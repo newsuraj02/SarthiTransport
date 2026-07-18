@@ -1006,10 +1006,21 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
   );
 }
 
-function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile }) {
+function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile, raiseAlert }) {
   const [tab, setTab] = useState("book");
   const [showMenu, setShowMenu] = useState(false);
+  const [showSos, setShowSos] = useState(false);
   const tabs = [["book", "बुक करें", ClipboardList], ["rides", "मेरी राइड्स", Package]];
+
+  if (showSos) {
+    return (
+      <div className="flex-1 overflow-y-auto relative">
+        <button onClick={() => setShowSos(false)} className="flex items-center gap-1 px-5 pt-4 text-xs font-semibold" style={{ color: C.marigoldDeep }}>← {lang === "en" ? "Back" : "वापस"}</button>
+        <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} />
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="flex-1 overflow-y-auto relative">
@@ -1026,6 +1037,9 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
                 <div className="text-[10px]" style={{ color: C.inkSoft }}>{customerProfile.address}, {customerProfile.area}, {customerProfile.city} {customerProfile.pincode}</div>
               </div>
             )}
+            <button onClick={() => { setShowSos(true); setShowMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+              <Siren size={14} color={C.safety} /> SOS / {lang === "en" ? "Help" : "मदद"}
+            </button>
             <button onClick={() => {
               const msg = lang === "en"
                 ? "Try Saathi Transport for booking trucks/tempos easily! Download: https://saathitransport.example.com — you both get ₹200 when your first trip is done!"
@@ -2194,9 +2208,14 @@ function TermsFooterLink({ onOpen, lang }) {
 // =====================================================================
 export default function App() {
   const [app, setApp] = useState("customer");
-  const [role, setRole] = useState("admin"); // demo mode: start on full switcher, no login gates
-  const [adminAuth, setAdminAuth] = useState(true);
-  const logout = () => { setRole(null); setAdminAuth(false); };
+  const [role, setRole] = useState(null);
+  const [adminAuth, setAdminAuth] = useState(false);
+  const logout = () => {
+    if (role === "admin") setAdminAuth(false);
+    if (role === "customer") setCustomerAuth({ verified: false, mobile: "" });
+    if (role === "driver") setDriverAuth({ verified: false, mobile: "" });
+    setRole(null);
+  };
   const [lang, setLang] = useState("hi");
   const [showTerms, setShowTerms] = useState(false);
   const [vehicleTypes, setVehicleTypes] = useState(DEFAULT_VEHICLES);
@@ -2206,9 +2225,9 @@ export default function App() {
   const [bonusPct, setBonusPct] = useState(0);
   const [trialMode, setTrialMode] = useState(true);
   const [minWallet, setMinWallet] = useState(500);
-  const [customerAuth, setCustomerAuth] = useState({ verified: true, mobile: "" });
-  const [customerAddress, setCustomerAddress] = useState({ verified: true, name: "रमेश पटेल", address: "दुकान नं. 12, MG रोड", area: "पिंपरी", city: "पुणे", pincode: "411018" });
-  const [driverAuth, setDriverAuth] = useState({ verified: true, mobile: "" });
+  const [customerAuth, setCustomerAuth] = useState({ verified: false, mobile: "" });
+  const [customerAddress, setCustomerAddress] = useState({ verified: false, name: "", address: "", area: "", city: "", pincode: "" });
+  const [driverAuth, setDriverAuth] = useState({ verified: false, mobile: "" });
 
   const addVehicleType = (v) => setVehicleTypes((prev) => [...prev, v]);
 
@@ -2427,7 +2446,7 @@ export default function App() {
         )}
         {role !== null && app === "customer" && customerAuth.verified && customerAddress.verified && (
           <CustomerApp bookings={bookings} createLoad={createLoad} driverVehicle={driver.vehicleSpec} vehicleTypes={vehicleTypes}
-            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverName={driver.name} lang={lang} onLogout={logout} customerProfile={customerAddress} />
+            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverName={driver.name} lang={lang} onLogout={logout} customerProfile={customerAddress} raiseAlert={raiseAlert} />
         )}
         {role !== null && app === "driver" && !driverAuth.verified && (
           <CustomerLogin onVerified={(mobile) => setDriverAuth({ verified: true, mobile })} />
