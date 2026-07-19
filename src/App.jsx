@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe,
+  ClipboardList, MapPinned, Siren, Mic, Globe, Menu,
 } from "lucide-react";
 
 // ---------------- design tokens ----------------
@@ -77,6 +77,41 @@ function estimateDistance(pickup, drop) {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 977;
   return 2 + (h % 17);
 }
+
+// Persists a piece of state to localStorage under `key`, so the app
+// remembers role choice, bookings, wallet balances etc. across reloads.
+function usePersistedState(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw !== null ? JSON.parse(raw) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+  }, [key, value]);
+  return [value, setValue];
+}
+
+function playBeepTone() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 300].forEach((delay) => {
+      setTimeout(() => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880; gain.gain.value = 0.15;
+        osc.start(); osc.stop(ctx.currentTime + 0.2);
+      }, delay);
+    });
+  } catch { /* audio not available */ }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TRIAL_DAYS = 60;
 
 // ---------------- shared: mock map ----------------
 function MockMap({ pickup, drop, progress, zoneColor, height = 150 }) {
@@ -302,18 +337,22 @@ function SosScreen({ role = "customer", raiseAlert, lang }) {
           <MessageCircle size={16} /> {lang === "en" ? "WhatsApp Support" : "व्हाट्सएप सपोर्ट"}
         </a>
       </div>
-      {role === "driver" && (
-        <div className="rounded-xl p-4 mt-5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "File a Complaint" : "शिकायत दर्ज करें"}</div>
-          <p className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Send admin details of any issue related to the customer or the goods." : "ग्राहक या सामान से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।"}</p>
-          <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={3}
-            placeholder={lang === "en" ? "e.g. Customer gave wrong address, wrong weight told..." : "जैसे: ग्राहक ने गलत पता दिया, सामान का वजन गलत बताया..."}
-            className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-          {sent && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Complaint sent to admin" : "शिकायत एडमिन को भेज दी गई"}</div>}
-          <button onClick={submitComplaint} disabled={!complaint.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm"
-            style={{ background: complaint.trim() ? C.navy : C.line, color: complaint.trim() ? "#fff" : "#8A8375" }}>{lang === "en" ? "Send Complaint" : "शिकायत भेजें"}</button>
-        </div>
-      )}
+      <div className="rounded-xl p-4 mt-5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+        <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "File a Complaint" : "शिकायत दर्ज करें"}</div>
+        <p className="text-[11px] mb-2" style={{ color: C.inkSoft }}>
+          {role === "driver"
+            ? (lang === "en" ? "Send admin details of any issue related to the customer or the goods." : "ग्राहक या सामान से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")
+            : (lang === "en" ? "Send admin details of any issue related to the driver or your booking." : "ड्राइवर या आपकी बुकिंग से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")}
+        </p>
+        <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={3}
+          placeholder={role === "driver"
+            ? (lang === "en" ? "e.g. Customer gave wrong address, wrong weight told..." : "जैसे: ग्राहक ने गलत पता दिया, सामान का वजन गलत बताया...")
+            : (lang === "en" ? "e.g. Driver asked for extra money, vehicle was different than promised..." : "जैसे: ड्राइवर ने अतिरिक्त पैसे मांगे, गाड़ी वादे से अलग थी...")}
+          className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+        {sent && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Complaint sent to admin" : "शिकायत एडमिन को भेज दी गई"}</div>}
+        <button onClick={submitComplaint} disabled={!complaint.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm"
+          style={{ background: complaint.trim() ? C.navy : C.line, color: complaint.trim() ? "#fff" : "#8A8375" }}>{lang === "en" ? "Send Complaint" : "शिकायत भेजें"}</button>
+      </div>
     </div>
   );
 }
@@ -566,6 +605,8 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
   const distance = estimateDistance(pickup, drop);
   const [posted, setPosted] = useState(false);
   const [mapField, setMapField] = useState(null); // 'pickup' | 'drop' | null
+  const [showBulkyPopup, setShowBulkyPopup] = useState(false);
+  const [bulkyPopupSeenFor, setBulkyPopupSeenFor] = useState("");
 
   const canPost = pickup.trim() && drop.trim() && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime));
 
@@ -573,10 +614,21 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
     const w = Number(weight);
     if (!weight || !w) return;
     const isLightBulky = LIGHT_BULKY_MATERIALS.includes(material);
-    const candidates = isLightBulky ? VEHICLES.filter((v) => BIG_VEHICLE_KEYS.includes(v.key)) : VEHICLES;
-    const fit = candidates.filter((v) => v.capacityKg >= w).sort((a, b) => a.capacityKg - b.capacityKg)[0]
-      || (isLightBulky ? VEHICLES.filter((v) => BIG_VEHICLE_KEYS.includes(v.key)).sort((a, b) => a.capacityKg - b.capacityKg)[0] : null);
-    if (fit) { setVehicle(fit.key); setShowAllVehicles(false); }
+    const smallFit = VEHICLES.filter((v) => v.capacityKg >= w).sort((a, b) => a.capacityKg - b.capacityKg)[0];
+    const bigFit = VEHICLES.filter((v) => BIG_VEHICLE_KEYS.includes(v.key)).sort((a, b) => a.capacityKg - b.capacityKg)[0];
+    if (isLightBulky && bigFit) {
+      setVehicle(bigFit.key);
+      setShowAllVehicles(false);
+      const key = material + "|" + weight;
+      if (bulkyPopupSeenFor !== key) {
+        setShowBulkyPopup(true);
+        setBulkyPopupSeenFor(key);
+      }
+    } else if (smallFit) {
+      setVehicle(smallFit.key);
+      setShowAllVehicles(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weight, material]);
 
   const post = () => {
@@ -747,6 +799,38 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
           ) : null;
         })()}
 
+        {weight && (
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Change vehicle (optional)" : "गाड़ी बदलें (वैकल्पिक)"}</label>
+            <select className={inputCls} style={inputStyle} value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
+              {VEHICLES.map((v) => <option key={v.key} value={v.key}>{v.label} · {v.capacity}</option>)}
+            </select>
+          </div>
+        )}
+
+        {showBulkyPopup && (() => {
+          const w = Number(weight);
+          const smallFit = VEHICLES.filter((v) => v.capacityKg >= w).sort((a, b) => a.capacityKg - b.capacityKg)[0];
+          const bigFit = VEHICLES.find((v) => v.key === vehicle);
+          return (
+            <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(28,42,58,0.6)" }} onClick={() => setShowBulkyPopup(false)}>
+              <div className="w-full max-w-sm rounded-t-2xl p-5" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+                <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.marigoldDeep }}>⚠ {lang === "en" ? "Light but bulky load" : "हल्का पर बड़ा माल"}</div>
+                <p className="text-xs mb-4" style={{ color: C.ink }}>{lang === "en" ? "This load is light and bulky — a bigger vehicle is suggested for it. You can still choose a smaller vehicle if you prefer." : "यह माल हल्का और बड़ा है, इसके लिए बड़ी गाड़ी का सुझाव है। चाहें तो छोटी गाड़ी भी चुन सकते हैं।"}</p>
+                <div className="space-y-2">
+                  <button onClick={() => setShowBulkyPopup(false)} className="w-full rounded-lg py-3 font-bold text-sm text-white" style={{ background: C.marigoldDeep }}>
+                    {lang === "en" ? `Keep suggested vehicle (${bigFit?.label})` : `सुझाई गई गाड़ी रखें (${bigFit?.label})`}
+                  </button>
+                  <button onClick={() => { if (smallFit) setVehicle(smallFit.key); setShowAllVehicles(true); setShowBulkyPopup(false); }}
+                    className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.line, color: C.ink }}>
+                    {lang === "en" ? `Use smaller vehicle instead (${smallFit?.label || "—"})` : `छोटी गाड़ी ही रखें (${smallFit?.label || "—"})`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="rounded-lg p-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
           <IndianRupee size={16} color={C.marigoldDeep} />
           <span className="text-[11px]" style={{ color: C.marigoldDeep }}>{lang === "en" ? "There's no fixed fare here — after posting, driver quotes will show up in \"My Rides\"." : "यहाँ कोई फिक्स भाड़ा नहीं है — पोस्ट करने के बाद ड्राइवरों की बोलियां \"मेरी राइड्स\" में दिखेंगी।"}</span>
@@ -811,7 +895,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
 
       {bidding.map((b) => {
         const v = VEHICLES.find((x) => x.key === b.vehicle);
-        const sortedBids = [...b.bids].sort((x, y) => x.amount - y.amount);
+        const sortedBids = b.bids.filter((x) => !x.paused).sort((x, y) => x.amount - y.amount);
         const selectedId = selectedBids[b.id];
         return (
           <div key={b.id} className="rounded-xl p-3 mb-4" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -944,6 +1028,9 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
                 <div className="text-xs font-bold" style={{ color: C.ink }}>{b.driverName}</div>
                 <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{v?.label} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
                 {b.hours && <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
+                <div className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: C.pimpri, fontFamily: monoFont }}>
+                  <Phone size={10} /> {b.driverMobile ? <a href={`tel:${b.driverMobile}`} className="underline">{b.driverMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
+                </div>
               </div>
             </div>
             {b.otp && !b.loadingStartedAt && (
@@ -957,6 +1044,12 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
               <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
             </div>
             <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle location" : "गाड़ी की लोकेशन"} — {b.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
+            {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
+            <div className="rounded-lg p-2 mt-2" style={{ background: "#FBEBD2" }}>
+              <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>
+                {lang === "en" ? "Pay the driver directly (cash / UPI / GPay) at delivery — Saathi Transport does not collect this fare." : "डिलीवरी पर ड्राइवर को सीधे भुगतान करें (नकद / UPI / GPay) — यह भाड़ा सार्थी ट्रांसपोर्ट कलेक्ट नहीं करता।"}
+              </div>
+            </div>
             <div className="flex items-center gap-4 mt-2">
               <button onClick={() => shareTrip(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
               <button onClick={() => cancelBooking(b.id)} className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
@@ -1006,17 +1099,60 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
   );
 }
 
-function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile, raiseAlert }) {
+function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile, customerMobile, raiseAlert, trialMode, onOpenTerms }) {
   const [tab, setTab] = useState("book");
-  const [showMenu, setShowMenu] = useState(false);
-  const [showSos, setShowSos] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | null
   const tabs = [["book", "बुक करें", ClipboardList], ["rides", "मेरी राइड्स", Package]];
+  const ongoingTrip = bookings.find((b) => b.status === "Ongoing");
 
-  if (showSos) {
+  const shareApp = () => {
+    const msg = trialMode
+      ? (lang === "en"
+        ? "Try Saathi Transport for booking trucks/tempos easily! Download: https://saathitransport.example.com"
+        : "ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: https://saathitransport.example.com")
+      : (lang === "en"
+        ? "Try Saathi Transport for booking trucks/tempos easily! Download: https://saathitransport.example.com — you both get ₹200 when your first trip is done!"
+        : "ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: https://saathitransport.example.com — पहली ट्रिप पूरी होने पर आप दोनों को ₹200 मिलेंगे!");
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  if (settingsView) {
     return (
       <div className="flex-1 overflow-y-auto relative">
-        <button onClick={() => setShowSos(false)} className="flex items-center gap-1 px-5 pt-4 text-xs font-semibold" style={{ color: C.marigoldDeep }}>← {lang === "en" ? "Back" : "वापस"}</button>
-        <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} />
+        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 px-5 pt-4 text-xs font-semibold" style={{ color: C.marigoldDeep }}>← {lang === "en" ? "Back" : "वापस"}</button>
+        {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} />}
+        {settingsView === "profile" && (
+          <div className="px-5 py-4">
+            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
+            <div className="rounded-xl p-4 mb-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="text-sm font-bold" style={{ color: C.ink }}>{customerProfile?.name || "—"}</div>
+              {customerMobile && <div className="text-xs mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{customerMobile}</div>}
+              <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{customerProfile?.address}, {customerProfile?.area}, {customerProfile?.city} {customerProfile?.pincode}</div>
+            </div>
+            <button onClick={onOpenTerms} className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}</button>
+          </div>
+        )}
+        {settingsView === "liveLocation" && (
+          <div className="px-5 py-4">
+            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
+            {ongoingTrip ? (
+              <>
+                <MockMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={200} />
+                <div className="text-xs mt-2" style={{ color: C.ink }}>{ongoingTrip.pickup} → {ongoingTrip.drop}</div>
+                <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ongoingTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
+              </>
+            ) : (
+              <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No active trip right now." : "अभी कोई सक्रिय ट्रिप नहीं है।"}</p>
+            )}
+          </div>
+        )}
+        {settingsView === "settings" && (
+          <div className="px-5 py-4">
+            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Settings" : "सेटिंग्स"}</h2>
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Use the language toggle (EN / हिं) at the top of the app to switch languages. For changes to your saved address, contact the helpline." : "भाषा बदलने के लिए ऐप के ऊपर मौजूद EN / हिं बटन इस्तेमाल करें। सेव किए गए पते में बदलाव के लिए हेल्पलाइन से संपर्क करें।"}</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -1024,33 +1160,41 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
   return (
     <>
       <div className="flex-1 overflow-y-auto relative">
-        <div className="flex items-center justify-end px-5 pt-3">
-          <button onClick={() => setShowMenu((s) => !s)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
-            <Settings2 size={15} color={C.inkSoft} />
+        <div className="flex items-center justify-between px-5 pt-3">
+          <button onClick={() => setMenuOpen(true)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
+            <Menu size={16} color={C.inkSoft} />
           </button>
         </div>
-        {showMenu && (
-          <div className="mx-5 mb-1 rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-            {customerProfile?.name && (
-              <div className="px-3 py-2.5" style={{ borderBottom: `1px solid ${C.line}` }}>
-                <div className="text-xs font-bold" style={{ color: C.ink }}>{customerProfile.name}</div>
-                <div className="text-[10px]" style={{ color: C.inkSoft }}>{customerProfile.address}, {customerProfile.area}, {customerProfile.city} {customerProfile.pincode}</div>
+        {menuOpen && (
+          <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
+            <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 py-4" style={{ background: C.navy }}>
+                <div className="text-sm font-bold text-white">{customerProfile?.name || (lang === "en" ? "Customer" : "कस्टमर")}</div>
+                {customerMobile && <div className="text-[11px]" style={{ color: "#9FB0C2", fontFamily: monoFont }}>{customerMobile}</div>}
               </div>
-            )}
-            <button onClick={() => { setShowSos(true); setShowMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-              <Siren size={14} color={C.safety} /> SOS / {lang === "en" ? "Help" : "मदद"}
-            </button>
-            <button onClick={() => {
-              const msg = lang === "en"
-                ? "Try Saathi Transport for booking trucks/tempos easily! Download: https://saathitransport.example.com — you both get ₹200 when your first trip is done!"
-                : "ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: https://saathitransport.example.com — पहली ट्रिप पूरी होने पर आप दोनों को ₹200 मिलेंगे!";
-              window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-            }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-              <MessageCircle size={14} color={C.success} /> {lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}
-            </button>
-            <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold" style={{ color: C.safety }}>
-              <XCircle size={14} /> {lang === "en" ? "Logout" : "लॉगआउट"}
-            </button>
+              <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
+              </button>
+              <button onClick={() => { setTab("rides"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : "मेरी ट्रिप्स"}
+              </button>
+              <button onClick={() => { setSettingsView("liveLocation"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <MapPinned size={16} color={C.marigoldDeep} /> {lang === "en" ? "Live Location" : "लाइव लोकेशन"}
+              </button>
+              <button onClick={() => { setSettingsView("settings"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings" : "सेटिंग्स"}
+              </button>
+              <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <MessageCircle size={16} color={C.success} /> {trialMode ? (lang === "en" ? "Share App" : "ऐप शेयर करें") : (lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)")}
+              </button>
+              <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
+              </button>
+              <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.safety }}>
+                <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
+              </button>
+            </div>
+            <div className="flex-1" style={{ background: "rgba(28,42,58,0.5)" }} />
           </div>
         )}
         {tab === "book" && <CustomerBooking createLoad={createLoad} driverVehicle={driverVehicle} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} />}
@@ -1064,7 +1208,7 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
 // =====================================================================
 // DRIVER APP
 // =====================================================================
-function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang }) {
+function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang, commissionPct = 0, minWallet = 0, trialMode = false }) {
   const VEHICLES = vehicleTypes;
   const v = VEHICLES.find((x) => x.key === load.vehicle);
   const myBid = load.bids.find((b) => b.driverName === driver.name);
@@ -1074,6 +1218,8 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang }) {
   const [justSubmitted, setJustSubmitted] = useState(false);
 
   const canSubmit = Number(amount) > 0 && Number(allowedHours) > 0 && Number(extraHourRate) > 0;
+  const requiredForQuote = Number(amount || 0) * (commissionPct / 100);
+  const walletShortfall = !trialMode && (driver.wallet - requiredForQuote) < minWallet;
 
   const otherBids = load.bids.filter((b) => b.driverName !== driver.name);
   const lowestOther = otherBids.length ? otherBids.reduce((min, b) => b.amount < min.amount ? b : min) : null;
@@ -1082,7 +1228,7 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang }) {
   const isMineHighest = myBid && allAmounts.length > 1 && myBid.amount === Math.max(...allAmounts) && myBid.amount !== lowestOverall;
 
   const submitBid = () => {
-    if (!canSubmit || myBid) return;
+    if (!canSubmit || myBid || walletShortfall) return;
     addBid(load.id, {
       driverName: driver.name, amount: Number(amount),
       hours: Number(allowedHours), extraHourRate: Number(extraHourRate),
@@ -1165,9 +1311,14 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang }) {
           {!canSubmit && (amount || allowedHours || extraHourRate) && (
             <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>{lang === "en" ? "All three fields are required" : "तीनों फील्ड भरना ज़रूरी है"}</div>
           )}
+          {canSubmit && walletShortfall && (
+            <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>
+              {lang === "en" ? `Not enough wallet balance to cover ${commissionPct}% commission on this fare — recharge your wallet first.` : `इस भाड़े पर ${commissionPct}% कमीशन के लिए वॉलेट में पर्याप्त बैलेंस नहीं है — पहले वॉलेट रीचार्ज करें।`}
+            </div>
+          )}
 
-          <button onClick={submitBid} disabled={!canSubmit} className="w-full rounded-lg py-2.5 text-sm font-bold text-white flex items-center justify-center gap-1.5"
-            style={{ background: justSubmitted ? C.success : canSubmit ? C.marigoldDeep : C.line, color: justSubmitted || canSubmit ? "#fff" : "#8A8375" }}>
+          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className="w-full rounded-lg py-2.5 text-sm font-bold text-white flex items-center justify-center gap-1.5"
+            style={{ background: justSubmitted ? C.success : (canSubmit && !walletShortfall) ? C.marigoldDeep : C.line, color: justSubmitted || (canSubmit && !walletShortfall) ? "#fff" : "#8A8375" }}>
             {justSubmitted ? <><CheckCircle2 size={16} /> {lang === "en" ? "Sent" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : "कोटेशन भेजें")}
           </button>
         </>
@@ -1176,31 +1327,65 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang }) {
   );
 }
 
-function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
+function fmtHMS(ms) {
+  const hh = Math.floor(ms / 3600000);
+  const mm = Math.floor((ms % 3600000) / 60000);
+  const ss = Math.floor((ms % 60000) / 1000);
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+// Shared elapsed/remaining-time math for a loading trip, used by both the
+// driver's timer screen and the customer's ongoing-trip overtime banner so
+// the "बीप-बीप" alarm behaves identically on both sides.
+function useTripClock(loadingStartedAt, hours, extraHourRate) {
   const [now, setNow] = useState(Date.now());
-  const [otpInput, setOtpInput] = useState("");
-  const [otpError, setOtpError] = useState(false);
-  const [beeped, setBeeped] = useState(false);
+  const beepedRef = useRef(false);
+  const started = !!loadingStartedAt;
+
   useEffect(() => {
-    if (!trip.loadingStartedAt) return;
+    if (!started) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [trip.loadingStartedAt]);
+  }, [started, loadingStartedAt]);
 
-  const playBeep = () => {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      [0, 300].forEach((delay) => {
-        setTimeout(() => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.frequency.value = 880; gain.gain.value = 0.15;
-          osc.start(); osc.stop(ctx.currentTime + 0.2);
-        }, delay);
-      });
-    } catch { /* audio not available */ }
-  };
+  const elapsedMs = started ? now - loadingStartedAt : 0;
+  const elapsedHoursExact = elapsedMs / 3600000;
+  const bookedHours = hours || 0;
+  const isOvertime = started && bookedHours > 0 && elapsedHoursExact >= bookedHours;
+  const extraHours = Math.max(0, elapsedHoursExact - bookedHours);
+  const extraCharge = Math.round(extraHours * (extraHourRate || 0));
+  const remainingMs = Math.max(0, bookedHours * 3600000 - elapsedMs);
+
+  useEffect(() => {
+    if (isOvertime && !beepedRef.current) {
+      beepedRef.current = true;
+      playBeepTone();
+    }
+    if (!isOvertime) beepedRef.current = false;
+  }, [isOvertime]);
+
+  return { started, isOvertime, extraHours, extraCharge, elapsedStr: fmtHMS(elapsedMs), remainingStr: fmtHMS(remainingMs) };
+}
+
+// Read-only overtime banner shown on the customer's ongoing-trip card —
+// mirrors the driver's alarm so both sides get the "समय खत्म" alert.
+function TripOvertimeBanner({ booking, lang }) {
+  const clock = useTripClock(booking.loadingStartedAt, booking.hours, booking.extraHourRate);
+  if (!clock.started || !clock.isOvertime) return null;
+  return (
+    <div className="rounded-lg mt-2 p-2.5" style={{ background: "#FCEAE3" }}>
+      <div className="text-[11px] font-bold" style={{ color: C.safety }}>🔔 {lang === "en" ? "Beep-beep! Allowed loading time is over" : "बीप-बीप! अलाउ समय खत्म हो गया"}</div>
+      <div className="text-[11px] mt-0.5" style={{ color: C.safety }}>
+        {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs · Waiting charge so far: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
+      </div>
+    </div>
+  );
+}
+
+function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
+  const [otpInput, setOtpInput] = useState("");
+  const [otpError, setOtpError] = useState(false);
+  const clock = useTripClock(trip.loadingStartedAt, trip.hours, trip.extraHourRate);
 
   if (!trip.loadingStartedAt) {
     const confirmOtp = () => {
@@ -1228,34 +1413,27 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
     );
   }
 
-  const elapsedMs = now - trip.loadingStartedAt;
-  const elapsedHoursExact = elapsedMs / 3600000;
-  const bookedHours = trip.hours || 0;
-  const extraHours = Math.max(0, elapsedHoursExact - bookedHours);
-  const extraCharge = Math.round(extraHours * (trip.extraHourRate || 0));
-  if (!beeped && bookedHours > 0 && elapsedHoursExact >= bookedHours) {
-    setBeeped(true);
-    playBeep();
-  }
-  const hh = Math.floor(elapsedMs / 3600000);
-  const mm = Math.floor((elapsedMs % 3600000) / 60000);
-  const ss = Math.floor((elapsedMs % 60000) / 1000);
-
   return (
     <div className="mt-3">
       <div className="rounded-lg p-3" style={{ background: C.navy }}>
-        <div className="text-[11px]" style={{ color: "#9FB0C2" }}>{lang === "en" ? "Loading started" : "लोडिंग शुरू हुए"}</div>
-        <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{String(hh).padStart(2, "0")}:{String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}</div>
         {trip.hours ? (
-          <div className="text-[11px] mt-1" style={{ color: "#9FB0C2" }}>{lang === "en" ? `Allowed: ${bookedHours} hrs` : `अलाउ समय: ${bookedHours} घंटे`}</div>
+          <>
+            <div className="text-[11px]" style={{ color: "#9FB0C2" }}>{clock.isOvertime ? (lang === "en" ? "Allowed time over — extra time running" : "अलाउ समय खत्म — अतिरिक्त समय चल रहा है") : (lang === "en" ? "Time remaining (reverse timer)" : "बचा हुआ समय (रिवर्स टाइमर)")}</div>
+            <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.isOvertime ? clock.elapsedStr : clock.remainingStr}</div>
+            <div className="text-[11px] mt-1" style={{ color: "#9FB0C2" }}>{lang === "en" ? `Allowed: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : `अलाउ समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
+          </>
         ) : (
-          <div className="text-[11px] mt-1" style={{ color: "#9FB0C2" }}>{lang === "en" ? "Driver had not set allowed hours" : "ड्राइवर ने अलाउ घंटे नहीं भरे थे"}</div>
+          <>
+            <div className="text-[11px]" style={{ color: "#9FB0C2" }}>{lang === "en" ? "Loading started" : "लोडिंग शुरू हुए"}</div>
+            <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.elapsedStr}</div>
+            <div className="text-[11px] mt-1" style={{ color: "#9FB0C2" }}>{lang === "en" ? "Driver had not set allowed hours" : "ड्राइवर ने अलाउ घंटे नहीं भरे थे"}</div>
+          </>
         )}
-        {trip.extraHourRate && extraHours > 0 && (
+        {trip.extraHourRate && clock.isOvertime && (
           <div className="rounded-lg mt-2 p-2" style={{ background: "#5A3E00" }}>
             <div className="text-[11px] font-bold" style={{ color: C.marigold }}>🔔 {lang === "en" ? "Beep-beep! Allowed time is over" : "बीप-बीप! अलाउ समय खत्म हो गया"}</div>
             <div className="text-[11px] mt-0.5" style={{ color: "#F0D9A0" }}>
-              {lang === "en" ? `Extra time: ${extraHours.toFixed(2)} hrs · Extra fare: ${fmt(extraCharge)}` : `अतिरिक्त समय: ${extraHours.toFixed(2)} घंटे · अतिरिक्त भाड़ा: ${fmt(extraCharge)}`}
+              {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs · Extra fare: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे · अतिरिक्त भाड़ा: ${fmt(clock.extraCharge)}`}
             </div>
           </div>
         )}
@@ -1263,8 +1441,8 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
       <button onClick={() => startLoading(trip.id, -3600000)} className="w-full text-center text-[11px] font-semibold py-2" style={{ color: C.inkSoft }}>
         {lang === "en" ? "+ Advance 1 hour (test)" : "+ 1 घंटा आगे बढ़ाएं (टेस्ट)"}
       </button>
-      <button onClick={() => completeBooking(trip.id, extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: C.success }}>
-        {lang === "en" ? "End Trip — Complete Trip" : "एंड ट्रिप — ट्रिप पूरी करें"} {extraCharge > 0 ? `(+${fmt(extraCharge)})` : ""}
+      <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: C.success }}>
+        {lang === "en" ? "End Trip — Complete Trip" : "एंड ट्रिप — ट्रिप पूरी करें"} {clock.extraCharge > 0 ? `(+${fmt(clock.extraCharge)})` : ""}
       </button>
     </div>
   );
@@ -1303,11 +1481,32 @@ function LoadSummaryCard({ load, vehicleTypes, driver, onOpen, lang }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang }) {
+function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet, trialMode }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name);
   const [openLoadId, setOpenLoadId] = useState(null);
   const openLoads = bookings.filter((b) => b.status === "Bidding" && (!driver.vehicleSpec?.type || b.vehicle === driver.vehicleSpec.type));
   const openLoad = openLoads.find((l) => l.id === openLoadId);
+
+  // No search bar / route filter for drivers — every new matching load rings
+  // (beep + toast) the moment it's posted, instead of drivers having to search.
+  const seenLoadIdsRef = useRef(null);
+  const [newLoadToast, setNewLoadToast] = useState(null);
+  const loadIdsKey = openLoads.map((l) => l.id).join(",");
+  useEffect(() => {
+    const currentIds = new Set(openLoads.map((l) => l.id));
+    if (seenLoadIdsRef.current === null) {
+      seenLoadIdsRef.current = currentIds;
+      return;
+    }
+    const freshLoads = openLoads.filter((l) => !seenLoadIdsRef.current.has(l.id));
+    if (freshLoads.length > 0 && driver.online && driver.kyc === "Approved" && !driver.blacklisted) {
+      playBeepTone();
+      setNewLoadToast(freshLoads[0]);
+      setTimeout(() => setNewLoadToast((cur) => (cur?.id === freshLoads[0].id ? null : cur)), 4000);
+    }
+    seenLoadIdsRef.current = currentIds;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadIdsKey]);
 
   return (
     <div className="px-5 py-5">
@@ -1327,10 +1526,10 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
         </button>
       </div>
 
-      {driver.kyc !== "Approved" && (
-        <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
-          <Clock3 size={15} color={C.marigoldDeep} />
-          <span className="text-xs font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "KYC verification pending — loads will show after admin approval." : "KYC सत्यापन लंबित है — एडमिन अप्रूवल के बाद लोड दिखेंगे।"}</span>
+      {newLoadToast && (
+        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.navy }}>
+          <Bell size={14} color={C.marigold} />
+          <span className="text-[11px] font-bold text-white">🔔 {lang === "en" ? "New load" : "नया लोड"}: {newLoadToast.pickup} → {newLoadToast.drop}</span>
         </div>
       )}
 
@@ -1346,7 +1545,8 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           <div className="text-xs font-bold mb-2" style={{ color: C.pimpri }}>{lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</div>
           <MockMap pickup={myTrip.pickup} drop={myTrip.drop} progress={myTrip.progress} zoneColor={C.pimpri} height={130} />
           <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
-          <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : "ग्राहक"}: 9876543210 · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(myTrip.fare)}</div>
+          <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : "ग्राहक"}: {myTrip.customerMobile ? <a href={`tel:${myTrip.customerMobile}`} className="underline">{myTrip.customerMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(myTrip.fare)}</div>
+          <div className="text-[10px] mt-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
           {myTrip.hours && <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
           <LoadingTimer trip={myTrip} startLoading={startLoading} completeBooking={completeBooking} lang={lang} />
         </div>
@@ -1383,7 +1583,8 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
               <span className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Request Details" : "रिक्वेस्ट की डिटेल"}</span>
               <button onClick={() => setOpenLoadId(null)} className="text-xs font-bold px-2 py-1 rounded" style={{ color: C.inkSoft }}>✕</button>
             </div>
-            <LoadAlertCard load={openLoad} vehicleTypes={vehicleTypes} driver={driver} addBid={(id, bid) => { addBid(id, bid); setOpenLoadId(null); }} lang={lang} />
+            <LoadAlertCard load={openLoad} vehicleTypes={vehicleTypes} driver={driver} addBid={(id, bid) => { addBid(id, bid); setOpenLoadId(null); }} lang={lang}
+              commissionPct={commissionPct} minWallet={minWallet} trialMode={trialMode} />
           </div>
         </div>
       )}
@@ -1391,29 +1592,51 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
   );
 }
 
-function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bonusPct, lang, withdrawals, requestWithdrawal }) {
-  const recharge = () => setDriver({ ...driver, wallet: driver.wallet + 500 });
+function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bonusPct, trialMode, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
   const myTrips = tripLog.filter((t) => t.driverName === driver.name && t.status !== "Cancelled");
   const totalCommission = myTrips.reduce((s, t) => s + t.fare * (commissionPct / 100), 0);
   const totalBonus = myTrips.reduce((s, t) => s + t.fare * (bonusPct / 100), 0);
   const myWithdrawals = (withdrawals || []).filter((w) => w.driverName === driver.name);
+  const myRecharges = (rechargeRequests || []).filter((r) => r.driverName === driver.name);
+  const hasPendingRecharge = myRecharges.some((r) => r.status === "Pending");
   return (
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Wallet" : "मेरा वॉलेट"}</h2>
-      {commissionPct === 0 && (
+      {trialMode && (
         <div className="rounded-lg p-3 mb-3 flex items-center gap-2" style={{ background: "#DFEEE2" }}>
           <CheckCircle2 size={15} color={C.success} />
-          <span className="text-xs font-semibold" style={{ color: C.success }}>{lang === "en" ? "Free trial is active — no commission will be cut." : "अभी फ्री ट्रायल चल रहा है — कोई कमीशन नहीं कटेगा।"}</span>
+          <span className="text-xs font-semibold" style={{ color: C.success }}>{lang === "en" ? "Free trial is active — no commission will be cut and no minimum wallet balance is required." : "अभी फ्री ट्रायल चल रहा है — कोई कमीशन नहीं कटेगा और न्यूनतम वॉलेट बैलेंस की ज़रूरत नहीं है।"}</span>
         </div>
       )}
       <div className="rounded-xl p-4 mb-3" style={{ background: C.navy }}>
         <div className="text-[11px]" style={{ color: "#9FB0C2" }}>{lang === "en" ? "Wallet Balance" : "वॉलेट बैलेंस"}</div>
         <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
-        {driver.wallet < minWallet && (
+        {!trialMode && driver.wallet < minWallet && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: C.safety }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
         )}
+        {(driver.heldCredit || 0) > 0 && (
+          <div className="text-[11px] mt-2 font-semibold" style={{ color: C.marigold }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
+        )}
       </div>
-      <button onClick={recharge} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Recharge ₹500 via UPI / Paytm" : "UPI / Paytm से ₹500 रीचार्ज करें"}</button>
+      <button onClick={() => requestRecharge(500)} disabled={hasPendingRecharge} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2"
+        style={{ background: hasPendingRecharge ? C.line : C.marigold, color: hasPendingRecharge ? "#8A8375" : C.navy }}>
+        {hasPendingRecharge ? (lang === "en" ? "Recharge request pending admin approval" : "रीचार्ज रिक्वेस्ट एडमिन अप्रूवल के इंतज़ार में") : (lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)")}
+      </button>
+      <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Pay admin via UPI/Paytm outside the app, then request a recharge — admin verifies and credits your wallet." : "ऐप के बाहर UPI/Paytm से एडमिन को भुगतान करें, फिर रीचार्ज रिक्वेस्ट करें — एडमिन जांच कर वॉलेट में जमा करेगा।"}</div>
+      {myRecharges.length > 0 && (
+        <div className="mb-2">
+          <div className="space-y-1.5">
+            {myRecharges.map((r) => (
+              <div key={r.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <span className="text-xs font-semibold" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(r.amount)}</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: r.status === "Approved" ? C.success : C.marigoldDeep, background: r.status === "Approved" ? "#DFEEE2" : "#FBEBD2" }}>
+                  {r.status === "Approved" ? (lang === "en" ? "Credited ✓" : "जमा हुआ ✓") : (lang === "en" ? "Pending admin approval" : "एडमिन अप्रूवल बाकी")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="text-[11px] mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? `${commissionPct}% commission is cut from this wallet instantly the moment a bid is accepted.` : `बिड एक्सेप्ट होते ही भाड़े का ${commissionPct}% कमीशन इसी वॉलेट से तुरंत कट जाता है।`}</div>
 
       <div className="rounded-xl p-4 mb-2" style={{ background: "#DFEEE2", border: `1.5px solid ${C.success}` }}>
@@ -1647,25 +1870,57 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal }) {
+function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, trialMode, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms }) {
   const [tab, setTab] = useState("home");
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'sos' | null
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | 'liveLocation' | null
   const tabs = [["home", "होम", LayoutDashboard], ["wallet", "वॉलेट", Wallet], ["history", "हिस्ट्री", Package]];
+  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name);
 
-  if (settingsView === "kyc") {
+  const shareApp = () => {
+    const msg = trialMode
+      ? (lang === "en"
+        ? "Join Saathi Transport as a driver — bid your own fare, no more middlemen! Download: https://saathitransport.example.com"
+        : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://saathitransport.example.com")
+      : (lang === "en"
+        ? "Join Saathi Transport as a driver — bid your own fare, no more middlemen! Download: https://saathitransport.example.com — we both get ₹200 after your first trip!"
+        : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://saathitransport.example.com — पहली ट्रिप पूरी होने पर हम दोनों को ₹200 मिलेंगे!");
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  if (settingsView) {
     return (
       <div className="flex-1 overflow-y-auto relative">
         <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 px-5 pt-4 text-xs font-semibold" style={{ color: C.marigoldDeep }}>← {lang === "en" ? "Back" : "वापस"}</button>
-        <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
-      </div>
-    );
-  }
-  if (settingsView === "sos") {
-    return (
-      <div className="flex-1 overflow-y-auto relative">
-        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 px-5 pt-4 text-xs font-semibold" style={{ color: C.marigoldDeep }}>← {lang === "en" ? "Back" : "वापस"}</button>
-        <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />
+        {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
+        {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
+        {settingsView === "profile" && (
+          <div className="px-5 py-4">
+            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
+            <div className="rounded-xl p-4 mb-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="text-sm font-bold" style={{ color: C.ink }}>{driver.name}</div>
+              {driver.mobile && <div className="text-xs mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driver.mobile}</div>}
+              <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle" : "गाड़ी"}: {driver.vehicleSpec?.vehicleNumber || "—"}</div>
+              <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "KYC status" : "KYC स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : "सत्यापित") : driver.kyc}</div>
+              <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Wallet" : "वॉलेट"}: {fmt(driver.wallet)}</div>
+            </div>
+            <button onClick={onOpenTerms} className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}</button>
+          </div>
+        )}
+        {settingsView === "liveLocation" && (
+          <div className="px-5 py-4">
+            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
+            {myTrip ? (
+              <>
+                <MockMap pickup={myTrip.pickup} drop={myTrip.drop} progress={myTrip.progress} zoneColor={C.pimpri} height={200} />
+                <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
+                <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{myTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
+              </>
+            ) : (
+              <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No active trip right now." : "अभी कोई सक्रिय ट्रिप नहीं है।"}</p>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -1673,34 +1928,45 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   return (
     <>
       <div className="flex-1 overflow-y-auto relative">
-        <div className="flex items-center justify-end px-5 pt-3">
-          <button onClick={() => setShowSettings((s) => !s)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
-            <Settings2 size={15} color={C.inkSoft} />
+        <div className="flex items-center justify-between px-5 pt-3">
+          <button onClick={() => setMenuOpen(true)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
+            <Menu size={16} color={C.inkSoft} />
           </button>
         </div>
-        {showSettings && (
-          <div className="mx-5 mb-1 rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-            <button onClick={() => { setSettingsView("kyc"); setShowSettings(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-              <ShieldCheck size={14} color={C.marigoldDeep} /> KYC
-            </button>
-            <button onClick={() => { setSettingsView("sos"); setShowSettings(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-              <Siren size={14} color={C.safety} /> SOS / {lang === "en" ? "Help" : "मदद"}
-            </button>
-            <button onClick={() => {
-              const msg = lang === "en"
-                ? "Join Saathi Transport as a driver — bid your own fare, no more middlemen! Download: https://saathitransport.example.com — we both get ₹200 after your first trip!"
-                : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://saathitransport.example.com — पहली ट्रिप पूरी होने पर हम दोनों को ₹200 मिलेंगे!";
-              window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-            }} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-              <MessageCircle size={14} color={C.success} /> {lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}
-            </button>
-            <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold" style={{ color: C.safety }}>
-              <XCircle size={14} /> {lang === "en" ? "Logout" : "लॉगआउट"}
-            </button>
+        {menuOpen && (
+          <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
+            <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 py-4" style={{ background: C.navy }}>
+                <div className="text-sm font-bold text-white">{driver.name}</div>
+                {driver.mobile && <div className="text-[11px]" style={{ color: "#9FB0C2", fontFamily: monoFont }}>{driver.mobile}</div>}
+              </div>
+              <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
+              </button>
+              <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : "मेरी ट्रिप्स"}
+              </button>
+              <button onClick={() => { setSettingsView("liveLocation"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <MapPinned size={16} color={C.marigoldDeep} /> {lang === "en" ? "Live Location" : "लाइव लोकेशन"}
+              </button>
+              <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : "सेटिंग्स (KYC व गाड़ी)"}
+              </button>
+              <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <MessageCircle size={16} color={C.success} /> {trialMode ? (lang === "en" ? "Share App" : "ऐप शेयर करें") : (lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)")}
+              </button>
+              <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
+              </button>
+              <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.safety }}>
+                <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
+              </button>
+            </div>
+            <div className="flex-1" style={{ background: "rgba(28,42,58,0.5)" }} />
           </div>
         )}
-        {tab === "home" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} />}
-        {tab === "wallet" && <DriverWallet driver={driver} setDriver={setDriver} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} />}
+        {tab === "home" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} commissionPct={commissionPct} minWallet={minWallet} trialMode={trialMode} />}
+        {tab === "wallet" && <DriverWallet driver={driver} setDriver={setDriver} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} trialMode={trialMode} lang={lang} withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge} />}
         {tab === "history" && <DriverHistory tripLog={tripLog} driver={driver} commissionPct={commissionPct} lang={lang} />}
       </div>
       <BottomNav tabs={tabs} tab={tab} setTab={setTab} lang={lang} />
@@ -1856,11 +2122,31 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   );
 }
 
-function AdminAlerts({ alerts, withdrawals, approveWithdrawal, lang }) {
+function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : { customer: "ग्राहक", driver: "ड्राइवर" };
   const pendingWithdrawals = (withdrawals || []).filter((w) => w.status === "Pending");
+  const pendingRecharges = (rechargeRequests || []).filter((r) => r.status === "Pending");
   return (
     <div className="space-y-4">
+      {pendingRecharges.length > 0 && (
+        <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
+          <div className="space-y-2">
+            {pendingRecharges.map((r) => (
+              <div key={r.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: "#FBEBD2" }}>
+                <div>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{r.driverName}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft }}>{r.time}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(r.amount)}</span>
+                  <button onClick={() => approveRecharge(r.id)} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.marigoldDeep }}>{lang === "en" ? "Approve" : "अप्रूव करें"}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {pendingWithdrawals.length > 0 && (
         <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.success} /> {lang === "en" ? "Withdrawal Requests" : "विड्रॉल रिक्वेस्ट"}</div>
@@ -2010,7 +2296,7 @@ function AdminNotify({ drivers }) {
   );
 }
 
-function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, trialMode, setTrialMode, lang }) {
+function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, trialMode, setTrialMode, trialDaysLeft, lang }) {
   return (
     <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : "सिस्टम सेटिंग्स"}</div>
@@ -2020,6 +2306,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
           <div>
             <div className="text-xs font-bold" style={{ color: trialMode ? C.success : C.ink }}>{lang === "en" ? "Free Trial Mode (2 months)" : "फ्री ट्रायल मोड (2 महीने)"}</div>
             <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "While on, both commission and bonus stay at 0%" : "चालू रहने पर कमीशन और बोनस दोनों 0% रहेंगे"}</div>
+            {trialMode && <div className="text-[11px] mt-1 font-semibold" style={{ color: C.success }}>{lang === "en" ? `${trialDaysLeft} days left — switches to commercial mode automatically after that` : `${trialDaysLeft} दिन बाकी — इसके बाद ऑटोमैटिक कमर्शियल मोड में बदल जाएगा`}</div>}
           </div>
           <button onClick={() => {
             setTrialMode((t) => {
@@ -2117,7 +2404,7 @@ function AdminFinance({ tripLog, commissionPct }) {
   );
 }
 
-function AdminPanel({ drivers, allDrivers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, trialMode, setTrialMode, withdrawals, approveWithdrawal }) {
+function AdminPanel({ drivers, allDrivers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
   const [tab, setTab] = useState("fleet");
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर लिस्ट", ClipboardList], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
@@ -2142,10 +2429,10 @@ function AdminPanel({ drivers, allDrivers, driver, updateDriverKyc, tripLog, ale
       {tab === "fleet" && <AdminFleet drivers={drivers} driver={driver} tripLog={tripLog} lang={lang} />}
       {tab === "kyc" && <AdminKyc drivers={allDrivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={allDrivers} toggleBlacklist={toggleBlacklist} lang={lang} />}
-      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} trialMode={trialMode} setTrialMode={setTrialMode} lang={lang} />}
+      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} />}
       {tab === "notify" && <AdminNotify drivers={drivers} />}
-      {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} lang={lang} />}
+      {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
     </div>
   );
 }
@@ -2156,20 +2443,20 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang }) {
   const sections = lang === "en" ? [
     ["1. Load Posting", "Once a load is posted, the pickup-drop details cannot be changed. The final fare will be whatever was agreed in the driver's Accepted Bid."],
     ["2. Bidding System", "The customer is free to accept any one bid among multiple drivers. Once a bid is accepted, it is treated as final."],
-    ["3. Cancellation", "If a trip is cancelled after a driver is assigned, the deducted commission will be credited back to the driver's wallet. Repeated cancellations may lead to temporary account suspension."],
-    ["4. Driver Responsibility", "The driver is required to submit a valid driving license, vehicle RC and KYC documents. No load will be shown without verification."],
-    ["5. Commission", `As soon as the customer accepts a bid, ${commissionPct}% of the agreed fare will be deducted instantly from the driver's wallet as company commission. Of this, ${bonusPct}% will be credited back to the driver's bonus account. Maintaining a minimum balance in the driver's wallet is mandatory.`],
-    ["6. Responsibility for Goods", "It is the customer's responsibility to ensure the safety and correct information (material type and weight) of the goods. The company is not responsible for any loss, damage, or delay of goods — this responsibility lies with the concerned driver/transporter."],
+    ["3. Cancellation", "If a trip is cancelled by either side after a driver is assigned, the deducted commission/advance fare is not refunded instantly — it is held by admin and automatically adjusted against the driver's next accepted trip, so the driver is not out of pocket. Repeated cancellations may lead to temporary account suspension."],
+    ["4. Driver Responsibility", "The driver is required to submit a valid driving license, vehicle RC and KYC documents. No load will be shown until admin approves this verification."],
+    ["5. Commission and Payment", `As soon as the customer accepts a bid, ${commissionPct}% of the agreed fare will be deducted instantly from the driver's wallet as company commission, and the customer's/driver's mobile numbers are revealed to each other. Of this commission, ${bonusPct}% will be credited back to the driver's bonus account. The remaining 90% of the fare is collected by the driver directly from the customer (cash, UPI, or any digital mode) after delivery — Saathi Transport does not collect this fare inside the app. Maintaining a minimum wallet balance is mandatory.`],
+    ["6. Responsibility for Goods & Loading Costs", "It is the customer's responsibility to ensure the safety and correct information (material type and weight) of the goods, and to bear the full cost of loading/unloading labour (hamali) — this is not the driver's expense. The company is not responsible for any loss, damage, or delay of goods — this responsibility lies with the concerned driver/transporter."],
     ["7. Platform's Role — Intermediary Only (Most Important)",
       `Saathi Transport is a technology platform that only serves as a medium to connect the customer (load owner) and independent drivers/transporters. The company/admin is not itself a party to any transport of goods, nor a transport service provider. The ${commissionPct}% commission is charged only as a platform usage fee, not for transport service. Every deal between customer and driver (fare, timing, terms) is entirely a private agreement between the two. The company, admin, or platform will not be liable in any way for theft, damage, delay, accident, wrong payment, dispute, or any direct/indirect loss related to the goods. Full responsibility for any such matter rests with the concerned customer and driver themselves.`],
     ["8. Disputes and Jurisdiction", "In case of any complaint or dispute, contact admin via the SOS section — admin can only help as a facilitator, this does not mean admin is responsible for the dispute. In case of any legal dispute, jurisdiction will lie only with Pimpri-Chinchwad / Pune courts."],
   ] : [
     ["1. लोड पोस्टिंग", "लोड पोस्ट करने के बाद पिकअप-ड्रॉप की जानकारी बदली नहीं जा सकती। अंतिम भाड़ा वही होगा जो ड्राइवर की स्वीकृत बोली (Accepted Bid) में तय हुआ हो।"],
     ["2. बिडिंग सिस्टम", "ग्राहक कई ड्राइवरों में से किसी भी एक बोली को स्वीकार करने के लिए स्वतंत्र है। एक बार बोली स्वीकार होने के बाद वह अंतिम मानी जाएगी।"],
-    ["3. रद्दीकरण", "ड्राइवर असाइन होने के बाद ट्रिप रद्द होने पर कटा हुआ कमीशन ड्राइवर के वॉलेट में वापस जमा कर दिया जाएगा। बार-बार रद्द करने पर खाता अस्थायी रूप से बंद किया जा सकता है।"],
-    ["4. ड्राइवर की जिम्मेदारी", "ड्राइवर को वैध ड्राइविंग लाइसेंस, गाड़ी की RC और KYC दस्तावेज़ जमा करना अनिवार्य है। बिना सत्यापन के कोई भी लोड नहीं दिखाया जाएगा।"],
-    ["5. कमीशन", `जैसे ही ग्राहक किसी बोली को स्वीकार करता है, तय भाड़े का ${commissionPct}% कंपनी कमीशन के रूप में ड्राइवर के वॉलेट से तुरंत कट जाएगा। इसमें से ${bonusPct}% ड्राइवर के बोनस अकाउंट में वापस जमा किया जाएगा। ड्राइवर के वॉलेट में न्यूनतम बैलेंस रखना अनिवार्य है।`],
-    ["6. सामान की जिम्मेदारी", "सामान की सुरक्षा और सही जानकारी (मटेरियल टाइप व वजन) देना ग्राहक की जिम्मेदारी है। किसी भी प्रकार के माल के नुकसान, टूट-फूट या देरी के लिए कंपनी जिम्मेदार नहीं होगी — यह जिम्मेदारी संबंधित ड्राइवर/ट्रांसपोर्टर की होगी।"],
+    ["3. रद्दीकरण", "बुकिंग फाइनल होने के बाद अगर किसी भी तरफ से ट्रिप रद्द की जाती है, तो कटा हुआ कमीशन/एडवांस भाड़ा तुरंत वापस नहीं किया जाता — यह एडमिन के पास होल्ड रहता है और ड्राइवर की अगली स्वीकृत ट्रिप के कमीशन में अपने आप एडजस्ट हो जाता है, ताकि ड्राइवर को नुकसान न हो। बार-बार रद्द करने पर खाता अस्थायी रूप से बंद किया जा सकता है।"],
+    ["4. ड्राइवर की जिम्मेदारी", "ड्राइवर को वैध ड्राइविंग लाइसेंस, गाड़ी की RC और KYC दस्तावेज़ जमा करना अनिवार्य है। एडमिन अप्रूवल तक कोई भी लोड नहीं दिखाया जाएगा।"],
+    ["5. कमीशन व भुगतान", `जैसे ही ग्राहक किसी बोली को स्वीकार करता है, तय भाड़े का ${commissionPct}% कंपनी कमीशन के रूप में ड्राइवर के वॉलेट से तुरंत कट जाएगा, और तभी ग्राहक व ड्राइवर के मोबाइल नंबर एक-दूसरे को दिखेंगे। इस कमीशन में से ${bonusPct}% ड्राइवर के बोनस अकाउंट में वापस जमा किया जाएगा। बचा हुआ 90% भाड़ा ड्राइवर डिलीवरी के बाद ग्राहक से सीधे (नकद, UPI या किसी भी डिजिटल माध्यम से) वसूलेगा — यह भुगतान सार्थी ट्रांसपोर्ट ऐप के अंदर कलेक्ट नहीं होता। ड्राइवर के वॉलेट में न्यूनतम बैलेंस रखना अनिवार्य है।`],
+    ["6. सामान की जिम्मेदारी व लोडिंग खर्च", "सामान की सुरक्षा और सही जानकारी (मटेरियल टाइप व वजन) देना, साथ ही लोडिंग-अनलोडिंग की हमाली का पूरा खर्च उठाना ग्राहक की जिम्मेदारी है — यह ड्राइवर का खर्च नहीं है। किसी भी प्रकार के माल के नुकसान, टूट-फूट या देरी के लिए कंपनी जिम्मेदार नहीं होगी — यह जिम्मेदारी संबंधित ड्राइवर/ट्रांसपोर्टर की होगी।"],
     ["7. प्लेटफ़ॉर्म की भूमिका — केवल मध्यस्थ (सबसे ज़रूरी)",
       `सार्थी ट्रांसपोर्ट एक टेक्नोलॉजी प्लेटफ़ॉर्म है जो सिर्फ ग्राहक (लोड मालिक) और स्वतंत्र ड्राइवर/ट्रांसपोर्टर को आपस में जोड़ने का माध्यम है। कंपनी/एडमिन किसी भी माल की ढुलाई में स्वयं पक्षकार (party) नहीं है और न ही ट्रांसपोर्ट सेवा प्रदाता है। ${commissionPct}% कमीशन केवल प्लेटफ़ॉर्म इस्तेमाल करने के शुल्क के रूप में लिया जाता है, ट्रांसपोर्ट सेवा के लिए नहीं। ग्राहक और ड्राइवर के बीच हुआ हर सौदा (भाड़ा, समय, शर्तें) पूरी तरह उन दोनों के बीच का निजी अनुबंध है। माल की चोरी, नुकसान, देरी, दुर्घटना, गलत भुगतान, विवाद, या किसी भी प्रकार के प्रत्यक्ष/अप्रत्यक्ष नुकसान के लिए कंपनी, एडमिन या प्लेटफ़ॉर्म किसी भी रूप में उत्तरदायी (liable) नहीं होगा। ऐसे किसी भी मामले की पूरी जिम्मेदारी संबंधित ग्राहक और ड्राइवर की खुद की होगी।`],
     ["8. विवाद और क्षेत्राधिकार", "किसी भी शिकायत या विवाद की स्थिति में SOS सेक्शन से एडमिन से संपर्क करें — एडमिन केवल सहायता (facilitation) के तौर पर मदद कर सकता है, इसका मतलब यह नहीं कि विवाद की जिम्मेदारी एडमिन की है। किसी भी कानूनी विवाद की स्थिति में क्षेत्राधिकार (Jurisdiction) केवल पिंपरी-चिंचवड़ / पुणे कोर्ट का रहेगा।"],
@@ -2207,38 +2494,56 @@ function TermsFooterLink({ onOpen, lang }) {
 // ROOT APP
 // =====================================================================
 export default function App() {
-  const [app, setApp] = useState("customer");
-  const [role, setRole] = useState(null);
-  const [adminAuth, setAdminAuth] = useState(false);
+  // Persisted so the app remembers the user's role choice and data across reloads —
+  // real re-auth (OTP/password) still runs each time via the *Auth verified flags.
+  const [app, setApp] = usePersistedState("sarthi_app", "customer");
+  const [role, setRole] = usePersistedState("sarthi_role", null);
+  const [adminAuth, setAdminAuth] = usePersistedState("sarthi_adminAuth", false);
+  const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
+  const [customerAddress, setCustomerAddress] = usePersistedState("sarthi_customerAddress", { verified: false, name: "", address: "", area: "", city: "", pincode: "" });
+  const [driverAuth, setDriverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
   const logout = () => {
     if (role === "admin") setAdminAuth(false);
     if (role === "customer") setCustomerAuth({ verified: false, mobile: "" });
     if (role === "driver") setDriverAuth({ verified: false, mobile: "" });
     setRole(null);
   };
-  const [lang, setLang] = useState("hi");
+  const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
   const [showTerms, setShowTerms] = useState(false);
-  const [vehicleTypes, setVehicleTypes] = useState(DEFAULT_VEHICLES);
-  const [customMaterials, setCustomMaterials] = useState({}); // { hiName: {hi, en} }
+  const [vehicleTypes, setVehicleTypes] = usePersistedState("sarthi_vehicleTypes", DEFAULT_VEHICLES);
+  const [customMaterials, setCustomMaterials] = usePersistedState("sarthi_customMaterials", {}); // { hiName: {hi, en} }
   const addCustomMaterial = (key, labels) => setCustomMaterials((prev) => ({ ...prev, [key]: labels }));
-  const [commissionPct, setCommissionPct] = useState(0);
-  const [bonusPct, setBonusPct] = useState(0);
-  const [trialMode, setTrialMode] = useState(true);
-  const [minWallet, setMinWallet] = useState(500);
-  const [customerAuth, setCustomerAuth] = useState({ verified: false, mobile: "" });
-  const [customerAddress, setCustomerAddress] = useState({ verified: false, name: "", address: "", area: "", city: "", pincode: "" });
-  const [driverAuth, setDriverAuth] = useState({ verified: false, mobile: "" });
+  const [commissionPct, setCommissionPct] = usePersistedState("sarthi_commissionPct", 0);
+  const [bonusPct, setBonusPct] = usePersistedState("sarthi_bonusPct", 0);
+  const [trialMode, setTrialMode] = usePersistedState("sarthi_trialMode", true);
+  const [minWallet, setMinWallet] = usePersistedState("sarthi_minWallet", 500);
+
+  // 2-month free trial: the clock starts the first time the app runs in this
+  // browser and is never rewritten again, so it behaves like a launch date.
+  // (A real production deployment would track this server-side, once per
+  // deployment rather than per browser — see README.)
+  const [trialStartDate] = usePersistedState("sarthi_trialStartDate", Date.now());
+  const trialDaysLeft = Math.max(0, TRIAL_DAYS - Math.floor((Date.now() - trialStartDate) / DAY_MS));
+  const trialExpired = trialDaysLeft <= 0;
+  useEffect(() => {
+    if (trialExpired && trialMode) {
+      setTrialMode(false);
+      setCommissionPct(10);
+      setBonusPct(2);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trialExpired]);
 
   const addVehicleType = (v) => setVehicleTypes((prev) => [...prev, v]);
 
-  const [drivers, setDrivers] = useState([
-    { id: "D-1", name: "विकास पवार", vehicleNumber: "MH-14-AB-4521", zone: "पुणे", online: true, kyc: "Approved", wallet: 1200, busy: false, rating: 4.7, vehicleType: "chhota" },
-    { id: "D-2", name: "सुनील यादव", vehicleNumber: "DL-01-CD-1187", zone: "दिल्ली", online: true, kyc: "Approved", wallet: 300, busy: false, rating: 4.3, vehicleType: "chhota" },
-    { id: "D-3", name: "अजय शिंदे", vehicleNumber: "MH-02-EF-7710", zone: "मुंबई", online: false, kyc: "Pending", wallet: 0, busy: false, rating: 4.5, vehicleType: "pickup" },
+  const [drivers, setDrivers] = usePersistedState("sarthi_drivers", [
+    { id: "D-1", name: "विकास पवार", mobile: "9822011111", vehicleNumber: "MH-14-AB-4521", zone: "पुणे", online: true, kyc: "Approved", wallet: 1200, busy: false, rating: 4.7, vehicleType: "chhota" },
+    { id: "D-2", name: "सुनील यादव", mobile: "9822022222", vehicleNumber: "DL-01-CD-1187", zone: "दिल्ली", online: true, kyc: "Approved", wallet: 300, busy: false, rating: 4.3, vehicleType: "chhota" },
+    { id: "D-3", name: "अजय शिंदे", mobile: "9822033333", vehicleNumber: "MH-02-EF-7710", zone: "मुंबई", online: false, kyc: "Pending", wallet: 0, busy: false, rating: 4.5, vehicleType: "pickup" },
   ]);
 
-  const [driver, setDriver] = useState({
-    name: "रमेश पटेल", online: true, kyc: "Approved", wallet: 1200, bonus: 0, rating: 4.7,
+  const [driver, setDriver] = usePersistedState("sarthi_driver", {
+    name: "रमेश पटेल", mobile: "", online: true, kyc: "Approved", wallet: 1200, bonus: 0, heldCredit: 0, rating: 4.7,
     docs: { aadhaar: "aadhaar.jpg", dl: "dl.jpg", rc: "rc.jpg", photo: "driver-photo.jpg", insurance: "insurance.jpg" },
     vehicleSpec: {
       type: "chhota",
@@ -2246,34 +2551,53 @@ export default function App() {
       capacityKg: 750, length: 7, width: 4.5, height: 4.5, vehicleNumber: "MH14AB4521",
     },
   });
+  const [driverResubmitting, setDriverResubmitting] = useState(false);
+  useEffect(() => {
+    if (driver.kyc !== "Rejected") setDriverResubmitting(false);
+  }, [driver.kyc]);
 
-  const [bookings, setBookings] = useState([
+  const [bookings, setBookings] = usePersistedState("sarthi_bookings", [
     {
       id: "TS-90001", pickup: "MG रोड, पिंपरी", drop: "MIDC, भोसरी", vehicle: "chhota", material: "बॉक्स / कार्टन", weight: "300", distance: 8,
       status: "Completed", bids: [], fare: 850, driverName: "रमेश पटेल", hours: 3, extraHourRate: 100,
       progress: 100, rating: 5,
     },
   ]);
-  const [tripLog, setTripLog] = useState([
+  const [tripLog, setTripLog] = usePersistedState("sarthi_tripLog", [
     {
       id: "TS-90001", pickup: "MG रोड, पिंपरी", drop: "MIDC, भोसरी", vehicle: "chhota", fare: 850, driverName: "रमेश पटेल",
       hours: 3, extraHourRate: 100, status: "Completed", rating: 5,
     },
   ]);
-  const [alerts, setAlerts] = useState([]);
-  const [withdrawals, setWithdrawals] = useState([]);
+  const [alerts, setAlerts] = usePersistedState("sarthi_alerts", []);
+  const [withdrawals, setWithdrawals] = usePersistedState("sarthi_withdrawals", []);
   const requestWithdrawal = (amount) => {
     if (amount <= 0) return;
     setDriver((d) => ({ ...d, bonus: Math.max(0, (d.bonus || 0) - amount) }));
     setWithdrawals((prev) => [{ id: genId("W"), driverName: driver.name, amount, status: "Pending", time: new Date().toLocaleTimeString("hi-IN", { hour: "2-digit", minute: "2-digit" }) }, ...prev]);
   };
   const approveWithdrawal = (id) => setWithdrawals((prev) => prev.map((w) => w.id === id ? { ...w, status: "Approved" } : w));
+
+  // Recharging the main wallet is a request admin must approve (proof of an
+  // outside UPI/cash payment), not an instant self-credit.
+  const [rechargeRequests, setRechargeRequests] = usePersistedState("sarthi_rechargeRequests", []);
+  const requestRecharge = (amount) => {
+    if (amount <= 0) return;
+    setRechargeRequests((prev) => [{ id: genId("R"), driverName: driver.name, amount, status: "Pending", time: new Date().toLocaleTimeString("hi-IN", { hour: "2-digit", minute: "2-digit" }) }, ...prev]);
+  };
+  const approveRecharge = (id) => {
+    setRechargeRequests((prev) => {
+      const req = prev.find((r) => r.id === id);
+      if (req && req.status === "Pending") setDriver((d) => ({ ...d, wallet: d.wallet + req.amount }));
+      return prev.map((r) => r.id === id ? { ...r, status: "Approved" } : r);
+    });
+  };
   const progressTimer = useRef(null);
 
   const createLoad = ({ pickup, drop, vehicle, material, weight, distance, scheduledFor }) => {
     const id = genId();
     setBookings((prev) => [
-      { id, pickup, drop, vehicle, material, weight, distance, status: "Bidding", bids: [], fare: null, driverName: null, progress: 0, scheduledFor: scheduledFor || null },
+      { id, pickup, drop, vehicle, material, weight, distance, status: "Bidding", bids: [], fare: null, driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "" },
       ...prev,
     ]);
     // simulate other drivers on the marketplace placing bids after a short delay
@@ -2300,6 +2624,10 @@ export default function App() {
     }));
   };
 
+  // Resolves a driver's mobile number by name — checks the currently
+  // controlled test driver first, then the simulated marketplace drivers.
+  const mobileForDriverName = (name) => (name === driver.name ? driver.mobile : drivers.find((d) => d.name === name)?.mobile) || "";
+
   const acceptBid = (bookingId, bidId) => {
     let acceptedFare = 0, acceptedDriver = "", acceptedHours = 0, acceptedExtraRate = 0;
     const otp = String(Math.floor(1000 + Math.random() * 9000));
@@ -2308,18 +2636,26 @@ export default function App() {
       const bid = b.bids.find((x) => x.id === bidId);
       if (!bid) return b;
       acceptedFare = bid.amount; acceptedDriver = bid.driverName; acceptedHours = bid.hours; acceptedExtraRate = bid.extraHourRate;
-      return { ...b, status: "Ongoing", fare: bid.amount, driverName: bid.driverName, hours: bid.hours, extraHourRate: bid.extraHourRate, progress: 0, otp };
+      return { ...b, status: "Ongoing", fare: bid.amount, driverName: bid.driverName, driverMobile: mobileForDriverName(bid.driverName), hours: bid.hours, extraHourRate: bid.extraHourRate, progress: 0, otp };
     }));
     setTimeout(() => {
       if (!acceptedDriver) return;
+      // 10% commission cut instantly on acceptance; any held credit from a
+      // past cancellation offsets this trip's commission first.
       if (acceptedDriver === driver.name) {
         const commissionAmt = acceptedFare * (commissionPct / 100);
         const bonusAmt = acceptedFare * (bonusPct / 100);
-        setDriver((d) => ({ ...d, wallet: Math.max(0, d.wallet - commissionAmt), bonus: (d.bonus || 0) + bonusAmt }));
+        setDriver((d) => {
+          const held = d.heldCredit || 0;
+          const offset = Math.min(held, commissionAmt);
+          return { ...d, wallet: Math.max(0, d.wallet - (commissionAmt - offset)), bonus: (d.bonus || 0) + bonusAmt, heldCredit: Math.max(0, held - offset) };
+        });
       }
-      // Freeze: remove this driver's pending quotes from every other open load — they're now busy on this trip
+      // Freeze: pause (not delete) this driver's pending quotes on every other
+      // open load — they're busy on this trip and stop appearing as "highest"
+      // etc. on the customer's screen. They come back (unfreeze) on trip end.
       setBookings((prev) => prev.map((b) => (b.id !== bookingId && b.status === "Bidding")
-        ? { ...b, bids: b.bids.filter((x) => x.driverName !== acceptedDriver) }
+        ? { ...b, bids: b.bids.map((x) => x.driverName === acceptedDriver ? { ...x, paused: true } : x) }
         : b));
       setBookings((prev) => {
         const b = prev.find((x) => x.id === bookingId);
@@ -2331,15 +2667,26 @@ export default function App() {
     }, 0);
   };
 
+  const unfreezeDriverBids = (prev, driverName) => prev.map((b) => (b.status === "Bidding" && driverName)
+    ? { ...b, bids: b.bids.map((x) => x.driverName === driverName ? { ...x, paused: false } : x) }
+    : b);
+
   const cancelBooking = (id) => {
     setBookings((prev) => {
       const b = prev.find((x) => x.id === id);
+      let next = prev;
       if (b && b.status === "Ongoing" && b.driverName === driver.name && b.fare) {
-        const refund = b.fare * (commissionPct / 100);
+        // New cancellation rule: the cut commission/advance is held by admin,
+        // not refunded instantly — it auto-adjusts against the driver's next
+        // accepted trip so the driver isn't out of pocket.
+        const held = b.fare * (commissionPct / 100);
         const bonusReverse = b.fare * (bonusPct / 100);
-        setDriver((d) => ({ ...d, wallet: d.wallet + refund, bonus: Math.max(0, (d.bonus || 0) - bonusReverse) }));
+        setDriver((d) => ({ ...d, heldCredit: (d.heldCredit || 0) + held, bonus: Math.max(0, (d.bonus || 0) - bonusReverse) }));
       }
-      return prev.map((x) => x.id === id ? { ...x, status: "Cancelled" } : x);
+      if (b && b.status === "Ongoing" && b.driverName) {
+        next = unfreezeDriverBids(prev, b.driverName);
+      }
+      return next.map((x) => x.id === id ? { ...x, status: "Cancelled" } : x);
     });
     setTripLog((prev) => prev.map((t) => t.id === id ? { ...t, status: "Cancelled" } : t));
   };
@@ -2348,7 +2695,11 @@ export default function App() {
     setTripLog((prev) => prev.map((t) => t.id === id ? { ...t, rating } : t));
   };
   const completeBooking = (id, extraCharge = 0) => {
-    setBookings((prev) => prev.map((b) => b.id === id ? { ...b, status: "Completed", progress: 100, extraCharge, fare: b.fare + extraCharge } : b));
+    setBookings((prev) => {
+      const finished = prev.find((x) => x.id === id);
+      const next = finished?.driverName ? unfreezeDriverBids(prev, finished.driverName) : prev;
+      return next.map((b) => b.id === id ? { ...b, status: "Completed", progress: 100, extraCharge, fare: b.fare + extraCharge } : b);
+    });
     setTripLog((prev) => prev.map((t) => t.id === id ? { ...t, status: "Completed", extraCharge, fare: t.fare + extraCharge } : t));
     setDriver((d) => ({ ...d, online: true }));
   };
@@ -2368,7 +2719,7 @@ export default function App() {
     setDrivers((prev) => prev.map((d) => d.id === id ? { ...d, blacklisted: !d.blacklisted, online: d.blacklisted ? d.online : false } : d));
   };
   const allDrivers = [...drivers, {
-    id: "D-0", name: driver.name, vehicleNumber: driver.vehicleSpec?.vehicleNumber || "—", zone: lang === "en" ? "Self (Test Driver)" : "स्वयं (टेस्ट ड्राइवर)",
+    id: "D-0", name: driver.name, mobile: driver.mobile, vehicleNumber: driver.vehicleSpec?.vehicleNumber || "—", zone: lang === "en" ? "Self (Test Driver)" : "स्वयं (टेस्ट ड्राइवर)",
     online: driver.online, kyc: driver.kyc, wallet: driver.wallet, rating: driver.rating || 0, blacklisted: driver.blacklisted || false, busy: false,
     vehicleSpec: driver.vehicleSpec, docs: driver.docs,
   }];
@@ -2446,12 +2797,13 @@ export default function App() {
         )}
         {role !== null && app === "customer" && customerAuth.verified && customerAddress.verified && (
           <CustomerApp bookings={bookings} createLoad={createLoad} driverVehicle={driver.vehicleSpec} vehicleTypes={vehicleTypes}
-            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverName={driver.name} lang={lang} onLogout={logout} customerProfile={customerAddress} raiseAlert={raiseAlert} />
+            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverName={driver.name} lang={lang} onLogout={logout}
+            customerProfile={customerAddress} customerMobile={customerAuth.mobile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)} />
         )}
         {role !== null && app === "driver" && !driverAuth.verified && (
-          <CustomerLogin onVerified={(mobile) => setDriverAuth({ verified: true, mobile })} />
+          <CustomerLogin onVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setDriver((d) => ({ ...d, mobile })); }} />
         )}
-        {role !== null && app === "driver" && driverAuth.verified && !driver.vehicleSpec && (
+        {role !== null && app === "driver" && driverAuth.verified && (!driver.vehicleSpec || driverResubmitting) && (
           <div className="flex-1 overflow-y-auto">
             <div className="mx-5 mt-4 rounded-lg p-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
               <ShieldCheck size={15} color={C.marigoldDeep} />
@@ -2460,16 +2812,39 @@ export default function App() {
             <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
           </div>
         )}
-        {role !== null && app === "driver" && driverAuth.verified && driver.vehicleSpec && (
+        {role !== null && app === "driver" && driverAuth.verified && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+            {driver.kyc === "Rejected" ? (
+              <>
+                <XCircle size={40} color={C.safety} className="mb-3" />
+                <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "KYC rejected" : "KYC अस्वीकृत"}</h2>
+                <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Your documents were rejected by admin. Please review and resubmit." : "आपके दस्तावेज़ एडमिन द्वारा अस्वीकृत किए गए हैं। कृपया दोबारा जांच कर सबमिट करें।"}</p>
+                <button onClick={() => setDriverResubmitting(true)} className="rounded-lg px-5 py-2.5 text-sm font-bold text-white" style={{ background: C.marigoldDeep }}>
+                  {lang === "en" ? "Resubmit KYC" : "KYC दोबारा भरें"}
+                </button>
+              </>
+            ) : (
+              <>
+                <Clock3 size={40} color={C.marigoldDeep} className="mb-3" />
+                <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "KYC verification pending" : "KYC सत्यापन लंबित है"}</h2>
+                <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Your documents are under review. The dashboard unlocks once admin approves." : "आपके दस्तावेज़ों की समीक्षा हो रही है। एडमिन अप्रूवल के बाद डैशबोर्ड खुलेगा।"}</p>
+              </>
+            )}
+          </div>
+        )}
+        {role !== null && app === "driver" && driverAuth.verified && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
-            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onLogout={logout} withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} />
+            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} trialMode={trialMode} lang={lang} onLogout={logout}
+            withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
+            onOpenTerms={() => setShowTerms(true)} />
         )}
         {role !== null && app === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
             <AdminPanel drivers={drivers} allDrivers={allDrivers} driver={driver} updateDriverKyc={updateDriverKyc} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
-              bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} trialMode={trialMode} setTrialMode={setTrialMode} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} />
+              bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft}
+              withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} />
           </div>
         )}
 
