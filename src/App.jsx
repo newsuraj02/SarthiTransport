@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe, Menu,
+  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home,
 } from "lucide-react";
 
 // ---------------- design tokens ----------------
@@ -25,15 +25,19 @@ const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
 
 const DEFAULT_VEHICLES = [
-  { key: "chhota", label: "छोटा हाथी", rate: 20, capacity: "750 किग्रा", capacityKg: 750, l: 7, w: 4.5, h: 4.5 },
-  { key: "tataAce", label: "टाटा एस", rate: 25, capacity: "850 किग्रा", capacityKg: 850, l: 7.5, w: 4.5, h: 5 },
-  { key: "pickup", label: "पिकअप", rate: 30, capacity: "1.5 टन", capacityKg: 1500, l: 8.5, w: 5, h: 5.5 },
-  { key: "truck", label: "बड़ा ट्रक", rate: 50, capacity: "9+ टन", capacityKg: 9000, l: 19, w: 6.5, h: 7 },
+  { key: "chhota", label: "छोटा हाथी", labelEn: "Chhota Hathi (Mini Truck)", rate: 20, capacity: "750 किग्रा", capacityEn: "750 kg", capacityKg: 750, l: 7, w: 4.5, h: 4.5 },
+  { key: "tataAce", label: "टाटा एस", labelEn: "Tata Ace", rate: 25, capacity: "850 किग्रा", capacityEn: "850 kg", capacityKg: 850, l: 7.5, w: 4.5, h: 5 },
+  { key: "pickup", label: "पिकअप", labelEn: "Pickup", rate: 30, capacity: "1.5 टन", capacityEn: "1.5 ton", capacityKg: 1500, l: 8.5, w: 5, h: 5.5 },
+  { key: "truck", label: "बड़ा ट्रक", labelEn: "Big Truck", rate: 50, capacity: "9+ टन", capacityEn: "9+ ton", capacityKg: 9000, l: 19, w: 6.5, h: 7 },
 ];
 const ADD_VEHICLE_TYPE = "__add_new_vehicle__";
 function slugify(str) {
   return "v" + str.replace(/\s+/g, "").slice(0, 10) + Math.floor(Math.random() * 900 + 100);
 }
+// Vehicle types added via "+ Add new type" only have one name (like custom
+// materials), so English falls back to the same string when no labelEn exists.
+const vehicleLabel = (v, lang) => (v ? (lang === "en" ? (v.labelEn || v.label) : v.label) : "");
+const vehicleCapacity = (v, lang) => (v ? (lang === "en" ? (v.capacityEn || v.capacity) : v.capacity) : "");
 const MATERIALS = ["लोहा", "प्लास्टिक", "बॉक्स / कार्टन", "सीमेंट / बालू", "अन्य"];
 const LIGHT_BULKY_MATERIALS = ["प्लास्टिक", "बॉक्स / कार्टन"];
 const BIG_VEHICLE_KEYS = ["pickup", "truck"];
@@ -42,6 +46,8 @@ const materialLabel = (m, lang, customMap = {}) => {
   if (customMap[m]) return lang === "en" ? (customMap[m].en || customMap[m].hi) : (customMap[m].hi || customMap[m].en);
   return (lang === "en" && MATERIAL_LABELS_EN[m]) ? MATERIAL_LABELS_EN[m] : m;
 };
+const ALERT_TYPE_LABELS_EN = { "पुलिस सहायता": "Police Help", "इमरजेंसी कॉल": "Emergency Call", "व्हाट्सएप सपोर्ट": "WhatsApp Support", "शिकायत": "Complaint" };
+const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_EN[t]) ? ALERT_TYPE_LABELS_EN[t] : t;
 const ADD_MATERIAL = "__add_new__";
 
 const CITY_COLORS = ["#2B5C8A", "#3F7D4F", "#B87A12", "#E85D2F", "#7A5CB8", "#1C7A7A"];
@@ -114,7 +120,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const TRIAL_DAYS = 60;
 
 // ---------------- shared: mock map ----------------
-function MockMap({ pickup, drop, progress, zoneColor, height = 150 }) {
+function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" }) {
   const p1 = hashPos(pickup || "pickup");
   const p2 = hashPos((drop || "drop") + "x");
   const tx = p1.x + (p2.x - p1.x) * (progress ?? 0) / 100;
@@ -136,10 +142,10 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150 }) {
         )}
       </svg>
       <div className="absolute bottom-1.5 left-2 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: C.paper, color: C.ink }}>
-        📍 पिकअप
+        📍 {lang === "en" ? "Pickup" : "पिकअप"}
       </div>
       <div className="absolute top-1.5 right-2 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: C.paper, color: C.ink }}>
-        🏁 ड्रॉप
+        🏁 {lang === "en" ? "Drop" : "ड्रॉप"}
       </div>
     </div>
   );
@@ -369,7 +375,7 @@ function RoleSelect({ onSelect, lang }) {
       <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.marigold }}>
         <Truck size={30} color={C.navy} />
       </div>
-      <div className="text-xl font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Saathi Transport" : "सार्थी ट्रांसपोर्ट"}</div>
+      <div className="text-xl font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Sarthi Transport" : "सार्थी ट्रांसपोर्ट"}</div>
       <p className="text-xs text-center mb-8" style={{ color: C.inkSoft }}>
         {lang === "en" ? "Choose which app you want to open" : "आप कौन सा ऐप खोलना चाहते हैं?"}
       </p>
@@ -450,33 +456,47 @@ function AdminLogin({ onVerified, lang }) {
   );
 }
 
-function CustomerLogin({ onVerified }) {
-  const [mobile, setMobile] = useState("");
+function CustomerLogin({ onVerified, lang = "hi", knownNumbers = [], lastMobile = "" }) {
+  const [mobile, setMobile] = useState(lastMobile);
   const [otp, setOtp] = useState("");
   const [stage, setStage] = useState("mobile");
   const inputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
+  const isKnown = mobile.length === 10 && knownNumbers.includes(mobile);
+
+  const proceed = () => {
+    if (mobile.length !== 10) return;
+    if (knownNumbers.includes(mobile)) onVerified(mobile); // remembered number — skip OTP
+    else setStage("otp");
+  };
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10">
       <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.marigold }}>
         <Truck size={26} color={C.navy} />
       </div>
-      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>सार्थी ट्रांसपोर्ट में लॉगिन करें</h2>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Login to Sarthi Transport" : "सार्थी ट्रांसपोर्ट में लॉगिन करें"}</h2>
       <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>
-        {stage === "mobile" ? "अपना मोबाइल नंबर डालें" : `${mobile} पर भेजा गया OTP डालें`}
+        {stage === "mobile"
+          ? (lang === "en" ? "Enter your mobile number" : "अपना मोबाइल नंबर डालें")
+          : (lang === "en" ? `Enter the OTP sent to ${mobile}` : `${mobile} पर भेजा गया OTP डालें`)}
       </p>
 
       {stage === "mobile" ? (
         <div className="w-full space-y-3">
           <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
             <Phone size={16} color={C.inkSoft} />
-            <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder="10 अंकों का मोबाइल नंबर"
+            <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
               value={mobile} onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))} />
           </div>
-          <button onClick={() => mobile.length === 10 && setStage("otp")} disabled={mobile.length !== 10}
+          {isKnown && (
+            <div className="text-[11px] font-semibold text-center" style={{ color: C.success }}>
+              {lang === "en" ? "Welcome back — you'll be logged in directly, no OTP needed." : "वापसी पर स्वागत है — बिना OTP के सीधे लॉगिन हो जाएंगे।"}
+            </div>
+          )}
+          <button onClick={proceed} disabled={mobile.length !== 10}
             className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 ? C.marigold : C.line, color: mobile.length === 10 ? C.navy : "#8A8375" }}>
-            OTP भेजें
+            {isKnown ? (lang === "en" ? "Continue" : "आगे बढ़ें") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
           </button>
         </div>
       ) : (
@@ -486,12 +506,12 @@ function CustomerLogin({ onVerified }) {
             <input className={inputCls} style={{ ...inputStyle, border: "none" }} placeholder="• • • •" value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))} />
           </div>
-          <div className="text-[11px] text-center" style={{ color: C.inkSoft }}>डेमो OTP: 1234</div>
+          <div className="text-[11px] text-center" style={{ color: C.inkSoft }}>{lang === "en" ? "Demo OTP: 1234" : "डेमो OTP: 1234"}</div>
           <button onClick={() => otp.length === 4 && onVerified(mobile)} disabled={otp.length !== 4}
             className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 4 ? C.marigold : C.line, color: otp.length === 4 ? C.navy : "#8A8375" }}>
-            वेरीफाई करें
+            {lang === "en" ? "Verify" : "वेरीफाई करें"}
           </button>
-          <button onClick={() => setStage("mobile")} className="w-full text-center text-[11px] font-semibold" style={{ color: C.inkSoft }}>नंबर बदलें</button>
+          <button onClick={() => setStage("mobile")} className="w-full text-center text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
         </div>
       )}
     </div>
@@ -501,7 +521,7 @@ function CustomerLogin({ onVerified }) {
 // =====================================================================
 // CUSTOMER ADDRESS VERIFICATION (mandatory after login)
 // =====================================================================
-function CustomerAddressVerify({ onVerified }) {
+function CustomerAddressVerify({ onVerified, lang = "hi" }) {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [area, setArea] = useState("");
@@ -530,53 +550,53 @@ function CustomerAddressVerify({ onVerified }) {
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
         <MapPin size={22} color={C.navy} />
       </div>
-      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>अपना पता वेरीफाई करें</h2>
-      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>आगे बढ़ने से पहले अपना पूरा पता भरें और वेरीफाई करें।</p>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Verify Your Address" : "अपना पता वेरीफाई करें"}</h2>
+      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Fill in and verify your full address before continuing." : "आगे बढ़ने से पहले अपना पूरा पता भरें और वेरीफाई करें।"}</p>
 
       <div className="space-y-3">
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>पूरा नाम</label>
-          <input className={inputCls} style={inputStyle} placeholder="जैसे: रमेश पटेल" value={name}
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name}
             onChange={(e) => { setName(e.target.value); setResult(null); }} />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>पूरा पता (मकान/दुकान नं., गली)</label>
-          <input className={inputCls} style={inputStyle} placeholder="जैसे: दुकान नं. 12, MG रोड" value={address}
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : "जैसे: दुकान नं. 12, MG रोड"} value={address}
             onChange={(e) => { setAddress(e.target.value); setResult(null); }} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>एरिया</label>
-            <input className={inputCls} style={inputStyle} placeholder="जैसे: पिंपरी" value={area}
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
+            <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Pimpri" : "जैसे: पिंपरी"} value={area}
               onChange={(e) => { setArea(e.target.value); setResult(null); }} />
           </div>
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>शहर</label>
-            <input className={inputCls} style={inputStyle} placeholder="जैसे: पुणे" value={city}
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
+            <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city}
               onChange={(e) => { setCity(e.target.value); setResult(null); }} />
           </div>
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>पिनकोड</label>
-          <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} placeholder="6 अंकों का पिनकोड" value={pincode}
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+          <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
             onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setResult(null); }} />
         </div>
 
         {result === "ok" && (
           <div className="rounded-lg p-3 flex items-center gap-2" style={{ background: "#DFEEE2" }}>
             <CheckCircle2 size={16} color={C.success} />
-            <span className="text-xs font-semibold" style={{ color: C.success }}>पता सत्यापित — अब आप बुकिंग कर सकते हैं।</span>
+            <span className="text-xs font-semibold" style={{ color: C.success }}>{lang === "en" ? "Address verified — you can now book." : "पता सत्यापित — अब आप बुकिंग कर सकते हैं।"}</span>
           </div>
         )}
 
         {result !== "ok" ? (
           <button onClick={verify} disabled={!canVerify || verifying} className="w-full rounded-lg py-3 font-bold text-sm"
             style={{ background: canVerify ? C.marigold : C.line, color: canVerify ? C.navy : "#8A8375" }}>
-            {verifying ? "जाँच रहे हैं..." : "पता वेरीफाई करें"}
+            {verifying ? (lang === "en" ? "Checking..." : "जाँच रहे हैं...") : (lang === "en" ? "Verify Address" : "पता वेरीफाई करें")}
           </button>
         ) : (
           <button onClick={() => onVerified({ name, address, area, city, pincode })} className="w-full rounded-lg py-3 font-bold text-sm text-white" style={{ background: C.success }}>
-            आगे बढ़ें
+            {lang === "en" ? "Continue" : "आगे बढ़ें"}
           </button>
         )}
       </div>
@@ -788,7 +808,7 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
             <div className="rounded-lg p-2.5" style={{ background: isLightBulky ? "#FBEBD2" : "#DCE9F5" }}>
               <div className="flex items-center gap-2">
                 <Truck size={14} color={isLightBulky ? C.marigoldDeep : "#2B5C8A"} />
-                <span className="text-[11px]" style={{ color: isLightBulky ? C.marigoldDeep : "#2B5C8A" }}>{lang === "en" ? "Vehicle decided" : "गाड़ी तय"}: <b>{v.label}</b></span>
+                <span className="text-[11px]" style={{ color: isLightBulky ? C.marigoldDeep : "#2B5C8A" }}>{lang === "en" ? "Vehicle decided" : "गाड़ी तय"}: <b>{vehicleLabel(v, lang)}</b></span>
               </div>
               {isLightBulky && (
                 <div className="text-[11px] mt-1.5" style={{ color: C.marigoldDeep }}>
@@ -803,7 +823,7 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Change vehicle (optional)" : "गाड़ी बदलें (वैकल्पिक)"}</label>
             <select className={inputCls} style={inputStyle} value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
-              {VEHICLES.map((v) => <option key={v.key} value={v.key}>{v.label} · {v.capacity}</option>)}
+              {VEHICLES.map((v) => <option key={v.key} value={v.key}>{vehicleLabel(v, lang)} · {vehicleCapacity(v, lang)}</option>)}
             </select>
           </div>
         )}
@@ -819,11 +839,11 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
                 <p className="text-xs mb-4" style={{ color: C.ink }}>{lang === "en" ? "This load is light and bulky — a bigger vehicle is suggested for it. You can still choose a smaller vehicle if you prefer." : "यह माल हल्का और बड़ा है, इसके लिए बड़ी गाड़ी का सुझाव है। चाहें तो छोटी गाड़ी भी चुन सकते हैं।"}</p>
                 <div className="space-y-2">
                   <button onClick={() => setShowBulkyPopup(false)} className="w-full rounded-lg py-3 font-bold text-sm text-white" style={{ background: C.marigoldDeep }}>
-                    {lang === "en" ? `Keep suggested vehicle (${bigFit?.label})` : `सुझाई गई गाड़ी रखें (${bigFit?.label})`}
+                    {lang === "en" ? `Keep suggested vehicle (${vehicleLabel(bigFit, lang)})` : `सुझाई गई गाड़ी रखें (${vehicleLabel(bigFit, lang)})`}
                   </button>
                   <button onClick={() => { if (smallFit) setVehicle(smallFit.key); setShowAllVehicles(true); setShowBulkyPopup(false); }}
                     className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.line, color: C.ink }}>
-                    {lang === "en" ? `Use smaller vehicle instead (${smallFit?.label || "—"})` : `छोटी गाड़ी ही रखें (${smallFit?.label || "—"})`}
+                    {lang === "en" ? `Use smaller vehicle instead (${smallFit ? vehicleLabel(smallFit, lang) : "—"})` : `छोटी गाड़ी ही रखें (${smallFit ? vehicleLabel(smallFit, lang) : "—"})`}
                   </button>
                 </div>
               </div>
@@ -874,7 +894,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
     : { Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
 
   const downloadInvoice = (b) => {
-    const text = `Saathi Transport Invoice\nBooking: ${b.id}\nPickup: ${b.pickup}\nDrop: ${b.drop}\nVehicle: ${VEHICLES.find(v => v.key === b.vehicle)?.label}\nDistance: ${b.distance} km\nQuoted Fare: ${fmt(b.fare - (b.extraCharge || 0))}\nExtra Waiting Charge: ${b.extraCharge ? fmt(b.extraCharge) : "-"}\nTotal Fare: ${fmt(b.fare)}\nAllowed Hours: ${b.hours || "-"} hrs\nWaiting Charge Rate: ${b.extraHourRate ? fmt(b.extraHourRate) + "/hr" : "-"}\nStatus: ${b.status}`;
+    const text = `Sarthi Transport Invoice\nBooking: ${b.id}\nPickup: ${b.pickup}\nDrop: ${b.drop}\nVehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}\nDistance: ${b.distance} km\nQuoted Fare: ${fmt(b.fare - (b.extraCharge || 0))}\nExtra Waiting Charge: ${b.extraCharge ? fmt(b.extraCharge) : "-"}\nTotal Fare: ${fmt(b.fare)}\nAllowed Hours: ${b.hours || "-"} hrs\nWaiting Charge Rate: ${b.extraHourRate ? fmt(b.extraHourRate) + "/hr" : "-"}\nStatus: ${b.status}`;
     const blob = new Blob([text], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -884,7 +904,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
 
   const shareTrip = (b) => {
     const text = lang === "en"
-      ? `My goods are moving via Saathi Transport.\nBooking: ${b.id}\nDriver: ${driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
+      ? `My goods are moving via Sarthi Transport.\nBooking: ${b.id}\nDriver: ${driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
       : `मेरा सामान सार्थी ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${driverName || "—"}\nगाड़ी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
@@ -903,7 +923,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
               <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
             </div>
-            <div className="text-xs mb-2" style={{ color: C.ink }}>{v?.label} · {b.pickup} → {b.drop}</div>
+            <div className="text-xs mb-2" style={{ color: C.ink }}>{vehicleLabel(v, lang)} · {b.pickup} → {b.drop}</div>
             {b.scheduledFor && (
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#DCE9F5" }}>
                 <Clock3 size={12} color="#2B5C8A" />
@@ -925,7 +945,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
                       <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>
                       <div className="flex items-center gap-2 mt-1">
                         {lowest.driverName === driverName && driverVehicle?.photo ? (
-                          <img src={driverVehicle.photo.url} alt={v?.label} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                          <img src={driverVehicle.photo.url} alt={vehicleLabel(v, lang)} className="w-12 h-12 rounded-lg object-cover shrink-0" />
                         ) : (
                           <div className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.success }}>
                             <Truck size={20} color="#fff" />
@@ -967,7 +987,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
                           style={{ background: isSelected ? "#DCE9F5" : "#FBEBD2", border: isSelected ? `2px solid ${C.pimpri}` : "2px solid transparent" }}>
                           <div className="flex items-center gap-2">
                             {bid.driverName === driverName && driverVehicle?.photo ? (
-                              <img src={driverVehicle.photo.url} alt={v?.label} className="w-9 h-9 rounded-lg object-cover shrink-0" />
+                              <img src={driverVehicle.photo.url} alt={vehicleLabel(v, lang)} className="w-9 h-9 rounded-lg object-cover shrink-0" />
                             ) : (
                               <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.marigoldDeep }}>
                                 <Truck size={16} color="#fff" />
@@ -1026,7 +1046,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
               )}
               <div className="flex-1">
                 <div className="text-xs font-bold" style={{ color: C.ink }}>{b.driverName}</div>
-                <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{v?.label} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
+                <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
                 {b.hours && <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
                 <div className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: C.pimpri, fontFamily: monoFont }}>
                   <Phone size={10} /> {b.driverMobile ? <a href={`tel:${b.driverMobile}`} className="underline">{b.driverMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
@@ -1039,7 +1059,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
                 <div className="text-2xl font-bold mt-1" style={{ color: C.marigoldDeep, fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
               </div>
             )}
-            <MockMap pickup={b.pickup} drop={b.drop} progress={b.progress} zoneColor={C.pimpri} height={130} />
+            <MockMap pickup={b.pickup} drop={b.drop} progress={b.progress} zoneColor={C.pimpri} height={130} lang={lang} />
             <div className="w-full h-1.5 rounded-full mt-2" style={{ background: C.line }}>
               <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
             </div>
@@ -1047,7 +1067,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
             {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
             <div className="rounded-lg p-2 mt-2" style={{ background: "#FBEBD2" }}>
               <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>
-                {lang === "en" ? "Pay the driver directly (cash / UPI / GPay) at delivery — Saathi Transport does not collect this fare." : "डिलीवरी पर ड्राइवर को सीधे भुगतान करें (नकद / UPI / GPay) — यह भाड़ा सार्थी ट्रांसपोर्ट कलेक्ट नहीं करता।"}
+                {lang === "en" ? "Pay the driver directly (cash / UPI / GPay) at delivery — Sarthi Transport does not collect this fare." : "डिलीवरी पर ड्राइवर को सीधे भुगतान करें (नकद / UPI / GPay) — यह भाड़ा सार्थी ट्रांसपोर्ट कलेक्ट नहीं करता।"}
               </div>
             </div>
             <div className="flex items-center gap-4 mt-2">
@@ -1099,7 +1119,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
   );
 }
 
-function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile, customerMobile, raiseAlert, trialMode, onOpenTerms }) {
+function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile, customerMobile, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
   const [tab, setTab] = useState("book");
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | null
@@ -1109,11 +1129,11 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
   const shareApp = () => {
     const msg = trialMode
       ? (lang === "en"
-        ? "Try Saathi Transport for booking trucks/tempos easily! Download: https://saathitransport.example.com"
-        : "ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: https://saathitransport.example.com")
+        ? "Try Sarthi Transport for booking trucks/tempos easily! Download: https://sarthitransport.example.com"
+        : "ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: https://sarthitransport.example.com")
       : (lang === "en"
-        ? "Try Saathi Transport for booking trucks/tempos easily! Download: https://saathitransport.example.com — you both get ₹200 when your first trip is done!"
-        : "ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: https://saathitransport.example.com — पहली ट्रिप पूरी होने पर आप दोनों को ₹200 मिलेंगे!");
+        ? "Try Sarthi Transport for booking trucks/tempos easily! Download: https://sarthitransport.example.com — you both get ₹200 when your first trip is done!"
+        : "ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: https://sarthitransport.example.com — पहली ट्रिप पूरी होने पर आप दोनों को ₹200 मिलेंगे!");
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -1138,7 +1158,7 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
             <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
             {ongoingTrip ? (
               <>
-                <MockMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={200} />
+                <MockMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
                 <div className="text-xs mt-2" style={{ color: C.ink }}>{ongoingTrip.pickup} → {ongoingTrip.drop}</div>
                 <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ongoingTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>
@@ -1164,6 +1184,11 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
           <button onClick={() => setMenuOpen(true)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
             <Menu size={16} color={C.inkSoft} />
           </button>
+          {onGoHome && (
+            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
+              <Home size={16} color={C.inkSoft} />
+            </button>
+          )}
         </div>
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
@@ -1172,6 +1197,11 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
                 <div className="text-sm font-bold text-white">{customerProfile?.name || (lang === "en" ? "Customer" : "कस्टमर")}</div>
                 {customerMobile && <div className="text-[11px]" style={{ color: "#9FB0C2", fontFamily: monoFont }}>{customerMobile}</div>}
               </div>
+              {onGoHome && (
+                <button onClick={() => { onGoHome(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                  <Home size={16} color={C.marigoldDeep} /> {lang === "en" ? "Back to Main Page" : "मुख्य पेज पर वापस जाएं"}
+                </button>
+              )}
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
               </button>
@@ -1248,7 +1278,7 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang, commissionPct
         <span className="text-[10px]" style={{ color: C.inkSoft }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
       </div>
       <div className="text-xs mb-0.5" style={{ color: C.ink }}>{load.pickup} → {load.drop}</div>
-      <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{v?.label} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}</div>
+      <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{vehicleLabel(v, lang)} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}</div>
 
       {lowestOverall !== null && (
         <div className="rounded-lg p-2 mb-2 flex items-center justify-between" style={{ background: "#DFEEE2" }}>
@@ -1462,7 +1492,7 @@ function LoadSummaryCard({ load, vehicleTypes, driver, onOpen, lang }) {
         <span className="text-[10px]" style={{ color: C.inkSoft }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
       </div>
       <div className="text-xs mb-0.5" style={{ color: C.ink }}>{load.pickup} → {load.drop}</div>
-      <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{v?.label} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}</div>
+      <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{vehicleLabel(v, lang)} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}</div>
       {load.scheduledFor && (
         <div className="text-[10px] font-semibold mb-2 flex items-center gap-1" style={{ color: "#2B5C8A" }}>
           <Clock3 size={11} /> {lang === "en" ? "Scheduled" : "शेड्यूल"}: {load.scheduledFor}
@@ -1543,7 +1573,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
       {myTrip ? (
         <div className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
           <div className="text-xs font-bold mb-2" style={{ color: C.pimpri }}>{lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</div>
-          <MockMap pickup={myTrip.pickup} drop={myTrip.drop} progress={myTrip.progress} zoneColor={C.pimpri} height={130} />
+          <MockMap pickup={myTrip.pickup} drop={myTrip.drop} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
           <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
           <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : "ग्राहक"}: {myTrip.customerMobile ? <a href={`tel:${myTrip.customerMobile}`} className="underline">{myTrip.customerMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(myTrip.fare)}</div>
           <div className="text-[10px] mt-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
@@ -1805,7 +1835,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
         <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Type" : "गाड़ी का प्रकार"}</label>
         <select className={inputCls} style={{ ...inputStyle, marginBottom: addingType ? 8 : 10 }} value={vehicleType}
           onChange={(e) => { if (e.target.value === ADD_VEHICLE_TYPE) setAddingType(true); else { setVehicleType(e.target.value); setAddingType(false); } }}>
-          {VEHICLES.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
+          {VEHICLES.map((v) => <option key={v.key} value={v.key}>{vehicleLabel(v, lang)}</option>)}
           <option value={ADD_VEHICLE_TYPE}>+ {lang === "en" ? "Add new type" : "नया प्रकार जोड़ें"}</option>
         </select>
         {addingType && (
@@ -1870,7 +1900,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, trialMode, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms }) {
+function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, trialMode, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, onGoHome }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | 'liveLocation' | null
@@ -1880,11 +1910,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const shareApp = () => {
     const msg = trialMode
       ? (lang === "en"
-        ? "Join Saathi Transport as a driver — bid your own fare, no more middlemen! Download: https://saathitransport.example.com"
-        : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://saathitransport.example.com")
+        ? "Join Sarthi Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthitransport.example.com"
+        : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthitransport.example.com")
       : (lang === "en"
-        ? "Join Saathi Transport as a driver — bid your own fare, no more middlemen! Download: https://saathitransport.example.com — we both get ₹200 after your first trip!"
-        : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://saathitransport.example.com — पहली ट्रिप पूरी होने पर हम दोनों को ₹200 मिलेंगे!");
+        ? "Join Sarthi Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthitransport.example.com — we both get ₹200 after your first trip!"
+        : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthitransport.example.com — पहली ट्रिप पूरी होने पर हम दोनों को ₹200 मिलेंगे!");
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -1912,7 +1942,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
             {myTrip ? (
               <>
-                <MockMap pickup={myTrip.pickup} drop={myTrip.drop} progress={myTrip.progress} zoneColor={C.pimpri} height={200} />
+                <MockMap pickup={myTrip.pickup} drop={myTrip.drop} progress={myTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
                 <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
                 <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{myTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>
@@ -1932,6 +1962,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
           <button onClick={() => setMenuOpen(true)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
             <Menu size={16} color={C.inkSoft} />
           </button>
+          {onGoHome && (
+            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
+              <Home size={16} color={C.inkSoft} />
+            </button>
+          )}
         </div>
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
@@ -1940,6 +1975,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 <div className="text-sm font-bold text-white">{driver.name}</div>
                 {driver.mobile && <div className="text-[11px]" style={{ color: "#9FB0C2", fontFamily: monoFont }}>{driver.mobile}</div>}
               </div>
+              {onGoHome && (
+                <button onClick={() => { onGoHome(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                  <Home size={16} color={C.marigoldDeep} /> {lang === "en" ? "Back to Main Page" : "मुख्य पेज पर वापस जाएं"}
+                </button>
+              )}
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
               </button>
@@ -2176,7 +2216,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
                 <div key={a.id} className="rounded-lg p-3" style={{ background: urgent ? "#FCEAE3" : "#F0EBDC" }}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold flex items-center gap-1" style={{ color: urgent ? C.safety : C.ink }}>
-                      {urgent && <Siren size={12} />} {roleLabel[a.role] || a.role} · {a.type}
+                      {urgent && <Siren size={12} />} {roleLabel[a.role] || a.role} · {alertTypeLabel(a.type, lang)}
                     </span>
                     <span className="text-[10px]" style={{ color: C.inkSoft }}>{a.time}</span>
                   </div>
@@ -2259,29 +2299,30 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
   );
 }
 
-function AdminNotify({ drivers }) {
+function AdminNotify({ drivers, lang }) {
   const [target, setTarget] = useState("all");
   const [message, setMessage] = useState("");
   const [sentLog, setSentLog] = useState([]);
+  const allDriversLabel = lang === "en" ? "All Drivers" : "सभी ड्राइवर";
   const send = () => {
     if (!message.trim()) return;
-    const label = target === "all" ? "सभी ड्राइवर" : drivers.find((d) => d.id === target)?.name || target;
+    const label = target === "all" ? allDriversLabel : drivers.find((d) => d.id === target)?.name || target;
     setSentLog((prev) => [{ id: genId("N"), to: label, message, time: new Date().toLocaleTimeString("hi-IN", { hour: "2-digit", minute: "2-digit" }) }, ...prev]);
     setMessage("");
   };
   return (
     <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> सूचना भेजें</div>
-      <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>किसे भेजें</label>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> {lang === "en" ? "Send Notification" : "सूचना भेजें"}</div>
+      <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Send to" : "किसे भेजें"}</label>
       <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
-        <option value="all">सभी ड्राइवर</option>
+        <option value="all">{allDriversLabel}</option>
         {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
       </select>
-      <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="संदेश लिखें..." className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-      <button onClick={send} disabled={!message.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm mb-4" style={{ background: message.trim() ? C.marigold : C.line, color: message.trim() ? C.navy : "#8A8375" }}>भेजें</button>
-      <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>भेजी गई सूचनाएं</div>
+      <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+      <button onClick={send} disabled={!message.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm mb-4" style={{ background: message.trim() ? C.marigold : C.line, color: message.trim() ? C.navy : "#8A8375" }}>{lang === "en" ? "Send" : "भेजें"}</button>
+      <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Sent Notifications" : "भेजी गई सूचनाएं"}</div>
       <div className="space-y-2">
-        {sentLog.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>अभी कोई सूचना नहीं भेजी गई।</p>}
+        {sentLog.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No notifications sent yet." : "अभी कोई सूचना नहीं भेजी गई।"}</p>}
         {sentLog.map((n) => (
           <div key={n.id} className="rounded-lg p-2.5" style={{ background: "#F0EBDC" }}>
             <div className="flex items-center justify-between">
@@ -2358,7 +2399,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
   );
 }
 
-function AdminFinance({ tripLog, commissionPct }) {
+function AdminFinance({ tripLog, commissionPct, lang }) {
   const totalCommission = tripLog.filter((t) => t.status !== "Cancelled").reduce((s, t) => s + t.fare * (commissionPct / 100), 0);
   const downloadReport = () => {
     const header = "Driver,Route,Fare,Commission,Status\n";
@@ -2372,19 +2413,24 @@ function AdminFinance({ tripLog, commissionPct }) {
   return (
     <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> रिपोर्ट्स — कमीशन और कमाई</div>
+        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Reports — Commission & Earnings" : "रिपोर्ट्स — कमीशन और कमाई"}</div>
         <button onClick={downloadReport} disabled={tripLog.length === 0} className="text-[11px] font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-lg"
           style={{ color: tripLog.length ? C.marigoldDeep : C.inkSoft, background: tripLog.length ? "#FBEBD2" : "#F0EBDC" }}>
-          <Download size={12} /> एक्सेल डाउनलोड करें
+          <Download size={12} /> {lang === "en" ? "Download CSV" : "एक्सेल डाउनलोड करें"}
         </button>
       </div>
       <div className="rounded-lg p-3 mb-3" style={{ background: "#DFEEE2" }}>
-        <div className="text-[11px]" style={{ color: C.success }}>आज का कुल कमीशन ({commissionPct}%)</div>
+        <div className="text-[11px]" style={{ color: C.success }}>{lang === "en" ? `Total commission so far (${commissionPct}%)` : `आज का कुल कमीशन (${commissionPct}%)`}</div>
         <div className="text-xl font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(totalCommission)}</div>
       </div>
-      {tripLog.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>आज अभी तक कोई बिड एक्सेप्ट नहीं हुई।</p> : (
+      {tripLog.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid has been accepted yet." : "आज अभी तक कोई बिड एक्सेप्ट नहीं हुई।"}</p> : (
         <table className="w-full text-xs">
-          <thead><tr style={{ color: C.inkSoft }}><th className="text-left font-semibold pb-1">ड्राइवर</th><th className="text-left font-semibold pb-1">रूट</th><th className="text-right font-semibold pb-1">भाड़ा</th><th className="text-right font-semibold pb-1">कमीशन</th></tr></thead>
+          <thead><tr style={{ color: C.inkSoft }}>
+            <th className="text-left font-semibold pb-1">{lang === "en" ? "Driver" : "ड्राइवर"}</th>
+            <th className="text-left font-semibold pb-1">{lang === "en" ? "Route" : "रूट"}</th>
+            <th className="text-right font-semibold pb-1">{lang === "en" ? "Fare" : "भाड़ा"}</th>
+            <th className="text-right font-semibold pb-1">{lang === "en" ? "Commission" : "कमीशन"}</th>
+          </tr></thead>
           <tbody>
             {tripLog.map((t) => (
               <tr key={t.id} style={{ borderTop: `1px solid ${C.line}` }}>
@@ -2392,7 +2438,7 @@ function AdminFinance({ tripLog, commissionPct }) {
                 <td className="py-1.5" style={{ color: C.inkSoft }}>{t.pickup} → {t.drop}</td>
                 <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: C.ink }}>{fmt(t.fare)}</td>
                 <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: t.status === "Cancelled" ? C.safety : C.success }}>
-                  {t.status === "Cancelled" ? "रद्द (वापस)" : fmt(t.fare * (commissionPct / 100))}
+                  {t.status === "Cancelled" ? (lang === "en" ? "Cancelled (refunded)" : "रद्द (वापस)") : fmt(t.fare * (commissionPct / 100))}
                 </td>
               </tr>
             ))}
@@ -2430,8 +2476,8 @@ function AdminPanel({ drivers, allDrivers, driver, updateDriverKyc, tripLog, ale
       {tab === "kyc" && <AdminKyc drivers={allDrivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={allDrivers} toggleBlacklist={toggleBlacklist} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft} lang={lang} />}
-      {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} />}
-      {tab === "notify" && <AdminNotify drivers={drivers} />}
+      {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
+      {tab === "notify" && <AdminNotify drivers={drivers} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
     </div>
   );
@@ -2445,10 +2491,10 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang }) {
     ["2. Bidding System", "The customer is free to accept any one bid among multiple drivers. Once a bid is accepted, it is treated as final."],
     ["3. Cancellation", "If a trip is cancelled by either side after a driver is assigned, the deducted commission/advance fare is not refunded instantly — it is held by admin and automatically adjusted against the driver's next accepted trip, so the driver is not out of pocket. Repeated cancellations may lead to temporary account suspension."],
     ["4. Driver Responsibility", "The driver is required to submit a valid driving license, vehicle RC and KYC documents. No load will be shown until admin approves this verification."],
-    ["5. Commission and Payment", `As soon as the customer accepts a bid, ${commissionPct}% of the agreed fare will be deducted instantly from the driver's wallet as company commission, and the customer's/driver's mobile numbers are revealed to each other. Of this commission, ${bonusPct}% will be credited back to the driver's bonus account. The remaining 90% of the fare is collected by the driver directly from the customer (cash, UPI, or any digital mode) after delivery — Saathi Transport does not collect this fare inside the app. Maintaining a minimum wallet balance is mandatory.`],
+    ["5. Commission and Payment", `As soon as the customer accepts a bid, ${commissionPct}% of the agreed fare will be deducted instantly from the driver's wallet as company commission, and the customer's/driver's mobile numbers are revealed to each other. Of this commission, ${bonusPct}% will be credited back to the driver's bonus account. The remaining 90% of the fare is collected by the driver directly from the customer (cash, UPI, or any digital mode) after delivery — Sarthi Transport does not collect this fare inside the app. Maintaining a minimum wallet balance is mandatory.`],
     ["6. Responsibility for Goods & Loading Costs", "It is the customer's responsibility to ensure the safety and correct information (material type and weight) of the goods, and to bear the full cost of loading/unloading labour (hamali) — this is not the driver's expense. The company is not responsible for any loss, damage, or delay of goods — this responsibility lies with the concerned driver/transporter."],
     ["7. Platform's Role — Intermediary Only (Most Important)",
-      `Saathi Transport is a technology platform that only serves as a medium to connect the customer (load owner) and independent drivers/transporters. The company/admin is not itself a party to any transport of goods, nor a transport service provider. The ${commissionPct}% commission is charged only as a platform usage fee, not for transport service. Every deal between customer and driver (fare, timing, terms) is entirely a private agreement between the two. The company, admin, or platform will not be liable in any way for theft, damage, delay, accident, wrong payment, dispute, or any direct/indirect loss related to the goods. Full responsibility for any such matter rests with the concerned customer and driver themselves.`],
+      `Sarthi Transport is a technology platform that only serves as a medium to connect the customer (load owner) and independent drivers/transporters. The company/admin is not itself a party to any transport of goods, nor a transport service provider. The ${commissionPct}% commission is charged only as a platform usage fee, not for transport service. Every deal between customer and driver (fare, timing, terms) is entirely a private agreement between the two. The company, admin, or platform will not be liable in any way for theft, damage, delay, accident, wrong payment, dispute, or any direct/indirect loss related to the goods. Full responsibility for any such matter rests with the concerned customer and driver themselves.`],
     ["8. Disputes and Jurisdiction", "In case of any complaint or dispute, contact admin via the SOS section — admin can only help as a facilitator, this does not mean admin is responsible for the dispute. In case of any legal dispute, jurisdiction will lie only with Pimpri-Chinchwad / Pune courts."],
   ] : [
     ["1. लोड पोस्टिंग", "लोड पोस्ट करने के बाद पिकअप-ड्रॉप की जानकारी बदली नहीं जा सकती। अंतिम भाड़ा वही होगा जो ड्राइवर की स्वीकृत बोली (Accepted Bid) में तय हुआ हो।"],
@@ -2502,12 +2548,22 @@ export default function App() {
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
   const [customerAddress, setCustomerAddress] = usePersistedState("sarthi_customerAddress", { verified: false, name: "", address: "", area: "", city: "", pincode: "" });
   const [driverAuth, setDriverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
+  // Numbers that have completed OTP once on this device — logging in again
+  // with the same number skips OTP entirely, so it's a true "remembered login".
+  const [knownCustomerNumbers, setKnownCustomerNumbers] = usePersistedState("sarthi_knownCustomerNumbers", []);
+  const [knownDriverNumbers, setKnownDriverNumbers] = usePersistedState("sarthi_knownDriverNumbers", []);
+  const rememberNumber = (setKnown) => (mobile) => setKnown((prev) => (prev.includes(mobile) ? prev : [...prev, mobile]));
+  const rememberCustomerNumber = rememberNumber(setKnownCustomerNumbers);
+  const rememberDriverNumber = rememberNumber(setKnownDriverNumbers);
   const logout = () => {
     if (role === "admin") setAdminAuth(false);
     if (role === "customer") setCustomerAuth({ verified: false, mobile: "" });
     if (role === "driver") setDriverAuth({ verified: false, mobile: "" });
     setRole(null);
   };
+  // Returns to role selection without clearing OTP verification, so tapping
+  // Customer/Driver by mistake and going back doesn't force a re-login.
+  const goHome = () => setRole(null);
   const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
   const [showTerms, setShowTerms] = useState(false);
   const [vehicleTypes, setVehicleTypes] = usePersistedState("sarthi_vehicleTypes", DEFAULT_VEHICLES);
@@ -2743,7 +2799,7 @@ export default function App() {
               <Truck size={20} color={C.navy} />
             </div>
             <div className="flex-1">
-              <div className="text-white font-bold text-lg leading-none">{lang === "en" ? "Saathi Transport" : "सार्थी ट्रांसपोर्ट"}</div>
+              <div className="text-white font-bold text-lg leading-none">{lang === "en" ? "Sarthi Transport" : "सार्थी ट्रांसपोर्ट"}</div>
               <div className="text-[11px]" style={{ color: "#9FB0C2" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
             </div>
             <button onClick={() => setLang((l) => (l === "hi" ? "en" : "hi"))}
@@ -2790,18 +2846,21 @@ export default function App() {
         )}
 
         {role !== null && app === "customer" && !customerAuth.verified && (
-          <CustomerLogin onVerified={(mobile) => setCustomerAuth({ verified: true, mobile })} />
+          <CustomerLogin lang={lang} knownNumbers={knownCustomerNumbers} lastMobile={customerAuth.mobile || knownCustomerNumbers[knownCustomerNumbers.length - 1] || ""}
+            onVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); rememberCustomerNumber(mobile); }} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && !customerAddress.verified && (
-          <CustomerAddressVerify onVerified={(addr) => setCustomerAddress({ verified: true, ...addr })} />
+          <CustomerAddressVerify lang={lang} onVerified={(addr) => setCustomerAddress({ verified: true, ...addr })} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && customerAddress.verified && (
           <CustomerApp bookings={bookings} createLoad={createLoad} driverVehicle={driver.vehicleSpec} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverName={driver.name} lang={lang} onLogout={logout}
-            customerProfile={customerAddress} customerMobile={customerAuth.mobile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)} />
+            customerProfile={customerAddress} customerMobile={customerAuth.mobile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
+            onGoHome={role === "admin" ? undefined : goHome} />
         )}
         {role !== null && app === "driver" && !driverAuth.verified && (
-          <CustomerLogin onVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setDriver((d) => ({ ...d, mobile })); }} />
+          <CustomerLogin lang={lang} knownNumbers={knownDriverNumbers} lastMobile={driverAuth.mobile || knownDriverNumbers[knownDriverNumbers.length - 1] || ""}
+            onVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setDriver((d) => ({ ...d, mobile })); rememberDriverNumber(mobile); }} />
         )}
         {role !== null && app === "driver" && driverAuth.verified && (!driver.vehicleSpec || driverResubmitting) && (
           <div className="flex-1 overflow-y-auto">
@@ -2837,7 +2896,7 @@ export default function App() {
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} trialMode={trialMode} lang={lang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
-            onOpenTerms={() => setShowTerms(true)} />
+            onOpenTerms={() => setShowTerms(true)} onGoHome={role === "admin" ? undefined : goHome} />
         )}
         {role !== null && app === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">

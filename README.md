@@ -1,4 +1,4 @@
-# सार्थी ट्रांसपोर्ट (Saathi Transport)
+# सार्थी ट्रांसपोर्ट (Sarthi Transport)
 
 An all-India on-demand truck/tempo booking marketplace — customers post loads, drivers bid, and admins run the platform.
 
