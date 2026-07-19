@@ -1,0 +1,19 @@
+// Sarthi Transport — shared pilot-test Firestore rules
+//
+// Paste this into Firebase Console → Firestore Database → Rules, then Publish.
+//
+// SECURITY NOTE: this intentionally allows any client to read/write every
+// document. That's fine for a short trusted pilot with a known group of
+// 10-15 testers, but must NOT be used for a public launch — anyone with
+// your Firebase config could read/write all data. Before a real launch:
+// add Firebase Auth (e.g. phone OTP) and scope rules per authenticated user.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
