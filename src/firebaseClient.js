@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -13,6 +13,12 @@ const firebaseConfig = {
 // Falls back to null (not throwing) so the app can still boot and show a
 // clear setup message instead of a blank white screen when the pilot
 // backend hasn't been configured yet.
+//
+// autoDetectLongPolling: Firestore's default streaming transport
+// (WebChannel) can get stuck behind restrictive corporate/mobile proxies
+// that don't like long-lived connections. Auto-detecting and falling back
+// to HTTP long-polling makes the realtime sync far more reliable on the
+// kind of varied networks 10-15 pilot testers will actually be on.
 export const db = firebaseConfig.apiKey && firebaseConfig.projectId
-  ? getFirestore(initializeApp(firebaseConfig))
+  ? initializeFirestore(initializeApp(firebaseConfig), { experimentalAutoDetectLongPolling: true })
   : null;

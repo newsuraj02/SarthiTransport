@@ -5,6 +5,9 @@ import {
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home,
 } from "lucide-react";
+import {
+  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, createDoc, replaceDoc, patchDoc, seedIfEmpty,
+} from "./firestoreStore";
 
 // ---------------- design tokens ----------------
 const C = {
@@ -1771,6 +1774,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
   const [addingType, setAddingType] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState(driver.vehicleSpec?.vehicleNumber || "");
+  const [driverName, setDriverName] = useState(driver.name && driver.name !== driver.mobile ? driver.name : "");
 
   const confirmNewType = () => {
     const name = newTypeName.trim();
@@ -1785,9 +1789,11 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
     if (f) setVehiclePhoto({ name: f.name, url: URL.createObjectURL(f) });
   };
 
+  const canSubmit = driverName.trim().length >= 3;
   const submit = () => {
+    if (!canSubmit) return;
     setDriver({
-      ...driver, kyc: "Pending", docs: { aadhaar, dl, rc, photo, insurance },
+      ...driver, name: driverName.trim(), kyc: "Pending", docs: { aadhaar, dl, rc, photo, insurance },
       vehicleSpec: {
         type: vehicleType, photo: vehiclePhoto,
         capacityKg: Number(capacityKg) || undefined, length: Number(length) || undefined,
@@ -1814,6 +1820,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
       </div>
 
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 1 — Your Details" : "स्टेप 1 — आपकी जानकारी"}</div>
+      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
+      <input className={inputCls} style={{ ...inputStyle, marginBottom: 12 }} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={driverName} onChange={(e) => setDriverName(e.target.value)} />
       <div className="grid grid-cols-3 gap-2 mb-4">
         {[
           ["photo", docLabels.photo, photo, setPhoto], ["aadhaar", docLabels.aadhaar, aadhaar, setAadhaar],
@@ -1895,7 +1903,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
         </div>
       </div>
 
-      <button onClick={submit} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
+      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Enter your name to submit" : "सबमिट करने के लिए अपना नाम डालें"}</div>}
+      <button onClick={submit} disabled={!canSubmit} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: canSubmit ? C.marigold : C.line, color: canSubmit ? C.navy : "#8A8375" }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
     </div>
   );
 }
@@ -2019,14 +2028,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
 // =====================================================================
 function AdminFleet({ drivers, driver, tripLog, lang }) {
   const bookedToday = tripLog.filter((t) => t.status === "Ongoing" || t.status === "Completed").length;
-  const readyOnline = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted).length + (driver.online && driver.kyc === "Approved" && !driver.blacklisted ? 1 : 0);
+  const readyOnline = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted).length;
 
   const [vehicleQuery, setVehicleQuery] = useState("");
   const q = vehicleQuery.trim().toUpperCase();
-  const matchedDriver = q
-    ? (drivers.find((d) => d.vehicleNumber.toUpperCase() === q) ||
-       (driver.vehicleSpec?.vehicleNumber?.toUpperCase() === q ? driver : null))
-    : null;
+  const matchedDriver = q ? drivers.find((d) => d.vehicleSpec?.vehicleNumber?.toUpperCase() === q) : null;
   const vehicleHistory = matchedDriver ? tripLog.filter((t) => t.driverName === matchedDriver.name) : [];
 
   return (
@@ -2051,7 +2057,7 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
         )}
         {matchedDriver && (
           <div className="mt-3">
-            <div className="text-xs font-bold" style={{ color: C.ink }}>{matchedDriver.name} · {matchedDriver.vehicleNumber}</div>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{matchedDriver.name} · {matchedDriver.vehicleSpec?.vehicleNumber || "—"}</div>
             <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Total trips" : "कुल ट्रिप्स"}: {vehicleHistory.length}</div>
             {vehicleHistory.length === 0 ? (
               <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No trip history for this vehicle yet." : "इस गाड़ी की अभी कोई ट्रिप हिस्ट्री नहीं है।"}</p>
@@ -2083,16 +2089,16 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
               <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#D9D0BC" strokeWidth="0.3" />
             ))}
             {drivers.filter((d) => d.online).map((d) => {
-              const pos = hashPos(d.id + d.zone);
-              const color = CITY_COLORS[hashPos(d.zone).x % CITY_COLORS.length] || C.pimpri;
+              const pos = hashPos(d.mobile || d.id);
+              const color = CITY_COLORS[hashPos(d.mobile || d.id).x % CITY_COLORS.length] || C.pimpri;
               return <circle key={d.id} cx={pos.x} cy={pos.y} r="2.2" fill={color} stroke="#fff" strokeWidth="0.5" />;
             })}
           </svg>
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px]" style={{ color: C.inkSoft }}>
-          {[...new Set(drivers.filter((d) => d.online).map((d) => d.zone))].map((city) => (
-            <span key={city} className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full inline-block" style={{ background: CITY_COLORS[hashPos(city).x % CITY_COLORS.length] }} /> {city}
+          {drivers.filter((d) => d.online).map((d) => (
+            <span key={d.id} className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full inline-block" style={{ background: CITY_COLORS[hashPos(d.mobile || d.id).x % CITY_COLORS.length] }} /> {d.name}
             </span>
           ))}
           {drivers.filter((d) => d.online).length === 0 && <span>{lang === "en" ? "No vehicle is online right now" : "अभी कोई गाड़ी ऑनलाइन नहीं है"}</span>}
@@ -2120,7 +2126,7 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                 <div className="flex items-center justify-between">
                   <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1">
                     <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                    <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleNumber} · {d.zone}</div>
+                    <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
                     <div className="text-[10px] font-semibold mt-0.5" style={{ color: "#2B5C8A" }}>{expanded ? (lang === "en" ? "▲ Hide details" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : "▼ KYC डिटेल देखें")}</div>
                   </button>
                   <div className="flex gap-2">
@@ -2234,28 +2240,28 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
 function AdminDriverList({ drivers, toggleBlacklist, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
-  const filtered = drivers.filter((d) => d.name.includes(q) || d.vehicleNumber.toLowerCase().includes(q.toLowerCase()) || d.zone.includes(q));
+  const filtered = drivers.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
   const kycMeta = lang === "en"
-    ? { Approved: { label: "Verified", color: C.success, bg: "#DFEEE2" }, Pending: { label: "Pending", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "Blocked", color: C.safety, bg: "#FCEAE3" } }
-    : { Approved: { label: "सत्यापित", color: C.success, bg: "#DFEEE2" }, Pending: { label: "लंबित", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "ब्लॉक्ड", color: C.safety, bg: "#FCEAE3" } };
+    ? { Approved: { label: "Verified", color: C.success, bg: "#DFEEE2" }, Pending: { label: "Pending", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "Blocked", color: C.safety, bg: "#FCEAE3" }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#F0EBDC" } }
+    : { Approved: { label: "सत्यापित", color: C.success, bg: "#DFEEE2" }, Pending: { label: "लंबित", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "ब्लॉक्ड", color: C.safety, bg: "#FCEAE3" }, none: { label: "KYC सबमिट नहीं हुआ", color: C.inkSoft, bg: "#F0EBDC" } };
   const docLabels = lang === "en"
     ? { aadhaar: "Aadhaar Card", dl: "Driving License", rc: "Vehicle RC", photo: "Driver Photo", insurance: "Insurance" }
     : { aadhaar: "आधार कार्ड", dl: "ड्राइविंग लाइसेंस", rc: "गाड़ी RC", photo: "ड्राइवर फोटो", insurance: "इंश्योरेंस" };
   return (
     <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "All Drivers" : "सभी ड्राइवर"}</div>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or city..." : "नाम, गाड़ी नंबर या शहर से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : "कोई ड्राइवर नहीं मिला।"}</p>}
         {filtered.map((d) => {
-          const km = kycMeta[d.kyc] || kycMeta.Pending;
+          const km = kycMeta[d.kyc] || kycMeta.none;
           const expanded = expandedId === d.id;
           return (
             <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: d.blacklisted ? "#FCEAE3" : C.paper }}>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleNumber} · {d.zone} · {lang === "en" ? "Wallet" : "वॉलेट"} {fmt(d.wallet)}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : "वॉलेट"} {fmt(d.wallet)}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: d.online ? C.success : C.inkSoft, background: d.online ? "#DFEEE2" : "#F0EBDC" }}>{d.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
@@ -2450,7 +2456,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
   );
 }
 
-function AdminPanel({ drivers, allDrivers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
+function AdminPanel({ drivers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
   const [tab, setTab] = useState("fleet");
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर लिस्ट", ClipboardList], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
@@ -2473,8 +2479,8 @@ function AdminPanel({ drivers, allDrivers, driver, updateDriverKyc, tripLog, ale
         ))}
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} driver={driver} tripLog={tripLog} lang={lang} />}
-      {tab === "kyc" && <AdminKyc drivers={allDrivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
-      {tab === "drivers" && <AdminDriverList drivers={allDrivers} toggleBlacklist={toggleBlacklist} lang={lang} />}
+      {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
+      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} lang={lang} />}
@@ -2542,6 +2548,9 @@ function TermsFooterLink({ onOpen, lang }) {
 export default function App() {
   // Persisted so the app remembers the user's role choice and data across reloads —
   // real re-auth (OTP/password) still runs each time via the *Auth verified flags.
+  // This per-device stuff stays in localStorage; everything shared between
+  // testers (bookings, bids, driver profiles, admin settings...) now lives in
+  // Firestore — see firestoreStore.js.
   const [app, setApp] = usePersistedState("sarthi_app", "customer");
   const [role, setRole] = usePersistedState("sarthi_role", null);
   const [adminAuth, setAdminAuth] = usePersistedState("sarthi_adminAuth", false);
@@ -2566,227 +2575,227 @@ export default function App() {
   const goHome = () => setRole(null);
   const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
   const [showTerms, setShowTerms] = useState(false);
-  const [vehicleTypes, setVehicleTypes] = usePersistedState("sarthi_vehicleTypes", DEFAULT_VEHICLES);
   const [customMaterials, setCustomMaterials] = usePersistedState("sarthi_customMaterials", {}); // { hiName: {hi, en} }
   const addCustomMaterial = (key, labels) => setCustomMaterials((prev) => ({ ...prev, [key]: labels }));
-  const [commissionPct, setCommissionPct] = usePersistedState("sarthi_commissionPct", 0);
-  const [bonusPct, setBonusPct] = usePersistedState("sarthi_bonusPct", 0);
-  const [trialMode, setTrialMode] = usePersistedState("sarthi_trialMode", true);
-  const [minWallet, setMinWallet] = usePersistedState("sarthi_minWallet", 500);
 
-  // 2-month free trial: the clock starts the first time the app runs in this
-  // browser and is never rewritten again, so it behaves like a launch date.
-  // (A real production deployment would track this server-side, once per
-  // deployment rather than per browser — see README.)
-  const [trialStartDate] = usePersistedState("sarthi_trialStartDate", Date.now());
+  // ---------------------------------------------------------------------
+  // Shared pilot state — synced live across every tester's device via
+  // Firestore. Each collection is subscribed once on mount; every write
+  // below just fires the Firestore call and lets the subscription flow the
+  // (near-instant, local-first) update back into these mirrors.
+  // ---------------------------------------------------------------------
+  const [vehicleTypes, setVehicleTypesLocal] = useState(DEFAULT_VEHICLES);
+  const [drivers, setDrivers] = useState([]); // every driver, including "me"
+  const [driver, setDriverLocal] = useState(null); // null until my own profile loads
+  const [bookings, setBookings] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
+  const [rechargeRequests, setRechargeRequests] = useState([]);
+  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 0, minWallet: 500, trialMode: true, trialStartDate: Date.now() });
+  const commissionPct = settings.commissionPct;
+  const bonusPct = settings.bonusPct;
+  const minWallet = settings.minWallet;
+  const trialMode = settings.trialMode;
+  const trialStartDate = settings.trialStartDate;
+  const setCommissionPct = (v) => patchDoc("settings", "main", { commissionPct: typeof v === "function" ? v(commissionPct) : v }).catch((e) => console.error(e));
+  const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
+  const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
+  const setTrialMode = (v) => patchDoc("settings", "main", { trialMode: typeof v === "function" ? v(trialMode) : v }).catch((e) => console.error(e));
+
+  useEffect(() => {
+    if (!firestoreReady) return;
+    seedIfEmpty("vehicleTypes", DEFAULT_VEHICLES, "key").catch((e) => console.error("[seed vehicleTypes]", e));
+    return subscribeCollection("vehicleTypes", setVehicleTypesLocal, null);
+  }, []);
+  useEffect(() => (firestoreReady ? subscribeCollection("drivers", setDrivers, null) : undefined), []);
+  useEffect(() => (firestoreReady ? subscribeCollection("bookings", setBookings) : undefined), []);
+  useEffect(() => (firestoreReady ? subscribeCollection("alerts", setAlerts) : undefined), []);
+  useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), []);
+  useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), []);
+  useEffect(() => {
+    if (!firestoreReady) return;
+    // Subscribe first, create-if-missing in the background — awaiting the
+    // create before subscribing would leave everyone stuck on defaults
+    // forever if that one initial call is slow on a flaky connection.
+    const unsub = subscribeDoc("settings", "main", (data) => { if (data) setSettingsLocal(data); });
+    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 0, minWallet: 500, trialMode: true, trialStartDate: Date.now() })
+      .catch((e) => console.error("[settings init]", e));
+    return unsub;
+  }, []);
+
+  // My own driver profile — created on first driver login (keyed by mobile
+  // number so every tester gets their own real identity), then kept live.
+  useEffect(() => {
+    if (!firestoreReady || !driverAuth.verified || !driverAuth.mobile) { setDriverLocal(null); return; }
+    const unsub = subscribeDoc("drivers", driverAuth.mobile, (data) => setDriverLocal(data));
+    getOrCreateDoc("drivers", driverAuth.mobile, {
+      // kyc stays null (not "Pending") until they actually submit the KYC
+      // form below, so admin's approval queue doesn't fill up with blank
+      // entries for testers who've only logged in so far.
+      name: driverAuth.mobile, mobile: driverAuth.mobile, online: true, kyc: null,
+      wallet: 500, bonus: 0, heldCredit: 0, rating: 4.5, blacklisted: false, docs: null, vehicleSpec: null,
+    }).catch((e) => console.error("[driver init]", e));
+    return unsub;
+  }, [driverAuth.verified, driverAuth.mobile]);
+
+  const setDriver = (updater) => {
+    if (!driver) return;
+    const next = typeof updater === "function" ? updater(driver) : updater;
+    if (firestoreReady && driverAuth.mobile) replaceDoc("drivers", driverAuth.mobile, next).catch((e) => console.error("[driver save]", e));
+  };
+
+  const [driverResubmitting, setDriverResubmitting] = useState(false);
+  useEffect(() => {
+    if (driver?.kyc !== "Rejected") setDriverResubmitting(false);
+  }, [driver?.kyc]);
+
+  // 2-month free trial: the clock starts the first time ANY tester's browser
+  // creates the shared settings doc, so it's a real once-per-deployment
+  // launch date now (not per-browser like the old local-only version).
   const trialDaysLeft = Math.max(0, TRIAL_DAYS - Math.floor((Date.now() - trialStartDate) / DAY_MS));
   const trialExpired = trialDaysLeft <= 0;
   useEffect(() => {
     if (trialExpired && trialMode) {
-      setTrialMode(false);
-      setCommissionPct(10);
-      setBonusPct(2);
+      patchDoc("settings", "main", { trialMode: false, commissionPct: 10, bonusPct: 2 }).catch((e) => console.error(e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trialExpired]);
+  }, [trialExpired, trialMode]);
 
-  const addVehicleType = (v) => setVehicleTypes((prev) => [...prev, v]);
+  const addVehicleType = (v) => createDoc("vehicleTypes", v.key, v).catch((e) => console.error(e));
 
-  const [drivers, setDrivers] = usePersistedState("sarthi_drivers", [
-    { id: "D-1", name: "विकास पवार", mobile: "9822011111", vehicleNumber: "MH-14-AB-4521", zone: "पुणे", online: true, kyc: "Approved", wallet: 1200, busy: false, rating: 4.7, vehicleType: "chhota" },
-    { id: "D-2", name: "सुनील यादव", mobile: "9822022222", vehicleNumber: "DL-01-CD-1187", zone: "दिल्ली", online: true, kyc: "Approved", wallet: 300, busy: false, rating: 4.3, vehicleType: "chhota" },
-    { id: "D-3", name: "अजय शिंदे", mobile: "9822033333", vehicleNumber: "MH-02-EF-7710", zone: "मुंबई", online: false, kyc: "Pending", wallet: 0, busy: false, rating: 4.5, vehicleType: "pickup" },
-  ]);
+  // Trip history is just every booking that's been assigned to a driver —
+  // no separate collection to keep in sync.
+  const tripLog = bookings.filter((b) => b.driverName);
 
-  const [driver, setDriver] = usePersistedState("sarthi_driver", {
-    name: "रमेश पटेल", mobile: "", online: true, kyc: "Approved", wallet: 1200, bonus: 0, heldCredit: 0, rating: 4.7,
-    docs: { aadhaar: "aadhaar.jpg", dl: "dl.jpg", rc: "rc.jpg", photo: "driver-photo.jpg", insurance: "insurance.jpg" },
-    vehicleSpec: {
-      type: "chhota",
-      photo: { name: "truck.jpg", url: "https://images.unsplash.com/photo-1591768793355-74d04bb6608f?w=600&h=400&fit=crop" },
-      capacityKg: 750, length: 7, width: 4.5, height: 4.5, vehicleNumber: "MH14AB4521",
-    },
-  });
-  const [driverResubmitting, setDriverResubmitting] = useState(false);
-  useEffect(() => {
-    if (driver.kyc !== "Rejected") setDriverResubmitting(false);
-  }, [driver.kyc]);
-
-  const [bookings, setBookings] = usePersistedState("sarthi_bookings", [
-    {
-      id: "TS-90001", pickup: "MG रोड, पिंपरी", drop: "MIDC, भोसरी", vehicle: "chhota", material: "बॉक्स / कार्टन", weight: "300", distance: 8,
-      status: "Completed", bids: [], fare: 850, driverName: "रमेश पटेल", hours: 3, extraHourRate: 100,
-      progress: 100, rating: 5,
-    },
-  ]);
-  const [tripLog, setTripLog] = usePersistedState("sarthi_tripLog", [
-    {
-      id: "TS-90001", pickup: "MG रोड, पिंपरी", drop: "MIDC, भोसरी", vehicle: "chhota", fare: 850, driverName: "रमेश पटेल",
-      hours: 3, extraHourRate: 100, status: "Completed", rating: 5,
-    },
-  ]);
-  const [alerts, setAlerts] = usePersistedState("sarthi_alerts", []);
-  const [withdrawals, setWithdrawals] = usePersistedState("sarthi_withdrawals", []);
   const requestWithdrawal = (amount) => {
-    if (amount <= 0) return;
-    setDriver((d) => ({ ...d, bonus: Math.max(0, (d.bonus || 0) - amount) }));
-    setWithdrawals((prev) => [{ id: genId("W"), driverName: driver.name, amount, status: "Pending", time: new Date().toLocaleTimeString("hi-IN", { hour: "2-digit", minute: "2-digit" }) }, ...prev]);
+    if (amount <= 0 || !driver) return;
+    setDriver({ ...driver, bonus: Math.max(0, (driver.bonus || 0) - amount) });
+    createDoc("withdrawals", genId("W"), { driverMobile: driver.mobile, driverName: driver.name, amount, status: "Pending" }).catch((e) => console.error(e));
   };
-  const approveWithdrawal = (id) => setWithdrawals((prev) => prev.map((w) => w.id === id ? { ...w, status: "Approved" } : w));
+  const approveWithdrawal = (id) => patchDoc("withdrawals", id, { status: "Approved" }).catch((e) => console.error(e));
 
   // Recharging the main wallet is a request admin must approve (proof of an
   // outside UPI/cash payment), not an instant self-credit.
-  const [rechargeRequests, setRechargeRequests] = usePersistedState("sarthi_rechargeRequests", []);
   const requestRecharge = (amount) => {
-    if (amount <= 0) return;
-    setRechargeRequests((prev) => [{ id: genId("R"), driverName: driver.name, amount, status: "Pending", time: new Date().toLocaleTimeString("hi-IN", { hour: "2-digit", minute: "2-digit" }) }, ...prev]);
+    if (amount <= 0 || !driver) return;
+    createDoc("rechargeRequests", genId("R"), { driverMobile: driver.mobile, driverName: driver.name, amount, status: "Pending" }).catch((e) => console.error(e));
   };
   const approveRecharge = (id) => {
-    setRechargeRequests((prev) => {
-      const req = prev.find((r) => r.id === id);
-      if (req && req.status === "Pending") setDriver((d) => ({ ...d, wallet: d.wallet + req.amount }));
-      return prev.map((r) => r.id === id ? { ...r, status: "Approved" } : r);
-    });
+    const req = rechargeRequests.find((r) => r.id === id);
+    if (req && req.status === "Pending") {
+      const target = drivers.find((d) => d.mobile === req.driverMobile);
+      if (target) patchDoc("drivers", target.mobile, { wallet: (target.wallet || 0) + req.amount }).catch((e) => console.error(e));
+    }
+    patchDoc("rechargeRequests", id, { status: "Approved" }).catch((e) => console.error(e));
   };
-  const progressTimer = useRef(null);
 
   const createLoad = ({ pickup, drop, vehicle, material, weight, distance, scheduledFor }) => {
-    const id = genId();
-    setBookings((prev) => [
-      { id, pickup, drop, vehicle, material, weight, distance, status: "Bidding", bids: [], fare: null, driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "" },
-      ...prev,
-    ]);
-    // simulate other drivers on the marketplace placing bids after a short delay
-    const vType = vehicleTypes.find((v) => v.key === vehicle);
-    const baseRate = vType?.rate || 25;
-    const bidders = drivers.filter((d) => d.kyc === "Approved" && !d.blacklisted && d.name !== driver.name && d.vehicleType === vehicle).slice(0, 2);
-    bidders.forEach((d, i) => {
-      setTimeout(() => {
-        const amount = Math.round((distance * baseRate * (0.85 + Math.random() * 0.3)) / 10) * 10;
-        const durationHrs = 2 + Math.floor(Math.random() * 5);
-        const extraHourRate = Math.round((baseRate * 3 + Math.random() * 50) / 10) * 10;
-        setBookings((prev) => prev.map((b) => b.id === id && b.status === "Bidding"
-          ? { ...b, bids: [...b.bids, { id: genId("B"), driverName: d.name, amount, hours: durationHrs, extraHourRate, rating: d.rating, distanceKm: 1 + Math.floor(Math.random() * 6) }] }
-          : b));
-      }, 1200 + i * 1400 + Math.random() * 800);
-    });
+    createDoc("bookings", genId(), {
+      pickup, drop, vehicle, material, weight, distance, status: "Bidding", bids: [], fare: null,
+      driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
+    }).catch((e) => console.error(e));
   };
 
   const addBid = (bookingId, bid) => {
-    setBookings((prev) => prev.map((b) => {
-      if (b.id !== bookingId) return b;
-      const rest = b.bids.filter((x) => x.driverName !== bid.driverName);
-      return { ...b, bids: [...rest, { id: genId("B"), ...bid }] };
-    }));
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b) return;
+    const rest = (b.bids || []).filter((x) => x.driverName !== bid.driverName);
+    patchDoc("bookings", bookingId, { bids: [...rest, { id: genId("B"), ...bid }] }).catch((e) => console.error(e));
   };
 
-  // Resolves a driver's mobile number by name — checks the currently
-  // controlled test driver first, then the simulated marketplace drivers.
-  const mobileForDriverName = (name) => (name === driver.name ? driver.mobile : drivers.find((d) => d.name === name)?.mobile) || "";
+  const mobileForDriverName = (name) => drivers.find((d) => d.name === name)?.mobile || "";
+
+  const unfreezeDriverName = (driverName) => {
+    if (!driverName) return;
+    const affected = bookings.filter((b) => b.status === "Bidding" && (b.bids || []).some((x) => x.driverName === driverName && x.paused));
+    affected.forEach((b) => {
+      patchDoc("bookings", b.id, { bids: b.bids.map((x) => x.driverName === driverName ? { ...x, paused: false } : x) }).catch((e) => console.error(e));
+    });
+  };
 
   const acceptBid = (bookingId, bidId) => {
-    let acceptedFare = 0, acceptedDriver = "", acceptedHours = 0, acceptedExtraRate = 0;
+    const b = bookings.find((x) => x.id === bookingId);
+    const bid = b?.bids?.find((x) => x.id === bidId);
+    if (!b || !bid) return;
     const otp = String(Math.floor(1000 + Math.random() * 9000));
-    setBookings((prev) => prev.map((b) => {
-      if (b.id !== bookingId) return b;
-      const bid = b.bids.find((x) => x.id === bidId);
-      if (!bid) return b;
-      acceptedFare = bid.amount; acceptedDriver = bid.driverName; acceptedHours = bid.hours; acceptedExtraRate = bid.extraHourRate;
-      return { ...b, status: "Ongoing", fare: bid.amount, driverName: bid.driverName, driverMobile: mobileForDriverName(bid.driverName), hours: bid.hours, extraHourRate: bid.extraHourRate, progress: 0, otp };
-    }));
-    setTimeout(() => {
-      if (!acceptedDriver) return;
-      // 10% commission cut instantly on acceptance; any held credit from a
-      // past cancellation offsets this trip's commission first.
-      if (acceptedDriver === driver.name) {
-        const commissionAmt = acceptedFare * (commissionPct / 100);
-        const bonusAmt = acceptedFare * (bonusPct / 100);
-        setDriver((d) => {
-          const held = d.heldCredit || 0;
-          const offset = Math.min(held, commissionAmt);
-          return { ...d, wallet: Math.max(0, d.wallet - (commissionAmt - offset)), bonus: (d.bonus || 0) + bonusAmt, heldCredit: Math.max(0, held - offset) };
-        });
-      }
-      // Freeze: pause (not delete) this driver's pending quotes on every other
-      // open load — they're busy on this trip and stop appearing as "highest"
-      // etc. on the customer's screen. They come back (unfreeze) on trip end.
-      setBookings((prev) => prev.map((b) => (b.id !== bookingId && b.status === "Bidding")
-        ? { ...b, bids: b.bids.map((x) => x.driverName === acceptedDriver ? { ...x, paused: true } : x) }
-        : b));
-      setBookings((prev) => {
-        const b = prev.find((x) => x.id === bookingId);
-        if (b) {
-          setTripLog((log) => [{ ...b, driverName: acceptedDriver, fare: acceptedFare, hours: acceptedHours, extraHourRate: acceptedExtraRate, status: "Ongoing" }, ...log]);
-        }
-        return prev;
-      });
-    }, 0);
-  };
+    patchDoc("bookings", bookingId, {
+      status: "Ongoing", fare: bid.amount, driverName: bid.driverName, driverMobile: mobileForDriverName(bid.driverName),
+      hours: bid.hours, extraHourRate: bid.extraHourRate, progress: 0, otp,
+    }).catch((e) => console.error(e));
 
-  const unfreezeDriverBids = (prev, driverName) => prev.map((b) => (b.status === "Bidding" && driverName)
-    ? { ...b, bids: b.bids.map((x) => x.driverName === driverName ? { ...x, paused: false } : x) }
-    : b);
+    // 10% commission cut instantly on acceptance, only for the accepted
+    // driver's own device — any held credit from a past cancellation offsets
+    // this trip's commission first.
+    if (bid.driverName === driver?.name) {
+      const commissionAmt = bid.amount * (commissionPct / 100);
+      const bonusAmt = bid.amount * (bonusPct / 100);
+      const held = driver.heldCredit || 0;
+      const offset = Math.min(held, commissionAmt);
+      setDriver({
+        ...driver,
+        wallet: Math.max(0, driver.wallet - (commissionAmt - offset)),
+        bonus: (driver.bonus || 0) + bonusAmt,
+        heldCredit: Math.max(0, held - offset),
+      });
+    }
+
+    // Freeze: pause (not delete) this driver's pending quotes on every other
+    // open load — they're busy on this trip and stop appearing as "highest"
+    // etc. on the customer's screen. They come back (unfreeze) on trip end.
+    const others = bookings.filter((x) => x.id !== bookingId && x.status === "Bidding" && (x.bids || []).some((y) => y.driverName === bid.driverName));
+    others.forEach((x) => {
+      patchDoc("bookings", x.id, { bids: x.bids.map((y) => y.driverName === bid.driverName ? { ...y, paused: true } : y) }).catch((e) => console.error(e));
+    });
+  };
 
   const cancelBooking = (id) => {
-    setBookings((prev) => {
-      const b = prev.find((x) => x.id === id);
-      let next = prev;
-      if (b && b.status === "Ongoing" && b.driverName === driver.name && b.fare) {
-        // New cancellation rule: the cut commission/advance is held by admin,
-        // not refunded instantly — it auto-adjusts against the driver's next
-        // accepted trip so the driver isn't out of pocket.
-        const held = b.fare * (commissionPct / 100);
-        const bonusReverse = b.fare * (bonusPct / 100);
-        setDriver((d) => ({ ...d, heldCredit: (d.heldCredit || 0) + held, bonus: Math.max(0, (d.bonus || 0) - bonusReverse) }));
-      }
-      if (b && b.status === "Ongoing" && b.driverName) {
-        next = unfreezeDriverBids(prev, b.driverName);
-      }
-      return next.map((x) => x.id === id ? { ...x, status: "Cancelled" } : x);
-    });
-    setTripLog((prev) => prev.map((t) => t.id === id ? { ...t, status: "Cancelled" } : t));
+    const b = bookings.find((x) => x.id === id);
+    if (!b) return;
+    if (b.status === "Ongoing" && b.driverName === driver?.name && b.fare) {
+      // New cancellation rule: the cut commission/advance is held by admin,
+      // not refunded instantly — it auto-adjusts against the driver's next
+      // accepted trip so the driver isn't out of pocket.
+      const held = b.fare * (commissionPct / 100);
+      const bonusReverse = b.fare * (bonusPct / 100);
+      setDriver({ ...driver, heldCredit: (driver.heldCredit || 0) + held, bonus: Math.max(0, (driver.bonus || 0) - bonusReverse) });
+    }
+    if (b.status === "Ongoing" && b.driverName) unfreezeDriverName(b.driverName);
+    patchDoc("bookings", id, { status: "Cancelled" }).catch((e) => console.error(e));
   };
-  const rateBooking = (id, rating) => {
-    setBookings((prev) => prev.map((b) => b.id === id ? { ...b, rating } : b));
-    setTripLog((prev) => prev.map((t) => t.id === id ? { ...t, rating } : t));
-  };
+  const rateBooking = (id, rating) => patchDoc("bookings", id, { rating }).catch((e) => console.error(e));
   const completeBooking = (id, extraCharge = 0) => {
-    setBookings((prev) => {
-      const finished = prev.find((x) => x.id === id);
-      const next = finished?.driverName ? unfreezeDriverBids(prev, finished.driverName) : prev;
-      return next.map((b) => b.id === id ? { ...b, status: "Completed", progress: 100, extraCharge, fare: b.fare + extraCharge } : b);
-    });
-    setTripLog((prev) => prev.map((t) => t.id === id ? { ...t, status: "Completed", extraCharge, fare: t.fare + extraCharge } : t));
-    setDriver((d) => ({ ...d, online: true }));
+    const b = bookings.find((x) => x.id === id);
+    if (!b) return;
+    if (b.driverName) unfreezeDriverName(b.driverName);
+    patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge }).catch((e) => console.error(e));
+    if (b.driverName === driver?.name) setDriver({ ...driver, online: true });
   };
   const startLoading = (id, adjustMs = 0) => {
-    setBookings((prev) => prev.map((b) => {
-      if (b.id !== id) return b;
-      if (!b.loadingStartedAt) return { ...b, loadingStartedAt: Date.now() };
-      return { ...b, loadingStartedAt: b.loadingStartedAt + adjustMs };
-    }));
+    const b = bookings.find((x) => x.id === id);
+    if (!b) return;
+    const loadingStartedAt = b.loadingStartedAt ? b.loadingStartedAt + adjustMs : Date.now();
+    patchDoc("bookings", id, { loadingStartedAt }).catch((e) => console.error(e));
   };
-  const updateDriverKyc = (id, status) => {
-    if (id === "D-0") { setDriver((d) => ({ ...d, kyc: status })); return; }
-    setDrivers((prev) => prev.map((d) => d.id === id ? { ...d, kyc: status } : d));
+  const updateDriverKyc = (mobile, status) => patchDoc("drivers", mobile, { kyc: status }).catch((e) => console.error(e));
+  const toggleBlacklist = (mobile) => {
+    const d = drivers.find((x) => x.mobile === mobile);
+    if (!d) return;
+    patchDoc("drivers", mobile, { blacklisted: !d.blacklisted, online: d.blacklisted ? d.online : false }).catch((e) => console.error(e));
   };
-  const toggleBlacklist = (id) => {
-    if (id === "D-0") { setDriver((d) => ({ ...d, blacklisted: !d.blacklisted, online: d.blacklisted ? d.online : false })); return; }
-    setDrivers((prev) => prev.map((d) => d.id === id ? { ...d, blacklisted: !d.blacklisted, online: d.blacklisted ? d.online : false } : d));
-  };
-  const allDrivers = [...drivers, {
-    id: "D-0", name: driver.name, mobile: driver.mobile, vehicleNumber: driver.vehicleSpec?.vehicleNumber || "—", zone: lang === "en" ? "Self (Test Driver)" : "स्वयं (टेस्ट ड्राइवर)",
-    online: driver.online, kyc: driver.kyc, wallet: driver.wallet, rating: driver.rating || 0, blacklisted: driver.blacklisted || false, busy: false,
-    vehicleSpec: driver.vehicleSpec, docs: driver.docs,
-  }];
-  const raiseAlert = (role, type, note) => setAlerts((prev) => [{ id: genId("A"), role, type, note, time: new Date().toLocaleTimeString("hi-IN", { hour: "2-digit", minute: "2-digit" }) }, ...prev]);
+  const raiseAlert = (role, type, note) => createDoc("alerts", genId("A"), { role, type, note: note || null }).catch((e) => console.error(e));
 
+  // Simulated GPS: only the assigned driver's own device advances progress
+  // for their trip, so two devices never race to write the same field.
+  const progressTimer = useRef(null);
   useEffect(() => {
     progressTimer.current = setInterval(() => {
-      setBookings((prev) => prev.map((b) => b.status === "Ongoing" && b.progress < 95 ? { ...b, progress: b.progress + 5 } : b));
+      if (!driver) return;
+      bookings
+        .filter((b) => b.status === "Ongoing" && b.progress < 95 && b.driverName === driver.name)
+        .forEach((b) => patchDoc("bookings", b.id, { progress: b.progress + 5 }).catch((e) => console.error(e)));
     }, 1200);
     return () => clearInterval(progressTimer.current);
-  }, []);
+  }, [bookings, driver]);
 
   const isDesktop = app === "admin";
 
@@ -2850,19 +2859,27 @@ export default function App() {
             onVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); rememberCustomerNumber(mobile); }} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && !customerAddress.verified && (
-          <CustomerAddressVerify lang={lang} onVerified={(addr) => setCustomerAddress({ verified: true, ...addr })} />
+          <CustomerAddressVerify lang={lang} onVerified={(addr) => {
+            setCustomerAddress({ verified: true, ...addr });
+            if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile }).catch((e) => console.error(e));
+          }} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && customerAddress.verified && (
-          <CustomerApp bookings={bookings} createLoad={createLoad} driverVehicle={driver.vehicleSpec} vehicleTypes={vehicleTypes}
-            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverName={driver.name} lang={lang} onLogout={logout}
+          <CustomerApp bookings={bookings} createLoad={createLoad} driverVehicle={driver?.vehicleSpec} vehicleTypes={vehicleTypes}
+            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverName={driver?.name} lang={lang} onLogout={logout}
             customerProfile={customerAddress} customerMobile={customerAuth.mobile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
             onGoHome={role === "admin" ? undefined : goHome} />
         )}
         {role !== null && app === "driver" && !driverAuth.verified && (
           <CustomerLogin lang={lang} knownNumbers={knownDriverNumbers} lastMobile={driverAuth.mobile || knownDriverNumbers[knownDriverNumbers.length - 1] || ""}
-            onVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setDriver((d) => ({ ...d, mobile })); rememberDriverNumber(mobile); }} />
+            onVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); rememberDriverNumber(mobile); }} />
         )}
-        {role !== null && app === "driver" && driverAuth.verified && (!driver.vehicleSpec || driverResubmitting) && (
+        {role !== null && app === "driver" && driverAuth.verified && !driver && (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
+          </div>
+        )}
+        {role !== null && app === "driver" && driverAuth.verified && driver && (!driver.vehicleSpec || driverResubmitting) && (
           <div className="flex-1 overflow-y-auto">
             <div className="mx-5 mt-4 rounded-lg p-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
               <ShieldCheck size={15} color={C.marigoldDeep} />
@@ -2871,7 +2888,7 @@ export default function App() {
             <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
           </div>
         )}
-        {role !== null && app === "driver" && driverAuth.verified && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
+        {role !== null && app === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
             {driver.kyc === "Rejected" ? (
               <>
@@ -2891,7 +2908,7 @@ export default function App() {
             )}
           </div>
         )}
-        {role !== null && app === "driver" && driverAuth.verified && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
+        {role !== null && app === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} trialMode={trialMode} lang={lang} onLogout={logout}
@@ -2900,7 +2917,7 @@ export default function App() {
         )}
         {role !== null && app === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
-            <AdminPanel drivers={drivers} allDrivers={allDrivers} driver={driver} updateDriverKyc={updateDriverKyc} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
+            <AdminPanel drivers={drivers} driver={driver} updateDriverKyc={updateDriverKyc} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
               bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} />
