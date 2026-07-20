@@ -6,17 +6,21 @@ Built with React + Vite + Tailwind CSS + lucide-react, backed by Firebase/Firest
 
 ## Apps included
 
-- **Customer** — role selection remembered across visits, OTP login, mandatory address verification, post a load (now or in advance) with a Google Maps location picker (search + tap-to-pin + real coordinates) for pickup/drop, review driver quotes (lowest fare first), track a trip live on a real map with the driver's live GPS position, pay the driver directly (90% of the fare, outside the app), rate drivers, download invoices, and reach Contact & Helpline (call/WhatsApp/complaint) from the hamburger menu.
-- **Driver** — OTP login, KYC hard-gated (no dashboard until admin approves), get a beep+toast the instant a matching load is posted (no search bar), submit one-time fare quotes (fare, allowed hours, waiting charge), wallet with minimum-balance and commission-shortfall checks outside the free-trial period, admin-approved recharge requests, bonus withdrawals, and a held-credit pool that auto-offsets the next trip after a cancellation.
+- **Customer** — real SMS-OTP login (Firebase Phone Authentication) remembered across visits, mandatory address verification, post a load (now or in advance) with a Google Maps location picker (search + tap-to-pin + real coordinates) for pickup/drop, review driver quotes (lowest fare first), track a trip live on a real map with the driver's live GPS position, pay the driver directly (90% of the fare, outside the app), rate drivers, download invoices, and reach Contact & Helpline (call/WhatsApp/complaint) from the hamburger menu.
+- **Driver** — real SMS-OTP login, KYC hard-gated (no dashboard until admin approves), get a beep+toast the instant a matching load is posted (no search bar), submit one-time fare quotes (fare, allowed hours, waiting charge), wallet with minimum-balance and commission-shortfall checks outside the free-trial period, admin-approved recharge requests, bonus withdrawals, and a held-credit pool that auto-offsets the next trip after a cancellation.
 - **Admin** — live fleet dashboard, KYC approval desk, driver list/blacklist, wallet recharge & bonus withdrawal approvals, commission/bonus/minimum-wallet settings with a 60-day free-trial countdown that auto-switches to commercial mode, finance reports, notifications, and emergency/complaint alerts from both customers and drivers.
 
 The root `App` component starts in a demo "role switcher" mode so all three apps are reachable from one screen, and admin can preview the customer/driver apps through the same real login/verification gates a normal user goes through.
 
 Two layers of state:
 - **Shared / real-time (Firestore)** — bookings, bids, driver profiles (keyed by mobile number, so every tester gets a real identity), customers, admin settings, alerts, withdrawals, recharge requests. Any tester's write shows up on every other tester's screen live.
-- **Per-device (`localStorage`)** — role choice, login/OTP verification state, remembered phone numbers, language, and custom material list. This is intentionally local: it's about *this browser's* session, not shared data.
+- **Per-device (`localStorage`)** — role choice, a lightweight "verified" flag mirroring the Firebase Auth session, language, and custom material list. This is intentionally local: it's about *this browser's* session, not shared data.
 
 See **`firestore.rules`** for the schema/security model, **`DEPLOYMENT.md`** for how to put this on a real URL so multiple people can test it together, and **`TESTING_GUIDE.md`** for a pilot test script covering all three roles.
+
+### Phone login (real SMS OTP)
+
+Customer and driver login send a real SMS OTP via Firebase Phone Authentication (see `DEPLOYMENT.md` → "Phone login" for the one-time Firebase Console setup: enabling Blaze billing and the Phone sign-in provider). Under the hood, customer and driver each sign in through their own dedicated Firebase Auth instance (`customerFirebaseAuth` / `driverFirebaseAuth` in `src/firebaseClient.js`), so one device/browser can hold two independent verified sessions at once — one customer number and one driver number — matching how the app already lets a single device act as both. "Remembered login" is now a real, persisted Firebase Auth session rather than a locally-stored list of past numbers: log out from the hamburger menu to actually end it.
 
 ### Google Maps
 
@@ -53,4 +57,4 @@ To actually test with multiple people at once, deploy it — see `DEPLOYMENT.md`
 ## Demo credentials
 
 - Admin password: `admin123`
-- Customer/Driver OTP: `1234`
+- Customer/Driver login: real SMS OTP (or use a [test phone number](DEPLOYMENT.md#phone-login-real-sms-otp) while developing, to avoid sending real SMS)

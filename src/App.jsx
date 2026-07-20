@@ -10,6 +10,8 @@ import {
 } from "./firestoreStore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
+import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from "firebase/auth";
+import { customerFirebaseAuth, driverFirebaseAuth } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 const C = {
@@ -617,19 +619,71 @@ function AdminLogin({ onVerified, lang }) {
   );
 }
 
-function CustomerLogin({ onVerified, lang = "hi", knownNumbers = [], lastMobile = "" }) {
-  const [mobile, setMobile] = useState(lastMobile);
+// Real phone-OTP login via Firebase Authentication. `authInstance` is a
+// dedicated Auth instance (see firebaseClient.js) so a customer session and
+// a driver session can each stay signed in with their own verified number
+// on the same device. Firebase Auth's own persistence means a returning
+// user with a still-valid session skips straight past this screen (see the
+// mount effect below) — that's the real "remembered login" now, not a
+// locally-stored list of past numbers.
+function CustomerLogin({ onVerified, lang = "hi", authInstance, recaptchaContainerId }) {
+  const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
-  const [stage, setStage] = useState("mobile");
+  const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const confirmationRef = useRef(null);
+  const recaptchaRef = useRef(null);
   const inputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
-  const isKnown = mobile.length === 10 && knownNumbers.includes(mobile);
 
-  const proceed = () => {
-    if (mobile.length !== 10) return;
-    if (knownNumbers.includes(mobile)) onVerified(mobile); // remembered number — skip OTP
-    else setStage("otp");
+  // Resume an already-verified session instead of asking for OTP again.
+  useEffect(() => {
+    const existing = authInstance?.currentUser?.phoneNumber;
+    if (existing) onVerified(existing.replace("+91", ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const getRecaptcha = () => {
+    if (!recaptchaRef.current) {
+      recaptchaRef.current = new RecaptchaVerifier(authInstance, recaptchaContainerId, { size: "invisible" });
+    }
+    return recaptchaRef.current;
   };
+
+  const sendOtp = async () => {
+    if (mobile.length !== 10 || !authInstance || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      confirmationRef.current = await signInWithPhoneNumber(authInstance, "+91" + mobile, getRecaptcha());
+      setOtp("");
+      setStage("otp");
+    } catch (e) {
+      console.error(e);
+      recaptchaRef.current = null; // force a fresh widget on retry
+      setError(lang === "en" ? "Couldn't send OTP — check the number and try again." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।");
+    }
+    setSending(false);
+  };
+
+  const verifyOtp = async () => {
+    if (otp.length !== 6 || !confirmationRef.current || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      await confirmationRef.current.confirm(otp);
+      onVerified(mobile);
+    } catch (e) {
+      console.error(e);
+      setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
+    }
+    setSending(false);
+  };
+
+  if (stage === "checking") {
+    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
+  }
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10">
@@ -647,34 +701,35 @@ function CustomerLogin({ onVerified, lang = "hi", knownNumbers = [], lastMobile 
         <div className="w-full space-y-3">
           <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
             <Phone size={16} color={C.inkSoft} />
+            <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
             <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
-              value={mobile} onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))} />
+              value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
           </div>
-          {isKnown && (
-            <div className="text-[11px] font-semibold text-center" style={{ color: C.success }}>
-              {lang === "en" ? "Welcome back — you'll be logged in directly, no OTP needed." : "वापसी पर स्वागत है — बिना OTP के सीधे लॉगिन हो जाएंगे।"}
-            </div>
-          )}
-          <button onClick={proceed} disabled={mobile.length !== 10}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 ? C.marigold : C.line, color: mobile.length === 10 ? C.navy : "#8A8375" }}>
-            {isKnown ? (lang === "en" ? "Continue" : "आगे बढ़ें") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+          {error && <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>{error}</div>}
+          <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : C.line, color: mobile.length === 10 && !sending ? C.navy : "#8A8375" }}>
+            {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
           </button>
         </div>
       ) : (
         <div className="w-full space-y-3">
           <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
             <ShieldCheck size={16} color={C.inkSoft} />
-            <input className={inputCls} style={{ ...inputStyle, border: "none" }} placeholder="• • • •" value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))} />
+            <input className={inputCls} style={{ ...inputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
+              onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
           </div>
-          <div className="text-[11px] text-center" style={{ color: C.inkSoft }}>{lang === "en" ? "Demo OTP: 1234" : "डेमो OTP: 1234"}</div>
-          <button onClick={() => otp.length === 4 && onVerified(mobile)} disabled={otp.length !== 4}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 4 ? C.marigold : C.line, color: otp.length === 4 ? C.navy : "#8A8375" }}>
-            {lang === "en" ? "Verify" : "वेरीफाई करें"}
+          {error && <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>{error}</div>}
+          <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#8A8375" }}>
+            {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
           </button>
-          <button onClick={() => setStage("mobile")} className="w-full text-center text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
+          <div className="flex items-center justify-between">
+            <button onClick={() => { setStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
+            <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+          </div>
         </div>
       )}
+      <div id={recaptchaContainerId} />
     </div>
   );
 }
@@ -2794,17 +2849,13 @@ export default function App() {
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
   const [customerAddress, setCustomerAddress] = usePersistedState("sarthi_customerAddress", { verified: false, name: "", address: "", area: "", city: "", pincode: "" });
   const [driverAuth, setDriverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
-  // Numbers that have completed OTP once on this device — logging in again
-  // with the same number skips OTP entirely, so it's a true "remembered login".
-  const [knownCustomerNumbers, setKnownCustomerNumbers] = usePersistedState("sarthi_knownCustomerNumbers", []);
-  const [knownDriverNumbers, setKnownDriverNumbers] = usePersistedState("sarthi_knownDriverNumbers", []);
-  const rememberNumber = (setKnown) => (mobile) => setKnown((prev) => (prev.includes(mobile) ? prev : [...prev, mobile]));
-  const rememberCustomerNumber = rememberNumber(setKnownCustomerNumbers);
-  const rememberDriverNumber = rememberNumber(setKnownDriverNumbers);
+  // "Remembered login" is now a real Firebase Auth session (see
+  // customerFirebaseAuth/driverFirebaseAuth in firebaseClient.js) — signing
+  // out below clears it for real, instead of just a locally-stored number.
   const logout = () => {
     if (role === "admin") setAdminAuth(false);
-    if (role === "customer") setCustomerAuth({ verified: false, mobile: "" });
-    if (role === "driver") setDriverAuth({ verified: false, mobile: "" });
+    if (role === "customer") { setCustomerAuth({ verified: false, mobile: "" }); if (customerFirebaseAuth) signOut(customerFirebaseAuth).catch((e) => console.error(e)); }
+    if (role === "driver") { setDriverAuth({ verified: false, mobile: "" }); if (driverFirebaseAuth) signOut(driverFirebaseAuth).catch((e) => console.error(e)); }
     setRole(null);
   };
   // Returns to role selection without clearing OTP verification, so tapping
@@ -3094,8 +3145,8 @@ export default function App() {
         )}
 
         {role !== null && app === "customer" && !customerAuth.verified && (
-          <CustomerLogin lang={lang} knownNumbers={knownCustomerNumbers} lastMobile={customerAuth.mobile || knownCustomerNumbers[knownCustomerNumbers.length - 1] || ""}
-            onVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); rememberCustomerNumber(mobile); }} />
+          <CustomerLogin lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
+            onVerified={(mobile) => setCustomerAuth({ verified: true, mobile })} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && !customerAddress.verified && (
           <CustomerAddressVerify lang={lang} onVerified={(addr) => {
@@ -3110,8 +3161,8 @@ export default function App() {
             onGoHome={role === "admin" ? undefined : goHome} />
         )}
         {role !== null && app === "driver" && !driverAuth.verified && (
-          <CustomerLogin lang={lang} knownNumbers={knownDriverNumbers} lastMobile={driverAuth.mobile || knownDriverNumbers[knownDriverNumbers.length - 1] || ""}
-            onVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); rememberDriverNumber(mobile); }} />
+          <CustomerLogin lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
+            onVerified={(mobile) => setDriverAuth({ verified: true, mobile })} />
         )}
         {role !== null && app === "driver" && driverAuth.verified && !driver && (
           <div className="flex-1 flex items-center justify-center">

@@ -40,6 +40,17 @@ Location picking, real coordinates, and live GPS tracking need a Google Maps key
 
 Without this key the app still works — it falls back to a free OpenStreetMap-based picker and the old animated map for tracking — but location picking won't have search/autocomplete and live GPS tracking won't render on a real map.
 
+## Phone login (real SMS OTP)
+
+Customer and driver login now send a real SMS OTP via Firebase Authentication — no code changes needed, but a few one-time steps in Firebase Console:
+
+1. **Enable Blaze (pay-as-you-go)**: https://console.cloud.google.com/billing/linkedaccount?project=sarthi-transport-74865 — Phone Authentication requires this even though actual usage cost for a pilot is a few cents. (You already saw this billing page when setting up Google Maps.)
+2. **Turn on the Phone sign-in provider**: Firebase Console → your project → **Authentication** → **Sign-in method** → click **Phone** → toggle **Enable** → Save.
+3. **(Recommended for testing) Add test phone numbers**: same Phone provider screen → **Phone numbers for testing** → add e.g. `+91 9999999999` with code `123456`. Logging in with that exact number always accepts that exact code, without sending a real SMS or using your quota — use this while you and testers are just poking at the app, save real numbers for the actual pilot.
+4. **Authorized domains**: Authentication → **Settings** → **Authorized domains** — your `*.web.app` / `*.firebaseapp.com` domain is added automatically; only touch this if you deploy to a custom domain instead.
+
+Nothing else to configure — the reCAPTCHA check Firebase requires is invisible and handled automatically by the SDK.
+
 ## Important: don't deploy via a sandboxed "Artifact" preview
 
 An Artifact-style preview page blocks all outbound network requests, so it **cannot** reach Firestore — the app would fall back to solo/local behavior and testers wouldn't see each other's data. Use Option A or B above for the actual pilot link.

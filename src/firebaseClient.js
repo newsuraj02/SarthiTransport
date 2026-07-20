@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -10,6 +11,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+const hasConfig = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
+
 // Falls back to null (not throwing) so the app can still boot and show a
 // clear setup message instead of a blank white screen when the pilot
 // backend hasn't been configured yet.
@@ -19,6 +22,15 @@ const firebaseConfig = {
 // that don't like long-lived connections. Auto-detecting and falling back
 // to HTTP long-polling makes the realtime sync far more reliable on the
 // kind of varied networks 10-15 pilot testers will actually be on.
-export const db = firebaseConfig.apiKey && firebaseConfig.projectId
-  ? initializeFirestore(initializeApp(firebaseConfig), { experimentalAutoDetectLongPolling: true })
+const defaultApp = hasConfig ? initializeApp(firebaseConfig) : null;
+export const db = defaultApp
+  ? initializeFirestore(defaultApp, { experimentalAutoDetectLongPolling: true })
   : null;
+
+// Two separate named Firebase Apps (not the default one above) so a
+// customer session and a driver session can each hold their own real,
+// phone-verified Firebase Auth sign-in at the same time on one device/
+// browser — this app intentionally lets one device act as both a customer
+// and a driver with different phone numbers.
+export const customerFirebaseAuth = hasConfig ? getAuth(initializeApp(firebaseConfig, "customerAuth")) : null;
+export const driverFirebaseAuth = hasConfig ? getAuth(initializeApp(firebaseConfig, "driverAuth")) : null;
