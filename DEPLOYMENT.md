@@ -16,6 +16,7 @@ firebase login
 # Create .env.local with your Firebase web config (see .env.example)
 cp .env.example .env.local
 # then fill in the six VITE_FIREBASE_* values from Firebase Console → Project Settings → General → Your apps
+# and VITE_GOOGLE_MAPS_API_KEY from Google Cloud Console (see "Google Maps" below)
 
 npm run build
 firebase deploy --only hosting
@@ -27,7 +28,17 @@ Firebase will print a URL like `https://sarthi-transport-74865.web.app` — that
 
 ## Option B — Vercel / Netlify
 
-Either works fine for a static Vite build. Import the repo, set the six `VITE_FIREBASE_*` environment variables in the project's dashboard (same values as `.env.local`), and use the default build command (`npm run build`) and output directory (`dist`).
+Either works fine for a static Vite build. Import the repo, set the six `VITE_FIREBASE_*` environment variables plus `VITE_GOOGLE_MAPS_API_KEY` in the project's dashboard (same values as `.env.local`), and use the default build command (`npm run build`) and output directory (`dist`).
+
+## Google Maps
+
+Location picking, real coordinates, and live GPS tracking need a Google Maps key:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), pick or create a project and enable **Maps JavaScript API**, **Geocoding API**, and **Places API**. Billing must be on (Google gives a recurring free monthly credit that comfortably covers a pilot).
+2. Create an API key (APIs & Services → Credentials), then restrict it to **HTTP referrers** matching your deployed domain (e.g. `https://sarthi-transport-74865.web.app/*`) so it can't be used elsewhere.
+3. Put it in `VITE_GOOGLE_MAPS_API_KEY`.
+
+Without this key the app still works — it falls back to a free OpenStreetMap-based picker and the old animated map for tracking — but location picking won't have search/autocomplete and live GPS tracking won't render on a real map.
 
 ## Important: don't deploy via a sandboxed "Artifact" preview
 

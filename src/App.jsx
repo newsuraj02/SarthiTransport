@@ -8,6 +8,8 @@ import {
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, createDoc, replaceDoc, patchDoc, seedIfEmpty,
 } from "./firestoreStore";
+import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
+import { useGoogleMaps } from "./googleMapsContext.jsx";
 
 // ---------------- design tokens ----------------
 const C = {
@@ -154,6 +156,53 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
   );
 }
 
+// Real Google Maps live-tracking view — pickup/drop pins at real coordinates
+// plus the driver's live GPS marker. Falls back to the fake MockMap when
+// Google Maps isn't configured/loaded yet, or this booking has no real
+// coordinates (e.g. it was posted before Maps was set up).
+function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng, driverLocation, progress, zoneColor, height = 150, lang = "hi" }) {
+  const { isLoaded, hasKey } = useGoogleMaps();
+  const hasCoords = pickupLat != null && pickupLng != null && dropLat != null && dropLng != null;
+  if (!hasKey || !isLoaded || !hasCoords) {
+    return <MockMap pickup={pickup} drop={drop} progress={progress} zoneColor={zoneColor} height={height} lang={lang} />;
+  }
+  const pickupPos = { lat: pickupLat, lng: pickupLng };
+  const dropPos = { lat: dropLat, lng: dropLng };
+  const driverPos = driverLocation?.lat != null && driverLocation?.lng != null ? { lat: driverLocation.lat, lng: driverLocation.lng } : null;
+  return (
+    <div className="relative rounded-lg overflow-hidden" style={{ height, border: `1px solid ${C.line}` }}>
+      <GoogleMap
+        mapContainerStyle={{ width: "100%", height: "100%" }}
+        onLoad={(map) => {
+          const bounds = new window.google.maps.LatLngBounds();
+          bounds.extend(pickupPos);
+          bounds.extend(dropPos);
+          if (driverPos) bounds.extend(driverPos);
+          map.fitBounds(bounds, 28);
+        }}
+        options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, gestureHandling: "greedy" }}
+      >
+        <MarkerF position={pickupPos} label={{ text: "P", color: "#fff", fontSize: "10px", fontWeight: "bold" }} />
+        <MarkerF position={dropPos} label={{ text: "D", color: "#fff", fontSize: "10px", fontWeight: "bold" }} />
+        <PolylineF path={[pickupPos, dropPos]} options={{ strokeColor: zoneColor || C.marigoldDeep, strokeOpacity: 0.7, strokeWeight: 3 }} />
+        {driverPos && (
+          <MarkerF
+            position={driverPos}
+            icon={{
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: C.navy,
+              fillOpacity: 1,
+              strokeColor: "#fff",
+              strokeWeight: 2,
+            }}
+          />
+        )}
+      </GoogleMap>
+    </div>
+  );
+}
+
 function Pill({ active, onClick, children }) {
   return (
     <button onClick={onClick} className="flex-1 text-sm font-bold py-2.5 rounded-full transition-colors"
@@ -264,6 +313,115 @@ function MapPicker({ onConfirm, onClose, lang = "hi" }) {
       </div>
     </div>
   );
+}
+
+// Real Google Maps location picker — search box (Places Autocomplete) +
+// tap/drag-to-place marker + reverse geocoding, returning real lat/lng.
+function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
+  const CENTER = { lat: 18.6298, lng: 73.8131 }; // Pimpri-Chinchwad / Pune area default
+  const [marker, setMarker] = useState(null); // {lat,lng}
+  const [address, setAddress] = useState("");
+  const [loading, setLoading] = useState(false);
+  const mapRef = useRef(null);
+  const autocompleteRef = useRef(null);
+  const geocoderRef = useRef(null);
+
+  const reverseGeocode = (lat, lng) => {
+    setLoading(true);
+    if (!geocoderRef.current) geocoderRef.current = new window.google.maps.Geocoder();
+    geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
+      setLoading(false);
+      setAddress(status === "OK" && results?.[0] ? results[0].formatted_address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    });
+  };
+
+  const placeMarker = (lat, lng) => {
+    setMarker({ lat, lng });
+    reverseGeocode(lat, lng);
+  };
+
+  const onPlaceChanged = () => {
+    const place = autocompleteRef.current?.getPlace();
+    const loc = place?.geometry?.location;
+    if (!loc) return;
+    const lat = loc.lat(), lng = loc.lng();
+    setMarker({ lat, lng });
+    setAddress(place.formatted_address || place.name || "");
+    setLoading(false);
+    mapRef.current?.panTo({ lat, lng });
+    mapRef.current?.setZoom(16);
+  };
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const { latitude, longitude } = pos.coords;
+      placeMarker(latitude, longitude);
+      mapRef.current?.panTo({ lat: latitude, lng: longitude });
+      mapRef.current?.setZoom(16);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(28,42,58,0.7)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Search or tap to mark location" : "जगह खोजें या टैप करके चुनें"}</span>
+          <button onClick={onClose} className="text-xs font-bold px-2 py-1" style={{ color: C.inkSoft }}>✕</button>
+        </div>
+
+        <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged}>
+          <input
+            className="w-full rounded-lg px-3 py-2.5 text-sm outline-none mb-2"
+            style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}
+            placeholder={lang === "en" ? "Search an address" : "पता खोजें"}
+          />
+        </Autocomplete>
+
+        <div className="relative rounded-lg overflow-hidden mb-3" style={{ height: 320, cursor: "crosshair" }}>
+          <GoogleMap
+            mapContainerStyle={{ width: "100%", height: "100%" }}
+            center={marker || CENTER}
+            zoom={marker ? 15 : 12}
+            onClick={(e) => placeMarker(e.latLng.lat(), e.latLng.lng())}
+            onLoad={(map) => (mapRef.current = map)}
+            options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+          >
+            {marker && <MarkerF position={marker} draggable onDragEnd={(e) => placeMarker(e.latLng.lat(), e.latLng.lng())} />}
+          </GoogleMap>
+        </div>
+
+        <button type="button" onClick={useMyLocation} className="text-xs font-semibold mb-3 flex items-center gap-1" style={{ color: "#2B5C8A" }}>
+          <Navigation size={12} /> {lang === "en" ? "Use my current location" : "मेरी मौजूदा जगह इस्तेमाल करें"}
+        </button>
+
+        <div className="rounded-lg p-3 mb-3" style={{ background: C.paper, minHeight: 50 }}>
+          {loading ? (
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Finding address..." : "पता ढूंढा जा रहा है..."}</span>
+          ) : marker ? (
+            <span className="text-xs" style={{ color: C.ink }}>{address}</span>
+          ) : (
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Search above or tap anywhere on the map to drop a pin" : "ऊपर खोजें या मैप पर कहीं भी टैप करके पिन लगाएं"}</span>
+          )}
+        </div>
+
+        <button onClick={() => marker && onConfirm(address, marker.lat, marker.lng)} disabled={!marker || loading}
+          className="w-full rounded-lg py-3 font-bold text-sm"
+          style={{ background: marker && !loading ? C.marigoldDeep : C.line, color: marker && !loading ? "#fff" : "#8A8375" }}>
+          {lang === "en" ? "Use this location" : "यह जगह इस्तेमाल करें"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Picks the real Google Maps picker when a Maps API key is configured and
+// loaded; otherwise falls back to the free OSM-based picker so location
+// picking still works before/without a Google Maps key.
+function LocationPicker(props) {
+  const { isLoaded, hasKey } = useGoogleMaps();
+  if (hasKey && isLoaded) return <GoogleLocationPicker {...props} />;
+  return <MapPicker {...props} />;
 }
 
 function MicButton({ onResult, lang = "hi-IN" }) {
@@ -617,6 +775,8 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
   const [advanceTime, setAdvanceTime] = useState("");
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
+  const [pickupCoords, setPickupCoords] = useState(null); // {lat,lng} | null
+  const [dropCoords, setDropCoords] = useState(null);
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
   const [showAllVehicles, setShowAllVehicles] = useState(true);
   const [material, setMaterial] = useState(MATERIALS[0]);
@@ -656,10 +816,15 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
 
   const post = () => {
     if (!canPost) return;
-    createLoad({ pickup, drop, vehicle, material, weight, distance, scheduledFor: bookingMode === "advance" ? `${advanceDate} ${advanceTime}` : null });
+    createLoad({
+      pickup, drop, vehicle, material, weight, distance, scheduledFor: bookingMode === "advance" ? `${advanceDate} ${advanceTime}` : null,
+      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+    });
     setPosted(true);
     setTimeout(() => setPosted(false), 3000);
     setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
+    setPickupCoords(null); setDropCoords(null);
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
@@ -705,7 +870,11 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
           </div>
         )}
         {lastBooking && !pickup && !drop && (
-          <button onClick={() => { setPickup(lastBooking.pickup); setDrop(lastBooking.drop); setMaterial(lastBooking.material); }}
+          <button onClick={() => {
+            setPickup(lastBooking.pickup); setDrop(lastBooking.drop); setMaterial(lastBooking.material);
+            setPickupCoords(lastBooking.pickupLat != null && lastBooking.pickupLng != null ? { lat: lastBooking.pickupLat, lng: lastBooking.pickupLng } : null);
+            setDropCoords(lastBooking.dropLat != null && lastBooking.dropLng != null ? { lat: lastBooking.dropLat, lng: lastBooking.dropLng } : null);
+          }}
             className="w-full flex items-center gap-2.5 rounded-lg p-2.5 text-left" style={{ background: "#DFEEE2" }}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: C.success }}>
               <Package size={15} color="#fff" />
@@ -722,8 +891,8 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : "पिकअप"}</label>
             <div className="flex items-center gap-1.5">
-              <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Pickup address" : "पिकअप पता"} value={pickup} onChange={(e) => setPickup(e.target.value)} />
-              <MicButton onResult={(text) => setPickup((p) => (p ? p + " " : "") + text)} />
+              <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Pickup address" : "पिकअप पता"} value={pickup} onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }} />
+              <MicButton onResult={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); }} />
               <button type="button" onClick={() => setMapField("pickup")} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#DCE9F5" }}>
                 <MapPin size={14} color="#2B5C8A" />
               </button>
@@ -733,7 +902,7 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
             ) : suggestAreas(pickup).length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {suggestAreas(pickup).map((a) => (
-                  <button key={a} onClick={() => setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a)}
+                  <button key={a} onClick={() => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
                     className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#DCE9F5", color: "#2B5C8A" }}>{a}</button>
                 ))}
               </div>
@@ -742,8 +911,8 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : "ड्रॉप"}</label>
             <div className="flex items-center gap-1.5">
-              <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Drop address" : "ड्रॉप पता"} value={drop} onChange={(e) => setDrop(e.target.value)} />
-              <MicButton onResult={(text) => setDrop((d) => (d ? d + " " : "") + text)} />
+              <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Drop address" : "ड्रॉप पता"} value={drop} onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }} />
+              <MicButton onResult={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); }} />
               <button type="button" onClick={() => setMapField("drop")} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#DCE9F5" }}>
                 <MapPin size={14} color="#2B5C8A" />
               </button>
@@ -753,7 +922,7 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
             ) : suggestAreas(drop).length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {suggestAreas(drop).map((a) => (
-                  <button key={a} onClick={() => setDrop(drop.trim() + (drop.trim() ? ", " : "") + a)}
+                  <button key={a} onClick={() => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
                     className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#DCE9F5", color: "#2B5C8A" }}>{a}</button>
                 ))}
               </div>
@@ -873,11 +1042,13 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
       </div>
 
       {mapField && (
-        <MapPicker
+        <LocationPicker
           lang={lang}
           onClose={() => setMapField(null)}
-          onConfirm={(address) => {
-            if (mapField === "pickup") setPickup(address); else setDrop(address);
+          onConfirm={(address, lat, lng) => {
+            const coords = lat != null && lng != null ? { lat, lng } : null;
+            if (mapField === "pickup") { setPickup(address); setPickupCoords(coords); }
+            else { setDrop(address); setDropCoords(coords); }
             setMapField(null);
           }}
         />
@@ -1062,7 +1233,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
                 <div className="text-2xl font-bold mt-1" style={{ color: C.marigoldDeep, fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
               </div>
             )}
-            <MockMap pickup={b.pickup} drop={b.drop} progress={b.progress} zoneColor={C.pimpri} height={130} lang={lang} />
+            <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng} driverLocation={b.driverLocation} progress={b.progress} zoneColor={C.pimpri} height={130} lang={lang} />
             <div className="w-full h-1.5 rounded-full mt-2" style={{ background: C.line }}>
               <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
             </div>
@@ -1161,7 +1332,7 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
             <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
             {ongoingTrip ? (
               <>
-                <MockMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
+                <LiveTrackingMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} pickupLat={ongoingTrip.pickupLat} pickupLng={ongoingTrip.pickupLng} dropLat={ongoingTrip.dropLat} dropLng={ongoingTrip.dropLng} driverLocation={ongoingTrip.driverLocation} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
                 <div className="text-xs mt-2" style={{ color: C.ink }}>{ongoingTrip.pickup} → {ongoingTrip.drop}</div>
                 <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ongoingTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>
@@ -1541,6 +1712,26 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadIdsKey]);
 
+  // Real GPS live-tracking: while this driver has an active trip, share their
+  // actual device location so the customer (and admin fleet map) see it live.
+  const lastGpsWriteRef = useRef(0);
+  useEffect(() => {
+    if (!myTrip || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
+        lastGpsWriteRef.current = now;
+        const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
+        patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
+        if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
+      },
+      (err) => console.error("GPS tracking error", err),
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [myTrip?.id, driver.mobile]);
+
   return (
     <div className="px-5 py-5">
       <div className="flex items-center justify-between mb-4">
@@ -1576,7 +1767,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
       {myTrip ? (
         <div className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
           <div className="text-xs font-bold mb-2" style={{ color: C.pimpri }}>{lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</div>
-          <MockMap pickup={myTrip.pickup} drop={myTrip.drop} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
+          <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
           <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
           <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : "ग्राहक"}: {myTrip.customerMobile ? <a href={`tel:${myTrip.customerMobile}`} className="underline">{myTrip.customerMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(myTrip.fare)}</div>
           <div className="text-[10px] mt-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
@@ -1951,7 +2142,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
             {myTrip ? (
               <>
-                <MockMap pickup={myTrip.pickup} drop={myTrip.drop} progress={myTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
+                <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
                 <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
                 <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{myTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>
@@ -2026,6 +2217,65 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
 // =====================================================================
 // ADMIN PANEL (desktop)
 // =====================================================================
+// Live fleet map — plots drivers at their real last-known GPS position
+// (shared while they're on an active trip) when Google Maps is configured
+// and at least one driver has reported one; otherwise falls back to the
+// old fake hashed-position layout so the panel still shows something.
+function AdminFleetMap({ drivers, lang }) {
+  const { isLoaded, hasKey } = useGoogleMaps();
+  const online = drivers.filter((d) => d.online);
+  const withLoc = online.filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null);
+
+  if (hasKey && isLoaded && withLoc.length > 0) {
+    return (
+      <div className="relative rounded-lg overflow-hidden" style={{ height: 260 }}>
+        <GoogleMap
+          mapContainerStyle={{ width: "100%", height: "100%" }}
+          onLoad={(map) => {
+            const bounds = new window.google.maps.LatLngBounds();
+            withLoc.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
+            map.fitBounds(bounds, 30);
+          }}
+          options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, gestureHandling: "greedy" }}
+        >
+          {withLoc.map((d, i) => (
+            <MarkerF
+              key={d.id}
+              position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }}
+              icon={{
+                path: window.google.maps.SymbolPath.CIRCLE,
+                scale: 9,
+                fillColor: CITY_COLORS[i % CITY_COLORS.length] || C.pimpri,
+                fillOpacity: 1,
+                strokeColor: "#fff",
+                strokeWeight: 2,
+              }}
+            />
+          ))}
+        </GoogleMap>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative rounded-lg overflow-hidden" style={{ height: 260, background: "#E7E2D2" }}>
+      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <line key={"h" + i} x1="0" y1={i * 18} x2="100" y2={i * 18} stroke="#D9D0BC" strokeWidth="0.3" />
+        ))}
+        {Array.from({ length: 6 }).map((_, i) => (
+          <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#D9D0BC" strokeWidth="0.3" />
+        ))}
+        {online.map((d) => {
+          const pos = hashPos(d.mobile || d.id);
+          const color = CITY_COLORS[hashPos(d.mobile || d.id).x % CITY_COLORS.length] || C.pimpri;
+          return <circle key={d.id} cx={pos.x} cy={pos.y} r="2.2" fill={color} stroke="#fff" strokeWidth="0.5" />;
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function AdminFleet({ drivers, driver, tripLog, lang }) {
   const bookedToday = tripLog.filter((t) => t.status === "Ongoing" || t.status === "Completed").length;
   const readyOnline = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted).length;
@@ -2080,25 +2330,12 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
 
       <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><MapPinned size={16} /> {lang === "en" ? "Live fleet map (all India)" : "लाइव फ्लीट मैप (पूरे भारत में)"}</div>
-        <div className="relative rounded-lg overflow-hidden" style={{ height: 260, background: "#E7E2D2" }}>
-          <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <line key={"h" + i} x1="0" y1={i * 18} x2="100" y2={i * 18} stroke="#D9D0BC" strokeWidth="0.3" />
-            ))}
-            {Array.from({ length: 6 }).map((_, i) => (
-              <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#D9D0BC" strokeWidth="0.3" />
-            ))}
-            {drivers.filter((d) => d.online).map((d) => {
-              const pos = hashPos(d.mobile || d.id);
-              const color = CITY_COLORS[hashPos(d.mobile || d.id).x % CITY_COLORS.length] || C.pimpri;
-              return <circle key={d.id} cx={pos.x} cy={pos.y} r="2.2" fill={color} stroke="#fff" strokeWidth="0.5" />;
-            })}
-          </svg>
-        </div>
+        <AdminFleetMap drivers={drivers} lang={lang} />
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px]" style={{ color: C.inkSoft }}>
           {drivers.filter((d) => d.online).map((d) => (
             <span key={d.id} className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full inline-block" style={{ background: CITY_COLORS[hashPos(d.mobile || d.id).x % CITY_COLORS.length] }} /> {d.name}
+              {d.lastKnownLocation?.lat != null && <span style={{ color: C.success }}>· {lang === "en" ? "live" : "लाइव"}</span>}
             </span>
           ))}
           {drivers.filter((d) => d.online).length === 0 && <span>{lang === "en" ? "No vehicle is online right now" : "अभी कोई गाड़ी ऑनलाइन नहीं है"}</span>}
@@ -2689,10 +2926,12 @@ export default function App() {
     patchDoc("rechargeRequests", id, { status: "Approved" }).catch((e) => console.error(e));
   };
 
-  const createLoad = ({ pickup, drop, vehicle, material, weight, distance, scheduledFor }) => {
+  const createLoad = ({ pickup, drop, vehicle, material, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng }) => {
     createDoc("bookings", genId(), {
       pickup, drop, vehicle, material, weight, distance, status: "Bidding", bids: [], fare: null,
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
+      pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null, dropLat: dropLat ?? null, dropLng: dropLng ?? null,
+      driverLocation: null,
     }).catch((e) => console.error(e));
   };
 
