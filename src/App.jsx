@@ -15,18 +15,18 @@ import { customerFirebaseAuth, driverFirebaseAuth } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 const C = {
-  bg: "#F4F1E8",
+  bg: "#F5F1E6",
   paper: "#FFFFFF",
-  ink: "#1C2A3A",
-  inkSoft: "#5B6B7C",
-  marigold: "#E8A020",
-  marigoldDeep: "#B87A12",
-  safety: "#E85D2F",
-  success: "#3F7D4F",
-  line: "#D9D0BC",
-  navy: "#1C2A3A",
-  pimpri: "#2B5C8A",
-  chinchwad: "#3F7D4F",
+  ink: "#141C2B",
+  inkSoft: "#54607A",
+  marigold: "#FFB800",
+  marigoldDeep: "#C2790A",
+  safety: "#FF3B30",
+  success: "#12A150",
+  line: "#E3D9C0",
+  navy: "#101A2E",
+  pimpri: "#1768D1",
+  chinchwad: "#12A150",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
@@ -847,8 +847,8 @@ function CustomerAddressVerify({ onVerified, lang = "hi" }) {
 // Pickup/Drop address field — wires Google Places Autocomplete directly onto
 // the text input (live suggestion dropdown while typing) when Maps is
 // configured/loaded, falling back to a plain input otherwise.
-function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, areaLabel, suggestions, onSuggestionTap }) {
-  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap }) {
+  const inputCls = "flex-1 min-w-0 rounded-lg px-3 py-2.5 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
   const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
   return (
@@ -861,6 +861,11 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
           </Autocomplete>
         ) : inputEl}
         <MicButton onResult={onMic} />
+        {onUseCurrentLocation && (
+          <button type="button" onClick={onUseCurrentLocation} disabled={locating} title={label} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#DFEEE2" }}>
+            <Navigation size={14} color={C.success} />
+          </button>
+        )}
         <button type="button" onClick={onMapPin} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#DCE9F5" }}>
           <MapPin size={14} color="#2B5C8A" />
         </button>
@@ -881,7 +886,7 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial }) {
+function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial, onPosted }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
   const [advanceDate, setAdvanceDate] = useState("");
@@ -899,7 +904,6 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
   const [addingMaterial, setAddingMaterial] = useState(false);
   const [weight, setWeight] = useState("");
   const distance = estimateDistance(pickup, drop);
-  const [posted, setPosted] = useState(false);
   const [mapField, setMapField] = useState(null); // 'pickup' | 'drop' | null
   const [showBulkyPopup, setShowBulkyPopup] = useState(false);
   const [bulkyPopupSeenFor, setBulkyPopupSeenFor] = useState("");
@@ -920,6 +924,34 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
     if (!loc) return;
     setDrop(place.formatted_address || place.name || "");
     setDropCoords({ lat: loc.lat(), lng: loc.lng() });
+  };
+
+  const [locatingPickup, setLocatingPickup] = useState(false);
+  const useMyCurrentLocation = () => {
+    if (!navigator.geolocation || locatingPickup) return;
+    setLocatingPickup(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setPickupCoords({ lat: latitude, lng: longitude });
+        if (mapsReady && window.google) {
+          new window.google.maps.Geocoder().geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
+            setPickup(status === "OK" && results?.[0] ? results[0].formatted_address : `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+            setLocatingPickup(false);
+          });
+        } else {
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`, { headers: { Accept: "application/json" } });
+            const data = await res.json();
+            setPickup(data?.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+          } catch {
+            setPickup(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+          }
+          setLocatingPickup(false);
+        }
+      },
+      () => setLocatingPickup(false)
+    );
   };
 
   const canPost = pickup.trim() && drop.trim() && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime));
@@ -952,10 +984,9 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
-    setPosted(true);
-    setTimeout(() => setPosted(false), 3000);
     setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
     setPickupCoords(null); setDropCoords(null);
+    onPosted?.();
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
@@ -1031,6 +1062,8 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
             placeholder={lang === "en" ? "Pickup address" : "पिकअप पता"}
             onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); }}
             onMapPin={() => setMapField("pickup")}
+            onUseCurrentLocation={useMyCurrentLocation}
+            locating={locatingPickup}
             areaLabel={findArea(pickup) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(pickup)}` : null}
             suggestions={suggestAreas(pickup)}
             onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
@@ -1149,16 +1182,9 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
           <span className="text-[11px]" style={{ color: C.marigoldDeep }}>{lang === "en" ? "There's no fixed fare here — after posting, driver quotes will show up in \"My Rides\"." : "यहाँ कोई फिक्स भाड़ा नहीं है — पोस्ट करने के बाद ड्राइवरों की बोलियां \"मेरी राइड्स\" में दिखेंगी।"}</span>
         </div>
 
-        {posted && (
-          <div className="rounded-lg p-3 flex items-center gap-2" style={{ background: "#DFEEE2" }}>
-            <CheckCircle2 size={16} color={C.success} />
-            <span className="text-xs font-semibold" style={{ color: C.success }}>{lang === "en" ? "Load posted — nearby drivers can see it now." : "लोड पोस्ट हो गया — पास के ड्राइवरों को दिख रहा है।"}</span>
-          </div>
-        )}
-
         <button onClick={post} disabled={!canPost} className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2"
-          style={{ background: posted ? C.success : canPost ? C.marigold : C.line, color: posted ? "#fff" : canPost ? C.navy : "#8A8375" }}>
-          {posted ? <><CheckCircle2 size={16} /> {lang === "en" ? "Load Posted" : "लोड पोस्ट हो गया"}</> : (lang === "en" ? "Book Now" : "बुक करें")}
+          style={{ background: canPost ? C.marigold : C.line, color: canPost ? C.navy : "#8A8375" }}>
+          {lang === "en" ? "Book Now" : "बुक करें"}
         </button>
       </div>
 
@@ -1524,7 +1550,7 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
             <div className="flex-1" style={{ background: "rgba(28,42,58,0.5)" }} />
           </div>
         )}
-        {tab === "book" && <CustomerBooking createLoad={createLoad} driverVehicle={driverVehicle} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} />}
+        {tab === "book" && <CustomerBooking createLoad={createLoad} driverVehicle={driverVehicle} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} onPosted={() => setTab("rides")} />}
         {tab === "rides" && <CustomerRides bookings={bookings} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverVehicle={driverVehicle} driverName={driverName} onGoBook={() => setTab("book")} lang={lang} />}
       </div>
       <BottomNav tabs={tabs} tab={tab} setTab={setTab} lang={lang} />
