@@ -2037,7 +2037,17 @@ function LoadSummaryCard({ load, vehicleTypes, driver, onOpen, lang }) {
 function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet, trialMode }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name);
   const [openLoadId, setOpenLoadId] = useState(null);
-  const openLoads = bookings.filter((b) => b.status === "Bidding" && (!driver.vehicleSpec?.type || b.vehicle === driver.vehicleSpec.type));
+  // A driver sees a load if it needs their exact vehicle type, or any
+  // smaller/lighter type — a bigger truck can always carry a smaller load,
+  // so "above" vehicle options can bid too, not just an exact match.
+  const driverVehicleDef = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
+  const openLoads = bookings.filter((b) => {
+    if (b.status !== "Bidding") return false;
+    if (!driverVehicleDef) return true;
+    const loadVehicleDef = vehicleTypes.find((v) => v.key === b.vehicle);
+    if (!loadVehicleDef) return b.vehicle === driver.vehicleSpec.type;
+    return loadVehicleDef.capacityKg <= driverVehicleDef.capacityKg;
+  });
   const openLoad = openLoads.find((l) => l.id === openLoadId);
 
   // No search bar / route filter for drivers — every new matching load rings
