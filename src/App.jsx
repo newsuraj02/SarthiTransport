@@ -1000,7 +1000,7 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial }) {
+function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
   const [advanceDate, setAdvanceDate] = useState("");
@@ -1339,14 +1339,14 @@ function RouteLine({ pickup, drop, lang }) {
 
 // Shows a single active (Bidding or Ongoing) booking — the customer's main
 // page focuses on this one card instead of a separate "My Rides" tab.
-function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driverVehicle, driverName, lang }) {
+function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driverVehicle, drivers, lang }) {
   const VEHICLES = vehicleTypes;
   const [selectedBid, setSelectedBid] = useState(null);
 
   const shareTrip = () => {
     const text = lang === "en"
-      ? `My goods are moving via Sarthi Transport.\nBooking: ${b.id}\nDriver: ${driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
-      : `मेरा सामान सार्थी ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${driverName || "—"}\nगाड़ी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
+      ? `My goods are moving via Sarthi Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
+      : `मेरा सामान सार्थी ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${b.driverName || "—"}\nगाड़ी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
@@ -1378,14 +1378,15 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                 {(() => {
                   const lowest = sortedBids[0];
                   const isSelected = selectedId === lowest.id;
+                  const lowestVehicle = drivers.find((d) => d.name === lowest.driverName)?.vehicleSpec;
                   return (
                     <button onClick={() => setSelectedBid(lowest.id)}
                       className="w-full text-left rounded-xl p-3 mb-2 relative"
                       style={{ background: isSelected ? "#DCE9F5" : "#DFEEE2", border: `2px solid ${isSelected ? C.pimpri : C.success}` }}>
                       <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>
                       <div className="flex items-center gap-2 mt-1">
-                        {lowest.driverName === driverName && driverVehicle?.photo ? (
-                          <img src={driverVehicle.photo.url} alt={vehicleLabel(v, lang)} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                        {lowestVehicle?.photo ? (
+                          <img src={lowestVehicle.photo.url} alt={vehicleLabel(v, lang)} className="w-12 h-12 rounded-lg object-cover shrink-0" />
                         ) : (
                           <div className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.success }}>
                             <Truck size={20} color="#fff" />
@@ -1421,13 +1422,14 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
                     {sortedBids.slice(1).map((bid) => {
                       const isSelected = selectedId === bid.id;
+                      const bidVehicle = drivers.find((d) => d.name === bid.driverName)?.vehicleSpec;
                       return (
                         <button key={bid.id} onClick={() => setSelectedBid(bid.id)}
                           className="w-full text-left rounded-lg p-2.5"
                           style={{ background: isSelected ? "#DCE9F5" : "#FBEBD2", border: isSelected ? `2px solid ${C.pimpri}` : "2px solid transparent" }}>
                           <div className="flex items-center gap-2">
-                            {bid.driverName === driverName && driverVehicle?.photo ? (
-                              <img src={driverVehicle.photo.url} alt={vehicleLabel(v, lang)} className="w-9 h-9 rounded-lg object-cover shrink-0" />
+                            {bidVehicle?.photo ? (
+                              <img src={bidVehicle.photo.url} alt={vehicleLabel(v, lang)} className="w-9 h-9 rounded-lg object-cover shrink-0" />
                             ) : (
                               <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.marigoldDeep }}>
                                 <Truck size={16} color="#fff" />
@@ -1651,11 +1653,15 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTe
   );
 }
 
-function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const ongoingTrip = bookings.find((b) => b.status === "Ongoing");
   const activeBooking = bookings.find((b) => b.status === "Bidding" || b.status === "Ongoing");
+  // The actual assigned driver's vehicle — looked up from the shared drivers
+  // list by name, not this device's own driver session (a customer's phone
+  // usually isn't also logged in as the driver who accepted their load).
+  const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
 
   const shareApp = () => {
     const msg = trialMode
@@ -1759,9 +1765,9 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
           </div>
         )}
         {activeBooking ? (
-          <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={driverVehicle} driverName={driverName} lang={lang} />
+          <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang} />
         ) : (
-          <CustomerBooking createLoad={createLoad} driverVehicle={driverVehicle} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} />
+          <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} />
         )}
       </div>
     </>
@@ -3489,8 +3495,8 @@ export default function App() {
           }} onBack={() => logoutRole("customer")} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && customerAddress.verified && (
-          <CustomerApp bookings={bookings} createLoad={createLoad} driverVehicle={driver?.vehicleSpec} vehicleTypes={vehicleTypes}
-            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverName={driver?.name} lang={lang} onLogout={logout}
+          <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes}
+            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
             customerProfile={customerAddress} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
             onGoHome={role === "admin" ? undefined : goHome} />
         )}
