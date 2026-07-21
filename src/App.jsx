@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home,
+  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, createDoc, replaceDoc, patchDoc, seedIfEmpty,
@@ -532,7 +532,16 @@ function SosScreen({ role = "customer", raiseAlert, lang }) {
 // =====================================================================
 // ROLE SELECTION — shown once so each user only sees their own platform
 // =====================================================================
-function RoleSelect({ onSelect, lang }) {
+function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVerified, onLogoutRole }) {
+  const anyVerified = customerVerified || driverVerified || adminVerified;
+  const showCustomer = !anyVerified || customerVerified;
+  const showDriver = !anyVerified || driverVerified;
+  const showAdmin = !anyVerified || adminVerified;
+  const logoutLink = (role, label) => (
+    <button onClick={() => onLogoutRole(role)} className="w-full text-center text-[10px] font-semibold mt-1.5" style={{ color: C.inkSoft }}>
+      {lang === "en" ? `Not you? Logout of ${label}` : `आप नहीं हैं? ${label} से लॉगआउट करें`}
+    </button>
+  );
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10">
       <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.marigold }}>
@@ -540,34 +549,49 @@ function RoleSelect({ onSelect, lang }) {
       </div>
       <div className="text-xl font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Sarthi Transport" : "सार्थी ट्रांसपोर्ट"}</div>
       <p className="text-xs text-center mb-8" style={{ color: C.inkSoft }}>
-        {lang === "en" ? "Choose which app you want to open" : "आप कौन सा ऐप खोलना चाहते हैं?"}
+        {anyVerified
+          ? (lang === "en" ? "Continue where you left off, or logout to switch" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें")
+          : (lang === "en" ? "Choose which app you want to open" : "आप कौन सा ऐप खोलना चाहते हैं?")}
       </p>
 
       <div className="w-full space-y-3">
-        <button onClick={() => onSelect("customer")} className="w-full rounded-xl p-4 flex items-center gap-3 text-left" style={{ background: C.marigold }}>
-          <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: C.navy }}>
-            <Package size={20} color="#fff" />
-          </div>
+        {showCustomer && (
           <div>
-            <div className="text-sm font-bold" style={{ color: C.navy }}>{lang === "en" ? "Customer" : "कस्टमर"}</div>
-            <div className="text-[11px]" style={{ color: "#5A4008" }}>{lang === "en" ? "Post a load & book a truck" : "लोड पोस्ट करें और ट्रक बुक करें"}</div>
+            <button onClick={() => onSelect("customer")} className="w-full rounded-xl p-4 flex items-center gap-3 text-left" style={{ background: C.marigold }}>
+              <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: C.navy }}>
+                <Package size={20} color="#fff" />
+              </div>
+              <div>
+                <div className="text-sm font-bold" style={{ color: C.navy }}>{lang === "en" ? "Customer" : "कस्टमर"}</div>
+                <div className="text-[11px]" style={{ color: "#5A4008" }}>{lang === "en" ? "Post a load & book a truck" : "लोड पोस्ट करें और ट्रक बुक करें"}</div>
+              </div>
+            </button>
+            {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : "कस्टमर")}
           </div>
-        </button>
+        )}
 
-        <button onClick={() => onSelect("driver")} className="w-full rounded-xl p-4 flex items-center gap-3 text-left" style={{ background: C.navy }}>
-          <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: C.marigold }}>
-            <Truck size={20} color={C.navy} />
-          </div>
+        {showDriver && (
           <div>
-            <div className="text-sm font-bold text-white">{lang === "en" ? "Driver" : "ड्राइवर"}</div>
-            <div className="text-[11px]" style={{ color: "#9FB0C2" }}>{lang === "en" ? "Bid on loads & earn" : "लोड पर बोली लगाएं और कमाएं"}</div>
+            <button onClick={() => onSelect("driver")} className="w-full rounded-xl p-4 flex items-center gap-3 text-left" style={{ background: C.navy }}>
+              <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: C.marigold }}>
+                <Truck size={20} color={C.navy} />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-white">{lang === "en" ? "Driver" : "ड्राइवर"}</div>
+                <div className="text-[11px]" style={{ color: "#9FB0C2" }}>{lang === "en" ? "Bid on loads & earn" : "लोड पर बोली लगाएं और कमाएं"}</div>
+              </div>
+            </button>
+            {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : "ड्राइवर")}
           </div>
-        </button>
+        )}
       </div>
 
-      <button onClick={() => onSelect("admin")} className="mt-8 text-[11px] font-semibold" style={{ color: C.inkSoft }}>
-        {lang === "en" ? "Admin Login" : "एडमिन लॉगिन"}
-      </button>
+      {showAdmin && (
+        <button onClick={() => onSelect("admin")} className="mt-8 text-[11px] font-semibold" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Admin Login" : "एडमिन लॉगिन"}
+        </button>
+      )}
+      {adminVerified && logoutLink("admin", lang === "en" ? "Admin" : "एडमिन")}
     </div>
   );
 }
@@ -820,6 +844,40 @@ function CustomerAddressVerify({ onVerified, lang = "hi" }) {
   );
 }
 
+// Pickup/Drop address field — wires Google Places Autocomplete directly onto
+// the text input (live suggestion dropdown while typing) when Maps is
+// configured/loaded, falling back to a plain input otherwise.
+function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, areaLabel, suggestions, onSuggestionTap }) {
+  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+  const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
+  return (
+    <div>
+      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{label}</label>
+      <div className="flex items-center gap-1.5">
+        {mapsReady ? (
+          <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged} options={{ componentRestrictions: { country: "in" } }}>
+            {inputEl}
+          </Autocomplete>
+        ) : inputEl}
+        <MicButton onResult={onMic} />
+        <button type="button" onClick={onMapPin} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#DCE9F5" }}>
+          <MapPin size={14} color="#2B5C8A" />
+        </button>
+      </div>
+      {areaLabel ? (
+        <div className="text-[10px] mt-1 font-semibold" style={{ color: "#2B5C8A" }}>📍 {areaLabel}</div>
+      ) : suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1">
+          {suggestions.map((a) => (
+            <button key={a} onClick={() => onSuggestionTap(a)} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#DCE9F5", color: "#2B5C8A" }}>{a}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
@@ -845,6 +903,24 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
   const [mapField, setMapField] = useState(null); // 'pickup' | 'drop' | null
   const [showBulkyPopup, setShowBulkyPopup] = useState(false);
   const [bulkyPopupSeenFor, setBulkyPopupSeenFor] = useState("");
+  const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
+  const mapsReady = mapsHasKey && mapsLoaded;
+  const pickupAutocompleteRef = useRef(null);
+  const dropAutocompleteRef = useRef(null);
+  const onPickupPlaceChanged = () => {
+    const place = pickupAutocompleteRef.current?.getPlace();
+    const loc = place?.geometry?.location;
+    if (!loc) return;
+    setPickup(place.formatted_address || place.name || "");
+    setPickupCoords({ lat: loc.lat(), lng: loc.lng() });
+  };
+  const onDropPlaceChanged = () => {
+    const place = dropAutocompleteRef.current?.getPlace();
+    const loc = place?.geometry?.location;
+    if (!loc) return;
+    setDrop(place.formatted_address || place.name || "");
+    setDropCoords({ lat: loc.lat(), lng: loc.lng() });
+  };
 
   const canPost = pickup.trim() && drop.trim() && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime));
 
@@ -913,7 +989,9 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
 
   return (
     <div className="px-5 py-5">
-      <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 mb-3 text-xs font-semibold" style={{ color: C.marigoldDeep }}>← {lang === "en" ? "Back" : "वापस"}</button>
+      <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+        <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+      </button>
       <div className="space-y-3">
         {bookingMode === "advance" && (
           <div className="rounded-lg p-3" style={{ background: "#DCE9F5" }}>
@@ -942,47 +1020,35 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
           </button>
         )}
         <div className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 1 — Pickup & Drop" : "स्टेप 1 — पिकअप और ड्रॉप"}</div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : "पिकअप"}</label>
-            <div className="flex items-center gap-1.5">
-              <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Pickup address" : "पिकअप पता"} value={pickup} onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }} />
-              <MicButton onResult={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); }} />
-              <button type="button" onClick={() => setMapField("pickup")} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#DCE9F5" }}>
-                <MapPin size={14} color="#2B5C8A" />
-              </button>
-            </div>
-            {findArea(pickup) ? (
-              <div className="text-[10px] mt-1 font-semibold" style={{ color: "#2B5C8A" }}>📍 {lang === "en" ? "Area" : "क्षेत्र"}: {findArea(pickup)}</div>
-            ) : suggestAreas(pickup).length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {suggestAreas(pickup).map((a) => (
-                  <button key={a} onClick={() => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#DCE9F5", color: "#2B5C8A" }}>{a}</button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : "ड्रॉप"}</label>
-            <div className="flex items-center gap-1.5">
-              <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Drop address" : "ड्रॉप पता"} value={drop} onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }} />
-              <MicButton onResult={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); }} />
-              <button type="button" onClick={() => setMapField("drop")} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#DCE9F5" }}>
-                <MapPin size={14} color="#2B5C8A" />
-              </button>
-            </div>
-            {findArea(drop) ? (
-              <div className="text-[10px] mt-1 font-semibold" style={{ color: "#2B5C8A" }}>📍 {lang === "en" ? "Area" : "क्षेत्र"}: {findArea(drop)}</div>
-            ) : suggestAreas(drop).length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {suggestAreas(drop).map((a) => (
-                  <button key={a} onClick={() => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#DCE9F5", color: "#2B5C8A" }}>{a}</button>
-                ))}
-              </div>
-            )}
-          </div>
+        <div className="space-y-4">
+          <LocationField
+            label={lang === "en" ? "Pickup" : "पिकअप"}
+            value={pickup}
+            onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
+            onPlaceChanged={onPickupPlaceChanged}
+            autocompleteRef={pickupAutocompleteRef}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Pickup address" : "पिकअप पता"}
+            onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); }}
+            onMapPin={() => setMapField("pickup")}
+            areaLabel={findArea(pickup) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(pickup)}` : null}
+            suggestions={suggestAreas(pickup)}
+            onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
+          />
+          <LocationField
+            label={lang === "en" ? "Drop" : "ड्रॉप"}
+            value={drop}
+            onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
+            onPlaceChanged={onDropPlaceChanged}
+            autocompleteRef={dropAutocompleteRef}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Drop address" : "ड्रॉप पता"}
+            onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); }}
+            onMapPin={() => setMapField("drop")}
+            areaLabel={findArea(drop) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(drop)}` : null}
+            suggestions={suggestAreas(drop)}
+            onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
+          />
         </div>
 
         {distance !== null && (
@@ -1369,7 +1435,9 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
   if (settingsView) {
     return (
       <div className="flex-1 overflow-y-auto relative">
-        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 px-5 pt-4 text-xs font-semibold" style={{ color: C.marigoldDeep }}>← {lang === "en" ? "Back" : "वापस"}</button>
+        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold self-start" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+          <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+        </button>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} />}
         {settingsView === "profile" && (
           <div className="px-5 py-4">
@@ -1414,8 +1482,8 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
             <Menu size={16} color={C.inkSoft} />
           </button>
           {onGoHome && (
-            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
-              <Home size={16} color={C.inkSoft} />
+            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <Home size={18} color={C.navy} strokeWidth={2.5} />
             </button>
           )}
         </div>
@@ -2176,7 +2244,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   if (settingsView) {
     return (
       <div className="flex-1 overflow-y-auto relative">
-        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 px-5 pt-4 text-xs font-semibold" style={{ color: C.marigoldDeep }}>← {lang === "en" ? "Back" : "वापस"}</button>
+        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold self-start" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+          <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+        </button>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
         {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
         {settingsView === "profile" && (
@@ -2218,8 +2288,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <Menu size={16} color={C.inkSoft} />
           </button>
           {onGoHome && (
-            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EBDC" }}>
-              <Home size={16} color={C.inkSoft} />
+            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <Home size={18} color={C.navy} strokeWidth={2.5} />
             </button>
           )}
         </div>
@@ -2852,11 +2922,14 @@ export default function App() {
   // "Remembered login" is now a real Firebase Auth session (see
   // customerFirebaseAuth/driverFirebaseAuth in firebaseClient.js) — signing
   // out below clears it for real, instead of just a locally-stored number.
-  const logout = () => {
-    if (role === "admin") setAdminAuth(false);
-    if (role === "customer") { setCustomerAuth({ verified: false, mobile: "" }); if (customerFirebaseAuth) signOut(customerFirebaseAuth).catch((e) => console.error(e)); }
-    if (role === "driver") { setDriverAuth({ verified: false, mobile: "" }); if (driverFirebaseAuth) signOut(driverFirebaseAuth).catch((e) => console.error(e)); }
+  const logoutRole = (targetRole) => {
+    if (targetRole === "admin") setAdminAuth(false);
+    if (targetRole === "customer") { setCustomerAuth({ verified: false, mobile: "" }); if (customerFirebaseAuth) signOut(customerFirebaseAuth).catch((e) => console.error(e)); }
+    if (targetRole === "driver") { setDriverAuth({ verified: false, mobile: "" }); if (driverFirebaseAuth) signOut(driverFirebaseAuth).catch((e) => console.error(e)); }
     setRole(null);
+  };
+  const logout = () => {
+    logoutRole(role);
   };
   // Returns to role selection without clearing OTP verification, so tapping
   // Customer/Driver by mistake and going back doesn't force a re-login.
@@ -3137,7 +3210,9 @@ export default function App() {
         )}
 
         {role === null && (
-          <RoleSelect lang={lang} onSelect={(r) => { setRole(r); setApp(r); }} />
+          <RoleSelect lang={lang} onSelect={(r) => { setRole(r); setApp(r); }}
+            customerVerified={customerAuth.verified} driverVerified={driverAuth.verified} adminVerified={adminAuth}
+            onLogoutRole={logoutRole} />
         )}
 
         {role === "admin" && !adminAuth && (
