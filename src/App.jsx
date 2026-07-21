@@ -720,8 +720,13 @@ function CustomerLogin({ onVerified, lang = "hi", authInstance, recaptchaContain
       setStage("otp");
     } catch (e) {
       console.error(e);
-      recaptchaRef.current = null; // force a fresh widget on retry
-      setError(lang === "en" ? "Couldn't send OTP — check the number and try again." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।");
+      try { recaptchaRef.current?.clear(); } catch { /* already gone */ }
+      recaptchaRef.current = null; // force a genuinely fresh widget on retry
+      setError(
+        e?.code === "auth/too-many-requests"
+          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
+          : (lang === "en" ? "Couldn't send OTP — check the number and try again." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।")
+      );
     }
     setSending(false);
   };
