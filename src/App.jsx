@@ -1567,9 +1567,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
       <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#DCE9F5", border: `1.5px solid ${C.pimpri}` }}>
         <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
-        <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: monoFont }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
+        <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
         {b.hours && (
-          <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: monoFont }}>
+          <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
             {lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}
           </div>
         )}
@@ -1577,11 +1577,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <Phone size={14} color="#000000" />
           {b.driverMobile ? (
             <>
-              <a href={`tel:${b.driverMobile}`} className="text-sm font-extrabold px-1.5 rounded" style={{ color: "#000000", fontFamily: monoFont, background: "#FFE066" }}>{b.driverMobile}</a>
-              <span className="text-sm font-semibold" style={{ color: "#000000" }}>{lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}</span>
+              <a href={`tel:${b.driverMobile}`} className="text-sm font-extrabold px-1.5 py-0.5 rounded" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums", letterSpacing: 0.3, background: "#FFE066" }}>{b.driverMobile}</a>
+              <span className="text-sm font-semibold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}</span>
             </>
           ) : (
-            <span className="text-sm font-bold" style={{ color: "#000000" }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+            <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
           )}
         </div>
       </div>
@@ -2242,9 +2242,9 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#DCE9F5", border: `1.5px solid ${C.pimpri}` }}>
             <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
-            <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: monoFont }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
+            <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
             {myTrip.hours && (
-              <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: monoFont }}>
+              <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
                 {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}
               </div>
             )}
@@ -2252,11 +2252,11 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
               <Phone size={14} color="#000000" />
               {myTrip.customerMobile ? (
                 <>
-                  <a href={`tel:${myTrip.customerMobile}`} className="text-sm font-extrabold px-1.5 rounded" style={{ color: "#000000", fontFamily: monoFont, background: "#FFE066" }}>{myTrip.customerMobile}</a>
-                  <span className="text-sm font-semibold" style={{ color: "#000000" }}>{lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}</span>
+                  <a href={`tel:${myTrip.customerMobile}`} className="text-sm font-extrabold px-1.5 py-0.5 rounded" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums", letterSpacing: 0.3, background: "#FFE066" }}>{myTrip.customerMobile}</a>
+                  <span className="text-sm font-semibold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}</span>
                 </>
               ) : (
-                <span className="text-sm font-bold" style={{ color: "#000000" }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
               )}
             </div>
           </div>
