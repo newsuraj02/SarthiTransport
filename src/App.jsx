@@ -599,7 +599,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
 // =====================================================================
 // ADMIN LOGIN — password protected, separate from customer/driver
 // =====================================================================
-function AdminLogin({ onVerified, lang }) {
+function AdminLogin({ onVerified, lang, onBack }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(false);
@@ -616,7 +616,12 @@ function AdminLogin({ onVerified, lang }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10">
+    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+      {onBack && (
+        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+          <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+        </button>
+      )}
       <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.navy }}>
         <LayoutDashboard size={26} color={C.marigold} />
       </div>
@@ -650,7 +655,7 @@ function AdminLogin({ onVerified, lang }) {
 // user with a still-valid session skips straight past this screen (see the
 // mount effect below) — that's the real "remembered login" now, not a
 // locally-stored list of past numbers.
-function CustomerLogin({ onVerified, lang = "hi", authInstance, recaptchaContainerId }) {
+function CustomerLogin({ onVerified, lang = "hi", authInstance, recaptchaContainerId, onBack }) {
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
   const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile");
@@ -710,7 +715,12 @@ function CustomerLogin({ onVerified, lang = "hi", authInstance, recaptchaContain
   }
 
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10">
+    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+      {onBack && (
+        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+          <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+        </button>
+      )}
       <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.marigold }}>
         <Truck size={26} color={C.navy} />
       </div>
@@ -3263,12 +3273,12 @@ export default function App() {
         )}
 
         {role === "admin" && !adminAuth && (
-          <AdminLogin lang={lang} onVerified={() => setAdminAuth(true)} />
+          <AdminLogin lang={lang} onVerified={() => setAdminAuth(true)} onBack={goHome} />
         )}
 
         {role !== null && app === "customer" && !customerAuth.verified && (
           <CustomerLogin lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
-            onVerified={(mobile) => setCustomerAuth({ verified: true, mobile })} />
+            onVerified={(mobile) => setCustomerAuth({ verified: true, mobile })} onBack={goHome} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && !customerAddress.verified && (
           <CustomerAddressVerify lang={lang} onVerified={(addr) => {
@@ -3284,7 +3294,7 @@ export default function App() {
         )}
         {role !== null && app === "driver" && !driverAuth.verified && (
           <CustomerLogin lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
-            onVerified={(mobile) => setDriverAuth({ verified: true, mobile })} />
+            onVerified={(mobile) => setDriverAuth({ verified: true, mobile })} onBack={goHome} />
         )}
         {role !== null && app === "driver" && driverAuth.verified && !driver && (
           <div className="flex-1 flex items-center justify-center">
