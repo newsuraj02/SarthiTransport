@@ -122,6 +122,15 @@ function estimateDistance(pickup, drop) {
   return 2 + (h % 17);
 }
 
+// Shortens a full Google-formatted address to its first couple of segments
+// so a driver glancing at the trip card isn't confused by two long, nearly
+// identical-looking addresses — the map already shows the full route.
+function shortAddr(text, segments = 2) {
+  if (!text) return "";
+  const parts = text.split(",").map((p) => p.trim()).filter(Boolean);
+  return parts.slice(0, segments).join(", ");
+}
+
 // Persists a piece of state to localStorage under `key`, so the app
 // remembers role choice, bookings, wallet balances etc. across reloads.
 function usePersistedState(key, initialValue) {
@@ -1473,17 +1482,18 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.pimpri }}><Navigation size={13} /> {lang === "en" ? "Live Tracking" : "लाइव ट्रैकिंग"}</span>
           <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
         </div>
-        <div className="flex items-center gap-2.5 mb-2 rounded-lg p-2" style={{ background: "#DCE9F5" }}>
+        <div className="flex items-center gap-2.5 mb-2">
           {driverVehicle?.photo ? <img src={driverVehicle.photo.url} alt="ड्राइवर" className="w-9 h-9 rounded-full object-cover" /> : (
             <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>
           )}
-          <div className="flex-1">
-            <div className="text-xs font-bold" style={{ color: C.ink }}>{b.driverName}</div>
-            <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
-            {b.hours && <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
-            <div className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: C.pimpri, fontFamily: monoFont }}>
-              <Phone size={10} /> {b.driverMobile ? <a href={`tel:${b.driverMobile}`} className="underline">{b.driverMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
-            </div>
+          <div className="text-sm font-bold" style={{ color: C.ink }}>{b.driverName}</div>
+        </div>
+        <div className="rounded-lg p-2.5 mb-2" style={{ background: "#DCE9F5", border: `1px solid ${C.pimpri}` }}>
+          <div className="text-xs font-bold" style={{ color: C.pimpri, fontFamily: monoFont }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")}</div>
+          <div className="text-sm font-bold mt-0.5" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? "Fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
+          {b.hours && <div className="text-xs font-bold mt-0.5" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
+          <div className="text-xs font-bold mt-0.5 flex items-center gap-1" style={{ color: C.pimpri, fontFamily: monoFont }}>
+            <Phone size={12} /> {b.driverMobile ? <a href={`tel:${b.driverMobile}`} className="underline">{b.driverMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
           </div>
         </div>
         {b.otp && !b.loadingStartedAt && (
@@ -1500,7 +1510,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
         <div className="rounded-lg p-2 mt-2" style={{ background: "#FBEBD2" }}>
           <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>
-            {lang === "en" ? "Pay the driver directly (cash / UPI / GPay) at delivery — Sarthi Transport does not collect this fare." : "डिलीवरी पर ड्राइवर को सीधे भुगतान करें (नकद / UPI / GPay) — यह भाड़ा सार्थी ट्रांसपोर्ट कलेक्ट नहीं करता।"}
+            {lang === "en" ? "Pay directly to the driver via Cash/UPI/etc." : "ड्राइवर को सीधे नकद/UPI/आदि से भुगतान करें।"}
           </div>
         </div>
         <div className="flex items-center gap-4 mt-2">
@@ -2127,10 +2137,15 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
         <div className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
           <div className="text-xs font-bold mb-2" style={{ color: C.pimpri }}>{lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</div>
           <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
-          <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
-          <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : "ग्राहक"}: {myTrip.customerMobile ? <a href={`tel:${myTrip.customerMobile}`} className="underline">{myTrip.customerMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(myTrip.fare)}</div>
-          <div className="text-[10px] mt-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
-          {myTrip.hours && <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
+          <div className="text-xs mt-2" style={{ color: C.ink }}>{shortAddr(myTrip.pickup)} → {shortAddr(myTrip.drop)}</div>
+          <div className="rounded-lg p-2.5 mt-2" style={{ background: "#DCE9F5", border: `1px solid ${C.pimpri}` }}>
+            <div className="text-xs font-bold" style={{ color: C.pimpri, fontFamily: monoFont }}>
+              {lang === "en" ? "Customer" : "ग्राहक"}: {myTrip.customerMobile ? <a href={`tel:${myTrip.customerMobile}`} className="underline">{myTrip.customerMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
+            </div>
+            <div className="text-sm font-bold mt-0.5" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? "Fixed fare" : "तय भाड़ा"} {fmt(myTrip.fare)}</div>
+            {myTrip.hours && <div className="text-xs font-bold mt-0.5" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
+          </div>
+          <div className="text-[10px] mt-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
           <LoadingTimer trip={myTrip} startLoading={startLoading} completeBooking={completeBooking} lang={lang} />
         </div>
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
@@ -2502,7 +2517,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             {myTrip ? (
               <>
                 <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
-                <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
+                <div className="text-xs mt-2" style={{ color: C.ink }}>{shortAddr(myTrip.pickup)} → {shortAddr(myTrip.drop)}</div>
                 <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{myTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>
             ) : (
