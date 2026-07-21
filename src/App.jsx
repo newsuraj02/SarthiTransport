@@ -3546,7 +3546,7 @@ export default function App() {
             <button onClick={() => setLang((l) => (l === "hi" ? "en" : "hi"))}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-bold"
               style={{ background: "#28394D", color: "#fff", border: "1px solid #3A4C61" }}>
-              <Globe size={12} /> {lang === "hi" ? "EN" : "हिं"}
+              <Globe size={12} /> {lang === "hi" ? "हिं" : "ENG"}
             </button>
           </div>
           {role === "admin" && adminAuth ? (
