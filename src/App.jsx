@@ -537,7 +537,7 @@ function SosScreen({ role = "customer", raiseAlert, lang }) {
           <MessageCircle size={16} /> {lang === "en" ? "WhatsApp Support" : "व्हाट्सएप सपोर्ट"}
         </a>
       </div>
-      <div className="rounded-xl p-4 mt-5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+      <div className="rounded-xl p-4 mt-5 shadow-sm" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
         <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "File a Complaint" : "शिकायत दर्ज करें"}</div>
         <p className="text-[11px] mb-2" style={{ color: C.inkSoft }}>
           {role === "driver"
@@ -972,7 +972,7 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial, onPosted }) {
+function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
   const [advanceDate, setAdvanceDate] = useState("");
@@ -1072,7 +1072,6 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
     });
     setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
     setPickupCoords(null); setDropCoords(null);
-    onPosted?.();
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
@@ -1310,42 +1309,27 @@ function RouteLine({ pickup, drop, lang }) {
   );
 }
 
-function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverVehicle, driverName, onGoBook, lang }) {
+// Shows a single active (Bidding or Ongoing) booking — the customer's main
+// page focuses on this one card instead of a separate "My Rides" tab.
+function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driverVehicle, driverName, lang }) {
   const VEHICLES = vehicleTypes;
-  const [selectedBids, setSelectedBids] = useState({});
-  const bidding = bookings.filter((b) => b.status === "Bidding");
-  const ongoing = bookings.filter((b) => b.status === "Ongoing");
-  const others = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled");
-  const statusMeta = lang === "en"
-    ? { Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
-    : { Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
+  const [selectedBid, setSelectedBid] = useState(null);
 
-  const downloadInvoice = (b) => {
-    const text = `Sarthi Transport Invoice\nBooking: ${b.id}\nPickup: ${b.pickup}\nDrop: ${b.drop}\nVehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}\nDistance: ${b.distance} km\nQuoted Fare: ${fmt(b.fare - (b.extraCharge || 0))}\nExtra Waiting Charge: ${b.extraCharge ? fmt(b.extraCharge) : "-"}\nTotal Fare: ${fmt(b.fare)}\nAllowed Hours: ${b.hours || "-"} hrs\nWaiting Charge Rate: ${b.extraHourRate ? fmt(b.extraHourRate) + "/hr" : "-"}\nStatus: ${b.status}`;
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `${b.id}-invoice.txt`; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const shareTrip = (b) => {
+  const shareTrip = () => {
     const text = lang === "en"
       ? `My goods are moving via Sarthi Transport.\nBooking: ${b.id}\nDriver: ${driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
       : `मेरा सामान सार्थी ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${driverName || "—"}\nगाड़ी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
-  return (
-    <div className="px-5 py-5">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Bookings" : "मेरी बुकिंग्स"}</h2>
-
-      {bidding.map((b) => {
-        const v = VEHICLES.find((x) => x.key === b.vehicle);
-        const sortedBids = b.bids.filter((x) => !x.paused).sort((x, y) => x.amount - y.amount);
-        const selectedId = selectedBids[b.id];
-        return (
-          <div key={b.id} className="rounded-xl p-3 mb-4" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+  if (b.status === "Bidding") {
+    const v = VEHICLES.find((x) => x.key === b.vehicle);
+    const sortedBids = b.bids.filter((x) => !x.paused).sort((x, y) => x.amount - y.amount);
+    const selectedId = selectedBid;
+    return (
+      <div className="px-5 py-5">
+        <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
+        <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
               <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
@@ -1367,7 +1351,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
                   const lowest = sortedBids[0];
                   const isSelected = selectedId === lowest.id;
                   return (
-                    <button onClick={() => setSelectedBids((prev) => ({ ...prev, [b.id]: lowest.id }))}
+                    <button onClick={() => setSelectedBid(lowest.id)}
                       className="w-full text-left rounded-xl p-3 mb-2 relative"
                       style={{ background: isSelected ? "#DCE9F5" : "#DFEEE2", border: `2px solid ${isSelected ? C.pimpri : C.success}` }}>
                       <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>
@@ -1410,7 +1394,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
                     {sortedBids.slice(1).map((bid) => {
                       const isSelected = selectedId === bid.id;
                       return (
-                        <button key={bid.id} onClick={() => setSelectedBids((prev) => ({ ...prev, [b.id]: bid.id }))}
+                        <button key={bid.id} onClick={() => setSelectedBid(bid.id)}
                           className="w-full text-left rounded-lg p-2.5"
                           style={{ background: isSelected ? "#DCE9F5" : "#FBEBD2", border: isSelected ? `2px solid ${C.pimpri}` : "2px solid transparent" }}>
                           <div className="flex items-center gap-2">
@@ -1450,79 +1434,98 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
             )}
 
             {selectedId && (
-              <button onClick={() => { acceptBid(b.id, selectedId); setSelectedBids((prev) => { const n = { ...prev }; delete n[b.id]; return n; }); }}
+              <button onClick={() => { acceptBid(b.id, selectedId); setSelectedBid(null); }}
                 className="w-full rounded-lg py-2.5 font-bold text-sm mt-2 text-white" style={{ background: C.success }}>
                 {lang === "en" ? "Book this vehicle" : "यही गाड़ी बुक करें"}
               </button>
             )}
             <button onClick={() => cancelBooking(b.id)} className="text-[11px] font-semibold mt-2" style={{ color: C.safety }}>{lang === "en" ? "Cancel load" : "लोड रद्द करें"}</button>
-          </div>
-        );
-      })}
+        </div>
+      </div>
+    );
+  }
 
-      {ongoing.map((b) => {
-        const v = VEHICLES.find((x) => x.key === b.vehicle);
-        return (
-          <div key={b.id} className="rounded-xl p-3 mb-4" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.pimpri }}><Navigation size={13} /> {lang === "en" ? "Live Tracking" : "लाइव ट्रैकिंग"}</span>
-              <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
-            </div>
-            <div className="flex items-center gap-2.5 mb-2 rounded-lg p-2" style={{ background: "#DCE9F5" }}>
-              {driverVehicle?.photo ? <img src={driverVehicle.photo.url} alt="ड्राइवर" className="w-9 h-9 rounded-full object-cover" /> : (
-                <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>
-              )}
-              <div className="flex-1">
-                <div className="text-xs font-bold" style={{ color: C.ink }}>{b.driverName}</div>
-                <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
-                {b.hours && <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
-                <div className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: C.pimpri, fontFamily: monoFont }}>
-                  <Phone size={10} /> {b.driverMobile ? <a href={`tel:${b.driverMobile}`} className="underline">{b.driverMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
-                </div>
-              </div>
-            </div>
-            {b.otp && !b.loadingStartedAt && (
-              <div className="rounded-lg p-3 mb-2 text-center" style={{ background: "#FBEBD2", border: `1.5px dashed ${C.marigoldDeep}` }}>
-                <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Give this OTP to the driver at pickup" : "पिकअप पर यह OTP ड्राइवर को बताएं"}</div>
-                <div className="text-2xl font-bold mt-1" style={{ color: C.marigoldDeep, fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
-              </div>
-            )}
-            <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng} driverLocation={b.driverLocation} progress={b.progress} zoneColor={C.pimpri} height={130} lang={lang} />
-            <div className="w-full h-1.5 rounded-full mt-2" style={{ background: C.line }}>
-              <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
-            </div>
-            <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle location" : "गाड़ी की लोकेशन"} — {b.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
-            {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
-            <div className="rounded-lg p-2 mt-2" style={{ background: "#FBEBD2" }}>
-              <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>
-                {lang === "en" ? "Pay the driver directly (cash / UPI / GPay) at delivery — Sarthi Transport does not collect this fare." : "डिलीवरी पर ड्राइवर को सीधे भुगतान करें (नकद / UPI / GPay) — यह भाड़ा सार्थी ट्रांसपोर्ट कलेक्ट नहीं करता।"}
-              </div>
-            </div>
-            <div className="flex items-center gap-4 mt-2">
-              <button onClick={() => shareTrip(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
-              <button onClick={() => cancelBooking(b.id)} className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
+  const v = VEHICLES.find((x) => x.key === b.vehicle);
+  return (
+    <div className="px-5 py-5">
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
+      <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.pimpri }}><Navigation size={13} /> {lang === "en" ? "Live Tracking" : "लाइव ट्रैकिंग"}</span>
+          <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
+        </div>
+        <div className="flex items-center gap-2.5 mb-2 rounded-lg p-2" style={{ background: "#DCE9F5" }}>
+          {driverVehicle?.photo ? <img src={driverVehicle.photo.url} alt="ड्राइवर" className="w-9 h-9 rounded-full object-cover" /> : (
+            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>
+          )}
+          <div className="flex-1">
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{b.driverName}</div>
+            <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")} · {lang === "en" ? "fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
+            {b.hours && <div className="text-[10px]" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
+            <div className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: C.pimpri, fontFamily: monoFont }}>
+              <Phone size={10} /> {b.driverMobile ? <a href={`tel:${b.driverMobile}`} className="underline">{b.driverMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
             </div>
           </div>
-        );
-      })}
+        </div>
+        {b.otp && !b.loadingStartedAt && (
+          <div className="rounded-lg p-3 mb-2 text-center" style={{ background: "#FBEBD2", border: `1.5px dashed ${C.marigoldDeep}` }}>
+            <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Give this OTP to the driver at pickup" : "पिकअप पर यह OTP ड्राइवर को बताएं"}</div>
+            <div className="text-2xl font-bold mt-1" style={{ color: C.marigoldDeep, fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
+          </div>
+        )}
+        <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng} driverLocation={b.driverLocation} progress={b.progress} zoneColor={C.pimpri} height={130} lang={lang} />
+        <div className="w-full h-1.5 rounded-full mt-2" style={{ background: C.line }}>
+          <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
+        </div>
+        <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle location" : "गाड़ी की लोकेशन"} — {b.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
+        {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
+        <div className="rounded-lg p-2 mt-2" style={{ background: "#FBEBD2" }}>
+          <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>
+            {lang === "en" ? "Pay the driver directly (cash / UPI / GPay) at delivery — Sarthi Transport does not collect this fare." : "डिलीवरी पर ड्राइवर को सीधे भुगतान करें (नकद / UPI / GPay) — यह भाड़ा सार्थी ट्रांसपोर्ट कलेक्ट नहीं करता।"}
+          </div>
+        </div>
+        <div className="flex items-center gap-4 mt-2">
+          <button onClick={shareTrip} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
+          <button onClick={() => cancelBooking(b.id)} className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {others.length === 0 && ongoing.length === 0 && bidding.length === 0 && (
+// Completed/cancelled booking history — reached from the hamburger menu now
+// that the main page focuses on the single active ride.
+function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
+  const VEHICLES = vehicleTypes;
+  const others = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled");
+  const statusMeta = lang === "en"
+    ? { Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
+    : { Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
+
+  const downloadInvoice = (b) => {
+    const text = `Sarthi Transport Invoice\nBooking: ${b.id}\nPickup: ${b.pickup}\nDrop: ${b.drop}\nVehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}\nDistance: ${b.distance} km\nQuoted Fare: ${fmt(b.fare - (b.extraCharge || 0))}\nExtra Waiting Charge: ${b.extraCharge ? fmt(b.extraCharge) : "-"}\nTotal Fare: ${fmt(b.fare)}\nAllowed Hours: ${b.hours || "-"} hrs\nWaiting Charge Rate: ${b.extraHourRate ? fmt(b.extraHourRate) + "/hr" : "-"}\nStatus: ${b.status}`;
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${b.id}-invoice.txt`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="px-5 py-4">
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Ride History" : "राइड हिस्ट्री"}</h2>
+      {others.length === 0 ? (
         <div className="text-center py-12 px-6">
           <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "#FBEBD2" }}>
             <Package size={26} color={C.marigoldDeep} />
           </div>
-          <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No bookings yet" : "अभी कोई बुकिंग नहीं है"}</p>
-          <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Post your first load — bids from nearby drivers will start arriving in minutes." : "अपना पहला लोड पोस्ट करें — कुछ ही मिनटों में पास के ड्राइवरों की बोलियां मिलनी शुरू हो जाएंगी।"}</p>
-          <button onClick={onGoBook} className="rounded-full px-5 py-2.5 text-xs font-bold" style={{ background: C.marigold, color: C.navy }}>
-            + {lang === "en" ? "Post first load" : "पहला लोड पोस्ट करें"}
-          </button>
+          <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No past rides yet" : "अभी कोई पुरानी राइड नहीं है"}</p>
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Completed and cancelled bookings will show up here." : "पूर्ण और रद्द बुकिंग यहां दिखेंगी।"}</p>
         </div>
-      )}
-
-      {others.map((b) => {
+      ) : others.map((b) => {
         const meta = statusMeta[b.status];
         return (
-          <div key={b.id} className="rounded-xl mb-3 p-3" style={{ background: C.paper, border: `1px dashed ${C.line}` }}>
+          <div key={b.id} className="rounded-xl mb-3 p-3 shadow-sm" style={{ background: C.paper, border: `1px dashed ${C.line}` }}>
             <div className="flex justify-between items-start">
               <div className="text-[11px]" style={{ fontFamily: monoFont, color: C.inkSoft }}>{b.id}</div>
               <div className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: meta.color, background: meta.bg }}>{meta.label}</div>
@@ -1548,11 +1551,10 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
 }
 
 function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile, customerMobile, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
-  const [tab, setTab] = useState("book");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | null
-  const tabs = [["book", "बुक करें", ClipboardList], ["rides", "मेरी राइड्स", Package]];
+  const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const ongoingTrip = bookings.find((b) => b.status === "Ongoing");
+  const activeBooking = bookings.find((b) => b.status === "Bidding" || b.status === "Ongoing");
 
   const shareApp = () => {
     const msg = trialMode
@@ -1575,7 +1577,7 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
         {settingsView === "profile" && (
           <div className="px-5 py-4">
             <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
-            <div className="rounded-xl p-4 mb-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
               <div className="text-sm font-bold" style={{ color: C.ink }}>{customerProfile?.name || "—"}</div>
               {customerMobile && <div className="text-xs mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{customerMobile}</div>}
               <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{customerProfile?.address}, {customerProfile?.area}, {customerProfile?.city} {customerProfile?.pincode}</div>
@@ -1603,6 +1605,7 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
             <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Use the language toggle (EN / हिं) at the top of the app to switch languages. For changes to your saved address, contact the helpline." : "भाषा बदलने के लिए ऐप के ऊपर मौजूद EN / हिं बटन इस्तेमाल करें। सेव किए गए पते में बदलाव के लिए हेल्पलाइन से संपर्क करें।"}</p>
           </div>
         )}
+        {settingsView === "history" && <CustomerHistory bookings={bookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
       </div>
     );
   }
@@ -1635,8 +1638,8 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
               </button>
-              <button onClick={() => { setTab("rides"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : "मेरी ट्रिप्स"}
+              <button onClick={() => { setSettingsView("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "Ride History" : "राइड हिस्ट्री"}
               </button>
               <button onClick={() => { setSettingsView("liveLocation"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <MapPinned size={16} color={C.marigoldDeep} /> {lang === "en" ? "Live Location" : "लाइव लोकेशन"}
@@ -1657,10 +1660,12 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
             <div className="flex-1" style={{ background: "rgba(28,42,58,0.5)" }} />
           </div>
         )}
-        {tab === "book" && <CustomerBooking createLoad={createLoad} driverVehicle={driverVehicle} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} onPosted={() => setTab("rides")} />}
-        {tab === "rides" && <CustomerRides bookings={bookings} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverVehicle={driverVehicle} driverName={driverName} onGoBook={() => setTab("book")} lang={lang} />}
+        {activeBooking ? (
+          <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={driverVehicle} driverName={driverName} lang={lang} />
+        ) : (
+          <CustomerBooking createLoad={createLoad} driverVehicle={driverVehicle} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} />
+        )}
       </div>
-      <BottomNav tabs={tabs} tab={tab} setTab={setTab} lang={lang} />
     </>
   );
 }
@@ -1702,7 +1707,7 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang, commissionPct
   const boxStyle = { border: `1px solid ${C.line}`, background: C.paper };
 
   return (
-    <div className="rounded-xl p-3 mb-3 transition-colors" style={{ background: justSubmitted ? "#DFEEE2" : C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
+    <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: justSubmitted ? "#DFEEE2" : C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}</span>
         <span className="text-[10px]" style={{ color: C.inkSoft }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
@@ -2021,7 +2026,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
       )}
 
       {myTrip ? (
-        <div className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
+        <div className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
           <div className="text-xs font-bold mb-2" style={{ color: C.pimpri }}>{lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</div>
           <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
           <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
@@ -2383,7 +2388,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         {settingsView === "profile" && (
           <div className="px-5 py-4">
             <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
-            <div className="rounded-xl p-4 mb-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
               <div className="text-sm font-bold" style={{ color: C.ink }}>{driver.name}</div>
               {driver.mobile && <div className="text-xs mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driver.mobile}</div>}
               <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle" : "गाड़ी"}: {driver.vehicleSpec?.vehicleNumber || "—"}</div>
@@ -2544,17 +2549,17 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
   return (
     <div>
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं"}</div>
           <div className="text-3xl font-bold mt-1" style={{ color: C.pimpri, fontFamily: monoFont }}>{bookedToday}</div>
         </div>
-        <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार"}</div>
           <div className="text-3xl font-bold mt-1" style={{ color: C.success, fontFamily: monoFont }}>{readyOnline}</div>
         </div>
       </div>
 
-      <div className="rounded-xl p-4 mb-5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Truck size={16} /> {lang === "en" ? "Search history by vehicle number" : "गाड़ी नंबर से हिस्ट्री देखें"}</div>
         <input value={vehicleQuery} onChange={(e) => setVehicleQuery(e.target.value)} placeholder="जैसे: MH-14-AB-4521"
           className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
@@ -2584,7 +2589,7 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
         )}
       </div>
 
-      <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><MapPinned size={16} /> {lang === "en" ? "Live fleet map (all India)" : "लाइव फ्लीट मैप (पूरे भारत में)"}</div>
         <AdminFleetMap drivers={drivers} lang={lang} />
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px]" style={{ color: C.inkSoft }}>
@@ -2608,7 +2613,7 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
     ? { photo: "Driver Photo", dl: "Driving License" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
   return (
-    <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "Driver Approval (KYC Desk)" : "ड्राइवर अप्रूवल (KYC Desk)"}</div>
       {pending.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No pending approvals." : "कोई पेंडिंग अप्रूवल नहीं है।"}</p> : (
         <div className="space-y-2">
@@ -2668,7 +2673,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
   return (
     <div className="space-y-4">
       {pendingRecharges.length > 0 && (
-        <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
           <div className="space-y-2">
             {pendingRecharges.map((r) => (
@@ -2687,7 +2692,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
         </div>
       )}
       {pendingWithdrawals.length > 0 && (
-        <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.success} /> {lang === "en" ? "Withdrawal Requests" : "विड्रॉल रिक्वेस्ट"}</div>
           <div className="space-y-2">
             {pendingWithdrawals.map((w) => (
@@ -2705,7 +2710,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
           </div>
         </div>
       )}
-      <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Siren size={16} color={C.safety} /> {lang === "en" ? "Emergency Alerts" : "इमरजेंसी अलर्ट्स"}</div>
         {alerts.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No alerts yet." : "अभी कोई अलर्ट नहीं आया।"}</p> : (
           <div className="space-y-2">
@@ -2741,7 +2746,7 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
     ? { photo: "Driver Photo", dl: "Driving License" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
   return (
-    <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "All Drivers" : "सभी ड्राइवर"}</div>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
@@ -2810,7 +2815,7 @@ function AdminNotify({ drivers, lang }) {
     setMessage("");
   };
   return (
-    <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> {lang === "en" ? "Send Notification" : "सूचना भेजें"}</div>
       <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Send to" : "किसे भेजें"}</label>
       <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
@@ -2838,7 +2843,7 @@ function AdminNotify({ drivers, lang }) {
 
 function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, trialMode, setTrialMode, trialDaysLeft, lang }) {
   return (
-    <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : "सिस्टम सेटिंग्स"}</div>
 
       <div className="rounded-lg p-3 mb-4" style={{ background: trialMode ? "#DFEEE2" : "#EDF0F5" }}>
@@ -2910,7 +2915,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
     URL.revokeObjectURL(url);
   };
   return (
-    <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Reports — Commission & Earnings" : "रिपोर्ट्स — कमीशन और कमाई"}</div>
         <button onClick={downloadReport} disabled={tripLog.length === 0} className="text-[11px] font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-lg"
