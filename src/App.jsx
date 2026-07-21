@@ -2688,12 +2688,12 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
             ) : (
               <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
                 {vehicleHistory.map((t) => (
-                  <div key={t.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: "#EDF0F5" }}>
+                  <div key={t.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: "#DCE9F5", border: `1px solid ${C.pimpri}` }}>
                     <div>
-                      <div className="text-[11px] font-semibold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
+                      <div className="text-[11px] font-bold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
                       <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status}</div>
                     </div>
-                    <div className="text-xs font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(t.fare)}</div>
+                    <div className="text-sm font-bold" style={{ color: C.pimpri, fontFamily: monoFont }}>{fmt(t.fare)}</div>
                   </div>
                 ))}
               </div>
