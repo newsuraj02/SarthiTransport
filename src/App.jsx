@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
-  Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation,
+  Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft,
 } from "lucide-react";
@@ -1524,34 +1524,76 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   return (
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
-      <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.pimpri }}><Navigation size={13} /> {lang === "en" ? "Live Tracking" : "लाइव ट्रैकिंग"}</span>
-          <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
-        </div>
-        <div className="flex items-center gap-2.5 mb-2">
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="relative shrink-0">
           <SafeImage
             src={driverVehicle?.photo?.url}
             alt="ड्राइवर"
-            className="w-9 h-9 rounded-full object-cover"
-            fallback={<div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>}
+            className="w-12 h-12 rounded-full object-cover"
+            fallback={<div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: C.navy }}><UserCircle2 size={26} color="#fff" /></div>}
+          />
+          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: "#fff" }}>
+            <CheckCircle2 size={15} color={C.success} />
+          </div>
+        </div>
+        <div>
+          <div className="text-base font-bold" style={{ color: C.ink }}>{b.driverName}</div>
+          <span className="inline-block mt-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full" style={{ background: "#DCE4FB", color: C.pimpri }}>{lang === "en" ? "Verified" : "सत्यापित"}</span>
+        </div>
+      </div>
+
+      <div className="rounded-2xl p-3 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Navigation size={15} /> {lang === "en" ? "Live Tracking" : "लाइव ट्रैकिंग"} <Activity size={14} /></span>
+        <span className="text-xs font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
+      </div>
+
+      <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex-1 p-3 flex items-center gap-2.5">
+          <SafeImage
+            src={driverVehicle?.photo?.url}
+            alt="ड्राइवर"
+            className="w-10 h-10 rounded-full object-cover"
+            fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>}
           />
           <div className="text-sm font-bold" style={{ color: C.ink }}>{b.driverName}</div>
         </div>
-        <div className="rounded-lg p-2.5 mb-2" style={{ background: "#DCE9F5", border: `1px solid ${C.pimpri}` }}>
-          <div className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont, letterSpacing: 0.2 }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")}</div>
-          <div className="text-lg font-extrabold mt-0.5" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
-          {b.hours && <div className="text-sm font-bold mt-0.5" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
-          <div className="text-sm font-bold mt-0.5 flex items-center gap-1" style={{ color: "#000000", fontFamily: bodyFont }}>
-            <Phone size={13} /> {b.driverMobile ? <a href={`tel:${b.driverMobile}`} className="underline">{b.driverMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
-          </div>
+        <div className="w-px" style={{ background: C.line }} />
+        <div className="flex-1 p-3">
+          <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Details" : "गाड़ी की जानकारी"}</div>
+          <div className="text-sm font-bold mt-0.5" style={{ color: C.ink }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "unavailable" : "उपलब्ध नहीं")}</div>
         </div>
-        {b.otp && !b.loadingStartedAt && (
-          <div className="rounded-lg p-3 mb-2 text-center" style={{ background: "#FBEBD2", border: `1.5px dashed ${C.marigoldDeep}` }}>
-            <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Give this OTP to the driver at pickup" : "पिकअप पर यह OTP ड्राइवर को बताएं"}</div>
-            <div className="text-2xl font-bold mt-1" style={{ color: C.marigoldDeep, fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#DCE9F5", border: `1.5px solid ${C.pimpri}` }}>
+        <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
+        <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: monoFont }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
+        {b.hours && (
+          <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: monoFont }}>
+            {lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}
           </div>
         )}
+        <div className="flex items-center gap-1.5 mt-2">
+          <Phone size={14} color="#000000" />
+          {b.driverMobile ? (
+            <>
+              <a href={`tel:${b.driverMobile}`} className="text-sm font-extrabold px-1.5 rounded" style={{ color: "#000000", fontFamily: monoFont, background: "#FFE066" }}>{b.driverMobile}</a>
+              <span className="text-sm font-semibold" style={{ color: "#000000" }}>{lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}</span>
+            </>
+          ) : (
+            <span className="text-sm font-bold" style={{ color: "#000000" }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+          )}
+        </div>
+      </div>
+
+      {b.otp && !b.loadingStartedAt && (
+        <div className="rounded-2xl p-4 mb-2.5 text-center" style={{ background: "#F1EEE7", border: "1.5px dashed #9AA0A6" }}>
+          <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Give this OTP to the driver at pickup" : "पिकअप पर यह OTP ड्राइवर को बताएं"}</div>
+          <div className="text-3xl font-extrabold mt-1.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 8 }}>{b.otp}</div>
+        </div>
+      )}
+
+      <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng} driverLocation={b.driverLocation} progress={b.progress} zoneColor={C.pimpri} height={130} lang={lang} />
         <div className="w-full h-1.5 rounded-full mt-2" style={{ background: C.line }}>
           <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
@@ -2183,19 +2225,46 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
       )}
 
       {myTrip ? (
-        <div className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
-          <div className="text-xs font-bold mb-2" style={{ color: C.pimpri }}>{lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</div>
-          <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
-          <div className="text-xs mt-2" style={{ color: C.ink }}>{shortAddr(myTrip.pickup)} → {shortAddr(myTrip.drop)}</div>
-          <div className="rounded-lg p-2.5 mt-2" style={{ background: "#DCE9F5", border: `1px solid ${C.pimpri}` }}>
-            <div className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont, letterSpacing: 0.2 }}>
-              {lang === "en" ? "Customer" : "ग्राहक"}: {myTrip.customerMobile ? <a href={`tel:${myTrip.customerMobile}`} className="underline">{myTrip.customerMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
-            </div>
-            <div className="text-lg font-extrabold mt-0.5" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Fixed fare" : "तय भाड़ा"} {fmt(myTrip.fare)}</div>
-            {myTrip.hours && <div className="text-sm font-bold mt-0.5" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
+        <div>
+          <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Truck size={15} /> {lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</span>
+            <span className="text-xs font-mono" style={{ color: C.inkSoft }}>{myTrip.id}</span>
           </div>
-          <div className="text-[10px] mt-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
-          <LoadingTimer trip={myTrip} startLoading={startLoading} completeBooking={completeBooking} lang={lang} />
+
+          <div className="rounded-2xl p-3 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Navigation size={15} /> {lang === "en" ? "Live Tracking" : "लाइव ट्रैकिंग"} <Activity size={14} /></span>
+          </div>
+
+          <div className="rounded-2xl p-3 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
+            <div className="text-xs mt-2" style={{ color: C.ink }}>{shortAddr(myTrip.pickup)} → {shortAddr(myTrip.drop)}</div>
+          </div>
+
+          <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#DCE9F5", border: `1.5px solid ${C.pimpri}` }}>
+            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
+            <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: monoFont }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
+            {myTrip.hours && (
+              <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: monoFont }}>
+                {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 mt-2">
+              <Phone size={14} color="#000000" />
+              {myTrip.customerMobile ? (
+                <>
+                  <a href={`tel:${myTrip.customerMobile}`} className="text-sm font-extrabold px-1.5 rounded" style={{ color: "#000000", fontFamily: monoFont, background: "#FFE066" }}>{myTrip.customerMobile}</a>
+                  <span className="text-sm font-semibold" style={{ color: "#000000" }}>{lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}</span>
+                </>
+              ) : (
+                <span className="text-sm font-bold" style={{ color: "#000000" }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <div className="text-[10px]" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
+            <LoadingTimer trip={myTrip} startLoading={startLoading} completeBooking={completeBooking} lang={lang} />
+          </div>
         </div>
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
         <>
