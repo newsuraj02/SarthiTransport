@@ -1558,11 +1558,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         </div>
         <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle location" : "गाड़ी की लोकेशन"} — {b.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
-        <div className="rounded-lg p-2 mt-2" style={{ background: "#FBEBD2" }}>
-          <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>
-            {lang === "en" ? "Pay directly to the driver via Cash/UPI/etc." : "ड्राइवर को सीधे नकद/UPI/आदि से भुगतान करें।"}
-          </div>
-        </div>
         <div className="flex items-center gap-4 mt-2">
           <button onClick={shareTrip} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
           <button onClick={() => cancelBooking(b.id)} className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
