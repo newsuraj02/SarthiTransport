@@ -14,22 +14,53 @@ import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from "firebase/auth
 import { customerFirebaseAuth, driverFirebaseAuth } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
+// Blue theme matching the SARTHI hexagon logo. Token names (marigold, navy,
+// etc.) are kept as-is even though they no longer mean gold/black — every
+// screen already references these by name, so this is a value-only swap.
 const C = {
-  bg: "#EFE3C3",
-  paper: "#FFFBF1",
-  ink: "#111111",
-  inkSoft: "#5A5040",
-  marigold: "#D4AF37",
-  marigoldDeep: "#A6841F",
-  safety: "#B23A2E",
-  success: "#3B7A43",
-  line: "#DBC99B",
-  navy: "#0D0D0D",
-  pimpri: "#2C4A6B",
-  chinchwad: "#3B7A43",
+  bg: "#EAF3FC",
+  paper: "#FFFFFF",
+  ink: "#132A4C",
+  inkSoft: "#5B7699",
+  marigold: "#3D6FE0",
+  marigoldDeep: "#2A4FA8",
+  safety: "#E0433D",
+  success: "#1F9D55",
+  line: "#CFE0F5",
+  navy: "#0F1E36",
+  pimpri: "#2A4FA8",
+  chinchwad: "#1F9D55",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
+
+// Brand mark — a blue hexagon holding a truck, matching the SARTHI logo.
+// Built as CSS/SVG (not an image file) so it stays crisp at any size and
+// recolors automatically with the theme.
+function Logo({ size = 64, showText = true, textColor }) {
+  return (
+    <div className="flex flex-col items-center">
+      <div
+        style={{
+          width: size,
+          height: size,
+          clipPath: "polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0% 50%)",
+          background: `linear-gradient(135deg, ${C.marigold}, ${C.marigoldDeep})`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Truck size={Math.round(size * 0.5)} color="#fff" strokeWidth={2.2} />
+      </div>
+      {showText && (
+        <div className="mt-1.5 font-extrabold" style={{ color: textColor || C.marigoldDeep, fontSize: Math.round(size * 0.22), letterSpacing: 1.5 }}>
+          SARTHI
+        </div>
+      )}
+    </div>
+  );
+}
 
 const DEFAULT_VEHICLES = [
   { key: "chhota", label: "छोटा हाथी", labelEn: "Chhota Hathi (Mini Truck)", rate: 20, capacity: "750 किग्रा", capacityEn: "750 kg", capacityKg: 750, l: 7, w: 4.5, h: 4.5 },
@@ -544,10 +575,9 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
   );
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10">
-      <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.marigold }}>
-        <Truck size={30} color={C.navy} />
+      <div className="mb-4">
+        <Logo size={88} />
       </div>
-      <div className="text-xl font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Sarthi Transport" : "सार्थी ट्रांसपोर्ट"}</div>
       <p className="text-xs text-center mb-8" style={{ color: C.inkSoft }}>
         {anyVerified
           ? (lang === "en" ? "Continue where you left off, or logout to switch" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें")
@@ -618,7 +648,7 @@ function AdminLogin({ onVerified, lang, onBack }) {
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
       {onBack && (
-        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
       )}
@@ -717,12 +747,12 @@ function CustomerLogin({ onVerified, lang = "hi", authInstance, recaptchaContain
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
       {onBack && (
-        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
       )}
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.marigold }}>
-        <Truck size={26} color={C.navy} />
+      <div className="mb-4">
+        <Logo size={64} showText={false} />
       </div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Login to Sarthi Transport" : "सार्थी ट्रांसपोर्ट में लॉगिन करें"}</h2>
       <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>
@@ -1030,7 +1060,7 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
 
   return (
     <div className="px-5 py-5">
-      <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+      <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
         <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
       </button>
       <div className="space-y-3">
@@ -1492,7 +1522,7 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
   if (settingsView) {
     return (
       <div className="flex-1 overflow-y-auto relative">
-        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold self-start" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold self-start" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} />}
@@ -2301,7 +2331,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   if (settingsView) {
     return (
       <div className="flex-1 overflow-y-auto relative">
-        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold self-start" style={{ background: "#EDE3C8", color: C.marigoldDeep }}>
+        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold self-start" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
@@ -3220,13 +3250,11 @@ export default function App() {
   const isDesktop = app === "admin";
 
   return (
-    <div className="min-h-screen flex justify-center" style={{ background: "#DCD5C4", fontFamily: bodyFont }}>
+    <div className="min-h-screen flex justify-center" style={{ background: "#C7D6EA", fontFamily: bodyFont }}>
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
         <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: C.marigold }}>
-              <Truck size={20} color={C.navy} />
-            </div>
+            <Logo size={38} showText={false} />
             <div className="flex-1">
               <div className="text-white font-bold text-lg leading-none">{lang === "en" ? "Sarthi Transport" : "सार्थी ट्रांसपोर्ट"}</div>
               <div className="text-[11px]" style={{ color: "#9FB0C2" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
