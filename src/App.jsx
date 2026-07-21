@@ -950,6 +950,16 @@ function fileToImageDataUrl(file, maxDim = 900, quality = 0.72) {
   });
 }
 
+// Renders an <img>, falling back to `fallback` if there's no src yet or the
+// image fails to load (e.g. a stale blob: URL from an older upload that no
+// longer resolves on this device) — avoids the browser's broken-image glyph.
+function SafeImage({ src, alt = "", className, fallback = null }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [src]);
+  if (!src || failed) return fallback;
+  return <img src={src} alt={alt} className={className} onError={() => setFailed(true)} />;
+}
+
 function PhotoPicker({ label, lang = "hi", onSelect, children }) {
   const [choosing, setChoosing] = useState(false);
   const cameraRef = useRef(null);
@@ -1414,13 +1424,16 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                       style={{ background: isSelected ? "#DCE9F5" : "#DFEEE2", border: `2px solid ${isSelected ? C.pimpri : C.success}` }}>
                       <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>
                       <div className="flex items-center gap-2 mt-1">
-                        {lowestVehicle?.photo ? (
-                          <img src={lowestVehicle.photo.url} alt={vehicleLabel(v, lang)} className="w-12 h-12 rounded-lg object-cover shrink-0" />
-                        ) : (
-                          <div className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.success }}>
-                            <Truck size={20} color="#fff" />
-                          </div>
-                        )}
+                        <SafeImage
+                          src={lowestVehicle?.photo?.url}
+                          alt={vehicleLabel(v, lang)}
+                          className="w-12 h-12 rounded-lg object-cover shrink-0"
+                          fallback={
+                            <div className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.success }}>
+                              <Truck size={20} color="#fff" />
+                            </div>
+                          }
+                        />
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
                             <div>
@@ -1457,13 +1470,16 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                           className="w-full text-left rounded-lg p-2.5"
                           style={{ background: isSelected ? "#DCE9F5" : "#FBEBD2", border: isSelected ? `2px solid ${C.pimpri}` : "2px solid transparent" }}>
                           <div className="flex items-center gap-2">
-                            {bidVehicle?.photo ? (
-                              <img src={bidVehicle.photo.url} alt={vehicleLabel(v, lang)} className="w-9 h-9 rounded-lg object-cover shrink-0" />
-                            ) : (
-                              <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.marigoldDeep }}>
-                                <Truck size={16} color="#fff" />
-                              </div>
-                            )}
+                            <SafeImage
+                              src={bidVehicle?.photo?.url}
+                              alt={vehicleLabel(v, lang)}
+                              className="w-9 h-9 rounded-lg object-cover shrink-0"
+                              fallback={
+                                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.marigoldDeep }}>
+                                  <Truck size={16} color="#fff" />
+                                </div>
+                              }
+                            />
                             <div className="flex-1">
                               <div className="flex items-center justify-between">
                                 <div>
@@ -1514,9 +1530,12 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
         </div>
         <div className="flex items-center gap-2.5 mb-2">
-          {driverVehicle?.photo ? <img src={driverVehicle.photo.url} alt="ड्राइवर" className="w-9 h-9 rounded-full object-cover" /> : (
-            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>
-          )}
+          <SafeImage
+            src={driverVehicle?.photo?.url}
+            alt="ड्राइवर"
+            className="w-9 h-9 rounded-full object-cover"
+            fallback={<div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>}
+          />
           <div className="text-sm font-bold" style={{ color: C.ink }}>{b.driverName}</div>
         </div>
         <div className="rounded-lg p-2.5 mb-2" style={{ background: "#DCE9F5", border: `1px solid ${C.pimpri}` }}>
@@ -2427,14 +2446,17 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
         ].map(([key, label, val, setVal]) => (
           <PhotoPicker key={key} label={label} lang={lang} onSelect={onDoc(setVal)}>
             <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
-              {val?.url ? (
-                <img src={val.url} alt={label} className="w-full h-16 object-cover" />
-              ) : (
-                <div className="p-2 flex flex-col items-center justify-center">
-                  <Camera size={16} color={C.inkSoft} />
-                  <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
-                </div>
-              )}
+              <SafeImage
+                src={val?.url}
+                alt={label}
+                className="w-full h-16 object-cover"
+                fallback={
+                  <div className="p-2 flex flex-col items-center justify-center">
+                    <Camera size={16} color={C.inkSoft} />
+                    <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
+                  </div>
+                }
+              />
               <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>{val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : "फोटो लें")}</span>
             </div>
           </PhotoPicker>
@@ -2485,14 +2507,17 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
         <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo" : "गाड़ी की फोटो"}</label>
         <PhotoPicker label={lang === "en" ? "Vehicle Photo" : "गाड़ी की फोटो"} lang={lang} onSelect={onVehiclePhoto}>
           <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer mb-2" style={{ border: `1.5px dashed #2B5C8A`, background: C.paper, minHeight: vehiclePhoto ? "auto" : 110 }}>
-            {vehiclePhoto ? (
-              <img src={vehiclePhoto.url} alt="गाड़ी" className="w-full h-40 rounded-lg object-cover" />
-            ) : (
-              <>
-                <div className="w-14 h-14 rounded-full flex items-center justify-center mb-1.5" style={{ background: "#DCE9F5" }}><Camera size={22} color="#2B5C8A" /></div>
-                <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Upload a clear photo" : "साफ फोटो अपलोड करें"}</div>
-              </>
-            )}
+            <SafeImage
+              src={vehiclePhoto?.url}
+              alt="गाड़ी"
+              className="w-full h-40 rounded-lg object-cover"
+              fallback={
+                <>
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center mb-1.5" style={{ background: "#DCE9F5" }}><Camera size={22} color="#2B5C8A" /></div>
+                  <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Upload a clear photo" : "साफ फोटो अपलोड करें"}</div>
+                </>
+              }
+            />
           </div>
         </PhotoPicker>
         <div className="text-[10px] mb-2" style={{ color: vehiclePhoto ? C.success : C.inkSoft }}>
@@ -2798,13 +2823,16 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                         const doc = d.docs?.[key];
                         return (
                           <div key={key} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-                            {doc?.url ? (
-                              <img src={doc.url} alt={label} className="w-full h-24 object-cover" />
-                            ) : (
-                              <div className="w-full h-24 flex items-center justify-center" style={{ background: "#F3F4F6" }}>
-                                <XCircle size={16} color={C.safety} />
-                              </div>
-                            )}
+                            <SafeImage
+                              src={doc?.url}
+                              alt={label}
+                              className="w-full h-24 object-cover"
+                              fallback={
+                                <div className="w-full h-24 flex items-center justify-center" style={{ background: "#F3F4F6" }}>
+                                  <XCircle size={16} color={C.safety} />
+                                </div>
+                              }
+                            />
                             <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: doc?.url ? C.success : C.safety, background: doc?.url ? "#DFEEE2" : "#FCEAE3" }}>
                               {doc?.url ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {label}
                             </div>
@@ -2815,7 +2843,7 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                     {d.vehicleSpec?.photo && (
                       <>
                         <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photo:" : "गाड़ी की फोटो:"}</div>
-                        <img src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-32 rounded-lg object-cover mb-2" />
+                        <SafeImage src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-32 rounded-lg object-cover mb-2" />
                       </>
                     )}
                     {d.vehicleSpec && (
@@ -2951,13 +2979,16 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
                       const doc = d.docs?.[key];
                       return (
                         <div key={key} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-                          {doc?.url ? (
-                            <img src={doc.url} alt={label} className="w-full h-24 object-cover" />
-                          ) : (
-                            <div className="w-full h-24 flex items-center justify-center" style={{ background: "#F3F4F6" }}>
-                              <XCircle size={16} color={C.safety} />
-                            </div>
-                          )}
+                          <SafeImage
+                            src={doc?.url}
+                            alt={label}
+                            className="w-full h-24 object-cover"
+                            fallback={
+                              <div className="w-full h-24 flex items-center justify-center" style={{ background: "#F3F4F6" }}>
+                                <XCircle size={16} color={C.safety} />
+                              </div>
+                            }
+                          />
                           <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: doc?.url ? C.success : C.safety, background: doc?.url ? "#DFEEE2" : "#FCEAE3" }}>
                             {doc?.url ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {label}
                           </div>
@@ -2968,7 +2999,7 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
                   {d.vehicleSpec?.photo && (
                     <>
                       <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photo:" : "गाड़ी की फोटो:"}</div>
-                      <img src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-28 rounded-lg object-cover mb-2" />
+                      <SafeImage src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-28 rounded-lg object-cover mb-2" />
                     </>
                   )}
                   {d.vehicleSpec && (
