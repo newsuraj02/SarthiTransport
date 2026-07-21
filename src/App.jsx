@@ -1952,11 +1952,11 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
     return (
       <div className="mt-3 rounded-lg p-3" style={{ background: "#FBEBD2", border: `1.5px dashed ${C.marigoldDeep}` }}>
         <div className="text-xs font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Ask the customer for their 4-digit OTP to start loading" : "लोडिंग शुरू करने के लिए ग्राहक से 4-अंकों का OTP मांगें"}</div>
-        <div className="flex items-center gap-2">
+        <div className="space-y-2">
           <input value={otpInput} onChange={(e) => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4)); setOtpError(false); }}
             placeholder="0000" maxLength={4} inputMode="numeric"
-            className="flex-1 rounded-lg px-3 py-2.5 text-center outline-none" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink, fontFamily: monoFont, fontSize: 20, letterSpacing: 6 }} />
-          <button onClick={confirmOtp} disabled={otpInput.length !== 4} className="shrink-0 rounded-lg px-4 py-2.5 text-sm font-bold text-white"
+            className="w-full rounded-lg px-3 py-2.5 text-center outline-none" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink, fontFamily: monoFont, fontSize: 20, letterSpacing: 6 }} />
+          <button onClick={confirmOtp} disabled={otpInput.length !== 4} className="w-full rounded-lg py-2.5 text-sm font-bold text-white"
             style={{ background: otpInput.length === 4 ? C.marigoldDeep : C.line, color: otpInput.length === 4 ? "#fff" : "#9AA3B0" }}>
             {lang === "en" ? "Confirm" : "पुष्टि करें"}
           </button>
