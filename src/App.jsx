@@ -1539,11 +1539,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="text-sm font-bold" style={{ color: C.ink }}>{b.driverName}</div>
         </div>
         <div className="rounded-lg p-2.5 mb-2" style={{ background: "#DCE9F5", border: `1px solid ${C.pimpri}` }}>
-          <div className="text-xs font-bold" style={{ color: C.pimpri, fontFamily: monoFont }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")}</div>
-          <div className="text-sm font-bold mt-0.5" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? "Fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
-          {b.hours && <div className="text-xs font-bold mt-0.5" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
-          <div className="text-xs font-bold mt-0.5 flex items-center gap-1" style={{ color: C.pimpri, fontFamily: monoFont }}>
-            <Phone size={12} /> {b.driverMobile ? <a href={`tel:${b.driverMobile}`} className="underline">{b.driverMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
+          <div className="text-sm font-bold" style={{ color: "#000000", fontFamily: monoFont }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "vehicle number unavailable" : "गाड़ी नंबर उपलब्ध नहीं")}</div>
+          <div className="text-lg font-extrabold mt-0.5" style={{ color: "#000000", fontFamily: monoFont }}>{lang === "en" ? "Fixed fare" : "तय भाड़ा"} {fmt(b.fare)}</div>
+          {b.hours && <div className="text-sm font-bold mt-0.5" style={{ color: "#000000", fontFamily: monoFont }}>{lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
+          <div className="text-sm font-bold mt-0.5 flex items-center gap-1" style={{ color: "#000000", fontFamily: monoFont }}>
+            <Phone size={13} /> {b.driverMobile ? <a href={`tel:${b.driverMobile}`} className="underline">{b.driverMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
           </div>
         </div>
         {b.otp && !b.loadingStartedAt && (
@@ -2188,11 +2188,11 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
           <div className="text-xs mt-2" style={{ color: C.ink }}>{shortAddr(myTrip.pickup)} → {shortAddr(myTrip.drop)}</div>
           <div className="rounded-lg p-2.5 mt-2" style={{ background: "#DCE9F5", border: `1px solid ${C.pimpri}` }}>
-            <div className="text-xs font-bold" style={{ color: C.pimpri, fontFamily: monoFont }}>
+            <div className="text-sm font-bold" style={{ color: "#000000", fontFamily: monoFont }}>
               {lang === "en" ? "Customer" : "ग्राहक"}: {myTrip.customerMobile ? <a href={`tel:${myTrip.customerMobile}`} className="underline">{myTrip.customerMobile}</a> : (lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा...")}
             </div>
-            <div className="text-sm font-bold mt-0.5" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? "Fixed fare" : "तय भाड़ा"} {fmt(myTrip.fare)}</div>
-            {myTrip.hours && <div className="text-xs font-bold mt-0.5" style={{ color: C.pimpri, fontFamily: monoFont }}>{lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
+            <div className="text-lg font-extrabold mt-0.5" style={{ color: "#000000", fontFamily: monoFont }}>{lang === "en" ? "Fixed fare" : "तय भाड़ा"} {fmt(myTrip.fare)}</div>
+            {myTrip.hours && <div className="text-sm font-bold mt-0.5" style={{ color: "#000000", fontFamily: monoFont }}>{lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}</div>}
           </div>
           <div className="text-[10px] mt-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
           <LoadingTimer trip={myTrip} startLoading={startLoading} completeBooking={completeBooking} lang={lang} />
