@@ -921,6 +921,35 @@ function CustomerAddressVerify({ onVerified, lang = "hi", onBack }) {
 // sheet asking Take Photo vs Choose from Library, instead of jumping
 // straight to the OS file picker. Each option triggers its own hidden file
 // input (one forces the camera via `capture`, the other doesn't).
+// Converts an uploaded photo into a compressed base64 data URL so it can be
+// stored in Firestore and stay visible on every device — a blob: URL only
+// ever resolves inside the browser tab that created it.
+function fileToImageDataUrl(file, maxDim = 900, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("image decode failed"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function PhotoPicker({ label, lang = "hi", onSelect, children }) {
   const [choosing, setChoosing] = useState(false);
   const cameraRef = useRef(null);
@@ -2353,7 +2382,10 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
   };
 
   const onVehiclePhoto = (f) => {
-    if (f) setVehiclePhoto({ name: f.name, url: URL.createObjectURL(f) });
+    if (f) fileToImageDataUrl(f).then((url) => setVehiclePhoto({ name: f.name, url }));
+  };
+  const onDoc = (setVal) => (f) => {
+    if (f) fileToImageDataUrl(f).then((url) => setVal({ name: f.name, url }));
   };
 
   const canSubmit = driverName.trim().length >= 3;
@@ -2393,11 +2425,17 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
         {[
           ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
         ].map(([key, label, val, setVal]) => (
-          <PhotoPicker key={key} label={label} lang={lang} onSelect={(f) => setVal(f.name)}>
-            <div className="rounded-lg p-2.5 flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
-              <Camera size={16} color={C.inkSoft} />
-              <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
-              <span className="text-[9px] mt-0.5 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>{val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : "फोटो लें")}</span>
+          <PhotoPicker key={key} label={label} lang={lang} onSelect={onDoc(setVal)}>
+            <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
+              {val?.url ? (
+                <img src={val.url} alt={label} className="w-full h-16 object-cover" />
+              ) : (
+                <div className="p-2 flex flex-col items-center justify-center">
+                  <Camera size={16} color={C.inkSoft} />
+                  <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
+                </div>
+              )}
+              <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>{val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : "फोटो लें")}</span>
             </div>
           </PhotoPicker>
         ))}
@@ -2754,23 +2792,39 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
 
                 {expanded && (
                   <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                    <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : "जमा किए गए दस्तावेज़:"}</div>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      {Object.entries(docLabels).map(([key, label]) => {
+                        const doc = d.docs?.[key];
+                        return (
+                          <div key={key} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
+                            {doc?.url ? (
+                              <img src={doc.url} alt={label} className="w-full h-24 object-cover" />
+                            ) : (
+                              <div className="w-full h-24 flex items-center justify-center" style={{ background: "#F3F4F6" }}>
+                                <XCircle size={16} color={C.safety} />
+                              </div>
+                            )}
+                            <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: doc?.url ? C.success : C.safety, background: doc?.url ? "#DFEEE2" : "#FCEAE3" }}>
+                              {doc?.url ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {label}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                     {d.vehicleSpec?.photo && (
-                      <img src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-32 rounded-lg object-cover mb-2" />
+                      <>
+                        <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photo:" : "गाड़ी की फोटो:"}</div>
+                        <img src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-32 rounded-lg object-cover mb-2" />
+                      </>
                     )}
                     {d.vehicleSpec && (
                       <div className="text-[11px] mb-2" style={{ color: C.ink }}>
-                        <b>{lang === "en" ? "Vehicle" : "गाड़ी"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : "किग्रा"}` : "—"} ·{" "}
+                        <b>{lang === "en" ? "Vehicle number" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
+                        <b>{lang === "en" ? "Capacity/size" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : "किग्रा"}` : "—"} ·{" "}
                         {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : "फीट"}
                       </div>
                     )}
-                    <div className="text-[11px] font-semibold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Uploaded documents:" : "अपलोड किए गए दस्तावेज़:"}</div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {Object.entries(docLabels).map(([key, label]) => (
-                        <div key={key} className="flex items-center gap-1.5 text-[11px]" style={{ color: d.docs?.[key] ? C.success : C.safety }}>
-                          {d.docs?.[key] ? <CheckCircle2 size={12} /> : <XCircle size={12} />} {label}
-                        </div>
-                      ))}
-                    </div>
                     {!d.vehicleSpec && !d.docs && (
                       <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>
                     )}
@@ -2891,19 +2945,38 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
               </button>
               {expanded && (
                 <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                  {d.vehicleSpec?.photo && <img src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-28 rounded-lg object-cover mb-2" />}
+                  <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : "जमा किए गए दस्तावेज़:"}</div>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    {Object.entries(docLabels).map(([key, label]) => {
+                      const doc = d.docs?.[key];
+                      return (
+                        <div key={key} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
+                          {doc?.url ? (
+                            <img src={doc.url} alt={label} className="w-full h-24 object-cover" />
+                          ) : (
+                            <div className="w-full h-24 flex items-center justify-center" style={{ background: "#F3F4F6" }}>
+                              <XCircle size={16} color={C.safety} />
+                            </div>
+                          )}
+                          <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: doc?.url ? C.success : C.safety, background: doc?.url ? "#DFEEE2" : "#FCEAE3" }}>
+                            {doc?.url ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {label}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {d.vehicleSpec?.photo && (
+                    <>
+                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photo:" : "गाड़ी की फोटो:"}</div>
+                      <img src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-28 rounded-lg object-cover mb-2" />
+                    </>
+                  )}
                   {d.vehicleSpec && (
                     <div className="text-[11px] mb-2" style={{ color: C.ink }}>
-                      <b>{lang === "en" ? "Vehicle" : "गाड़ी"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : "फीट"}
+                      <b>{lang === "en" ? "Vehicle number" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
+                      <b>{lang === "en" ? "Capacity/size" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : "फीट"}
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {Object.entries(docLabels).map(([key, label]) => (
-                      <div key={key} className="flex items-center gap-1.5 text-[11px]" style={{ color: d.docs?.[key] ? C.success : C.safety }}>
-                        {d.docs?.[key] ? <CheckCircle2 size={12} /> : <XCircle size={12} />} {label}
-                      </div>
-                    ))}
-                  </div>
                   {!d.vehicleSpec && !d.docs && <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>}
                 </div>
               )}
