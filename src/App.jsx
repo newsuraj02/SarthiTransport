@@ -803,6 +803,8 @@ function CustomerLogin({ onVerified, lang = "hi", authInstance, recaptchaContain
 // =====================================================================
 function CustomerAddressVerify({ onVerified, lang = "hi", onBack }) {
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [photo, setPhoto] = useState(null);
   const [address, setAddress] = useState("");
   const [area, setArea] = useState("");
   const [city, setCity] = useState("");
@@ -839,10 +841,22 @@ function CustomerAddressVerify({ onVerified, lang = "hi", onBack }) {
       <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Fill in and verify your full address before continuing." : "आगे बढ़ने से पहले अपना पूरा पता भरें और वेरीफाई करें।"}</p>
 
       <div className="space-y-3">
+        <div className="flex justify-center">
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => setPhoto({ name: f.name, url: URL.createObjectURL(f) })}>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#DCE9F5", border: `2px dashed ${C.marigoldDeep}` }}>
+              {photo ? <img src={photo.url} alt="" className="w-full h-full object-cover" /> : <Camera size={22} color={C.marigoldDeep} />}
+            </div>
+          </PhotoPicker>
+        </div>
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name}
             onChange={(e) => { setName(e.target.value); setResult(null); }} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
+          <input type="email" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email}
+            onChange={(e) => { setEmail(e.target.value); setResult(null); }} />
         </div>
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
@@ -880,7 +894,7 @@ function CustomerAddressVerify({ onVerified, lang = "hi", onBack }) {
             {verifying ? (lang === "en" ? "Checking..." : "जाँच रहे हैं...") : (lang === "en" ? "Verify Address" : "पता वेरीफाई करें")}
           </button>
         ) : (
-          <button onClick={() => onVerified({ name, address, area, city, pincode })} className="w-full rounded-lg py-3 font-bold text-sm text-white" style={{ background: C.success }}>
+          <button onClick={() => onVerified({ name, email: email.trim() || null, photo, address, area, city, pincode })} className="w-full rounded-lg py-3 font-bold text-sm text-white" style={{ background: C.success }}>
             {lang === "en" ? "Continue" : "आगे बढ़ें"}
           </button>
         )}
@@ -1550,7 +1564,79 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
   );
 }
 
-function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile, customerMobile, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
+// Editable customer profile — photo, name, email, mobile (read-only, tied to
+// the verified login), and address, with a Save button that persists via
+// onUpdateProfile.
+function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTerms, lang }) {
+  const [name, setName] = useState(customerProfile?.name || "");
+  const [email, setEmail] = useState(customerProfile?.email || "");
+  const [photo, setPhoto] = useState(customerProfile?.photo || null);
+  const [address, setAddress] = useState(customerProfile?.address || "");
+  const [area, setArea] = useState(customerProfile?.area || "");
+  const [city, setCity] = useState(customerProfile?.city || "");
+  const [pincode, setPincode] = useState(customerProfile?.pincode || "");
+  const [saved, setSaved] = useState(false);
+
+  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+
+  const save = () => {
+    onSave?.({ name: name.trim(), email: email.trim() || null, photo, address, area, city, pincode });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div className="px-5 py-4">
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
+      <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex justify-center">
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => setPhoto({ name: f.name, url: URL.createObjectURL(f) })}>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#DCE9F5", border: `2px dashed ${C.marigoldDeep}` }}>
+              {photo ? <img src={photo.url} alt="" className="w-full h-full object-cover" /> : <Camera size={22} color={C.marigoldDeep} />}
+            </div>
+          </PhotoPicker>
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
+          <input className={inputCls} style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : "मोबाइल"}</label>
+          <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, background: C.bg, color: C.inkSoft }} value={customerMobile || ""} disabled />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
+          <input type="email" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
+          <input className={inputCls} style={inputStyle} value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
+            <input className={inputCls} style={inputStyle} value={area} onChange={(e) => setArea(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
+            <input className={inputCls} style={inputStyle} value={city} onChange={(e) => setCity(e.target.value)} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+          <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+        </div>
+        <button onClick={save} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: saved ? C.success : C.marigoldDeep }}>
+          {saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
+        </button>
+      </div>
+      <button onClick={onOpenTerms} className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}</button>
+    </div>
+  );
+}
+
+function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverName, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const ongoingTrip = bookings.find((b) => b.status === "Ongoing");
@@ -1575,15 +1661,7 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
         </button>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} />}
         {settingsView === "profile" && (
-          <div className="px-5 py-4">
-            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
-            <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-              <div className="text-sm font-bold" style={{ color: C.ink }}>{customerProfile?.name || "—"}</div>
-              {customerMobile && <div className="text-xs mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{customerMobile}</div>}
-              <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{customerProfile?.address}, {customerProfile?.area}, {customerProfile?.city} {customerProfile?.pincode}</div>
-            </div>
-            <button onClick={onOpenTerms} className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}</button>
-          </div>
+          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} onOpenTerms={onOpenTerms} lang={lang} />
         )}
         {settingsView === "liveLocation" && (
           <div className="px-5 py-4">
@@ -1626,9 +1704,14 @@ function CustomerApp({ bookings, createLoad, driverVehicle, vehicleTypes, cancel
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
-              <div className="px-4 py-4" style={{ background: C.navy }}>
-                <div className="text-sm font-bold text-white">{customerProfile?.name || (lang === "en" ? "Customer" : "कस्टमर")}</div>
-                {customerMobile && <div className="text-[11px]" style={{ color: "#9FB0C2", fontFamily: monoFont }}>{customerMobile}</div>}
+              <div className="px-4 py-4 flex items-center gap-3" style={{ background: C.navy }}>
+                <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ background: C.marigold }}>
+                  {customerProfile?.photo ? <img src={customerProfile.photo.url} alt="" className="w-full h-full object-cover" /> : <UserCircle2 size={24} color={C.navy} />}
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-white">{customerProfile?.name || (lang === "en" ? "Customer" : "कस्टमर")}</div>
+                  {customerMobile && <div className="text-[11px]" style={{ color: "#9FB0C2", fontFamily: monoFont }}>{customerMobile}</div>}
+                </div>
               </div>
               {onGoHome && (
                 <button onClick={() => { onGoHome(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
@@ -3059,6 +3142,13 @@ export default function App() {
   const [adminAuth, setAdminAuth] = usePersistedState("sarthi_adminAuth", false);
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
   const [customerAddress, setCustomerAddress] = usePersistedState("sarthi_customerAddress", { verified: false, name: "", address: "", area: "", city: "", pincode: "" });
+  const updateCustomerProfile = (patch) => {
+    setCustomerAddress((prev) => {
+      const next = { ...prev, ...patch };
+      if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...next, mobile: customerAuth.mobile }).catch((e) => console.error(e));
+      return next;
+    });
+  };
   const [driverAuth, setDriverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
   // "Remembered login" is now a real Firebase Auth session (see
   // customerFirebaseAuth/driverFirebaseAuth in firebaseClient.js) — signing
@@ -3371,7 +3461,7 @@ export default function App() {
         {role !== null && app === "customer" && customerAuth.verified && customerAddress.verified && (
           <CustomerApp bookings={bookings} createLoad={createLoad} driverVehicle={driver?.vehicleSpec} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} driverName={driver?.name} lang={lang} onLogout={logout}
-            customerProfile={customerAddress} customerMobile={customerAuth.mobile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
+            customerProfile={customerAddress} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
             onGoHome={role === "admin" ? undefined : goHome} />
         )}
         {role !== null && app === "driver" && !driverAuth.verified && (
