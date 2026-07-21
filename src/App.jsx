@@ -2165,11 +2165,8 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
 
 function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
   const VEHICLES = vehicleTypes;
-  const [aadhaar, setAadhaar] = useState(null);
   const [dl, setDl] = useState(null);
-  const [rc, setRc] = useState(null);
   const [photo, setPhoto] = useState(null);
-  const [insurance, setInsurance] = useState(null);
 
   const [vehicleType, setVehicleType] = useState(driver.vehicleSpec?.type || VEHICLES[0].key);
   const [vehiclePhoto, setVehiclePhoto] = useState(driver.vehicleSpec?.photo || null);
@@ -2199,7 +2196,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
   const submit = () => {
     if (!canSubmit) return;
     setDriver({
-      ...driver, name: driverName.trim(), kyc: "Pending", docs: { aadhaar, dl, rc, photo, insurance },
+      ...driver, name: driverName.trim(), kyc: "Pending", docs: { dl, photo },
       vehicleSpec: {
         type: vehicleType, photo: vehiclePhoto,
         capacityKg: Number(capacityKg) || undefined, length: Number(length) || undefined,
@@ -2212,13 +2209,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
   const docLabels = lang === "en"
-    ? { photo: "Driver Photo", aadhaar: "Aadhaar Card", dl: "Driving License", rc: "Vehicle RC", insurance: "Vehicle Insurance" }
-    : { photo: "ड्राइवर फोटो", aadhaar: "आधार कार्ड", dl: "ड्राइविंग लाइसेंस", rc: "गाड़ी RC", insurance: "गाड़ी इंश्योरेंस" };
+    ? { photo: "Driver Photo", dl: "Driving License" }
+    : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
 
   return (
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : "दस्तावेज़ (KYC)"}</h2>
-      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Upload your photo, Aadhaar, driving license, vehicle RC and insurance." : "अपनी फोटो, आधार, ड्राइविंग लाइसेंस, गाड़ी RC और इंश्योरेंस अपलोड करें।"}</p>
+      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Upload your photo and driving license, and enter your vehicle's number and dimensions." : "अपनी फोटो और ड्राइविंग लाइसेंस अपलोड करें, और अपनी गाड़ी का नंबर व साइज़ डालें।"}</p>
 
       <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: driver.kyc === "Approved" ? "#DFEEE2" : "#FBEBD2" }}>
         <ShieldCheck size={16} color={driver.kyc === "Approved" ? C.success : C.marigoldDeep} />
@@ -2228,10 +2225,9 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 1 — Your Details" : "स्टेप 1 — आपकी जानकारी"}</div>
       <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
       <input className={inputCls} style={{ ...inputStyle, marginBottom: 12 }} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={driverName} onChange={(e) => setDriverName(e.target.value)} />
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-2 gap-2 mb-3">
         {[
-          ["photo", docLabels.photo, photo, setPhoto], ["aadhaar", docLabels.aadhaar, aadhaar, setAadhaar],
-          ["dl", docLabels.dl, dl, setDl], ["rc", docLabels.rc, rc, setRc], ["insurance", docLabels.insurance, insurance, setInsurance],
+          ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
         ].map(([key, label, val, setVal]) => (
           <label key={key} className="rounded-lg p-2.5 flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
             <Camera size={16} color={C.inkSoft} />
@@ -2240,6 +2236,30 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
             <input type="file" accept="image/*" className="hidden" onChange={(e) => setVal(e.target.files?.[0]?.name || "photo")} />
           </label>
         ))}
+      </div>
+
+      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : "गाड़ी रजिस्टर्ड नंबर"}</label>
+      <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 12 }} placeholder="MH-14-XX-XXXX" value={vehicleNumber}
+        onChange={(e) => setVehicleNumber(e.target.value)} />
+
+      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Dimensions" : "गाड़ी का साइज़"}</label>
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <div>
+          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : "क्षमता (किलोग्राम)"}</label>
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : "लंबाई (फीट)"}</label>
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 7" : "जैसे: 7"} value={length} onChange={(e) => setLength(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : "चौड़ाई (फीट)"}</label>
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : "जैसे: 4.5"} value={width} onChange={(e) => setWidth(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : "ऊंचाई (फीट)"}</label>
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : "जैसे: 4.5"} value={height} onChange={(e) => setHeight(e.target.value)} />
+        </div>
       </div>
 
       <div className="text-[11px] font-bold mb-2" style={{ color: "#2B5C8A" }}>{lang === "en" ? "Step 2 — Vehicle Details" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
@@ -2259,10 +2279,6 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
           </div>
         )}
 
-        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Number" : "गाड़ी नंबर"}</label>
-        <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 10 }} placeholder="MH-14-XX-XXXX" value={vehicleNumber}
-          onChange={(e) => setVehicleNumber(e.target.value)} />
-
         <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo" : "गाड़ी की फोटो"}</label>
         <label className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer mb-2" style={{ border: `1.5px dashed #2B5C8A`, background: C.paper, minHeight: vehiclePhoto ? "auto" : 110 }}>
           {vehiclePhoto ? (
@@ -2278,7 +2294,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
         <div className="text-[10px] mb-2" style={{ color: vehiclePhoto ? C.success : C.inkSoft }}>
           {vehiclePhoto ? (lang === "en" ? "Uploaded ✓ — tap to change" : "अपलोड ✓ — बदलने के लिए टैप करें") : (lang === "en" ? "Upload a photo" : "फोटो अपलोड करें")}
         </div>
-        <div className="rounded-lg p-2.5 mb-2" style={{ background: "#F0EBDC" }}>
+        <div className="rounded-lg p-2.5" style={{ background: "#F0EBDC" }}>
           <div className="text-[10px] font-semibold mb-1" style={{ color: C.ink }}>{lang === "en" ? "For a good photo:" : "अच्छी फोटो के लिए:"}</div>
           <div className="text-[10px]" style={{ color: C.inkSoft, lineHeight: 1.6 }}>
             {lang === "en" ? (
@@ -2286,25 +2302,6 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
             ) : (
               <>• दिन की रोशनी में, साफ जगह पर फोटो लें<br />• पूरी गाड़ी (आगे से या साइड से) फ्रेम में आनी चाहिए<br />• गाड़ी नंबर प्लेट साफ दिखनी चाहिए<br />• धुंधली, अंधेरी या कटी हुई फोटो न डालें</>
             )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : "क्षमता (किलोग्राम)"}</label>
-            <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : "लंबाई (फीट)"}</label>
-            <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 7" : "जैसे: 7"} value={length} onChange={(e) => setLength(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : "चौड़ाई (फीट)"}</label>
-            <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : "जैसे: 4.5"} value={width} onChange={(e) => setWidth(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : "ऊंचाई (फीट)"}</label>
-            <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : "जैसे: 4.5"} value={height} onChange={(e) => setHeight(e.target.value)} />
           </div>
         </div>
       </div>
@@ -2566,8 +2563,8 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   const pending = drivers.filter((d) => d.kyc === "Pending");
   const [expandedId, setExpandedId] = useState(null);
   const docLabels = lang === "en"
-    ? { aadhaar: "Aadhaar Card", dl: "Driving License", rc: "Vehicle RC", photo: "Driver Photo", insurance: "Insurance" }
-    : { aadhaar: "आधार कार्ड", dl: "ड्राइविंग लाइसेंस", rc: "गाड़ी RC", photo: "ड्राइवर फोटो", insurance: "इंश्योरेंस" };
+    ? { photo: "Driver Photo", dl: "Driving License" }
+    : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
   return (
     <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "Driver Approval (KYC Desk)" : "ड्राइवर अप्रूवल (KYC Desk)"}</div>
@@ -2699,8 +2696,8 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
     ? { Approved: { label: "Verified", color: C.success, bg: "#DFEEE2" }, Pending: { label: "Pending", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "Blocked", color: C.safety, bg: "#FCEAE3" }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#F0EBDC" } }
     : { Approved: { label: "सत्यापित", color: C.success, bg: "#DFEEE2" }, Pending: { label: "लंबित", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "ब्लॉक्ड", color: C.safety, bg: "#FCEAE3" }, none: { label: "KYC सबमिट नहीं हुआ", color: C.inkSoft, bg: "#F0EBDC" } };
   const docLabels = lang === "en"
-    ? { aadhaar: "Aadhaar Card", dl: "Driving License", rc: "Vehicle RC", photo: "Driver Photo", insurance: "Insurance" }
-    : { aadhaar: "आधार कार्ड", dl: "ड्राइविंग लाइसेंस", rc: "गाड़ी RC", photo: "ड्राइवर फोटो", insurance: "इंश्योरेंस" };
+    ? { photo: "Driver Photo", dl: "Driving License" }
+    : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
   return (
     <div className="rounded-xl p-4" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "All Drivers" : "सभी ड्राइवर"}</div>
