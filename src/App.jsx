@@ -15,18 +15,18 @@ import { customerFirebaseAuth, driverFirebaseAuth } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 const C = {
-  bg: "#F5F1E6",
-  paper: "#FFFFFF",
-  ink: "#141C2B",
-  inkSoft: "#54607A",
-  marigold: "#FFB800",
-  marigoldDeep: "#C2790A",
-  safety: "#FF3B30",
-  success: "#12A150",
-  line: "#E3D9C0",
-  navy: "#101A2E",
-  pimpri: "#1768D1",
-  chinchwad: "#12A150",
+  bg: "#EFE3C3",
+  paper: "#FFFBF1",
+  ink: "#111111",
+  inkSoft: "#5A5040",
+  marigold: "#D4AF37",
+  marigoldDeep: "#A6841F",
+  safety: "#B23A2E",
+  success: "#3B7A43",
+  line: "#DBC99B",
+  navy: "#0D0D0D",
+  pimpri: "#2C4A6B",
+  chinchwad: "#3B7A43",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
@@ -1204,6 +1204,26 @@ function CustomerBooking({ createLoad, driverVehicle, vehicleTypes, lastBooking,
   );
 }
 
+// Bold From/To route line with pickup/drop dots — used in booking lists so
+// the route is the most visually prominent thing on the card.
+function RouteLine({ pickup, drop, lang }) {
+  return (
+    <div className="flex items-stretch gap-2.5 my-1.5">
+      <div className="flex flex-col items-center pt-1">
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: C.marigoldDeep }} />
+        <span className="flex-1 my-0.5" style={{ width: 2, background: C.line, minHeight: 16 }} />
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: C.safety }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.inkSoft }}>{lang === "en" ? "From" : "से"}</div>
+        <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{pickup}</div>
+        <div className="text-[9px] font-bold uppercase tracking-wide mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "To" : "तक"}</div>
+        <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{drop}</div>
+      </div>
+    </div>
+  );
+}
+
 function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acceptBid, driverVehicle, driverName, onGoBook, lang }) {
   const VEHICLES = vehicleTypes;
   const [selectedBids, setSelectedBids] = useState({});
@@ -1244,7 +1264,8 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
               <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
             </div>
-            <div className="text-xs mb-2" style={{ color: C.ink }}>{vehicleLabel(v, lang)} · {b.pickup} → {b.drop}</div>
+            <div className="text-[10px] font-semibold" style={{ color: C.inkSoft }}>{vehicleLabel(v, lang)}</div>
+            <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
             {b.scheduledFor && (
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#DCE9F5" }}>
                 <Clock3 size={12} color="#2B5C8A" />
@@ -1420,7 +1441,7 @@ function CustomerRides({ bookings, vehicleTypes, cancelBooking, rateBooking, acc
               <div className="text-[11px]" style={{ fontFamily: monoFont, color: C.inkSoft }}>{b.id}</div>
               <div className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: meta.color, background: meta.bg }}>{meta.label}</div>
             </div>
-            <div className="text-xs mt-1" style={{ color: C.ink }}>{b.pickup} → {b.drop}</div>
+            <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
             <div className="flex items-center justify-between mt-2">
               <span className="text-sm font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{b.fare ? fmt(b.fare) : "—"}</span>
               {b.status === "Completed" && (
