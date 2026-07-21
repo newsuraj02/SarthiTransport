@@ -18,15 +18,15 @@ import { customerFirebaseAuth, driverFirebaseAuth } from "./firebaseClient";
 // etc.) are kept as-is even though they no longer mean gold/black — every
 // screen already references these by name, so this is a value-only swap.
 const C = {
-  bg: "#EAF3FC",
+  bg: "#F7F6F2",
   paper: "#FFFFFF",
   ink: "#132A4C",
-  inkSoft: "#5B7699",
+  inkSoft: "#5B6B84",
   marigold: "#3D6FE0",
   marigoldDeep: "#2A4FA8",
   safety: "#E0433D",
   success: "#1F9D55",
-  line: "#CFE0F5",
+  line: "#E2E4E8",
   navy: "#0F1E36",
   pimpri: "#2A4FA8",
   chinchwad: "#1F9D55",
@@ -801,7 +801,7 @@ function CustomerLogin({ onVerified, lang = "hi", authInstance, recaptchaContain
 // =====================================================================
 // CUSTOMER ADDRESS VERIFICATION (mandatory after login)
 // =====================================================================
-function CustomerAddressVerify({ onVerified, lang = "hi" }) {
+function CustomerAddressVerify({ onVerified, lang = "hi", onBack }) {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [area, setArea] = useState("");
@@ -827,6 +827,11 @@ function CustomerAddressVerify({ onVerified, lang = "hi" }) {
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8">
+      {onBack && (
+        <button onClick={onBack} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+          <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+        </button>
+      )}
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
         <MapPin size={22} color={C.navy} />
       </div>
@@ -2905,13 +2910,18 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
   );
 }
 
-function AdminPanel({ drivers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
+function AdminPanel({ drivers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
   const [tab, setTab] = useState("fleet");
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर लिस्ट", ClipboardList], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
+          {onGoHome && (
+            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-8 h-8 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <Home size={15} color={C.navy} strokeWidth={2.5} />
+            </button>
+          )}
           <LayoutDashboard size={18} color={C.marigoldDeep} />
           <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Control Panel" : "एडमिन कंट्रोल पैनल"}</h2>
         </div>
@@ -3250,7 +3260,7 @@ export default function App() {
   const isDesktop = app === "admin";
 
   return (
-    <div className="min-h-screen flex justify-center" style={{ background: "#C7D6EA", fontFamily: bodyFont }}>
+    <div className="min-h-screen flex justify-center" style={{ background: "#DCDDD6", fontFamily: bodyFont }}>
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
         <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
           <div className="flex items-center gap-2 mb-4">
@@ -3312,7 +3322,7 @@ export default function App() {
           <CustomerAddressVerify lang={lang} onVerified={(addr) => {
             setCustomerAddress({ verified: true, ...addr });
             if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile }).catch((e) => console.error(e));
-          }} />
+          }} onBack={() => logoutRole("customer")} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && customerAddress.verified && (
           <CustomerApp bookings={bookings} createLoad={createLoad} driverVehicle={driver?.vehicleSpec} vehicleTypes={vehicleTypes}
@@ -3325,13 +3335,19 @@ export default function App() {
             onVerified={(mobile) => setDriverAuth({ verified: true, mobile })} onBack={goHome} />
         )}
         {role !== null && app === "driver" && driverAuth.verified && !driver && (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex flex-col items-center justify-center px-5">
+            <button onClick={() => logoutRole("driver")} className="self-start flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+              <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+            </button>
             <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
           </div>
         )}
         {role !== null && app === "driver" && driverAuth.verified && driver && (!driver.vehicleSpec || driverResubmitting) && (
           <div className="flex-1 overflow-y-auto">
-            <div className="mx-5 mt-4 rounded-lg p-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
+            <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+              <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+            </button>
+            <div className="mx-5 mt-3 rounded-lg p-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
               <ShieldCheck size={15} color={C.marigoldDeep} />
               <span className="text-xs font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Completing KYC is required before opening the home page." : "होम पेज खोलने से पहले KYC पूरी करना ज़रूरी है।"}</span>
             </div>
@@ -3339,7 +3355,10 @@ export default function App() {
           </div>
         )}
         {role !== null && app === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
-          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
+            <button onClick={() => logoutRole("driver")} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+              <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+            </button>
             {driver.kyc === "Rejected" ? (
               <>
                 <XCircle size={40} color={C.safety} className="mb-3" />
@@ -3369,7 +3388,7 @@ export default function App() {
           <div className="flex-1 overflow-y-auto">
             <AdminPanel drivers={drivers} driver={driver} updateDriverKyc={updateDriverKyc} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
-              bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft}
+              bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} onGoHome={goHome} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} />
           </div>
         )}
