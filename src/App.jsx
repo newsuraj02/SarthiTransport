@@ -563,10 +563,12 @@ function SosScreen({ role = "customer", raiseAlert, lang }) {
 // =====================================================================
 // ROLE SELECTION — shown once so each user only sees their own platform
 // =====================================================================
-function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVerified, onLogoutRole, adminEntry }) {
+function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVerified, onLogoutRole, adminEntry, lockedRole }) {
   const anyVerified = customerVerified || driverVerified || adminVerified;
-  const showCustomer = !anyVerified || customerVerified;
-  const showDriver = !anyVerified || driverVerified;
+  // Once a device has verified as Customer or Driver, it's locked to that
+  // choice forever — the other option never shows again, even after logout.
+  const showCustomer = lockedRole ? lockedRole === "customer" : true;
+  const showDriver = lockedRole ? lockedRole === "driver" : true;
   // Admin Login is invisible to regular Customer/Driver users — it only
   // shows up when the page was opened with the secret ?admin=1 link, or
   // once already signed in as admin (so the logout link stays reachable).
@@ -3358,6 +3360,21 @@ export default function App() {
     });
   };
   const [driverAuth, setDriverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
+  // Once a device verifies as Customer or Driver, it's permanently locked to
+  // that choice — the other option never appears again, even after logout.
+  const [lockedRole, setLockedRole] = usePersistedState("sarthi_lockedRole", null);
+  useEffect(() => {
+    if (lockedRole) return;
+    if (customerAuth.verified) setLockedRole("customer");
+    else if (driverAuth.verified) setLockedRole("driver");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Opening the app with ?admin=1 skips the role-choice screen entirely and
+  // goes straight to the Admin login form — no option to pick Customer/Driver.
+  useEffect(() => {
+    if (adminEntry && role === null) setRole("admin");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminEntry]);
   // "Remembered login" is now a real Firebase Auth session (see
   // customerFirebaseAuth/driverFirebaseAuth in firebaseClient.js) — signing
   // out below clears it for real, instead of just a locally-stored number.
@@ -3649,16 +3666,16 @@ export default function App() {
         {role === null && (
           <RoleSelect lang={lang} onSelect={(r) => { setRole(r); setApp(r); }}
             customerVerified={customerAuth.verified} driverVerified={driverAuth.verified} adminVerified={adminAuth}
-            onLogoutRole={logoutRole} adminEntry={adminEntry} />
+            onLogoutRole={logoutRole} adminEntry={adminEntry} lockedRole={lockedRole} />
         )}
 
         {role === "admin" && !adminAuth && (
-          <AdminLogin lang={lang} onVerified={() => setAdminAuth(true)} onBack={goHome} />
+          <AdminLogin lang={lang} onVerified={() => setAdminAuth(true)} onBack={adminEntry ? undefined : goHome} />
         )}
 
         {role !== null && app === "customer" && !customerAuth.verified && (
           <CustomerLogin lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
-            onVerified={(mobile) => setCustomerAuth({ verified: true, mobile })} onBack={goHome} />
+            onVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); setLockedRole("customer"); }} onBack={goHome} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && !customerAddress.verified && (
           <CustomerAddressVerify lang={lang} onVerified={(addr) => {
@@ -3674,7 +3691,7 @@ export default function App() {
         )}
         {role !== null && app === "driver" && !driverAuth.verified && (
           <CustomerLogin lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
-            onVerified={(mobile) => setDriverAuth({ verified: true, mobile })} onBack={goHome} />
+            onVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setLockedRole("driver"); }} onBack={goHome} />
         )}
         {role !== null && app === "driver" && driverAuth.verified && !driver && (
           <div className="flex-1 flex flex-col items-center justify-center px-5">
