@@ -801,7 +801,7 @@ function CustomerAddressVerify({ onVerified, lang = "hi", onBack, stepLabel }) {
 // CUSTOMER REGISTRATION — one continuous page: phone OTP, then straight
 // into the profile/address form, instead of two separate screens.
 // =====================================================================
-function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, onComplete }) {
+function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, onComplete, addressVerified }) {
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
   const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile");
@@ -862,6 +862,12 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   };
 
   if (verified) {
+    // Returning customer, same number — details were already collected the
+    // first time; the root will swap to CustomerApp on its next render.
+    // Never show the form again here, even for a single frame.
+    if (addressVerified) {
+      return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : "लोड हो रहा है..."}</p></div>;
+    }
     return (
       <CustomerAddressVerify lang={lang} onVerified={onComplete} onBack={onLogout}
         stepLabel={lang === "en" ? "Step 2 of 2 — Your Details" : "स्टेप 2 / 2 — आपकी जानकारी"} />
@@ -986,7 +992,10 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   };
 
   if (verified) {
-    if (!driver) {
+    if (!driver || driver.vehicleSpec) {
+      // No driver doc yet, or (returning driver, same number) KYC was
+      // already submitted before — the root will swap to the KYC-pending
+      // or DriverApp screen on its next render. Never show the form again.
       return (
         <div className="flex-1 flex flex-col items-center justify-center px-5">
           <button onClick={onLogout} className="self-start flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
@@ -3539,7 +3548,7 @@ export default function App() {
   useEffect(() => {
     if (!customerAuth.verified || !customerAuth.mobile) return;
     if (customerAddress.verified && customerAddress.mobile !== customerAuth.mobile) {
-      setCustomerAddress({ verified: false, name: "", address: "", area: "", city: "", pincode: "" });
+      setCustomerAddress({ verified: false, name: "", address: "", area: "", city: "", state: "", pincode: "" });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerAuth.mobile, customerAuth.verified]);
@@ -3868,7 +3877,7 @@ export default function App() {
 
         {role !== null && app === "customer" && !(customerAuth.verified && customerAddress.verified) && (
           <CustomerOnboarding lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
-            verified={customerAuth.verified}
+            verified={customerAuth.verified} addressVerified={customerAddress.verified}
             onOtpVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); setLockedRole("customer"); }}
             onLogout={() => (customerAuth.verified ? logoutRole("customer") : goHome())}
             onComplete={(addr) => {
