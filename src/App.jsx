@@ -684,11 +684,12 @@ function AdminLogin({ onVerified, lang, onBack }) {
 }
 
 // =====================================================================
-// CUSTOMER REGISTRATION — details form with mobile/OTP verification at
-// the bottom of the same page. Fill everything in once, verify, done.
+// CUSTOMER REGISTRATION — two separate steps. Step 1 is mobile/OTP only.
+// Step 2 (profile details) only appears once, right after verifying, and
+// only if this exact mobile number has no saved profile yet.
 // =====================================================================
-function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, onComplete, addressVerified }) {
-  // Profile/address fields — only asked the first time (no saved profile yet).
+function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, hasProfile, checking, onOtpVerified, onLogout, onComplete }) {
+  // Step 2 fields — profile/address, asked only once, only if needed.
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [photo, setPhoto] = useState(null);
@@ -698,7 +699,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
 
-  // Mobile/OTP verification — lives at the bottom of the same page.
+  // Step 1 — mobile/OTP verification.
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
   const [otpStage, setOtpStage] = useState("mobile");
@@ -711,19 +712,12 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   const fieldCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const fieldStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
-  // A saved profile already exists (returning customer) — a still-valid
-  // Firebase session means "let them straight in". Without one, a session
-  // that doesn't match a saved profile is stale (e.g. after a data reset)
-  // — sign out of it so registration starts clean instead of dropping the
-  // customer into a half-finished "continue where you left off" screen.
+  // A still-valid Firebase session on this device — skip straight past
+  // Step 1. Whether a profile exists for that number is checked separately
+  // and live from Firestore, so there's no stale-cache risk here.
   useEffect(() => {
     const existing = authInstance?.currentUser?.phoneNumber;
-    if (!existing) return;
-    if (addressVerified) {
-      onOtpVerified(existing.replace("+91", ""));
-    } else {
-      signOut(authInstance).catch(() => {});
-    }
+    if (existing) onOtpVerified(existing.replace("+91", ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -737,7 +731,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   };
 
   const sendOtp = async () => {
-    if ((!addressVerified && !detailsValid) || mobile.length !== 10 || !authInstance || sending) return;
+    if (mobile.length !== 10 || !authInstance || sending) return;
     setSending(true);
     setError("");
     try {
@@ -764,11 +758,6 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     try {
       await confirmationRef.current.confirm(otp);
       onOtpVerified(mobile);
-      // Returning customer (addressVerified already true) has nothing new
-      // to save — only a first-time registration submits a profile here.
-      if (!addressVerified) {
-        onComplete({ name, email: email.trim() || null, photo, address, area, city, state, pincode });
-      }
     } catch (e) {
       console.error(e);
       setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
@@ -778,79 +767,91 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     setSending(false);
   };
 
-  // Returning customer, same number — the root will swap to CustomerApp on
-  // its next render. Never show anything else here, even for one frame.
-  if (verified && addressVerified) {
+  const submitProfile = () => {
+    if (!detailsValid) return;
+    onComplete({ name, email: email.trim() || null, photo, address, area, city, state, pincode });
+  };
+
+  const backButton = (
+    <button onClick={onLogout} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+      <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+    </button>
+  );
+
+  if (verified && checking) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-5">
+        {backButton}
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your profile..." : "आपकी प्रोफाइल जांची जा रही है..."}</p>
+      </div>
+    );
+  }
+
+  if (verified && hasProfile) {
+    // Root is about to swap to CustomerApp — never show anything else here.
     return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : "लोड हो रहा है..."}</p></div>;
   }
 
-  const otpSection = (
-    <div>
-      {otpStage === "mobile" ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-            <Phone size={16} color={C.inkSoft} />
-            <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
-            <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
-              value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
-          </div>
-          {!addressVerified && !detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
-          {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-          <button onClick={sendOtp} disabled={(!addressVerified && !detailsValid) || mobile.length !== 10 || sending}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: (addressVerified || detailsValid) && mobile.length === 10 && !sending ? C.marigold : C.line, color: (addressVerified || detailsValid) && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
-            {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
-          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-            <ShieldCheck size={16} color={C.inkSoft} />
-            <input className={otpInputCls} style={{ ...otpInputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
-              onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
-          </div>
-          {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-          <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
-            {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (addressVerified ? (lang === "en" ? "Verify" : "वेरीफाई करें") : (lang === "en" ? "Verify & Register" : "वेरीफाई करें और रजिस्टर करें"))}
-          </button>
-          <div className="flex items-center justify-between">
-            <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
-            <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  // Returning customer — profile already exists on this device, nothing to
-  // fill in again. Just verify the mobile number.
-  if (addressVerified) {
+  if (!verified) {
+    // STEP 1 — mobile + OTP only, nothing else to fill in yet.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
         <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
         <div className="mb-4"><Logo size={64} showText={false} /></div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Welcome back" : "वापसी पर स्वागत है"}</h2>
-        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to continue." : "आगे बढ़ने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
-        <div className="w-full">{otpSection}</div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Login" : "कस्टमर लॉगिन"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
+        <div className="w-full">
+          {otpStage === "mobile" ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <Phone size={16} color={C.inkSoft} />
+                <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+              </div>
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : C.line, color: mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <ShieldCheck size={16} color={C.inkSoft} />
+                <input className={otpInputCls} style={{ ...otpInputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
+                  onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              </div>
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
+              </button>
+              <div className="flex items-center justify-between">
+                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
+                <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+              </div>
+            </div>
+          )}
+        </div>
         <div id={recaptchaContainerId} />
       </div>
     );
   }
 
-  // First-time registration: fill in details, verify mobile at the bottom.
+  // STEP 2 — verified, and this number has no saved profile yet: fill it
+  // in once.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
-      <button onClick={onLogout} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
-        <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
-      </button>
+      {backButton}
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
         <MapPin size={22} color={C.navy} />
       </div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Registration" : "कस्टमर रजिस्ट्रेशन"}</h2>
-      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Fill in your details, then verify your mobile number below." : "अपनी जानकारी भरें, फिर नीचे अपना मोबाइल नंबर वेरीफाई करें।"}</p>
+      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
 
       <div className="space-y-3">
         <div className="flex justify-center">
@@ -895,10 +896,11 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         </div>
       </div>
 
-      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
-        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
-        {otpSection}
-      </div>
+      {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
+      <button onClick={submitProfile} disabled={!detailsValid} className="w-full rounded-lg py-3 font-bold text-sm mt-3"
+        style={{ background: detailsValid ? C.marigold : C.line, color: detailsValid ? C.navy : "#9AA3B0" }}>
+        {lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें"}
+      </button>
       <div id={recaptchaContainerId} />
     </div>
   );
@@ -3590,22 +3592,22 @@ export default function App() {
   const adminEntry = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("admin") === "1";
   const [adminAuth, setAdminAuth] = usePersistedState("sarthi_adminAuth", false);
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
-  const [customerAddress, setCustomerAddress] = usePersistedState("sarthi_customerAddress", { verified: false, name: "", address: "", area: "", city: "", pincode: "" });
-  // customerAddress is cached locally so a returning customer doesn't have
-  // to re-type their address every session — but that cache isn't keyed by
-  // mobile number, so if a *different* customer registers on the same
-  // device with a new number, the old cached profile would otherwise leak
-  // through unchanged. Wipe it the moment the verified mobile no longer
-  // matches whose profile is cached, forcing fresh registration details.
+  // The customer's profile is looked up live from Firestore by their
+  // verified mobile number (exactly like the driver profile) instead of a
+  // local cache — a local cache doesn't know which mobile it belongs to, so
+  // a second customer verifying on the same device would otherwise see the
+  // first customer's leftover profile. customerChecked distinguishes "we
+  // haven't looked yet" from "we looked, and there's no profile".
+  const [customer, setCustomer] = useState(null);
+  const [customerChecked, setCustomerChecked] = useState(false);
   useEffect(() => {
-    if (!customerAuth.verified || !customerAuth.mobile) return;
-    if (customerAddress.verified && customerAddress.mobile !== customerAuth.mobile) {
-      setCustomerAddress({ verified: false, name: "", address: "", area: "", city: "", state: "", pincode: "" });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerAuth.mobile, customerAuth.verified]);
+    if (!customerAuth.verified || !customerAuth.mobile) { setCustomer(null); setCustomerChecked(false); return; }
+    if (!firestoreReady) { setCustomer(null); setCustomerChecked(true); return; }
+    setCustomerChecked(false);
+    return subscribeDoc("customers", customerAuth.mobile, (data) => { setCustomer(data); setCustomerChecked(true); });
+  }, [customerAuth.verified, customerAuth.mobile]);
   const updateCustomerProfile = (patch) => {
-    setCustomerAddress((prev) => {
+    setCustomer((prev) => {
       const next = { ...prev, ...patch };
       if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...next, mobile: customerAuth.mobile }).catch((e) => console.error(e));
       return next;
@@ -3927,20 +3929,20 @@ export default function App() {
           <AdminLogin lang={lang} onVerified={() => setAdminAuth(true)} onBack={adminEntry ? undefined : goHome} />
         )}
 
-        {role !== null && app === "customer" && !(customerAuth.verified && customerAddress.verified) && (
+        {role !== null && app === "customer" && (!customerAuth.verified || !customerChecked || !customer) && (
           <CustomerOnboarding lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
-            verified={customerAuth.verified} addressVerified={customerAddress.verified}
+            verified={customerAuth.verified} hasProfile={!!customer} checking={customerAuth.verified && !customerChecked}
             onOtpVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); setLockedRole("customer"); }}
             onLogout={() => (customerAuth.verified ? logoutRole("customer") : goHome())}
             onComplete={(addr) => {
-              setCustomerAddress({ verified: true, mobile: customerAuth.mobile, ...addr });
+              setCustomer({ mobile: customerAuth.mobile, ...addr });
               if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile }).catch((e) => console.error(e));
             }} />
         )}
-        {role !== null && app === "customer" && customerAuth.verified && customerAddress.verified && (
+        {role !== null && app === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
-            customerProfile={customerAddress} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
+            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
             onGoHome={role === "admin" ? undefined : goHome} />
         )}
         {role !== null && app === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
