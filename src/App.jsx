@@ -1164,7 +1164,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <Clock3 size={22} color={C.navy} />
           </div>
           <div>
-            <div className="text-base font-bold text-white">📅 {lang === "en" ? "Book vehicle in advance" : "एडवांस गाड़ी बुक करें"}</div>
+            <div className="text-base font-bold text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
             <div className="text-[11px]" style={{ color: "#9FB0C2" }}>{lang === "en" ? "Choose a future date and time" : "आगे की तारीख और समय चुनें"}</div>
           </div>
         </button>
