@@ -683,146 +683,22 @@ function AdminLogin({ onVerified, lang, onBack }) {
   );
 }
 
-// Real phone-OTP login via Firebase Authentication. `authInstance` is a
-// dedicated Auth instance (see firebaseClient.js) so a customer session and
-// a driver session can each stay signed in with their own verified number
-// on the same device. Firebase Auth's own persistence means a returning
-// user with a still-valid session skips straight past this screen (see the
-// mount effect below) — that's the real "remembered login" now, not a
-// locally-stored list of past numbers.
-function CustomerLogin({ onVerified, lang = "hi", authInstance, recaptchaContainerId, onBack }) {
-  const [mobile, setMobile] = useState("");
-  const [otp, setOtp] = useState("");
-  const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
-  const confirmationRef = useRef(null);
-  const recaptchaRef = useRef(null);
-  const inputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center";
-  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
-
-  // Resume an already-verified session instead of asking for OTP again.
-  useEffect(() => {
-    const existing = authInstance?.currentUser?.phoneNumber;
-    if (existing) onVerified(existing.replace("+91", ""));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const getRecaptcha = () => {
-    if (!recaptchaRef.current) {
-      recaptchaRef.current = new RecaptchaVerifier(authInstance, recaptchaContainerId, { size: "invisible" });
-    }
-    return recaptchaRef.current;
-  };
-
-  const sendOtp = async () => {
-    if (mobile.length !== 10 || !authInstance || sending) return;
-    setSending(true);
-    setError("");
-    try {
-      confirmationRef.current = await signInWithPhoneNumber(authInstance, "+91" + mobile, getRecaptcha());
-      setOtp("");
-      setStage("otp");
-    } catch (e) {
-      console.error(e);
-      try { recaptchaRef.current?.clear(); } catch { /* already gone */ }
-      recaptchaRef.current = null; // force a genuinely fresh widget on retry
-      setError(
-        e?.code === "auth/too-many-requests"
-          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
-          : (lang === "en" ? "Couldn't send OTP — check the number and try again." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।")
-      );
-    }
-    setSending(false);
-  };
-
-  const verifyOtp = async () => {
-    if (otp.length !== 6 || !confirmationRef.current || sending) return;
-    setSending(true);
-    setError("");
-    try {
-      await confirmationRef.current.confirm(otp);
-      onVerified(mobile);
-    } catch (e) {
-      console.error(e);
-      setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
-    }
-    setSending(false);
-  };
-
-  if (stage === "checking") {
-    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
-  }
-
-  return (
-    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-      {onBack && (
-        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
-          <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
-        </button>
-      )}
-      <div className="mb-4">
-        <Logo size={64} showText={false} />
-      </div>
-      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Login to Sarthi Transport" : "सार्थी ट्रांसपोर्ट में लॉगिन करें"}</h2>
-      <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>
-        {stage === "mobile"
-          ? (lang === "en" ? "Enter your mobile number" : "अपना मोबाइल नंबर डालें")
-          : (lang === "en" ? `Enter the OTP sent to ${mobile}` : `${mobile} पर भेजा गया OTP डालें`)}
-      </p>
-
-      {stage === "mobile" ? (
-        <div className="w-full space-y-3">
-          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-            <Phone size={16} color={C.inkSoft} />
-            <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
-            <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
-              value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
-          </div>
-          {error && <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>{error}</div>}
-          <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : C.line, color: mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
-            {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
-          </button>
-        </div>
-      ) : (
-        <div className="w-full space-y-3">
-          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-            <ShieldCheck size={16} color={C.inkSoft} />
-            <input className={inputCls} style={{ ...inputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
-              onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
-          </div>
-          {error && <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>{error}</div>}
-          <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
-            {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
-          </button>
-          <div className="flex items-center justify-between">
-            <button onClick={() => { setStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
-            <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
-          </div>
-        </div>
-      )}
-      <div id={recaptchaContainerId} />
-    </div>
-  );
-}
-
 // =====================================================================
 // CUSTOMER ADDRESS VERIFICATION (mandatory after login)
 // =====================================================================
-function CustomerAddressVerify({ onVerified, lang = "hi", onBack }) {
+function CustomerAddressVerify({ onVerified, lang = "hi", onBack, stepLabel }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [photo, setPhoto] = useState(null);
   const [address, setAddress] = useState("");
   const [area, setArea] = useState("");
   const [city, setCity] = useState("");
+  const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState(null);
 
-  const canVerify = name.trim().length >= 3 && address.trim().split(/\s+/).length >= 2 && area.trim() && city.trim() && pincode.length === 6;
+  const canVerify = name.trim().length >= 3 && address.trim().split(/\s+/).length >= 2 && area.trim() && city.trim() && state.trim() && pincode.length === 6;
 
   const verify = () => {
     if (!canVerify) return;
@@ -844,6 +720,7 @@ function CustomerAddressVerify({ onVerified, lang = "hi", onBack }) {
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
       )}
+      {stepLabel && <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{stepLabel}</div>}
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
         <MapPin size={22} color={C.navy} />
       </div>
@@ -885,10 +762,17 @@ function CustomerAddressVerify({ onVerified, lang = "hi", onBack }) {
               onChange={(e) => { setCity(e.target.value); setResult(null); }} />
           </div>
         </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
-          <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
-            onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setResult(null); }} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
+            <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state}
+              onChange={(e) => { setState(e.target.value); setResult(null); }} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+            <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
+              onChange={(e) => { setPincode(e.target.value.replace(/\D/g, "").slice(0, 6)); setResult(null); }} />
+          </div>
         </div>
 
         {result === "ok" && (
@@ -904,11 +788,275 @@ function CustomerAddressVerify({ onVerified, lang = "hi", onBack }) {
             {verifying ? (lang === "en" ? "Checking..." : "जाँच रहे हैं...") : (lang === "en" ? "Verify Address" : "पता वेरीफाई करें")}
           </button>
         ) : (
-          <button onClick={() => onVerified({ name, email: email.trim() || null, photo, address, area, city, pincode })} className="w-full rounded-lg py-3 font-bold text-sm text-white" style={{ background: C.success }}>
+          <button onClick={() => onVerified({ name, email: email.trim() || null, photo, address, area, city, state, pincode })} className="w-full rounded-lg py-3 font-bold text-sm text-white" style={{ background: C.success }}>
             {lang === "en" ? "Continue" : "आगे बढ़ें"}
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// CUSTOMER REGISTRATION — one continuous page: phone OTP, then straight
+// into the profile/address form, instead of two separate screens.
+// =====================================================================
+function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, onComplete }) {
+  const [mobile, setMobile] = useState("");
+  const [otp, setOtp] = useState("");
+  const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const confirmationRef = useRef(null);
+  const recaptchaRef = useRef(null);
+  const inputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
+
+  // Resume an already-verified session instead of asking for OTP again.
+  useEffect(() => {
+    const existing = authInstance?.currentUser?.phoneNumber;
+    if (existing) onOtpVerified(existing.replace("+91", ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const getRecaptcha = () => {
+    if (!recaptchaRef.current) {
+      recaptchaRef.current = new RecaptchaVerifier(authInstance, recaptchaContainerId, { size: "invisible" });
+    }
+    return recaptchaRef.current;
+  };
+
+  const sendOtp = async () => {
+    if (mobile.length !== 10 || !authInstance || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      confirmationRef.current = await signInWithPhoneNumber(authInstance, "+91" + mobile, getRecaptcha());
+      setOtp("");
+      setStage("otp");
+    } catch (e) {
+      console.error(e);
+      try { recaptchaRef.current?.clear(); } catch { /* already gone */ }
+      recaptchaRef.current = null;
+      setError(
+        e?.code === "auth/too-many-requests"
+          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
+          : (lang === "en" ? "Couldn't send OTP — check the number and try again." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।")
+      );
+    }
+    setSending(false);
+  };
+
+  const verifyOtp = async () => {
+    if (otp.length !== 6 || !confirmationRef.current || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      await confirmationRef.current.confirm(otp);
+      onOtpVerified(mobile);
+    } catch (e) {
+      console.error(e);
+      setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
+    }
+    setSending(false);
+  };
+
+  if (verified) {
+    return (
+      <CustomerAddressVerify lang={lang} onVerified={onComplete} onBack={onLogout}
+        stepLabel={lang === "en" ? "Step 2 of 2 — Your Details" : "स्टेप 2 / 2 — आपकी जानकारी"} />
+    );
+  }
+
+  if (stage === "checking") {
+    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+      <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+        <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+      </button>
+      <div className="mb-4"><Logo size={64} showText={false} /></div>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Registration" : "कस्टमर रजिस्ट्रेशन"}</h2>
+      <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>
+        {stage === "mobile"
+          ? (lang === "en" ? "Step 1 of 2 — Enter your mobile number" : "स्टेप 1 / 2 — अपना मोबाइल नंबर डालें")
+          : (lang === "en" ? `Step 1 of 2 — Enter the OTP sent to ${mobile}` : `स्टेप 1 / 2 — ${mobile} पर भेजा गया OTP डालें`)}
+      </p>
+
+      {stage === "mobile" ? (
+        <div className="w-full space-y-3">
+          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+            <Phone size={16} color={C.inkSoft} />
+            <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+            <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+              value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+          </div>
+          {error && <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>{error}</div>}
+          <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : C.line, color: mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+            {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+          </button>
+        </div>
+      ) : (
+        <div className="w-full space-y-3">
+          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+            <ShieldCheck size={16} color={C.inkSoft} />
+            <input className={inputCls} style={{ ...inputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
+              onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+          </div>
+          {error && <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>{error}</div>}
+          <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+            {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
+          </button>
+          <div className="flex items-center justify-between">
+            <button onClick={() => { setStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
+            <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+          </div>
+        </div>
+      )}
+      <div id={recaptchaContainerId} />
+    </div>
+  );
+}
+
+// =====================================================================
+// DRIVER REGISTRATION — one continuous page: phone OTP, then straight
+// into KYC submission, instead of two separate screens.
+// =====================================================================
+function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType }) {
+  const [mobile, setMobile] = useState("");
+  const [otp, setOtp] = useState("");
+  const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const confirmationRef = useRef(null);
+  const recaptchaRef = useRef(null);
+  const inputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
+
+  useEffect(() => {
+    const existing = authInstance?.currentUser?.phoneNumber;
+    if (existing) onOtpVerified(existing.replace("+91", ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const getRecaptcha = () => {
+    if (!recaptchaRef.current) {
+      recaptchaRef.current = new RecaptchaVerifier(authInstance, recaptchaContainerId, { size: "invisible" });
+    }
+    return recaptchaRef.current;
+  };
+
+  const sendOtp = async () => {
+    if (mobile.length !== 10 || !authInstance || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      confirmationRef.current = await signInWithPhoneNumber(authInstance, "+91" + mobile, getRecaptcha());
+      setOtp("");
+      setStage("otp");
+    } catch (e) {
+      console.error(e);
+      try { recaptchaRef.current?.clear(); } catch { /* already gone */ }
+      recaptchaRef.current = null;
+      setError(
+        e?.code === "auth/too-many-requests"
+          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
+          : (lang === "en" ? "Couldn't send OTP — check the number and try again." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।")
+      );
+    }
+    setSending(false);
+  };
+
+  const verifyOtp = async () => {
+    if (otp.length !== 6 || !confirmationRef.current || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      await confirmationRef.current.confirm(otp);
+      onOtpVerified(mobile);
+    } catch (e) {
+      console.error(e);
+      setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
+    }
+    setSending(false);
+  };
+
+  if (verified) {
+    if (!driver) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center px-5">
+          <button onClick={onLogout} className="self-start flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+            <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+          </button>
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
+        </div>
+      );
+    }
+    return (
+      <div className="flex-1 overflow-y-auto">
+        <button onClick={onLogout} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+          <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+        </button>
+        <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
+          stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"} />
+      </div>
+    );
+  }
+
+  if (stage === "checking") {
+    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+      <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+        <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+      </button>
+      <div className="mb-4"><Logo size={64} showText={false} /></div>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Registration" : "ड्राइवर रजिस्ट्रेशन"}</h2>
+      <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>
+        {stage === "mobile"
+          ? (lang === "en" ? "Step 1 of 2 — Enter your mobile number" : "स्टेप 1 / 2 — अपना मोबाइल नंबर डालें")
+          : (lang === "en" ? `Step 1 of 2 — Enter the OTP sent to ${mobile}` : `स्टेप 1 / 2 — ${mobile} पर भेजा गया OTP डालें`)}
+      </p>
+
+      {stage === "mobile" ? (
+        <div className="w-full space-y-3">
+          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+            <Phone size={16} color={C.inkSoft} />
+            <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+            <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+              value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+          </div>
+          {error && <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>{error}</div>}
+          <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : C.line, color: mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+            {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+          </button>
+        </div>
+      ) : (
+        <div className="w-full space-y-3">
+          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+            <ShieldCheck size={16} color={C.inkSoft} />
+            <input className={inputCls} style={{ ...inputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
+              onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+          </div>
+          {error && <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>{error}</div>}
+          <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+            {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
+          </button>
+          <div className="flex items-center justify-between">
+            <button onClick={() => { setStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
+            <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+          </div>
+        </div>
+      )}
+      <div id={recaptchaContainerId} />
     </div>
   );
 }
@@ -1678,6 +1826,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTe
   const [address, setAddress] = useState(customerProfile?.address || "");
   const [area, setArea] = useState(customerProfile?.area || "");
   const [city, setCity] = useState(customerProfile?.city || "");
+  const [state, setState] = useState(customerProfile?.state || "");
   const [pincode, setPincode] = useState(customerProfile?.pincode || "");
   const [saved, setSaved] = useState(false);
 
@@ -1685,7 +1834,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTe
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   const save = () => {
-    onSave?.({ name: name.trim(), email: email.trim() || null, photo, address, area, city, pincode });
+    onSave?.({ name: name.trim(), email: email.trim() || null, photo, address, area, city, state, pincode });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -1727,9 +1876,15 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTe
             <input className={inputCls} style={inputStyle} value={city} onChange={(e) => setCity(e.target.value)} />
           </div>
         </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
-          <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
+            <input className={inputCls} style={inputStyle} value={state} onChange={(e) => setState(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+            <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+          </div>
         </div>
         <button onClick={save} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: saved ? C.success : C.marigoldDeep }}>
           {saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
@@ -2442,7 +2597,7 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
   );
 }
 
-function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
+function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel }) {
   const VEHICLES = vehicleTypes;
   const [dl, setDl] = useState(null);
   const [photo, setPhoto] = useState(null);
@@ -2457,6 +2612,10 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
   const [newTypeName, setNewTypeName] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState(driver.vehicleSpec?.vehicleNumber || "");
   const [driverName, setDriverName] = useState(driver.name && driver.name !== driver.mobile ? driver.name : "");
+  const [address, setAddress] = useState(driver.address || "");
+  const [city, setCity] = useState(driver.city || "");
+  const [state, setState] = useState(driver.state || "");
+  const [pincode, setPincode] = useState(driver.pincode || "");
 
   const confirmNewType = () => {
     const name = newTypeName.trim();
@@ -2473,11 +2632,12 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
     if (f) fileToImageDataUrl(f).then((url) => setVal({ name: f.name, url }));
   };
 
-  const canSubmit = driverName.trim().length >= 3;
+  const canSubmit = driverName.trim().length >= 3 && address.trim().length > 0 && city.trim() && state.trim() && pincode.length === 6;
   const submit = () => {
     if (!canSubmit) return;
     setDriver({
       ...driver, name: driverName.trim(), kyc: "Pending", docs: { dl, photo },
+      address: address.trim(), city: city.trim(), state: state.trim(), pincode,
       vehicleSpec: {
         type: vehicleType, photo: vehiclePhoto,
         capacityKg: Number(capacityKg) || undefined, length: Number(length) || undefined,
@@ -2495,6 +2655,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
 
   return (
     <div className="px-5 py-5">
+      {stepLabel && <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{stepLabel}</div>}
       <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : "दस्तावेज़ (KYC)"}</h2>
       <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Upload your photo and driving license, and enter your vehicle's number and dimensions." : "अपनी फोटो और ड्राइविंग लाइसेंस अपलोड करें, और अपनी गाड़ी का नंबर व साइज़ डालें।"}</p>
 
@@ -2506,6 +2667,23 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 1 — Your Details" : "स्टेप 1 — आपकी जानकारी"}</div>
       <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
       <input className={inputCls} style={{ ...inputStyle, marginBottom: 12 }} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={driverName} onChange={(e) => setDriverName(e.target.value)} />
+
+      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
+      <input className={inputCls} style={{ ...inputStyle, marginBottom: 12 }} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
+        </div>
+      </div>
+      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+      <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, marginBottom: 12 }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
+        onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+
       <div className="grid grid-cols-2 gap-2 mb-3">
         {[
           ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
@@ -2601,7 +2779,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang }) {
         </div>
       </div>
 
-      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Enter your name to submit" : "सबमिट करने के लिए अपना नाम डालें"}</div>}
+      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Fill your name, address, city, state, and 6-digit pincode to submit" : "सबमिट करने के लिए नाम, पता, शहर, राज्य और 6 अंकों का पिनकोड भरें"}</div>}
       <button onClick={submit} disabled={!canSubmit} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: canSubmit ? C.marigold : C.line, color: canSubmit ? C.navy : "#9AA3B0" }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
     </div>
   );
@@ -3688,15 +3866,15 @@ export default function App() {
           <AdminLogin lang={lang} onVerified={() => setAdminAuth(true)} onBack={adminEntry ? undefined : goHome} />
         )}
 
-        {role !== null && app === "customer" && !customerAuth.verified && (
-          <CustomerLogin lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
-            onVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); setLockedRole("customer"); }} onBack={goHome} />
-        )}
-        {role !== null && app === "customer" && customerAuth.verified && !customerAddress.verified && (
-          <CustomerAddressVerify lang={lang} onVerified={(addr) => {
-            setCustomerAddress({ verified: true, mobile: customerAuth.mobile, ...addr });
-            if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile }).catch((e) => console.error(e));
-          }} onBack={() => logoutRole("customer")} />
+        {role !== null && app === "customer" && !(customerAuth.verified && customerAddress.verified) && (
+          <CustomerOnboarding lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
+            verified={customerAuth.verified}
+            onOtpVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); setLockedRole("customer"); }}
+            onLogout={() => (customerAuth.verified ? logoutRole("customer") : goHome())}
+            onComplete={(addr) => {
+              setCustomerAddress({ verified: true, mobile: customerAuth.mobile, ...addr });
+              if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile }).catch((e) => console.error(e));
+            }} />
         )}
         {role !== null && app === "customer" && customerAuth.verified && customerAddress.verified && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes}
@@ -3704,19 +3882,14 @@ export default function App() {
             customerProfile={customerAddress} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
             onGoHome={role === "admin" ? undefined : goHome} />
         )}
-        {role !== null && app === "driver" && !driverAuth.verified && (
-          <CustomerLogin lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
-            onVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setLockedRole("driver"); }} onBack={goHome} />
+        {role !== null && app === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
+          <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
+            verified={driverAuth.verified}
+            onOtpVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setLockedRole("driver"); }}
+            onLogout={() => (driverAuth.verified ? logoutRole("driver") : goHome())}
+            driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
         )}
-        {role !== null && app === "driver" && driverAuth.verified && !driver && (
-          <div className="flex-1 flex flex-col items-center justify-center px-5">
-            <button onClick={() => logoutRole("driver")} className="self-start flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
-              <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
-            </button>
-            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
-          </div>
-        )}
-        {role !== null && app === "driver" && driverAuth.verified && driver && (!driver.vehicleSpec || driverResubmitting) && (
+        {role !== null && app === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
           <div className="flex-1 overflow-y-auto">
             <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
               <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
