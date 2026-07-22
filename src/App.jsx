@@ -122,15 +122,6 @@ function estimateDistance(pickup, drop) {
   return 2 + (h % 17);
 }
 
-// Shortens a full Google-formatted address to its first couple of segments
-// so a driver glancing at the trip card isn't confused by two long, nearly
-// identical-looking addresses — the map already shows the full route.
-function shortAddr(text, segments = 2) {
-  if (!text) return "";
-  const parts = text.split(",").map((p) => p.trim()).filter(Boolean);
-  return parts.slice(0, segments).join(", ");
-}
-
 // Persists a piece of state to localStorage under `key`, so the app
 // remembers role choice, bookings, wallet balances etc. across reloads.
 function usePersistedState(key, initialValue) {
@@ -2237,7 +2228,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
           <div className="rounded-2xl p-3 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
-            <div className="text-xs mt-2" style={{ color: C.ink }}>{shortAddr(myTrip.pickup)} → {shortAddr(myTrip.drop)}</div>
+            <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
           </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#DCE9F5", border: `1.5px solid ${C.pimpri}` }}>
@@ -2650,7 +2641,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             {myTrip ? (
               <>
                 <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
-                <div className="text-xs mt-2" style={{ color: C.ink }}>{shortAddr(myTrip.pickup)} → {shortAddr(myTrip.drop)}</div>
+                <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
                 <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{myTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>
             ) : (
