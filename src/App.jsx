@@ -3352,6 +3352,19 @@ export default function App() {
   const [adminAuth, setAdminAuth] = usePersistedState("sarthi_adminAuth", false);
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
   const [customerAddress, setCustomerAddress] = usePersistedState("sarthi_customerAddress", { verified: false, name: "", address: "", area: "", city: "", pincode: "" });
+  // customerAddress is cached locally so a returning customer doesn't have
+  // to re-type their address every session — but that cache isn't keyed by
+  // mobile number, so if a *different* customer registers on the same
+  // device with a new number, the old cached profile would otherwise leak
+  // through unchanged. Wipe it the moment the verified mobile no longer
+  // matches whose profile is cached, forcing fresh registration details.
+  useEffect(() => {
+    if (!customerAuth.verified || !customerAuth.mobile) return;
+    if (customerAddress.verified && customerAddress.mobile !== customerAuth.mobile) {
+      setCustomerAddress({ verified: false, name: "", address: "", area: "", city: "", pincode: "" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerAuth.mobile, customerAuth.verified]);
   const updateCustomerProfile = (patch) => {
     setCustomerAddress((prev) => {
       const next = { ...prev, ...patch };
@@ -3681,7 +3694,7 @@ export default function App() {
         )}
         {role !== null && app === "customer" && customerAuth.verified && !customerAddress.verified && (
           <CustomerAddressVerify lang={lang} onVerified={(addr) => {
-            setCustomerAddress({ verified: true, ...addr });
+            setCustomerAddress({ verified: true, mobile: customerAuth.mobile, ...addr });
             if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile }).catch((e) => console.error(e));
           }} onBack={() => logoutRole("customer")} />
         )}
