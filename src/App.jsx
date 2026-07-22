@@ -457,7 +457,7 @@ function LocationPicker(props) {
   return <MapPicker {...props} />;
 }
 
-function MicButton({ onResult, lang = "hi-IN" }) {
+function MicButton({ onResult, lang = "hi-IN", size = 8, iconSize = 14 }) {
   const [listening, setListening] = useState(false);
   const recRef = useRef(null);
 
@@ -489,9 +489,9 @@ function MicButton({ onResult, lang = "hi-IN" }) {
 
   return (
     <button type="button" onClick={listening ? stop : start}
-      className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
-      style={{ background: listening ? C.safety : "#DCE9F5" }}>
-      <Mic size={14} color={listening ? "#fff" : "#2B5C8A"} />
+      className="shrink-0 rounded-full flex items-center justify-center"
+      style={{ background: listening ? C.safety : "#DCE9F5", width: size * 4, height: size * 4 }}>
+      <Mic size={iconSize} color={listening ? "#fff" : "#2B5C8A"} />
     </button>
   );
 }
@@ -992,27 +992,33 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
 // the text input (live suggestion dropdown while typing) when Maps is
 // configured/loaded, falling back to a plain input otherwise.
 function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap }) {
-  const inputCls = "flex-1 min-w-0 rounded-lg px-3 py-2.5 text-sm outline-none";
-  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+  // Icon cluster (map-pin, optional current-location, mic) sits inside the
+  // bar at the right edge, so the field itself can span the full width —
+  // right padding reserves room for it instead of separate outside buttons.
+  const rightPad = onUseCurrentLocation ? 108 : 76;
+  const inputCls = "w-full rounded-lg pl-3 py-2.5 text-sm outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, paddingRight: rightPad };
   const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
   return (
     <div>
       <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{label}</label>
-      <div className="flex items-center gap-1.5">
+      <div className="relative w-full">
         {mapsReady ? (
           <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged} options={{ componentRestrictions: { country: "in" } }}>
             {inputEl}
           </Autocomplete>
         ) : inputEl}
-        <MicButton onResult={onMic} />
-        {onUseCurrentLocation && (
-          <button type="button" onClick={onUseCurrentLocation} disabled={locating} title={label} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#DFEEE2" }}>
-            <Navigation size={14} color={C.success} />
+        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <button type="button" onClick={onMapPin} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 28, height: 28, background: "#DCE9F5" }}>
+            <MapPin size={13} color="#2B5C8A" />
           </button>
-        )}
-        <button type="button" onClick={onMapPin} className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#DCE9F5" }}>
-          <MapPin size={14} color="#2B5C8A" />
-        </button>
+          {onUseCurrentLocation && (
+            <button type="button" onClick={onUseCurrentLocation} disabled={locating} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 28, height: 28, background: "#DFEEE2" }}>
+              <Navigation size={13} color={C.success} />
+            </button>
+          )}
+          <MicButton onResult={onMic} size={7} iconSize={13} />
+        </div>
       </div>
       {areaLabel ? (
         <div className="text-[10px] mt-1 font-semibold" style={{ color: "#2B5C8A" }}>📍 {areaLabel}</div>
