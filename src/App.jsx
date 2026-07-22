@@ -688,7 +688,7 @@ function AdminLogin({ onVerified, lang, onBack }) {
 // the bottom of the same page. Fill everything in once, verify, done.
 // =====================================================================
 function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, onComplete, addressVerified }) {
-  // Profile/address fields — filled in first, on this same page.
+  // Profile/address fields — only asked the first time (no saved profile yet).
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [photo, setPhoto] = useState(null);
@@ -701,7 +701,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   // Mobile/OTP verification — lives at the bottom of the same page.
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
-  const [otpStage, setOtpStage] = useState(authInstance?.currentUser ? "checking" : "mobile");
+  const [otpStage, setOtpStage] = useState("mobile");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const confirmationRef = useRef(null);
@@ -711,10 +711,19 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   const fieldCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const fieldStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
-  // Resume an already-verified session instead of asking for OTP again.
+  // A saved profile already exists (returning customer) — a still-valid
+  // Firebase session means "let them straight in". Without one, a session
+  // that doesn't match a saved profile is stale (e.g. after a data reset)
+  // — sign out of it so registration starts clean instead of dropping the
+  // customer into a half-finished "continue where you left off" screen.
   useEffect(() => {
     const existing = authInstance?.currentUser?.phoneNumber;
-    if (existing) onOtpVerified(existing.replace("+91", ""));
+    if (!existing) return;
+    if (addressVerified) {
+      onOtpVerified(existing.replace("+91", ""));
+    } else {
+      signOut(authInstance).catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -728,7 +737,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   };
 
   const sendOtp = async () => {
-    if (!detailsValid || mobile.length !== 10 || !authInstance || sending) return;
+    if ((!addressVerified && !detailsValid) || mobile.length !== 10 || !authInstance || sending) return;
     setSending(true);
     setError("");
     try {
@@ -748,8 +757,6 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     setSending(false);
   };
 
-  const details = () => ({ name, email: email.trim() || null, photo, address, area, city, state, pincode });
-
   const verifyOtp = async () => {
     if (otp.length !== 6 || !confirmationRef.current || sending) return;
     setSending(true);
@@ -757,7 +764,11 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     try {
       await confirmationRef.current.confirm(otp);
       onOtpVerified(mobile);
-      onComplete(details());
+      // Returning customer (addressVerified already true) has nothing new
+      // to save — only a first-time registration submits a profile here.
+      if (!addressVerified) {
+        onComplete({ name, email: email.trim() || null, photo, address, area, city, state, pincode });
+      }
     } catch (e) {
       console.error(e);
       setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
@@ -767,24 +778,69 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     setSending(false);
   };
 
-  // Crash-recovery path: OTP was verified in a past session but these
-  // details never actually got submitted (e.g. the app closed mid-flow).
-  const completeDetailsOnly = () => {
-    if (!detailsValid) return;
-    onComplete(details());
-  };
-
-  // Returning customer, same number — details were already collected the
-  // first time; the root will swap to CustomerApp on its next render.
-  // Never show the form again here, even for a single frame.
+  // Returning customer, same number — the root will swap to CustomerApp on
+  // its next render. Never show anything else here, even for one frame.
   if (verified && addressVerified) {
     return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : "लोड हो रहा है..."}</p></div>;
   }
 
-  if (!verified && otpStage === "checking") {
-    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
+  const otpSection = (
+    <div>
+      {otpStage === "mobile" ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+            <Phone size={16} color={C.inkSoft} />
+            <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+            <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+              value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+          </div>
+          {!addressVerified && !detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
+          {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+          <button onClick={sendOtp} disabled={(!addressVerified && !detailsValid) || mobile.length !== 10 || sending}
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: (addressVerified || detailsValid) && mobile.length === 10 && !sending ? C.marigold : C.line, color: (addressVerified || detailsValid) && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+            {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
+          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+            <ShieldCheck size={16} color={C.inkSoft} />
+            <input className={otpInputCls} style={{ ...otpInputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
+              onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+          </div>
+          {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+          <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+            {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (addressVerified ? (lang === "en" ? "Verify" : "वेरीफाई करें") : (lang === "en" ? "Verify & Register" : "वेरीफाई करें और रजिस्टर करें"))}
+          </button>
+          <div className="flex items-center justify-between">
+            <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
+            <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Returning customer — profile already exists on this device, nothing to
+  // fill in again. Just verify the mobile number.
+  if (addressVerified) {
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
+          <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+        </button>
+        <div className="mb-4"><Logo size={64} showText={false} /></div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Welcome back" : "वापसी पर स्वागत है"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to continue." : "आगे बढ़ने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
+        <div className="w-full">{otpSection}</div>
+        <div id={recaptchaContainerId} />
+      </div>
+    );
   }
 
+  // First-time registration: fill in details, verify mobile at the bottom.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
       <button onClick={onLogout} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#DCE9FB", color: C.marigoldDeep }}>
@@ -794,11 +850,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         <MapPin size={22} color={C.navy} />
       </div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Registration" : "कस्टमर रजिस्ट्रेशन"}</h2>
-      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
-        {verified
-          ? (lang === "en" ? "Finish filling in your details to continue." : "आगे बढ़ने के लिए अपनी जानकारी पूरी भरें।")
-          : (lang === "en" ? "Fill in your details, then verify your mobile number below." : "अपनी जानकारी भरें, फिर नीचे अपना मोबाइल नंबर वेरीफाई करें।")}
-      </p>
+      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Fill in your details, then verify your mobile number below." : "अपनी जानकारी भरें, फिर नीचे अपना मोबाइल नंबर वेरीफाई करें।"}</p>
 
       <div className="space-y-3">
         <div className="flex justify-center">
@@ -843,53 +895,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         </div>
       </div>
 
-      {verified ? (
-        <>
-          {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
-          <button onClick={completeDetailsOnly} disabled={!detailsValid} className="w-full rounded-lg py-3 font-bold text-sm mt-2"
-            style={{ background: detailsValid ? C.success : C.line, color: detailsValid ? "#fff" : "#9AA3B0" }}>
-            {lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें"}
-          </button>
-        </>
-      ) : (
-        <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
-          <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
-          {otpStage === "mobile" ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                <Phone size={16} color={C.inkSoft} />
-                <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
-                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
-                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
-              </div>
-              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
-              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-              <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
-              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                <ShieldCheck size={16} color={C.inkSoft} />
-                <input className={otpInputCls} style={{ ...otpInputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
-                  onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
-              </div>
-              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-              <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify & Register" : "वेरीफाई करें और रजिस्टर करें")}
-              </button>
-              <div className="flex items-center justify-between">
-                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
-                <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
+        {otpSection}
+      </div>
       <div id={recaptchaContainerId} />
     </div>
   );
@@ -928,13 +937,23 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   }, []);
 
   // Once OTP verifies and the driver doc exists, attach whatever was
-  // collected on this page — a no-op in the rare crash-recovery case where
-  // this session never actually filled the fields (handled by the manual
-  // "Continue" button in that branch below instead).
+  // collected on this page.
   useEffect(() => {
     if (verified && driver && !driver.address && !infoAppliedRef.current && name.trim()) {
       infoAppliedRef.current = true;
       setDriver({ ...driver, name: name.trim(), address: address.trim(), city: city.trim(), state: state.trim(), pincode });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verified, driver]);
+
+  // Verified with an existing driver doc but no address on it and nothing
+  // typed this session — a stale session left over from testing (e.g. a
+  // Firestore wipe survived by the Firebase Auth session). Force a clean
+  // restart instead of ever showing a half-broken "finish your details"
+  // screen with a disabled button.
+  useEffect(() => {
+    if (verified && driver && !driver.vehicleSpec && !driver.address && !name.trim()) {
+      onLogout();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verified, driver]);
@@ -985,14 +1004,6 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       return;
     }
     setSending(false);
-  };
-
-  // Crash-recovery path: already OTP-verified but these details were never
-  // actually submitted this session (nothing for the effect above to apply).
-  const submitDetailsOnly = () => {
-    if (!detailsValid || !driver) return;
-    infoAppliedRef.current = true;
-    setDriver({ ...driver, name: name.trim(), address: address.trim(), city: city.trim(), state: state.trim(), pincode });
   };
 
   const backButton = (
@@ -1047,18 +1058,25 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
   }
 
-  // Page 1: personal details, with mobile/OTP verification at the bottom —
-  // unless we're already verified (crash-recovery), in which case just a
-  // plain submit button since there's no OTP left to do.
+  if (verified && driver && !driver.vehicleSpec && !driver.address && !name.trim()) {
+    // Stale session with no progress — the effect above is signing us out
+    // right now so this page reloads fresh.
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-5">
+        {backButton}
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Restarting registration..." : "रजिस्ट्रेशन फिर से शुरू हो रहा है..."}</p>
+      </div>
+    );
+  }
+
+  // Page 1: personal details, with mobile/OTP verification at the bottom.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
       {backButton}
       <div className="mb-4"><Logo size={64} showText={false} /></div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Registration" : "ड्राइवर रजिस्ट्रेशन"}</h2>
       <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
-        {verified
-          ? (lang === "en" ? "Finish filling in your details to continue." : "आगे बढ़ने के लिए अपनी जानकारी पूरी भरें।")
-          : (lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।")}
+        {lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।"}
       </p>
 
       <div className="space-y-3">
@@ -1087,18 +1105,9 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         </div>
       </div>
 
-      {verified ? (
-        <>
-          {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
-          <button onClick={submitDetailsOnly} disabled={!detailsValid} className="w-full rounded-lg py-3 font-bold text-sm mt-2"
-            style={{ background: detailsValid ? C.success : C.line, color: detailsValid ? "#fff" : "#9AA3B0" }}>
-            {lang === "en" ? "Continue" : "आगे बढ़ें"}
-          </button>
-        </>
-      ) : (
-        <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
-          <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
-          {otpStage === "mobile" ? (
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
+        {otpStage === "mobile" ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <Phone size={16} color={C.inkSoft} />
@@ -1132,8 +1141,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               </div>
             </div>
           )}
-        </div>
-      )}
+      </div>
       <div id={recaptchaContainerId} />
     </div>
   );
