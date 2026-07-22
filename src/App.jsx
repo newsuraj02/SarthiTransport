@@ -844,10 +844,13 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
       </div>
 
       {verified ? (
-        <button onClick={completeDetailsOnly} disabled={!detailsValid} className="w-full rounded-lg py-3 font-bold text-sm mt-5"
-          style={{ background: detailsValid ? C.success : C.line, color: detailsValid ? "#fff" : "#9AA3B0" }}>
-          {lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें"}
-        </button>
+        <>
+          {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
+          <button onClick={completeDetailsOnly} disabled={!detailsValid} className="w-full rounded-lg py-3 font-bold text-sm mt-2"
+            style={{ background: detailsValid ? C.success : C.line, color: detailsValid ? "#fff" : "#9AA3B0" }}>
+            {lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें"}
+          </button>
+        </>
       ) : (
         <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
           <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
@@ -1085,10 +1088,13 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       </div>
 
       {verified ? (
-        <button onClick={submitDetailsOnly} disabled={!detailsValid} className="w-full rounded-lg py-3 font-bold text-sm mt-5"
-          style={{ background: detailsValid ? C.success : C.line, color: detailsValid ? "#fff" : "#9AA3B0" }}>
-          {lang === "en" ? "Continue" : "आगे बढ़ें"}
-        </button>
+        <>
+          {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
+          <button onClick={submitDetailsOnly} disabled={!detailsValid} className="w-full rounded-lg py-3 font-bold text-sm mt-2"
+            style={{ background: detailsValid ? C.success : C.line, color: detailsValid ? "#fff" : "#9AA3B0" }}>
+            {lang === "en" ? "Continue" : "आगे बढ़ें"}
+          </button>
+        </>
       ) : (
         <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
           <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
