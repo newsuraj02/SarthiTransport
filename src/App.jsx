@@ -3379,10 +3379,12 @@ export default function App() {
   // customerFirebaseAuth/driverFirebaseAuth in firebaseClient.js) — signing
   // out below clears it for real, instead of just a locally-stored number.
   const logoutRole = (targetRole) => {
-    if (targetRole === "admin") setAdminAuth(false);
+    if (targetRole === "admin") { setAdminAuth(false); setRole(null); return; }
     if (targetRole === "customer") { setCustomerAuth({ verified: false, mobile: "" }); if (customerFirebaseAuth) signOut(customerFirebaseAuth).catch((e) => console.error(e)); }
     if (targetRole === "driver") { setDriverAuth({ verified: false, mobile: "" }); if (driverFirebaseAuth) signOut(driverFirebaseAuth).catch((e) => console.error(e)); }
-    setRole(null);
+    // A locked device only has one role anyway — skip the now-pointless
+    // role-choice screen and go straight back to that role's login form.
+    setRole(targetRole);
   };
   const logout = () => {
     logoutRole(role);
