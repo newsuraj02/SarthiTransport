@@ -563,11 +563,14 @@ function SosScreen({ role = "customer", raiseAlert, lang }) {
 // =====================================================================
 // ROLE SELECTION — shown once so each user only sees their own platform
 // =====================================================================
-function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVerified, onLogoutRole }) {
+function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVerified, onLogoutRole, adminEntry }) {
   const anyVerified = customerVerified || driverVerified || adminVerified;
   const showCustomer = !anyVerified || customerVerified;
   const showDriver = !anyVerified || driverVerified;
-  const showAdmin = !anyVerified || adminVerified;
+  // Admin Login is invisible to regular Customer/Driver users — it only
+  // shows up when the page was opened with the secret ?admin=1 link, or
+  // once already signed in as admin (so the logout link stays reachable).
+  const showAdmin = (adminEntry && !anyVerified) || adminVerified;
   const logoutLink = (role, label) => (
     <button onClick={() => onLogoutRole(role)} className="w-full text-center text-[10px] font-semibold mt-1.5" style={{ color: C.inkSoft }}>
       {lang === "en" ? `Not you? Logout of ${label}` : `आप नहीं हैं? ${label} से लॉगआउट करें`}
@@ -3340,6 +3343,10 @@ export default function App() {
   // Firestore — see firestoreStore.js.
   const [app, setApp] = usePersistedState("sarthi_app", "customer");
   const [role, setRole] = usePersistedState("sarthi_role", null);
+  // Admin Login is only revealed when the page is opened with this secret
+  // link (e.g. https://yourapp/?admin=1) — regular Customer/Driver users
+  // never see it on the plain URL.
+  const adminEntry = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("admin") === "1";
   const [adminAuth, setAdminAuth] = usePersistedState("sarthi_adminAuth", false);
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
   const [customerAddress, setCustomerAddress] = usePersistedState("sarthi_customerAddress", { verified: false, name: "", address: "", area: "", city: "", pincode: "" });
@@ -3642,7 +3649,7 @@ export default function App() {
         {role === null && (
           <RoleSelect lang={lang} onSelect={(r) => { setRole(r); setApp(r); }}
             customerVerified={customerAuth.verified} driverVerified={driverAuth.verified} adminVerified={adminAuth}
-            onLogoutRole={logoutRole} />
+            onLogoutRole={logoutRole} adminEntry={adminEntry} />
         )}
 
         {role === "admin" && !adminAuth && (
