@@ -51,6 +51,15 @@ Customer and driver login now send a real SMS OTP via Firebase Authentication �
 
 Nothing else to configure — the reCAPTCHA check Firebase requires is invisible and handled automatically by the SDK.
 
+## Photo & document storage (Firebase Storage)
+
+Profile photos, KYC documents, and vehicle photos upload to Firebase Storage (not inline in Firestore) so the app stays fast as more testers upload photos. One-time setup:
+
+1. Firebase Console → your project → **Storage** → **Get started** → accept the default bucket and location (the free tier is more than enough for a pilot).
+2. **Rules** tab → paste the contents of `storage.rules` → **Publish**.
+
+Until this is done, photo uploads automatically fall back to the old inline-in-Firestore behavior, so the app keeps working — but do this before real testers start uploading KYC documents.
+
 ## Important: don't deploy via a sandboxed "Artifact" preview
 
 An Artifact-style preview page blocks all outbound network requests, so it **cannot** reach Firestore — the app would fall back to solo/local behavior and testers wouldn't see each other's data. Use Option A or B above for the actual pilot link.

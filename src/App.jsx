@@ -11,7 +11,8 @@ import {
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from "firebase/auth";
-import { customerFirebaseAuth, driverFirebaseAuth } from "./firebaseClient";
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { customerFirebaseAuth, driverFirebaseAuth, storage } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Blue theme matching the SARTHI hexagon logo. Token names (marigold, navy,
@@ -688,11 +689,12 @@ function AdminLogin({ onVerified, lang, onBack }) {
 // Step 2 (profile details) only appears once, right after verifying, and
 // only if this exact mobile number has no saved profile yet.
 // =====================================================================
-function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, hasProfile, checking, onOtpVerified, onLogout, onComplete }) {
+function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, verifiedMobile, hasProfile, checking, onOtpVerified, onLogout, onComplete }) {
   // Step 2 fields — profile/address, asked only once, only if needed.
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [photo, setPhoto] = useState(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [address, setAddress] = useState("");
   const [area, setArea] = useState("");
   const [city, setCity] = useState("");
@@ -855,9 +857,11 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
 
       <div className="space-y-3">
         <div className="flex justify-center">
-          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => fileToImageDataUrl(f).then((url) => setPhoto({ name: f.name, url }))}>
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${verifiedMobile || mobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
             <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#DCE9F5", border: `2px dashed ${C.marigoldDeep}` }}>
-              <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />
+              {photoUploading
+                ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
+                : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
             </div>
           </PhotoPicker>
         </div>
@@ -897,9 +901,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
       </div>
 
       {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
-      <button onClick={submitProfile} disabled={!detailsValid} className="w-full rounded-lg py-3 font-bold text-sm mt-3"
-        style={{ background: detailsValid ? C.marigold : C.line, color: detailsValid ? C.navy : "#9AA3B0" }}>
-        {lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें"}
+      <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className="w-full rounded-lg py-3 font-bold text-sm mt-3"
+        style={{ background: detailsValid && !photoUploading ? C.marigold : C.line, color: detailsValid && !photoUploading ? C.navy : "#9AA3B0" }}>
+        {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें")}
       </button>
       <div id={recaptchaContainerId} />
     </div>
@@ -1153,10 +1157,9 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
 // sheet asking Take Photo vs Choose from Library, instead of jumping
 // straight to the OS file picker. Each option triggers its own hidden file
 // input (one forces the camera via `capture`, the other doesn't).
-// Converts an uploaded photo into a compressed base64 data URL so it can be
-// stored in Firestore and stay visible on every device — a blob: URL only
-// ever resolves inside the browser tab that created it.
-function fileToImageDataUrl(file, maxDim = 900, quality = 0.72) {
+// Resizes/compresses an uploaded photo client-side and hands back the
+// decoded <canvas> — shared by uploadPhoto below.
+function resizeImageToCanvas(file, maxDim = 900) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);
@@ -1174,12 +1177,34 @@ function fileToImageDataUrl(file, maxDim = 900, quality = 0.72) {
         canvas.width = width;
         canvas.height = height;
         canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
+        resolve(canvas);
       };
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
   });
+}
+
+// Resizes a photo and uploads it to Firebase Storage at `path` (overwriting
+// any previous photo at that same path), returning {name, url} with a real,
+// permanent download URL — so profile/KYC/vehicle photos live as small
+// links in Firestore instead of full images inline in every document. Falls
+// back to an inline base64 data URL if Storage isn't configured, so the app
+// still works before that one-time setup step is done.
+async function uploadPhoto(file, path, maxDim = 900, quality = 0.72) {
+  const canvas = await resizeImageToCanvas(file, maxDim);
+  if (storage) {
+    try {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      const ref = storageRef(storage, path);
+      await uploadBytes(ref, blob, { contentType: "image/jpeg" });
+      const url = await getDownloadURL(ref);
+      return { name: file.name, url };
+    } catch (e) {
+      console.error("[storage upload]", e);
+    }
+  }
+  return { name: file.name, url: canvas.toDataURL("image/jpeg", quality) };
 }
 
 // Renders an <img>, falling back to `fallback` if there's no src yet or the
@@ -1911,6 +1936,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTe
   const [name, setName] = useState(customerProfile?.name || "");
   const [email, setEmail] = useState(customerProfile?.email || "");
   const [photo, setPhoto] = useState(customerProfile?.photo || null);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [address, setAddress] = useState(customerProfile?.address || "");
   const [area, setArea] = useState(customerProfile?.area || "");
   const [city, setCity] = useState(customerProfile?.city || "");
@@ -1932,9 +1958,11 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTe
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
-          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => setPhoto({ name: f.name, url: URL.createObjectURL(f) })}>
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${customerMobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
             <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#DCE9F5", border: `2px dashed ${C.marigoldDeep}` }}>
-              {photo ? <img src={photo.url} alt="" className="w-full h-full object-cover" /> : <Camera size={22} color={C.marigoldDeep} />}
+              {photoUploading
+                ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
+                : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
             </div>
           </PhotoPicker>
         </div>
@@ -1974,8 +2002,8 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTe
             <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </div>
         </div>
-        <button onClick={save} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: saved ? C.success : C.marigoldDeep }}>
-          {saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
+        <button onClick={save} disabled={photoUploading} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: photoUploading ? C.line : saved ? C.success : C.marigoldDeep }}>
+          {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
         </button>
       </div>
       <button onClick={onOpenTerms} className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}</button>
@@ -2689,6 +2717,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const VEHICLES = vehicleTypes;
   const [dl, setDl] = useState(null);
   const [photo, setPhoto] = useState(null);
+  // Which photo tile ("photo" | "dl" | "vehicle") is mid-upload, or null.
+  const [uploadingKey, setUploadingKey] = useState(null);
 
   const [vehicleType, setVehicleType] = useState(driver.vehicleSpec?.type || VEHICLES[0].key);
   const [vehiclePhoto, setVehiclePhoto] = useState(driver.vehicleSpec?.photo || null);
@@ -2709,13 +2739,17 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   };
 
   const onVehiclePhoto = (f) => {
-    if (f) fileToImageDataUrl(f).then((url) => setVehiclePhoto({ name: f.name, url }));
+    if (!f) return;
+    setUploadingKey("vehicle");
+    uploadPhoto(f, `drivers/${driver.mobile}/vehicle.jpg`).then((p) => { setVehiclePhoto(p); setUploadingKey(null); });
   };
-  const onDoc = (setVal) => (f) => {
-    if (f) fileToImageDataUrl(f).then((url) => setVal({ name: f.name, url }));
+  const onDoc = (setVal, key) => (f) => {
+    if (!f) return;
+    setUploadingKey(key);
+    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); setUploadingKey(null); });
   };
 
-  const canSubmit = !!(photo && dl && vehicleNumber.trim());
+  const canSubmit = !!(photo && dl && vehicleNumber.trim() && !uploadingKey);
   const submit = () => {
     if (!canSubmit) return;
     setDriver({
@@ -2751,19 +2785,25 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         {[
           ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
         ].map(([key, label, val, setVal]) => (
-          <PhotoPicker key={key} label={label} lang={lang} onSelect={onDoc(setVal)}>
+          <PhotoPicker key={key} label={label} lang={lang} onSelect={onDoc(setVal, key)}>
             <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
-              <SafeImage
-                src={val?.url}
-                alt={label}
-                className="w-full h-16 object-cover"
-                fallback={
-                  <div className="p-2 flex flex-col items-center justify-center">
-                    <Camera size={16} color={C.inkSoft} />
-                    <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
-                  </div>
-                }
-              />
+              {uploadingKey === key ? (
+                <div className="p-2 flex flex-col items-center justify-center">
+                  <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</span>
+                </div>
+              ) : (
+                <SafeImage
+                  src={val?.url}
+                  alt={label}
+                  className="w-full h-16 object-cover"
+                  fallback={
+                    <div className="p-2 flex flex-col items-center justify-center">
+                      <Camera size={16} color={C.inkSoft} />
+                      <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
+                    </div>
+                  }
+                />
+              )}
               <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>{val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : "फोटो लें")}</span>
             </div>
           </PhotoPicker>
@@ -2814,17 +2854,21 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo" : "गाड़ी की फोटो"}</label>
         <PhotoPicker label={lang === "en" ? "Vehicle Photo" : "गाड़ी की फोटो"} lang={lang} onSelect={onVehiclePhoto}>
           <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer mb-2" style={{ border: `1.5px dashed #2B5C8A`, background: C.paper, minHeight: vehiclePhoto ? "auto" : 110 }}>
-            <SafeImage
-              src={vehiclePhoto?.url}
-              alt="गाड़ी"
-              className="w-full h-40 rounded-lg object-cover"
-              fallback={
-                <>
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center mb-1.5" style={{ background: "#DCE9F5" }}><Camera size={22} color="#2B5C8A" /></div>
-                  <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Upload a clear photo" : "साफ फोटो अपलोड करें"}</div>
-                </>
-              }
-            />
+            {uploadingKey === "vehicle" ? (
+              <div className="text-xs font-semibold py-6" style={{ color: "#2B5C8A" }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</div>
+            ) : (
+              <SafeImage
+                src={vehiclePhoto?.url}
+                alt="गाड़ी"
+                className="w-full h-40 rounded-lg object-cover"
+                fallback={
+                  <>
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center mb-1.5" style={{ background: "#DCE9F5" }}><Camera size={22} color="#2B5C8A" /></div>
+                    <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Upload a clear photo" : "साफ फोटो अपलोड करें"}</div>
+                  </>
+                }
+              />
+            )}
           </div>
         </PhotoPicker>
         <div className="text-[10px] mb-2" style={{ color: vehiclePhoto ? C.success : C.inkSoft }}>
@@ -3931,7 +3975,7 @@ export default function App() {
 
         {role !== null && app === "customer" && (!customerAuth.verified || !customerChecked || !customer) && (
           <CustomerOnboarding lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
-            verified={customerAuth.verified} hasProfile={!!customer} checking={customerAuth.verified && !customerChecked}
+            verified={customerAuth.verified} verifiedMobile={customerAuth.mobile} hasProfile={!!customer} checking={customerAuth.verified && !customerChecked}
             onOtpVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); setLockedRole("customer"); }}
             onLogout={() => (customerAuth.verified ? logoutRole("customer") : goHome())}
             onComplete={(addr) => {

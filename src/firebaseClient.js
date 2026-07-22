@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { initializeFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -26,6 +27,11 @@ const defaultApp = hasConfig ? initializeApp(firebaseConfig) : null;
 export const db = defaultApp
   ? initializeFirestore(defaultApp, { experimentalAutoDetectLongPolling: true })
   : null;
+
+// Profile/KYC/vehicle photos upload here instead of living inline in
+// Firestore documents — keeps every realtime listener (driver lists,
+// bookings) small regardless of how many photos testers upload.
+export const storage = defaultApp ? getStorage(defaultApp) : null;
 
 // Two separate named Firebase Apps (not the default one above) so a
 // customer session and a driver session can each hold their own real,
