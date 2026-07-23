@@ -3094,61 +3094,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
 // (shared while they're on an active trip) when Google Maps is configured
 // and at least one driver has reported one; otherwise falls back to the
 // old fake hashed-position layout so the panel still shows something.
-function AdminFleetMap({ drivers, lang }) {
-  const { isLoaded, hasKey } = useGoogleMaps();
-  const online = drivers.filter((d) => d.online);
-  const withLoc = online.filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null);
-
-  if (hasKey && isLoaded && withLoc.length > 0) {
-    return (
-      <div className="relative rounded-lg overflow-hidden" style={{ height: 260 }}>
-        <GoogleMap
-          mapContainerStyle={{ width: "100%", height: "100%" }}
-          onLoad={(map) => {
-            const bounds = new window.google.maps.LatLngBounds();
-            withLoc.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
-            map.fitBounds(bounds, 30);
-          }}
-          options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, gestureHandling: "greedy" }}
-        >
-          {withLoc.map((d, i) => (
-            <MarkerF
-              key={d.id}
-              position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }}
-              icon={{
-                path: window.google.maps.SymbolPath.CIRCLE,
-                scale: 9,
-                fillColor: CITY_COLORS[i % CITY_COLORS.length] || C.pimpri,
-                fillOpacity: 1,
-                strokeColor: "#fff",
-                strokeWeight: 2,
-              }}
-            />
-          ))}
-        </GoogleMap>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative rounded-lg overflow-hidden" style={{ height: 260, background: "#EDE0CC" }}>
-      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <line key={"h" + i} x1="0" y1={i * 18} x2="100" y2={i * 18} stroke="#D9C8A8" strokeWidth="0.3" />
-        ))}
-        {Array.from({ length: 6 }).map((_, i) => (
-          <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#D9C8A8" strokeWidth="0.3" />
-        ))}
-        {online.map((d) => {
-          const pos = hashPos(d.mobile || d.id);
-          const color = CITY_COLORS[hashPos(d.mobile || d.id).x % CITY_COLORS.length] || C.pimpri;
-          return <circle key={d.id} cx={pos.x} cy={pos.y} r="2.2" fill={color} stroke="#fff" strokeWidth="0.5" />;
-        })}
-      </svg>
-    </div>
-  );
-}
-
 function AdminFleet({ drivers, driver, tripLog, lang }) {
   const bookedToday = tripLog.filter((t) => t.status === "Ongoing" || t.status === "Completed").length;
   const readyOnline = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted).length;
@@ -3199,20 +3144,6 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
             )}
           </div>
         )}
-      </div>
-
-      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><MapPinned size={16} /> {lang === "en" ? "Live fleet map (all India)" : "लाइव फ्लीट मैप (पूरे भारत में)"}</div>
-        <AdminFleetMap drivers={drivers} lang={lang} />
-        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px]" style={{ color: C.inkSoft }}>
-          {drivers.filter((d) => d.online).map((d) => (
-            <span key={d.id} className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full inline-block" style={{ background: CITY_COLORS[hashPos(d.mobile || d.id).x % CITY_COLORS.length] }} /> {d.name}
-              {d.lastKnownLocation?.lat != null && <span style={{ color: C.success }}>· {lang === "en" ? "live" : "लाइव"}</span>}
-            </span>
-          ))}
-          {drivers.filter((d) => d.online).length === 0 && <span>{lang === "en" ? "No vehicle is online right now" : "अभी कोई गाड़ी ऑनलाइन नहीं है"}</span>}
-        </div>
       </div>
     </div>
   );
