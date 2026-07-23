@@ -293,9 +293,9 @@ function BottomNav({ tabs, tab, setTab, lang = "hi" }) {
   return (
     <div className="flex border-t" style={{ borderColor: C.line, background: C.paper }}>
       {tabs.map(([key, label, Icon]) => (
-        <button key={key} onClick={() => setTab(key)} className="flex-1 flex flex-col items-center gap-1 py-2.5">
-          <Icon size={18} color={tab === key ? C.marigoldDeep : C.inkSoft} />
-          <span className="text-[10px] font-semibold" style={{ color: tab === key ? C.marigoldDeep : C.inkSoft }}>{lang === "en" ? (EN_LABELS[key] || label) : label}</span>
+        <button key={key} onClick={() => setTab(key)} className="flex-1 flex flex-col items-center gap-1 py-3">
+          <Icon size={22} color={tab === key ? C.marigoldDeep : C.ink} />
+          <span className="text-xs font-semibold" style={{ color: tab === key ? C.marigoldDeep : C.ink }}>{lang === "en" ? (EN_LABELS[key] || label) : label}</span>
         </button>
       ))}
     </div>
@@ -3845,7 +3845,7 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang }) {
 
 function TermsFooterLink({ onOpen, lang }) {
   return (
-    <button onClick={onOpen} className="w-full text-center text-[11px] font-semibold py-2" style={{ color: C.inkSoft, background: C.paper, borderTop: `1px solid ${C.line}` }}>
+    <button onClick={onOpen} className="w-full text-center text-sm font-semibold py-2.5" style={{ color: C.ink, background: C.paper, borderTop: `1px solid ${C.line}` }}>
       {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
     </button>
   );
