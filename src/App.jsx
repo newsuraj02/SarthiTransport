@@ -1582,33 +1582,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </div>
         </div>
 
-        {weight && (() => {
-          const v = VEHICLES.find((x) => x.key === vehicle);
-          const isLightBulky = LIGHT_BULKY_MATERIALS.includes(material);
-          return v ? (
-            <div className="rounded-lg p-2.5" style={{ background: isLightBulky ? "#FBEBD2" : "#F5E6C8" }}>
-              <div className="flex items-center gap-2">
-                <Truck size={14} color={isLightBulky ? C.marigoldDeep : "#A8721C"} />
-                <span className="text-[11px]" style={{ color: isLightBulky ? C.marigoldDeep : "#A8721C" }}>{lang === "en" ? "Vehicle decided" : "गाड़ी तय"}: <b>{vehicleLabel(v, lang)}</b></span>
-              </div>
-              {isLightBulky && (
-                <div className="text-[11px] mt-1.5" style={{ color: C.marigoldDeep }}>
-                  {lang === "en" ? "This load is light but bulky — a bigger vehicle is suggested for it." : "यह माल हल्का और बड़ा है, इसके लिए बड़ी गाड़ी का सुझाव है।"}
-                </div>
-              )}
-            </div>
-          ) : null;
-        })()}
-
-        {weight && (
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Change vehicle (optional)" : "गाड़ी बदलें (वैकल्पिक)"}</label>
-            <select className={inputCls} style={inputStyle} value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
-              {VEHICLES.map((v) => <option key={v.key} value={v.key}>{vehicleLabel(v, lang)} · {vehicleCapacity(v, lang)}</option>)}
-            </select>
-          </div>
-        )}
-
         {showBulkyPopup && (() => {
           const w = Number(weight);
           const smallFit = VEHICLES.filter((v) => v.capacityKg >= w).sort((a, b) => a.capacityKg - b.capacityKg)[0];
