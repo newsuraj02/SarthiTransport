@@ -72,7 +72,6 @@ const DEFAULT_VEHICLES = [
   { key: "pickup", label: "पिकअप", labelEn: "Pickup", rate: 30, capacity: "1.5 टन", capacityEn: "1.5 ton", capacityKg: 1500, l: 8.5, w: 5, h: 5.5 },
   { key: "truck", label: "बड़ा ट्रक", labelEn: "Big Truck", rate: 50, capacity: "9+ टन", capacityEn: "9+ ton", capacityKg: 9000, l: 19, w: 6.5, h: 7 },
 ];
-const ADD_VEHICLE_TYPE = "__add_new_vehicle__";
 function slugify(str) {
   return "v" + str.replace(/\s+/g, "").slice(0, 10) + Math.floor(Math.random() * 900 + 100);
 }
@@ -2745,23 +2744,32 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // Which photo tile ("photo" | "dl" | "vehicle") is mid-upload, or null.
   const [uploadingKey, setUploadingKey] = useState(null);
 
-  const [vehicleType, setVehicleType] = useState(driver.vehicleSpec?.type || VEHICLES[0].key);
+  const existingVehicleType = VEHICLES.find((v) => v.key === driver.vehicleSpec?.type);
+  // The driver just types their vehicle's name — no dropdown of preset
+  // types to pick from. Resolved to a vehicleTypes entry (reusing a
+  // matching one by name, or creating a new one) only at submit time.
+  const [vehicleTypeName, setVehicleTypeName] = useState(existingVehicleType ? vehicleLabel(existingVehicleType, lang) : "");
   const [vehiclePhotoFront, setVehiclePhotoFront] = useState(driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
   const [vehiclePhotoSide, setVehiclePhotoSide] = useState(driver.vehicleSpec?.photoSide || null);
   const [capacityKg, setCapacityKg] = useState(driver.vehicleSpec?.capacityKg || "");
   const [length, setLength] = useState(driver.vehicleSpec?.length || "");
   const [width, setWidth] = useState(driver.vehicleSpec?.width || "");
   const [height, setHeight] = useState(driver.vehicleSpec?.height || "");
-  const [addingType, setAddingType] = useState(false);
-  const [newTypeName, setNewTypeName] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState(driver.vehicleSpec?.vehicleNumber || "");
 
-  const confirmNewType = () => {
-    const name = newTypeName.trim();
-    if (!name) return;
+  // Reuses a vehicleTypes entry with a matching name (case-insensitive) so
+  // typing the same vehicle name as another driver doesn't fragment the
+  // shared type list; otherwise creates a new one from what's typed here.
+  const resolveVehicleTypeKey = () => {
+    const name = vehicleTypeName.trim();
+    const match = VEHICLES.find((v) => v.label.toLowerCase() === name.toLowerCase() || (v.labelEn || "").toLowerCase() === name.toLowerCase());
+    if (match) return match.key;
     const key = slugify(name);
-    addVehicleType({ key, label: name, rate: 25, capacity: "", capacityKg: 0, l: 0, w: 0, h: 0 });
-    setVehicleType(key); setNewTypeName(""); setAddingType(false);
+    addVehicleType({
+      key, label: name, rate: 25, capacity: "", capacityKg: Number(capacityKg) || 0,
+      l: Number(length) || 0, w: Number(width) || 0, h: Number(height) || 0,
+    });
+    return key;
   };
 
   const onVehiclePhoto = (setVal, key) => (f) => {
@@ -2775,13 +2783,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); setUploadingKey(null); });
   };
 
-  const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && !uploadingKey);
+  const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !uploadingKey);
   const submit = () => {
     if (!canSubmit) return;
     setDriver({
       ...driver, kyc: "Pending", docs: { dl, photo },
       vehicleSpec: {
-        type: vehicleType, photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
+        type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
         capacityKg: Number(capacityKg) || undefined, length: Number(length) || undefined,
         width: Number(width) || undefined, height: Number(height) || undefined,
         vehicleNumber: vehicleNumber.trim().toUpperCase(),
@@ -2864,18 +2872,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       <div className="rounded-xl p-3 mb-4" style={{ border: `1.5px solid #A8721C`, background: "#F5E6C8" }}>
         <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#A8721C" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
 
-        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Type" : "गाड़ी का प्रकार"}</label>
-        <select className={inputCls} style={{ ...inputStyle, marginBottom: addingType ? 8 : 10 }} value={vehicleType}
-          onChange={(e) => { if (e.target.value === ADD_VEHICLE_TYPE) setAddingType(true); else { setVehicleType(e.target.value); setAddingType(false); } }}>
-          {VEHICLES.map((v) => <option key={v.key} value={v.key}>{vehicleLabel(v, lang)}</option>)}
-          <option value={ADD_VEHICLE_TYPE}>+ {lang === "en" ? "Add new type" : "नया प्रकार जोड़ें"}</option>
-        </select>
-        {addingType && (
-          <div className="flex items-center gap-2 mb-2">
-            <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "New vehicle type name" : "नए गाड़ी प्रकार का नाम"} value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} />
-            <button onClick={confirmNewType} className="shrink-0 rounded-lg px-3 py-2.5 text-xs font-bold text-white" style={{ background: "#A8721C" }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
-          </div>
-        )}
+        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : "गाड़ी का नाम"}</label>
+        <input className={inputCls} style={{ ...inputStyle, marginBottom: 10 }} placeholder={lang === "en" ? "e.g. Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
 
         <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photos (Front & Side)" : "गाड़ी की फोटो (आगे व साइड)"}</label>
         <div className="grid grid-cols-2 gap-2 mb-2">
@@ -2919,7 +2917,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         </div>
       </div>
 
-      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle number to submit" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो अपलोड करें और गाड़ी नंबर डालें"}</div>}
+      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle name & number to submit" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो, गाड़ी का नाम और नंबर डालें"}</div>}
       <button onClick={submit} disabled={!canSubmit} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: canSubmit ? C.marigold : C.line, color: canSubmit ? C.navy : "#9AA3B0" }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
     </div>
   );
