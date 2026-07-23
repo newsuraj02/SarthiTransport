@@ -2757,8 +2757,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // resubmission after a rejection) only when there's no in-progress draft.
   const [dl, setDl] = usePersistedState("sarthi_driverKyc_dl", null);
   const [photo, setPhoto] = usePersistedState("sarthi_driverKyc_photo", null);
-  // Which photo tile ("photo" | "dl" | "vehicle") is mid-upload, or null.
-  const [uploadingKey, setUploadingKey] = useState(null);
+  // Which photo tiles are mid-upload — a set, not a single value, so
+  // uploading two photos at once (e.g. tapping Front then Side before the
+  // first finishes) doesn't make one tile's "uploading" indicator vanish
+  // while it's still actually in flight.
+  const [uploadingKeys, setUploadingKeys] = useState({});
+  const markUploading = (key, on) => setUploadingKeys((prev) => ({ ...prev, [key]: on }));
+  const anyUploading = Object.values(uploadingKeys).some(Boolean);
 
   const existingVehicleType = VEHICLES.find((v) => v.key === driver.vehicleSpec?.type);
   // The driver just types their vehicle's name — no dropdown of preset
@@ -2790,16 +2795,16 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
 
   const onVehiclePhoto = (setVal, key) => (f) => {
     if (!f) return;
-    setUploadingKey(key);
-    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); setUploadingKey(null); });
+    markUploading(key, true);
+    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); markUploading(key, false); });
   };
   const onDoc = (setVal, key) => (f) => {
     if (!f) return;
-    setUploadingKey(key);
-    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); setUploadingKey(null); });
+    markUploading(key, true);
+    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); markUploading(key, false); });
   };
 
-  const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !uploadingKey);
+  const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
   const submit = () => {
     if (!canSubmit) return;
     setDriver({
@@ -2841,7 +2846,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         ].map(([key, label, val, setVal]) => (
           <PhotoPicker key={key} label={label} lang={lang} onSelect={onDoc(setVal, key)}>
             <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
-              {uploadingKey === key ? (
+              {uploadingKeys[key] ? (
                 <div className="p-2 flex flex-col items-center justify-center">
                   <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</span>
                 </div>
@@ -2903,7 +2908,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           ].map(([key, label, val, setVal]) => (
             <PhotoPicker key={key} label={label} lang={lang} onSelect={onVehiclePhoto(setVal, key)}>
               <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed #A8721C`, background: C.paper, minHeight: 110 }}>
-                {uploadingKey === key ? (
+                {uploadingKeys[key] ? (
                   <div className="text-xs font-semibold py-6" style={{ color: "#A8721C" }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</div>
                 ) : (
                   <SafeImage
