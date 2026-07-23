@@ -6,8 +6,9 @@ import {
   ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft,
 } from "lucide-react";
 import {
-  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, createDoc, replaceDoc, patchDoc, seedIfEmpty,
+  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, seedIfEmpty,
 } from "./firestoreStore";
+import { increment, arrayUnion } from "firebase/firestore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from "firebase/auth";
@@ -94,7 +95,7 @@ const CITY_COLORS = ["#2B5C8A", "#3F7D4F", "#B87A12", "#E85D2F", "#7A5CB8", "#1C
 const EN_LABELS = {
   book: "Book Now", rides: "My Rides", home: "Home", wallet: "Wallet", history: "History",
   kyc: "KYC", sos: "SOS", fleet: "Live Dashboard", drivers: "Driver List", settings: "Settings",
-  finance: "Reports", notify: "Notify", alerts: "Alerts",
+  finance: "Reports", notify: "Notify", alerts: "Alerts", customers: "Customers",
 };
 
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -156,7 +157,7 @@ function playBeepTone() {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const TRIAL_DAYS = 60;
+const TRIAL_DAYS = 30;
 
 // ---------------- shared: mock map ----------------
 function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" }) {
@@ -771,7 +772,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
 
   const submitProfile = () => {
     if (!detailsValid) return;
-    onComplete({ name, email: email.trim() || null, photo, address, area, city, state, pincode });
+    const ownMobile = verifiedMobile || mobile;
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    const referredBy = ref && ref !== ownMobile ? ref : null;
+    onComplete({ name, email: email.trim() || null, photo, address, area, city, state, pincode, referredBy, referralCredited: false, referralBalance: 0, referralEntries: [] });
   };
 
   const backButton = (
@@ -947,7 +951,9 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   useEffect(() => {
     if (verified && driver && !driver.address && !infoAppliedRef.current && name.trim()) {
       infoAppliedRef.current = true;
-      setDriver({ ...driver, name: name.trim(), address: address.trim(), city: city.trim(), state: state.trim(), pincode });
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      const referredBy = ref && ref !== driver.mobile ? ref : null;
+      setDriver({ ...driver, name: name.trim(), address: address.trim(), city: city.trim(), state: state.trim(), pincode, referredBy, referralCredited: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verified, driver]);
@@ -1442,6 +1448,20 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         {bookingMode === "advance" && (
           <div className="rounded-lg p-3" style={{ background: "#DCE9F5" }}>
             <div className="text-[11px] font-bold mb-2" style={{ color: "#2B5C8A" }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</div>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {[1, 2, 3].map((n) => {
+                const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+                const iso = d.toISOString().slice(0, 10);
+                const active = advanceDate === iso;
+                return (
+                  <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
+                    className="rounded-lg py-2 text-[11px] font-bold text-center"
+                    style={{ background: active ? "#2B5C8A" : C.paper, color: active ? "#fff" : "#2B5C8A", border: `1.5px solid #2B5C8A` }}>
+                    {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : `${n} दिन बाद`}
+                  </button>
+                );
+              })}
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
               <input type="time" value={advanceTime} onChange={(e) => setAdvanceTime(e.target.value)} className={inputCls} style={inputStyle} />
@@ -1932,7 +1952,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
 // Editable customer profile — photo, name, email, mobile (read-only, tied to
 // the verified login), and address, with a Save button that persists via
 // onUpdateProfile.
-function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTerms, lang }) {
+function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestReferralWithdrawal, onOpenTerms, lang }) {
   const [name, setName] = useState(customerProfile?.name || "");
   const [email, setEmail] = useState(customerProfile?.email || "");
   const [photo, setPhoto] = useState(customerProfile?.photo || null);
@@ -1953,9 +1973,41 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTe
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const now = Date.now();
+  const referralEntries = customerProfile?.referralEntries || [];
+  const referralLocked = referralEntries.filter((e) => e.unlockAt > now).reduce((s, e) => s + e.amount, 0);
+  const referralBalance = customerProfile?.referralBalance || 0;
+  const referralAvailable = Math.max(0, referralBalance - referralLocked);
+  const [withdrawn, setWithdrawn] = useState(false);
+  const withdrawReferral = () => {
+    if (referralAvailable <= 0) return;
+    requestReferralWithdrawal?.(referralAvailable);
+    setWithdrawn(true);
+    setTimeout(() => setWithdrawn(false), 2500);
+  };
+
   return (
     <div className="px-5 py-4">
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
+      {referralBalance > 0 && (
+        <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: "#DFEEE2", border: `1px solid ${C.success}` }}>
+          <div className="text-xs font-bold mb-1 flex items-center gap-1.5" style={{ color: C.success }}>🤝 {lang === "en" ? "Referral Rewards" : "रेफरल रिवॉर्ड"}</div>
+          <div className="text-lg font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(referralBalance)}</div>
+          {referralLocked > 0 && (
+            <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
+              {lang === "en" ? `${fmt(referralLocked)} locked — unlocks 2 months after each referral` : `${fmt(referralLocked)} लॉक्ड — हर रेफरल के 2 महीने बाद अनलॉक होगा`}
+            </div>
+          )}
+          {withdrawn ? (
+            <div className="text-xs font-semibold mt-2" style={{ color: C.success }}>{lang === "en" ? "Withdrawal request sent ✓" : "विड्रॉल रिक्वेस्ट भेज दी गई ✓"}</div>
+          ) : (
+            <button onClick={withdrawReferral} disabled={referralAvailable <= 0} className="w-full rounded-lg py-2 font-bold text-xs mt-2"
+              style={{ background: referralAvailable > 0 ? C.success : C.line, color: referralAvailable > 0 ? "#fff" : "#9AA3B0" }}>
+              {referralAvailable > 0 ? (lang === "en" ? `Withdraw ${fmt(referralAvailable)}` : `${fmt(referralAvailable)} विड्रॉ करें`) : (lang === "en" ? "Nothing unlocked yet" : "अभी कुछ भी अनलॉक नहीं हुआ")}
+            </button>
+          )}
+        </div>
+      )}
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
           <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${customerMobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
@@ -2011,7 +2063,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, onOpenTe
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const ongoingTrip = bookings.find((b) => b.status === "Ongoing");
@@ -2022,13 +2074,14 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
 
   const shareApp = () => {
-    const msg = trialMode
-      ? (lang === "en"
-        ? "Try Sarthi Transport for booking trucks/tempos easily! Download: https://sarthitransport.example.com"
-        : "ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: https://sarthitransport.example.com")
-      : (lang === "en"
-        ? "Try Sarthi Transport for booking trucks/tempos easily! Download: https://sarthitransport.example.com — you both get ₹200 when your first trip is done!"
-        : "ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: https://sarthitransport.example.com — पहली ट्रिप पूरी होने पर आप दोनों को ₹200 मिलेंगे!");
+    // Referral reward applies from day one (not gated by trial mode) — the
+    // link carries this customer's own mobile number as their referral
+    // code, so ₹200 credits to their profile once the new user completes
+    // their first booking/trip (see creditReferralOnce in the root App).
+    const link = `https://sarthitransport.example.com?ref=${customerMobile}`;
+    const msg = lang === "en"
+      ? `Try Sarthi Transport for booking trucks/tempos easily! Download: ${link} — I get ₹200 once your first booking is done!`
+      : `ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: ${link} — आपकी पहली बुकिंग पूरी होने पर मुझे ₹200 मिलेंगे!`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -2040,7 +2093,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
         </button>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} />}
         {settingsView === "profile" && (
-          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} onOpenTerms={onOpenTerms} lang={lang} />
+          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} requestReferralWithdrawal={requestReferralWithdrawal} onOpenTerms={onOpenTerms} lang={lang} />
         )}
         {settingsView === "liveLocation" && (
           <div className="px-5 py-4">
@@ -2110,7 +2163,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings" : "सेटिंग्स"}
               </button>
               <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <MessageCircle size={16} color={C.success} /> {trialMode ? (lang === "en" ? "Share App" : "ऐप शेयर करें") : (lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)")}
+                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}
               </button>
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
@@ -2721,7 +2774,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const [uploadingKey, setUploadingKey] = useState(null);
 
   const [vehicleType, setVehicleType] = useState(driver.vehicleSpec?.type || VEHICLES[0].key);
-  const [vehiclePhoto, setVehiclePhoto] = useState(driver.vehicleSpec?.photo || null);
+  const [vehiclePhotoFront, setVehiclePhotoFront] = useState(driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
+  const [vehiclePhotoSide, setVehiclePhotoSide] = useState(driver.vehicleSpec?.photoSide || null);
   const [capacityKg, setCapacityKg] = useState(driver.vehicleSpec?.capacityKg || "");
   const [length, setLength] = useState(driver.vehicleSpec?.length || "");
   const [width, setWidth] = useState(driver.vehicleSpec?.width || "");
@@ -2738,10 +2792,10 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     setVehicleType(key); setNewTypeName(""); setAddingType(false);
   };
 
-  const onVehiclePhoto = (f) => {
+  const onVehiclePhoto = (setVal, key) => (f) => {
     if (!f) return;
-    setUploadingKey("vehicle");
-    uploadPhoto(f, `drivers/${driver.mobile}/vehicle.jpg`).then((p) => { setVehiclePhoto(p); setUploadingKey(null); });
+    setUploadingKey(key);
+    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); setUploadingKey(null); });
   };
   const onDoc = (setVal, key) => (f) => {
     if (!f) return;
@@ -2749,13 +2803,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); setUploadingKey(null); });
   };
 
-  const canSubmit = !!(photo && dl && vehicleNumber.trim() && !uploadingKey);
+  const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && !uploadingKey);
   const submit = () => {
     if (!canSubmit) return;
     setDriver({
       ...driver, kyc: "Pending", docs: { dl, photo },
       vehicleSpec: {
-        type: vehicleType, photo: vehiclePhoto,
+        type: vehicleType, photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
         capacityKg: Number(capacityKg) || undefined, length: Number(length) || undefined,
         width: Number(width) || undefined, height: Number(height) || undefined,
         vehicleNumber: vehicleNumber.trim().toUpperCase(),
@@ -2851,42 +2905,49 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           </div>
         )}
 
-        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo" : "गाड़ी की फोटो"}</label>
-        <PhotoPicker label={lang === "en" ? "Vehicle Photo" : "गाड़ी की फोटो"} lang={lang} onSelect={onVehiclePhoto}>
-          <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer mb-2" style={{ border: `1.5px dashed #2B5C8A`, background: C.paper, minHeight: vehiclePhoto ? "auto" : 110 }}>
-            {uploadingKey === "vehicle" ? (
-              <div className="text-xs font-semibold py-6" style={{ color: "#2B5C8A" }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</div>
-            ) : (
-              <SafeImage
-                src={vehiclePhoto?.url}
-                alt="गाड़ी"
-                className="w-full h-40 rounded-lg object-cover"
-                fallback={
-                  <>
-                    <div className="w-14 h-14 rounded-full flex items-center justify-center mb-1.5" style={{ background: "#DCE9F5" }}><Camera size={22} color="#2B5C8A" /></div>
-                    <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Upload a clear photo" : "साफ फोटो अपलोड करें"}</div>
-                  </>
-                }
-              />
-            )}
-          </div>
-        </PhotoPicker>
-        <div className="text-[10px] mb-2" style={{ color: vehiclePhoto ? C.success : C.inkSoft }}>
-          {vehiclePhoto ? (lang === "en" ? "Uploaded ✓ — tap to change" : "अपलोड ✓ — बदलने के लिए टैप करें") : (lang === "en" ? "Upload a photo" : "फोटो अपलोड करें")}
+        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photos (Front & Side)" : "गाड़ी की फोटो (आगे व साइड)"}</label>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          {[
+            ["vehicleFront", lang === "en" ? "Front" : "आगे से", vehiclePhotoFront, setVehiclePhotoFront],
+            ["vehicleSide", lang === "en" ? "Side" : "साइड से", vehiclePhotoSide, setVehiclePhotoSide],
+          ].map(([key, label, val, setVal]) => (
+            <PhotoPicker key={key} label={label} lang={lang} onSelect={onVehiclePhoto(setVal, key)}>
+              <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed #2B5C8A`, background: C.paper, minHeight: 110 }}>
+                {uploadingKey === key ? (
+                  <div className="text-xs font-semibold py-6" style={{ color: "#2B5C8A" }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</div>
+                ) : (
+                  <SafeImage
+                    src={val?.url}
+                    alt={label}
+                    className="w-full h-24 rounded-lg object-cover"
+                    fallback={
+                      <>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: "#DCE9F5" }}><Camera size={18} color="#2B5C8A" /></div>
+                        <div className="text-[10px] font-semibold text-center" style={{ color: C.ink }}>{label}</div>
+                      </>
+                    }
+                  />
+                )}
+              </div>
+              <div className="text-[9px] mt-0.5 text-center" style={{ color: val ? C.success : C.inkSoft }}>
+                {val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : "अपलोड के लिए टैप करें")}
+              </div>
+            </PhotoPicker>
+          ))}
         </div>
         <div className="rounded-lg p-2.5" style={{ background: "#EDF0F5" }}>
           <div className="text-[10px] font-semibold mb-1" style={{ color: C.ink }}>{lang === "en" ? "For a good photo:" : "अच्छी फोटो के लिए:"}</div>
           <div className="text-[10px]" style={{ color: C.inkSoft, lineHeight: 1.6 }}>
             {lang === "en" ? (
-              <>• Take it in daylight, at a clean spot<br />• The full vehicle (front or side) should be in frame<br />• The number plate should be clearly visible<br />• Don't upload blurry, dark, or cropped photos</>
+              <>• Take it in daylight, at a clean spot<br />• The full vehicle should be in frame<br />• The number plate should be clearly visible<br />• Don't upload blurry, dark, or cropped photos</>
             ) : (
-              <>• दिन की रोशनी में, साफ जगह पर फोटो लें<br />• पूरी गाड़ी (आगे से या साइड से) फ्रेम में आनी चाहिए<br />• गाड़ी नंबर प्लेट साफ दिखनी चाहिए<br />• धुंधली, अंधेरी या कटी हुई फोटो न डालें</>
+              <>• दिन की रोशनी में, साफ जगह पर फोटो लें<br />• पूरी गाड़ी फ्रेम में आनी चाहिए<br />• गाड़ी नंबर प्लेट साफ दिखनी चाहिए<br />• धुंधली, अंधेरी या कटी हुई फोटो न डालें</>
             )}
           </div>
         </div>
       </div>
 
-      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, and enter the vehicle number to submit" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस अपलोड करें और गाड़ी नंबर डालें"}</div>}
+      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle number to submit" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो अपलोड करें और गाड़ी नंबर डालें"}</div>}
       <button onClick={submit} disabled={!canSubmit} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: canSubmit ? C.marigold : C.line, color: canSubmit ? C.navy : "#9AA3B0" }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
     </div>
   );
@@ -2900,13 +2961,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name);
 
   const shareApp = () => {
-    const msg = trialMode
-      ? (lang === "en"
-        ? "Join Sarthi Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthitransport.example.com"
-        : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthitransport.example.com")
-      : (lang === "en"
-        ? "Join Sarthi Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthitransport.example.com — we both get ₹200 after your first trip!"
-        : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthitransport.example.com — पहली ट्रिप पूरी होने पर हम दोनों को ₹200 मिलेंगे!");
+    // The ₹200 referral reward is a customer-side program (see spec) — a
+    // driver's share link doesn't carry a referral code.
+    const msg = lang === "en"
+      ? "Join Sarthi Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthitransport.example.com"
+      : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthitransport.example.com";
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -2987,7 +3046,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : "सेटिंग्स (KYC व गाड़ी)"}
               </button>
               <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <MessageCircle size={16} color={C.success} /> {trialMode ? (lang === "en" ? "Share App" : "ऐप शेयर करें") : (lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)")}
+                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App" : "ऐप शेयर करें"}
               </button>
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
@@ -3191,10 +3250,13 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                         );
                       })}
                     </div>
-                    {d.vehicleSpec?.photo && (
+                    {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
                       <>
-                        <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photo:" : "गाड़ी की फोटो:"}</div>
-                        <SafeImage src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-32 rounded-lg object-cover mb-2" />
+                        <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : "गाड़ी की फोटो:"}</div>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          {d.vehicleSpec?.photo && <SafeImage src={d.vehicleSpec.photo.url} alt="गाड़ी - आगे" className="w-full h-28 rounded-lg object-cover" />}
+                          {d.vehicleSpec?.photoSide && <SafeImage src={d.vehicleSpec.photoSide.url} alt="गाड़ी - साइड" className="w-full h-28 rounded-lg object-cover" />}
+                        </div>
                       </>
                     )}
                     {d.vehicleSpec && (
@@ -3250,7 +3312,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
             {pendingWithdrawals.map((w) => (
               <div key={w.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: "#DFEEE2" }}>
                 <div>
-                  <div className="text-xs font-bold" style={{ color: C.ink }}>{w.driverName}</div>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{w.driverName || w.customerName} <span className="font-normal" style={{ color: C.inkSoft }}>· {w.role === "customer" ? (lang === "en" ? "Referral" : "रेफरल") : (lang === "en" ? "Driver bonus" : "ड्राइवर बोनस")}</span></div>
                   <div className="text-[10px]" style={{ color: C.inkSoft }}>{w.time}</div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -3347,10 +3409,13 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
                       );
                     })}
                   </div>
-                  {d.vehicleSpec?.photo && (
+                  {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
                     <>
-                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photo:" : "गाड़ी की फोटो:"}</div>
-                      <SafeImage src={d.vehicleSpec.photo.url} alt="गाड़ी" className="w-full h-28 rounded-lg object-cover mb-2" />
+                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : "गाड़ी की फोटो:"}</div>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        {d.vehicleSpec?.photo && <SafeImage src={d.vehicleSpec.photo.url} alt="गाड़ी - आगे" className="w-full h-24 rounded-lg object-cover" />}
+                        {d.vehicleSpec?.photoSide && <SafeImage src={d.vehicleSpec.photoSide.url} alt="गाड़ी - साइड" className="w-full h-24 rounded-lg object-cover" />}
+                      </div>
                     </>
                   )}
                   {d.vehicleSpec && (
@@ -3372,6 +3437,33 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// Read-only oversight of customer registrations — name, address, KYC info.
+// Customers are never gated by admin approval (only drivers are), so this
+// is visibility only, not a verification queue.
+function AdminCustomers({ customers, lang }) {
+  const [q, setQ] = useState("");
+  const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q) || (c.city || "").toLowerCase().includes(q.toLowerCase()));
+  return (
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "All Customers" : "सभी कस्टमर"}</div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, mobile or city..." : "नाम, मोबाइल या शहर से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+      <div className="space-y-2">
+        {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : "कोई कस्टमर नहीं मिला।"}</p>}
+        {filtered.map((c) => (
+          <div key={c.mobile} className="rounded-lg p-3 flex items-center gap-2.5" style={{ border: `1px solid ${C.line}` }}>
+            <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#DCE9F5" }}><UserCircle2 size={20} color="#2B5C8A" /></div>} />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
+              <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+              <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>{[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || (lang === "en" ? "No address on file" : "पता उपलब्ध नहीं")}</div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -3423,7 +3515,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
       <div className="rounded-lg p-3 mb-4" style={{ background: trialMode ? "#DFEEE2" : "#EDF0F5" }}>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xs font-bold" style={{ color: trialMode ? C.success : C.ink }}>{lang === "en" ? "Free Trial Mode (2 months)" : "फ्री ट्रायल मोड (2 महीने)"}</div>
+            <div className="text-xs font-bold" style={{ color: trialMode ? C.success : C.ink }}>{lang === "en" ? "Free Trial Mode (1 month)" : "फ्री ट्रायल मोड (1 महीना)"}</div>
             <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "While on, both commission and bonus stay at 0%" : "चालू रहने पर कमीशन और बोनस दोनों 0% रहेंगे"}</div>
             {trialMode && <div className="text-[11px] mt-1 font-semibold" style={{ color: C.success }}>{lang === "en" ? `${trialDaysLeft} days left — switches to commercial mode automatically after that` : `${trialDaysLeft} दिन बाकी — इसके बाद ऑटोमैटिक कमर्शियल मोड में बदल जाएगा`}</div>}
           </div>
@@ -3528,9 +3620,9 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
   );
 }
 
-function AdminPanel({ drivers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
   const [tab, setTab] = useState("fleet");
-  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर लिस्ट", ClipboardList], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
+  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर लिस्ट", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
@@ -3558,6 +3650,7 @@ function AdminPanel({ drivers, driver, updateDriverKyc, tripLog, alerts, toggleB
       {tab === "fleet" && <AdminFleet drivers={drivers} driver={driver} tripLog={tripLog} lang={lang} />}
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} lang={lang} />}
+      {tab === "customers" && <AdminCustomers customers={customers} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} lang={lang} />}
@@ -3708,7 +3801,7 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
-  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 0, minWallet: 500, trialMode: true, trialStartDate: Date.now() });
+  const [settings, setSettingsLocal] = useState({ commissionPct: 3, bonusPct: 2, minWallet: 500, trialMode: true, trialStartDate: Date.now() });
   const commissionPct = settings.commissionPct;
   const bonusPct = settings.bonusPct;
   const minWallet = settings.minWallet;
@@ -3725,6 +3818,10 @@ export default function App() {
     return subscribeCollection("vehicleTypes", setVehicleTypesLocal, null);
   }, []);
   useEffect(() => (firestoreReady ? subscribeCollection("drivers", setDrivers, null) : undefined), []);
+  // Only Admin needs the full customer list (profile/address oversight) —
+  // gated on role so customer/driver sessions don't pull it for nothing.
+  const [allCustomers, setAllCustomers] = useState([]);
+  useEffect(() => (firestoreReady && role === "admin" ? subscribeCollection("customers", setAllCustomers, null) : undefined), [role]);
   useEffect(() => (firestoreReady ? subscribeCollection("bookings", setBookings) : undefined), []);
   useEffect(() => (firestoreReady ? subscribeCollection("alerts", setAlerts) : undefined), []);
   useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), []);
@@ -3735,7 +3832,7 @@ export default function App() {
     // create before subscribing would leave everyone stuck on defaults
     // forever if that one initial call is slow on a flaky connection.
     const unsub = subscribeDoc("settings", "main", (data) => { if (data) setSettingsLocal(data); });
-    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 0, minWallet: 500, trialMode: true, trialStartDate: Date.now() })
+    getOrCreateDoc("settings", "main", { commissionPct: 3, bonusPct: 2, minWallet: 500, trialMode: true, trialStartDate: Date.now() })
       .catch((e) => console.error("[settings init]", e));
     return unsub;
   }, []);
@@ -3787,9 +3884,18 @@ export default function App() {
   const requestWithdrawal = (amount) => {
     if (amount <= 0 || !driver) return;
     setDriver({ ...driver, bonus: Math.max(0, (driver.bonus || 0) - amount) });
-    createDoc("withdrawals", genId("W"), { driverMobile: driver.mobile, driverName: driver.name, amount, status: "Pending" }).catch((e) => console.error(e));
+    createDoc("withdrawals", genId("W"), { role: "driver", driverMobile: driver.mobile, driverName: driver.name, amount, status: "Pending" }).catch((e) => console.error(e));
   };
   const approveWithdrawal = (id) => patchDoc("withdrawals", id, { status: "Approved" }).catch((e) => console.error(e));
+  // Referral rewards unlock 2 months after being credited (see
+  // creditReferralOnce) — this only fires once that's already true, so the
+  // requested amount is always available balance, never locked money.
+  const requestReferralWithdrawal = (amount) => {
+    if (amount <= 0 || !customer || !customerAuth.mobile) return;
+    setCustomer({ ...customer, referralBalance: Math.max(0, (customer.referralBalance || 0) - amount) });
+    patchDoc("customers", customerAuth.mobile, { referralBalance: increment(-amount) }).catch((e) => console.error(e));
+    createDoc("withdrawals", genId("W"), { role: "customer", customerMobile: customerAuth.mobile, customerName: customer.name, amount, status: "Pending" }).catch((e) => console.error(e));
+  };
 
   // Recharging the main wallet is a request admin must approve (proof of an
   // outside UPI/cash payment), not an instant self-credit.
@@ -3882,12 +3988,30 @@ export default function App() {
     patchDoc("bookings", id, { status: "Cancelled" }).catch((e) => console.error(e));
   };
   const rateBooking = (id, rating) => patchDoc("bookings", id, { rating }).catch((e) => console.error(e));
+  // Credits ₹200 to the referring customer's profile the moment a referred
+  // user (customer or driver) completes their first successful booking or
+  // trip — checked/flagged via referralCredited so it only ever fires once
+  // per referred user, no matter how many trips they complete after that.
+  const creditReferralOnce = async (mobile, collectionName) => {
+    const entity = await getDocOnce(collectionName, mobile);
+    if (!entity?.referredBy || entity.referralCredited) return;
+    await patchDoc(collectionName, mobile, { referralCredited: true }).catch((e) => console.error("[referral]", e));
+    await patchDoc("customers", entity.referredBy, {
+      referralBalance: increment(200),
+      referralEntries: arrayUnion({ amount: 200, fromMobile: mobile, creditedAt: Date.now(), unlockAt: Date.now() + 60 * DAY_MS }),
+    }).catch((e) => console.error("[referral]", e));
+  };
   const completeBooking = (id, extraCharge = 0) => {
     const b = bookings.find((x) => x.id === id);
     if (!b) return;
     if (b.driverName) unfreezeDriverName(b.driverName);
     patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge }).catch((e) => console.error(e));
     if (b.driverName === driver?.name) setDriver({ ...driver, online: true });
+    if (firestoreReady) {
+      if (b.customerMobile) creditReferralOnce(b.customerMobile, "customers");
+      const bookingDriver = drivers.find((d) => d.name === b.driverName);
+      if (bookingDriver?.mobile) creditReferralOnce(bookingDriver.mobile, "drivers");
+    }
   };
   const startLoading = (id, adjustMs = 0) => {
     const b = bookings.find((x) => x.id === id);
@@ -3986,7 +4110,7 @@ export default function App() {
         {role !== null && app === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
-            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
+            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} requestReferralWithdrawal={requestReferralWithdrawal} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
             onGoHome={role === "admin" ? undefined : goHome} />
         )}
         {role !== null && app === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
@@ -4040,7 +4164,7 @@ export default function App() {
         )}
         {role !== null && app === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
-            <AdminPanel drivers={drivers} driver={driver} updateDriverKyc={updateDriverKyc} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
+            <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
               bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} onGoHome={goHome} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} />

@@ -32,6 +32,15 @@ export function subscribeDoc(name, id, onChange) {
   }, (err) => console.error(`[firestore] ${name}/${id} subscription error:`, err));
 }
 
+// One-off read (no live subscription) — for the rare case a client needs
+// another user's doc for a moment (e.g. checking a referral code) rather
+// than staying subscribed to it forever.
+export async function getDocOnce(name, id) {
+  if (!db) return null;
+  const snap = await getDoc(doc(db, name, id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
 // Fetches a doc by id, creating it with `defaults` the first time (e.g. a
 // driver's or customer's first login, or the singleton settings doc).
 export async function getOrCreateDoc(name, id, defaults) {
