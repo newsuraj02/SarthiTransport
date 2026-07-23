@@ -2668,7 +2668,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         )}
       </div>
       <button onClick={() => setShowComingSoon(true)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: C.navy, color: "#fff" }}>
-        <IndianRupee size={14} /> {lang === "en" ? "Recharge via Payment Gateway" : "पेमेंट गेटवे से रीचार्ज करें"}
+        <IndianRupee size={14} /> {lang === "en" ? "Recharge" : "रीचार्ज करें"}
       </button>
       {showComingSoon && (
         <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold text-center" style={{ background: "#FBEBD2", color: C.marigoldDeep }}>
