@@ -3757,7 +3757,11 @@ export default function App() {
   // link (e.g. https://yourapp/?admin=1) — regular Customer/Driver users
   // never see it on the plain URL.
   const adminEntry = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("admin") === "1";
-  const [adminAuth, setAdminAuth] = usePersistedState("sarthi_adminAuth", false);
+  // Not persisted like customer/driver auth (those are real Firebase phone
+  // OTP sessions) — admin is gated by a plain password, so every fresh page
+  // load must go through AdminLogin again rather than silently staying
+  // signed in and jumping straight to the Customer/Driver preview toggle.
+  const [adminAuth, setAdminAuth] = useState(false);
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
   // The customer's profile is looked up live from Firestore by their
   // verified mobile number (exactly like the driver profile) instead of a
