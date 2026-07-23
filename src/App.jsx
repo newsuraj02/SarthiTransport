@@ -1501,6 +1501,14 @@ function CustomerBooking({ createLoad, vehicleTypes, drivers, lastBooking, lang,
             </div>
           </div>
         )}
+        <div className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 1 — Service Type" : "स्टेप 1 — सर्विस टाइप"}</div>
+        <div>
+          <select className={inputCls} style={inputStyle} value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
+            <option value="withinCity">{lang === "en" ? "Within City" : "शहर के अंदर"}</option>
+            <option value="outstation">{lang === "en" ? "Outstation" : "आउटस्टेशन"}</option>
+          </select>
+        </div>
+
         {lastBooking && !pickup && !drop && (
           <button onClick={() => {
             setPickup(lastBooking.pickup); setDrop(lastBooking.drop); setMaterial(lastBooking.material);
@@ -1518,7 +1526,7 @@ function CustomerBooking({ createLoad, vehicleTypes, drivers, lastBooking, lang,
             <span className="text-[10px] font-bold shrink-0" style={{ color: C.success }}>{lang === "en" ? "Tap →" : "टैप करें →"}</span>
           </button>
         )}
-        <div className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 1 — Pickup & Drop" : "स्टेप 1 — पिकअप और ड्रॉप"}</div>
+        <div className="text-[11px] font-bold pt-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Pickup & Drop" : "स्टेप 2 — पिकअप और ड्रॉप"}</div>
         <div className="space-y-4">
           <LocationField
             label={lang === "en" ? "Pickup" : "पिकअप"}
@@ -1560,14 +1568,7 @@ function CustomerBooking({ createLoad, vehicleTypes, drivers, lastBooking, lang,
           </div>
         )}
 
-        <div className="text-[11px] font-bold pt-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Load Details" : "स्टेप 2 — सामान की जानकारी"}</div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Service Type" : "सर्विस टाइप"}</label>
-          <select className={inputCls} style={inputStyle} value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
-            <option value="withinCity">{lang === "en" ? "Within City" : "शहर के अंदर"}</option>
-            <option value="outstation">{lang === "en" ? "Outstation" : "आउटस्टेशन"}</option>
-          </select>
-        </div>
+        <div className="text-[11px] font-bold pt-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 3 — Load Details" : "स्टेप 3 — सामान की जानकारी"}</div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
