@@ -715,15 +715,18 @@ function AdminLogin({ onVerified, lang, onBack }) {
 // =====================================================================
 function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, verifiedMobile, hasProfile, checking, onOtpVerified, onLogout, onComplete }) {
   // Step 2 fields — profile/address, asked only once, only if needed.
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [photo, setPhoto] = useState(null);
+  // Persisted to localStorage so refreshing mid-registration (a slow
+  // connection, an accidental reload) doesn't force retyping everything —
+  // cleared once submitProfile actually completes.
+  const [name, setName] = usePersistedState("sarthi_customerReg_name", "");
+  const [email, setEmail] = usePersistedState("sarthi_customerReg_email", "");
+  const [photo, setPhoto] = usePersistedState("sarthi_customerReg_photo", null);
   const [photoUploading, setPhotoUploading] = useState(false);
-  const [address, setAddress] = useState("");
-  const [area, setArea] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [pincode, setPincode] = useState("");
+  const [address, setAddress] = usePersistedState("sarthi_customerReg_address", "");
+  const [area, setArea] = usePersistedState("sarthi_customerReg_area", "");
+  const [city, setCity] = usePersistedState("sarthi_customerReg_city", "");
+  const [state, setState] = usePersistedState("sarthi_customerReg_state", "");
+  const [pincode, setPincode] = usePersistedState("sarthi_customerReg_pincode", "");
 
   // Step 1 — mobile/OTP verification.
   const [mobile, setMobile] = useState("");
@@ -799,6 +802,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     const ref = new URLSearchParams(window.location.search).get("ref");
     const referredBy = ref && ref !== ownMobile ? ref : null;
     onComplete({ name, email: email.trim() || null, photo, address, area, city, state, pincode, referredBy, referralCredited: false, referralBalance: 0, referralEntries: [] });
+    // Submitted for real — clear the draft so it can't leak into a future
+    // registration attempt on this same device (e.g. a different customer).
+    setName(""); setEmail(""); setPhoto(null); setAddress(""); setArea(""); setCity(""); setState(""); setPincode("");
   };
 
   const backButton = (
@@ -943,11 +949,13 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
 // =====================================================================
 function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType }) {
   // Personal details — filled in first, on this page (Step 1 of 2).
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [pincode, setPincode] = useState("");
+  // Persisted to localStorage so a refresh mid-fill doesn't wipe it —
+  // cleared once the details actually attach to the driver doc below.
+  const [name, setName] = usePersistedState("sarthi_driverReg_name", "");
+  const [address, setAddress] = usePersistedState("sarthi_driverReg_address", "");
+  const [city, setCity] = usePersistedState("sarthi_driverReg_city", "");
+  const [state, setState] = usePersistedState("sarthi_driverReg_state", "");
+  const [pincode, setPincode] = usePersistedState("sarthi_driverReg_pincode", "");
   const infoAppliedRef = useRef(false);
 
   // Mobile/OTP verification — lives at the bottom of this same page.
@@ -977,6 +985,9 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       const ref = new URLSearchParams(window.location.search).get("ref");
       const referredBy = ref && ref !== driver.mobile ? ref : null;
       setDriver({ ...driver, name: name.trim(), address: address.trim(), city: city.trim(), state: state.trim(), pincode, referredBy, referralCredited: false });
+      // Attached for real — clear the draft so it can't leak into a future
+      // registration attempt on this same device (e.g. a different driver).
+      setName(""); setAddress(""); setCity(""); setState(""); setPincode("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verified, driver]);
@@ -2739,8 +2750,13 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
 
 function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel }) {
   const VEHICLES = vehicleTypes;
-  const [dl, setDl] = useState(null);
-  const [photo, setPhoto] = useState(null);
+  // Persisted to localStorage so a refresh mid-fill (slow connection,
+  // accidental reload) doesn't force re-uploading photos or retyping —
+  // cleared once submit() actually attaches them to the driver doc. Falls
+  // back to whatever's already saved on the driver (e.g. on KYC
+  // resubmission after a rejection) only when there's no in-progress draft.
+  const [dl, setDl] = usePersistedState("sarthi_driverKyc_dl", null);
+  const [photo, setPhoto] = usePersistedState("sarthi_driverKyc_photo", null);
   // Which photo tile ("photo" | "dl" | "vehicle") is mid-upload, or null.
   const [uploadingKey, setUploadingKey] = useState(null);
 
@@ -2748,14 +2764,14 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // The driver just types their vehicle's name — no dropdown of preset
   // types to pick from. Resolved to a vehicleTypes entry (reusing a
   // matching one by name, or creating a new one) only at submit time.
-  const [vehicleTypeName, setVehicleTypeName] = useState(existingVehicleType ? vehicleLabel(existingVehicleType, lang) : "");
-  const [vehiclePhotoFront, setVehiclePhotoFront] = useState(driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
-  const [vehiclePhotoSide, setVehiclePhotoSide] = useState(driver.vehicleSpec?.photoSide || null);
-  const [capacityKg, setCapacityKg] = useState(driver.vehicleSpec?.capacityKg || "");
-  const [length, setLength] = useState(driver.vehicleSpec?.length || "");
-  const [width, setWidth] = useState(driver.vehicleSpec?.width || "");
-  const [height, setHeight] = useState(driver.vehicleSpec?.height || "");
-  const [vehicleNumber, setVehicleNumber] = useState(driver.vehicleSpec?.vehicleNumber || "");
+  const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : "");
+  const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedState("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
+  const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedState("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
+  const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg || "");
+  const [length, setLength] = usePersistedState("sarthi_driverKyc_length", driver.vehicleSpec?.length || "");
+  const [width, setWidth] = usePersistedState("sarthi_driverKyc_width", driver.vehicleSpec?.width || "");
+  const [height, setHeight] = usePersistedState("sarthi_driverKyc_height", driver.vehicleSpec?.height || "");
+  const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "");
 
   // Reuses a vehicleTypes entry with a matching name (case-insensitive) so
   // typing the same vehicle name as another driver doesn't fragment the
@@ -2795,6 +2811,10 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         vehicleNumber: vehicleNumber.trim().toUpperCase(),
       },
     });
+    // Submitted for real — clear the draft so a later resubmission (after a
+    // rejection) starts from the driver's actual saved data, not this.
+    setDl(null); setPhoto(null); setVehicleTypeName(""); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
+    setCapacityKg(""); setLength(""); setWidth(""); setHeight(""); setVehicleNumber("");
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
