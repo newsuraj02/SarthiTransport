@@ -2131,8 +2131,8 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
     <>
       <div className="flex-1 overflow-y-auto relative">
         <div className="flex items-center justify-between px-5 pt-3">
-          <button onClick={() => setMenuOpen(true)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EAE0" }}>
-            <Menu size={16} color={C.inkSoft} />
+          <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <Menu size={18} color={C.navy} strokeWidth={2.5} />
           </button>
           {onGoHome && (
             <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -3092,8 +3092,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     <>
       <div className="flex-1 overflow-y-auto relative">
         <div className="flex items-center justify-between px-5 pt-3">
-          <button onClick={() => setMenuOpen(true)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#F0EAE0" }}>
-            <Menu size={16} color={C.inkSoft} />
+          <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <Menu size={18} color={C.navy} strokeWidth={2.5} />
           </button>
           {onGoHome && (
             <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
