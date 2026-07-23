@@ -2641,6 +2641,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 }
 
 function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bonusPct, trialMode, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
+  const [showComingSoon, setShowComingSoon] = useState(false);
   const myTrips = tripLog.filter((t) => t.driverName === driver.name && t.status !== "Cancelled");
   const totalCommission = myTrips.reduce((s, t) => s + t.fare * (commissionPct / 100), 0);
   const totalBonus = myTrips.reduce((s, t) => s + t.fare * (bonusPct / 100), 0);
@@ -2666,6 +2667,15 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
           <div className="text-[11px] mt-2 font-semibold" style={{ color: C.marigold }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
         )}
       </div>
+      <button onClick={() => setShowComingSoon(true)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: C.navy, color: "#fff" }}>
+        <IndianRupee size={14} /> {lang === "en" ? "Recharge via Payment Gateway" : "पेमेंट गेटवे से रीचार्ज करें"}
+      </button>
+      {showComingSoon && (
+        <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold text-center" style={{ background: "#FBEBD2", color: C.marigoldDeep }}>
+          {lang === "en" ? "Online payments are coming soon. Use manual recharge below for now." : "ऑनलाइन पेमेंट जल्द आ रहा है। फिलहाल नीचे मैनुअल रीचार्ज का उपयोग करें।"}
+        </div>
+      )}
+      <div className="text-[10px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Manual recharge (until online payments launch)" : "मैनुअल रीचार्ज (ऑनलाइन पेमेंट आने तक)"}</div>
       <button onClick={() => requestRecharge(500)} disabled={hasPendingRecharge} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2"
         style={{ background: hasPendingRecharge ? C.line : C.marigold, color: hasPendingRecharge ? "#9AA3B0" : C.navy }}>
         {hasPendingRecharge ? (lang === "en" ? "Recharge request pending admin approval" : "रीचार्ज रिक्वेस्ट एडमिन अप्रूवल के इंतज़ार में") : (lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)")}
