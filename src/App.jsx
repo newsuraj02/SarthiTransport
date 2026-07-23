@@ -1930,11 +1930,19 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
             </div>
             <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
             <div className="flex items-center justify-between mt-2">
-              <span className="text-sm font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{b.fare ? fmt(b.fare) : "—"}</span>
+              <div>
+                <div className="text-[9px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Transaction Amount" : "लेन-देन राशि"}</div>
+                <span className="text-sm font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{b.fare ? fmt(b.fare) : "—"}</span>
+              </div>
               {b.status === "Completed" && (
                 <button onClick={() => downloadInvoice(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Download size={12} /> {lang === "en" ? "Invoice" : "इनवॉइस"}</button>
               )}
             </div>
+            {b.status === "Completed" && b.fare > 0 && (
+              <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>
+                {lang === "en" ? "Payment Type" : "भुगतान का प्रकार"}: <span className="font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Cash / UPI (paid directly to driver)" : "नकद / UPI (सीधे ड्राइवर को)"}</span>
+              </div>
+            )}
             {b.status === "Completed" && (
               <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
                 <span className="text-[11px]" style={{ color: C.inkSoft }}>{b.rating ? (lang === "en" ? "Your rating:" : "आपकी रेटिंग:") : (lang === "en" ? "Rate the driver:" : "ड्राइवर को रेट करें:")}</span>
@@ -2642,12 +2650,31 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
 function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bonusPct, trialMode, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
   const [showComingSoon, setShowComingSoon] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const myTrips = tripLog.filter((t) => t.driverName === driver.name && t.status !== "Cancelled");
   const totalCommission = myTrips.reduce((s, t) => s + t.fare * (commissionPct / 100), 0);
   const totalBonus = myTrips.reduce((s, t) => s + t.fare * (bonusPct / 100), 0);
   const myWithdrawals = (withdrawals || []).filter((w) => w.driverName === driver.name);
   const myRecharges = (rechargeRequests || []).filter((r) => r.driverName === driver.name);
   const hasPendingRecharge = myRecharges.some((r) => r.status === "Pending");
+
+  // The wallet balance only ever moves for two reasons: a commission cut the
+  // instant a bid is accepted, or an approved recharge landing — so that's
+  // the complete ledger, merged and sorted newest-first by createdAt.
+  const walletTransactions = [
+    ...myTrips.map((t) => ({
+      id: t.id, type: "debit", createdAt: t.createdAt,
+      label: lang === "en" ? `Commission — ${t.pickup} → ${t.drop}` : `कमीशन — ${t.pickup} → ${t.drop}`,
+      amount: t.fare * (commissionPct / 100),
+    })),
+    ...myRecharges.filter((r) => r.status === "Approved").map((r) => ({
+      id: r.id, type: "credit", createdAt: r.createdAt,
+      label: lang === "en" ? "Wallet recharge" : "वॉलेट रीचार्ज",
+      amount: r.amount,
+    })),
+  ].sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  const txTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+
   return (
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Wallet" : "मेरा वॉलेट"}</h2>
@@ -2666,7 +2693,31 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         {(driver.heldCredit || 0) > 0 && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: C.marigold }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
         )}
+        <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1.5" style={{ background: "#3D1B17", color: "#fff" }}>
+          <ClipboardList size={13} /> {showHistory ? (lang === "en" ? "Hide Transaction History" : "लेन-देन हिस्ट्री छुपाएं") : (lang === "en" ? "Transaction History" : "लेन-देन हिस्ट्री")}
+        </button>
       </div>
+      {showHistory && (
+        <div className="rounded-xl p-3 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          {walletTransactions.length === 0 ? (
+            <p className="text-[11px] text-center py-2" style={{ color: C.inkSoft }}>{lang === "en" ? "No wallet transactions yet." : "अभी तक कोई लेन-देन नहीं हुआ।"}</p>
+          ) : (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {walletTransactions.map((tx) => (
+                <div key={tx.id} className="rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: "#F8F4EC" }}>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold truncate" style={{ color: C.ink }}>{tx.label}</div>
+                    <div className="text-[10px]" style={{ color: C.inkSoft }}>{txTime(tx.createdAt)}</div>
+                  </div>
+                  <span className="text-xs font-bold shrink-0" style={{ color: tx.type === "credit" ? C.success : C.safety, fontFamily: monoFont }}>
+                    {tx.type === "credit" ? "+" : "−"}{fmt(tx.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <button onClick={() => setShowComingSoon(true)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: C.navy, color: "#fff" }}>
         <IndianRupee size={14} /> {lang === "en" ? "Recharge" : "रीचार्ज करें"}
       </button>
