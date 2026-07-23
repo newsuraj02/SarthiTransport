@@ -1932,7 +1932,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
             <div className="flex items-center justify-between mt-2">
               <div>
                 <div className="text-[9px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Transaction Amount" : "लेन-देन राशि"}</div>
-                <span className="text-sm font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{b.fare ? fmt(b.fare) : "—"}</span>
+                <span className="text-lg font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{b.fare ? fmt(b.fare) : "—"}</span>
               </div>
               {b.status === "Completed" && (
                 <button onClick={() => downloadInvoice(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Download size={12} /> {lang === "en" ? "Invoice" : "इनवॉइस"}</button>
