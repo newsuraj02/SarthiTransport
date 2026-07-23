@@ -4211,7 +4211,7 @@ export default function App() {
         {role !== null && role !== "admin" && app !== "customer" && (
           <div className="px-5 py-2 flex items-center gap-1.5" style={{ background: "#F5E6C8", borderBottom: `1px solid ${C.line}` }}>
             <span className="text-sm">💡</span>
-            <span className="text-[11px] font-medium" style={{ color: C.inkSoft }}>
+            <span className="text-[11px] font-medium" style={{ color: C.ink }}>
               {app === "driver" && (lang === "en" ? "This screen is for truck/tempo drivers — bid on loads and track earnings." : "यह स्क्रीन ट्रक/टेम्पो ड्राइवरों के लिए है — लोड पर बोली लगाएं और कमाई देखें।")}
             </span>
           </div>
