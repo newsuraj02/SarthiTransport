@@ -164,6 +164,34 @@ function usePersistedState(key, initialValue) {
   return [value, setValue];
 }
 
+// Like usePersistedState, but for {name, url} photo values specifically —
+// skips writing to localStorage when `url` is a base64 data: URI (the
+// fallback uploadPhoto uses when Firebase Storage isn't reachable/
+// configured). Those can be large enough on their own, let alone four of
+// them on one KYC form, to blow past localStorage's ~5-10MB per-origin
+// quota; once that's hit, the browser silently drops the write instead of
+// throwing somewhere visible, which is what made photos vanish on refresh.
+// A real Storage download URL is just a short link, so it always persists
+// fine — this only affects the degraded fallback path.
+function usePersistedPhoto(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw !== null ? JSON.parse(raw) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  useEffect(() => {
+    if (value?.url?.startsWith("data:")) return;
+    try {
+      if (value) window.localStorage.setItem(key, JSON.stringify(value));
+      else window.localStorage.removeItem(key);
+    } catch { /* storage unavailable or quota exceeded */ }
+  }, [key, value]);
+  return [value, setValue];
+}
+
 function playBeepTone() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -720,7 +748,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   // cleared once submitProfile actually completes.
   const [name, setName] = usePersistedState("sarthi_customerReg_name", "");
   const [email, setEmail] = usePersistedState("sarthi_customerReg_email", "");
-  const [photo, setPhoto] = usePersistedState("sarthi_customerReg_photo", null);
+  const [photo, setPhoto] = usePersistedPhoto("sarthi_customerReg_photo", null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [address, setAddress] = usePersistedState("sarthi_customerReg_address", "");
   const [area, setArea] = usePersistedState("sarthi_customerReg_area", "");
@@ -2755,8 +2783,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // cleared once submit() actually attaches them to the driver doc. Falls
   // back to whatever's already saved on the driver (e.g. on KYC
   // resubmission after a rejection) only when there's no in-progress draft.
-  const [dl, setDl] = usePersistedState("sarthi_driverKyc_dl", null);
-  const [photo, setPhoto] = usePersistedState("sarthi_driverKyc_photo", null);
+  const [dl, setDl] = usePersistedPhoto("sarthi_driverKyc_dl", null);
+  const [photo, setPhoto] = usePersistedPhoto("sarthi_driverKyc_photo", null);
   // Which photo tiles are mid-upload — a set, not a single value, so
   // uploading two photos at once (e.g. tapping Front then Side before the
   // first finishes) doesn't make one tile's "uploading" indicator vanish
@@ -2770,8 +2798,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // types to pick from. Resolved to a vehicleTypes entry (reusing a
   // matching one by name, or creating a new one) only at submit time.
   const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : "");
-  const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedState("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
-  const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedState("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
+  const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
+  const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
   const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg || "");
   const [length, setLength] = usePersistedState("sarthi_driverKyc_length", driver.vehicleSpec?.length || "");
   const [width, setWidth] = usePersistedState("sarthi_driverKyc_width", driver.vehicleSpec?.width || "");
