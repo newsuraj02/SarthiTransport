@@ -13,7 +13,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from "firebase/auth";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, storage } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, storage, requestPushToken, listenForegroundPush } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Oxblood & mustard theme — chosen specifically to not read as Porter
@@ -205,6 +205,75 @@ function playBeepTone() {
       }, delay);
     });
   } catch { /* audio not available */ }
+}
+
+// Wires up real push notifications for ride events (bid accepted, trip
+// completed, new bid) — collectionName/docId is where the FCM device token
+// gets saved ("customers"/mobile or "drivers"/mobile) so the Cloud Function
+// in functions/index.js knows who to push to. Silently re-issues a token on
+// every load if permission was already granted in an earlier session, so it
+// stays fresh without asking again; `enable()` is what the banner's button
+// calls to trigger the actual browser permission prompt on first use.
+function useRideNotifications(collectionName, docId, lang) {
+  const [permission, setPermission] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
+  const [toast, setToast] = useState(null);
+
+  const enable = async () => {
+    const result = await requestPushToken();
+    if (result.ok && docId) {
+      patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+      setPermission("granted");
+    } else {
+      setPermission(result.reason === "unsupported" ? "unsupported" : (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
+    }
+  };
+
+  useEffect(() => {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted" || !docId) return;
+    requestPushToken().then((result) => {
+      if (result.ok) patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+    });
+    let unsub;
+    listenForegroundPush((payload) => {
+      playBeepTone();
+      setToast(payload.notification || null);
+      setTimeout(() => setToast(null), 5000);
+    }).then((fn) => { unsub = fn; });
+    return () => unsub?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionName, docId]);
+
+  return { permission, enable, toast };
+}
+
+function NotificationBanner({ permission, onEnable, lang }) {
+  if (permission === "granted" || permission === "unsupported") return null;
+  if (permission === "denied") {
+    return (
+      <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: "#FCEAE3", color: C.safety }}>
+        {lang === "en" ? "Notifications are blocked in your browser settings — enable them there to get ride updates." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — राइड अपडेट पाने के लिए वहां चालू करें।"}
+      </div>
+    );
+  }
+  return (
+    <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-2.5 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
+      <Bell size={14} color={C.marigoldDeep} />
+      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Turn on notifications for ride updates" : "राइड अपडेट के लिए नोटिफिकेशन चालू करें"}</span>
+    </button>
+  );
+}
+
+function ForegroundToast({ toast }) {
+  if (!toast) return null;
+  return (
+    <div className="mx-5 mb-2 rounded-lg p-2.5 flex items-center gap-2" style={{ background: C.navy }}>
+      <Bell size={14} color={C.marigold} />
+      <div>
+        <div className="text-[11px] font-bold text-white">{toast.title}</div>
+        {toast.body && <div className="text-[10px]" style={{ color: "#D9C4B0" }}>{toast.body}</div>}
+      </div>
+    </div>
+  );
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -2079,6 +2148,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
   const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
+  const rideNotifications = useRideNotifications("customers", customerMobile, lang);
 
   const shareApp = () => {
     // Referral reward applies from day one (not gated by trial mode) — the
@@ -2141,6 +2211,8 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
           )}
         </div>
         {!activeBooking && <Greeting name={customerProfile?.name} lang={lang} />}
+        <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
+        <ForegroundToast toast={rideNotifications.toast} />
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -3039,6 +3111,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | 'liveLocation' | null
   const tabs = [["home", "होम", LayoutDashboard], ["wallet", "वॉलेट", Wallet], ["history", "हिस्ट्री", Package]];
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name);
+  const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
 
   const shareApp = () => {
     // The ₹200 referral reward is a customer-side program (see spec) — a
@@ -3102,6 +3175,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
           )}
         </div>
         {tab === "home" && <Greeting name={driver?.name} lang={lang} />}
+        {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />}
+        <ForegroundToast toast={rideNotifications.toast} />
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
