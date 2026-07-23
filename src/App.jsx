@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft,
+  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, seedIfEmpty,
@@ -99,7 +99,7 @@ const CITY_COLORS = ["#A8721C", "#3F7D4F", "#B87A12", "#E85D2F", "#7A5CB8", "#1C
 
 const EN_LABELS = {
   book: "Book Now", rides: "My Rides", home: "Home", wallet: "Wallet", history: "History",
-  kyc: "KYC", sos: "SOS", fleet: "Live Dashboard", drivers: "Driver List", settings: "Settings",
+  kyc: "KYC", sos: "SOS", fleet: "Live Dashboard", drivers: "Drivers", settings: "Settings",
   finance: "Reports", notify: "Notify", alerts: "Alerts", customers: "Customers",
 };
 
@@ -3218,6 +3218,59 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
   );
 }
 
+// Renders one KYC/vehicle document thumbnail with View (opens full-size in
+// a new tab) and Download buttons. Download fetches the image as a blob
+// first so the browser actually saves the file instead of just navigating
+// to it — Firebase Storage download URLs are cross-origin, and browsers
+// ignore a plain <a download> on cross-origin links.
+function KycDocThumb({ url, label, lang, fileName, height = "h-24" }) {
+  const handleDownload = async (e) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName || label;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("[kyc doc download]", err);
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+  return (
+    <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
+      <SafeImage
+        src={url}
+        alt={label}
+        className={`w-full ${height} object-cover`}
+        fallback={
+          <div className={`w-full ${height} flex items-center justify-center`} style={{ background: "#F3F4F6" }}>
+            <XCircle size={16} color={C.safety} />
+          </div>
+        }
+      />
+      <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: url ? C.success : C.safety, background: url ? "#DFEEE2" : "#FCEAE3" }}>
+        {url ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {label}
+      </div>
+      {url && (
+        <div className="flex" style={{ borderTop: `1px solid ${C.line}` }}>
+          <button onClick={() => window.open(url, "_blank", "noopener,noreferrer")} className="flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>
+            <Eye size={11} /> {lang === "en" ? "View" : "देखें"}
+          </button>
+          <button onClick={handleDownload} className="flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-semibold" style={{ color: C.marigoldDeep, borderLeft: `1px solid ${C.line}` }}>
+            <Download size={11} /> {lang === "en" ? "Download" : "डाउनलोड"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminKyc({ drivers, updateDriverKyc, lang }) {
   const pending = drivers.filter((d) => d.kyc === "Pending");
   const [expandedId, setExpandedId] = useState(null);
@@ -3251,31 +3304,15 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       {Object.entries(docLabels).map(([key, label]) => {
                         const doc = d.docs?.[key];
-                        return (
-                          <div key={key} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-                            <SafeImage
-                              src={doc?.url}
-                              alt={label}
-                              className="w-full h-24 object-cover"
-                              fallback={
-                                <div className="w-full h-24 flex items-center justify-center" style={{ background: "#F3F4F6" }}>
-                                  <XCircle size={16} color={C.safety} />
-                                </div>
-                              }
-                            />
-                            <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: doc?.url ? C.success : C.safety, background: doc?.url ? "#DFEEE2" : "#FCEAE3" }}>
-                              {doc?.url ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {label}
-                            </div>
-                          </div>
-                        );
+                        return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
                       })}
                     </div>
                     {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
                       <>
                         <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : "गाड़ी की फोटो:"}</div>
                         <div className="grid grid-cols-2 gap-2 mb-2">
-                          {d.vehicleSpec?.photo && <SafeImage src={d.vehicleSpec.photo.url} alt="गाड़ी - आगे" className="w-full h-28 rounded-lg object-cover" />}
-                          {d.vehicleSpec?.photoSide && <SafeImage src={d.vehicleSpec.photoSide.url} alt="गाड़ी - साइड" className="w-full h-28 rounded-lg object-cover" />}
+                          {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} height="h-28" />}
+                          {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} height="h-28" />}
                         </div>
                       </>
                     )}
@@ -3410,31 +3447,15 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     {Object.entries(docLabels).map(([key, label]) => {
                       const doc = d.docs?.[key];
-                      return (
-                        <div key={key} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-                          <SafeImage
-                            src={doc?.url}
-                            alt={label}
-                            className="w-full h-24 object-cover"
-                            fallback={
-                              <div className="w-full h-24 flex items-center justify-center" style={{ background: "#F3F4F6" }}>
-                                <XCircle size={16} color={C.safety} />
-                              </div>
-                            }
-                          />
-                          <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: doc?.url ? C.success : C.safety, background: doc?.url ? "#DFEEE2" : "#FCEAE3" }}>
-                            {doc?.url ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {label}
-                          </div>
-                        </div>
-                      );
+                      return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
                     })}
                   </div>
                   {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
                     <>
                       <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : "गाड़ी की फोटो:"}</div>
                       <div className="grid grid-cols-2 gap-2 mb-2">
-                        {d.vehicleSpec?.photo && <SafeImage src={d.vehicleSpec.photo.url} alt="गाड़ी - आगे" className="w-full h-24 rounded-lg object-cover" />}
-                        {d.vehicleSpec?.photoSide && <SafeImage src={d.vehicleSpec.photoSide.url} alt="गाड़ी - साइड" className="w-full h-24 rounded-lg object-cover" />}
+                        {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} />}
+                        {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} />}
                       </div>
                     </>
                   )}
@@ -3642,7 +3663,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
 
 function AdminPanel({ drivers, customers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
   const [tab, setTab] = useState("fleet");
-  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर लिस्ट", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
+  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
