@@ -1328,9 +1328,10 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial }) {
+function CustomerBooking({ createLoad, vehicleTypes, drivers, lastBooking, lang, customMaterials, addCustomMaterial }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
+  const [selectingVehicle, setSelectingVehicle] = useState(false);
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
   const [pickup, setPickup] = useState("");
@@ -1427,8 +1428,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
     setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
-    setPickupCoords(null); setDropCoords(null);
+    setPickupCoords(null); setDropCoords(null); setSelectingVehicle(false);
   };
+
+  // A real photo from any driver already registered with this vehicle type
+  // (KYC front photo), so customers see an actual vehicle instead of a
+  // generic icon — falls back to the icon when nobody's uploaded one yet.
+  const vehiclePhotoFor = (key) => (drivers || []).find((d) => d.vehicleSpec?.type === key && d.vehicleSpec?.photo?.url)?.vehicleSpec?.photo?.url || null;
+  const estimatedFare = (v) => (distance != null && v?.rate ? Math.round((distance * v.rate) / 10) * 10 : null);
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -1610,11 +1617,68 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           <span className="text-[11px]" style={{ color: C.marigoldDeep }}>{lang === "en" ? "There's no fixed fare here — after posting, driver quotes will show up in \"My Rides\"." : "यहाँ कोई फिक्स भाड़ा नहीं है — पोस्ट करने के बाद ड्राइवरों की बोलियां \"मेरी राइड्स\" में दिखेंगी।"}</span>
         </div>
 
-        <button onClick={post} disabled={!canPost} className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2"
+        <button onClick={() => setSelectingVehicle(true)} disabled={!canPost} className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2"
           style={{ background: canPost ? C.marigold : C.line, color: canPost ? C.navy : "#9AA3B0" }}>
           {lang === "en" ? "Book Now" : "बुक करें"}
         </button>
       </div>
+
+      {selectingVehicle && (() => {
+        const recommended = VEHICLES.find((v) => v.key === vehicle) || VEHICLES[0];
+        const others = VEHICLES.filter((v) => v.key !== recommended.key).sort((a, b) => a.capacityKg - b.capacityKg);
+        const isLightBulky = LIGHT_BULKY_MATERIALS.includes(material);
+        const Row = ({ v, active }) => {
+          const photoUrl = vehiclePhotoFor(v.key);
+          const fare = estimatedFare(v);
+          return (
+            <button onClick={() => setVehicle(v.key)} className="w-full text-left rounded-xl p-3 flex items-center gap-3"
+              style={{ background: active ? "#F5E6C8" : C.paper, border: `1.5px solid ${active ? "#A8721C" : C.line}` }}>
+              <SafeImage src={photoUrl} alt={vehicleLabel(v, lang)} className="w-14 h-14 rounded-lg object-cover shrink-0"
+                fallback={<div className="w-14 h-14 rounded-lg flex items-center justify-center shrink-0" style={{ background: active ? "#A8721C" : "#F0EAE0" }}><Truck size={22} color={active ? "#fff" : C.inkSoft} /></div>} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold" style={{ color: C.ink }}>{vehicleLabel(v, lang)}</div>
+                <div className="text-[11px]" style={{ color: C.inkSoft }}>{vehicleCapacity(v, lang)}</div>
+              </div>
+              {fare != null && <div className="text-sm font-bold shrink-0" style={{ color: "#A8721C", fontFamily: monoFont }}>~{fmt(fare)}</div>}
+            </button>
+          );
+        };
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col" style={{ background: C.bg }}>
+            <div className="flex items-center gap-2 px-5 pt-5 pb-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <button onClick={() => setSelectingVehicle(false)} className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "#F0EAE0" }}>
+                <ChevronLeft size={18} color={C.ink} />
+              </button>
+              <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Select Vehicle" : "गाड़ी चुनें"}</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <div className="text-[10px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Prices shown are estimates only — the actual fare is whatever a driver quotes after you post." : "दिखाए गए दाम सिर्फ अनुमान हैं — असली भाड़ा वह होगा जो पोस्ट करने के बाद ड्राइवर कोट करेगा।"}</div>
+              <div>
+                <div className="text-[11px] font-bold mb-2" style={{ color: "#A8721C" }}>{lang === "en" ? "Recommended for your load" : "आपके सामान के लिए सुझाई गई"}</div>
+                <Row v={recommended} active={vehicle === recommended.key} />
+                {isLightBulky && (
+                  <div className="text-[11px] mt-2 rounded-lg p-2" style={{ background: "#FBEBD2", color: "#A8721C" }}>
+                    {lang === "en" ? "This load is light but bulky — a bigger vehicle is suggested for it." : "यह माल हल्का और बड़ा है, इसके लिए बड़ी गाड़ी का सुझाव है।"}
+                  </div>
+                )}
+              </div>
+              {others.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Others" : "अन्य विकल्प"}</div>
+                  <div className="space-y-2">
+                    {others.map((v) => <Row key={v.key} v={v} active={vehicle === v.key} />)}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-4" style={{ borderTop: `1px solid ${C.line}`, background: C.paper }}>
+              <button onClick={post} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>
+                {lang === "en" ? `Proceed with ${vehicleLabel(VEHICLES.find((v) => v.key === vehicle), lang)}` : `${vehicleLabel(VEHICLES.find((v) => v.key === vehicle), lang)} के साथ आगे बढ़ें`}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {mapField && (
         <LocationPicker
@@ -2172,7 +2236,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
         {activeBooking ? (
           <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang} />
         ) : (
-          <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} />
+          <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} drivers={drivers} lastBooking={bookings[0]} lang={lang} />
         )}
       </div>
     </>
