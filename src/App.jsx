@@ -1265,8 +1265,13 @@ async function uploadPhoto(file, path, maxDim = 900, quality = 0.72) {
     try {
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
       const ref = storageRef(storage, path);
-      await uploadBytes(ref, blob, { contentType: "image/jpeg" });
-      const url = await getDownloadURL(ref);
+      // Firebase's resumable upload retries transient network errors with
+      // backoff for a long time by default — on a flaky connection that can
+      // stall the whole form for a while before ever reaching the fallback
+      // below. Cap it so a bad connection fails over quickly instead.
+      const attempt = uploadBytes(ref, blob, { contentType: "image/jpeg" }).then(() => getDownloadURL(ref));
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Storage upload timed out")), 10000));
+      const url = await Promise.race([attempt, timeout]);
       return { name: file.name, url };
     } catch (e) {
       console.error("[storage upload]", e);
