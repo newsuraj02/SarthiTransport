@@ -88,6 +88,10 @@ const materialLabel = (m, lang, customMap = {}) => {
   if (customMap[m]) return lang === "en" ? (customMap[m].en || customMap[m].hi) : (customMap[m].hi || customMap[m].en);
   return (lang === "en" && MATERIAL_LABELS_EN[m]) ? MATERIAL_LABELS_EN[m] : m;
 };
+const serviceTypeLabel = (t, lang) => {
+  if (t === "outstation") return lang === "en" ? "Outstation" : "आउटस्टेशन";
+  return lang === "en" ? "Within City" : "शहर के अंदर";
+};
 const ALERT_TYPE_LABELS_EN = { "पुलिस सहायता": "Police Help", "इमरजेंसी कॉल": "Emergency Call", "व्हाट्सएप सपोर्ट": "WhatsApp Support", "शिकायत": "Complaint" };
 const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_EN[t]) ? ALERT_TYPE_LABELS_EN[t] : t;
 const ADD_MATERIAL = "__add_new__";
@@ -1340,6 +1344,7 @@ function CustomerBooking({ createLoad, vehicleTypes, drivers, lastBooking, lang,
   const [dropCoords, setDropCoords] = useState(null);
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
   const [showAllVehicles, setShowAllVehicles] = useState(true);
+  const [serviceType, setServiceType] = useState("withinCity"); // 'withinCity' | 'outstation'
   const [material, setMaterial] = useState(MATERIALS[0]);
   const [materialsList, setMaterialsList] = useState(MATERIALS);
   const [newMaterial, setNewMaterial] = useState("");
@@ -1426,9 +1431,10 @@ function CustomerBooking({ createLoad, vehicleTypes, drivers, lastBooking, lang,
       pickup, drop, vehicle, material, weight, distance, scheduledFor: bookingMode === "advance" ? `${advanceDate} ${advanceTime}` : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+      serviceType,
     });
     setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
-    setPickupCoords(null); setDropCoords(null); setSelectingVehicle(false);
+    setPickupCoords(null); setDropCoords(null); setSelectingVehicle(false); setServiceType("withinCity");
   };
 
   // A real photo from any driver already registered with this vehicle type
@@ -1555,6 +1561,13 @@ function CustomerBooking({ createLoad, vehicleTypes, drivers, lastBooking, lang,
         )}
 
         <div className="text-[11px] font-bold pt-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Load Details" : "स्टेप 2 — सामान की जानकारी"}</div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Service Type" : "सर्विस टाइप"}</label>
+          <select className={inputCls} style={inputStyle} value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
+            <option value="withinCity">{lang === "en" ? "Within City" : "शहर के अंदर"}</option>
+            <option value="outstation">{lang === "en" ? "Outstation" : "आउटस्टेशन"}</option>
+          </select>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
@@ -1741,7 +1754,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
               <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
             </div>
-            <div className="text-[10px] font-semibold" style={{ color: C.inkSoft }}>{vehicleLabel(v, lang)}</div>
+            <div className="text-[10px] font-semibold flex items-center gap-1.5" style={{ color: C.inkSoft }}>
+              {vehicleLabel(v, lang)}
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: b.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: b.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(b.serviceType, lang)}</span>
+            </div>
             <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
             {b.scheduledFor && (
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#F5E6C8" }}>
@@ -2286,7 +2302,10 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang, commissionPct
         <span className="text-[10px]" style={{ color: C.inkSoft }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
       </div>
       <div className="text-xs mb-0.5" style={{ color: C.ink }}>{load.pickup} → {load.drop}</div>
-      <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{vehicleLabel(v, lang)} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}</div>
+      <div className="text-[11px] mb-1 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
+        {vehicleLabel(v, lang)} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: load.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: load.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(load.serviceType, lang)}</span>
+      </div>
 
       {lowestOverall !== null && (
         <div className="rounded-lg p-2 mb-2 flex items-center justify-between" style={{ background: "#DFEEE2" }}>
@@ -2500,7 +2519,10 @@ function LoadSummaryCard({ load, vehicleTypes, driver, onOpen, lang }) {
         <span className="text-[10px]" style={{ color: C.inkSoft }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
       </div>
       <div className="text-xs mb-0.5" style={{ color: C.ink }}>{load.pickup} → {load.drop}</div>
-      <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{vehicleLabel(v, lang)} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}</div>
+      <div className="text-[11px] mb-2 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
+        {vehicleLabel(v, lang)} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: load.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: load.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(load.serviceType, lang)}</span>
+      </div>
       {load.scheduledFor && (
         <div className="text-[10px] font-semibold mb-2 flex items-center gap-1" style={{ color: "#A8721C" }}>
           <Clock3 size={11} /> {lang === "en" ? "Scheduled" : "शेड्यूल"}: {load.scheduledFor}
@@ -3972,12 +3994,12 @@ export default function App() {
     patchDoc("rechargeRequests", id, { status: "Approved" }).catch((e) => console.error(e));
   };
 
-  const createLoad = ({ pickup, drop, vehicle, material, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng }) => {
+  const createLoad = ({ pickup, drop, vehicle, material, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, serviceType }) => {
     createDoc("bookings", genId(), {
       pickup, drop, vehicle, material, weight, distance, status: "Bidding", bids: [], fare: null,
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
       pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null, dropLat: dropLat ?? null, dropLng: dropLng ?? null,
-      driverLocation: null,
+      driverLocation: null, serviceType: serviceType || "withinCity",
     }).catch((e) => console.error(e));
   };
 
