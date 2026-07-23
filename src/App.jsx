@@ -3140,11 +3140,11 @@ function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWall
   return (
     <div>
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <StatTile label={lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedToday} color={C.pimpri} />
-        <StatTile label={lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnline} color={C.success} />
         <StatTile label={lang === "en" ? "Pending KYC approvals" : "लंबित KYC अप्रूवल"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("kyc") : undefined} />
-        <StatTile label={lang === "en" ? "Today's earnings (commission)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
+        <StatTile label={lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnline} color={C.success} />
+        <StatTile label={lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedToday} color={C.pimpri} />
         <StatTile label={lang === "en" ? "Cancelled today" : "आज रद्द हुईं"} value={cancelledToday} color={cancelledToday > 0 ? C.safety : C.success} />
+        <StatTile label={lang === "en" ? "Today's earnings (commission)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
         {!trialMode && (
           <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletOnline} color={lowWalletOnline > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("drivers") : undefined} />
         )}
