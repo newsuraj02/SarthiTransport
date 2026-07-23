@@ -289,15 +289,6 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   );
 }
 
-function Pill({ active, onClick, children }) {
-  return (
-    <button onClick={onClick} className="flex-1 text-sm font-bold py-2.5 rounded-full transition-colors"
-      style={{ background: active ? C.marigold : "transparent", color: active ? C.navy : "#D9C4B0" }}>
-      {children}
-    </button>
-  );
-}
-
 function BottomNav({ tabs, tab, setTab, lang = "hi" }) {
   return (
     <div className="flex border-t" style={{ borderColor: C.line, background: C.paper }}>
@@ -4074,7 +4065,7 @@ export default function App() {
     return () => clearInterval(progressTimer.current);
   }, [bookings, driver]);
 
-  const isDesktop = app === "admin";
+  const isDesktop = role === "admin" && adminAuth;
 
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#DCDDD6", fontFamily: bodyFont }}>
@@ -4092,31 +4083,18 @@ export default function App() {
               <Globe size={12} /> {lang === "hi" ? "हिं" : "ENG"}
             </button>
           </div>
-          {role === "admin" && adminAuth ? (
-            <div className="flex items-center gap-2">
-              <div className="flex flex-1 rounded-full p-1.5" style={{ background: "#3D1B17" }}>
-                <Pill active={app === "customer"} onClick={() => setApp("customer")}>{lang === "en" ? "Customer" : "कस्टमर"}</Pill>
-                <Pill active={app === "driver"} onClick={() => setApp("driver")}>{lang === "en" ? "Driver" : "ड्राइवर"}</Pill>
-              </div>
-              <button onClick={() => setApp("admin")} title={lang === "en" ? "Admin Panel" : "एडमिन पैनल"} className="w-11 h-11 shrink-0 rounded-full flex items-center justify-center"
-                style={{ background: app === "admin" ? C.marigold : "#3D1B17", border: app === "admin" ? "none" : "1px solid #4A1F1F" }}>
-                <LayoutDashboard size={18} color={app === "admin" ? C.navy : "#D9C4B0"} />
-              </button>
-            </div>
-          ) : null}
           {role === "admin" && adminAuth && (
             <div className="mt-1.5 text-[10px] text-center" style={{ color: "#D9C4B0" }}>
-              {lang === "en" ? "Admin can view all apps" : "एडमिन सभी ऐप देख सकता है"}
+              {lang === "en" ? "Overview & approvals — Customer/Driver registration is not available here" : "ओवरव्यू और अप्रूवल — यहां कस्टमर/ड्राइवर रजिस्ट्रेशन उपलब्ध नहीं है"}
             </div>
           )}
         </div>
 
-        {role !== null && (role !== "admin" || adminAuth) && app !== "customer" && (
+        {role !== null && role !== "admin" && app !== "customer" && (
           <div className="px-5 py-2 flex items-center gap-1.5" style={{ background: "#F5E6C8", borderBottom: `1px solid ${C.line}` }}>
             <span className="text-sm">💡</span>
             <span className="text-[11px] font-medium" style={{ color: C.inkSoft }}>
               {app === "driver" && (lang === "en" ? "This screen is for truck/tempo drivers — bid on loads and track earnings." : "यह स्क्रीन ट्रक/टेम्पो ड्राइवरों के लिए है — लोड पर बोली लगाएं और कमाई देखें।")}
-              {app === "admin" && (lang === "en" ? "This is your control room — run the whole business from here." : "यह आपका कंट्रोल रूम है — पूरा बिजनेस यहीं से चलाएं।")}
             </span>
           </div>
         )}
@@ -4128,10 +4106,10 @@ export default function App() {
         )}
 
         {role === "admin" && !adminAuth && (
-          <AdminLogin lang={lang} onVerified={() => setAdminAuth(true)} onBack={adminEntry ? undefined : goHome} />
+          <AdminLogin lang={lang} onVerified={() => { setAdminAuth(true); setApp("admin"); }} onBack={adminEntry ? undefined : goHome} />
         )}
 
-        {role !== null && app === "customer" && (!customerAuth.verified || !customerChecked || !customer) && (
+        {role === "customer" && (!customerAuth.verified || !customerChecked || !customer) && (
           <CustomerOnboarding lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
             verified={customerAuth.verified} verifiedMobile={customerAuth.mobile} hasProfile={!!customer} checking={customerAuth.verified && !customerChecked}
             onOtpVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); setLockedRole("customer"); }}
@@ -4141,20 +4119,20 @@ export default function App() {
               if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile }).catch((e) => console.error(e));
             }} />
         )}
-        {role !== null && app === "customer" && customerAuth.verified && customerChecked && customer && (
+        {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} requestReferralWithdrawal={requestReferralWithdrawal} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
-            onGoHome={role === "admin" ? undefined : goHome} />
+            onGoHome={goHome} />
         )}
-        {role !== null && app === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
+        {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
             verified={driverAuth.verified}
             onOtpVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setLockedRole("driver"); }}
             onLogout={() => (driverAuth.verified ? logoutRole("driver") : goHome())}
             driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
         )}
-        {role !== null && app === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
           <div className="flex-1 overflow-y-auto">
             <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
               <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
@@ -4166,7 +4144,7 @@ export default function App() {
             <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
           </div>
         )}
-        {role !== null && app === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
             <button onClick={() => logoutRole("driver")} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
               <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
@@ -4189,14 +4167,14 @@ export default function App() {
             )}
           </div>
         )}
-        {role !== null && app === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} trialMode={trialMode} lang={lang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
-            onOpenTerms={() => setShowTerms(true)} onGoHome={role === "admin" ? undefined : goHome} />
+            onOpenTerms={() => setShowTerms(true)} onGoHome={goHome} />
         )}
-        {role !== null && app === "admin" && adminAuth && (
+        {role === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
             <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
