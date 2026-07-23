@@ -3486,25 +3486,76 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
 // Read-only oversight of customer registrations — name, address, KYC info.
 // Customers are never gated by admin approval (only drivers are), so this
 // is visibility only, not a verification queue.
-function AdminCustomers({ customers, lang }) {
+function AdminCustomers({ customers, bookings, lang }) {
   const [q, setQ] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
   const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q) || (c.city || "").toLowerCase().includes(q.toLowerCase()));
+  const statusMeta = lang === "en"
+    ? { Bidding: { label: "Awaiting bids", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "Ongoing", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
+    : { Bidding: { label: "बिड बाकी", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "चालू", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
+  const bookingDate = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleDateString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "All Customers" : "सभी कस्टमर"}</div>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, mobile or city..." : "नाम, मोबाइल या शहर से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : "कोई कस्टमर नहीं मिला।"}</p>}
-        {filtered.map((c) => (
-          <div key={c.mobile} className="rounded-lg p-3 flex items-center gap-2.5" style={{ border: `1px solid ${C.line}` }}>
-            <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#F5E6C8" }}><UserCircle2 size={20} color="#A8721C" /></div>} />
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
-              <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
-              <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>{[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || (lang === "en" ? "No address on file" : "पता उपलब्ध नहीं")}</div>
+        {filtered.map((c) => {
+          const expanded = expandedId === c.mobile;
+          const rides = (bookings || []).filter((b) => b.customerMobile === c.mobile);
+          return (
+            <div key={c.mobile} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
+              <div className="flex items-center gap-2.5">
+                <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#F5E6C8" }}><UserCircle2 size={20} color="#A8721C" /></div>} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                  <div className="text-[10px] mt-0.5 truncate" style={{ color: C.inkSoft }}>{[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || (lang === "en" ? "No address on file" : "पता उपलब्ध नहीं")}</div>
+                </div>
+                <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg" style={{ color: C.marigoldDeep, background: "#FBEBD2" }}>
+                  {expanded ? (lang === "en" ? "Hide" : "छुपाएं") : (lang === "en" ? "View Details" : "विवरण देखें")}
+                </button>
+              </div>
+
+              {expanded && (
+                <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <div className="text-[11px] mb-3" style={{ color: C.ink }}>
+                    <b>{lang === "en" ? "Contact number" : "संपर्क नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{c.mobile}</span><br />
+                    {c.email && (<><b>{lang === "en" ? "Email" : "ईमेल"}:</b> {c.email}<br /></>)}
+                    <b>{lang === "en" ? "Address" : "पता"}:</b> {[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || "—"}
+                  </div>
+                  <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>
+                    {lang === "en" ? `Ride history (${rides.length})` : `राइड हिस्ट्री (${rides.length})`}
+                  </div>
+                  {rides.length === 0 ? (
+                    <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No bookings yet." : "अभी तक कोई बुकिंग नहीं।"}</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                      {rides.map((b) => {
+                        const sm = statusMeta[b.status] || statusMeta.Cancelled;
+                        return (
+                          <div key={b.id} className="rounded-lg p-2" style={{ background: "#F8F4EC" }}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
+                            </div>
+                            <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
+                              {materialLabel(b.material, lang)} · {b.weight} {lang === "en" ? "kg" : "किग्रा"} · {serviceTypeLabel(b.serviceType, lang)}
+                            </div>
+                            <div className="text-[10px] flex items-center justify-between mt-1">
+                              <span style={{ color: C.inkSoft }}>{b.driverName ? `${lang === "en" ? "Driver" : "ड्राइवर"}: ${b.driverName}` : (lang === "en" ? "No driver assigned" : "ड्राइवर तय नहीं")} · {bookingDate(b)}</span>
+                              {b.fare != null && <span className="font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(b.fare)}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -3661,7 +3712,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
   const [tab, setTab] = useState("fleet");
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
@@ -3692,7 +3743,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, tripLog, aler
       {tab === "fleet" && <AdminFleet drivers={drivers} driver={driver} tripLog={tripLog} lang={lang} />}
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} lang={lang} />}
-      {tab === "customers" && <AdminCustomers customers={customers} lang={lang} />}
+      {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} lang={lang} />}
@@ -4197,7 +4248,7 @@ export default function App() {
         )}
         {role === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
-            <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
+            <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
               bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} onGoHome={goHome} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} />
