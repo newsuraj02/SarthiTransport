@@ -3094,9 +3094,43 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
 // (shared while they're on an active trip) when Google Maps is configured
 // and at least one driver has reported one; otherwise falls back to the
 // old fake hashed-position layout so the panel still shows something.
-function AdminFleet({ drivers, driver, tripLog, lang }) {
+function StatTile({ label, value, color, onClick }) {
+  const content = (
+    <>
+      <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{label}</div>
+      <div className="text-3xl font-bold mt-1" style={{ color, fontFamily: monoFont }}>{value}</div>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button onClick={onClick} className="rounded-xl p-4 shadow-sm text-left w-full" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        {content}
+      </button>
+    );
+  }
+  return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>{content}</div>;
+}
+
+function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWallet, trialMode, lang, onNavigate }) {
   const bookedToday = tripLog.filter((t) => t.status === "Ongoing" || t.status === "Completed").length;
   const readyOnline = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted).length;
+  const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
+  const lowWalletOnline = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet).length;
+
+  const isToday = (b) => {
+    const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
+    if (!d) return false;
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  };
+  const todaysEarnings = (bookings || []).filter((b) => b.status === "Completed" && isToday(b)).reduce((s, b) => s + (b.fare || 0) * (commissionPct / 100), 0);
+  const cancelledToday = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b)).length;
+
+  const statusMeta = lang === "en"
+    ? { Bidding: { label: "Awaiting bids", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "Ongoing", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
+    : { Bidding: { label: "बिड बाकी", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "चालू", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
+  const recentActivity = (bookings || []).slice(0, 8);
+  const activityTime = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleTimeString(lang === "en" ? "en-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" }) : "—");
 
   const [vehicleQuery, setVehicleQuery] = useState("");
   const q = vehicleQuery.trim().toUpperCase();
@@ -3106,14 +3140,14 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
   return (
     <div>
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं"}</div>
-          <div className="text-3xl font-bold mt-1" style={{ color: C.pimpri, fontFamily: monoFont }}>{bookedToday}</div>
-        </div>
-        <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार"}</div>
-          <div className="text-3xl font-bold mt-1" style={{ color: C.success, fontFamily: monoFont }}>{readyOnline}</div>
-        </div>
+        <StatTile label={lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedToday} color={C.pimpri} />
+        <StatTile label={lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnline} color={C.success} />
+        <StatTile label={lang === "en" ? "Pending KYC approvals" : "लंबित KYC अप्रूवल"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("kyc") : undefined} />
+        <StatTile label={lang === "en" ? "Today's earnings (commission)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
+        <StatTile label={lang === "en" ? "Cancelled today" : "आज रद्द हुईं"} value={cancelledToday} color={cancelledToday > 0 ? C.safety : C.success} />
+        {!trialMode && (
+          <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletOnline} color={lowWalletOnline > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("drivers") : undefined} />
+        )}
       </div>
 
       <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -3142,6 +3176,28 @@ function AdminFleet({ drivers, driver, tripLog, lang }) {
                 ))}
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Activity size={16} /> {lang === "en" ? "Recent Activity" : "हाल की गतिविधि"}</div>
+        {recentActivity.length === 0 ? (
+          <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No activity yet." : "अभी तक कोई गतिविधि नहीं।"}</p>
+        ) : (
+          <div className="space-y-1.5">
+            {recentActivity.map((b) => {
+              const sm = statusMeta[b.status] || statusMeta.Bidding;
+              return (
+                <div key={b.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: "#F8F4EC" }}>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</div>
+                    <div className="text-[10px]" style={{ color: C.inkSoft }}>{b.driverName ? `${b.driverName} · ` : ""}{activityTime(b)}</div>
+                  </div>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -3671,7 +3727,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} driver={driver} tripLog={tripLog} lang={lang} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} trialMode={trialMode} lang={lang} onNavigate={setTab} />}
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} lang={lang} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} />}
