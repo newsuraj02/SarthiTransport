@@ -1680,9 +1680,50 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   };
 
   if (b.status === "Bidding") {
-    const v = VEHICLES.find((x) => x.key === b.vehicle);
     const sortedBids = b.bids.filter((x) => !x.paused).sort((x, y) => x.amount - y.amount);
     const selectedId = selectedBid;
+    // Each bid comes from a driver who may have a different vehicle type,
+    // so the vehicle shown per bid is that driver's own — never the load's
+    // pre-suggested type, since the customer never confirmed one.
+    const bidRow = (bid, isLowest) => {
+      const isSelected = selectedId === bid.id;
+      const bidDriver = drivers.find((d) => d.name === bid.driverName);
+      const bidVehicleType = VEHICLES.find((vt) => vt.key === bidDriver?.vehicleSpec?.type);
+      return (
+        <button key={bid.id} onClick={() => setSelectedBid(bid.id)}
+          className="w-full text-left rounded-xl p-3 relative"
+          style={{ background: isSelected ? "#F5E6C8" : C.paper, border: `1.5px solid ${isSelected ? "#A8721C" : isLowest ? C.success : C.line}` }}>
+          {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>}
+          <div className="flex items-center gap-3 mt-1">
+            <SafeImage
+              src={bidDriver?.vehicleSpec?.photo?.url}
+              alt={vehicleLabel(bidVehicleType, lang)}
+              className="w-14 h-14 rounded-lg object-cover shrink-0"
+              fallback={
+                <div className="w-14 h-14 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? "#A8721C" : isLowest ? C.success : C.marigoldDeep }}>
+                  <Truck size={22} color="#fff" />
+                </div>
+              }
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{vehicleLabel(bidVehicleType, lang) || bid.driverName}</div>
+              <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{bid.driverName} · {stars(bid.rating)} · {bid.distanceKm} {lang === "en" ? "km away" : "किमी दूर"}</div>
+              {bidVehicleType && <div className="text-[9px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{vehicleCapacity(bidVehicleType, lang)}</div>}
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-base font-bold" style={{ color: "#A8721C", fontFamily: monoFont }}>{fmt(bid.amount)}</div>
+              {isSelected && <CheckCircle2 size={16} color="#A8721C" className="ml-auto mt-0.5" />}
+            </div>
+          </div>
+          {(bid.hours || bid.extraHourRate) && (
+            <div className="text-[10px] mt-1.5 pt-1.5" style={{ color: C.inkSoft, borderTop: `1px solid ${C.line}` }}>
+              {bid.hours ? (lang === "en" ? `${bid.hours} allowed hrs · ` : `${bid.hours} घंटे अलाउ · `) : ""}
+              {bid.extraHourRate ? (lang === "en" ? `then ${fmt(bid.extraHourRate)}/hr waiting` : `उसके बाद ${fmt(bid.extraHourRate)}/घंटा वेटिंग`) : ""}
+            </div>
+          )}
+        </button>
+      );
+    };
     return (
       <div className="px-5 py-5">
         <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
@@ -1691,8 +1732,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
               <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
             </div>
-            <div className="text-[10px] font-semibold flex items-center gap-1.5" style={{ color: C.inkSoft }}>
-              {vehicleLabel(v, lang)}
+            <div className="text-[10px] font-semibold flex items-center gap-1.5 mb-1">
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: b.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: b.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(b.serviceType, lang)}</span>
             </div>
             <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
@@ -1706,99 +1746,14 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             {sortedBids.length === 0 ? (
               <div className="text-[11px] py-3 text-center" style={{ color: C.inkSoft }}>{lang === "en" ? "Waiting for driver bids..." : "ड्राइवरों की बोली का इंतज़ार है..."}</div>
             ) : (
-              <>
-                {(() => {
-                  const lowest = sortedBids[0];
-                  const isSelected = selectedId === lowest.id;
-                  const lowestVehicle = drivers.find((d) => d.name === lowest.driverName)?.vehicleSpec;
-                  return (
-                    <button onClick={() => setSelectedBid(lowest.id)}
-                      className="w-full text-left rounded-xl p-3 mb-2 relative"
-                      style={{ background: isSelected ? "#F5E6C8" : "#DFEEE2", border: `2px solid ${isSelected ? C.pimpri : C.success}` }}>
-                      <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <SafeImage
-                          src={lowestVehicle?.photo?.url}
-                          alt={vehicleLabel(v, lang)}
-                          className="w-12 h-12 rounded-lg object-cover shrink-0"
-                          fallback={
-                            <div className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.success }}>
-                              <Truck size={20} color="#fff" />
-                            </div>
-                          }
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-xs font-bold" style={{ color: C.ink }}>{lowest.driverName}</div>
-                              <div className="text-[10px]" style={{ color: isSelected ? C.pimpri : C.success }}>{stars(lowest.rating)} · {lowest.distanceKm} {lang === "en" ? "km away" : "किमी दूर"}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-base font-bold" style={{ color: isSelected ? C.pimpri : C.success, fontFamily: monoFont }}>{fmt(lowest.amount)}</span>
-                              {isSelected && <CheckCircle2 size={16} color={C.pimpri} />}
-                            </div>
-                          </div>
-                          {v && (
-                            <div className="text-[9px] mt-0.5" style={{ color: isSelected ? C.pimpri : C.success, fontFamily: monoFont }}>{v.l}×{v.w}×{v.h} {lang === "en" ? "ft (L×W×H)" : "फीट (ल×चौ×ऊं)"}</div>
-                          )}
-                        </div>
-                      </div>
-                      {(lowest.hours || lowest.extraHourRate) && (
-                        <div className="text-[10px] mt-1.5 pt-1.5" style={{ color: isSelected ? C.pimpri : C.success, borderTop: `1px solid ${isSelected ? "#E3C98A" : "#BFE0C6"}` }}>
-                          {lowest.hours ? (lang === "en" ? `${lowest.hours} allowed hrs · ` : `${lowest.hours} घंटे अलाउ · `) : ""}
-                          {lowest.extraHourRate ? (lang === "en" ? `then ${fmt(lowest.extraHourRate)}/hr waiting` : `उसके बाद ${fmt(lowest.extraHourRate)}/घंटा वेटिंग`) : ""}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })()}
-
+              <div className="space-y-2">
+                {bidRow(sortedBids[0], true)}
                 {sortedBids.length > 1 && (
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
-                    {sortedBids.slice(1).map((bid) => {
-                      const isSelected = selectedId === bid.id;
-                      const bidVehicle = drivers.find((d) => d.name === bid.driverName)?.vehicleSpec;
-                      return (
-                        <button key={bid.id} onClick={() => setSelectedBid(bid.id)}
-                          className="w-full text-left rounded-lg p-2.5"
-                          style={{ background: isSelected ? "#F5E6C8" : "#FBEBD2", border: isSelected ? `2px solid ${C.pimpri}` : "2px solid transparent" }}>
-                          <div className="flex items-center gap-2">
-                            <SafeImage
-                              src={bidVehicle?.photo?.url}
-                              alt={vehicleLabel(v, lang)}
-                              className="w-9 h-9 rounded-lg object-cover shrink-0"
-                              fallback={
-                                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.pimpri : C.marigoldDeep }}>
-                                  <Truck size={16} color="#fff" />
-                                </div>
-                              }
-                            />
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-xs font-bold" style={{ color: C.ink }}>{bid.driverName}</div>
-                                  <div className="text-[10px]" style={{ color: isSelected ? C.pimpri : C.marigoldDeep }}>{stars(bid.rating)} · {bid.distanceKm} {lang === "en" ? "km away" : "किमी दूर"}</div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold" style={{ color: isSelected ? C.pimpri : C.marigoldDeep, fontFamily: monoFont }}>{fmt(bid.amount)}</span>
-                                  {isSelected && <CheckCircle2 size={16} color={C.pimpri} />}
-                                </div>
-                              </div>
-                              {v && <div className="text-[9px]" style={{ color: isSelected ? C.pimpri : C.marigoldDeep, fontFamily: monoFont }}>{v.l}×{v.w}×{v.h} {lang === "en" ? "ft" : "फीट"}</div>}
-                            </div>
-                          </div>
-                          {(bid.hours || bid.extraHourRate) && (
-                            <div className="text-[10px] mt-1.5 pt-1.5" style={{ color: isSelected ? C.pimpri : C.marigoldDeep, borderTop: `1px solid ${isSelected ? "#E3C98A" : "#EDDDBD"}` }}>
-                              {bid.hours ? (lang === "en" ? `${bid.hours} allowed hrs · ` : `${bid.hours} घंटे अलाउ · `) : ""}
-                              {bid.extraHourRate ? (lang === "en" ? `then ${fmt(bid.extraHourRate)}/hr waiting` : `उसके बाद ${fmt(bid.extraHourRate)}/घंटा वेटिंग`) : ""}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
+                    {sortedBids.slice(1).map((bid) => bidRow(bid, false))}
                   </div>
                 )}
-              </>
+              </div>
             )}
 
             {selectedId && (
