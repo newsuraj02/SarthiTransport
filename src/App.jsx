@@ -2098,7 +2098,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
             </button>
           )}
         </div>
-        <Greeting name={customerProfile?.name} lang={lang} />
+        {!activeBooking && <Greeting name={customerProfile?.name} lang={lang} />}
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -2993,7 +2993,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </button>
           )}
         </div>
-        <Greeting name={driver?.name} lang={lang} />
+        {tab === "home" && <Greeting name={driver?.name} lang={lang} />}
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -3612,7 +3612,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, tripLog, aler
           <XCircle size={12} /> {lang === "en" ? "Logout" : "लॉगआउट"}
         </button>
       </div>
-      <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : "एडमिन"} 👋</div>
+      {tab === "fleet" && <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : "एडमिन"} 👋</div>}
       <div className="flex gap-2 mb-5 overflow-x-auto">
         {tabs.map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap"
