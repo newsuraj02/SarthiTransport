@@ -109,6 +109,24 @@ function hashPos(str) {
 function fmt(n) { return "₹" + Math.round(n).toLocaleString("en-IN"); }
 function stars(n) { return "★".repeat(Math.round(n)) + "☆".repeat(5 - Math.round(n)); }
 
+// Time-of-day greeting shown at the top of the Customer/Driver/Admin home
+// screens — computed fresh on every render, so it naturally flips from
+// Morning to Afternoon to Evening as the session stays open across the day.
+function greetingWord(lang) {
+  const hour = new Date().getHours();
+  if (lang === "en") return hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+  return hour < 12 ? "सुप्रभात" : hour < 17 ? "शुभ दोपहर" : "शुभ संध्या";
+}
+function Greeting({ name, lang }) {
+  return (
+    <div className="px-5 pt-2 pb-1">
+      <div className="text-sm font-bold" style={{ color: C.ink }}>
+        {greetingWord(lang)}{name ? `, ${name}` : ""} 👋
+      </div>
+    </div>
+  );
+}
+
 const AREAS = ["पिंपरी", "चिंचवड", "निगड़ी", "आकुर्डी", "भोसरी", "वाकड़", "तळवडे", "रावेत", "MG रोड", "MR-10", "काळेवाडी", "पिंपळे सौदागर", "थेरगाव", "चिखली", "मोशी", "भोसरी MIDC"];
 function findArea(text) {
   if (!text.trim()) return null;
@@ -2135,6 +2153,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
             </button>
           )}
         </div>
+        <Greeting name={customerProfile?.name} lang={lang} />
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -3023,6 +3042,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </button>
           )}
         </div>
+        <Greeting name={driver?.name} lang={lang} />
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -3641,6 +3661,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, tripLog, aler
           <XCircle size={12} /> {lang === "en" ? "Logout" : "लॉगआउट"}
         </button>
       </div>
+      <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : "एडमिन"} 👋</div>
       <div className="flex gap-2 mb-5 overflow-x-auto">
         {tabs.map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap"
