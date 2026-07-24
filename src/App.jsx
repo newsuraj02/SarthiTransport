@@ -2369,8 +2369,8 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         {myBid && <span className="text-[10px] font-bold flex items-center gap-1" style={{ color: C.success }}><CheckCircle2 size={12} /> {lang === "en" ? "Bid sent" : "बोली भेजी"}</span>}
       </div>
       <div className="mb-2">
-        <div className="text-base font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "From" : "से"}: {load.pickup}</div>
-        <div className="text-base font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "To" : "तक"}: {load.drop}</div>
+        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "From" : "से"}: </span><span className="text-base font-extrabold">{load.pickup}</span></div>
+        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "To" : "तक"}: </span><span className="text-base font-extrabold">{load.drop}</span></div>
       </div>
       {/* Status-bar row: the key facts as scannable pills instead of a sentence. */}
       <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
@@ -2631,9 +2631,11 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-sm font-bold" style={{ color: C.ink }}>{driver.name}</div>
-          <div className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>
-            {stars(driver.rating || 0)} <span style={{ color: C.inkSoft, fontFamily: monoFont }}>({(driver.rating || 0).toFixed(1)})</span>
-          </div>
+          {driver.rating > 0 && (
+            <div className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>
+              {stars(driver.rating)} <span style={{ color: C.inkSoft, fontFamily: monoFont }}>({driver.rating.toFixed(1)})</span>
+            </div>
+          )}
         </div>
         <button onClick={() => setDriver({ ...driver, online: !driver.online })}
           className="flex items-center gap-2 rounded-full pl-3 pr-1 py-1" style={{ background: driver.online ? C.navy : "#9AA3B0" }}>
