@@ -147,6 +147,33 @@ function estimateDistance(pickup, drop) {
   return 2 + (h % 17);
 }
 
+// Great-circle ("as the crow flies") distance between two coordinates, in km.
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Roads aren't a straight line, so straight-line distance is scaled up by a
+// fixed factor as a stand-in for real road distance — typical for Indian
+// urban/semi-urban road networks. Good enough until this gets replaced by a
+// real routed distance from Google's Distance Matrix API.
+const ROAD_DISTANCE_FACTOR = 1.35;
+
+// Prefers real GPS coordinates (captured via Places Autocomplete, the map
+// picker, or "use current location") over the old text-hash guess — falls
+// back to that guess only when a coordinate is missing, e.g. the customer
+// typed an address by hand without ever picking a suggestion.
+function estimateDistanceKm(pickup, drop, pickupCoords, dropCoords) {
+  if (pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null) {
+    const straightLineKm = haversineKm(pickupCoords.lat, pickupCoords.lng, dropCoords.lat, dropCoords.lng);
+    return Math.max(1, Math.round(straightLineKm * ROAD_DISTANCE_FACTOR));
+  }
+  return estimateDistance(pickup, drop);
+}
+
 // Persists a piece of state to localStorage under `key`, so the app
 // remembers role choice, bookings, wallet balances etc. across reloads.
 function usePersistedState(key, initialValue) {
@@ -1453,7 +1480,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [newMaterialEn, setNewMaterialEn] = useState("");
   const [addingMaterial, setAddingMaterial] = useState(false);
   const [weight, setWeight] = useState("");
-  const distance = estimateDistance(pickup, drop);
+  const distance = estimateDistanceKm(pickup, drop, pickupCoords, dropCoords);
   const [mapField, setMapField] = useState(null); // 'pickup' | 'drop' | null
   const [showBulkyPopup, setShowBulkyPopup] = useState(false);
   const [bulkyPopupSeenFor, setBulkyPopupSeenFor] = useState("");
