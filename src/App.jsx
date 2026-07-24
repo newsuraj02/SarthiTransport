@@ -1501,7 +1501,10 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [showAllVehicles, setShowAllVehicles] = useState(true);
   const [serviceType, setServiceType] = useState("withinCity"); // 'withinCity' | 'outstation'
   const [material, setMaterial] = useState(MATERIALS[0]);
-  const [materialsList, setMaterialsList] = useState(MATERIALS);
+  // The default list plus anything any customer has ever added — synced
+  // live via customMaterials, so a material someone else added shows up
+  // here too instead of staying stuck on just their own device.
+  const materialsList = [...MATERIALS, ...Object.keys(customMaterials || {}).filter((m) => !MATERIALS.includes(m))];
   const [newMaterial, setNewMaterial] = useState("");
   const [addingMaterial, setAddingMaterial] = useState(false);
   const [weight, setWeight] = useState("");
@@ -1745,7 +1748,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
                   <button onClick={() => {
                     const name = newMaterial.trim();
                     if (!name) return;
-                    setMaterialsList((prev) => prev.includes(name) ? prev : [...prev, name]);
                     addCustomMaterial(name, { hi: name, en: name });
                     setMaterial(name); setNewMaterial(""); setAddingMaterial(false);
                   }} className="flex-1 rounded-lg py-2.5 text-xs font-bold text-white" style={{ background: "#A8721C" }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
@@ -2200,7 +2202,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const ongoingTrip = bookings.find((b) => b.status === "Ongoing");
@@ -2319,7 +2321,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
         {activeBooking ? (
           <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang} />
         ) : (
-          <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} />
+          <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial} />
         )}
       </div>
     </>
@@ -4064,8 +4066,10 @@ export default function App() {
   const goHome = () => setRole(null);
   const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
   const [showTerms, setShowTerms] = useState(false);
-  const [customMaterials, setCustomMaterials] = usePersistedState("sarthi_customMaterials", {}); // { hiName: {hi, en} }
-  const addCustomMaterial = (key, labels) => setCustomMaterials((prev) => ({ ...prev, [key]: labels }));
+  // Shared across every customer (like vehicleTypes) so a material one
+  // customer adds gets suggested to everyone else too, instead of staying
+  // stuck on just their own device.
+  const [customMaterials, setCustomMaterials] = useState({}); // { hiName: {hi, en} }
 
   // ---------------------------------------------------------------------
   // Shared pilot state — synced live across every tester's device via
@@ -4096,6 +4100,13 @@ export default function App() {
     seedIfEmpty("vehicleTypes", DEFAULT_VEHICLES, "key").catch((e) => console.error("[seed vehicleTypes]", e));
     return subscribeCollection("vehicleTypes", setVehicleTypesLocal, null);
   }, []);
+  useEffect(() => (firestoreReady
+    ? subscribeCollection("materials", (docs) => {
+        const map = {};
+        docs.forEach((d) => { if (d.hi) map[d.hi] = { hi: d.hi, en: d.en }; });
+        setCustomMaterials(map);
+      }, null)
+    : undefined), []);
   useEffect(() => (firestoreReady ? subscribeCollection("drivers", setDrivers, null) : undefined), []);
   // Only Admin needs the full customer list (profile/address oversight) —
   // gated on role so customer/driver sessions don't pull it for nothing.
@@ -4155,6 +4166,7 @@ export default function App() {
   }, [trialExpired, trialMode]);
 
   const addVehicleType = (v) => createDoc("vehicleTypes", v.key, v).catch((e) => console.error(e));
+  const addCustomMaterial = (name, labels) => createDoc("materials", slugify(name), labels).catch((e) => console.error(e));
 
   // Trip history is just every booking that's been assigned to a driver —
   // no separate collection to keep in sync.
@@ -4374,7 +4386,7 @@ export default function App() {
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
-          <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes}
+          <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} requestReferralWithdrawal={requestReferralWithdrawal} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
             onGoHome={goHome} />
