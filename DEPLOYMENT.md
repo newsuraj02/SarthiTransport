@@ -34,11 +34,13 @@ Either works fine for a static Vite build. Import the repo, set the six `VITE_FI
 
 Location picking, real coordinates, and live GPS tracking need a Google Maps key:
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), pick or create a project and enable **Maps JavaScript API**, **Geocoding API**, and **Places API**. Billing must be on (Google gives a recurring free monthly credit that comfortably covers a pilot).
+1. In [Google Cloud Console](https://console.cloud.google.com/), pick or create a project and enable **Maps JavaScript API**, **Geocoding API**, **Places API**, and **Distance Matrix API**. Billing must be on (Google gives a recurring free monthly credit that comfortably covers a pilot).
 2. Create an API key (APIs & Services → Credentials), then restrict it to **HTTP referrers** matching your deployed domain (e.g. `https://sarthi-transport-74865.web.app/*`) so it can't be used elsewhere.
 3. Put it in `VITE_GOOGLE_MAPS_API_KEY`.
 
 Without this key the app still works — it falls back to a free OpenStreetMap-based picker and the old animated map for tracking — but location picking won't have search/autocomplete and live GPS tracking won't render on a real map.
+
+Distance Matrix API specifically powers the "Estimated distance" shown when booking a load — with it enabled, that number is the real routed driving distance between pickup and drop; without it (or if the call fails), the app falls back to a straight-line-distance approximation, then to a rough guess if coordinates aren't available at all.
 
 ## Phone login (real SMS OTP)
 

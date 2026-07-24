@@ -174,6 +174,32 @@ function estimateDistanceKm(pickup, drop, pickupCoords, dropCoords) {
   return estimateDistance(pickup, drop);
 }
 
+// Real routed driving distance from Google's Distance Matrix Service (part
+// of the core Maps JavaScript API — no extra `libraries` entry needed,
+// unlike Places). Resolves in km, or rejects if Maps isn't loaded, the
+// request fails, or no route is found — callers should keep whatever
+// straight-line estimate they already showed as the fallback.
+function fetchRoadDistanceKm(pickupCoords, dropCoords) {
+  return new Promise((resolve, reject) => {
+    if (!window.google?.maps?.DistanceMatrixService) { reject(new Error("Distance Matrix not loaded")); return; }
+    const service = new window.google.maps.DistanceMatrixService();
+    service.getDistanceMatrix(
+      {
+        origins: [pickupCoords],
+        destinations: [dropCoords],
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        unitSystem: window.google.maps.UnitSystem.METRIC,
+      },
+      (response, status) => {
+        if (status !== "OK") { reject(new Error(status)); return; }
+        const el = response?.rows?.[0]?.elements?.[0];
+        if (!el || el.status !== "OK") { reject(new Error(el?.status || "no result")); return; }
+        resolve(el.distance.value / 1000);
+      }
+    );
+  });
+}
+
 // Persists a piece of state to localStorage under `key`, so the app
 // remembers role choice, bookings, wallet balances etc. across reloads.
 function usePersistedState(key, initialValue) {
@@ -1480,12 +1506,30 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [newMaterialEn, setNewMaterialEn] = useState("");
   const [addingMaterial, setAddingMaterial] = useState(false);
   const [weight, setWeight] = useState("");
-  const distance = estimateDistanceKm(pickup, drop, pickupCoords, dropCoords);
+  const [distance, setDistance] = useState(null);
   const [mapField, setMapField] = useState(null); // 'pickup' | 'drop' | null
   const [showBulkyPopup, setShowBulkyPopup] = useState(false);
   const [bulkyPopupSeenFor, setBulkyPopupSeenFor] = useState("");
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
+
+  // Shows the straight-line estimate immediately (no blank/loading state),
+  // then silently upgrades to the real routed distance from Google's
+  // Distance Matrix once it resolves — keeping the straight-line number if
+  // that call fails or Maps isn't configured at all.
+  const distanceRequestRef = useRef(0);
+  useEffect(() => {
+    setDistance(estimateDistanceKm(pickup, drop, pickupCoords, dropCoords));
+    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
+    if (!hasBothCoords || !mapsReady) return;
+    const requestId = ++distanceRequestRef.current;
+    fetchRoadDistanceKm(pickupCoords, dropCoords)
+      .then((km) => {
+        if (distanceRequestRef.current === requestId) setDistance(Math.max(1, Math.round(km)));
+      })
+      .catch((e) => console.error("[distance matrix]", e));
+  }, [pickup, drop, pickupCoords, dropCoords, mapsReady]);
+
   const pickupAutocompleteRef = useRef(null);
   const dropAutocompleteRef = useRef(null);
   const onPickupPlaceChanged = () => {
