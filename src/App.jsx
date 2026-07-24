@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye,
+  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye, EyeOff,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, seedIfEmpty,
@@ -823,6 +823,7 @@ function AdminLogin({ onVerified, lang, onBack }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const inputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -865,8 +866,14 @@ function AdminLogin({ onVerified, lang, onBack }) {
       <div className="w-full space-y-3">
         <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Admin email / ID" : "एडमिन ईमेल / आईडी"} value={email}
           onChange={(e) => { setEmail(e.target.value); setError(false); }} />
-        <input type="password" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Password" : "पासवर्ड"} value={password}
-          onChange={(e) => { setPassword(e.target.value); setError(false); }} />
+        <div className="relative">
+          <input type={showPassword ? "text" : "password"} className={inputCls} style={{ ...inputStyle, paddingRight: 40 }} placeholder={lang === "en" ? "Password" : "पासवर्ड"} value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(false); }} />
+          <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute top-1/2 -translate-y-1/2 right-3" style={{ color: C.inkSoft }}
+            aria-label={lang === "en" ? (showPassword ? "Hide password" : "Show password") : (showPassword ? "पासवर्ड छुपाएं" : "पासवर्ड दिखाएं")}>
+            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
         {error && (
           <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>
             {lang === "en" ? "Incorrect email or password" : "ईमेल या पासवर्ड गलत है"}
