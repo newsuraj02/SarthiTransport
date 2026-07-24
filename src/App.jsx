@@ -1728,10 +1728,12 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         </div>
 
         {distance !== null && (
-          <div className="rounded-lg p-2.5 flex items-center gap-2" style={{ background: "#F5E6C8" }}>
-            <Navigation size={14} color="#A8721C" />
-            <span className="text-xs font-semibold" style={{ color: "#A8721C" }}>{lang === "en" ? "Estimated distance" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : "किमी"}</span>
-            <span className="text-[10px]" style={{ color: C.inkSoft }}>— {lang === "en" ? "this helps both customer and driver decide a fair price" : "इससे कस्टमर और ड्राइवर दोनों को सही बोली तय करने में आसानी होगी"}</span>
+          <div className="rounded-lg p-2.5" style={{ background: "#F5E6C8" }}>
+            <div className="flex items-center gap-2">
+              <Navigation size={16} color="#A8721C" />
+              <span className="text-sm font-semibold" style={{ color: "#A8721C" }}>{lang === "en" ? "Estimated distance" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : "किमी"}</span>
+            </div>
+            <div className="text-xs mt-1" style={{ color: C.inkSoft }}>— {lang === "en" ? "this helps both customer and driver decide a fair price" : "इससे कस्टमर और ड्राइवर दोनों को सही बोली तय करने में आसानी होगी"}</div>
           </div>
         )}
 
