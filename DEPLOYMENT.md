@@ -109,6 +109,53 @@ That's it — no Firestore rules changes needed. In the app, customers/drivers s
 
 Until steps 1-4 are done, that banner still shows and the button still runs — it just won't have a working Cloud Function to actually deliver pushes, so nothing will arrive. No error, just silence, so it's safe to deploy this code before finishing the Console setup.
 
+## Wiping all driver/customer data (reset before/after a pilot)
+
+`scripts/wipeUserData.js` permanently deletes everything tied to drivers and
+customers, while leaving your admin settings and config lists alone. Exact
+scope:
+
+- **Deletes** (entire Firestore collections): `drivers`, `customers`,
+  `bookings` (which includes all bids/quotes, since those live inside
+  booking docs), `withdrawals`, `rechargeRequests`, `alerts`.
+- **Also deletes** (Storage): every file under `drivers/` and `customers/`
+  — KYC documents, vehicle photos, profile photos. Pass `--skip-storage` if
+  you'd rather keep those and only clear Firestore.
+- **Leaves untouched**: the `settings/main` doc (commission %, bonus %,
+  minimum wallet, trial mode, trial start date), the `vehicleTypes`
+  collection, and the `materials` collection.
+
+This is **irreversible** — there's no undo once it runs. Run it from your
+own machine, never from a shared/public one, since it uses a service
+account key with full admin access to your project.
+
+```bash
+# One-time: get a service account key
+# Firebase Console -> gear icon -> Project Settings -> Service accounts
+# -> "Generate new private key" -> saves a .json file. Keep it outside
+# the repo (or in the repo root — it's already git-ignored by pattern).
+
+cd scripts
+npm install
+
+# Dry run first — shows counts, deletes nothing:
+node wipeUserData.js /path/to/serviceAccountKey.json sarthi-transport-74865.appspot.com --dry-run
+
+# For real — you'll be asked to type DELETE to confirm:
+node wipeUserData.js /path/to/serviceAccountKey.json sarthi-transport-74865.appspot.com
+```
+
+(Swap in your actual downloaded key's path and your actual Storage bucket
+name — found at the top of Firebase Console → Storage, or as
+`VITE_FIREBASE_STORAGE_BUCKET` in your `.env.local`.)
+
+Prefer not to run a script at all? For a pilot-sized dataset it's just as
+fine to do it by hand: Firebase Console → **Firestore Database** → open
+each of the six collections listed above → select all documents → Delete.
+Then **Storage** → open the `drivers/` and `customers/` folders → select
+all → Delete. Leave `settings`, `vehicleTypes`, and `materials` alone
+either way.
+
 ## Important: don't deploy via a sandboxed "Artifact" preview
 
 An Artifact-style preview page blocks all outbound network requests, so it **cannot** reach Firestore — the app would fall back to solo/local behavior and testers wouldn't see each other's data. Use Option A or B above for the actual pilot link.
