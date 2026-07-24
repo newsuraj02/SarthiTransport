@@ -828,9 +828,21 @@ function AdminLogin({ onVerified, lang, onBack }) {
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   const submit = () => {
-    const validEmail = import.meta.env.VITE_ADMIN_EMAIL || "";
-    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD || "";
-    if (validEmail && validPassword && email.trim().toLowerCase() === validEmail.toLowerCase() && password === validPassword) {
+    // Up to 4 separate admin logins (VITE_ADMIN_EMAIL/_2/_3/_4, each with
+    // its own matching password) — every configured slot is checked, so
+    // several people can each use their own real credentials instead of
+    // sharing one login.
+    const slots = [
+      [import.meta.env.VITE_ADMIN_EMAIL, import.meta.env.VITE_ADMIN_PASSWORD],
+      [import.meta.env.VITE_ADMIN_EMAIL_2, import.meta.env.VITE_ADMIN_PASSWORD_2],
+      [import.meta.env.VITE_ADMIN_EMAIL_3, import.meta.env.VITE_ADMIN_PASSWORD_3],
+      [import.meta.env.VITE_ADMIN_EMAIL_4, import.meta.env.VITE_ADMIN_PASSWORD_4],
+    ];
+    const enteredEmail = email.trim().toLowerCase();
+    const matched = slots.some(([validEmail, validPassword]) =>
+      validEmail && validPassword && enteredEmail === validEmail.toLowerCase() && password === validPassword
+    );
+    if (matched) {
       onVerified();
     } else {
       setError(true);

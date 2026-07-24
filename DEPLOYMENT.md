@@ -73,6 +73,19 @@ VITE_ADMIN_PASSWORD=pick-something-real
 
 Pick any values you want — they're not validated against anything external, just compared directly against what you type on the Admin Login screen. Since `.env.local` is git-ignored, these never end up in the repo. If either variable is left blank, Admin login is disabled entirely (login always fails) rather than falling back to any default — that's intentional, so a forgotten setup step doesn't quietly leave a public demo password active.
 
+**Adding more admins**: up to 4 separate logins are supported — fill in the numbered pairs for each additional person, all in the same `.env.local`:
+
+```
+VITE_ADMIN_EMAIL_2=second-admin@example.com
+VITE_ADMIN_PASSWORD_2=their-own-password
+VITE_ADMIN_EMAIL_3=third-admin@example.com
+VITE_ADMIN_PASSWORD_3=their-own-password
+VITE_ADMIN_EMAIL_4=fourth-admin@example.com
+VITE_ADMIN_PASSWORD_4=their-own-password
+```
+
+Each person logs in with their own email/password — any configured pair works. Leave a pair blank to leave that slot unused. Since this is checked client-side rather than against a real user database, there's no per-admin audit trail (no record of *which* admin took an action) — just separate logins for convenience/access control, not accountability.
+
 Note: this is still a client-side password check baked into the deployed JS bundle, not a real server-verified login — anyone who inspects the built app's source could technically find it. That's an acceptable tradeoff for a small pilot's Admin Portal, same as the wide-open Firestore/Storage rules noted elsewhere in this doc — not something to rely on for a public launch.
 
 ## Push notifications (ride updates)
