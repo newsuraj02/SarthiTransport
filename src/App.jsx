@@ -368,7 +368,7 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
 // plus the driver's live GPS marker. Falls back to the fake MockMap when
 // Google Maps isn't configured/loaded yet, or this booking has no real
 // coordinates (e.g. it was posted before Maps was set up).
-function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng, driverLocation, progress, zoneColor, height = 150, lang = "hi" }) {
+function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng, driverLocation, customerLocation, progress, zoneColor, height = 150, lang = "hi" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const hasCoords = pickupLat != null && pickupLng != null && dropLat != null && dropLng != null;
   if (!hasKey || !isLoaded || !hasCoords) {
@@ -377,6 +377,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   const pickupPos = { lat: pickupLat, lng: pickupLng };
   const dropPos = { lat: dropLat, lng: dropLng };
   const driverPos = driverLocation?.lat != null && driverLocation?.lng != null ? { lat: driverLocation.lat, lng: driverLocation.lng } : null;
+  const customerPos = customerLocation?.lat != null && customerLocation?.lng != null ? { lat: customerLocation.lat, lng: customerLocation.lng } : null;
   return (
     <div className="relative rounded-lg overflow-hidden" style={{ height, border: `1px solid ${C.line}` }}>
       <GoogleMap
@@ -386,6 +387,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
           bounds.extend(pickupPos);
           bounds.extend(dropPos);
           if (driverPos) bounds.extend(driverPos);
+          if (customerPos) bounds.extend(customerPos);
           map.fitBounds(bounds, 28);
         }}
         options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, gestureHandling: "greedy" }}
@@ -396,13 +398,30 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
         {driverPos && (
           <MarkerF
             position={driverPos}
+            label={{ text: "🚚", fontSize: "14px" }}
             icon={{
               path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 8,
+              scale: 14,
               fillColor: C.navy,
               fillOpacity: 1,
               strokeColor: "#fff",
               strokeWeight: 2,
+              labelOrigin: new window.google.maps.Point(0, 0),
+            }}
+          />
+        )}
+        {customerPos && (
+          <MarkerF
+            position={customerPos}
+            label={{ text: "🧍", fontSize: "14px" }}
+            icon={{
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 14,
+              fillColor: C.success,
+              fillOpacity: 1,
+              strokeColor: "#fff",
+              strokeWeight: 2,
+              labelOrigin: new window.google.maps.Point(0, 0),
             }}
           />
         )}
@@ -2008,7 +2027,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       )}
 
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng} driverLocation={b.driverLocation} progress={b.progress} zoneColor={C.pimpri} height={130} lang={lang} />
+        <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng} driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height={130} lang={lang} />
         <div className="w-full h-1.5 rounded-full mt-2" style={{ background: C.line }}>
           <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
         </div>
@@ -2213,6 +2232,26 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
   const rideNotifications = useRideNotifications("customers", customerMobile, lang);
 
+  // Real GPS live-tracking, mirroring the driver's own — shares the
+  // customer's actual device location while a trip is Ongoing, so the
+  // driver (and the customer's own map) can see both parties together.
+  const lastCustomerGpsWriteRef = useRef(0);
+  useEffect(() => {
+    if (!ongoingTrip || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastCustomerGpsWriteRef.current < 5000) return;
+        lastCustomerGpsWriteRef.current = now;
+        const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
+        patchDoc("bookings", ongoingTrip.id, { customerLocation: location }).catch((e) => console.error(e));
+      },
+      (err) => console.error("GPS tracking error", err),
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [ongoingTrip?.id]);
+
   const shareApp = () => {
     // Referral reward applies from day one (not gated by trial mode) — the
     // link carries this customer's own mobile number as their referral
@@ -2240,7 +2279,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
             {ongoingTrip ? (
               <>
-                <LiveTrackingMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} pickupLat={ongoingTrip.pickupLat} pickupLng={ongoingTrip.pickupLng} dropLat={ongoingTrip.dropLat} dropLng={ongoingTrip.dropLng} driverLocation={ongoingTrip.driverLocation} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
+                <LiveTrackingMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} pickupLat={ongoingTrip.pickupLat} pickupLng={ongoingTrip.pickupLng} dropLat={ongoingTrip.dropLat} dropLng={ongoingTrip.dropLng} driverLocation={ongoingTrip.driverLocation} customerLocation={ongoingTrip.customerLocation} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
                 <div className="text-xs mt-2" style={{ color: C.ink }}>{ongoingTrip.pickup} → {ongoingTrip.drop}</div>
                 <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ongoingTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>
@@ -2538,6 +2577,10 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
 
   return (
     <div className="mt-3">
+      <div className="mb-3" style={{ height: "35vh" }}>
+        <LiveTrackingMap pickup={trip.pickup} drop={trip.drop} pickupLat={trip.pickupLat} pickupLng={trip.pickupLng} dropLat={trip.dropLat} dropLng={trip.dropLng}
+          driverLocation={trip.driverLocation} customerLocation={trip.customerLocation} progress={trip.progress} zoneColor={C.pimpri} height="100%" lang={lang} />
+      </div>
       <div className="rounded-lg p-3" style={{ background: C.navy }}>
         {trip.hours ? (
           <>
@@ -2561,10 +2604,7 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
           </div>
         )}
       </div>
-      <button onClick={() => startLoading(trip.id, -3600000)} className="w-full text-center text-[11px] font-semibold py-2" style={{ color: C.inkSoft }}>
-        {lang === "en" ? "+ Advance 1 hour (test)" : "+ 1 घंटा आगे बढ़ाएं (टेस्ट)"}
-      </button>
-      <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: C.success }}>
+      <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white mt-3" style={{ background: C.success }}>
         {lang === "en" ? "End Trip — Complete Trip" : "एंड ट्रिप — ट्रिप पूरी करें"} {clock.extraCharge > 0 ? `(+${fmt(clock.extraCharge)})` : ""}
       </button>
     </div>
@@ -2672,7 +2712,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           </div>
 
           <div className="rounded-2xl p-3 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
+            <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
             <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
           </div>
 
@@ -3160,7 +3200,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
             {myTrip ? (
               <>
-                <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
+                <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
                 <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
                 <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{myTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>

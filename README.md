@@ -26,7 +26,7 @@ Customer and driver login send a real SMS OTP via Firebase Phone Authentication 
 
 Location picking (search + tap-to-pin), real pickup/drop coordinates, and live trip tracking use the Google Maps JavaScript/Places/Geocoding APIs, loaded via `VITE_GOOGLE_MAPS_API_KEY` (see `DEPLOYMENT.md` → "Google Maps" for how to get one). Without a key configured, the app automatically falls back to a free OpenStreetMap-based picker and a stylized animated map — booking still works, just without search/autocomplete or a real live map.
 
-While a trip is "Ongoing", the assigned driver's browser shares their real GPS position (`navigator.geolocation.watchPosition`, throttled to one write every ~5s) to that booking's `driverLocation` field and to their own driver doc's `lastKnownLocation` — both the customer's live tracking view and admin's fleet map read from there.
+While a trip is "Ongoing", both sides share their real GPS position the same way (`navigator.geolocation.watchPosition`, throttled to one write every ~5s): the driver's browser writes to that booking's `driverLocation` field (and their own driver doc's `lastKnownLocation`, which admin's fleet map reads from), and the customer's browser writes to the same booking's `customerLocation` field. `LiveTrackingMap` renders both as separate markers (🚚 driver, 🧍 customer) alongside the pickup/drop pins.
 
 ### Known limitations for a pilot (not a public launch)
 
