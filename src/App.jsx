@@ -1976,9 +1976,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         </div>
       </div>
 
-      <div className="rounded-2xl p-3 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Navigation size={15} /> {lang === "en" ? "Live Tracking" : "लाइव ट्रैकिंग"} <Activity size={14} /></span>
-        <span className="text-xs font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-xs font-mono mb-1.5" style={{ color: C.inkSoft }}>{b.id}</div>
+        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "From" : "से"}: </span><span className="text-base font-extrabold">{b.pickup}</span></div>
+        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "To" : "तक"}: </span><span className="text-base font-extrabold">{b.drop}</span></div>
       </div>
 
       <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -2027,8 +2028,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       )}
 
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng} driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height={130} lang={lang} />
-        <div className="w-full h-1.5 rounded-full mt-2" style={{ background: C.line }}>
+        <div className="w-full h-1.5 rounded-full" style={{ background: C.line }}>
           <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
         </div>
         <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle location" : "गाड़ी की लोकेशन"} — {b.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
@@ -2707,13 +2707,9 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
             <span className="text-xs font-mono" style={{ color: C.inkSoft }}>{myTrip.id}</span>
           </div>
 
-          <div className="rounded-2xl p-3 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Navigation size={15} /> {lang === "en" ? "Live Tracking" : "लाइव ट्रैकिंग"} <Activity size={14} /></span>
-          </div>
-
-          <div className="rounded-2xl p-3 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={130} lang={lang} />
-            <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
+          <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "From" : "से"}: </span><span className="text-base font-extrabold">{myTrip.pickup}</span></div>
+            <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "To" : "तक"}: </span><span className="text-base font-extrabold">{myTrip.drop}</span></div>
           </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
