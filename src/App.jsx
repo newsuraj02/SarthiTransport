@@ -1520,22 +1520,8 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, bookings, lang, customMaterials, addCustomMaterial }) {
+function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial }) {
   const VEHICLES = vehicleTypes;
-  // Up to 3 distinct past routes (not just the single most recent booking)
-  // as quick-tap suggestions — bookings is already newest-first, so this
-  // naturally surfaces the customer's most recently-used routes.
-  const suggestedTrips = [];
-  {
-    const seenRoutes = new Set();
-    for (const b of bookings || []) {
-      const key = `${b.pickup}|${b.drop}`;
-      if (seenRoutes.has(key)) continue;
-      seenRoutes.add(key);
-      suggestedTrips.push(b);
-      if (suggestedTrips.length >= 3) break;
-    }
-  }
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -1723,23 +1709,22 @@ function CustomerBooking({ createLoad, vehicleTypes, bookings, lang, customMater
           </select>
         </div>
 
-        {suggestedTrips.length > 0 && !pickup && !drop && (
-          <div>
-            <div className="text-[10px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Suggested trips" : "सुझाई गई ट्रिप्स"}</div>
-            <div className="flex flex-wrap gap-1.5">
-              {suggestedTrips.map((t) => (
-                <button key={t.id} onClick={() => {
-                  setPickup(t.pickup); setDrop(t.drop); setMaterial(t.material);
-                  setPickupCoords(t.pickupLat != null && t.pickupLng != null ? { lat: t.pickupLat, lng: t.pickupLng } : null);
-                  setDropCoords(t.dropLat != null && t.dropLng != null ? { lat: t.dropLat, lng: t.dropLng } : null);
-                }}
-                  className="flex items-center gap-1.5 rounded-full pl-2 pr-3 py-1.5 text-left" style={{ background: "#DFEEE2", maxWidth: "100%" }}>
-                  <Package size={12} color={C.success} className="shrink-0" />
-                  <span className="text-[10px] font-semibold truncate" style={{ color: C.success }}>{t.pickup} → {t.drop}</span>
-                </button>
-              ))}
+        {lastBooking && !pickup && !drop && (
+          <button onClick={() => {
+            setPickup(lastBooking.pickup); setDrop(lastBooking.drop); setMaterial(lastBooking.material);
+            setPickupCoords(lastBooking.pickupLat != null && lastBooking.pickupLng != null ? { lat: lastBooking.pickupLat, lng: lastBooking.pickupLng } : null);
+            setDropCoords(lastBooking.dropLat != null && lastBooking.dropLng != null ? { lat: lastBooking.dropLat, lng: lastBooking.dropLng } : null);
+          }}
+            className="w-full flex items-center gap-2.5 rounded-lg p-2.5 text-left" style={{ background: "#DFEEE2" }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: C.success }}>
+              <Package size={15} color="#fff" />
             </div>
-          </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-bold" style={{ color: C.success }}>{lang === "en" ? "Repeat last trip" : "पिछली ट्रिप दोहराएं"}</div>
+              <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{lastBooking.pickup} → {lastBooking.drop}</div>
+            </div>
+            <span className="text-[10px] font-bold shrink-0" style={{ color: C.success }}>{lang === "en" ? "Tap →" : "टैप करें →"}</span>
+          </button>
         )}
         <div className="space-y-4">
           <LocationField
@@ -2388,7 +2373,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         {activeBooking ? (
           <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang} />
         ) : (
-          <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} bookings={bookings} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial} />
+          <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial} />
         )}
       </div>
     </>
