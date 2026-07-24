@@ -1447,8 +1447,8 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
   // Icon cluster (map-pin, optional current-location, mic) sits inside the
   // bar at the right edge, so the field itself can span the full width —
   // right padding reserves room for it instead of separate outside buttons.
-  const rightPad = onUseCurrentLocation ? 108 : 76;
-  const inputCls = "w-full rounded-lg pl-3 py-2.5 text-sm outline-none";
+  const rightPad = onUseCurrentLocation ? 132 : 92;
+  const inputCls = "w-full rounded-lg pl-4 py-4 text-base font-semibold outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, paddingRight: rightPad };
   const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
   return (
@@ -1460,16 +1460,16 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
             {inputEl}
           </Autocomplete>
         ) : inputEl}
-        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          <button type="button" onClick={onMapPin} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 28, height: 28, background: "#F5E6C8" }}>
-            <MapPin size={13} color="#A8721C" />
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+          <button type="button" onClick={onMapPin} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 34, height: 34, background: "#F5E6C8" }}>
+            <MapPin size={16} color="#A8721C" />
           </button>
           {onUseCurrentLocation && (
-            <button type="button" onClick={onUseCurrentLocation} disabled={locating} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 28, height: 28, background: "#DFEEE2" }}>
-              <Navigation size={13} color={C.success} />
+            <button type="button" onClick={onUseCurrentLocation} disabled={locating} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 34, height: 34, background: "#DFEEE2" }}>
+              <Navigation size={16} color={C.success} />
             </button>
           )}
-          <MicButton onResult={onMic} size={7} iconSize={13} />
+          <MicButton onResult={onMic} size={8.5} iconSize={16} />
         </div>
       </div>
       {areaLabel ? (
@@ -1668,7 +1668,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             </div>
           </div>
         )}
-        <div className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 1 — Service Type" : "स्टेप 1 — सर्विस टाइप"}</div>
         <div>
           <select className={inputCls} style={inputStyle} value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
             <option value="withinCity">{lang === "en" ? "Within City" : "शहर के अंदर"}</option>
@@ -1693,7 +1692,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <span className="text-[10px] font-bold shrink-0" style={{ color: C.success }}>{lang === "en" ? "Tap →" : "टैप करें →"}</span>
           </button>
         )}
-        <div className="text-[11px] font-bold pt-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Pickup & Drop" : "स्टेप 2 — पिकअप और ड्रॉप"}</div>
         <div className="space-y-4">
           <LocationField
             label={lang === "en" ? "Pickup" : "पिकअप"}
@@ -1737,7 +1735,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </div>
         )}
 
-        <div className="text-[11px] font-bold pt-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 3 — Load Details" : "स्टेप 3 — सामान की जानकारी"}</div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
@@ -1794,11 +1791,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             </div>
           );
         })()}
-
-        <div className="rounded-lg p-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
-          <IndianRupee size={16} color={C.marigoldDeep} />
-          <span className="text-[11px]" style={{ color: C.marigoldDeep }}>{lang === "en" ? "There's no fixed fare here — after posting, driver quotes will show up in \"My Rides\"." : "यहाँ कोई फिक्स भाड़ा नहीं है — पोस्ट करने के बाद ड्राइवरों की बोलियां \"मेरी राइड्स\" में दिखेंगी।"}</span>
-        </div>
 
         <button onClick={post} disabled={!canPost} className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2"
           style={{ background: canPost ? C.marigold : C.line, color: canPost ? C.navy : "#9AA3B0" }}>
