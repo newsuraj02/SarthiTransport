@@ -2368,7 +2368,10 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         <span className="text-xs font-bold flex items-center gap-1" style={{ color: myBid ? C.success : C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}</span>
         {myBid && <span className="text-[10px] font-bold flex items-center gap-1" style={{ color: C.success }}><CheckCircle2 size={12} /> {lang === "en" ? "Bid sent" : "बोली भेजी"}</span>}
       </div>
-      <div className="text-base font-extrabold mb-2" style={{ color: C.ink }}>{load.pickup} → {load.drop}</div>
+      <div className="mb-2">
+        <div className="text-base font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "From" : "से"}: {load.pickup}</div>
+        <div className="text-base font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "To" : "तक"}: {load.drop}</div>
+      </div>
       {/* Status-bar row: the key facts as scannable pills instead of a sentence. */}
       <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
         <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
