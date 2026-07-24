@@ -2331,9 +2331,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
 // =====================================================================
 // DRIVER APP
 // =====================================================================
-function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang, commissionPct = 0, minWallet = 0, trialMode = false }) {
-  const VEHICLES = vehicleTypes;
-  const v = VEHICLES.find((x) => x.key === load.vehicle);
+function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWallet = 0, trialMode = false }) {
   const myBid = load.bids.find((b) => b.driverName === driver.name);
   const [amount, setAmount] = useState("");
   const [allowedHours, setAllowedHours] = useState("");
@@ -2370,15 +2368,14 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang, commissionPct
         <span className="text-xs font-bold flex items-center gap-1" style={{ color: myBid ? C.success : C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}</span>
         {myBid && <span className="text-[10px] font-bold flex items-center gap-1" style={{ color: C.success }}><CheckCircle2 size={12} /> {lang === "en" ? "Bid sent" : "बोली भेजी"}</span>}
       </div>
-      <div className="text-xs mb-1.5 truncate" style={{ color: C.ink }} title={`${load.pickup} → ${load.drop}`}>{load.pickup} → {load.drop}</div>
+      <div className="text-base font-extrabold mb-2" style={{ color: C.ink }}>{load.pickup} → {load.drop}</div>
       {/* Status-bar row: the key facts as scannable pills instead of a sentence. */}
       <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{vehicleLabel(v, lang)}</span>
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{materialLabel(load.material, lang)} · {load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
-        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: load.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: load.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(load.serviceType, lang)}</span>
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{materialLabel(load.material, lang)} · {load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+        <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ background: load.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: load.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(load.serviceType, lang)}</span>
         {load.scheduledFor && (
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ background: "#FBEBD2", color: "#A8721C" }}><Clock3 size={9} /> {load.scheduledFor}</span>
+          <span className="text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1" style={{ background: "#FBEBD2", color: "#A8721C" }}><Clock3 size={10} /> {load.scheduledFor}</span>
         )}
       </div>
 
@@ -2408,15 +2405,6 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang, commissionPct
       ) : (
         <>
           <div className="text-sm font-extrabold mb-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
-          {v?.rate && (
-            <button onClick={() => setAmount(String(Math.round((load.distance * v.rate) / 10) * 10))}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 mb-2" style={{ background: "#F5E6C8" }}>
-              <IndianRupee size={11} color="#A8721C" />
-              <span className="text-[11px] font-semibold" style={{ color: "#A8721C" }}>
-                {lang === "en" ? `Suggested: ₹${Math.round((load.distance * v.rate) / 10) * 10} (tap to fill)` : `सुझाव: ₹${Math.round((load.distance * v.rate) / 10) * 10} (टैप करके भरें)`}
-              </span>
-            </button>
-          )}
           <div className="rounded-lg overflow-hidden mb-2" style={{ border: `2px solid ${C.marigoldDeep}` }}>
             <div className="grid grid-cols-3" style={{ background: "#FBEBD2" }}>
               <div className="px-1.5 py-1.5 text-center" style={{ borderRight: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
@@ -2723,7 +2711,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
             <>
               <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</div>
               {openLoads.map((load) => (
-                <LoadAlertCard key={load.id} load={load} vehicleTypes={vehicleTypes} driver={driver} addBid={addBid} lang={lang}
+                <LoadAlertCard key={load.id} load={load} driver={driver} addBid={addBid} lang={lang}
                   commissionPct={commissionPct} minWallet={minWallet} trialMode={trialMode} />
               ))}
             </>
