@@ -62,6 +62,19 @@ Profile photos, KYC documents, and vehicle photos upload to Firebase Storage (no
 
 Until this is done, photo uploads automatically fall back to the old inline-in-Firestore behavior, so the app keeps working — but do this before real testers start uploading KYC documents.
 
+## Admin login
+
+The Admin Portal (`?admin=1`) used to accept any email with the hardcoded password `admin123` — that's gone now. Set your own real credentials in `.env.local`:
+
+```
+VITE_ADMIN_EMAIL=you@example.com
+VITE_ADMIN_PASSWORD=pick-something-real
+```
+
+Pick any values you want — they're not validated against anything external, just compared directly against what you type on the Admin Login screen. Since `.env.local` is git-ignored, these never end up in the repo. If either variable is left blank, Admin login is disabled entirely (login always fails) rather than falling back to any default — that's intentional, so a forgotten setup step doesn't quietly leave a public demo password active.
+
+Note: this is still a client-side password check baked into the deployed JS bundle, not a real server-verified login — anyone who inspects the built app's source could technically find it. That's an acceptable tradeoff for a small pilot's Admin Portal, same as the wide-open Firestore/Storage rules noted elsewhere in this doc — not something to rely on for a public launch.
+
 ## Push notifications (ride updates)
 
 Customers get a real push when a driver bids/accepts their load or completes the trip; drivers get one the moment their bid is accepted — even if the browser tab isn't open. One-time setup:

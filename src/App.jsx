@@ -828,7 +828,9 @@ function AdminLogin({ onVerified, lang, onBack }) {
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   const submit = () => {
-    if (email.trim() && password === "admin123") {
+    const validEmail = import.meta.env.VITE_ADMIN_EMAIL || "";
+    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD || "";
+    if (validEmail && validPassword && email.trim().toLowerCase() === validEmail.toLowerCase() && password === validPassword) {
       onVerified();
     } else {
       setError(true);
@@ -853,7 +855,6 @@ function AdminLogin({ onVerified, lang, onBack }) {
           onChange={(e) => { setEmail(e.target.value); setError(false); }} />
         <input type="password" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Password" : "पासवर्ड"} value={password}
           onChange={(e) => { setPassword(e.target.value); setError(false); }} />
-        <div className="text-[11px] text-center" style={{ color: C.inkSoft }}>{lang === "en" ? "Demo password: admin123" : "डेमो पासवर्ड: admin123"}</div>
         {error && (
           <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>
             {lang === "en" ? "Incorrect email or password" : "ईमेल या पासवर्ड गलत है"}
