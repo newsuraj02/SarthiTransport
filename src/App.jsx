@@ -2365,15 +2365,21 @@ function LoadAlertCard({ load, vehicleTypes, driver, addBid, lang, commissionPct
   const boxStyle = { border: `1px solid ${C.line}`, background: C.paper };
 
   return (
-    <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: justSubmitted ? "#DFEEE2" : C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}</span>
-        <span className="text-[10px]" style={{ color: C.inkSoft }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
+    <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: justSubmitted ? "#DFEEE2" : C.paper, border: `2px solid ${justSubmitted ? C.success : myBid ? C.success : C.marigoldDeep}` }}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-bold flex items-center gap-1" style={{ color: myBid ? C.success : C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}</span>
+        {myBid && <span className="text-[10px] font-bold flex items-center gap-1" style={{ color: C.success }}><CheckCircle2 size={12} /> {lang === "en" ? "Bid sent" : "बोली भेजी"}</span>}
       </div>
-      <div className="text-xs mb-0.5" style={{ color: C.ink }}>{load.pickup} → {load.drop}</div>
-      <div className="text-[11px] mb-1 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
-        {vehicleLabel(v, lang)} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}
+      <div className="text-xs mb-1.5 truncate" style={{ color: C.ink }} title={`${load.pickup} → ${load.drop}`}>{load.pickup} → {load.drop}</div>
+      {/* Status-bar row: the key facts as scannable pills instead of a sentence. */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{vehicleLabel(v, lang)}</span>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{materialLabel(load.material, lang)} · {load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: load.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: load.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(load.serviceType, lang)}</span>
+        {load.scheduledFor && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ background: "#FBEBD2", color: "#A8721C" }}><Clock3 size={9} /> {load.scheduledFor}</span>
+        )}
       </div>
 
       {lowestOverall !== null && (
@@ -2574,45 +2580,8 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
   );
 }
 
-function LoadSummaryCard({ load, vehicleTypes, driver, onOpen, lang }) {
-  const VEHICLES = vehicleTypes;
-  const v = VEHICLES.find((x) => x.key === load.vehicle);
-  const myBid = load.bids.find((b) => b.driverName === driver.name);
-  return (
-    <button onClick={onOpen} className="w-full text-left rounded-xl p-3 mb-3"
-      style={{ background: C.paper, border: `1.5px solid ${myBid ? C.success : C.marigoldDeep}` }}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-bold flex items-center gap-1" style={{ color: myBid ? C.success : C.marigoldDeep }}>
-          <Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}
-        </span>
-        <span className="text-[10px]" style={{ color: C.inkSoft }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
-      </div>
-      <div className="text-xs mb-0.5" style={{ color: C.ink }}>{load.pickup} → {load.drop}</div>
-      <div className="text-[11px] mb-2 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
-        {vehicleLabel(v, lang)} · {materialLabel(load.material, lang)} · {load.weight} {lang === "en" ? "kg" : "किग्रा"}
-        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: load.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: load.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(load.serviceType, lang)}</span>
-      </div>
-      {load.scheduledFor && (
-        <div className="text-[10px] font-semibold mb-2 flex items-center gap-1" style={{ color: "#A8721C" }}>
-          <Clock3 size={11} /> {lang === "en" ? "Scheduled" : "शेड्यूल"}: {load.scheduledFor}
-        </div>
-      )}
-      {myBid ? (
-        <div className="text-[11px] font-bold flex items-center gap-1" style={{ color: C.success }}>
-          <CheckCircle2 size={13} /> {lang === "en" ? "Your bid sent" : "आपकी बोली भेजी गई"}: {fmt(myBid.amount)}
-        </div>
-      ) : (
-        <div className="text-[11px] font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}>
-          {lang === "en" ? "Tap to enter fare →" : "भाड़ा भरने के लिए टैप करें →"}
-        </div>
-      )}
-    </button>
-  );
-}
-
 function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet, trialMode }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name);
-  const [openLoadId, setOpenLoadId] = useState(null);
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
   // so "above" vehicle options can bid too, not just an exact match.
@@ -2624,7 +2593,6 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
     if (!loadVehicleDef) return b.vehicle === driver.vehicleSpec.type;
     return loadVehicleDef.capacityKg <= driverVehicleDef.capacityKg;
   });
-  const openLoad = openLoads.find((l) => l.id === openLoadId);
 
   // No search bar / route filter for drivers — every new matching load rings
   // (beep + toast) the moment it's posted, instead of drivers having to search.
@@ -2755,7 +2723,8 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
             <>
               <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</div>
               {openLoads.map((load) => (
-                <LoadSummaryCard key={load.id} load={load} vehicleTypes={vehicleTypes} driver={driver} onOpen={() => setOpenLoadId(load.id)} lang={lang} />
+                <LoadAlertCard key={load.id} load={load} vehicleTypes={vehicleTypes} driver={driver} addBid={addBid} lang={lang}
+                  commissionPct={commissionPct} minWallet={minWallet} trialMode={trialMode} />
               ))}
             </>
           )}
@@ -2764,19 +2733,6 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
         <div className="text-center py-10">
           <Truck size={28} color={C.inkSoft} className="mx-auto mb-2" />
           <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
-        </div>
-      )}
-
-      {openLoad && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setOpenLoadId(null)}>
-          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Request Details" : "रिक्वेस्ट की डिटेल"}</span>
-              <button onClick={() => setOpenLoadId(null)} className="text-xs font-bold px-2 py-1 rounded" style={{ color: C.inkSoft }}>✕</button>
-            </div>
-            <LoadAlertCard load={openLoad} vehicleTypes={vehicleTypes} driver={driver} addBid={(id, bid) => { addBid(id, bid); setOpenLoadId(null); }} lang={lang}
-              commissionPct={commissionPct} minWallet={minWallet} trialMode={trialMode} />
-          </div>
         </div>
       )}
     </div>
