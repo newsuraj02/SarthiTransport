@@ -1503,7 +1503,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [material, setMaterial] = useState(MATERIALS[0]);
   const [materialsList, setMaterialsList] = useState(MATERIALS);
   const [newMaterial, setNewMaterial] = useState("");
-  const [newMaterialEn, setNewMaterialEn] = useState("");
   const [addingMaterial, setAddingMaterial] = useState(false);
   const [weight, setWeight] = useState("");
   const [distance, setDistance] = useState(null);
@@ -1738,29 +1737,26 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
-            <select className={inputCls} style={inputStyle} value={material}
-              onChange={(e) => { if (e.target.value === ADD_MATERIAL) setAddingMaterial(true); else { setMaterial(e.target.value); setAddingMaterial(false); } }}>
-              {materialsList.map((m) => <option key={m} value={m}>{materialLabel(m, lang, customMaterials)}</option>)}
-              <option value={ADD_MATERIAL}>+ {lang === "en" ? "Add new material" : "नया मटेरियल जोड़ें"}</option>
-            </select>
-            {addingMaterial && (
-              <div className="rounded-lg p-2.5 mt-2" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                <div className="text-[10px] font-semibold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Name (Hindi)" : "नाम (हिंदी में)"}</div>
-                <input className={inputCls} style={{ ...inputStyle, marginBottom: 6 }} placeholder={lang === "en" ? "e.g. टाइल्स" : "जैसे: टाइल्स"} value={newMaterial} onChange={(e) => setNewMaterial(e.target.value)} />
-                <div className="text-[10px] font-semibold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Name (English) — optional" : "नाम (English में) — वैकल्पिक"}</div>
+            {addingMaterial ? (
+              <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <input className={inputCls} style={{ ...inputStyle, marginBottom: 6 }} placeholder={lang === "en" ? "e.g. Tiles" : "जैसे: टाइल्स"} value={newMaterial} onChange={(e) => setNewMaterial(e.target.value)} autoFocus />
                 <div className="flex items-center gap-2">
-                  <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tiles" : "e.g. Tiles"} value={newMaterialEn} onChange={(e) => setNewMaterialEn(e.target.value)} />
+                  <button onClick={() => { setAddingMaterial(false); setNewMaterial(""); }} className="flex-1 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>{lang === "en" ? "Cancel" : "रद्द करें"}</button>
                   <button onClick={() => {
-                    const nameHi = newMaterial.trim();
-                    const nameEn = newMaterialEn.trim();
-                    if (!nameHi) return;
-                    setMaterialsList((prev) => prev.includes(nameHi) ? prev : [...prev, nameHi]);
-                    addCustomMaterial(nameHi, { hi: nameHi, en: nameEn || nameHi });
-                    setMaterial(nameHi); setNewMaterial(""); setNewMaterialEn(""); setAddingMaterial(false);
-                  }} className="shrink-0 rounded-lg px-3 py-2.5 text-xs font-bold text-white" style={{ background: "#A8721C" }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
+                    const name = newMaterial.trim();
+                    if (!name) return;
+                    setMaterialsList((prev) => prev.includes(name) ? prev : [...prev, name]);
+                    addCustomMaterial(name, { hi: name, en: name });
+                    setMaterial(name); setNewMaterial(""); setAddingMaterial(false);
+                  }} className="flex-1 rounded-lg py-2.5 text-xs font-bold text-white" style={{ background: "#A8721C" }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
                 </div>
-                <div className="text-[10px] mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Leave English blank to use the same name in both languages." : "अंग्रेज़ी खाली छोड़ने पर दोनों भाषाओं में एक ही नाम दिखेगा।"}</div>
               </div>
+            ) : (
+              <select className={inputCls} style={inputStyle} value={material}
+                onChange={(e) => { if (e.target.value === ADD_MATERIAL) setAddingMaterial(true); else setMaterial(e.target.value); }}>
+                {materialsList.map((m) => <option key={m} value={m}>{materialLabel(m, lang, customMaterials)}</option>)}
+                <option value={ADD_MATERIAL}>+ {lang === "en" ? "Add new material" : "नया मटेरियल जोड़ें"}</option>
+              </select>
             )}
           </div>
           <div>
