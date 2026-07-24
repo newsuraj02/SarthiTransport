@@ -1842,9 +1842,9 @@ function RouteLine({ pickup, drop, lang }) {
         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: C.safety }} />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.inkSoft }}>{lang === "en" ? "From" : "से"}</div>
+        <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : "पिकअप"}</div>
         <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{pickup}</div>
-        <div className="text-[9px] font-bold uppercase tracking-wide mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "To" : "तक"}</div>
+        <div className="text-[9px] font-bold uppercase tracking-wide mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : "ड्रॉप"}</div>
         <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{drop}</div>
       </div>
     </div>
@@ -1978,8 +1978,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="text-xs font-mono mb-1.5" style={{ color: C.inkSoft }}>{b.id}</div>
-        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "From" : "से"}: </span><span className="text-base font-extrabold">{b.pickup}</span></div>
-        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "To" : "तक"}: </span><span className="text-base font-extrabold">{b.drop}</span></div>
+        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{b.pickup}</span></div>
+        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{b.drop}</span></div>
       </div>
 
       <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -2408,8 +2408,8 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         {myBid && <span className="text-[10px] font-bold flex items-center gap-1" style={{ color: C.success }}><CheckCircle2 size={12} /> {lang === "en" ? "Bid sent" : "बोली भेजी"}</span>}
       </div>
       <div className="mb-2">
-        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "From" : "से"}: </span><span className="text-base font-extrabold">{load.pickup}</span></div>
-        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "To" : "तक"}: </span><span className="text-base font-extrabold">{load.drop}</span></div>
+        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{load.pickup}</span></div>
+        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{load.drop}</span></div>
       </div>
       {/* Status-bar row: the key facts as scannable pills instead of a sentence. */}
       <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
@@ -2708,8 +2708,8 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "From" : "से"}: </span><span className="text-base font-extrabold">{myTrip.pickup}</span></div>
-            <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "To" : "तक"}: </span><span className="text-base font-extrabold">{myTrip.drop}</span></div>
+            <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{myTrip.pickup}</span></div>
+            <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{myTrip.drop}</span></div>
           </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
