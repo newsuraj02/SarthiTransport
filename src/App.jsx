@@ -2515,7 +2515,11 @@ function useTripClock(loadingStartedAt, hours, extraHourRate) {
   const bookedHours = hours || 0;
   const isOvertime = started && bookedHours > 0 && elapsedHoursExact >= bookedHours;
   const extraHours = Math.max(0, elapsedHoursExact - bookedHours);
-  const extraCharge = Math.round(extraHours * (extraHourRate || 0));
+  // Waiting is billed in full-hour blocks, not pro-rated by the minute — 5
+  // minutes into the waiting hour costs the same as the full hour, and a
+  // second hour started (even by a minute) bills a second full hour.
+  const billableHours = extraHours > 0 ? Math.ceil(extraHours) : 0;
+  const extraCharge = Math.round(billableHours * (extraHourRate || 0));
   const remainingMs = Math.max(0, bookedHours * 3600000 - elapsedMs);
 
   useEffect(() => {
@@ -2526,7 +2530,7 @@ function useTripClock(loadingStartedAt, hours, extraHourRate) {
     if (!isOvertime) beepedRef.current = false;
   }, [isOvertime]);
 
-  return { started, isOvertime, extraHours, extraCharge, elapsedStr: fmtHMS(elapsedMs), remainingStr: fmtHMS(remainingMs) };
+  return { started, isOvertime, extraHours, billableHours, extraCharge, elapsedStr: fmtHMS(elapsedMs), remainingStr: fmtHMS(remainingMs) };
 }
 
 // Read-only overtime banner shown on the customer's ongoing-trip card —
@@ -2538,7 +2542,7 @@ function TripOvertimeBanner({ booking, lang }) {
     <div className="rounded-lg mt-2 p-2.5" style={{ background: "#FCEAE3" }}>
       <div className="text-[11px] font-bold" style={{ color: C.safety }}>🔔 {lang === "en" ? "Beep-beep! Allowed loading time is over" : "बीप-बीप! अलाउ समय खत्म हो गया"}</div>
       <div className="text-[11px] mt-0.5" style={{ color: C.safety }}>
-        {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs · Waiting charge so far: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
+        {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs (billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"}) · Waiting charge so far: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे (${clock.billableHours} घंटे के हिसाब से बिल) · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
       </div>
     </div>
   );
@@ -2599,13 +2603,13 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
           <div className="rounded-lg mt-2 p-2" style={{ background: "#4A1512" }}>
             <div className="text-[11px] font-bold" style={{ color: "#FF8A80" }}>🔔 {lang === "en" ? "Beep-beep! Allowed time is over" : "बीप-बीप! अलाउ समय खत्म हो गया"}</div>
             <div className="text-[11px] mt-0.5" style={{ color: "#F5C6C2" }}>
-              {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs · Extra fare: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे · अतिरिक्त भाड़ा: ${fmt(clock.extraCharge)}`}
+              {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs (billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"}) · Extra fare: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे (${clock.billableHours} घंटे के हिसाब से बिल) · अतिरिक्त भाड़ा: ${fmt(clock.extraCharge)}`}
             </div>
           </div>
         )}
       </div>
       <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white mt-3" style={{ background: C.success }}>
-        {lang === "en" ? "End Trip — Complete Trip" : "एंड ट्रिप — ट्रिप पूरी करें"} {clock.extraCharge > 0 ? `(+${fmt(clock.extraCharge)})` : ""}
+        {lang === "en" ? "End Trip" : "एंड ट्रिप"}
       </button>
     </div>
   );
