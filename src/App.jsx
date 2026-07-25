@@ -2277,7 +2277,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
     // link carries this customer's own mobile number as their referral
     // code, so ₹200 credits to their profile once the new user completes
     // their first booking/trip (see creditReferralOnce in the root App).
-    const link = `https://sarthitransport.example.com?ref=${customerMobile}`;
+    const link = `https://sarthi-transport-74865.web.app?ref=${customerMobile}`;
     const msg = lang === "en"
       ? `Try Sarthi Transport for booking trucks/tempos easily! Download: ${link} — I get ₹200 once your first booking is done!`
       : `ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: ${link} — आपकी पहली बुकिंग पूरी होने पर मुझे ₹200 मिलेंगे!`;
@@ -3194,8 +3194,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     // The ₹200 referral reward is a customer-side program (see spec) — a
     // driver's share link doesn't carry a referral code.
     const msg = lang === "en"
-      ? "Join Sarthi Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthitransport.example.com"
-      : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthitransport.example.com";
+      ? "Join Sarthi Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthi-transport-74865.web.app"
+      : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthi-transport-74865.web.app";
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
