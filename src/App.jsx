@@ -916,7 +916,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   const [error, setError] = useState("");
   const confirmationRef = useRef(null);
   const recaptchaRef = useRef(null);
-  const otpInputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center";
+  const otpInputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center placeholder:text-[#C7B8B3]";
   const otpInputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
   const fieldCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const fieldStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -1037,7 +1037,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <ShieldCheck size={16} color={C.inkSoft} />
-                <input className={otpInputCls} style={{ ...otpInputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
+                <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
                   onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
@@ -1146,7 +1146,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   const [error, setError] = useState("");
   const confirmationRef = useRef(null);
   const recaptchaRef = useRef(null);
-  const otpInputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center";
+  const otpInputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center placeholder:text-[#C7B8B3]";
   const otpInputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
   const fieldCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const fieldStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -1353,7 +1353,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <ShieldCheck size={16} color={C.inkSoft} />
-                <input className={otpInputCls} style={{ ...otpInputStyle, border: "none" }} placeholder="• • • • • •" value={otp}
+                <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
                   onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
