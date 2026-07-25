@@ -1127,7 +1127,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
 // DRIVER REGISTRATION — one continuous page: phone OTP, then straight
 // into KYC submission, instead of two separate screens.
 // =====================================================================
-function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType }) {
+function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType, trialMode }) {
   // Personal details — filled in first, on this page (Step 1 of 2).
   // Persisted to localStorage so a refresh mid-fill doesn't wipe it —
   // cleared once the details actually attach to the driver doc below.
@@ -1274,7 +1274,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     return (
       <div className="flex-1 overflow-y-auto">
         <div className="px-5 pt-4">{backButton}</div>
-        <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
+        <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} trialMode={trialMode}
           stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"} />
       </div>
     );
@@ -2977,7 +2977,7 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
   );
 }
 
-function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel }) {
+function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, trialMode = false }) {
   const VEHICLES = vehicleTypes;
   // Persisted to localStorage so a refresh mid-fill (slow connection,
   // accidental reload) doesn't force re-uploading photos or retyping —
@@ -3034,10 +3034,15 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   };
 
   const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
+  // First-time submission during the free trial skips the admin approval
+  // wait entirely — a driver who's already been reviewed before (kyc isn't
+  // null, e.g. resubmitting after a rejection or editing an approved
+  // profile) still goes back through the normal Pending review either way.
+  const isFirstSubmission = driver.kyc == null;
   const submit = () => {
     if (!canSubmit) return;
     setDriver({
-      ...driver, kyc: "Pending", docs: { dl, photo },
+      ...driver, kyc: trialMode && isFirstSubmission ? "Approved" : "Pending", docs: { dl, photo },
       vehicleSpec: {
         type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
         capacityKg: Number(capacityKg) || undefined, length: Number(length) || undefined,
@@ -4405,7 +4410,7 @@ export default function App() {
             verified={driverAuth.verified}
             onOtpVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setLockedRole("driver"); }}
             onLogout={() => (driverAuth.verified ? logoutRole("driver") : goHome())}
-            driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
+            driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} trialMode={trialMode} />
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
           <div className="flex-1 overflow-y-auto">
