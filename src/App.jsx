@@ -3604,7 +3604,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
   );
 }
 
-function AdminDriverList({ drivers, toggleBlacklist, lang }) {
+function AdminDriverList({ drivers, toggleBlacklist, lang, vehicleTypes, addVehicleType, addManualDriver }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const filtered = drivers.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
@@ -3614,12 +3614,69 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
+
+  const [showAdd, setShowAdd] = useState(false);
+  const blankForm = { name: "", mobile: "", vehicleTypeName: "", vehicleNumber: "", capacityKg: "", address: "", city: "", state: "", pincode: "" };
+  const [form, setForm] = useState(blankForm);
+  const [addError, setAddError] = useState("");
+  const [adding, setAdding] = useState(false);
+  const canAdd = form.name.trim().length > 0 && form.mobile.trim().length === 10 && form.vehicleTypeName.trim().length > 0 && form.vehicleNumber.trim().length > 0 && !adding;
+  const resetForm = () => { setForm(blankForm); setAddError(""); };
+  // Same reuse-by-name-or-create-new resolution the driver's own KYC form
+  // uses, so a manually added driver's vehicle type merges into the same
+  // shared list instead of forking it.
+  const resolveVehicleTypeKey = () => {
+    const name = form.vehicleTypeName.trim();
+    const match = vehicleTypes.find((v) => v.label.toLowerCase() === name.toLowerCase() || (v.labelEn || "").toLowerCase() === name.toLowerCase());
+    if (match) return match.key;
+    const key = slugify(name);
+    addVehicleType({ key, label: name, rate: 25, capacity: "", capacityKg: Number(form.capacityKg) || 0 });
+    return key;
+  };
+  const submitAdd = () => {
+    if (!canAdd) return;
+    setAdding(true);
+    const vehicleTypeKey = resolveVehicleTypeKey();
+    addManualDriver({ ...form, vehicleTypeKey })
+      .then(() => { resetForm(); setShowAdd(false); })
+      .catch(() => setAddError(lang === "en" ? "A driver with this mobile number already exists." : "इस मोबाइल नंबर से पहले से एक ड्राइवर मौजूद है।"))
+      .finally(() => setAdding(false));
+  };
+  const addFieldCls = "w-full rounded-lg px-3 py-2 text-xs outline-none";
+  const addFieldStyle = { border: `1px solid ${C.line}`, background: C.paper, color: C.ink };
+
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
-        <Users size={16} /> {lang === "en" ? "All Drivers" : "सभी ड्राइवर"}
-        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.navy, background: "#F5E6C8" }}>{drivers.length}</span>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
+          <Users size={16} /> {lang === "en" ? "All Drivers" : "सभी ड्राइवर"}
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.navy, background: "#F5E6C8" }}>{drivers.length}</span>
+        </div>
+        <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white" style={{ background: C.success }}>
+          {showAdd ? (lang === "en" ? "Cancel" : "रद्द करें") : `+ ${lang === "en" ? "Add Driver" : "ड्राइवर जोड़ें"}`}
+        </button>
       </div>
+      {showAdd && (
+        <div className="rounded-lg p-3 mb-3 space-y-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
+          <div className="grid grid-cols-2 gap-2">
+            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Vehicle type *" : "गाड़ी का प्रकार *"} value={form.vehicleTypeName} onChange={(e) => setForm({ ...form, vehicleTypeName: e.target.value })} />
+            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Vehicle number *" : "गाड़ी नंबर *"} value={form.vehicleNumber} onChange={(e) => setForm({ ...form, vehicleNumber: e.target.value.toUpperCase() })} />
+          </div>
+          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Capacity (kg)" : "क्षमता (किग्रा)"} value={form.capacityKg} onChange={(e) => setForm({ ...form, capacityKg: e.target.value.replace(/\D/g, "") })} />
+          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Address" : "पता"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <div className="grid grid-cols-2 gap-2">
+            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "City" : "शहर"} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "State" : "राज्य"} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
+          </div>
+          {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
+          <button onClick={submitAdd} disabled={!canAdd} className="w-full rounded-lg py-2 text-xs font-bold" style={{ background: canAdd ? C.success : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
+            {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Driver" : "ड्राइवर सेव करें")}
+          </button>
+        </div>
+      )}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : "कोई ड्राइवर नहीं मिला।"}</p>}
@@ -3687,7 +3744,7 @@ function AdminDriverList({ drivers, toggleBlacklist, lang }) {
 // Read-only oversight of customer registrations — name, address, KYC info.
 // Customers are never gated by admin approval (only drivers are), so this
 // is visibility only, not a verification queue.
-function AdminCustomers({ customers, bookings, lang }) {
+function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q) || (c.city || "").toLowerCase().includes(q.toLowerCase()));
@@ -3695,12 +3752,52 @@ function AdminCustomers({ customers, bookings, lang }) {
     ? { Bidding: { label: "Awaiting bids", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "Ongoing", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
     : { Bidding: { label: "बिड बाकी", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "चालू", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
   const bookingDate = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleDateString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", mobile: "", address: "", area: "", city: "", state: "", pincode: "" });
+  const [addError, setAddError] = useState("");
+  const [adding, setAdding] = useState(false);
+  const canAdd = form.name.trim().length > 0 && form.mobile.trim().length === 10 && !adding;
+  const resetForm = () => { setForm({ name: "", mobile: "", address: "", area: "", city: "", state: "", pincode: "" }); setAddError(""); };
+  const submitAdd = () => {
+    if (!canAdd) return;
+    setAdding(true);
+    addManualCustomer(form)
+      .then(() => { resetForm(); setShowAdd(false); })
+      .catch(() => setAddError(lang === "en" ? "A customer with this mobile number already exists." : "इस मोबाइल नंबर से पहले से एक कस्टमर मौजूद है।"))
+      .finally(() => setAdding(false));
+  };
+  const addFieldCls = "w-full rounded-lg px-3 py-2 text-xs outline-none";
+  const addFieldStyle = { border: `1px solid ${C.line}`, background: C.paper, color: C.ink };
+
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
-        <Users size={16} /> {lang === "en" ? "All Customers" : "सभी कस्टमर"}
-        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.navy, background: "#F5E6C8" }}>{(customers || []).length}</span>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
+          <Users size={16} /> {lang === "en" ? "All Customers" : "सभी कस्टमर"}
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.navy, background: "#F5E6C8" }}>{(customers || []).length}</span>
+        </div>
+        <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white" style={{ background: C.success }}>
+          {showAdd ? (lang === "en" ? "Cancel" : "रद्द करें") : `+ ${lang === "en" ? "Add Customer" : "कस्टमर जोड़ें"}`}
+        </button>
       </div>
+      {showAdd && (
+        <div className="rounded-lg p-3 mb-3 space-y-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
+          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Address" : "पता"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <div className="grid grid-cols-2 gap-2">
+            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Area" : "क्षेत्र"} value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} />
+            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "City" : "शहर"} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "State" : "राज्य"} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
+          </div>
+          {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
+          <button onClick={submitAdd} disabled={!canAdd} className="w-full rounded-lg py-2 text-xs font-bold" style={{ background: canAdd ? C.success : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
+            {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Customer" : "कस्टमर सेव करें")}
+          </button>
+        </div>
+      )}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, mobile or city..." : "नाम, मोबाइल या शहर से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : "कोई कस्टमर नहीं मिला।"}</p>}
@@ -3916,7 +4013,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver }) {
   const [tab, setTab] = useState("fleet");
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
@@ -3946,8 +4043,8 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} />}
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
-      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} lang={lang} />}
-      {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} />}
+      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
+      {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} addManualCustomer={addManualCustomer} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} lang={lang} />}
@@ -4187,6 +4284,31 @@ export default function App() {
 
   const addVehicleType = (v) => createDoc("vehicleTypes", v.key, v).catch((e) => console.error(e));
   const addCustomMaterial = (name, labels) => createDoc("materials", slugify(name), labels).catch((e) => console.error(e));
+
+  // Admin-side manual registration — lets admin add a customer/driver
+  // straight into the database without them going through OTP signup
+  // themselves. Keyed by mobile (same identity model as self-signup), so
+  // once that number logs in for real it lands on an already-complete
+  // profile instead of the onboarding flow.
+  const addManualCustomer = (fields) => {
+    const mobile = (fields.mobile || "").trim();
+    if (!mobile || allCustomers.some((c) => c.mobile === mobile)) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    return replaceDoc("customers", mobile, {
+      mobile, name: fields.name.trim(), email: null, photo: null,
+      address: fields.address || "", area: fields.area || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
+      referredBy: null, referralCredited: false, referralBalance: 0, referralEntries: [],
+    });
+  };
+  const addManualDriver = (fields) => {
+    const mobile = (fields.mobile || "").trim();
+    if (!mobile || drivers.some((d) => d.mobile === mobile)) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    return replaceDoc("drivers", mobile, {
+      mobile, name: fields.name.trim(), online: false, kyc: "Approved", rating: 4.5,
+      wallet: 500, bonus: 0, heldCredit: 0, blacklisted: false, docs: null,
+      address: fields.address || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
+      vehicleSpec: { type: fields.vehicleTypeKey, vehicleNumber: fields.vehicleNumber.trim().toUpperCase(), capacityKg: Number(fields.capacityKg) || undefined },
+    });
+  };
 
   // Trip history is just every booking that's been assigned to a driver —
   // no separate collection to keep in sync.
@@ -4465,7 +4587,8 @@ export default function App() {
             <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
               bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} onGoHome={goHome} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft}
-              withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} />
+              withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
+              vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver} />
           </div>
         )}
 
