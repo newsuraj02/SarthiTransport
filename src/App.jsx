@@ -3542,6 +3542,10 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : { customer: "ग्राहक", driver: "ड्राइवर" };
   const pendingWithdrawals = (withdrawals || []).filter((w) => w.status === "Pending");
   const pendingRecharges = (rechargeRequests || []).filter((r) => r.status === "Pending");
+  // Docs only ever get a createdAt (server timestamp) — there's no separate
+  // "time" field — so format that instead of the undefined w.time/r.time/a.time
+  // this used to read (which is why timestamps never actually showed up).
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   return (
     <div className="space-y-4">
       {pendingRecharges.length > 0 && (
@@ -3552,7 +3556,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
               <div key={r.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: "#FBEBD2" }}>
                 <div>
                   <div className="text-xs font-bold" style={{ color: C.ink }}>{r.driverName}</div>
-                  <div className="text-[10px]" style={{ color: C.inkSoft }}>{r.time}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(r.createdAt)}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(r.amount)}</span>
@@ -3571,7 +3575,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
               <div key={w.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: "#DFEEE2" }}>
                 <div>
                   <div className="text-xs font-bold" style={{ color: C.ink }}>{w.driverName || w.customerName} <span className="font-normal" style={{ color: C.inkSoft }}>· {w.role === "customer" ? (lang === "en" ? "Referral" : "रेफरल") : (lang === "en" ? "Driver bonus" : "ड्राइवर बोनस")}</span></div>
-                  <div className="text-[10px]" style={{ color: C.inkSoft }}>{w.time}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(w.createdAt)}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(w.amount)}</span>
@@ -3594,7 +3598,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
                     <span className="text-xs font-bold flex items-center gap-1" style={{ color: urgent ? C.safety : C.ink }}>
                       {urgent && <Siren size={12} />} {roleLabel[a.role] || a.role} · {alertTypeLabel(a.type, lang)}
                     </span>
-                    <span className="text-[10px]" style={{ color: C.inkSoft }}>{a.time}</span>
+                    <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(a.createdAt)}</span>
                   </div>
                   {a.note && <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{a.note}</div>}
                 </div>
