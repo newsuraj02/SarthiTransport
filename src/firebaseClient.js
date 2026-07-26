@@ -13,53 +13,77 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const hasConfig = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
+export const hasConfig = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 
-// Falls back to null (not throwing) so the app can still boot and show a
-// clear setup message instead of a blank white screen when the pilot
-// backend hasn't been configured yet.
+// Three separate named Firebase Apps (not one shared default app) so a
+// customer session, a driver session, and an admin session can each hold
+// their own real, phone/email-verified Firebase Auth sign-in at the same
+// time on one device/browser.
 //
+// IMPORTANT: Firestore/Storage security rules only see `request.auth` as
+// non-null when the request is issued through the SAME app instance whose
+// Auth the user actually signed into — an Auth session on one named app
+// does NOT carry over to a Firestore/Storage client built on a different
+// (or default) app. So each of these three apps needs its own Firestore +
+// Storage client too, not one shared instance built on some separate,
+// never-signed-into app (that was a real bug: every read/write silently
+// looked unauthenticated to security rules, regardless of who was really
+// logged in, once rules started requiring real auth).
+const customerApp = hasConfig ? initializeApp(firebaseConfig, "customerAuth") : null;
+const driverApp = hasConfig ? initializeApp(firebaseConfig, "driverAuth") : null;
+const adminApp = hasConfig ? initializeApp(firebaseConfig, "adminAuth") : null;
+
+export const customerFirebaseAuth = customerApp ? getAuth(customerApp) : null;
+export const driverFirebaseAuth = driverApp ? getAuth(driverApp) : null;
+export const adminFirebaseAuth = adminApp ? getAuth(adminApp) : null;
+
 // autoDetectLongPolling: Firestore's default streaming transport
 // (WebChannel) can get stuck behind restrictive corporate/mobile proxies
 // that don't like long-lived connections. Auto-detecting and falling back
 // to HTTP long-polling makes the realtime sync far more reliable on the
-// kind of varied networks 10-15 pilot testers will actually be on.
-const defaultApp = hasConfig ? initializeApp(firebaseConfig) : null;
-export const db = defaultApp
-  ? initializeFirestore(defaultApp, { experimentalAutoDetectLongPolling: true })
-  : null;
-
+// kind of varied networks pilot testers will actually be on.
+const firestoreOpts = { experimentalAutoDetectLongPolling: true };
+const dbByRole = {
+  customer: customerApp ? initializeFirestore(customerApp, firestoreOpts) : null,
+  driver: driverApp ? initializeFirestore(driverApp, firestoreOpts) : null,
+  admin: adminApp ? initializeFirestore(adminApp, firestoreOpts) : null,
+};
 // Profile/KYC/vehicle photos upload here instead of living inline in
 // Firestore documents — keeps every realtime listener (driver lists,
 // bookings) small regardless of how many photos testers upload.
-export const storage = defaultApp ? getStorage(defaultApp) : null;
+const storageByRole = {
+  customer: customerApp ? getStorage(customerApp) : null,
+  driver: driverApp ? getStorage(driverApp) : null,
+  admin: adminApp ? getStorage(adminApp) : null,
+};
 
-// Two separate named Firebase Apps (not the default one above) so a
-// customer session and a driver session can each hold their own real,
-// phone-verified Firebase Auth sign-in at the same time on one device/
-// browser — this app intentionally lets one device act as both a customer
-// and a driver with different phone numbers.
-export const customerFirebaseAuth = hasConfig ? getAuth(initializeApp(firebaseConfig, "customerAuth")) : null;
-export const driverFirebaseAuth = hasConfig ? getAuth(initializeApp(firebaseConfig, "driverAuth")) : null;
-// Real email/password sign-in for Admin (replacing the old env-var password
-// comparison) — needed so Firestore/Storage security rules can actually
-// recognize "this is an authenticated admin" via a custom claim, the same
-// way they recognize a customer/driver via their verified phone number.
-export const adminFirebaseAuth = hasConfig ? getAuth(initializeApp(firebaseConfig, "adminAuth")) : null;
+// Which role's Firestore/Storage client every read/write should go through
+// right now — kept in sync with the root App's `role` state. Defaults to
+// "customer" before any role is chosen; harmless, since the only reads
+// that happen pre-login (vehicleTypes, materials, settings) are public
+// regardless of which of the three (equally unauthenticated, at that
+// point) clients asks.
+let activeRole = "customer";
+export function setActiveRole(role) {
+  activeRole = (role === "driver" || role === "admin") ? role : "customer";
+}
+export function getDb() {
+  return dbByRole[activeRole];
+}
+export function getActiveStorage() {
+  return storageByRole[activeRole];
+}
 
-// Push notifications (ride status updates, new bids) — lazy/guarded because
-// getMessaging() throws in browsers/contexts that don't support it (Safari
-// without the right setup, private-browsing tabs, non-HTTPS), and because
-// requesting the token before a user gesture would trigger the permission
-// prompt at a confusing moment. Callers request this only when the user
-// taps an explicit "Enable Notifications" button.
+// Push notifications don't touch Firestore/Storage security rules, so the
+// messaging instance can live on any one app — reuses the customer app
+// rather than creating a fourth.
 let messagingInstance = null;
 async function getMessagingIfSupported() {
   if (!hasConfig) return null;
   if (messagingInstance) return messagingInstance;
   try {
     if (!(await isSupported())) return null;
-    messagingInstance = getMessaging(defaultApp);
+    messagingInstance = getMessaging(customerApp);
     return messagingInstance;
   } catch (e) {
     console.error("[messaging] unsupported", e);

@@ -13,7 +13,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, storage, requestPushToken, listenForegroundPush } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Oxblood & mustard theme — chosen specifically to not read as Porter
@@ -1437,6 +1437,7 @@ function resizeImageToCanvas(file, maxDim = 900) {
 // still works before that one-time setup step is done.
 async function uploadPhoto(file, path, maxDim = 900, quality = 0.72) {
   const canvas = await resizeImageToCanvas(file, maxDim);
+  const storage = getActiveStorage();
   if (storage) {
     try {
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
@@ -4190,6 +4191,11 @@ export default function App() {
   // Firestore — see firestoreStore.js.
   const [app, setApp] = usePersistedState("sarthi_app", "customer");
   const [role, setRole] = usePersistedState("sarthi_role", null);
+  // Every Firestore/Storage read or write below goes through whichever
+  // role's own authenticated client is "active" (see setActiveRole in
+  // firebaseClient.js) — this has to run before any other effect in this
+  // component that touches Firestore, so it's declared first.
+  useEffect(() => { setActiveRole(role); }, [role]);
   // Admin Login is only revealed when the page is opened with this secret
   // link (e.g. https://yourapp/?admin=1) — regular Customer/Driver users
   // never see it on the plain URL.
@@ -4294,17 +4300,22 @@ export default function App() {
         setCustomMaterials(map);
       }, null)
     : undefined), []);
-  useEffect(() => (firestoreReady ? subscribeCollection("drivers", setDrivers, null) : undefined), []);
-  // Only Admin needs the full customer list (profile/address oversight) —
-  // gated on role so customer/driver sessions don't pull it for nothing.
+  // These four collections require real authentication under the current
+  // Firestore rules (isSignedIn()) — the dependency array must include every
+  // auth transition, not just mount ([]) or role alone, otherwise a
+  // subscription that first fires before login finishes gets permanently
+  // denied and never retries once the user actually signs in.
+  const authDeps = [role, customerAuth.verified, driverAuth.verified, adminAuth];
+  useEffect(() => (firestoreReady ? subscribeCollection("drivers", setDrivers, null) : undefined), authDeps);
+  // Only Admin needs the full customer list (profile/address oversight).
   const [allCustomers, setAllCustomers] = useState([]);
-  useEffect(() => (firestoreReady && role === "admin" ? subscribeCollection("customers", setAllCustomers, null) : undefined), [role]);
-  useEffect(() => (firestoreReady ? subscribeCollection("bookings", setBookings) : undefined), []);
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("customers", setAllCustomers, null) : undefined), authDeps);
+  useEffect(() => (firestoreReady ? subscribeCollection("bookings", setBookings) : undefined), authDeps);
   // Only Admin ever reads this (see AdminAlerts) — matches the Firestore
   // rule restricting alerts to admin-only reads.
-  useEffect(() => (firestoreReady && role === "admin" ? subscribeCollection("alerts", setAlerts) : undefined), [role]);
-  useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), []);
-  useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), []);
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("alerts", setAlerts) : undefined), authDeps);
+  useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), authDeps);
+  useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), authDeps);
   useEffect(() => {
     if (!firestoreReady) return;
     // Subscribe first, create-if-missing in the background — awaiting the
