@@ -23,6 +23,7 @@
 // Firestore/Storage rules — custom claims only apply to newly-issued tokens.
 
 const admin = require("firebase-admin");
+const { ensureAdmin } = require("./_adminHelpers");
 
 const [, , keyPathArg, email, password] = process.argv;
 
@@ -38,19 +39,7 @@ admin.initializeApp({
 });
 
 (async () => {
-  let user;
-  try {
-    user = await admin.auth().getUserByEmail(email);
-    await admin.auth().updateUser(user.uid, { password });
-    console.log(`Existing admin account found for ${email} — password updated.`);
-  } catch (e) {
-    if (e.code !== "auth/user-not-found") throw e;
-    user = await admin.auth().createUser({ email, password });
-    console.log(`Created new admin account for ${email}.`);
-  }
-
-  await admin.auth().setCustomUserClaims(user.uid, { admin: true });
-  console.log(`Tagged ${email} (uid: ${user.uid}) with the admin claim.`);
+  await ensureAdmin(email, password);
   console.log("Done. That admin should log out and back in on the Admin Login screen for it to take effect.");
   process.exit(0);
 })().catch((e) => {

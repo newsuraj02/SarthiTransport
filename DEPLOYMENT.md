@@ -80,6 +80,14 @@ The Admin Portal (`?admin=1`) uses real Firebase Authentication (email/password)
 
 Running `setupAdmin.js` again for the same email updates their password and re-applies the admin tag — use it to add more admins or reset a forgotten password. There's no limit on how many admin accounts you create this way.
 
+**Adding several admins at once**: `setupAdmins.js` does the same thing for multiple people in one command:
+```bash
+node setupAdmins.js /path/to/serviceAccountKey.json \
+  admin1@example.com "password1" \
+  admin2@example.com "password2" \
+  admin3@example.com "password3"
+```
+
 ## Security setup (Firestore + Storage rules)
 
 Both `firestore.rules` and `storage.rules` in this repo started wide open (`allow read, write: if true`) for the initial trusted pilot — anyone with your public Firebase web config could read/write everything. They've since been rewritten to actually check identity: customers/drivers can only write their own data (matched by their verified phone number), and admin-only actions (approvals, KYC, settings) require the real admin login above. Do this **once**, in this exact order:
