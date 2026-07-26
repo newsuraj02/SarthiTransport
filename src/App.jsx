@@ -926,6 +926,18 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   const [email, setEmail] = usePersistedState("sarthi_customerReg_email", "");
   const [photo, setPhoto] = usePersistedPhoto("sarthi_customerReg_photo", null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  // Sign Up's photo picker runs before OTP verifies, but Storage's security
+  // rules require real auth to write — so the file just sits here (never
+  // persisted; Files aren't JSON-serializable) and the actual upload
+  // happens inside submitProfile, once verifyOtp has signed the user in.
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  useEffect(() => {
+    if (!photoFile) return;
+    const url = URL.createObjectURL(photoFile);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
   const [address, setAddress] = usePersistedState("sarthi_customerReg_address", "");
   const [area, setArea] = usePersistedState("sarthi_customerReg_area", "");
   const [city, setCity] = usePersistedState("sarthi_customerReg_city", "");
@@ -970,7 +982,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   };
 
   const sendOtp = async () => {
-    if (mobile.length !== 10 || !authInstance || sending) return;
+    // Sign Up requires the details form to be filled in first; Login skips
+    // straight to sending the OTP.
+    if ((mode === "signup" && !detailsValid) || mobile.length !== 10 || !authInstance || sending) return;
     setSending(true);
     setError("");
     try {
@@ -990,6 +1004,26 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     setSending(false);
   };
 
+  const submitProfile = async () => {
+    if (!detailsValid) return;
+    const ownMobile = verifiedMobile || mobile;
+    // Sign Up's photo was only picked, not uploaded (couldn't be — Storage
+    // requires real auth, which didn't exist until verifyOtp just now) —
+    // upload it for real at this point, now that it does.
+    let finalPhoto = photo;
+    if (photoFile && ownMobile) {
+      setPhotoUploading(true);
+      finalPhoto = await uploadPhoto(photoFile, `customers/${ownMobile}/profile.jpg`);
+      setPhotoUploading(false);
+    }
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    const referredBy = ref && ref !== ownMobile ? ref : null;
+    onComplete({ name, email: email.trim() || null, photo: finalPhoto, address, area, city, state, pincode, referredBy, referralCredited: false, referralBalance: 0, referralEntries: [] });
+    // Submitted for real — clear the draft so it can't leak into a future
+    // registration attempt on this same device (e.g. a different customer).
+    setName(""); setEmail(""); setPhoto(null); setPhotoFile(null); setAddress(""); setArea(""); setCity(""); setState(""); setPincode("");
+  };
+
   const verifyOtp = async () => {
     if (otp.length !== 6 || !confirmationRef.current || sending) return;
     setSending(true);
@@ -997,6 +1031,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     try {
       await confirmationRef.current.confirm(otp);
       onOtpVerified(mobile);
+      // Sign Up already collected every field above — submit it straight
+      // away instead of showing a second, redundant details screen.
+      if (mode === "signup" && detailsValid) submitProfile();
     } catch (e) {
       console.error(e);
       setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
@@ -1004,17 +1041,6 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
       return;
     }
     setSending(false);
-  };
-
-  const submitProfile = () => {
-    if (!detailsValid) return;
-    const ownMobile = verifiedMobile || mobile;
-    const ref = new URLSearchParams(window.location.search).get("ref");
-    const referredBy = ref && ref !== ownMobile ? ref : null;
-    onComplete({ name, email: email.trim() || null, photo, address, area, city, state, pincode, referredBy, referralCredited: false, referralBalance: 0, referralEntries: [] });
-    // Submitted for real — clear the draft so it can't leak into a future
-    // registration attempt on this same device (e.g. a different customer).
-    setName(""); setEmail(""); setPhoto(null); setAddress(""); setArea(""); setCity(""); setState(""); setPincode("");
   };
 
   const backButton = (
@@ -1035,6 +1061,75 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   if (verified && hasProfile) {
     // Root is about to swap to CustomerApp — never show anything else here.
     return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : "लोड हो रहा है..."}</p></div>;
+  }
+
+  if (verified && !hasProfile) {
+    // Verified but genuinely no saved profile — covers someone who tapped
+    // Login but turned out to be a new customer, so they're not stuck with
+    // no way to finish setting up. (Sign Up never reaches this: its own
+    // details are submitted automatically the moment OTP verifies.)
+    return (
+      <div className="flex-1 overflow-y-auto px-6 py-8 relative">
+        {backButton}
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
+          <MapPin size={22} color={C.navy} />
+        </div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Registration" : "कस्टमर रजिस्ट्रेशन"}</h2>
+        <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
+
+        <div className="space-y-3">
+          <div className="flex justify-center">
+            <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${verifiedMobile || mobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
+              <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#F5E6C8", border: `2px dashed ${C.marigoldDeep}` }}>
+                {photoUploading
+                  ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
+                  : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
+              </div>
+            </PhotoPicker>
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
+            <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
+              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
+              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
+              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+              <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
+                onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+            </div>
+          </div>
+        </div>
+
+        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
+        <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className="w-full rounded-lg py-3 font-bold text-sm mt-3"
+          style={{ background: detailsValid && !photoUploading ? C.marigold : C.line, color: detailsValid && !photoUploading ? C.navy : "#9AA3B0" }}>
+          {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें")}
+        </button>
+        <div id={recaptchaContainerId} />
+      </div>
+    );
   }
 
   if (!verified && mode === null) {
@@ -1064,15 +1159,15 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     );
   }
 
-  if (!verified) {
-    // STEP 1 — mobile + OTP only, nothing else to fill in yet.
+  if (mode === "login") {
+    // Login — mobile + OTP only, nothing else to fill in.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
         <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
         <div className="mb-4"><Logo size={64} showText={false} /></div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{mode === "signup" ? (lang === "en" ? "Customer Sign Up" : "कस्टमर साइन अप") : (lang === "en" ? "Customer Login" : "कस्टमर लॉगिन")}</h2>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Login" : "कस्टमर लॉगिन"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
         <div className="w-full">
           {otpStage === "mobile" ? (
@@ -1114,24 +1209,24 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     );
   }
 
-  // STEP 2 — verified, and this number has no saved profile yet: fill it
-  // in once.
+  // Sign Up — the registration form comes first, with mobile/OTP
+  // verification at the bottom of this same page.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
-      {backButton}
-      <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
-        <MapPin size={22} color={C.navy} />
-      </div>
-      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Registration" : "कस्टमर रजिस्ट्रेशन"}</h2>
-      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
+      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+        <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+      </button>
+      <div className="mb-4"><Logo size={64} showText={false} /></div>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Sign Up" : "कस्टमर साइन अप"}</h2>
+      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।"}
+      </p>
 
       <div className="space-y-3">
         <div className="flex justify-center">
-          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${verifiedMobile || mobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => setPhotoFile(f)}>
             <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#F5E6C8", border: `2px dashed ${C.marigoldDeep}` }}>
-              {photoUploading
-                ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
-                : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
+              <SafeImage src={photoPreview} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />
             </div>
           </PhotoPicker>
         </div>
@@ -1170,11 +1265,43 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         </div>
       </div>
 
-      {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
-      <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className="w-full rounded-lg py-3 font-bold text-sm mt-3"
-        style={{ background: detailsValid && !photoUploading ? C.marigold : C.line, color: detailsValid && !photoUploading ? C.navy : "#9AA3B0" }}>
-        {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें")}
-      </button>
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
+        {otpStage === "mobile" ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <Phone size={16} color={C.inkSoft} />
+                <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+              </div>
+              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <ShieldCheck size={16} color={C.inkSoft} />
+                <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
+                  onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              </div>
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify & Continue" : "वेरीफाई करें और आगे बढ़ें")}
+              </button>
+              <div className="flex items-center justify-between">
+                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
+                <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+              </div>
+            </div>
+          )}
+      </div>
       <div id={recaptchaContainerId} />
     </div>
   );
@@ -1217,6 +1344,21 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Once OTP verifies and the driver doc exists, attach whatever was
+  // collected on the Sign Up form (pre-OTP). Login has no fields to apply —
+  // this simply won't fire for that path since name stays empty.
+  const infoAppliedRef = useRef(false);
+  useEffect(() => {
+    if (verified && driver && !driver.address && !infoAppliedRef.current && name.trim()) {
+      infoAppliedRef.current = true;
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      const referredBy = ref && ref !== driver.mobile ? ref : null;
+      setDriver({ ...driver, name: name.trim(), address: address.trim(), city: city.trim(), state: state.trim(), pincode, referredBy, referralCredited: false });
+      setName(""); setAddress(""); setCity(""); setState(""); setPincode("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verified, driver]);
+
   const detailsValid = name.trim().length >= 3 && address.trim().length > 0 && city.trim() && state.trim() && pincode.length === 6;
 
   const getRecaptcha = () => {
@@ -1227,7 +1369,9 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   };
 
   const sendOtp = async () => {
-    if (mobile.length !== 10 || !authInstance || sending) return;
+    // Sign Up requires the details form to be filled in first; Login skips
+    // straight to sending the OTP.
+    if ((mode === "signup" && !detailsValid) || mobile.length !== 10 || !authInstance || sending) return;
     setSending(true);
     setError("");
     try {
@@ -1254,6 +1398,8 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     try {
       await confirmationRef.current.confirm(otp);
       onOtpVerified(mobile);
+      // Sign Up's details attach to the driver doc automatically once it's
+      // ready (see the effect above) — nothing more to do here.
     } catch (e) {
       console.error(e);
       setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
@@ -1263,9 +1409,9 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     setSending(false);
   };
 
-  // Explicit submit for the post-verification details form — no more
-  // relying on a side-effect that only fired if the name happened to
-  // already be typed in before OTP.
+  // Fallback completion form (see the "no address, nothing typed" branch
+  // below) — covers someone who tapped Login but turned out to be a new
+  // driver, so they're not stuck with no way to finish setting up.
   const completeDetails = () => {
     if (!detailsValid || !driver) return;
     const ref = new URLSearchParams(window.location.search).get("ref");
@@ -1388,49 +1534,132 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     );
   }
 
-  // Step 1: mobile + OTP only — nothing else to fill in yet, regardless of
-  // whether they tapped Login or Sign Up.
+  if (mode === "login") {
+    // Login — mobile + OTP only, nothing else to fill in.
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+          <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+        </button>
+        <div className="mb-4"><Logo size={64} showText={false} /></div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Login" : "ड्राइवर लॉगिन"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
+        <div className="w-full">
+          {otpStage === "mobile" ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <Phone size={16} color={C.inkSoft} />
+                <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+              </div>
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : C.line, color: mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <ShieldCheck size={16} color={C.inkSoft} />
+                <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
+                  onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              </div>
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
+              </button>
+              <div className="flex items-center justify-between">
+                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
+                <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+              </div>
+            </div>
+          )}
+        </div>
+        <div id={recaptchaContainerId} />
+      </div>
+    );
+  }
+
+  // Sign Up — the registration form comes first, with mobile/OTP
+  // verification at the bottom of this same page.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
       <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
         <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
       </button>
       <div className="mb-4"><Logo size={64} showText={false} /></div>
-      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{mode === "signup" ? (lang === "en" ? "Driver Sign Up" : "ड्राइवर साइन अप") : (lang === "en" ? "Driver Login" : "ड्राइवर लॉगिन")}</h2>
-      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
-      {otpStage === "mobile" ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-            <Phone size={16} color={C.inkSoft} />
-            <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
-            <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
-              value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
-          </div>
-          {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-          <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : C.line, color: mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
-            {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
-          </button>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Sign Up" : "ड्राइवर साइन अप"}</h2>
+      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।"}
+      </p>
+
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
-          <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-            <ShieldCheck size={16} color={C.inkSoft} />
-            <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
-              onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
           </div>
-          {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-          <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
-            {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
-          </button>
-          <div className="flex items-center justify-between">
-            <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
-            <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
           </div>
         </div>
-      )}
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+          <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
+            onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+        </div>
+      </div>
+
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
+        {otpStage === "mobile" ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <Phone size={16} color={C.inkSoft} />
+                <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+              </div>
+              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <ShieldCheck size={16} color={C.inkSoft} />
+                <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
+                  onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              </div>
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify & Continue" : "वेरीफाई करें और आगे बढ़ें")}
+              </button>
+              <div className="flex items-center justify-between">
+                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
+                <button onClick={sendOtp} disabled={sending} className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+              </div>
+            </div>
+          )}
+      </div>
       <div id={recaptchaContainerId} />
     </div>
   );
