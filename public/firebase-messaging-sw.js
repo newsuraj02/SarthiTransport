@@ -19,7 +19,7 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   const { title, body } = payload.notification || {};
-  self.registration.showNotification(title || "Sarthi Transport", {
+  self.registration.showNotification(title || "Apna Transport", {
     body: body || "",
     icon: "/favicon.svg",
   });

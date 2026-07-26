@@ -39,7 +39,7 @@ const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
 
 // Brand mark — an oxblood-and-mustard hexagon holding a truck, matching the
-// SARTHI logo. Built as CSS/SVG (not an image file) so it stays crisp at any
+// APNA logo. Built as CSS/SVG (not an image file) so it stays crisp at any
 // size and recolors automatically with the theme.
 function Logo({ size = 64, showText = true, textColor }) {
   return (
@@ -59,7 +59,7 @@ function Logo({ size = 64, showText = true, textColor }) {
       </div>
       {showText && (
         <div className="mt-1.5 font-extrabold" style={{ color: textColor || C.marigoldDeep, fontSize: Math.round(size * 0.22), letterSpacing: 1.5 }}>
-          SARTHI
+          APNA
         </div>
       )}
     </div>
@@ -1879,8 +1879,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
   const shareTrip = () => {
     const text = lang === "en"
-      ? `My goods are moving via Sarthi Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
-      : `मेरा सामान सार्थी ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${b.driverName || "—"}\nगाड़ी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
+      ? `My goods are moving via Apna Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
+      : `मेरा सामान अपना ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${b.driverName || "—"}\nगाड़ी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
@@ -2072,7 +2072,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
     : { Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
 
   const downloadInvoice = (b) => {
-    const text = `Sarthi Transport Invoice\nBooking: ${b.id}\nPickup: ${b.pickup}\nDrop: ${b.drop}\nVehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}\nDistance: ${b.distance} km\nQuoted Fare: ${fmt(b.fare - (b.extraCharge || 0))}\nExtra Waiting Charge: ${b.extraCharge ? fmt(b.extraCharge) : "-"}\nTotal Fare: ${fmt(b.fare)}\nAllowed Hours: ${b.hours || "-"} hrs\nWaiting Charge Rate: ${b.extraHourRate ? fmt(b.extraHourRate) + "/hr" : "-"}\nStatus: ${b.status}`;
+    const text = `Apna Transport Invoice\nBooking: ${b.id}\nPickup: ${b.pickup}\nDrop: ${b.drop}\nVehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}\nDistance: ${b.distance} km\nQuoted Fare: ${fmt(b.fare - (b.extraCharge || 0))}\nExtra Waiting Charge: ${b.extraCharge ? fmt(b.extraCharge) : "-"}\nTotal Fare: ${fmt(b.fare)}\nAllowed Hours: ${b.hours || "-"} hrs\nWaiting Charge Rate: ${b.extraHourRate ? fmt(b.extraHourRate) + "/hr" : "-"}\nStatus: ${b.status}`;
     const blob = new Blob([text], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -2279,8 +2279,8 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
     // their first booking/trip (see creditReferralOnce in the root App).
     const link = `https://sarthi-transport-74865.web.app?ref=${customerMobile}`;
     const msg = lang === "en"
-      ? `Try Sarthi Transport for booking trucks/tempos easily! Download: ${link} — I get ₹200 once your first booking is done!`
-      : `ट्रक/टेम्पो बुक करने के लिए सार्थी ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: ${link} — आपकी पहली बुकिंग पूरी होने पर मुझे ₹200 मिलेंगे!`;
+      ? `Try Apna Transport for booking trucks/tempos easily! Download: ${link} — I get ₹200 once your first booking is done!`
+      : `ट्रक/टेम्पो बुक करने के लिए अपना ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: ${link} — आपकी पहली बुकिंग पूरी होने पर मुझे ₹200 मिलेंगे!`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -3194,8 +3194,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     // The ₹200 referral reward is a customer-side program (see spec) — a
     // driver's share link doesn't carry a referral code.
     const msg = lang === "en"
-      ? "Join Sarthi Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthi-transport-74865.web.app"
-      : "सार्थी ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthi-transport-74865.web.app";
+      ? "Join Apna Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthi-transport-74865.web.app"
+      : "अपना ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthi-transport-74865.web.app";
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -4061,20 +4061,20 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang }) {
     ["2. Bidding System", "The customer is free to accept any one bid among multiple drivers. Once a bid is accepted, it is treated as final."],
     ["3. Cancellation", "If a trip is cancelled by either side after a driver is assigned, the deducted commission/advance fare is not refunded instantly — it is held by admin and automatically adjusted against the driver's next accepted trip, so the driver is not out of pocket. Repeated cancellations may lead to temporary account suspension."],
     ["4. Driver Responsibility", "The driver is required to submit a valid driving license, vehicle RC and KYC documents. No load will be shown until admin approves this verification."],
-    ["5. Commission and Payment", `As soon as the customer accepts a bid, ${commissionPct}% of the agreed fare will be deducted instantly from the driver's wallet as company commission, and the customer's/driver's mobile numbers are revealed to each other. Of this commission, ${bonusPct}% will be credited back to the driver's bonus account. The remaining 90% of the fare is collected by the driver directly from the customer (cash, UPI, or any digital mode) after delivery — Sarthi Transport does not collect this fare inside the app. Maintaining a minimum wallet balance is mandatory.`],
+    ["5. Commission and Payment", `As soon as the customer accepts a bid, ${commissionPct}% of the agreed fare will be deducted instantly from the driver's wallet as company commission, and the customer's/driver's mobile numbers are revealed to each other. Of this commission, ${bonusPct}% will be credited back to the driver's bonus account. The remaining 90% of the fare is collected by the driver directly from the customer (cash, UPI, or any digital mode) after delivery — Apna Transport does not collect this fare inside the app. Maintaining a minimum wallet balance is mandatory.`],
     ["6. Responsibility for Goods & Loading Costs", "It is the customer's responsibility to ensure the safety and correct information (material type and weight) of the goods, and to bear the full cost of loading/unloading labour (hamali) — this is not the driver's expense. The company is not responsible for any loss, damage, or delay of goods — this responsibility lies with the concerned driver/transporter."],
     ["7. Platform's Role — Intermediary Only (Most Important)",
-      `Sarthi Transport is a technology platform that only serves as a medium to connect the customer (load owner) and independent drivers/transporters. The company/admin is not itself a party to any transport of goods, nor a transport service provider. The ${commissionPct}% commission is charged only as a platform usage fee, not for transport service. Every deal between customer and driver (fare, timing, terms) is entirely a private agreement between the two. The company, admin, or platform will not be liable in any way for theft, damage, delay, accident, wrong payment, dispute, or any direct/indirect loss related to the goods. Full responsibility for any such matter rests with the concerned customer and driver themselves.`],
+      `Apna Transport is a technology platform that only serves as a medium to connect the customer (load owner) and independent drivers/transporters. The company/admin is not itself a party to any transport of goods, nor a transport service provider. The ${commissionPct}% commission is charged only as a platform usage fee, not for transport service. Every deal between customer and driver (fare, timing, terms) is entirely a private agreement between the two. The company, admin, or platform will not be liable in any way for theft, damage, delay, accident, wrong payment, dispute, or any direct/indirect loss related to the goods. Full responsibility for any such matter rests with the concerned customer and driver themselves.`],
     ["8. Disputes and Jurisdiction", "In case of any complaint or dispute, contact admin via the SOS section — admin can only help as a facilitator, this does not mean admin is responsible for the dispute. In case of any legal dispute, jurisdiction will lie only with Pimpri-Chinchwad / Pune courts."],
   ] : [
     ["1. लोड पोस्टिंग", "लोड पोस्ट करने के बाद पिकअप-ड्रॉप की जानकारी बदली नहीं जा सकती। अंतिम भाड़ा वही होगा जो ड्राइवर की स्वीकृत बोली (Accepted Bid) में तय हुआ हो।"],
     ["2. बिडिंग सिस्टम", "ग्राहक कई ड्राइवरों में से किसी भी एक बोली को स्वीकार करने के लिए स्वतंत्र है। एक बार बोली स्वीकार होने के बाद वह अंतिम मानी जाएगी।"],
     ["3. रद्दीकरण", "बुकिंग फाइनल होने के बाद अगर किसी भी तरफ से ट्रिप रद्द की जाती है, तो कटा हुआ कमीशन/एडवांस भाड़ा तुरंत वापस नहीं किया जाता — यह एडमिन के पास होल्ड रहता है और ड्राइवर की अगली स्वीकृत ट्रिप के कमीशन में अपने आप एडजस्ट हो जाता है, ताकि ड्राइवर को नुकसान न हो। बार-बार रद्द करने पर खाता अस्थायी रूप से बंद किया जा सकता है।"],
     ["4. ड्राइवर की जिम्मेदारी", "ड्राइवर को वैध ड्राइविंग लाइसेंस, गाड़ी की RC और KYC दस्तावेज़ जमा करना अनिवार्य है। एडमिन अप्रूवल तक कोई भी लोड नहीं दिखाया जाएगा।"],
-    ["5. कमीशन व भुगतान", `जैसे ही ग्राहक किसी बोली को स्वीकार करता है, तय भाड़े का ${commissionPct}% कंपनी कमीशन के रूप में ड्राइवर के वॉलेट से तुरंत कट जाएगा, और तभी ग्राहक व ड्राइवर के मोबाइल नंबर एक-दूसरे को दिखेंगे। इस कमीशन में से ${bonusPct}% ड्राइवर के बोनस अकाउंट में वापस जमा किया जाएगा। बचा हुआ 90% भाड़ा ड्राइवर डिलीवरी के बाद ग्राहक से सीधे (नकद, UPI या किसी भी डिजिटल माध्यम से) वसूलेगा — यह भुगतान सार्थी ट्रांसपोर्ट ऐप के अंदर कलेक्ट नहीं होता। ड्राइवर के वॉलेट में न्यूनतम बैलेंस रखना अनिवार्य है।`],
+    ["5. कमीशन व भुगतान", `जैसे ही ग्राहक किसी बोली को स्वीकार करता है, तय भाड़े का ${commissionPct}% कंपनी कमीशन के रूप में ड्राइवर के वॉलेट से तुरंत कट जाएगा, और तभी ग्राहक व ड्राइवर के मोबाइल नंबर एक-दूसरे को दिखेंगे। इस कमीशन में से ${bonusPct}% ड्राइवर के बोनस अकाउंट में वापस जमा किया जाएगा। बचा हुआ 90% भाड़ा ड्राइवर डिलीवरी के बाद ग्राहक से सीधे (नकद, UPI या किसी भी डिजिटल माध्यम से) वसूलेगा — यह भुगतान अपना ट्रांसपोर्ट ऐप के अंदर कलेक्ट नहीं होता। ड्राइवर के वॉलेट में न्यूनतम बैलेंस रखना अनिवार्य है।`],
     ["6. सामान की जिम्मेदारी व लोडिंग खर्च", "सामान की सुरक्षा और सही जानकारी (मटेरियल टाइप व वजन) देना, साथ ही लोडिंग-अनलोडिंग की हमाली का पूरा खर्च उठाना ग्राहक की जिम्मेदारी है — यह ड्राइवर का खर्च नहीं है। किसी भी प्रकार के माल के नुकसान, टूट-फूट या देरी के लिए कंपनी जिम्मेदार नहीं होगी — यह जिम्मेदारी संबंधित ड्राइवर/ट्रांसपोर्टर की होगी।"],
     ["7. प्लेटफ़ॉर्म की भूमिका — केवल मध्यस्थ (सबसे ज़रूरी)",
-      `सार्थी ट्रांसपोर्ट एक टेक्नोलॉजी प्लेटफ़ॉर्म है जो सिर्फ ग्राहक (लोड मालिक) और स्वतंत्र ड्राइवर/ट्रांसपोर्टर को आपस में जोड़ने का माध्यम है। कंपनी/एडमिन किसी भी माल की ढुलाई में स्वयं पक्षकार (party) नहीं है और न ही ट्रांसपोर्ट सेवा प्रदाता है। ${commissionPct}% कमीशन केवल प्लेटफ़ॉर्म इस्तेमाल करने के शुल्क के रूप में लिया जाता है, ट्रांसपोर्ट सेवा के लिए नहीं। ग्राहक और ड्राइवर के बीच हुआ हर सौदा (भाड़ा, समय, शर्तें) पूरी तरह उन दोनों के बीच का निजी अनुबंध है। माल की चोरी, नुकसान, देरी, दुर्घटना, गलत भुगतान, विवाद, या किसी भी प्रकार के प्रत्यक्ष/अप्रत्यक्ष नुकसान के लिए कंपनी, एडमिन या प्लेटफ़ॉर्म किसी भी रूप में उत्तरदायी (liable) नहीं होगा। ऐसे किसी भी मामले की पूरी जिम्मेदारी संबंधित ग्राहक और ड्राइवर की खुद की होगी।`],
+      `अपना ट्रांसपोर्ट एक टेक्नोलॉजी प्लेटफ़ॉर्म है जो सिर्फ ग्राहक (लोड मालिक) और स्वतंत्र ड्राइवर/ट्रांसपोर्टर को आपस में जोड़ने का माध्यम है। कंपनी/एडमिन किसी भी माल की ढुलाई में स्वयं पक्षकार (party) नहीं है और न ही ट्रांसपोर्ट सेवा प्रदाता है। ${commissionPct}% कमीशन केवल प्लेटफ़ॉर्म इस्तेमाल करने के शुल्क के रूप में लिया जाता है, ट्रांसपोर्ट सेवा के लिए नहीं। ग्राहक और ड्राइवर के बीच हुआ हर सौदा (भाड़ा, समय, शर्तें) पूरी तरह उन दोनों के बीच का निजी अनुबंध है। माल की चोरी, नुकसान, देरी, दुर्घटना, गलत भुगतान, विवाद, या किसी भी प्रकार के प्रत्यक्ष/अप्रत्यक्ष नुकसान के लिए कंपनी, एडमिन या प्लेटफ़ॉर्म किसी भी रूप में उत्तरदायी (liable) नहीं होगा। ऐसे किसी भी मामले की पूरी जिम्मेदारी संबंधित ग्राहक और ड्राइवर की खुद की होगी।`],
     ["8. विवाद और क्षेत्राधिकार", "किसी भी शिकायत या विवाद की स्थिति में SOS सेक्शन से एडमिन से संपर्क करें — एडमिन केवल सहायता (facilitation) के तौर पर मदद कर सकता है, इसका मतलब यह नहीं कि विवाद की जिम्मेदारी एडमिन की है। किसी भी कानूनी विवाद की स्थिति में क्षेत्राधिकार (Jurisdiction) केवल पिंपरी-चिंचवड़ / पुणे कोर्ट का रहेगा।"],
   ];
   return (
@@ -4482,7 +4482,7 @@ export default function App() {
           <div className="flex items-center gap-2 mb-4">
             <Logo size={38} showText={false} />
             <div className="flex-1">
-              <div className="text-white font-bold text-lg leading-none">{lang === "en" ? "Sarthi Transport" : "सार्थी ट्रांसपोर्ट"}</div>
+              <div className="text-white font-bold text-lg leading-none">{lang === "en" ? "Apna Transport" : "अपना ट्रांसपोर्ट"}</div>
               <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
             </div>
             <button onClick={() => setLang((l) => (l === "hi" ? "en" : "hi"))}

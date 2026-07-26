@@ -1,6 +1,6 @@
 {
   "name": "functions",
-  "description": "Cloud Functions for Sarthi Transport — sends push notifications for ride events (bid accepted, trip completed, new bid).",
+  "description": "Cloud Functions for Apna Transport — sends push notifications for ride events (bid accepted, trip completed, new bid).",
   "private": true,
   "engines": {
     "node": "20"
