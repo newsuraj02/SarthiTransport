@@ -4167,9 +4167,15 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang }) {
 
 function TermsFooterLink({ onOpen, lang }) {
   return (
-    <button onClick={onOpen} className="w-full text-center text-sm font-semibold py-2.5" style={{ color: C.ink, background: C.paper, borderTop: `1px solid ${C.line}` }}>
-      {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
-    </button>
+    <div className="flex" style={{ borderTop: `1px solid ${C.line}`, background: C.paper }}>
+      <button onClick={onOpen} className="flex-1 text-center text-sm font-semibold py-2.5" style={{ color: C.ink }}>
+        {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
+      </button>
+      <div style={{ width: 1, background: C.line }} />
+      <a href="/privacy.html" target="_blank" rel="noreferrer" className="flex-1 text-center text-sm font-semibold py-2.5" style={{ color: C.ink }}>
+        {lang === "en" ? "Privacy Policy" : "गोपनीयता नीति"}
+      </a>
+    </div>
   );
 }
 
