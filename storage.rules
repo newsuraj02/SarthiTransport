@@ -1,20 +1,33 @@
-// Sarthi Transport — shared pilot-test Firebase Storage rules
+// Apna Transport — production Firebase Storage rules
 //
 // Paste this into Firebase Console → Storage → Rules, then Publish.
+// Requires the same admin custom claim as firestore.rules (see
+// scripts/setupAdmin.js) and real Firebase Phone Auth for customers/drivers.
 //
-// SECURITY NOTE: this intentionally allows any client to read/write every
-// file. That's fine for a short trusted pilot with a known group of
-// 10-15 testers, but must NOT be used for a public launch — anyone with
-// your Firebase config could read/write all uploaded photos. Before a real
-// launch: add Firebase Auth (e.g. phone OTP) and scope rules per
-// authenticated user.
+// Only the owning driver/customer and admin can read or write a person's
+// own KYC documents, vehicle photos, or profile photo — nobody else (not
+// even other drivers/customers) ever needs to see these.
 
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write: if true;
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+    function isOwnPhone(mobile) {
+      return isSignedIn() && request.auth.token.phone_number == ('+91' + mobile);
+    }
+
+    match /drivers/{mobile}/{fileName} {
+      allow read, write: if isOwnPhone(mobile) || isAdmin();
+    }
+    match /customers/{mobile}/{fileName} {
+      allow read, write: if isOwnPhone(mobile) || isAdmin();
     }
   }
 }

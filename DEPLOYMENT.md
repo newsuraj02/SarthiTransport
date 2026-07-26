@@ -64,29 +64,43 @@ Until this is done, photo uploads automatically fall back to the old inline-in-F
 
 ## Admin login
 
-The Admin Portal (`?admin=1`) used to accept any email with the hardcoded password `admin123` — that's gone now. Set your own real credentials in `.env.local`:
+The Admin Portal (`?admin=1`) uses real Firebase Authentication (email/password) — not an env var, not a client-side comparison. This is what lets Firestore/Storage security rules actually verify "this is a real admin" (see "Security setup" below).
 
-```
-VITE_ADMIN_EMAIL=you@example.com
-VITE_ADMIN_PASSWORD=pick-something-real
-```
+**One-time setup per admin:**
 
-Pick any values you want — they're not validated against anything external, just compared directly against what you type on the Admin Login screen. Since `.env.local` is git-ignored, these never end up in the repo. If either variable is left blank, Admin login is disabled entirely (login always fails) rather than falling back to any default — that's intentional, so a forgotten setup step doesn't quietly leave a public demo password active.
+1. Firebase Console → **Authentication** → **Sign-in method** → enable **Email/Password** (once, for the whole project).
+2. Create the admin's account and tag it as an admin:
+   ```bash
+   cd scripts
+   npm install
+   node setupAdmin.js /path/to/serviceAccountKey.json admin@example.com "their-password"
+   ```
+   (Get the service account key from Project Settings → Service accounts → Generate new private key.) Run this once per admin — each gets their own real email/password.
+3. That admin logs in normally at the Admin Login screen with the email/password you just set.
 
-**Adding more admins**: up to 4 separate logins are supported — fill in the numbered pairs for each additional person, all in the same `.env.local`:
+Running `setupAdmin.js` again for the same email updates their password and re-applies the admin tag — use it to add more admins or reset a forgotten password. There's no limit on how many admin accounts you create this way.
 
-```
-VITE_ADMIN_EMAIL_2=second-admin@example.com
-VITE_ADMIN_PASSWORD_2=their-own-password
-VITE_ADMIN_EMAIL_3=third-admin@example.com
-VITE_ADMIN_PASSWORD_3=their-own-password
-VITE_ADMIN_EMAIL_4=fourth-admin@example.com
-VITE_ADMIN_PASSWORD_4=their-own-password
-```
+## Security setup (Firestore + Storage rules)
 
-Each person logs in with their own email/password — any configured pair works. Leave a pair blank to leave that slot unused. Since this is checked client-side rather than against a real user database, there's no per-admin audit trail (no record of *which* admin took an action) — just separate logins for convenience/access control, not accountability.
+Both `firestore.rules` and `storage.rules` in this repo started wide open (`allow read, write: if true`) for the initial trusted pilot — anyone with your public Firebase web config could read/write everything. They've since been rewritten to actually check identity: customers/drivers can only write their own data (matched by their verified phone number), and admin-only actions (approvals, KYC, settings) require the real admin login above. Do this **once**, in this exact order:
 
-Note: this is still a client-side password check baked into the deployed JS bundle, not a real server-verified login — anyone who inspects the built app's source could technically find it. That's an acceptable tradeoff for a small pilot's Admin Portal, same as the wide-open Firestore/Storage rules noted elsewhere in this doc — not something to rely on for a public launch.
+1. **Set up at least one admin account first** (previous section) — `setupAdmin.js` — before publishing the new rules, so you don't lock yourself out of admin-only paths before an admin account exists to unlock them.
+2. **Enable Email/Password sign-in** (previous section, step 1) if you haven't already — the new rules assume real Firebase Auth exists for admin, not just customers/drivers.
+3. **Deploy both rule files** — `firebase.json` already points at them, so the CLI can push both directly instead of copy-pasting into Console (less error-prone):
+   ```bash
+   firebase deploy --only firestore:rules,storage:rules
+   ```
+   (Console → Firestore Database/Storage → Rules → paste-and-Publish still works too, if you prefer.)
+4. **Rebuild and redeploy the app** — the Admin Login screen's code changed (real Firebase sign-in instead of env vars):
+   ```bash
+   npm run build
+   firebase deploy --only hosting
+   ```
+5. **Log every existing admin out and back in once** — custom claims (the "admin" tag) only take effect on a freshly issued sign-in token, so an admin who was already logged in via the old system needs one fresh login for the new rules to recognize them.
+
+After this, delete `VITE_ADMIN_EMAIL`/`VITE_ADMIN_PASSWORD` (and any `_2`/`_3`/`_4` variants) from your `.env.local` if you had them set — they're no longer read by the app at all.
+
+**What's still intentionally open, and why**: `vehicleTypes`, `materials`, and `settings` stay world-readable (no login needed) because the app loads them before anyone signs in, and none of it is sensitive — just vehicle names, material names, and commission percentages. `drivers`/`bookings`/`withdrawals`/`rechargeRequests` are readable by *any* signed-in user (not scoped to just the owner) because the app currently fetches whole collections and filters client-side rather than using scoped Firestore queries — e.g. a driver needs to see every open "Bidding" load, not just their own bookings. Writes to all of these ARE scoped to the owning phone number or admin. Tightening list-reads further would mean rewriting those subscriptions to use `where()` queries first — a real future improvement, not done here.
 
 ## Push notifications (ride updates)
 

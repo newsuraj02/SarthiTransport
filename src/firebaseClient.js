@@ -41,6 +41,11 @@ export const storage = defaultApp ? getStorage(defaultApp) : null;
 // and a driver with different phone numbers.
 export const customerFirebaseAuth = hasConfig ? getAuth(initializeApp(firebaseConfig, "customerAuth")) : null;
 export const driverFirebaseAuth = hasConfig ? getAuth(initializeApp(firebaseConfig, "driverAuth")) : null;
+// Real email/password sign-in for Admin (replacing the old env-var password
+// comparison) — needed so Firestore/Storage security rules can actually
+// recognize "this is an authenticated admin" via a custom claim, the same
+// way they recognize a customer/driver via their verified phone number.
+export const adminFirebaseAuth = hasConfig ? getAuth(initializeApp(firebaseConfig, "adminAuth")) : null;
 
 // Push notifications (ride status updates, new bids) — lazy/guarded because
 // getMessaging() throws in browsers/contexts that don't support it (Safari

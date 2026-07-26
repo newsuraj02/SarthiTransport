@@ -1,19 +1,98 @@
-// Sarthi Transport — shared pilot-test Firestore rules
+// Apna Transport — production Firestore rules
 //
-// Paste this into Firebase Console → Firestore Database → Rules, then Publish.
+// Paste this into Firebase Console → Firestore Database → Rules, then
+// Publish. Requires: (1) admin accounts created via scripts/setupAdmin.js
+// (tags them with a custom "admin" claim), and (2) customers/drivers
+// continuing to sign in via real Firebase Phone Auth as they already do.
 //
-// SECURITY NOTE: this intentionally allows any client to read/write every
-// document. That's fine for a short trusted pilot with a known group of
-// 10-15 testers, but must NOT be used for a public launch — anyone with
-// your Firebase config could read/write all data. Before a real launch:
-// add Firebase Auth (e.g. phone OTP) and scope rules per authenticated user.
+// Design notes / known trade-offs (read before changing):
+// - vehicleTypes/materials/settings stay readable by anyone, signed in or
+//   not — the app subscribes to them before login even happens, and none
+//   of it is sensitive (vehicle names, material names, commission %).
+// - drivers/bookings/withdrawals/rechargeRequests are readable by any
+//   signed-in user (not just the owner) because the client fetches whole
+//   collections and filters in JS rather than using scoped queries (e.g.
+//   a driver needs every "Bidding" booking, not just their own). Locking
+//   list-reads down further would need those queries rewritten first.
+//   Writes ARE scoped to the owning phone number (or admin) wherever the
+//   data model makes that safely checkable.
+// - customers is the one collection where the app never does a broad
+//   query except from Admin, so list access is admin-only while get
+//   (single-doc) access still works for the owning customer.
+// - alerts (SOS/complaints) are admin-only to read — only the Admin
+//   Portal ever displays them.
 
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+    // Firebase Phone Auth's token carries the verified number as
+    // "+91XXXXXXXXXX"; every customer/driver doc is keyed by the bare
+    // 10-digit number, matching what's passed to signInWithPhoneNumber.
+    function isOwnPhone(mobile) {
+      return isSignedIn() && request.auth.token.phone_number == ('+91' + mobile);
+    }
+
+    match /vehicleTypes/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /materials/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /settings/{id} {
+      // Lets the app's own "create if missing" bootstrap work on a brand
+      // new project before any admin account exists yet; once the doc
+      // exists, only admin can change it.
+      allow read: if true;
+      allow write: if isAdmin() || !exists(/databases/$(database)/documents/settings/$(id));
+    }
+
+    match /drivers/{mobile} {
+      allow read: if isSignedIn();
+      allow write: if isOwnPhone(mobile) || isAdmin();
+    }
+
+    match /customers/{mobile} {
+      allow get: if isOwnPhone(mobile) || isAdmin();
+      allow list: if isAdmin();
+      allow write: if isOwnPhone(mobile) || isAdmin();
+    }
+
+    match /bookings/{id} {
+      allow read: if isSignedIn();
+      allow create: if isOwnPhone(request.resource.data.customerMobile);
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /withdrawals/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        (request.resource.data.role == 'driver' && isOwnPhone(request.resource.data.driverMobile)) ||
+        (request.resource.data.role == 'customer' && isOwnPhone(request.resource.data.customerMobile))
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    match /rechargeRequests/{id} {
+      allow read: if isSignedIn();
+      allow create: if isOwnPhone(request.resource.data.driverMobile);
+      allow update, delete: if isAdmin();
+    }
+
+    match /alerts/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
   }
 }

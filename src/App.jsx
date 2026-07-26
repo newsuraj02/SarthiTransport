@@ -11,9 +11,9 @@ import {
 import { increment, arrayUnion, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
-import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from "firebase/auth";
+import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, storage, requestPushToken, listenForegroundPush } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, storage, requestPushToken, listenForegroundPush } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Oxblood & mustard theme — chosen specifically to not read as Porter
@@ -831,33 +831,48 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
 function AdminLogin({ onVerified, lang, onBack }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const inputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
-  const submit = () => {
-    // Up to 4 separate admin logins (VITE_ADMIN_EMAIL/_2/_3/_4, each with
-    // its own matching password) — every configured slot is checked, so
-    // several people can each use their own real credentials instead of
-    // sharing one login.
-    const slots = [
-      [import.meta.env.VITE_ADMIN_EMAIL, import.meta.env.VITE_ADMIN_PASSWORD],
-      [import.meta.env.VITE_ADMIN_EMAIL_2, import.meta.env.VITE_ADMIN_PASSWORD_2],
-      [import.meta.env.VITE_ADMIN_EMAIL_3, import.meta.env.VITE_ADMIN_PASSWORD_3],
-      [import.meta.env.VITE_ADMIN_EMAIL_4, import.meta.env.VITE_ADMIN_PASSWORD_4],
-    ];
-    const enteredEmail = email.trim().toLowerCase();
-    const matched = slots.some(([validEmail, validPassword]) =>
-      validEmail && validPassword && enteredEmail === validEmail.toLowerCase() && password === validPassword
-    );
-    if (matched) {
+  // A real, persisted Firebase Auth session (not a locally-stored flag) —
+  // refreshing the page or reopening the app skips straight past this form
+  // if already signed in, same as Customer/Driver already do.
+  useEffect(() => {
+    if (!adminFirebaseAuth) { setChecking(false); return; }
+    const unsub = onAuthStateChanged(adminFirebaseAuth, (user) => {
+      setChecking(false);
+      if (user) onVerified();
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const submit = async () => {
+    if (!adminFirebaseAuth || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await signInWithEmailAndPassword(adminFirebaseAuth, email.trim(), password);
       onVerified();
-    } else {
-      setError(true);
+    } catch (e) {
+      console.error(e);
+      setError(lang === "en" ? "Incorrect email or password" : "ईमेल या पासवर्ड गलत है");
     }
+    setSubmitting(false);
   };
+
+  if (checking) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : "आपका सेशन जांचा जा रहा है..."}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
@@ -874,10 +889,10 @@ function AdminLogin({ onVerified, lang, onBack }) {
 
       <div className="w-full space-y-3">
         <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Admin email / ID" : "एडमिन ईमेल / आईडी"} value={email}
-          onChange={(e) => { setEmail(e.target.value); setError(false); }} />
+          onChange={(e) => { setEmail(e.target.value); setError(""); }} />
         <div className="relative">
           <input type={showPassword ? "text" : "password"} className={inputCls} style={{ ...inputStyle, paddingRight: 40 }} placeholder={lang === "en" ? "Password" : "पासवर्ड"} value={password}
-            onChange={(e) => { setPassword(e.target.value); setError(false); }} />
+            onChange={(e) => { setPassword(e.target.value); setError(""); }} />
           <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute top-1/2 -translate-y-1/2 right-3" style={{ color: C.inkSoft }}
             aria-label={lang === "en" ? (showPassword ? "Hide password" : "Show password") : (showPassword ? "पासवर्ड छुपाएं" : "पासवर्ड दिखाएं")}>
             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -885,12 +900,12 @@ function AdminLogin({ onVerified, lang, onBack }) {
         </div>
         {error && (
           <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>
-            {lang === "en" ? "Incorrect email or password" : "ईमेल या पासवर्ड गलत है"}
+            {error}
           </div>
         )}
-        <button onClick={submit} disabled={!email.trim() || !password.trim()} className="w-full rounded-lg py-3 font-bold text-sm"
-          style={{ background: email.trim() && password.trim() ? C.marigold : C.line, color: email.trim() && password.trim() ? C.navy : "#9AA3B0" }}>
-          {lang === "en" ? "Login" : "लॉगिन करें"}
+        <button onClick={submit} disabled={!email.trim() || !password.trim() || submitting} className="w-full rounded-lg py-3 font-bold text-sm"
+          style={{ background: email.trim() && password.trim() && !submitting ? C.marigold : C.line, color: email.trim() && password.trim() && !submitting ? C.navy : "#9AA3B0" }}>
+          {submitting ? (lang === "en" ? "Logging in..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : "लॉगिन करें")}
         </button>
       </div>
     </div>
@@ -4220,7 +4235,7 @@ export default function App() {
   // customerFirebaseAuth/driverFirebaseAuth in firebaseClient.js) — signing
   // out below clears it for real, instead of just a locally-stored number.
   const logoutRole = (targetRole) => {
-    if (targetRole === "admin") setAdminAuth(false);
+    if (targetRole === "admin") { setAdminAuth(false); if (adminFirebaseAuth) signOut(adminFirebaseAuth).catch((e) => console.error(e)); }
     if (targetRole === "customer") { setCustomerAuth({ verified: false, mobile: "" }); if (customerFirebaseAuth) signOut(customerFirebaseAuth).catch((e) => console.error(e)); }
     if (targetRole === "driver") { setDriverAuth({ verified: false, mobile: "" }); if (driverFirebaseAuth) signOut(driverFirebaseAuth).catch((e) => console.error(e)); }
     // A locked device only has one role anyway — skip the now-pointless
@@ -4279,7 +4294,9 @@ export default function App() {
   const [allCustomers, setAllCustomers] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" ? subscribeCollection("customers", setAllCustomers, null) : undefined), [role]);
   useEffect(() => (firestoreReady ? subscribeCollection("bookings", setBookings) : undefined), []);
-  useEffect(() => (firestoreReady ? subscribeCollection("alerts", setAlerts) : undefined), []);
+  // Only Admin ever reads this (see AdminAlerts) — matches the Firestore
+  // rule restricting alerts to admin-only reads.
+  useEffect(() => (firestoreReady && role === "admin" ? subscribeCollection("alerts", setAlerts) : undefined), [role]);
   useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), []);
   useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), []);
   useEffect(() => {

@@ -30,7 +30,7 @@ While a trip is "Ongoing", both sides share their real GPS position the same way
 
 ### Known limitations for a pilot (not a public launch)
 
-- **Security**: Firestore rules are wide open (anyone with the web config can read/write everything) — fine for a short trusted pilot, not for a public link. See the note at the top of `firestore.rules`.
+- **Security**: Firestore/Storage rules now require real authentication (customer/driver phone number, or an admin account tagged via `scripts/setupAdmin.js`) — see the notes at the top of `firestore.rules`/`storage.rules` and `DEPLOYMENT.md` → "Security setup" for the trade-offs still accepted (some collections stay list-readable by any signed-in user rather than scoped to just the owner).
 - **Driver identity**: a driver's active trip is matched by display *name* internally, not phone number — pilot testers must use distinct real names (see `TESTING_GUIDE.md`).
 - **Live GPS**: only shared while a driver has an active ("Ongoing") trip, and only if they grant location permission in their browser — there's no background/idle tracking.
 - Each driver/customer gets their own 30-day free trial starting from their own signup date (their doc's `createdAt`), not one shared platform-wide clock — see `isInTrial()` in `src/App.jsx`. Commission is 0% and KYC auto-approves for a driver's first submission while they're within their own 30 days; admin's configured commission/bonus/minimum-wallet rates apply automatically once it ends.
@@ -56,5 +56,5 @@ To actually test with multiple people at once, deploy it — see `DEPLOYMENT.md`
 
 ## Demo credentials
 
-- Admin password: `admin123`
+- Admin login: real Firebase email/password — see `DEPLOYMENT.md` → "Admin login" for one-time setup via `scripts/setupAdmin.js`.
 - Customer/Driver login: real SMS OTP (or use a [test phone number](DEPLOYMENT.md#phone-login-real-sms-otp) while developing, to avoid sending real SMS)
