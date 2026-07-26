@@ -691,16 +691,10 @@ function StarRating({ value, onRate }) {
   );
 }
 
+const ADMIN_PHONE = "+917972399892";
+const ADMIN_WHATSAPP = "917972399892";
+
 function SosScreen({ role = "customer", raiseAlert, lang }) {
-  const [complaint, setComplaint] = useState("");
-  const [sent, setSent] = useState(false);
-  const submitComplaint = () => {
-    if (!complaint.trim()) return;
-    raiseAlert?.(role, "शिकायत", complaint.trim());
-    setComplaint("");
-    setSent(true);
-    setTimeout(() => setSent(false), 3000);
-  };
   return (
     <div className="px-5 py-5">
       <div className="rounded-xl p-5 text-center mb-5" style={{ background: "#FCEAE3" }}>
@@ -709,34 +703,14 @@ function SosScreen({ role = "customer", raiseAlert, lang }) {
         <p className="text-xs mt-1" style={{ color: C.ink }}>{lang === "en" ? "For any problem or booking help, click the button below." : "किसी भी समस्या या बुकिंग सहायता के लिए नीचे दिए गए बटन पर क्लिक करें।"}</p>
       </div>
       <div className="space-y-3">
-        <a href="tel:100" onClick={() => raiseAlert?.(role, "पुलिस सहायता")}
-          className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: "#2A211C" }}>
-          <Siren size={16} /> {lang === "en" ? "Police Help (100)" : "पुलिस सहायता (100)"}
-        </a>
-        <a href="tel:+911234567890" onClick={() => raiseAlert?.(role, "इमरजेंसी कॉल")}
+        <a href={`tel:${ADMIN_PHONE}`} onClick={() => raiseAlert?.(role, "इमरजेंसी कॉल")}
           className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: C.safety }}>
           <Phone size={16} /> {lang === "en" ? "Call Admin" : "एडमिन को कॉल करें"}
         </a>
-        <a href="https://wa.me/911234567890" target="_blank" rel="noreferrer" onClick={() => raiseAlert?.(role, "व्हाट्सएप सपोर्ट")}
+        <a href={`https://wa.me/${ADMIN_WHATSAPP}`} target="_blank" rel="noreferrer" onClick={() => raiseAlert?.(role, "व्हाट्सएप सपोर्ट")}
           className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: C.success }}>
           <MessageCircle size={16} /> {lang === "en" ? "WhatsApp Support" : "व्हाट्सएप सपोर्ट"}
         </a>
-      </div>
-      <div className="rounded-xl p-4 mt-5 shadow-sm" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-        <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "File a Complaint" : "शिकायत दर्ज करें"}</div>
-        <p className="text-[11px] mb-2" style={{ color: C.inkSoft }}>
-          {role === "driver"
-            ? (lang === "en" ? "Send admin details of any issue related to the customer or the goods." : "ग्राहक या सामान से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")
-            : (lang === "en" ? "Send admin details of any issue related to the driver or your booking." : "ड्राइवर या आपकी बुकिंग से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")}
-        </p>
-        <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={3}
-          placeholder={role === "driver"
-            ? (lang === "en" ? "e.g. Customer gave wrong address, wrong weight told..." : "जैसे: ग्राहक ने गलत पता दिया, सामान का वजन गलत बताया...")
-            : (lang === "en" ? "e.g. Driver asked for extra money, vehicle was different than promised..." : "जैसे: ड्राइवर ने अतिरिक्त पैसे मांगे, गाड़ी वादे से अलग थी...")}
-          className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-        {sent && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Complaint sent to admin" : "शिकायत एडमिन को भेज दी गई"}</div>}
-        <button onClick={submitComplaint} disabled={!complaint.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm"
-          style={{ background: complaint.trim() ? C.navy : C.line, color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : "शिकायत भेजें"}</button>
       </div>
     </div>
   );
