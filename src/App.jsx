@@ -3934,6 +3934,27 @@ function AdminNotify({ drivers, lang }) {
 }
 
 function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, trialMode, setTrialMode, trialDaysLeft, lang }) {
+  // Commission/bonus/min-wallet are edited as a draft and only written to
+  // Firestore on Save, instead of firing a write on every keystroke. Stays
+  // in sync with the live values as long as there's no unsaved edit, so an
+  // external change (e.g. trial mode toggling commission to 0) still shows
+  // up immediately.
+  const [draft, setDraft] = useState({ commissionPct, bonusPct, minWallet });
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    if (!dirty) setDraft({ commissionPct, bonusPct, minWallet });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commissionPct, bonusPct, minWallet, dirty]);
+  const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
+  const saveSettings = () => {
+    setCommissionPct(draft.commissionPct);
+    setBonusPct(draft.bonusPct);
+    setMinWallet(draft.minWallet);
+    setDirty(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : "सिस्टम सेटिंग्स"}</div>
@@ -3964,7 +3985,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
           <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted" : "बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
         </div>
         <div className="flex items-center gap-1">
-          <input type="number" value={commissionPct} disabled={trialMode} onChange={(e) => setCommissionPct(Math.max(0, Number(e.target.value) || 0))}
+          <input type="number" value={draft.commissionPct} disabled={trialMode} onChange={(e) => updateDraft({ commissionPct: Math.max(0, Number(e.target.value) || 0) })}
             className="w-16 rounded px-2 py-1 text-xs text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}` }} />
           <span className="text-xs" style={{ color: C.inkSoft }}>%</span>
         </div>
@@ -3975,22 +3996,27 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
           <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "This % out of the commission goes back to the driver's bonus account" : "कमीशन में से यह % ड्राइवर के बोनस अकाउंट में वापस जाएगा"}</div>
         </div>
         <div className="flex items-center gap-1">
-          <input type="number" value={bonusPct} disabled={trialMode} onChange={(e) => setBonusPct(Math.max(0, Number(e.target.value) || 0))}
+          <input type="number" value={draft.bonusPct} disabled={trialMode} onChange={(e) => updateDraft({ bonusPct: Math.max(0, Number(e.target.value) || 0) })}
             className="w-16 rounded px-2 py-1 text-xs text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}` }} />
           <span className="text-xs" style={{ color: C.inkSoft }}>%</span>
         </div>
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Minimum Wallet Balance" : "न्यूनतम वॉलेट बैलेंस"}</div>
           <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver must maintain this balance to keep the app active" : "ऐप एक्टिव रखने के लिए ड्राइवर को यह बैलेंस रखना होगा"}</div>
         </div>
         <div className="flex items-center gap-1">
           <span className="text-xs" style={{ color: C.inkSoft }}>₹</span>
-          <input type="number" value={minWallet} onChange={(e) => setMinWallet(Math.max(0, Number(e.target.value) || 0))}
+          <input type="number" value={draft.minWallet} onChange={(e) => updateDraft({ minWallet: Math.max(0, Number(e.target.value) || 0) })}
             className="w-20 rounded px-2 py-1 text-xs text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}` }} />
         </div>
       </div>
+      {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : "सेटिंग्स सेव हो गईं"}</div>}
+      <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-2.5 font-bold text-sm"
+        style={{ background: dirty ? C.navy : C.line, color: dirty ? "#fff" : "#9AA3B0" }}>
+        {lang === "en" ? "Save Changes" : "बदलाव सेव करें"}
+      </button>
     </div>
   );
 }
