@@ -26,7 +26,7 @@ A few people can try both roles from the same device — the app remembers each 
 8. If a customer accepts your quote, you'll see "ट्रिप जारी है" (trip in progress) with the customer's phone number.
 9. Ask the customer for their 4-digit pickup OTP, enter it — the loading timer starts.
 10. Try the "+1 hour" test button a couple of times to see the overtime/waiting-charge alert kick in.
-11. Tap "End Trip" to complete it. Check your wallet — commission should be deducted (or not, if the admin has trial mode on).
+11. Tap "End Trip" to complete it. Check your wallet — commission should be deducted, unless you're still within your own first 30 days on the app (each driver gets their own free trial from their signup date).
 12. Try requesting a wallet recharge and a bonus withdrawal — both should show as "pending admin approval" until the admin approves them.
 
 ## Customer script
@@ -46,7 +46,7 @@ A few people can try both roles from the same device — the app remembers each 
 2. **KYC Desk** — approve/reject drivers as they submit (check this often near the start, since drivers are blocked until you approve them).
 3. **Live Dashboard** — watch the booked-today and online-driver counts move as testers act.
 4. **Driver List** — search by name/vehicle number/mobile, try blocking and unblocking a driver.
-5. **System Settings** — toggle trial mode off to see real commission/bonus percentages kick in; note the "days left" countdown.
+5. **System Settings** — set the commission/bonus/minimum-wallet rates that apply once a driver's own 30-day trial ends (there's no manual trial toggle — it's automatic per driver/customer from their signup date).
 6. **Reports** — download the CSV commission report once a few trips complete.
 7. **Notify** — send a test message to all drivers.
 8. **Alerts** — approve wallet recharge and bonus withdrawal requests as they come in; review any SOS/complaint alerts.
@@ -61,5 +61,5 @@ A few people can try both roles from the same device — the app remembers each 
 
 - The map location-picker and the sample vehicle photo won't load if your network blocks OpenStreetMap/Google Maps — this doesn't affect anything else.
 - Login OTP is a real SMS now (Firebase Phone Authentication) — make sure you enter a mobile number you actually have access to.
-- The 60-day free-trial clock started the first time anyone opened the deployed app, and is shared by everyone (see admin settings for days left).
+- Each driver/customer gets their own 30-day free trial from their own signup date, not a shared platform-wide clock.
 - Payments, KYC document storage, and the ₹200 referral reward are all simulated — nothing real is charged or paid out.

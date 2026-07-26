@@ -8,7 +8,7 @@ import {
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, seedIfEmpty,
 } from "./firestoreStore";
-import { increment, arrayUnion } from "firebase/firestore";
+import { increment, arrayUnion, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from "firebase/auth";
@@ -331,6 +331,12 @@ function ForegroundToast({ toast }) {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TRIAL_DAYS = 30;
+// Each driver/customer gets their own 30-day trial from their own signup
+// date (their doc's createdAt), not one shared platform-wide clock. A
+// missing createdAt (still resolving right after signup, or a legacy doc
+// from before this field existed) is treated as "in trial" — generous by
+// default rather than accidentally charging someone commission early.
+const isInTrial = (createdAt) => (createdAt?.toMillis ? (Date.now() - createdAt.toMillis()) < TRIAL_DAYS * DAY_MS : true);
 
 // ---------------- shared: mock map ----------------
 function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" }) {
@@ -1130,7 +1136,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
 // DRIVER REGISTRATION — one continuous page: phone OTP, then straight
 // into KYC submission, instead of two separate screens.
 // =====================================================================
-function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType, trialMode }) {
+function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType }) {
   // Personal details — filled in first, on this page (Step 1 of 2).
   // Persisted to localStorage so a refresh mid-fill doesn't wipe it —
   // cleared once the details actually attach to the driver doc below.
@@ -1277,7 +1283,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     return (
       <div className="flex-1 overflow-y-auto">
         <div className="px-5 pt-4">{backButton}</div>
-        <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} trialMode={trialMode}
+        <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
           stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"} />
       </div>
     );
@@ -2244,7 +2250,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, trialMode, onOpenTerms, onGoHome }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, onOpenTerms, onGoHome }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const ongoingTrip = bookings.find((b) => b.status === "Ongoing");
@@ -2393,7 +2399,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
 // =====================================================================
 // DRIVER APP
 // =====================================================================
-function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWallet = 0, trialMode = false }) {
+function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWallet = 0 }) {
   const myBid = load.bids.find((b) => b.driverName === driver.name);
   const [amount, setAmount] = useState("");
   const [allowedHours, setAllowedHours] = useState("");
@@ -2402,7 +2408,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
 
   const canSubmit = Number(amount) > 0 && Number(allowedHours) > 0 && Number(extraHourRate) > 0;
   const requiredForQuote = Number(amount || 0) * (commissionPct / 100);
-  const walletShortfall = !trialMode && (driver.wallet - requiredForQuote) < minWallet;
+  const walletShortfall = !isInTrial(driver.createdAt) && (driver.wallet - requiredForQuote) < minWallet;
 
   const otherBids = load.bids.filter((b) => b.driverName !== driver.name);
   const lowestOther = otherBids.length ? otherBids.reduce((min, b) => b.amount < min.amount ? b : min) : null;
@@ -2638,7 +2644,7 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet, trialMode }) {
+function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name);
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
@@ -2780,7 +2786,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
               <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</div>
               {openLoads.map((load) => (
                 <LoadAlertCard key={load.id} load={load} driver={driver} addBid={addBid} lang={lang}
-                  commissionPct={commissionPct} minWallet={minWallet} trialMode={trialMode} />
+                  commissionPct={commissionPct} minWallet={minWallet} />
               ))}
             </>
           )}
@@ -2795,9 +2801,10 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
   );
 }
 
-function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bonusPct, trialMode, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
+function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bonusPct, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const inTrial = isInTrial(driver.createdAt);
   const myTrips = tripLog.filter((t) => t.driverName === driver.name && t.status !== "Cancelled");
   const totalCommission = myTrips.reduce((s, t) => s + t.fare * (commissionPct / 100), 0);
   const totalBonus = myTrips.reduce((s, t) => s + t.fare * (bonusPct / 100), 0);
@@ -2825,16 +2832,16 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
   return (
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Wallet" : "मेरा वॉलेट"}</h2>
-      {trialMode && (
+      {inTrial && (
         <div className="rounded-lg p-3 mb-3 flex items-center gap-2" style={{ background: "#DFEEE2" }}>
           <CheckCircle2 size={15} color={C.success} />
-          <span className="text-xs font-semibold" style={{ color: C.success }}>{lang === "en" ? "Free trial is active — no commission will be cut and no minimum wallet balance is required." : "अभी फ्री ट्रायल चल रहा है — कोई कमीशन नहीं कटेगा और न्यूनतम वॉलेट बैलेंस की ज़रूरत नहीं है।"}</span>
+          <span className="text-xs font-semibold" style={{ color: C.success }}>{lang === "en" ? "Your free trial is active — no commission will be cut and no minimum wallet balance is required." : "आपका फ्री ट्रायल चल रहा है — कोई कमीशन नहीं कटेगा और न्यूनतम वॉलेट बैलेंस की ज़रूरत नहीं है।"}</span>
         </div>
       )}
       <div className="rounded-xl p-4 mb-3" style={{ background: C.navy }}>
         <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Wallet Balance" : "वॉलेट बैलेंस"}</div>
         <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
-        {!trialMode && driver.wallet < minWallet && (
+        {!inTrial && driver.wallet < minWallet && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: C.safety }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
         )}
         {(driver.heldCredit || 0) > 0 && (
@@ -2980,7 +2987,7 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
   );
 }
 
-function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, trialMode = false }) {
+function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel }) {
   const VEHICLES = vehicleTypes;
   // Persisted to localStorage so a refresh mid-fill (slow connection,
   // accidental reload) doesn't force re-uploading photos or retyping —
@@ -3037,15 +3044,16 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   };
 
   const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
-  // First-time submission during the free trial skips the admin approval
-  // wait entirely — a driver who's already been reviewed before (kyc isn't
-  // null, e.g. resubmitting after a rejection or editing an approved
-  // profile) still goes back through the normal Pending review either way.
+  // First-time submission within this driver's own 30-day trial (from
+  // their own signup date) skips the admin approval wait entirely — a
+  // driver who's already been reviewed before (kyc isn't null, e.g.
+  // resubmitting after a rejection or editing an approved profile) still
+  // goes back through the normal Pending review either way.
   const isFirstSubmission = driver.kyc == null;
   const submit = () => {
     if (!canSubmit) return;
     setDriver({
-      ...driver, kyc: trialMode && isFirstSubmission ? "Approved" : "Pending", docs: { dl, photo },
+      ...driver, kyc: isInTrial(driver.createdAt) && isFirstSubmission ? "Approved" : "Pending", docs: { dl, photo },
       vehicleSpec: {
         type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
         capacityKg: Number(capacityKg) || undefined, length: Number(length) || undefined,
@@ -3185,7 +3193,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, trialMode, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, onGoHome }) {
+function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, onGoHome }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | 'liveLocation' | null
@@ -3294,8 +3302,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} commissionPct={commissionPct} minWallet={minWallet} trialMode={trialMode} />}
-        {tab === "wallet" && <DriverWallet driver={driver} setDriver={setDriver} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} trialMode={trialMode} lang={lang} withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge} />}
+        {tab === "home" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} commissionPct={commissionPct} minWallet={minWallet} />}
+        {tab === "wallet" && <DriverWallet driver={driver} setDriver={setDriver} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge} />}
         {tab === "history" && <DriverHistory tripLog={tripLog} driver={driver} commissionPct={commissionPct} lang={lang} />}
       </div>
       <BottomNav tabs={tabs} tab={tab} setTab={setTab} lang={lang} />
@@ -3933,7 +3941,7 @@ function AdminNotify({ drivers, lang }) {
   );
 }
 
-function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, trialMode, setTrialMode, trialDaysLeft, lang }) {
+function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, lang }) {
   // Commission/bonus/min-wallet are edited as a draft and only written to
   // Firestore on Save, instead of firing a write on every keystroke. Stays
   // in sync with the live values as long as there's no unsaved edit, so an
@@ -3959,44 +3967,29 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : "सिस्टम सेटिंग्स"}</div>
 
-      <div className="rounded-lg p-3 mb-4" style={{ background: trialMode ? "#DFEEE2" : "#F0EAE0" }}>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs font-bold" style={{ color: trialMode ? C.success : C.ink }}>{lang === "en" ? "Free Trial Mode (1 month)" : "फ्री ट्रायल मोड (1 महीना)"}</div>
-            <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "While on, both commission and bonus stay at 0%" : "चालू रहने पर कमीशन और बोनस दोनों 0% रहेंगे"}</div>
-            {trialMode && <div className="text-[11px] mt-1 font-semibold" style={{ color: C.success }}>{lang === "en" ? `${trialDaysLeft} days left — switches to commercial mode automatically after that` : `${trialDaysLeft} दिन बाकी — इसके बाद ऑटोमैटिक कमर्शियल मोड में बदल जाएगा`}</div>}
-          </div>
-          <button onClick={() => {
-            setTrialMode((t) => {
-              const next = !t;
-              if (next) { setCommissionPct(0); setBonusPct(0); }
-              else { setCommissionPct(10); setBonusPct(2); }
-              return next;
-            });
-          }} className="w-12 h-7 rounded-full relative" style={{ background: trialMode ? C.success : "#B8BEC7" }}>
-            <div className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all" style={{ left: trialMode ? 25 : 3 }} />
-          </button>
-        </div>
+      <div className="rounded-lg p-3 mb-4" style={{ background: "#DFEEE2" }}>
+        <div className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
+        <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
       </div>
 
-      <div className="flex items-center justify-between mb-4" style={{ opacity: trialMode ? 0.4 : 1 }}>
+      <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Commission Percentage" : "कमीशन प्रतिशत"}</div>
-          <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted" : "बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
+          <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted, once their trial has ended" : "ट्रायल खत्म होने के बाद, बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
         </div>
         <div className="flex items-center gap-1">
-          <input type="number" value={draft.commissionPct} disabled={trialMode} onChange={(e) => updateDraft({ commissionPct: Math.max(0, Number(e.target.value) || 0) })}
+          <input type="number" value={draft.commissionPct} onChange={(e) => updateDraft({ commissionPct: Math.max(0, Number(e.target.value) || 0) })}
             className="w-16 rounded px-2 py-1 text-xs text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}` }} />
           <span className="text-xs" style={{ color: C.inkSoft }}>%</span>
         </div>
       </div>
-      <div className="flex items-center justify-between mb-4" style={{ opacity: trialMode ? 0.4 : 1 }}>
+      <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Driver Bonus Percentage" : "ड्राइवर बोनस प्रतिशत"}</div>
           <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "This % out of the commission goes back to the driver's bonus account" : "कमीशन में से यह % ड्राइवर के बोनस अकाउंट में वापस जाएगा"}</div>
         </div>
         <div className="flex items-center gap-1">
-          <input type="number" value={draft.bonusPct} disabled={trialMode} onChange={(e) => updateDraft({ bonusPct: Math.max(0, Number(e.target.value) || 0) })}
+          <input type="number" value={draft.bonusPct} onChange={(e) => updateDraft({ bonusPct: Math.max(0, Number(e.target.value) || 0) })}
             className="w-16 rounded px-2 py-1 text-xs text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}` }} />
           <span className="text-xs" style={{ color: C.inkSoft }}>%</span>
         </div>
@@ -4072,7 +4065,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, trialMode, setTrialMode, trialDaysLeft, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver }) {
   const [tab, setTab] = useState("fleet");
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
@@ -4104,7 +4097,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} addManualCustomer={addManualCustomer} />}
-      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft} lang={lang} />}
+      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
@@ -4260,16 +4253,13 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
-  const [settings, setSettingsLocal] = useState({ commissionPct: 3, bonusPct: 2, minWallet: 500, trialMode: true, trialStartDate: Date.now() });
+  const [settings, setSettingsLocal] = useState({ commissionPct: 3, bonusPct: 2, minWallet: 500 });
   const commissionPct = settings.commissionPct;
   const bonusPct = settings.bonusPct;
   const minWallet = settings.minWallet;
-  const trialMode = settings.trialMode;
-  const trialStartDate = settings.trialStartDate;
   const setCommissionPct = (v) => patchDoc("settings", "main", { commissionPct: typeof v === "function" ? v(commissionPct) : v }).catch((e) => console.error(e));
   const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
   const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
-  const setTrialMode = (v) => patchDoc("settings", "main", { trialMode: typeof v === "function" ? v(trialMode) : v }).catch((e) => console.error(e));
 
   useEffect(() => {
     if (!firestoreReady) return;
@@ -4298,7 +4288,7 @@ export default function App() {
     // create before subscribing would leave everyone stuck on defaults
     // forever if that one initial call is slow on a flaky connection.
     const unsub = subscribeDoc("settings", "main", (data) => { if (data) setSettingsLocal(data); });
-    getOrCreateDoc("settings", "main", { commissionPct: 3, bonusPct: 2, minWallet: 500, trialMode: true, trialStartDate: Date.now() })
+    getOrCreateDoc("settings", "main", { commissionPct: 3, bonusPct: 2, minWallet: 500 })
       .catch((e) => console.error("[settings init]", e));
     return unsub;
   }, []);
@@ -4329,18 +4319,6 @@ export default function App() {
     if (driver?.kyc !== "Rejected") setDriverResubmitting(false);
   }, [driver?.kyc]);
 
-  // 2-month free trial: the clock starts the first time ANY tester's browser
-  // creates the shared settings doc, so it's a real once-per-deployment
-  // launch date now (not per-browser like the old local-only version).
-  const trialDaysLeft = Math.max(0, TRIAL_DAYS - Math.floor((Date.now() - trialStartDate) / DAY_MS));
-  const trialExpired = trialDaysLeft <= 0;
-  useEffect(() => {
-    if (trialExpired && trialMode) {
-      patchDoc("settings", "main", { trialMode: false, commissionPct: 10, bonusPct: 2 }).catch((e) => console.error(e));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trialExpired, trialMode]);
-
   const addVehicleType = (v) => createDoc("vehicleTypes", v.key, v).catch((e) => console.error(e));
   const addCustomMaterial = (name, labels) => createDoc("materials", slugify(name), labels).catch((e) => console.error(e));
 
@@ -4356,6 +4334,7 @@ export default function App() {
       mobile, name: fields.name.trim(), email: null, photo: null,
       address: fields.address || "", area: fields.area || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
       referredBy: null, referralCredited: false, referralBalance: 0, referralEntries: [],
+      createdAt: serverTimestamp(),
     });
   };
   const addManualDriver = (fields) => {
@@ -4366,6 +4345,7 @@ export default function App() {
       wallet: 500, bonus: 0, heldCredit: 0, blacklisted: false, docs: null,
       address: fields.address || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
       vehicleSpec: { type: fields.vehicleTypeKey, vehicleNumber: fields.vehicleNumber.trim().toUpperCase(), capacityKg: Number(fields.capacityKg) || undefined },
+      createdAt: serverTimestamp(),
     });
   };
 
@@ -4440,12 +4420,15 @@ export default function App() {
       hours: bid.hours, extraHourRate: bid.extraHourRate, progress: 0, otp,
     }).catch((e) => console.error(e));
 
-    // 10% commission cut instantly on acceptance, only for the accepted
+    // Commission cut instantly on acceptance, only for the accepted
     // driver's own device — any held credit from a past cancellation offsets
-    // this trip's commission first.
+    // this trip's commission first. 0% while this specific driver is still
+    // within their own 30-day trial (from their own signup date).
     if (bid.driverName === driver?.name) {
-      const commissionAmt = bid.amount * (commissionPct / 100);
-      const bonusAmt = bid.amount * (bonusPct / 100);
+      const effCommissionPct = isInTrial(driver.createdAt) ? 0 : commissionPct;
+      const effBonusPct = isInTrial(driver.createdAt) ? 0 : bonusPct;
+      const commissionAmt = bid.amount * (effCommissionPct / 100);
+      const bonusAmt = bid.amount * (effBonusPct / 100);
       const held = driver.heldCredit || 0;
       const offset = Math.min(held, commissionAmt);
       setDriver({
@@ -4471,9 +4454,13 @@ export default function App() {
     if (b.status === "Ongoing" && b.driverName === driver?.name && b.fare) {
       // New cancellation rule: the cut commission/advance is held by admin,
       // not refunded instantly — it auto-adjusts against the driver's next
-      // accepted trip so the driver isn't out of pocket.
-      const held = b.fare * (commissionPct / 100);
-      const bonusReverse = b.fare * (bonusPct / 100);
+      // accepted trip so the driver isn't out of pocket. Matches whatever
+      // rate actually applied when the commission was cut (0% if this
+      // driver was in their own trial at the time).
+      const effCommissionPct = isInTrial(driver.createdAt) ? 0 : commissionPct;
+      const effBonusPct = isInTrial(driver.createdAt) ? 0 : bonusPct;
+      const held = b.fare * (effCommissionPct / 100);
+      const bonusReverse = b.fare * (effBonusPct / 100);
       setDriver({ ...driver, heldCredit: (driver.heldCredit || 0) + held, bonus: Math.max(0, (driver.bonus || 0) - bonusReverse) });
     }
     if (b.status === "Ongoing" && b.driverName) unfreezeDriverName(b.driverName);
@@ -4583,13 +4570,15 @@ export default function App() {
             onLogout={() => (customerAuth.verified ? logoutRole("customer") : goHome())}
             onComplete={(addr) => {
               setCustomer({ mobile: customerAuth.mobile, ...addr });
-              if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile }).catch((e) => console.error(e));
+              // First-ever creation of this customer's doc — stamp their real
+              // signup date so their own 30-day trial can be calculated from it.
+              if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile, createdAt: serverTimestamp() }).catch((e) => console.error(e));
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
-            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} requestReferralWithdrawal={requestReferralWithdrawal} raiseAlert={raiseAlert} trialMode={trialMode} onOpenTerms={() => setShowTerms(true)}
+            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} requestReferralWithdrawal={requestReferralWithdrawal} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
             onGoHome={goHome} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
@@ -4597,7 +4586,7 @@ export default function App() {
             verified={driverAuth.verified}
             onOtpVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setLockedRole("driver"); }}
             onLogout={() => (driverAuth.verified ? logoutRole("driver") : goHome())}
-            driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} trialMode={trialMode} />
+            driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
           <div className="flex-1 overflow-y-auto">
@@ -4637,7 +4626,7 @@ export default function App() {
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
-            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} trialMode={trialMode} lang={lang} onLogout={logout}
+            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
             onOpenTerms={() => setShowTerms(true)} onGoHome={goHome} />
         )}
@@ -4645,7 +4634,7 @@ export default function App() {
           <div className="flex-1 overflow-y-auto">
             <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
-              bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} onGoHome={goHome} trialMode={trialMode} setTrialMode={setTrialMode} trialDaysLeft={trialDaysLeft}
+              bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} onGoHome={goHome}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver} />
           </div>

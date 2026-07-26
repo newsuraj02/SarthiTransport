@@ -122,8 +122,8 @@ scope:
   — KYC documents, vehicle photos, profile photos. Pass `--skip-storage` if
   you'd rather keep those and only clear Firestore.
 - **Leaves untouched**: the `settings/main` doc (commission %, bonus %,
-  minimum wallet, trial mode, trial start date), the `vehicleTypes`
-  collection, and the `materials` collection.
+  minimum wallet), the `vehicleTypes` collection, and the `materials`
+  collection.
 
 This is **irreversible** — there's no undo once it runs. Run it from your
 own machine, never from a shared/public one, since it uses a service
