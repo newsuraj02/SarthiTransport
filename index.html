@@ -7,9 +7,14 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <meta name="theme-color" content="#5C1F1F" />
+    <!-- The app already switches between English/Hindi itself via its own
+         ENG/हिं toggle — browser auto-translate (e.g. Chrome Translate)
+         conflicts with that and mistranslates "Apna" (not a real English
+         word it recognizes) into "Your"/"Own". Disable it entirely. -->
+    <meta name="google" content="notranslate" />
     <title>अपना ट्रांसपोर्ट | Apna Transport</title>
   </head>
-  <body>
+  <body translate="no">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

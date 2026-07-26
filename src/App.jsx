@@ -58,7 +58,7 @@ function Logo({ size = 64, showText = true, textColor }) {
         <Truck size={Math.round(size * 0.5)} color="#fff" strokeWidth={2.2} />
       </div>
       {showText && (
-        <div className="mt-1.5 font-extrabold" style={{ color: textColor || C.marigoldDeep, fontSize: Math.round(size * 0.22), letterSpacing: 1.5 }}>
+        <div translate="no" className="mt-1.5 font-extrabold" style={{ color: textColor || C.marigoldDeep, fontSize: Math.round(size * 0.22), letterSpacing: 1.5 }}>
           APNA
         </div>
       )}
@@ -4562,7 +4562,7 @@ export default function App() {
           <div className="flex items-center gap-2 mb-4">
             <Logo size={38} showText={false} />
             <div className="flex-1">
-              <div className="text-white font-bold text-lg leading-none">{lang === "en" ? "Apna Transport" : "अपना ट्रांसपोर्ट"}</div>
+              <div translate="no" className="text-white font-bold text-lg leading-none">{lang === "en" ? "Apna Transport" : "अपना ट्रांसपोर्ट"}</div>
               <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
             </div>
             <button onClick={() => setLang((l) => (l === "hi" ? "en" : "hi"))}
