@@ -3588,24 +3588,50 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
       )}
       <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Siren size={16} color={C.safety} /> {lang === "en" ? "Emergency Alerts" : "इमरजेंसी अलर्ट्स"}</div>
-        {alerts.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No alerts yet." : "अभी कोई अलर्ट नहीं आया।"}</p> : (
-          <div className="space-y-2">
-            {alerts.map((a) => {
-              const urgent = a.type === "इमरजेंसी कॉल" || a.type === "पुलिस सहायता";
-              return (
-                <div key={a.id} className="rounded-lg p-3" style={{ background: urgent ? "#FCEAE3" : "#F0EAE0" }}>
+        {alerts.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No alerts yet." : "अभी कोई अलर्ट नहीं आया।"}</p> : (() => {
+          // Police Help / Emergency Call / WhatsApp Support carry no extra
+          // info per tap — a driver tapping "WhatsApp Support" 5 times just
+          // adds 5 identical rows. Collapse those into one row per role+type
+          // with a tap count, so the list reads as distinct alert kinds, not
+          // a repeated instruction. Complaints keep one row each since every
+          // one has its own real text.
+          const grouped = {};
+          const complaints = [];
+          for (const a of alerts) {
+            if (a.type === "शिकायत") { complaints.push(a); continue; }
+            const key = `${a.role}|${a.type}`;
+            if (!grouped[key]) grouped[key] = { role: a.role, type: a.type, count: 0, latest: a.createdAt };
+            grouped[key].count += 1;
+          }
+          const groupedRows = Object.values(grouped); // alerts is newest-first, so first-seen == latest per key
+          return (
+            <div className="space-y-2">
+              {groupedRows.map((g) => {
+                const urgent = g.type === "इमरजेंसी कॉल" || g.type === "पुलिस सहायता";
+                return (
+                  <div key={`${g.role}|${g.type}`} className="rounded-lg p-3" style={{ background: urgent ? "#FCEAE3" : "#F0EAE0" }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold flex items-center gap-1" style={{ color: urgent ? C.safety : C.ink }}>
+                        {urgent && <Siren size={12} />} {roleLabel[g.role] || g.role} · {alertTypeLabel(g.type, lang)}
+                        {g.count > 1 && <span className="font-normal" style={{ color: C.inkSoft }}>&nbsp;×{g.count}</span>}
+                      </span>
+                      <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(g.latest)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {complaints.map((a) => (
+                <div key={a.id} className="rounded-lg p-3" style={{ background: "#F0EAE0" }}>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold flex items-center gap-1" style={{ color: urgent ? C.safety : C.ink }}>
-                      {urgent && <Siren size={12} />} {roleLabel[a.role] || a.role} · {alertTypeLabel(a.type, lang)}
-                    </span>
+                    <span className="text-xs font-bold" style={{ color: C.ink }}>{roleLabel[a.role] || a.role} · {alertTypeLabel(a.type, lang)}</span>
                     <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(a.createdAt)}</span>
                   </div>
                   {a.note && <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{a.note}</div>}
                 </div>
-              );
-            })}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
