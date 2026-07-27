@@ -124,6 +124,22 @@ function isFutureAdvance(scheduledFor) {
   return datePart > today;
 }
 
+function pad2(n) { return String(n).padStart(2, "0"); }
+
+// Renders a booking's date/time in DD:MM:YYYY HH:MM — for an advance
+// booking that's the scheduled date/time itself; for an immediate ride
+// (no scheduledFor) it's when the ride was actually posted.
+function rideDateTimeLabel(booking) {
+  if (booking.scheduledFor) {
+    const [datePart, timePart] = booking.scheduledFor.split(" ");
+    const [y, m, d] = datePart.split("-");
+    return `${d}:${m}:${y}${timePart ? " " + timePart : ""}`;
+  }
+  const d = booking.createdAt?.toDate ? booking.createdAt.toDate() : null;
+  if (!d) return "";
+  return `${pad2(d.getDate())}:${pad2(d.getMonth() + 1)}:${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
 // Time-of-day greeting shown at the top of the Customer/Driver/Admin home
 // screens — computed fresh on every render, so it naturally flips from
 // Morning to Afternoon to Evening as the session stays open across the day.
@@ -2275,17 +2291,19 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
     };
     return (
       <div className="px-5 py-5">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-start justify-between mb-3 gap-2">
           <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
-          {onAddAnother && (
-            <button onClick={onAddAnother} className="text-[11px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
-              <Plus size={12} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और राइड जोड़ें"}
-            </button>
-          )}
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-1 rounded-full text-right" style={{ background: b.scheduledFor ? "#FBEBD2" : "#DFEEE2", color: b.scheduledFor ? "#A8721C" : C.success }}>
+              <Clock3 size={11} /> {b.scheduledFor ? (lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(b)}
+            </span>
+            {onAddAnother && (
+              <button onClick={onAddAnother} className="text-[11px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+                <Plus size={12} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और राइड जोड़ें"}
+              </button>
+            )}
+          </div>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-3 py-1.5 rounded-full mb-3" style={{ background: b.scheduledFor ? "#FBEBD2" : "#DFEEE2", color: b.scheduledFor ? "#A8721C" : C.success }}>
-          <Clock3 size={13} /> {b.scheduledFor ? (lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")}
-        </span>
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
@@ -2330,18 +2348,19 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const v = VEHICLES.find((x) => x.key === b.vehicle);
   return (
     <div className="px-5 py-5">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-start justify-between mb-3 gap-2">
         <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
-        {onAddAnother && (
-          <button onClick={onAddAnother} className="text-[11px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
-            <Plus size={12} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और राइड जोड़ें"}
-          </button>
-        )}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-1 rounded-full text-right" style={{ background: b.scheduledFor ? "#FBEBD2" : "#DFEEE2", color: b.scheduledFor ? "#A8721C" : C.success }}>
+            <Clock3 size={11} /> {b.scheduledFor ? (lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(b)}
+          </span>
+          {onAddAnother && (
+            <button onClick={onAddAnother} className="text-[11px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+              <Plus size={12} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और राइड जोड़ें"}
+            </button>
+          )}
+        </div>
       </div>
-
-      <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-3 py-1.5 rounded-full mb-2.5" style={{ background: b.scheduledFor ? "#FBEBD2" : "#DFEEE2", color: b.scheduledFor ? "#A8721C" : C.success }}>
-        <Clock3 size={13} /> {b.scheduledFor ? (lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")}
-      </span>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="relative shrink-0">
