@@ -4556,6 +4556,14 @@ export default function App() {
     if (adminEntry && role === null) setRole("admin");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminEntry]);
+  // Backs the manifest's home-screen shortcuts (?open=customer / ?open=driver)
+  // — jumps straight past the role-choice screen on a fresh load, same as
+  // adminEntry above. Harmless no-op for anyone opening the plain URL.
+  useEffect(() => {
+    const open = new URLSearchParams(window.location.search).get("open");
+    if ((open === "customer" || open === "driver") && role === null) { setRole(open); setApp(open); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // "Remembered login" is now a real Firebase Auth session (see
   // customerFirebaseAuth/driverFirebaseAuth in firebaseClient.js) — signing
   // out below clears it for real, instead of just a locally-stored number.
