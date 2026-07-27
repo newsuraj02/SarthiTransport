@@ -2757,7 +2757,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                     <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                       <div className="flex items-center gap-1.5 mb-1" style={{ color: "#A8721C" }}>
                         <Clock3 size={12} />
-                        <span className="text-[11px] font-bold">{ab.scheduledFor}</span>
+                        <span className="text-[11px] font-bold">{lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड"} · {rideDateTimeLabel(ab)}</span>
                       </div>
                       <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
                       <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ab.status === "Bidding" ? (lang === "en" ? "Waiting for bids" : "बोली का इंतज़ार") : (lang === "en" ? `Driver assigned — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`)}</div>
@@ -2893,9 +2893,9 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
         <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{materialLabel(load.material, lang)} · {load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
         <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ background: load.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: load.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(load.serviceType, lang)}</span>
-        {load.scheduledFor && (
-          <span className="text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1" style={{ background: "#FBEBD2", color: "#A8721C" }}><Clock3 size={10} /> {load.scheduledFor}</span>
-        )}
+        <span className="text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1" style={{ background: load.scheduledFor ? "#FBEBD2" : "#DFEEE2", color: load.scheduledFor ? "#A8721C" : C.success }}>
+          <Clock3 size={10} /> {load.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(load)}
+        </span>
       </div>
 
       {lowestOverall !== null && (
@@ -3185,7 +3185,9 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
         <div>
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Truck size={15} /> {lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</span>
-            <span className="text-xs font-mono" style={{ color: C.inkSoft }}>{myTrip.id}</span>
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-1 rounded-full" style={{ background: myTrip.scheduledFor ? "#FBEBD2" : "#DFEEE2", color: myTrip.scheduledFor ? "#A8721C" : C.success }}>
+              <Clock3 size={11} /> {myTrip.scheduledFor ? (lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(myTrip)}
+            </span>
           </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -3712,6 +3714,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 <button onClick={() => setSelectedAdvanceId(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
                   <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back to list" : "लिस्ट पर वापस जाएं"}
                 </button>
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-1 rounded-full mb-2.5" style={{ background: "#FBEBD2", color: "#A8721C" }}>
+                  <Clock3 size={11} /> {lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड"} · {rideDateTimeLabel(ab)}
+                </span>
                 <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{ab.pickup}</span></div>
                   <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{ab.drop}</span></div>
@@ -3753,7 +3758,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                     <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                       <div className="flex items-center gap-1.5 mb-1" style={{ color: "#A8721C" }}>
                         <Clock3 size={12} />
-                        <span className="text-[11px] font-bold">{ab.scheduledFor}</span>
+                        <span className="text-[11px] font-bold">{lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड"} · {rideDateTimeLabel(ab)}</span>
                       </div>
                       <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
                     </button>
