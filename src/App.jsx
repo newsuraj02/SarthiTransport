@@ -2576,8 +2576,12 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
 function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, onOpenTerms, onGoHome }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
-  const ongoingTrip = bookings.find((b) => b.status === "Ongoing");
-  const activeBooking = bookings.find((b) => b.status === "Bidding" || b.status === "Ongoing");
+  // `bookings` is the whole platform's list (drivers need to see every open
+  // load to bid on) — a customer must only ever see their own, so every
+  // lookup below filters to this customer's mobile number first.
+  const myBookings = bookings.filter((b) => b.customerMobile === customerMobile);
+  const ongoingTrip = myBookings.find((b) => b.status === "Ongoing");
+  const activeBooking = myBookings.find((b) => b.status === "Bidding" || b.status === "Ongoing");
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
@@ -2646,7 +2650,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Use the language toggle (EN / हिं) at the top of the app to switch languages. For changes to your saved address, contact the helpline." : "भाषा बदलने के लिए ऐप के ऊपर मौजूद EN / हिं बटन इस्तेमाल करें। सेव किए गए पते में बदलाव के लिए हेल्पलाइन से संपर्क करें।"}</p>
           </div>
         )}
-        {settingsView === "history" && <CustomerHistory bookings={bookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
+        {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
       </div>
     );
   }
@@ -2712,7 +2716,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         {activeBooking ? (
           <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang} />
         ) : (
-          <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={bookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial} />
+          <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial} />
         )}
       </div>
     </>
