@@ -648,7 +648,7 @@ function LocationPicker(props) {
   return <MapPicker {...props} />;
 }
 
-function MicButton({ onResult, lang = "hi-IN", size = 8, iconSize = 14 }) {
+function MicButton({ onResult, lang = "hi-IN", label, size = 8, iconSize = 14 }) {
   const [listening, setListening] = useState(false);
   const recRef = useRef(null);
 
@@ -677,6 +677,16 @@ function MicButton({ onResult, lang = "hi-IN", size = 8, iconSize = 14 }) {
     recRef.current?.stop();
     setListening(false);
   };
+
+  if (label) {
+    return (
+      <button type="button" onClick={listening ? stop : start}
+        className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold"
+        style={{ background: listening ? C.safety : "#F5E6C8", color: listening ? "#fff" : "#A8721C" }}>
+        <Mic size={16} /> {label}
+      </button>
+    );
+  }
 
   return (
     <button type="button" onClick={listening ? stop : start}
@@ -757,12 +767,14 @@ function SosScreen({ role = "customer", raiseAlert, lang }) {
 // =====================================================================
 // ROLE SELECTION — shown once so each user only sees their own platform
 // =====================================================================
-function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVerified, onLogoutRole, adminEntry, lockedRole }) {
+function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVerified, onLogoutRole, adminEntry }) {
   const anyVerified = customerVerified || driverVerified || adminVerified;
-  // Once a device has verified as Customer or Driver, it's locked to that
-  // choice forever — the other option never shows again, even after logout.
-  const showCustomer = lockedRole ? lockedRole === "customer" : true;
-  const showDriver = lockedRole ? lockedRole === "driver" : true;
+  // One number, one app: while a Customer or Driver session is active on
+  // this device, the other role is hidden — opening it requires logging
+  // out of the active one first (via the "Not you?" link below). Logging
+  // out brings back this same screen with both options visible again.
+  const showCustomer = !driverVerified;
+  const showDriver = !customerVerified;
   // Admin Login is invisible to regular Customer/Driver users — it only
   // shows up when the page was opened with the secret ?admin=1 link, or
   // once already signed in as admin (so the logout link stays reachable).
@@ -1793,31 +1805,39 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
 // Pickup/Drop address field — wires Google Places Autocomplete directly onto
 // the text input (live suggestion dropdown while typing) when Maps is
 // configured/loaded, falling back to a plain input otherwise.
-function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap }) {
-  const inputCls = "w-full rounded-lg px-4 py-4 text-base font-semibold outline-none";
-  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap, lang = "hi", dotColor }) {
+  const inputCls = "w-full rounded-lg py-5 text-base font-semibold outline-none";
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: dotColor ? 34 : 16, paddingRight: 16 };
   const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
   return (
     <div>
       <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{label}</label>
-      {mapsReady ? (
-        <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged} options={{ componentRestrictions: { country: "in" } }}>
-          {inputEl}
-        </Autocomplete>
-      ) : inputEl}
-      {/* A separate row below the field, instead of icons crammed inside
-          it, so each button is a full 44px touch target — the minimum
-          Apple/Google guidelines call for reliable tapping on a phone. */}
-      <div className="flex items-center gap-2.5 mt-2">
-        <button type="button" onClick={onMapPin} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 44, height: 44, background: "#F5E6C8" }}>
-          <MapPin size={20} color="#A8721C" />
-        </button>
+      <div className="relative w-full">
+        {mapsReady ? (
+          <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged} options={{ componentRestrictions: { country: "in" } }}>
+            {inputEl}
+          </Autocomplete>
+        ) : inputEl}
+        {/* The colored dot at the front of the box is a quick visual cue —
+            green for where the load comes from, red for where it goes —
+            on top of the placeholder text saying the same thing. */}
+        {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
+      </div>
+      {/* Clear, labeled buttons below the field instead of small icons
+          crammed inside it — bigger touch targets and unambiguous at a
+          glance for a first-time user. */}
+      <div className="mt-2 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: "#F5E6C8", color: "#A8721C" }}>
+            <MapPin size={16} /> {lang === "en" ? "Choose from Map" : "मैप से चुनें"}
+          </button>
+          <MicButton onResult={onMic} label={lang === "en" ? "Speak to Enter" : "बोलकर लिखें"} />
+        </div>
         {onUseCurrentLocation && (
-          <button type="button" onClick={onUseCurrentLocation} disabled={locating} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 44, height: 44, background: "#DFEEE2" }}>
-            <Navigation size={20} color={C.success} />
+          <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: "#DFEEE2", color: C.success }}>
+            <Navigation size={16} /> {locating ? (lang === "en" ? "Locating..." : "ढूंढ रहे हैं...") : (lang === "en" ? "Use My Current Location" : "मेरी वर्तमान लोकेशन इस्तेमाल करें")}
           </button>
         )}
-        <MicButton onResult={onMic} size={11} iconSize={20} />
       </div>
       {areaLabel ? (
         <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>📍 {areaLabel}</div>
@@ -2044,12 +2064,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         <div className="space-y-4">
           <LocationField
             label={lang === "en" ? "Pickup" : "पिकअप"}
+            lang={lang}
+            dotColor={C.success}
             value={pickup}
             onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
             onPlaceChanged={onPickupPlaceChanged}
             autocompleteRef={pickupAutocompleteRef}
             mapsReady={mapsReady}
-            placeholder={lang === "en" ? "Pickup address" : "पिकअप पता"}
+            placeholder={lang === "en" ? "🟢 Where to pick up the load from? (Pickup)" : "🟢 सामान कहाँ से उठाना है? (पिकअप)"}
             onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); }}
             onMapPin={() => setMapField("pickup")}
             onUseCurrentLocation={useMyCurrentLocation}
@@ -2060,12 +2082,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           />
           <LocationField
             label={lang === "en" ? "Drop" : "ड्रॉप"}
+            lang={lang}
+            dotColor={C.safety}
             value={drop}
             onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
             onPlaceChanged={onDropPlaceChanged}
             autocompleteRef={dropAutocompleteRef}
             mapsReady={mapsReady}
-            placeholder={lang === "en" ? "Drop address" : "ड्रॉप पता"}
+            placeholder={lang === "en" ? "🔴 Where to unload the goods? (Drop)" : "🔴 सामान कहाँ उतारना है? (ड्रॉप)"}
             onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); }}
             onMapPin={() => setMapField("drop")}
             areaLabel={findArea(drop) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(drop)}` : null}
@@ -2137,9 +2161,9 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           );
         })()}
 
-        <button onClick={post} disabled={!canPost} className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2"
-          style={{ background: canPost ? C.marigold : C.line, color: canPost ? C.navy : "#9AA3B0" }}>
-          {lang === "en" ? "Book Now" : "बुक करें"}
+        <button onClick={post} disabled={!canPost} className="w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2"
+          style={{ background: canPost ? C.success : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
+          🚚 {lang === "en" ? "Find Vehicles / Book Now" : "गाड़ियां खोजें / अभी बुक करें"}
         </button>
       </div>
 
@@ -4511,15 +4535,6 @@ export default function App() {
     });
   };
   const [driverAuth, setDriverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
-  // Once a device verifies as Customer or Driver, it's permanently locked to
-  // that choice — the other option never appears again, even after logout.
-  const [lockedRole, setLockedRole] = usePersistedState("sarthi_lockedRole", null);
-  useEffect(() => {
-    if (lockedRole) return;
-    if (customerAuth.verified) setLockedRole("customer");
-    else if (driverAuth.verified) setLockedRole("driver");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   // Opening the app with ?admin=1 skips the role-choice screen entirely and
   // goes straight to the Admin login form — no option to pick Customer/Driver.
   useEffect(() => {
@@ -4529,13 +4544,18 @@ export default function App() {
   // "Remembered login" is now a real Firebase Auth session (see
   // customerFirebaseAuth/driverFirebaseAuth in firebaseClient.js) — signing
   // out below clears it for real, instead of just a locally-stored number.
+  //
+  // One-number-one-app: Customer and Driver can't be active at the same
+  // time — RoleSelect hides whichever one isn't currently verified's
+  // sibling (see showCustomer/showDriver there) while the other is live.
+  // Logging out clears that role's session and returns to the main role
+  // picker (not straight back into that same role's login form), so both
+  // options are visible again for whoever picks up the device next.
   const logoutRole = (targetRole) => {
     if (targetRole === "admin") { setAdminAuth(false); if (adminFirebaseAuth) signOut(adminFirebaseAuth).catch((e) => console.error(e)); }
     if (targetRole === "customer") { setCustomerAuth({ verified: false, mobile: "" }); if (customerFirebaseAuth) signOut(customerFirebaseAuth).catch((e) => console.error(e)); }
     if (targetRole === "driver") { setDriverAuth({ verified: false, mobile: "" }); if (driverFirebaseAuth) signOut(driverFirebaseAuth).catch((e) => console.error(e)); }
-    // A locked device only has one role anyway — skip the now-pointless
-    // role-choice screen and go straight back to that role's login form.
-    setRole(targetRole);
+    setRole(null);
   };
   const logout = () => {
     logoutRole(role);
@@ -4873,7 +4893,7 @@ export default function App() {
         {role === null && (
           <RoleSelect lang={lang} onSelect={(r) => { setRole(r); setApp(r); }}
             customerVerified={customerAuth.verified} driverVerified={driverAuth.verified} adminVerified={adminAuth}
-            onLogoutRole={logoutRole} adminEntry={adminEntry} lockedRole={lockedRole} />
+            onLogoutRole={logoutRole} adminEntry={adminEntry} />
         )}
 
         {role === "admin" && !adminAuth && (
@@ -4883,7 +4903,7 @@ export default function App() {
         {role === "customer" && (!customerAuth.verified || !customerChecked || !customer) && (
           <CustomerOnboarding lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
             verified={customerAuth.verified} verifiedMobile={customerAuth.mobile} hasProfile={!!customer} checking={customerAuth.verified && !customerChecked}
-            onOtpVerified={(mobile) => { setCustomerAuth({ verified: true, mobile }); setLockedRole("customer"); }}
+            onOtpVerified={(mobile) => setCustomerAuth({ verified: true, mobile })}
             onLogout={() => (customerAuth.verified ? logoutRole("customer") : goHome())}
             onComplete={(addr) => {
               setCustomer({ mobile: customerAuth.mobile, ...addr });
@@ -4901,7 +4921,7 @@ export default function App() {
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
             verified={driverAuth.verified}
-            onOtpVerified={(mobile) => { setDriverAuth({ verified: true, mobile }); setLockedRole("driver"); }}
+            onOtpVerified={(mobile) => setDriverAuth({ verified: true, mobile })}
             onLogout={() => (driverAuth.verified ? logoutRole("driver") : goHome())}
             driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
         )}
