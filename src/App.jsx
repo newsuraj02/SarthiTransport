@@ -2283,6 +2283,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             </button>
           )}
         </div>
+        <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-3 py-1.5 rounded-full mb-3" style={{ background: b.scheduledFor ? "#FBEBD2" : "#DFEEE2", color: b.scheduledFor ? "#A8721C" : C.success }}>
+          <Clock3 size={13} /> {b.scheduledFor ? (lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")}
+        </span>
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
@@ -2335,6 +2338,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           </button>
         )}
       </div>
+
+      <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-3 py-1.5 rounded-full mb-2.5" style={{ background: b.scheduledFor ? "#FBEBD2" : "#DFEEE2", color: b.scheduledFor ? "#A8721C" : C.success }}>
+        <Clock3 size={13} /> {b.scheduledFor ? (lang === "en" ? "Advance Booked Ride" : "एडवांस बुक्ड राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")}
+      </span>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="relative shrink-0">
