@@ -861,7 +861,25 @@ function AdminLogin({ onVerified, lang, onBack }) {
       onVerified();
     } catch (e) {
       console.error(e);
-      setError(lang === "en" ? "Incorrect email or password" : "ईमेल या पासवर्ड गलत है");
+      // Firebase folds "no such user" and "wrong password" into the same
+      // generic invalid-credential code (to avoid leaking which one it
+      // was) — but operation-not-allowed / configuration errors are
+      // distinct and mean something needs fixing in Firebase Console
+      // rather than the typed-in credentials, so surface those separately.
+      if (e?.code === "auth/operation-not-allowed") {
+        setError(lang === "en" ? "Email/Password sign-in isn't enabled yet in Firebase Console (Authentication → Sign-in method)." : "Firebase Console में Email/Password साइन-इन अभी चालू नहीं है (Authentication → Sign-in method)।");
+      } else if (e?.code === "auth/too-many-requests") {
+        setError(lang === "en" ? "Too many attempts — please wait a while before trying again." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।");
+      } else if (e?.code === "auth/network-request-failed") {
+        setError(lang === "en" ? "Network error — check your internet connection." : "नेटवर्क त्रुटि — अपना इंटरनेट कनेक्शन जांचें।");
+      } else if (e?.code === "auth/invalid-email") {
+        setError(lang === "en" ? "That doesn't look like a valid email address." : "यह एक मान्य ईमेल पता नहीं लगता।");
+      } else {
+        setError(
+          (lang === "en" ? "Incorrect email or password" : "ईमेल या पासवर्ड गलत है")
+          + (e?.code ? ` (${e.code})` : "")
+        );
+      }
     }
     setSubmitting(false);
   };
