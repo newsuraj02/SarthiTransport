@@ -2232,26 +2232,16 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           style={{ background: isSelected ? "#F5E6C8" : C.paper, border: `1.5px solid ${isSelected ? "#A8721C" : isLowest ? C.success : C.line}` }}>
           {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>}
           <div className="flex items-center gap-3 mt-1">
-            <div className="flex gap-1 shrink-0">
-              <SafeImage
-                src={bidDriver?.vehicleSpec?.photo?.url}
-                alt={lang === "en" ? `${vehicleLabel(bidVehicleType, lang)} - Front` : `${vehicleLabel(bidVehicleType, lang)} - आगे`}
-                className="w-14 h-14 rounded-lg object-cover"
-                fallback={
-                  <div className="w-14 h-14 rounded-lg flex items-center justify-center" style={{ background: isSelected ? "#A8721C" : isLowest ? C.success : C.marigoldDeep }}>
-                    <Truck size={22} color="#fff" />
-                  </div>
-                }
-              />
-              {bidDriver?.vehicleSpec?.photoSide?.url && (
-                <SafeImage
-                  src={bidDriver.vehicleSpec.photoSide.url}
-                  alt={lang === "en" ? `${vehicleLabel(bidVehicleType, lang)} - Side` : `${vehicleLabel(bidVehicleType, lang)} - साइड`}
-                  className="w-14 h-14 rounded-lg object-cover"
-                  fallback={null}
-                />
-              )}
-            </div>
+            <SafeImage
+              src={bidDriver?.vehicleSpec?.photoSide?.url}
+              alt={lang === "en" ? `${vehicleLabel(bidVehicleType, lang)} - Side` : `${vehicleLabel(bidVehicleType, lang)} - साइड`}
+              className="w-14 h-14 rounded-lg object-cover shrink-0"
+              fallback={
+                <div className="w-14 h-14 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? "#A8721C" : isLowest ? C.success : C.marigoldDeep }}>
+                  <Truck size={22} color="#fff" />
+                </div>
+              }
+            />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{vehicleLabel(bidVehicleType, lang) || bid.driverName}</div>
               <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{bid.driverName} · {stars(bid.rating)} · {bid.distanceKm} {lang === "en" ? "km away" : "किमी दूर"}</div>
