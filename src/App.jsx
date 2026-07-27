@@ -1794,33 +1794,30 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
 // the text input (live suggestion dropdown while typing) when Maps is
 // configured/loaded, falling back to a plain input otherwise.
 function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap }) {
-  // Icon cluster (map-pin, optional current-location, mic) sits inside the
-  // bar at the right edge, so the field itself can span the full width —
-  // right padding reserves room for it instead of separate outside buttons.
-  const rightPad = onUseCurrentLocation ? 132 : 92;
-  const inputCls = "w-full rounded-lg pl-4 py-4 text-base font-semibold outline-none";
-  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, paddingRight: rightPad };
+  const inputCls = "w-full rounded-lg px-4 py-4 text-base font-semibold outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
   const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
   return (
     <div>
       <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{label}</label>
-      <div className="relative w-full">
-        {mapsReady ? (
-          <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged} options={{ componentRestrictions: { country: "in" } }}>
-            {inputEl}
-          </Autocomplete>
-        ) : inputEl}
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-          <button type="button" onClick={onMapPin} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 34, height: 34, background: "#F5E6C8" }}>
-            <MapPin size={16} color="#A8721C" />
+      {mapsReady ? (
+        <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged} options={{ componentRestrictions: { country: "in" } }}>
+          {inputEl}
+        </Autocomplete>
+      ) : inputEl}
+      {/* A separate row below the field, instead of icons crammed inside
+          it, so each button is a full 44px touch target — the minimum
+          Apple/Google guidelines call for reliable tapping on a phone. */}
+      <div className="flex items-center gap-2.5 mt-2">
+        <button type="button" onClick={onMapPin} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 44, height: 44, background: "#F5E6C8" }}>
+          <MapPin size={20} color="#A8721C" />
+        </button>
+        {onUseCurrentLocation && (
+          <button type="button" onClick={onUseCurrentLocation} disabled={locating} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 44, height: 44, background: "#DFEEE2" }}>
+            <Navigation size={20} color={C.success} />
           </button>
-          {onUseCurrentLocation && (
-            <button type="button" onClick={onUseCurrentLocation} disabled={locating} title={label} className="shrink-0 rounded-full flex items-center justify-center" style={{ width: 34, height: 34, background: "#DFEEE2" }}>
-              <Navigation size={16} color={C.success} />
-            </button>
-          )}
-          <MicButton onResult={onMic} size={8.5} iconSize={16} />
-        </div>
+        )}
+        <MicButton onResult={onMic} size={11} iconSize={20} />
       </div>
       {areaLabel ? (
         <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>📍 {areaLabel}</div>
