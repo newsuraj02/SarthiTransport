@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye, EyeOff,
+  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye, EyeOff, Plus,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, seedIfEmpty,
@@ -111,6 +111,18 @@ function hashPos(str) {
 }
 function fmt(n) { return "₹" + Math.round(n).toLocaleString("en-IN"); }
 function stars(n) { return "★".repeat(Math.round(n)) + "☆".repeat(5 - Math.round(n)); }
+
+// A booking counts as a still-pending "advance" booking only while its
+// scheduled date is genuinely in the future — once that date arrives, it
+// should behave like any other active/ongoing booking. scheduledFor is
+// stored as "YYYY-MM-DD HH:MM", so a plain string comparison on the date
+// part is enough (no timezone math needed, same as isToday elsewhere).
+function isFutureAdvance(scheduledFor) {
+  if (!scheduledFor) return false;
+  const datePart = scheduledFor.split(" ")[0];
+  const today = new Date().toISOString().slice(0, 10);
+  return datePart > today;
+}
 
 // Time-of-day greeting shown at the top of the Customer/Driver/Admin home
 // screens — computed fresh on every render, so it naturally flips from
@@ -2205,7 +2217,7 @@ function RouteLine({ pickup, drop, lang }) {
 
 // Shows a single active (Bidding or Ongoing) booking — the customer's main
 // page focuses on this one card instead of a separate "My Rides" tab.
-function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driverVehicle, drivers, lang }) {
+function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driverVehicle, drivers, lang, onAddAnother }) {
   const VEHICLES = vehicleTypes;
   const [selectedBid, setSelectedBid] = useState(null);
 
@@ -2263,7 +2275,14 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
     };
     return (
       <div className="px-5 py-5">
-        <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
+          {onAddAnother && (
+            <button onClick={onAddAnother} className="text-[11px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+              <Plus size={12} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और राइड जोड़ें"}
+            </button>
+          )}
+        </div>
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
@@ -2308,7 +2327,14 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const v = VEHICLES.find((x) => x.key === b.vehicle);
   return (
     <div className="px-5 py-5">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
+        {onAddAnother && (
+          <button onClick={onAddAnother} className="text-[11px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+            <Plus size={12} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और राइड जोड़ें"}
+          </button>
+        )}
+      </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="relative shrink-0">
@@ -2353,6 +2379,12 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
       <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
         <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
+        {b.scheduledFor && (
+          <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
+            <Clock3 size={13} />
+            <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Booked for:" : "बुकिंग की तारीख:"} {b.scheduledFor}</span>
+          </div>
+        )}
         <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
         {b.hours && (
           <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
@@ -2586,13 +2618,23 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
 
 function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, onOpenTerms, onGoHome }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
+  const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | 'advance' | null
+  const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
   // `bookings` is the whole platform's list (drivers need to see every open
   // load to bid on) — a customer must only ever see their own, so every
   // lookup below filters to this customer's mobile number first.
   const myBookings = bookings.filter((b) => b.customerMobile === customerMobile);
-  const ongoingTrip = myBookings.find((b) => b.status === "Ongoing");
-  const activeBooking = myBookings.find((b) => b.status === "Bidding" || b.status === "Ongoing");
+  // Posting a new ride while another one is already active/advance-booked —
+  // see the "Add Another Ride" button on ActiveRide below. Cleared the
+  // moment a new booking actually lands (myBookings.length changes).
+  const [addingAnother, setAddingAnother] = useState(false);
+  useEffect(() => { setAddingAnother(false); }, [myBookings.length]);
+  // A booking scheduled for a future date shouldn't hog the home screen or
+  // block posting today's ride — it stays reachable from the "Advance
+  // Bookings" menu item instead (see settingsView === "advance" below).
+  const advanceBookings = myBookings.filter((b) => (b.status === "Bidding" || b.status === "Ongoing") && isFutureAdvance(b.scheduledFor));
+  const ongoingTrip = myBookings.find((b) => b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor));
+  const activeBooking = myBookings.find((b) => (b.status === "Bidding" || b.status === "Ongoing") && !isFutureAdvance(b.scheduledFor));
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
@@ -2662,6 +2704,38 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           </div>
         )}
         {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
+        {settingsView === "advance" && (
+          selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
+            <div>
+              <button onClick={() => setSelectedAdvanceId(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+                <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back to list" : "लिस्ट पर वापस जाएं"}
+              </button>
+              <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid}
+                driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
+                drivers={drivers} lang={lang} />
+            </div>
+          ) : (
+            <div className="px-5 py-4">
+              <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Advance Bookings" : "एडवांस बुकिंग"}</h2>
+              {advanceBookings.length === 0 ? (
+                <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
+              ) : (
+                <div className="space-y-2">
+                  {advanceBookings.map((ab) => (
+                    <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                      <div className="flex items-center gap-1.5 mb-1" style={{ color: "#A8721C" }}>
+                        <Clock3 size={12} />
+                        <span className="text-[11px] font-bold">{ab.scheduledFor}</span>
+                      </div>
+                      <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
+                      <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ab.status === "Bidding" ? (lang === "en" ? "Waiting for bids" : "बोली का इंतज़ार") : (lang === "en" ? `Driver assigned — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`)}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        )}
       </div>
     );
   }
@@ -2679,7 +2753,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             </button>
           )}
         </div>
-        {!activeBooking && <Greeting name={customerProfile?.name} lang={lang} />}
+        {(!activeBooking || addingAnother) && <Greeting name={customerProfile?.name} lang={lang} />}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
         <ForegroundToast toast={rideNotifications.toast} />
         {menuOpen && (
@@ -2705,6 +2779,9 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               <button onClick={() => { setSettingsView("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "Ride History" : "राइड हिस्ट्री"}
               </button>
+              <button onClick={() => { setSelectedAdvanceId(null); setSettingsView("advance"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Clock3 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Advance Bookings" : "एडवांस बुकिंग"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}
+              </button>
               <button onClick={() => { setSettingsView("liveLocation"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <MapPinned size={16} color={C.marigoldDeep} /> {lang === "en" ? "Live Location" : "लाइव लोकेशन"}
               </button>
@@ -2724,8 +2801,9 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {activeBooking ? (
-          <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang} />
+        {activeBooking && !addingAnother ? (
+          <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
+            onAddAnother={() => setAddingAnother(true)} />
         ) : (
           <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial} />
         )}
@@ -2983,7 +3061,7 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
 }
 
 function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
-  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name);
+  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
   // so "above" vehicle options can bid too, not just an exact match.
@@ -3085,6 +3163,12 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
             <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
+            {myTrip.scheduledFor && (
+              <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
+                <Clock3 size={13} />
+                <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Booked for:" : "बुकिंग की तारीख:"} {myTrip.scheduledFor}</span>
+              </div>
+            )}
             <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
             {myTrip.hours && (
               <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
@@ -3534,9 +3618,14 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
 function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, onGoHome }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | 'liveLocation' | null
+  const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | 'liveLocation' | 'advance' | null
+  const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
   const tabs = [["home", "होम", LayoutDashboard], ["wallet", "वॉलेट", Wallet], ["history", "हिस्ट्री", Package]];
-  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name);
+  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
+  // Jobs this driver is already assigned to but that are scheduled for a
+  // future date — kept out of myTrip (above) so today's home screen isn't
+  // stuck showing a trip that's days away, but still reachable here.
+  const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
 
   const shareApp = () => {
@@ -3583,6 +3672,65 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             )}
           </div>
         )}
+        {settingsView === "advance" && (
+          selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
+            const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
+            return (
+              <div className="px-5 py-4">
+                <button onClick={() => setSelectedAdvanceId(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+                  <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back to list" : "लिस्ट पर वापस जाएं"}
+                </button>
+                <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{ab.pickup}</span></div>
+                  <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{ab.drop}</span></div>
+                </div>
+                <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
+                  <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
+                  <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
+                    <Clock3 size={13} />
+                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Booked for:" : "बुकिंग की तारीख:"} {ab.scheduledFor}</span>
+                  </div>
+                  <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(ab.fare)}</div>
+                  {ab.hours && (
+                    <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
+                      {lang === "en" ? `${ab.hours} allowed hrs` : `${ab.hours} घंटे अलाउ`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग`) : ""}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <Phone size={14} color="#000000" />
+                    {ab.customerMobile ? (
+                      <>
+                        <a href={`tel:${ab.customerMobile}`} className="text-sm font-extrabold px-1.5 py-0.5 rounded" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums", letterSpacing: 0.3, background: "#FFE066" }}>{ab.customerMobile}</a>
+                        <span className="text-sm font-semibold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}</span>
+                      </>
+                    ) : (
+                      <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })() : (
+            <div className="px-5 py-4">
+              <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Advance Bookings" : "एडवांस बुकिंग"}</h2>
+              {advanceBookings.length === 0 ? (
+                <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
+              ) : (
+                <div className="space-y-2">
+                  {advanceBookings.map((ab) => (
+                    <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                      <div className="flex items-center gap-1.5 mb-1" style={{ color: "#A8721C" }}>
+                        <Clock3 size={12} />
+                        <span className="text-[11px] font-bold">{ab.scheduledFor}</span>
+                      </div>
+                      <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        )}
       </div>
     );
   }
@@ -3620,6 +3768,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               </button>
               <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : "मेरी ट्रिप्स"}
+              </button>
+              <button onClick={() => { setSelectedAdvanceId(null); setSettingsView("advance"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Clock3 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Advance Bookings" : "एडवांस बुकिंग"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}
               </button>
               <button onClick={() => { setSettingsView("liveLocation"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <MapPinned size={16} color={C.marigoldDeep} /> {lang === "en" ? "Live Location" : "लाइव लोकेशन"}
