@@ -2379,6 +2379,17 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         </div>
       )}
 
+      {/* Same live-tracking map the driver sees on their own trip screen —
+          both sides are watching the same route/GPS on the same booking
+          doc, so once loading has actually started, show it here too
+          instead of only behind the hamburger menu's Live Location page. */}
+      {b.loadingStartedAt && (
+        <div className="mb-2.5" style={{ height: "35vh" }}>
+          <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
+            driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="100%" lang={lang} />
+        </div>
+      )}
+
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="w-full h-1.5 rounded-full" style={{ background: C.line }}>
           <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
