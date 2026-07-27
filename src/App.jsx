@@ -2632,9 +2632,13 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   // A booking scheduled for a future date shouldn't hog the home screen or
   // block posting today's ride — it stays reachable from the "Advance
   // Bookings" menu item instead (see settingsView === "advance" below).
-  const advanceBookings = myBookings.filter((b) => (b.status === "Bidding" || b.status === "Ongoing") && isFutureAdvance(b.scheduledFor));
+  // Still-Bidding advance loads stay on the main page like any other load
+  // (so the customer sees bids come in and can accept one) — only a bid
+  // actually being accepted (status flips to Ongoing) moves a future-dated
+  // one out to Advance Bookings.
+  const advanceBookings = myBookings.filter((b) => b.status === "Ongoing" && isFutureAdvance(b.scheduledFor));
   const ongoingTrip = myBookings.find((b) => b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor));
-  const activeBooking = myBookings.find((b) => (b.status === "Bidding" || b.status === "Ongoing") && !isFutureAdvance(b.scheduledFor));
+  const activeBooking = myBookings.find((b) => b.status === "Bidding" || (b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor)));
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
