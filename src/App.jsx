@@ -2307,7 +2307,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
-              <span className="text-[10px] font-mono" style={{ color: C.inkSoft }}>{b.id}</span>
+              <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: b.scheduledFor ? "#FBEBD2" : "#DFEEE2", color: b.scheduledFor ? "#A8721C" : C.success }}>
+                <Clock3 size={9} /> {b.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")}
+              </span>
             </div>
             <div className="text-[10px] font-semibold flex items-center gap-1.5 mb-1">
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: b.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: b.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(b.serviceType, lang)}</span>
