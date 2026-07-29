@@ -4868,9 +4868,16 @@ export default function App() {
   // themselves. Keyed by mobile (same identity model as self-signup), so
   // once that number logs in for real it lands on an already-complete
   // profile instead of the onboarding flow.
-  const addManualCustomer = (fields) => {
+  // Checks Firestore directly for the duplicate-mobile guard, not the
+  // locally subscribed allCustomers/drivers array — that array can briefly
+  // hold an optimistic local write from a rapid double-click before the
+  // server confirms (or rejects) it, which was falsely tripping this check
+  // even when nothing had actually been saved.
+  const addManualCustomer = async (fields) => {
     const mobile = (fields.mobile || "").trim();
-    if (!mobile || allCustomers.some((c) => c.mobile === mobile)) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    if (!mobile) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    const existing = await getDocOnce("customers", mobile);
+    if (existing) return Promise.reject(new Error("duplicate-or-missing-mobile"));
     return replaceDoc("customers", mobile, {
       mobile, name: fields.name.trim(), email: null, photo: null,
       address: fields.address || "", area: fields.area || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
@@ -4878,9 +4885,11 @@ export default function App() {
       createdAt: serverTimestamp(),
     });
   };
-  const addManualDriver = (fields) => {
+  const addManualDriver = async (fields) => {
     const mobile = (fields.mobile || "").trim();
-    if (!mobile || drivers.some((d) => d.mobile === mobile)) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    if (!mobile) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    const existing = await getDocOnce("drivers", mobile);
+    if (existing) return Promise.reject(new Error("duplicate-or-missing-mobile"));
     return replaceDoc("drivers", mobile, {
       mobile, name: fields.name.trim(), online: false, kyc: "Approved", rating: 4.5,
       wallet: 500, bonus: 0, heldCredit: 0, blacklisted: false, docs: null,
