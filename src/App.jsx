@@ -6,7 +6,7 @@ import {
   ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye, EyeOff, Plus,
 } from "lucide-react";
 import {
-  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, seedIfEmpty,
+  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
 } from "./firestoreStore";
 import { increment, arrayUnion, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
@@ -4202,9 +4202,10 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
   );
 }
 
-function AdminDriverList({ drivers, toggleBlacklist, lang, vehicleTypes, addVehicleType, addManualDriver }) {
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicleTypes, addVehicleType, addManualDriver }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const filtered = drivers.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
   const kycMeta = lang === "en"
     ? { Approved: { label: "Verified", color: C.success, bg: "#DFEEE2" }, Pending: { label: "Pending", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "Blocked", color: C.safety, bg: "#FCEAE3" }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#F0EAE0" } }
@@ -4332,9 +4333,28 @@ function AdminDriverList({ drivers, toggleBlacklist, lang, vehicleTypes, addVehi
 
               <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
                 {d.blacklisted ? <span className="text-[11px] font-bold" style={{ color: C.safety }}>⛔ {lang === "en" ? "Blocked — won't get bookings" : "ब्लॉक्ड — बुकिंग नहीं मिलेगी"}</span> : <span />}
-                <button onClick={() => toggleBlacklist(d.id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: d.blacklisted ? C.success : C.safety, background: d.blacklisted ? "#DFEEE2" : "#FCEAE3" }}>
-                  {d.blacklisted ? (lang === "en" ? "Unblock" : "अनब्लॉक करें") : (lang === "en" ? "Block" : "ब्लॉक करें")}
-                </button>
+                <div className="flex items-center gap-2">
+                  {confirmDeleteId === d.id ? (
+                    <>
+                      <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : "हमेशा के लिए हटाएं?"}</span>
+                      <button onClick={() => { deleteDriver(d.mobile || d.id); setConfirmDeleteId(null); }} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                        {lang === "en" ? "Yes, delete" : "हां, हटाएं"}
+                      </button>
+                      <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
+                        {lang === "en" ? "Cancel" : "रद्द करें"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => toggleBlacklist(d.id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: d.blacklisted ? C.success : C.safety, background: d.blacklisted ? "#DFEEE2" : "#FCEAE3" }}>
+                        {d.blacklisted ? (lang === "en" ? "Unblock" : "अनब्लॉक करें") : (lang === "en" ? "Block" : "ब्लॉक करें")}
+                      </button>
+                      <button onClick={() => setConfirmDeleteId(d.id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
+                        {lang === "en" ? "Delete" : "हटाएं"}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -4632,7 +4652,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver }) {
   const [tab, setTab] = useState("fleet");
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
@@ -4662,7 +4682,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} />}
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
-      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
+      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} addManualCustomer={addManualCustomer} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
@@ -5102,6 +5122,7 @@ export default function App() {
     if (!d) return;
     patchDoc("drivers", mobile, { blacklisted: !d.blacklisted, online: d.blacklisted ? d.online : false }).catch((e) => console.error(e));
   };
+  const deleteDriver = (mobile) => removeDoc("drivers", mobile).catch((e) => console.error(e));
   const raiseAlert = (role, type, note) => createDoc("alerts", genId("A"), { role, type, note: note || null }).catch((e) => console.error(e));
 
   // Simulated GPS: only the assigned driver's own device advances progress
@@ -5230,7 +5251,7 @@ export default function App() {
         )}
         {role === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
-            <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist}
+            <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
               bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} onGoHome={goHome}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}

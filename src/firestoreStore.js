@@ -1,5 +1,5 @@
 import {
-  collection, doc, onSnapshot, setDoc, updateDoc, getDoc, query, orderBy, serverTimestamp,
+  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc, query, orderBy, serverTimestamp,
 } from "firebase/firestore";
 import { getDb, hasConfig } from "./firebaseClient";
 
@@ -77,6 +77,12 @@ export async function replaceDoc(name, id, data) {
 // untouched — used for status flips like "Pending" -> "Approved".
 export async function patchDoc(name, id, patch) {
   await updateDoc(doc(getDb(), name, id), patch);
+}
+
+// Permanently removes a doc (e.g. an admin deleting a driver/customer
+// profile entirely, not just blocking them).
+export async function removeDoc(name, id) {
+  await deleteDoc(doc(getDb(), name, id));
 }
 
 export async function seedIfEmpty(name, items, idField) {
