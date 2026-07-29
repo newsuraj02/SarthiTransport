@@ -4199,7 +4199,12 @@ function AdminDriverList({ drivers, toggleBlacklist, lang, vehicleTypes, addVehi
     const vehicleTypeKey = resolveVehicleTypeKey();
     addManualDriver({ ...form, vehicleTypeKey })
       .then(() => { resetForm(); setShowAdd(false); })
-      .catch(() => setAddError(lang === "en" ? "A driver with this mobile number already exists." : "इस मोबाइल नंबर से पहले से एक ड्राइवर मौजूद है।"))
+      .catch((e) => {
+        console.error(e);
+        setAddError(e?.message === "duplicate-or-missing-mobile"
+          ? (lang === "en" ? "A driver with this mobile number already exists." : "इस मोबाइल नंबर से पहले से एक ड्राइवर मौजूद है।")
+          : (lang === "en" ? "Couldn't save — try logging out of Admin and back in, then try again." : "सेव नहीं हो सका — एडमिन से लॉगआउट करके दोबारा लॉगिन करें, फिर कोशिश करें।"));
+      })
       .finally(() => setAdding(false));
   };
   const addFieldCls = "w-full rounded-lg px-3 py-2 text-xs outline-none";
@@ -4324,7 +4329,12 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
     setAdding(true);
     addManualCustomer(form)
       .then(() => { resetForm(); setShowAdd(false); })
-      .catch(() => setAddError(lang === "en" ? "A customer with this mobile number already exists." : "इस मोबाइल नंबर से पहले से एक कस्टमर मौजूद है।"))
+      .catch((e) => {
+        console.error(e);
+        setAddError(e?.message === "duplicate-or-missing-mobile"
+          ? (lang === "en" ? "A customer with this mobile number already exists." : "इस मोबाइल नंबर से पहले से एक कस्टमर मौजूद है।")
+          : (lang === "en" ? "Couldn't save — try logging out of Admin and back in, then try again." : "सेव नहीं हो सका — एडमिन से लॉगआउट करके दोबारा लॉगिन करें, फिर कोशिश करें।"));
+      })
       .finally(() => setAdding(false));
   };
   const addFieldCls = "w-full rounded-lg px-3 py-2 text-xs outline-none";
