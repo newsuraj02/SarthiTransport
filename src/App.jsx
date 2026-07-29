@@ -1121,11 +1121,29 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : "लोड हो रहा है..."}</p></div>;
   }
 
+  if (verified && !hasProfile && mode !== "signup") {
+    // This number chose (or defaulted to, via a resumed session) Login, but
+    // genuinely has no registration on file — the details form must only
+    // ever be reachable through Sign Up, so send them there instead of
+    // silently letting a Login tap register a new account.
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
+        {backButton}
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: "#FCEAE3" }}>
+          <XCircle size={26} color={C.safety} />
+        </div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : "अभी रजिस्टर्ड नहीं है"}</h2>
+        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a customer account yet. Please sign up first." : "इस मोबाइल नंबर से अभी तक कोई कस्टमर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
+        <button onClick={() => setMode("signup")} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>
+          {lang === "en" ? "Sign Up Now" : "अभी साइन अप करें"}
+        </button>
+      </div>
+    );
+  }
+
   if (verified && !hasProfile) {
-    // Verified but genuinely no saved profile — covers someone who tapped
-    // Login but turned out to be a new customer, so they're not stuck with
-    // no way to finish setting up. (Sign Up never reaches this: its own
-    // details are submitted automatically the moment OTP verifies.)
+    // Verified via Sign Up, and this number genuinely has no saved profile
+    // yet.
     return (
       <div className="flex-1 overflow-y-auto px-6 py-8 relative">
         {backButton}
@@ -1520,9 +1538,29 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     );
   }
 
+  if (verified && driver && !driver.vehicleSpec && !driver.address && mode !== "signup") {
+    // This number chose (or defaulted to, via a resumed session) Login, but
+    // genuinely has no registration on file — the details form must only
+    // ever be reachable through Sign Up, so send them there instead of
+    // silently letting a Login tap register a new account.
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
+        {backButton}
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: "#FCEAE3" }}>
+          <XCircle size={26} color={C.safety} />
+        </div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : "अभी रजिस्टर्ड नहीं है"}</h2>
+        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a driver account yet. Please sign up first." : "इस मोबाइल नंबर से अभी तक कोई ड्राइवर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
+        <button onClick={() => setMode("signup")} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>
+          {lang === "en" ? "Sign Up Now" : "अभी साइन अप करें"}
+        </button>
+      </div>
+    );
+  }
+
   if (verified && driver && !driver.vehicleSpec && !driver.address) {
-    // STEP 2 — verified, and this number genuinely has no details yet
-    // (first-time signup, whichever button they originally tapped).
+    // STEP 2 — verified via Sign Up, and this number genuinely has no
+    // details yet.
     return (
       <div className="flex-1 overflow-y-auto px-6 py-8 relative">
         {backButton}
