@@ -4904,7 +4904,7 @@ export default function App() {
       mobile, name: fields.name.trim(), online: false, kyc: "Approved", rating: 4.5,
       wallet: 500, bonus: 0, heldCredit: 0, blacklisted: false, docs: null,
       address: fields.address || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
-      vehicleSpec: { type: fields.vehicleTypeKey, vehicleNumber: fields.vehicleNumber.trim().toUpperCase(), capacityKg: Number(fields.capacityKg) || undefined },
+      vehicleSpec: { type: fields.vehicleTypeKey, vehicleNumber: fields.vehicleNumber.trim().toUpperCase(), capacityKg: Number(fields.capacityKg) || null },
       createdAt: serverTimestamp(),
     });
   };
