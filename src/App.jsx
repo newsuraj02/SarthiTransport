@@ -4855,7 +4855,7 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
-  const [settings, setSettingsLocal] = useState({ commissionPct: 3, bonusPct: 2, minWallet: 500 });
+  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500 });
   const commissionPct = settings.commissionPct;
   const bonusPct = settings.bonusPct;
   const minWallet = settings.minWallet;
@@ -4897,7 +4897,7 @@ export default function App() {
     // create before subscribing would leave everyone stuck on defaults
     // forever if that one initial call is slow on a flaky connection.
     const unsub = subscribeDoc("settings", "main", (data) => { if (data) setSettingsLocal(data); });
-    getOrCreateDoc("settings", "main", { commissionPct: 3, bonusPct: 2, minWallet: 500 })
+    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500 })
       .catch((e) => console.error("[settings init]", e));
     return unsub;
   }, []);
