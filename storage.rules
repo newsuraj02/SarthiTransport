@@ -29,5 +29,8 @@ service firebase.storage {
     match /customers/{mobile}/{fileName} {
       allow read, write: if isOwnPhone(mobile) || isAdmin();
     }
+    match /expenses/{fileName} {
+      allow read, write: if isAdmin();
+    }
   }
 }

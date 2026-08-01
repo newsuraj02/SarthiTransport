@@ -94,5 +94,14 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
+
+    // Business expense tracking (Admin's "Expenses" tab) — admin-only,
+    // since this is internal financial data, not app-functionality data.
+    match /expenses/{id} {
+      allow read, write: if isAdmin();
+    }
+    match /expenseCategories/{id} {
+      allow read, write: if isAdmin();
+    }
   }
 }

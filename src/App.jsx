@@ -179,8 +179,19 @@ const CITY_COLORS = ["#A8721C", "#3F7D4F", "#B87A12", "#E85D2F", "#7A5CB8", "#1C
 const EN_LABELS = {
   book: "Book Now", rides: "My Rides", home: "Home", wallet: "Wallet", history: "History",
   kyc: "KYC", sos: "SOS", fleet: "Live Dashboard", drivers: "Drivers", settings: "Settings",
-  finance: "Reports", notify: "Notify", alerts: "Alerts", customers: "Customers",
+  finance: "Reports", notify: "Notify", alerts: "Alerts", customers: "Customers", expenses: "Expenses",
 };
+
+// Default business-expense categories for Admin's Expenses tab — admin can
+// add more via "+ Add Category", stored in the expenseCategories collection
+// and merged in, same custom-list pattern as materials/vehicleTypes.
+const DEFAULT_EXPENSE_CATEGORIES = [
+  { key: "server", icon: "🌐", hi: "सर्वर / डोमेन खर्च", en: "Server / Domain Expense" },
+  { key: "ads", icon: "📢", hi: "गूगल एड्स व प्रचार", en: "Google Ads & Promotion" },
+  { key: "office", icon: "☕", hi: "ऑफिस व चाय पानी", en: "Office & Refreshments" },
+  { key: "fuel", icon: "⛽", hi: "फ्यूल व मेंटेनेंस", en: "Fuel & Maintenance" },
+  { key: "other", icon: "📦", hi: "अन्य खर्चे", en: "Other Expenses" },
+];
 
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
 function hashPos(str) {
@@ -4739,9 +4750,202 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver }) {
+// Admin's private expense tracker — for keeping receipts/bills organized
+// so they can be handed to a CA at tax time (server bills, ads, fuel,
+// office costs, etc.). Entirely separate from driver commission/earnings,
+// which already live under the Reports tab.
+function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCategory, lang }) {
+  const categories = [...DEFAULT_EXPENSE_CATEGORIES, ...Object.values(expenseCategories || {}).filter((c) => !DEFAULT_EXPENSE_CATEGORIES.some((d) => d.hi === c.hi))];
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const blankForm = { date: todayISO(), category: categories[0]?.hi || "", amount: "", note: "", photo: null };
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState(blankForm);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const now = new Date();
+  const totalThisMonth = expenses.filter((e) => {
+    const d = e.date ? new Date(e.date) : null;
+    return d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).reduce((s, e) => s + (e.amount || 0), 0);
+  const receiptsCount = expenses.filter((e) => e.photoUrl).length;
+
+  const resetForm = () => { setForm({ ...blankForm, category: categories[0]?.hi || "" }); setAddingCategory(false); setNewCategoryName(""); setSaveError(""); };
+  const openAdd = (prefill = {}) => { resetForm(); setForm((f) => ({ ...f, ...prefill })); setShowAdd(true); };
+
+  const submit = async () => {
+    if (!form.amount || Number(form.amount) <= 0) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const id = genId("EXP");
+      let photoUrl = null;
+      if (form.photo) {
+        const uploaded = await uploadPhoto(form.photo, `expenses/${id}.jpg`);
+        photoUrl = uploaded.url;
+      }
+      await addExpense({ id, date: form.date, category: form.category, amount: Number(form.amount), note: form.note.trim(), photoUrl });
+      setShowAdd(false);
+      resetForm();
+    } catch (e) {
+      console.error(e);
+      setSaveError(lang === "en" ? "Couldn't save — please try again." : "सेव नहीं हो सका — दोबारा कोशिश करें।");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const downloadReport = () => {
+    const header = "Date,Category,Amount,Description,Photo Attached\n";
+    const rows = [...expenses].sort((a, b) => (a.date < b.date ? -1 : 1))
+      .map((e) => `${e.date},"${e.category}",${e.amount},"${(e.note || "").replace(/"/g, "'")}",${e.photoUrl ? "Yes" : "No"}`).join("\n");
+    const blob = new Blob([header + rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "expense-report.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const recent = [...expenses].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  return (
+    <div>
+      <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Expense Tools:" : "खर्चे के टूल:"}</div>
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <button onClick={() => openAdd()} className="rounded-xl py-4 flex flex-col items-center gap-1.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigold}` }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.marigold }}><Plus size={18} color="#fff" /></div>
+          <span className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "New Expense" : "नया खर्च"}</span>
+        </button>
+        <PhotoPicker label={lang === "en" ? "Attach a bill photo" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => openAdd({ photo: file })}>
+          <div className="rounded-xl py-4 flex flex-col items-center gap-1.5 cursor-pointer" style={{ background: "#FCEAE3", border: `1.5px solid ${C.safety}` }}>
+            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.safety }}><Camera size={16} color="#fff" /></div>
+            <span className="text-[11px] font-bold text-center" style={{ color: C.safety }}>{lang === "en" ? "Camera / Bill" : "कैमरा / बिल"}</span>
+          </div>
+        </PhotoPicker>
+        <button onClick={downloadReport} disabled={expenses.length === 0} className="rounded-xl py-4 flex flex-col items-center gap-1.5" style={{ background: "#DFEEE2", border: `1.5px solid ${C.success}`, opacity: expenses.length ? 1 : 0.5 }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.success }}><Download size={16} color="#fff" /></div>
+          <span className="text-[11px] font-bold" style={{ color: C.success }}>Excel {lang === "en" ? "Report" : "रिपोर्ट"}</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <StatTile label={lang === "en" ? "Total expenses (this month)" : "कुल खर्च (इस महीने)"} value={fmt(totalThisMonth)} color={C.ink} />
+        <StatTile label={lang === "en" ? "Secured receipts" : "सुरक्षित रसीदें"} value={`${receiptsCount} ${lang === "en" ? "bills" : "बिल"}`} color={C.marigoldDeep} />
+      </div>
+
+      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><ClipboardList size={16} /> {lang === "en" ? "Expense History" : "खर्चों का इतिहास"}</div>
+        {recent.length === 0 ? (
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No expenses recorded yet." : "अभी तक कोई खर्च दर्ज नहीं हुआ।"}</p>
+        ) : (
+          <div className="space-y-2">
+            {recent.map((e) => {
+              const cat = categories.find((c) => c.hi === e.category || c.en === e.category);
+              return (
+                <div key={e.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{e.note || (cat ? (lang === "en" ? cat.en : cat.hi) : e.category)}</div>
+                      <div className="text-[10px]" style={{ color: C.inkSoft }}>{e.date} · {cat ? `${cat.icon} ${lang === "en" ? cat.en : cat.hi}` : e.category}</div>
+                    </div>
+                    <div className="text-sm font-bold shrink-0" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(e.amount)}</div>
+                  </div>
+                  {e.photoUrl && (
+                    <a href={e.photoUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold mt-1.5 inline-flex items-center gap-1" style={{ color: C.success }}>
+                      <CheckCircle2 size={11} /> {lang === "en" ? "Photo secured" : "फोटो सुरक्षित"}
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setShowAdd(false)}>
+          <div className="w-full max-w-sm rounded-t-2xl max-h-[85vh] overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{ background: C.navy }}>
+              <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: "#fff" }}><ClipboardList size={15} /> {lang === "en" ? "Add New Expense" : "नया खर्च दर्ज करें"}</h3>
+              <button onClick={() => setShowAdd(false)} className="text-sm font-bold" style={{ color: "#fff" }}>✕</button>
+            </div>
+            <div className="p-5 space-y-3">
+              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+
+              <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Choose expense category:" : "खर्च की कैटेगरी चुनें:"}</div>
+              <div className="space-y-1.5">
+                {categories.map((c) => {
+                  const active = form.category === c.hi;
+                  return (
+                    <button key={c.key} type="button" onClick={() => setForm({ ...form, category: c.hi })}
+                      className="w-full rounded-lg px-3 py-2.5 flex items-center justify-between"
+                      style={{ background: active ? "#FBEBD2" : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}` }}>
+                      <span className="text-xs font-bold flex items-center gap-2" style={{ color: active ? C.marigoldDeep : C.ink }}>
+                        <span>{c.icon}</span> {lang === "en" ? c.en : c.hi}
+                      </span>
+                      <span className="w-4 h-4 rounded-full shrink-0" style={{ border: `2px solid ${active ? C.marigoldDeep : C.line}`, background: active ? C.marigoldDeep : "transparent" }} />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {addingCategory ? (
+                <div className="flex gap-2">
+                  <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={lang === "en" ? "New category name" : "नई कैटेगरी का नाम"}
+                    className="flex-1 min-w-0 rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+                  <button type="button" onClick={() => {
+                    const name = newCategoryName.trim();
+                    if (!name) return;
+                    addExpenseCategory(name);
+                    setForm((f) => ({ ...f, category: name }));
+                    setNewCategoryName(""); setAddingCategory(false);
+                  }} className="px-3 rounded-lg text-xs font-bold text-white" style={{ background: C.success }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setAddingCategory(true)} className="w-full rounded-lg py-2.5 text-xs font-bold" style={{ border: `2px dashed ${C.marigold}`, color: C.marigoldDeep }}>
+                  + {lang === "en" ? "Add Category" : "नयी कैटेगरी जोड़ें (Add Category)"}
+                </button>
+              )}
+
+              <div>
+                <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>💰 {lang === "en" ? "Amount (₹)" : "रकम (₹)"}</label>
+                <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder={lang === "en" ? "e.g. 2500" : "उदा: 2500"}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>📝 {lang === "en" ? "Description (note)" : "विवरण (नोट लिखें)"}</label>
+                <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder={lang === "en" ? "e.g. Firebase domain & server charge" : "उदा: फायरबेस डोमेन और सर्वर चार्ज"}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+              </div>
+
+              <PhotoPicker label={lang === "en" ? "Attach a bill photo" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => setForm((f) => ({ ...f, photo: file }))}>
+                <div className="w-full rounded-lg py-2.5 text-xs font-bold text-center cursor-pointer" style={{ background: form.photo ? "#DFEEE2" : C.bg, color: form.photo ? C.success : C.inkSoft, border: `1.5px dashed ${form.photo ? C.success : C.line}` }}>
+                  {form.photo ? `✓ ${lang === "en" ? "Photo attached" : "फोटो जोड़ी गई"}` : `📷 ${lang === "en" ? "Camera Photo / Choose Gallery" : "कैमरा फोटो / गैलरी चुनिए"}`}
+                </div>
+              </PhotoPicker>
+
+              {saveError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{saveError}</div>}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowAdd(false)} className="flex-1 rounded-lg py-3 text-sm font-bold" style={{ background: C.line, color: C.inkSoft }}>{lang === "en" ? "Cancel" : "रद्द"}</button>
+                <button onClick={submit} disabled={!form.amount || Number(form.amount) <= 0 || saving} className="flex-1 rounded-lg py-3 text-sm font-bold text-white flex items-center justify-center gap-1.5"
+                  style={{ background: (!form.amount || Number(form.amount) <= 0 || saving) ? C.line : C.success }}>
+                  <CheckCircle2 size={15} /> {saving ? (lang === "en" ? "Saving..." : "सेव हो रहा है...") : (lang === "en" ? "Save Securely" : "सुरक्षित सेव करें")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory }) {
   const [tab, setTab] = useState("fleet");
-  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
+  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
@@ -4771,6 +4975,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} addManualCustomer={addManualCustomer} />}
+      {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} lang={lang} />}
@@ -4978,6 +5183,17 @@ export default function App() {
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("alerts", setAlerts) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), authDeps);
+  // Business expenses — admin-only, same pattern as alerts.
+  const [expenses, setExpenses] = useState([]);
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("expenses", setExpenses) : undefined), authDeps);
+  const [expenseCategories, setExpenseCategories] = useState({}); // { hiName: {key, hi, en, icon} }
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth
+    ? subscribeCollection("expenseCategories", (docs) => {
+        const map = {};
+        docs.forEach((d) => { map[d.hi] = d; });
+        setExpenseCategories(map);
+      }, null)
+    : undefined), authDeps);
   useEffect(() => {
     if (!firestoreReady) return;
     // Subscribe first, create-if-missing in the background — awaiting the
@@ -5211,6 +5427,9 @@ export default function App() {
   };
   const deleteDriver = (mobile) => removeDoc("drivers", mobile).catch((e) => console.error(e));
   const raiseAlert = (role, type, note) => createDoc("alerts", genId("A"), { role, type, note: note || null }).catch((e) => console.error(e));
+  const addExpense = ({ id, date, category, amount, note, photoUrl }) =>
+    createDoc("expenses", id, { date, category, amount, note: note || "", photoUrl: photoUrl || null });
+  const addExpenseCategory = (name) => createDoc("expenseCategories", slugify(name), { key: slugify(name), icon: "📦", hi: name, en: name }).catch((e) => console.error(e));
 
   // Simulated GPS: only the assigned driver's own device advances progress
   // for their trip, so two devices never race to write the same field.
@@ -5342,7 +5561,8 @@ export default function App() {
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
               bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} onGoHome={goHome}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
-              vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver} />
+              vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
+              expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} />
           </div>
         )}
 
