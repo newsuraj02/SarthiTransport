@@ -3893,17 +3893,20 @@ function StatTile({ label, value, color, onClick }) {
 }
 
 function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWallet, lang, onNavigate }) {
-  const bookedToday = tripLog.filter((t) => t.status === "Ongoing" || t.status === "Completed").length;
-  const readyOnline = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted).length;
-  const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
-  const lowWalletOnline = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet).length;
-
   const isToday = (b) => {
     const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
     if (!d) return false;
     const now = new Date();
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
   };
+  // "Booked today" previously counted every Ongoing/Completed trip ever
+  // logged (no date filter) despite the label — scope it to today like the
+  // other trip-based tiles below.
+  const bookedToday = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t)).length;
+  const readyOnline = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted).length;
+  const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
+  const lowWalletOnline = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet).length;
+
   const todaysEarnings = (bookings || []).filter((b) => b.status === "Completed" && isToday(b)).reduce((s, b) => s + (b.fare || 0) * (commissionPct / 100), 0);
   const cancelledToday = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b)).length;
 
