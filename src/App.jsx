@@ -2179,12 +2179,9 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             </div>
             <div className="grid grid-cols-2 gap-2">
               <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
-              <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-lg px-3 py-2.5 text-left" style={inputStyle}>
-                <div className="text-[9px] font-bold mb-0.5" style={{ color: "#A8721C" }}>{lang === "en" ? "Time" : "समय (Time)"}</div>
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-xs font-bold" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select" : "चुनें")}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Change" : "बदलें"}</span>
-                </div>
+              <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-1.5" style={inputStyle}>
+                <span className="text-xs font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : "समय चुनें")}</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Change" : "बदलें"}</span>
               </button>
             </div>
             <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
