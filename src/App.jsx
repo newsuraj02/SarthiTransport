@@ -87,6 +87,85 @@ const materialLabel = (m, lang, customMap = {}) => {
   if (customMap[m]) return lang === "en" ? (customMap[m].en || customMap[m].hi) : (customMap[m].hi || customMap[m].en);
   return (lang === "en" && MATERIAL_LABELS_EN[m]) ? MATERIAL_LABELS_EN[m] : m;
 };
+
+// A curated slot picker (period -> a handful of round-hour times) instead of
+// a native <input type="time"> clock/dial, which testers found fiddly —
+// tap a period, then a slot, done. Slot values stay 24-hour "HH:MM" so
+// advanceTime/scheduledFor storage format is unchanged.
+const TIME_PERIODS = [
+  { key: "morning", icon: "🌅", labelHi: "सुबह", labelEn: "Morning", slots: ["06:00", "07:00", "08:00", "09:00"] },
+  { key: "afternoon", icon: "☀️", labelHi: "दोपहर", labelEn: "Afternoon", slots: ["12:00", "13:00", "14:00", "15:00"] },
+  { key: "evening", icon: "🌆", labelHi: "शाम", labelEn: "Evening", slots: ["16:00", "17:00", "18:00", "19:00"] },
+  { key: "night", icon: "🌙", labelHi: "रात", labelEn: "Night", slots: ["20:00", "21:00", "22:00", "23:00"] },
+];
+function formatSlotShort(hhmm, lang) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const mm = String(m).padStart(2, "0");
+  return lang === "en" ? `${h12}:${mm} ${h < 12 ? "AM" : "PM"}` : `${h12}:${mm} बजे`;
+}
+function formatTimeSlot(hhmm, lang) {
+  if (!hhmm) return "";
+  const period = TIME_PERIODS.find((p) => p.slots.includes(hhmm)) || TIME_PERIODS[0];
+  return `${lang === "en" ? period.labelEn : period.labelHi} ${formatSlotShort(hhmm, lang)}`;
+}
+function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
+  const defaultPeriod = (TIME_PERIODS.find((p) => p.slots.includes(value)) || TIME_PERIODS[0]).key;
+  const [activePeriod, setActivePeriod] = useState(defaultPeriod);
+  const [pending, setPending] = useState(value || "");
+  useEffect(() => {
+    if (open) { setActivePeriod(defaultPeriod); setPending(value || ""); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  if (!open) return null;
+  const period = TIME_PERIODS.find((p) => p.key === activePeriod);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl overflow-hidden" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4" style={{ background: C.navy }}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose Time" : "समय चुनें"}</h3>
+            <button onClick={onClose} className="text-sm font-bold" style={{ color: "#fff" }}>✕</button>
+          </div>
+          <p className="text-[11px] mt-0.5" style={{ color: C.marigold }}>{lang === "en" ? "Pick a period, then only that period's slots will show." : "जो पहर चुनेंगे, सिर्फ वही समय दिखेगा"}</p>
+        </div>
+        <div className="p-5">
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>1. {lang === "en" ? "Choose period:" : "पहर चुनें:"}</div>
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {TIME_PERIODS.map((p) => {
+              const active = activePeriod === p.key;
+              return (
+                <button key={p.key} type="button" onClick={() => setActivePeriod(p.key)}
+                  className="rounded-lg py-2.5 flex flex-col items-center gap-1 text-[11px] font-bold"
+                  style={{ background: active ? "#FBEBD2" : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? C.marigoldDeep : C.inkSoft }}>
+                  <span className="text-lg leading-none">{p.icon}</span>
+                  {lang === "en" ? p.labelEn : p.labelHi}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>2. {lang === "en" ? "Available time slots:" : "उपलब्ध समय (Time Slots):"}</div>
+          <div className="grid grid-cols-2 gap-2 mb-5">
+            {period.slots.map((s) => {
+              const active = pending === s;
+              return (
+                <button key={s} type="button" onClick={() => setPending(s)}
+                  className="rounded-lg py-2.5 text-xs font-bold text-left px-3"
+                  style={{ background: active ? "#FBEBD2" : C.paper, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? C.marigoldDeep : C.ink }}>
+                  {period.icon} {formatSlotShort(s, lang)}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={() => { if (pending) { onSelect(pending); onClose(); } }} disabled={!pending}
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: pending ? C.navy : C.line, color: pending ? "#fff" : "#9AA3B0" }}>
+            {lang === "en" ? "Done" : "ठीक है (Done)"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 const serviceTypeLabel = (t, lang) => {
   if (t === "outstation") return lang === "en" ? "Outstation" : "आउटस्टेशन";
   return lang === "en" ? "Within City" : "शहर के अंदर";
@@ -1926,6 +2005,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
+  const [showTimeModal, setShowTimeModal] = useState(false);
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null); // {lat,lng} | null
@@ -2099,8 +2179,15 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             </div>
             <div className="grid grid-cols-2 gap-2">
               <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
-              <input type="time" value={advanceTime} onChange={(e) => setAdvanceTime(e.target.value)} className={inputCls} style={inputStyle} />
+              <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-lg px-3 py-2.5 text-left" style={inputStyle}>
+                <div className="text-[9px] font-bold mb-0.5" style={{ color: "#A8721C" }}>{lang === "en" ? "Time" : "समय (Time)"}</div>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-xs font-bold" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select" : "चुनें")}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Change" : "बदलें"}</span>
+                </div>
+              </button>
             </div>
+            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
           </div>
         )}
         <div>
