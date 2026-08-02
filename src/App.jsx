@@ -3467,12 +3467,12 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
           {lang === "en" ? "Online payments are coming soon. Use manual recharge below for now." : "ऑनलाइन पेमेंट जल्द आ रहा है। फिलहाल नीचे मैनुअल रीचार्ज का उपयोग करें।"}
         </div>
       )}
-      <div className="text-[10px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Manual recharge (until online payments launch)" : "मैनुअल रीचार्ज (ऑनलाइन पेमेंट आने तक)"}</div>
+      <div className="text-[11px] font-bold mb-1.5" style={{ color: C.ink }}>{lang === "en" ? "Manual recharge (until online payments launch)" : "मैनुअल रीचार्ज (ऑनलाइन पेमेंट आने तक)"}</div>
       <button onClick={() => requestRecharge(500)} disabled={hasPendingRecharge} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2"
         style={{ background: hasPendingRecharge ? C.line : C.marigold, color: hasPendingRecharge ? "#9AA3B0" : C.navy }}>
         {hasPendingRecharge ? (lang === "en" ? "Recharge request pending admin approval" : "रीचार्ज रिक्वेस्ट एडमिन अप्रूवल के इंतज़ार में") : (lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)")}
       </button>
-      <div className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Pay admin via UPI/Paytm outside the app, then request a recharge — admin verifies and credits your wallet." : "ऐप के बाहर UPI/Paytm से एडमिन को भुगतान करें, फिर रीचार्ज रिक्वेस्ट करें — एडमिन जांच कर वॉलेट में जमा करेगा।"}</div>
+      <div className="text-[11px] font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "Pay admin via UPI/Paytm outside the app, then request a recharge — admin verifies and credits your wallet." : "ऐप के बाहर UPI/Paytm से एडमिन को भुगतान करें, फिर रीचार्ज रिक्वेस्ट करें — एडमिन जांच कर वॉलेट में जमा करेगा।"}</div>
       {myRecharges.length > 0 && (
         <div className="mb-2">
           <div className="space-y-1.5">
@@ -3487,13 +3487,13 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
           </div>
         </div>
       )}
-      <div className="text-[11px] mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? `${commissionPct}% commission is cut from this wallet instantly the moment a bid is accepted.` : `बिड एक्सेप्ट होते ही भाड़े का ${commissionPct}% कमीशन इसी वॉलेट से तुरंत कट जाता है।`}</div>
+      <div className="text-[11px] font-bold mb-4" style={{ color: C.ink }}>{lang === "en" ? `${commissionPct}% commission is cut from this wallet instantly the moment a bid is accepted.` : `बिड एक्सेप्ट होते ही भाड़े का ${commissionPct}% कमीशन इसी वॉलेट से तुरंत कट जाता है।`}</div>
 
       <div className="rounded-xl p-4 mb-2" style={{ background: "#DFEEE2", border: `1.5px solid ${C.success}` }}>
         <div className="flex items-center justify-between mb-2">
           <div>
             <div className="text-[11px] font-bold" style={{ color: C.success }}>{lang === "en" ? "Bonus Account" : "बोनस अकाउंट"}</div>
-            <div className="text-[10px]" style={{ color: C.inkSoft }}>{lang === "en" ? `You get ${bonusPct}% out of the ${commissionPct}% commission` : `${commissionPct}% कमीशन में से ${bonusPct}% बोनस आपको मिलता है`}</div>
+            <div className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? `You get ${bonusPct}% out of the ${commissionPct}% commission` : `${commissionPct}% कमीशन में से ${bonusPct}% बोनस आपको मिलता है`}</div>
           </div>
           <div className="text-xl font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(driver.bonus || 0)}</div>
         </div>
@@ -3520,21 +3520,21 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         </div>
       )}
 
-      <div className="rounded-lg p-3 flex items-center justify-between mb-2" style={{ background: "#FBEBD2" }}>
+      <div className="rounded-lg p-3 flex items-center justify-between mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
         <div>
-          <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Total commission cut so far" : "अब तक कुल कमीशन कटा"}</div>
-          <div className="text-[10px]" style={{ color: C.inkSoft }}>{lang === "en" ? `from ${myTrips.length} trips` : `${myTrips.length} ट्रिप्स से`}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Total commission cut so far" : "अब तक कुल कमीशन कटा"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? `from ${myTrips.length} trips` : `${myTrips.length} ट्रिप्स से`}</div>
         </div>
         <div className="text-lg font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(totalCommission)}</div>
       </div>
-      <div className="rounded-lg p-3 flex items-center justify-between" style={{ background: "#F5E6C8" }}>
+      <div className="rounded-lg p-3 flex items-center justify-between" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
         <div>
-          <div className="text-[11px] font-semibold" style={{ color: C.pimpri }}>{lang === "en" ? "Total bonus earned so far" : "अब तक कुल बोनस मिला"}</div>
-          <div className="text-[10px]" style={{ color: C.inkSoft }}>{lang === "en" ? `from ${myTrips.length} trips` : `${myTrips.length} ट्रिप्स से`}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.pimpri }}>{lang === "en" ? "Total bonus earned so far" : "अब तक कुल बोनस मिला"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? `from ${myTrips.length} trips` : `${myTrips.length} ट्रिप्स से`}</div>
         </div>
         <div className="text-lg font-bold" style={{ color: C.pimpri, fontFamily: monoFont }}>{fmt(totalBonus)}</div>
       </div>
-      <div className="text-[11px] mt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "See the full trip-wise list in the \"History\" tab." : "पूरी ट्रिप-वार लिस्ट \"हिस्ट्री\" टैब में देखें।"}</div>
+      <div className="text-[11px] font-bold mt-2" style={{ color: C.ink }}>{lang === "en" ? "See the full trip-wise list in the \"History\" tab." : "पूरी ट्रिप-वार लिस्ट \"हिस्ट्री\" टैब में देखें।"}</div>
     </div>
   );
 }
