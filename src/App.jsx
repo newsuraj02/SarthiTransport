@@ -1962,7 +1962,7 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
 // the text input (live suggestion dropdown while typing) when Maps is
 // configured/loaded, falling back to a plain input otherwise.
 function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap, lang = "hi", dotColor }) {
-  const inputCls = "w-full rounded-lg py-5 text-base font-semibold outline-none";
+  const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: dotColor ? 34 : 16, paddingRight: 16 };
   const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
   return (
@@ -2136,7 +2136,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
     setPickupCoords(null); setDropCoords(null); setServiceType("withinCity");
   };
 
-  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   if (!bookingMode) {
