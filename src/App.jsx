@@ -2889,11 +2889,11 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
             <Menu size={18} color={C.navy} strokeWidth={2.5} />
           </button>
-          <div className="flex rounded-full p-0.5 shrink-0" style={{ background: "#F5E6C8" }}>
-            <button onClick={() => setRideView("current")} className="px-3 py-1.5 rounded-full text-xs font-bold" style={{ background: rideView === "current" ? C.navy : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
+          <div className="flex rounded-full p-1 shrink-0" style={{ background: "#F5E6C8" }}>
+            <button onClick={() => setRideView("current")} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "current" ? C.navy : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
               {lang === "en" ? "Current" : "वर्तमान"}
             </button>
-            <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-3 py-1.5 rounded-full text-xs font-bold" style={{ background: rideView === "advance" ? C.navy : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
+            <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "advance" ? C.navy : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
               {lang === "en" ? "Advance" : "एडवांस"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}
             </button>
           </div>
@@ -3862,11 +3862,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <Menu size={18} color={C.navy} strokeWidth={2.5} />
           </button>
           {tab === "home" && (
-            <div className="flex rounded-full p-0.5 shrink-0" style={{ background: "#F5E6C8" }}>
-              <button onClick={() => setRideView("current")} className="px-3 py-1.5 rounded-full text-xs font-bold" style={{ background: rideView === "current" ? C.navy : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
+            <div className="flex rounded-full p-1 shrink-0" style={{ background: "#F5E6C8" }}>
+              <button onClick={() => setRideView("current")} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "current" ? C.navy : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
                 {lang === "en" ? "Current" : "वर्तमान"}
               </button>
-              <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-3 py-1.5 rounded-full text-xs font-bold" style={{ background: rideView === "advance" ? C.navy : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
+              <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "advance" ? C.navy : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
                 {lang === "en" ? "Advance" : "एडवांस"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}
               </button>
             </div>
