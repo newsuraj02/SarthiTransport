@@ -2557,15 +2557,16 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             {lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}
           </div>
         )}
-        <div className="flex items-center gap-1.5 mt-2">
-          <Phone size={14} color="#000000" />
+        <div className="mt-2">
           {b.driverMobile ? (
-            <>
-              <a href={`tel:${b.driverMobile}`} className="text-sm font-extrabold px-1.5 py-0.5 rounded" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums", letterSpacing: 0.3, background: "#FFE066" }}>{b.driverMobile}</a>
-              <span className="text-sm font-semibold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}</span>
-            </>
+            <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+              <Phone size={16} color="#000000" /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{b.driverMobile}</span>
+            </a>
           ) : (
-            <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+            <div className="flex items-center gap-1.5">
+              <Phone size={14} color="#000000" />
+              <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+            </div>
           )}
         </div>
       </div>
@@ -3349,15 +3350,16 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
                 {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}
               </div>
             )}
-            <div className="flex items-center gap-1.5 mt-2">
-              <Phone size={14} color="#000000" />
+            <div className="mt-2">
               {myTrip.customerMobile ? (
-                <>
-                  <a href={`tel:${myTrip.customerMobile}`} className="text-sm font-extrabold px-1.5 py-0.5 rounded" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums", letterSpacing: 0.3, background: "#FFE066" }}>{myTrip.customerMobile}</a>
-                  <span className="text-sm font-semibold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}</span>
-                </>
+                <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+                  <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{myTrip.customerMobile}</span>
+                </a>
               ) : (
-                <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                <div className="flex items-center gap-1.5">
+                  <Phone size={14} color="#000000" />
+                  <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                </div>
               )}
             </div>
           </div>
@@ -3943,15 +3945,16 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                       {lang === "en" ? `${ab.hours} allowed hrs` : `${ab.hours} घंटे अलाउ`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग`) : ""}
                     </div>
                   )}
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <Phone size={14} color="#000000" />
+                  <div className="mt-2">
                     {ab.customerMobile ? (
-                      <>
-                        <a href={`tel:${ab.customerMobile}`} className="text-sm font-extrabold px-1.5 py-0.5 rounded" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums", letterSpacing: 0.3, background: "#FFE066" }}>{ab.customerMobile}</a>
-                        <span className="text-sm font-semibold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}</span>
-                      </>
+                      <a href={`tel:${ab.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+                        <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{ab.customerMobile}</span>
+                      </a>
                     ) : (
-                      <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                      <div className="flex items-center gap-1.5">
+                        <Phone size={14} color="#000000" />
+                        <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -4023,6 +4026,9 @@ function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWall
 
   const todaysEarnings = (bookings || []).filter((b) => b.status === "Completed" && isToday(b)).reduce((s, b) => s + (b.fare || 0) * (commissionPct / 100), 0);
   const cancelledToday = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b)).length;
+  // Any not-yet-finished booking scheduled for a future date, regardless of
+  // whether it's still awaiting bids or already has a driver assigned.
+  const totalAdvanceBookings = (bookings || []).filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed").length;
 
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "Ongoing", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
@@ -4044,6 +4050,7 @@ function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWall
         <StatTile label={lang === "en" ? "Cancelled today" : "आज रद्द हुईं"} value={cancelledToday} color={cancelledToday > 0 ? C.safety : C.success} />
         <StatTile label={lang === "en" ? "Today's earnings (commission)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletOnline} color={lowWalletOnline > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("drivers") : undefined} />
+        <StatTile label={lang === "en" ? "Total advance bookings" : "कुल एडवांस बुकिंग"} value={totalAdvanceBookings} color={C.pimpri} />
       </div>
 
       <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
