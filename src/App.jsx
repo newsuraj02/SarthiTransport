@@ -1967,7 +1967,7 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
   const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
   return (
     <div>
-      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{label}</label>
+      <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{label}</label>
       <div className="relative w-full">
         {mapsReady ? (
           <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged} options={{ componentRestrictions: { country: "in" } }}>
@@ -2142,7 +2142,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   if (!bookingMode) {
     return (
       <div className="px-5 py-8 flex flex-col justify-center" style={{ minHeight: 420 }}>
-        <p className="text-xs text-center mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "What do you need?" : "आपको क्या चाहिए?"}</p>
+        <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : "आपको क्या चाहिए?"}</p>
         <button onClick={() => setBookingMode("now")} className="w-full rounded-2xl p-5 mb-4 text-left flex items-center gap-3" style={{ background: C.marigold }}>
           <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.navy }}>
             <Truck size={22} color="#fff" />
@@ -2217,7 +2217,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[11px] font-bold" style={{ color: C.success }}>{lang === "en" ? "Repeat last trip" : "पिछली ट्रिप दोहराएं"}</div>
-              <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{lastBooking.pickup} → {lastBooking.drop}</div>
+              <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{lastBooking.pickup} → {lastBooking.drop}</div>
             </div>
             <span className="text-[10px] font-bold shrink-0" style={{ color: C.success }}>{lang === "en" ? "Tap →" : "टैप करें →"}</span>
           </button>
@@ -2271,7 +2271,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
+            <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
             {addingMaterial ? (
               <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <input className={inputCls} style={{ ...inputStyle, marginBottom: 6 }} placeholder={lang === "en" ? "e.g. Tiles" : "जैसे: टाइल्स"} value={newMaterial} onChange={(e) => setNewMaterial(e.target.value)} autoFocus />
@@ -2294,7 +2294,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             )}
           </div>
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
+            <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
             <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300" : "जैसे: 300"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
           </div>
         </div>
