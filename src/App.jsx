@@ -3973,18 +3973,18 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
 function StatTile({ label, value, color, onClick }) {
   const content = (
     <>
-      <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{label}</div>
+      <div className="text-xs font-bold" style={{ color: C.ink }}>{label}</div>
       <div className="text-3xl font-bold mt-1" style={{ color, fontFamily: monoFont }}>{value}</div>
     </>
   );
   if (onClick) {
     return (
-      <button onClick={onClick} className="rounded-xl p-4 shadow-sm text-left w-full" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <button onClick={onClick} className="rounded-xl p-4 shadow-sm text-left w-full" style={{ background: C.paper, border: `1.5px solid ${color}` }}>
         {content}
       </button>
     );
   }
-  return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>{content}</div>;
+  return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${color}` }}>{content}</div>;
 }
 
 function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWallet, lang, onNavigate }) {
