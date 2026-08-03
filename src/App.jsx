@@ -2443,7 +2443,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <div className="flex items-center justify-between mb-3 gap-2">
           <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
           {onAddAnother && (
-            <button onClick={onAddAnother} className="text-sm font-extrabold px-3.5 py-2 rounded-full flex items-center gap-1.5 shrink-0" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+            <button onClick={onAddAnother} className="text-sm font-black px-3.5 py-2 rounded-full flex items-center gap-1.5 shrink-0" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
               <Plus size={16} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और गाड़ी बुक करें"}
             </button>
           )}
@@ -2495,7 +2495,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="flex items-center justify-between mb-3 gap-2">
         <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
         {onAddAnother && (
-          <button onClick={onAddAnother} className="text-sm font-extrabold px-3.5 py-2 rounded-full flex items-center gap-1.5 shrink-0" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+          <button onClick={onAddAnother} className="text-sm font-black px-3.5 py-2 rounded-full flex items-center gap-1.5 shrink-0" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
             <Plus size={16} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और गाड़ी बुक करें"}
           </button>
         )}
