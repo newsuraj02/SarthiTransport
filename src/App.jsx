@@ -214,6 +214,27 @@ function isFutureAdvance(scheduledFor) {
   return datePart > today;
 }
 
+function parseScheduledFor(scheduledFor) {
+  const [datePart, timePart] = scheduledFor.split(" ");
+  return new Date(`${datePart}T${timePart}:00`);
+}
+
+// The real-world time window a driver is committed to once a bid is
+// accepted: starts at the scheduled time (advance) or the moment of
+// acceptance (immediate, via acceptedAt — falls back to createdAt for
+// older bookings from before that field existed), and runs for the
+// allotted hours. Used to stop a driver being double-booked into two
+// overlapping commitments (see acceptBid).
+function getBookingWindow(b) {
+  if (!b.hours) return null;
+  let start;
+  if (b.scheduledFor) start = parseScheduledFor(b.scheduledFor);
+  else if (b.acceptedAt?.toMillis) start = new Date(b.acceptedAt.toMillis());
+  else if (b.createdAt?.toMillis) start = new Date(b.createdAt.toMillis());
+  else return null;
+  return { start, end: new Date(start.getTime() + b.hours * 60 * 60 * 1000) };
+}
+
 function pad2(n) { return String(n).padStart(2, "0"); }
 
 // Renders a booking's date/time in DD:MM:YYYY HH:MM — for an advance
@@ -2385,6 +2406,7 @@ function RideTypeBanner({ booking, lang }) {
 function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driverVehicle, drivers, lang, onAddAnother }) {
   const VEHICLES = vehicleTypes;
   const [selectedBid, setSelectedBid] = useState(null);
+  const [acceptError, setAcceptError] = useState("");
 
   const shareTrip = () => {
     const text = lang === "en"
@@ -2477,8 +2499,13 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               </div>
             )}
 
+            {acceptError && <div className="text-xs font-bold mt-2" style={{ color: C.safety }}>{acceptError}</div>}
             {selectedId && (
-              <button onClick={() => { acceptBid(b.id, selectedId); setSelectedBid(null); }}
+              <button onClick={() => {
+                const err = acceptBid(b.id, selectedId);
+                if (err) setAcceptError(err);
+                else { setSelectedBid(null); setAcceptError(""); }
+              }}
                 className="w-full rounded-lg py-2.5 font-bold text-sm mt-2 text-white" style={{ background: C.success }}>
                 {lang === "en" ? "Book this vehicle" : "यही गाड़ी बुक करें"}
               </button>
@@ -5439,14 +5466,37 @@ export default function App() {
     });
   };
 
+  // Returns an error string if accepting this bid would double-book the
+  // driver into two overlapping time commitments (e.g. still mid-trip on a
+  // 16-hour immediate job when an advance booking for early next morning
+  // would start) — null means no conflict, safe to proceed.
+  const findSchedulingConflict = (b, bid) => {
+    const newStart = b.scheduledFor ? parseScheduledFor(b.scheduledFor) : new Date();
+    const newEnd = new Date(newStart.getTime() + (bid.hours || 0) * 60 * 60 * 1000);
+    const conflict = bookings.find((other) => {
+      if (other.id === b.id || other.status !== "Ongoing" || other.driverName !== bid.driverName) return false;
+      const win = getBookingWindow(other);
+      if (!win) return false;
+      return newStart < win.end && win.start < newEnd;
+    });
+    if (!conflict) return null;
+    const win = getBookingWindow(conflict);
+    const fmtTime = (d) => d.toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return lang === "en"
+      ? `This driver is already booked from ${fmtTime(win.start)} to ${fmtTime(win.end)} — please pick another driver or time.`
+      : `यह ड्राइवर पहले से ${fmtTime(win.start)} से ${fmtTime(win.end)} तक बुक है — कृपया दूसरा ड्राइवर या समय चुनें।`;
+  };
+
   const acceptBid = (bookingId, bidId) => {
     const b = bookings.find((x) => x.id === bookingId);
     const bid = b?.bids?.find((x) => x.id === bidId);
-    if (!b || !bid) return;
+    if (!b || !bid) return null;
+    const conflictError = findSchedulingConflict(b, bid);
+    if (conflictError) return conflictError;
     const otp = String(Math.floor(1000 + Math.random() * 9000));
     patchDoc("bookings", bookingId, {
       status: "Ongoing", fare: bid.amount, driverName: bid.driverName, driverMobile: mobileForDriverName(bid.driverName),
-      hours: bid.hours, extraHourRate: bid.extraHourRate, progress: 0, otp,
+      hours: bid.hours, extraHourRate: bid.extraHourRate, progress: 0, otp, acceptedAt: serverTimestamp(),
     }).catch((e) => console.error(e));
 
     // Commission cut instantly on acceptance, only for the accepted
@@ -5475,6 +5525,7 @@ export default function App() {
     others.forEach((x) => {
       patchDoc("bookings", x.id, { bids: x.bids.map((y) => y.driverName === bid.driverName ? { ...y, paused: true } : y) }).catch((e) => console.error(e));
     });
+    return null;
   };
 
   const cancelBooking = (id) => {
