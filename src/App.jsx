@@ -4022,7 +4022,7 @@ function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWall
   const bookedTodayList = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t));
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
   const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
-  const lowWalletOnline = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet).length;
+  const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet);
 
   const todaysEarnings = (bookings || []).filter((b) => b.status === "Completed" && isToday(b)).reduce((s, b) => s + (b.fare || 0) * (commissionPct / 100), 0);
   const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b));
@@ -4030,10 +4030,30 @@ function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWall
   // whether it's still awaiting bids or already has a driver assigned.
   const advanceBookingsList = (bookings || []).filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed");
 
-  // Which of the four "expandable" tiles (if any) is currently showing its
-  // live record list inline, right below the KPI grid.
+  // Which of the "expandable" tiles (if any) is currently showing its live
+  // record list — rendered as its own row, directly under the grid row that
+  // tile lives in, not lumped into one shared panel elsewhere on the page.
   const [expandedTile, setExpandedTile] = useState(null);
   const toggleTile = (key) => setExpandedTile((cur) => (cur === key ? null : key));
+  // Renders nothing unless `key` is the currently-expanded tile — always
+  // opens (even with zero items, showing the empty-state message) since the
+  // point is showing the real live list, not just a non-zero count.
+  const renderPanel = (key, title, emptyMsg, items, renderItem) => {
+    if (expandedTile !== key) return null;
+    return (
+      <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-bold" style={{ color: C.ink }}>{title}</div>
+          <button onClick={() => setExpandedTile(null)} className="text-xs font-bold" style={{ color: C.inkSoft }}>✕</button>
+        </div>
+        {items.length === 0 ? (
+          <p className="text-xs" style={{ color: C.inkSoft }}>{emptyMsg}</p>
+        ) : (
+          <div className="space-y-1.5">{items.map(renderItem)}</div>
+        )}
+      </div>
+    );
+  };
 
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "Ongoing", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
@@ -4048,89 +4068,65 @@ function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWall
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      <div className="grid grid-cols-2 gap-3 mb-3">
         <StatTile label={lang === "en" ? "Pending KYC approvals" : "लंबित KYC अप्रूवल"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("kyc") : undefined} />
         <StatTile label={lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => toggleTile("online")} />
+      </div>
+      {renderPanel("online", lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार",
+        lang === "en" ? "No drivers currently online." : "अभी कोई ड्राइवर ऑनलाइन नहीं है।",
+        readyOnlineDrivers, (d) => (
+          <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: "#F8F4EC" }}>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+            <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+          </div>
+        ))}
+
+      <div className="grid grid-cols-2 gap-3 mb-3">
         <StatTile label={lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => toggleTile("booked")} />
         <StatTile label={lang === "en" ? "Cancelled today" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => toggleTile("cancelled")} />
+      </div>
+      {renderPanel("booked", lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं",
+        lang === "en" ? "No vehicles booked today yet." : "आज तक कोई गाड़ी बुक नहीं हुई।",
+        bookedTodayList, (t) => (
+          <div key={t.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
+            <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
+            <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fmt(t.fare)} · {statusMeta[t.status]?.label || t.status}</div>
+          </div>
+        ))}
+      {renderPanel("cancelled", lang === "en" ? "Cancelled today" : "आज रद्द हुईं",
+        lang === "en" ? "Nothing cancelled today." : "आज कुछ भी रद्द नहीं हुआ।",
+        cancelledTodayList, (b) => (
+          <div key={b.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
+            <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+            <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : "कोई ड्राइवर तय नहीं हुआ")}</div>
+          </div>
+        ))}
+
+      <div className="grid grid-cols-2 gap-3 mb-3">
         <StatTile label={lang === "en" ? "Today's earnings (commission)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
-        <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletOnline} color={lowWalletOnline > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("drivers") : undefined} />
+        <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => toggleTile("lowWallet")} />
+      </div>
+      {renderPanel("lowWallet", lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर",
+        lang === "en" ? "No online driver is below the minimum wallet balance." : "कोई भी ऑनलाइन ड्राइवर न्यूनतम वॉलेट से कम नहीं है।",
+        lowWalletDrivers, (d) => (
+          <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: "#FCEAE3" }}>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+            <div className="text-[11px] font-bold" style={{ color: C.safety, fontFamily: monoFont }}>{fmt(d.wallet)}</div>
+          </div>
+        ))}
+
+      <div className="grid grid-cols-2 gap-3 mb-3">
         <StatTile label={lang === "en" ? "Total advance bookings" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => toggleTile("advance")} />
       </div>
-
-      {expandedTile && (
-        <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.pimpri}` }}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-bold" style={{ color: C.ink }}>
-              {expandedTile === "online" && (lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार")}
-              {expandedTile === "booked" && (lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं")}
-              {expandedTile === "cancelled" && (lang === "en" ? "Cancelled today" : "आज रद्द हुईं")}
-              {expandedTile === "advance" && (lang === "en" ? "Total advance bookings" : "कुल एडवांस बुकिंग")}
-            </div>
-            <button onClick={() => setExpandedTile(null)} className="text-xs font-bold" style={{ color: C.inkSoft }}>✕</button>
+      {renderPanel("advance", lang === "en" ? "Total advance bookings" : "कुल एडवांस बुकिंग",
+        lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।",
+        advanceBookingsList, (b) => (
+          <div key={b.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
+            <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+            <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : "बोली का इंतज़ार")}</div>
           </div>
-
-          {expandedTile === "online" && (
-            readyOnlineDrivers.length === 0 ? (
-              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No drivers currently online." : "अभी कोई ड्राइवर ऑनलाइन नहीं है।"}</p>
-            ) : (
-              <div className="space-y-1.5">
-                {readyOnlineDrivers.map((d) => (
-                  <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: "#F8F4EC" }}>
-                    <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                    <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
-
-          {expandedTile === "booked" && (
-            bookedTodayList.length === 0 ? (
-              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No vehicles booked today yet." : "आज तक कोई गाड़ी बुक नहीं हुई।"}</p>
-            ) : (
-              <div className="space-y-1.5">
-                {bookedTodayList.map((t) => (
-                  <div key={t.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
-                    <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
-                    <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fmt(t.fare)} · {statusMeta[t.status]?.label || t.status}</div>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
-
-          {expandedTile === "cancelled" && (
-            cancelledTodayList.length === 0 ? (
-              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Nothing cancelled today." : "आज कुछ भी रद्द नहीं हुआ।"}</p>
-            ) : (
-              <div className="space-y-1.5">
-                {cancelledTodayList.map((b) => (
-                  <div key={b.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
-                    <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
-                    <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : "कोई ड्राइवर तय नहीं हुआ")}</div>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
-
-          {expandedTile === "advance" && (
-            advanceBookingsList.length === 0 ? (
-              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
-            ) : (
-              <div className="space-y-1.5">
-                {advanceBookingsList.map((b) => (
-                  <div key={b.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
-                    <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
-                    <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : "बोली का इंतज़ार")}</div>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
-        </div>
-      )}
+        ))}
+      <div className="mb-2" />
 
       <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Truck size={16} /> {lang === "en" ? "Search history by vehicle number" : "गाड़ी नंबर से हिस्ट्री देखें"}</div>
