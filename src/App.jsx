@@ -3305,8 +3305,24 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
   // smaller/lighter type — a bigger truck can always carry a smaller load,
   // so "above" vehicle options can bid too, not just an exact match.
   const driverVehicleDef = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
+
+  // If this driver has an upcoming Advance booking, Current (immediate)
+  // loads are hidden entirely — no notification, no listing, no bidding —
+  // starting N hours before it (N scaled by this driver's own vehicle
+  // tonnage), so they aren't pulled toward a new immediate job while they
+  // should be prepping for/heading to the advance one. Other customers'
+  // still-open Advance loads stay visible/biddable throughout.
+  const myAdvanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
+  const notificationsLocked = myAdvanceBookings.some((b) => {
+    const scheduled = parseScheduledFor(b.scheduledFor);
+    const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
+    const lockStart = scheduled.getTime() - lockHours * 60 * 60 * 1000;
+    return Date.now() >= lockStart && Date.now() < scheduled.getTime();
+  });
+
   const openLoads = bookings.filter((b) => {
     if (b.status !== "Bidding") return false;
+    if (notificationsLocked && !isFutureAdvance(b.scheduledFor)) return false;
     if (!driverVehicleDef) return true;
     const loadVehicleDef = vehicleTypes.find((v) => v.key === b.vehicle);
     if (!loadVehicleDef) return b.vehicle === driver.vehicleSpec.type;
@@ -3318,19 +3334,6 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
   const seenLoadIdsRef = useRef(null);
   const [newLoadToast, setNewLoadToast] = useState(null);
   const loadIdsKey = openLoads.map((l) => l.id).join(",");
-
-  // If this driver has an upcoming Advance booking, Current-load
-  // notifications go quiet starting N hours before it (N scaled by this
-  // driver's own vehicle tonnage) — they still see open loads if they check
-  // manually, they just stop getting pinged while they should be prepping
-  // for/heading to the advance job.
-  const myAdvanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
-  const notificationsLocked = myAdvanceBookings.some((b) => {
-    const scheduled = parseScheduledFor(b.scheduledFor);
-    const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
-    const lockStart = scheduled.getTime() - lockHours * 60 * 60 * 1000;
-    return Date.now() >= lockStart && Date.now() < scheduled.getTime();
-  });
 
   useEffect(() => {
     const currentIds = new Set(openLoads.map((l) => l.id));
@@ -3398,7 +3401,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
       {notificationsLocked && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
           <Clock3 size={14} color={C.marigoldDeep} />
-          <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "You have an Advance booking coming up soon — new Current-load alerts are paused until then." : "आपकी एडवांस बुकिंग जल्द है — तब तक नए करेंट लोड के अलर्ट रोक दिए गए हैं।"}</span>
+          <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
         </div>
       )}
 
