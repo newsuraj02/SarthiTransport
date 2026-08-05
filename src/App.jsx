@@ -228,6 +228,17 @@ function minAdvanceNoticeHours(weightKg) {
   return 1;
 }
 
+// A driver with an upcoming Advance booking stops getting pinged for new
+// Current (immediate) loads starting this many hours before that booking's
+// scheduled time — bigger vehicles get a longer quiet window since they
+// need more prep/travel time before heading out. Keyed off the driver's
+// own vehicle capacity.
+function notificationLockHours(vehicleCapacityKg) {
+  if (vehicleCapacityKg > 8000) return 3;
+  if (vehicleCapacityKg >= 3000) return 2;
+  return 1;
+}
+
 // The real-world time window a driver is committed to once a bid is
 // accepted: starts at the scheduled time (advance) or the moment of
 // acceptance (immediate, via acceptedAt — falls back to createdAt for
@@ -3307,6 +3318,20 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
   const seenLoadIdsRef = useRef(null);
   const [newLoadToast, setNewLoadToast] = useState(null);
   const loadIdsKey = openLoads.map((l) => l.id).join(",");
+
+  // If this driver has an upcoming Advance booking, Current-load
+  // notifications go quiet starting N hours before it (N scaled by this
+  // driver's own vehicle tonnage) — they still see open loads if they check
+  // manually, they just stop getting pinged while they should be prepping
+  // for/heading to the advance job.
+  const myAdvanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
+  const notificationsLocked = myAdvanceBookings.some((b) => {
+    const scheduled = parseScheduledFor(b.scheduledFor);
+    const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
+    const lockStart = scheduled.getTime() - lockHours * 60 * 60 * 1000;
+    return Date.now() >= lockStart && Date.now() < scheduled.getTime();
+  });
+
   useEffect(() => {
     const currentIds = new Set(openLoads.map((l) => l.id));
     if (seenLoadIdsRef.current === null) {
@@ -3314,14 +3339,14 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
       return;
     }
     const freshLoads = openLoads.filter((l) => !seenLoadIdsRef.current.has(l.id));
-    if (freshLoads.length > 0 && driver.online && driver.kyc === "Approved" && !driver.blacklisted) {
+    if (freshLoads.length > 0 && driver.online && driver.kyc === "Approved" && !driver.blacklisted && !notificationsLocked) {
       playBeepTone();
       setNewLoadToast(freshLoads[0]);
       setTimeout(() => setNewLoadToast((cur) => (cur?.id === freshLoads[0].id ? null : cur)), 4000);
     }
     seenLoadIdsRef.current = currentIds;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadIdsKey]);
+  }, [loadIdsKey, notificationsLocked]);
 
   // Real GPS live-tracking: while this driver has an active trip, share their
   // actual device location so the customer (and admin fleet map) see it live.
@@ -3367,6 +3392,13 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.navy }}>
           <Bell size={14} color={C.marigold} />
           <span className="text-[11px] font-bold text-white">🔔 {lang === "en" ? "New load" : "नया लोड"}: {newLoadToast.pickup} → {newLoadToast.drop}</span>
+        </div>
+      )}
+
+      {notificationsLocked && (
+        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
+          <Clock3 size={14} color={C.marigoldDeep} />
+          <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "You have an Advance booking coming up soon — new Current-load alerts are paused until then." : "आपकी एडवांस बुकिंग जल्द है — तब तक नए करेंट लोड के अलर्ट रोक दिए गए हैं।"}</span>
         </div>
       )}
 
