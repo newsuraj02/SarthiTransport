@@ -219,6 +219,15 @@ function parseScheduledFor(scheduledFor) {
   return new Date(`${datePart}T${timePart}:00`);
 }
 
+// Heavier loads need more lead time for a driver to actually be arranged —
+// enforced on Advance booking so a customer can't schedule, say, an 8-ton
+// load for 30 minutes from now.
+function minAdvanceNoticeHours(weightKg) {
+  if (weightKg > 8000) return 3;
+  if (weightKg >= 3000) return 2;
+  return 1;
+}
+
 // The real-world time window a driver is committed to once a bid is
 // accepted: starts at the scheduled time (advance) or the moment of
 // acceptance (immediate, via acceptedAt — falls back to createdAt for
@@ -2122,7 +2131,20 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
     );
   };
 
-  const canPost = pickup.trim() && drop.trim() && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime));
+  // Minimum lead-time rule for Advance bookings, scaled by load weight —
+  // heavier loads need more notice to actually line up a driver.
+  const advanceNoticeError = (() => {
+    if (bookingMode !== "advance" || !advanceDate || !advanceTime || !weight.trim()) return "";
+    const scheduled = parseScheduledFor(`${advanceDate} ${advanceTime}`);
+    const minHours = minAdvanceNoticeHours(Number(weight) || 0);
+    const hoursUntil = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
+    if (hoursUntil >= minHours) return "";
+    return lang === "en"
+      ? `This weight needs at least ${minHours} hour${minHours > 1 ? "s" : ""} advance notice — please pick a later time.`
+      : `इस वजन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`;
+  })();
+
+  const canPost = pickup.trim() && drop.trim() && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime && !advanceNoticeError));
 
   useEffect(() => {
     const w = Number(weight);
@@ -2342,6 +2364,10 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             </div>
           );
         })()}
+
+        {advanceNoticeError && (
+          <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{advanceNoticeError}</div>
+        )}
 
         <button onClick={post} disabled={!canPost} className="w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2"
           style={{ background: canPost ? C.success : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
