@@ -72,11 +72,32 @@ function parseScheduledFor(scheduledFor) {
   const [datePart, timePart] = scheduledFor.split(" ");
   return new Date(`${datePart}T${timePart}:00`);
 }
-function isFutureAdvance(scheduledFor) {
-  if (!scheduledFor) return false;
-  const datePart = scheduledFor.split(" ")[0];
-  const today = new Date().toISOString().slice(0, 10);
-  return datePart > today;
+
+// Mirrors src/App.jsx's getBookingWindow — the real-world time window a
+// driver is committed to for an already-accepted Ongoing booking.
+function getBookingWindow(b) {
+  if (!b.hours) return null;
+  let start;
+  if (b.scheduledFor) start = parseScheduledFor(b.scheduledFor);
+  else if (b.acceptedAt?.toMillis) start = new Date(b.acceptedAt.toMillis());
+  else if (b.createdAt?.toMillis) start = new Date(b.createdAt.toMillis());
+  else return null;
+  return { start, end: new Date(start.getTime() + b.hours * 60 * 60 * 1000) };
+}
+
+// Mirrors src/App.jsx's findDriverLoadConflict (list-filtering mode, no
+// candidate hours known yet) — true if this new load's start time falls
+// inside any of the driver's existing Ongoing commitments' window plus the
+// vehicle-tonnage buffer ahead of it. Covers both "still mid-trip on a
+// current job" and "advance booking coming up soon", not just the latter.
+function hasLoadConflict(load, myOngoing, lockHours) {
+  const newStart = load.scheduledFor ? parseScheduledFor(load.scheduledFor) : new Date();
+  return myOngoing.some((existing) => {
+    const win = getBookingWindow(existing);
+    if (!win) return false;
+    const lockStart = new Date(win.start.getTime() - lockHours * 60 * 60 * 1000);
+    return newStart < win.end && newStart >= lockStart;
+  });
 }
 
 // Fires the moment a customer posts a new load — pushes a loud, high-priority
@@ -106,7 +127,6 @@ exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event
     (ongoingByDriver[b.driverName] ||= []).push(b);
   });
 
-  const now = Date.now();
   const sends = [];
   driversSnap.forEach((doc) => {
     const driver = doc.data();
@@ -118,14 +138,11 @@ exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event
     if (driverVehicleDef && loadVehicleDef && loadVehicleDef.capacityKg > driverVehicleDef.capacityKg) return;
     if (driverVehicleDef && !loadVehicleDef && load.vehicle !== driver.vehicleSpec?.type) return;
 
-    // Respect the advance-booking protection window — no ping if locked.
-    const myAdvance = (ongoingByDriver[driver.name] || []).find((b) => isFutureAdvance(b.scheduledFor));
-    if (myAdvance) {
-      const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
-      const scheduled = parseScheduledFor(myAdvance.scheduledFor);
-      const lockStart = scheduled.getTime() - lockHours * 60 * 60 * 1000;
-      if (now >= lockStart && now < scheduled.getTime()) return;
-    }
+    // No ping if this load would conflict with a commitment the driver
+    // already has (current trip in progress, or an upcoming Advance booking
+    // plus its vehicle-tonnage buffer) — they can't bid on it anyway.
+    const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
+    if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) return;
 
     sends.push(sendLoadAlert(driver.fcmToken, load, event.params.bookingId));
   });

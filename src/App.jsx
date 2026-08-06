@@ -257,6 +257,40 @@ function getBookingWindow(b) {
   return { start, end: new Date(start.getTime() + b.hours * 60 * 60 * 1000) };
 }
 
+// The single source of truth for "can this driver take this load" — used at
+// three points: hiding a load from a driver's list before they ever see it,
+// blocking the Send Quote button if they try anyway, and blocking Accept if
+// a customer somehow still selects a conflicting bid. A driver already
+// committed to another Ongoing booking (current trip in progress, or an
+// upcoming Advance booking) cannot bid on / be assigned anything whose time
+// falls inside that commitment's window PLUS the vehicle-tonnage buffer
+// ahead of it (notificationLockHours) — e.g. a 10 AM advance booking with a
+// 2-hour buffer and 4 allotted hours blocks everything from 8 AM to 2 PM.
+// `candidate.hours` is optional — omitted while just deciding whether to
+// show a load (duration isn't chosen yet), included once a bid amount/hours
+// has actually been entered so a full overlap (not just a start-time check)
+// can be tested.
+function findDriverLoadConflict(driver, candidate, bookings, vehicleTypes, lang) {
+  if (!driver) return null;
+  const driverVehicleDef = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
+  const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
+  const newStart = candidate.scheduledFor ? parseScheduledFor(candidate.scheduledFor) : new Date();
+  const newEnd = candidate.hours ? new Date(newStart.getTime() + candidate.hours * 60 * 60 * 1000) : newStart;
+  const myCommitments = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && b.id !== candidate.id);
+  for (const existing of myCommitments) {
+    const win = getBookingWindow(existing);
+    if (!win) continue;
+    const lockStart = new Date(win.start.getTime() - lockHours * 60 * 60 * 1000);
+    if (newStart < win.end && newEnd >= lockStart) {
+      const fmtTime = (d) => d.toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      return lang === "en"
+        ? `⚠️ You already have a ride booked from ${fmtTime(win.start)} to ${fmtTime(win.end)} (incl. ${lockHours}hr buffer) — you cannot bid on or take this load.`
+        : `⚠️ आपकी पहले से ${fmtTime(win.start)} से ${fmtTime(win.end)} तक (${lockHours} घंटे के बफर सहित) एक राइड बुक है — आप इस लोड पर बोली नहीं लगा सकते या इसे नहीं ले सकते।`;
+    }
+  }
+  return null;
+}
+
 function pad2(n) { return String(n).padStart(2, "0"); }
 
 // Renders a booking's date/time in DD:MM:YYYY HH:MM — for an advance
@@ -3080,6 +3114,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   const [allowedHours, setAllowedHours] = useState("");
   const [extraHourRate, setExtraHourRate] = useState("");
   const [justSubmitted, setJustSubmitted] = useState(false);
+  const [bidError, setBidError] = useState("");
 
   const canSubmit = Number(amount) > 0 && Number(allowedHours) > 0 && Number(extraHourRate) > 0;
   const requiredForQuote = Number(amount || 0) * (commissionPct / 100);
@@ -3093,11 +3128,13 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
 
   const submitBid = () => {
     if (!canSubmit || myBid || walletShortfall) return;
-    addBid(load.id, {
+    const err = addBid(load.id, {
       driverName: driver.name, amount: Number(amount),
       hours: Number(allowedHours), extraHourRate: Number(extraHourRate),
       rating: driver.rating || 4.6, distanceKm: 1 + Math.floor(Math.random() * 6),
     });
+    if (err) { setBidError(err); return; }
+    setBidError("");
     setJustSubmitted(true);
     setTimeout(() => setJustSubmitted(false), 2500);
   };
@@ -3179,6 +3216,9 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
             <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>
               {lang === "en" ? `Not enough wallet balance to cover ${commissionPct}% commission on this fare — recharge your wallet first.` : `इस भाड़े पर ${commissionPct}% कमीशन के लिए वॉलेट में पर्याप्त बैलेंस नहीं है — पहले वॉलेट रीचार्ज करें।`}
             </div>
+          )}
+          {bidError && (
+            <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{bidError}</div>
           )}
 
           <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className="w-full rounded-lg py-2.5 text-sm font-bold text-white flex items-center justify-center gap-1.5"
@@ -3328,8 +3368,10 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
   // loads are hidden entirely — no notification, no listing, no bidding —
   // starting N hours before it (N scaled by this driver's own vehicle
   // tonnage), so they aren't pulled toward a new immediate job while they
-  // should be prepping for/heading to the advance one. Other customers'
-  // still-open Advance loads stay visible/biddable throughout.
+  // should be prepping for/heading to the advance one. Used only for the
+  // banner below — the actual filtering (which also covers any OTHER load,
+  // including another Advance one, whose time would conflict) is done by
+  // findDriverLoadConflict in openLoads.
   const myAdvanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
   const notificationsLocked = myAdvanceBookings.some((b) => {
     const scheduled = parseScheduledFor(b.scheduledFor);
@@ -3338,9 +3380,13 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
     return Date.now() >= lockStart && Date.now() < scheduled.getTime();
   });
 
+  // A load never even shows up if it would conflict with a commitment this
+  // driver already has (current trip in progress, or an upcoming Advance
+  // booking plus its vehicle-tonnage buffer) — no bidding, no alert to work
+  // around, it's simply not in the list.
   const openLoads = bookings.filter((b) => {
     if (b.status !== "Bidding") return false;
-    if (notificationsLocked && !isFutureAdvance(b.scheduledFor)) return false;
+    if (findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor }, bookings, vehicleTypes, lang)) return false;
     if (!driverVehicleDef) return true;
     const loadVehicleDef = vehicleTypes.find((v) => v.key === b.vehicle);
     if (!loadVehicleDef) return b.vehicle === driver.vehicleSpec.type;
@@ -5528,11 +5574,21 @@ export default function App() {
     }).catch((e) => console.error(e));
   };
 
+  // A driver can't even place a bid — let alone have one accepted — on a
+  // load that would conflict with a commitment they already have (see
+  // findDriverLoadConflict). This is the authoritative check: DriverHome
+  // hides conflicting loads from the list as the first line of defense, but
+  // this is what actually stops the write if a stale/cached load slips
+  // through.
   const addBid = (bookingId, bid) => {
     const b = bookings.find((x) => x.id === bookingId);
-    if (!b) return;
+    if (!b) return null;
+    const bidDriver = drivers.find((d) => d.name === bid.driverName);
+    const conflict = findDriverLoadConflict(bidDriver, { id: b.id, scheduledFor: b.scheduledFor, hours: bid.hours }, bookings, vehicleTypes, lang);
+    if (conflict) return conflict;
     const rest = (b.bids || []).filter((x) => x.driverName !== bid.driverName);
     patchDoc("bookings", bookingId, { bids: [...rest, { id: genId("B"), ...bid }] }).catch((e) => console.error(e));
+    return null;
   };
 
   const mobileForDriverName = (name) => drivers.find((d) => d.name === name)?.mobile || "";
@@ -5545,57 +5601,13 @@ export default function App() {
     });
   };
 
-  // Returns an error string if accepting a Current (immediate) booking
-  // falls inside this driver's protection window ahead of their own
-  // upcoming Advance booking — the chart-based rule, independent of how
-  // long this new job would actually take. Advance bookings themselves are
-  // never blocked by this check. null means no conflict, safe to proceed.
-  const findAdvanceLockConflict = (b, bid) => {
-    if (b.scheduledFor) return null;
-    const bidDriver = drivers.find((d) => d.name === bid.driverName);
-    const driverVehicleDef = vehicleTypes.find((v) => v.key === bidDriver?.vehicleSpec?.type);
-    const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
-    const myAdvance = bookings.find((x) => x.status === "Ongoing" && x.driverName === bid.driverName && isFutureAdvance(x.scheduledFor));
-    if (!myAdvance) return null;
-    const scheduled = parseScheduledFor(myAdvance.scheduledFor);
-    const lockStart = scheduled.getTime() - lockHours * 60 * 60 * 1000;
-    const now = Date.now();
-    if (now < lockStart || now >= scheduled.getTime()) return null;
-    const fmtTime = (d) => d.toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" });
-    return lang === "en"
-      ? `⚠️ Booking cannot be accepted! This driver has an Advance booking today at ${fmtTime(scheduled)}. As per vehicle category rules, no new booking can be accepted within ${lockHours} hour${lockHours > 1 ? "s" : ""} of an Advance booking.`
-      : `⚠️ बुकिंग स्वीकार नहीं की जा सकती! इस ड्राइवर की आज ${fmtTime(scheduled)} पर एडवांस बुकिंग तय है। गाड़ी श्रेणी के नियम के अनुसार, एडवांस बुकिंग से ${lockHours} घंटे पहले कोई नई बुकिंग स्वीकार नहीं की जा सकती।`;
-  };
-
-  // Returns an error string if accepting this bid would double-book the
-  // driver into two overlapping time commitments (e.g. still mid-trip on a
-  // 16-hour immediate job when an advance booking for early next morning
-  // would start) — null means no conflict, safe to proceed.
-  const findSchedulingConflict = (b, bid) => {
-    const newStart = b.scheduledFor ? parseScheduledFor(b.scheduledFor) : new Date();
-    const newEnd = new Date(newStart.getTime() + (bid.hours || 0) * 60 * 60 * 1000);
-    const conflict = bookings.find((other) => {
-      if (other.id === b.id || other.status !== "Ongoing" || other.driverName !== bid.driverName) return false;
-      const win = getBookingWindow(other);
-      if (!win) return false;
-      return newStart < win.end && win.start < newEnd;
-    });
-    if (!conflict) return null;
-    const win = getBookingWindow(conflict);
-    const fmtTime = (d) => d.toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    return lang === "en"
-      ? `This driver is already booked from ${fmtTime(win.start)} to ${fmtTime(win.end)} — please pick another driver or time.`
-      : `यह ड्राइवर पहले से ${fmtTime(win.start)} से ${fmtTime(win.end)} तक बुक है — कृपया दूसरा ड्राइवर या समय चुनें।`;
-  };
-
   const acceptBid = (bookingId, bidId) => {
     const b = bookings.find((x) => x.id === bookingId);
     const bid = b?.bids?.find((x) => x.id === bidId);
     if (!b || !bid) return null;
-    const lockError = findAdvanceLockConflict(b, bid);
-    if (lockError) return lockError;
-    const conflictError = findSchedulingConflict(b, bid);
-    if (conflictError) return conflictError;
+    const bidDriver = drivers.find((d) => d.name === bid.driverName);
+    const conflict = findDriverLoadConflict(bidDriver, { id: b.id, scheduledFor: b.scheduledFor, hours: bid.hours }, bookings, vehicleTypes, lang);
+    if (conflict) return conflict;
     const otp = String(Math.floor(1000 + Math.random() * 9000));
     patchDoc("bookings", bookingId, {
       status: "Ongoing", fare: bid.amount, driverName: bid.driverName, driverMobile: mobileForDriverName(bid.driverName),
