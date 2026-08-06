@@ -3,7 +3,7 @@
 // pushes needs the Admin SDK's service-account credentials — a browser
 // can't hold those safely, so this is the one piece of this app that has
 // to live in a Cloud Function instead of client code.
-const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentUpdated, onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -21,6 +21,117 @@ async function sendPush(token, title, body) {
     console.error("[push] send failed:", e.message);
   }
 }
+
+// New-load alerts need to cut through — loud/vibrating and marked
+// high-priority on both Android and web push, so they still surface even
+// with the app fully closed and the phone in someone's pocket. Regular
+// status-update pushes above (sendPush) stay at normal priority since
+// those aren't time-critical the same way.
+async function sendLoadAlert(token, load, bookingId) {
+  if (!token) return;
+  try {
+    await getMessaging().send({
+      token,
+      notification: {
+        title: "🔔 नया भाड़ा उपलब्ध है!",
+        body: `📍 लोडिंग: ${load.pickup}\n🏁 अनलोडिंग: ${load.drop}\n🚛 गाड़ी: ${load.vehicle || "-"}${load.weight ? ` · ${load.weight}kg` : ""}`,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "new_load_alerts",
+          priority: "max",
+          visibility: "public",
+          defaultSound: true,
+          defaultVibrateTimings: false,
+          vibrateTimingsMillis: [0, 400, 200, 400, 200, 400],
+        },
+      },
+      webpush: {
+        headers: { Urgency: "high" },
+        notification: { requireInteraction: true, vibrate: [400, 200, 400, 200, 400], tag: "new-load", renotify: true },
+        fcmOptions: { link: "/?open=driver" },
+      },
+      data: { type: "new_load", bookingId },
+    });
+  } catch (e) {
+    console.error("[push] load-alert send failed:", e.message);
+  }
+}
+
+// Same lock-hours chart as src/App.jsx's notificationLockHours — kept in
+// sync manually since this Cloud Function can't import from the browser
+// bundle. Update both together if the chart ever changes.
+function notificationLockHours(vehicleCapacityKg) {
+  if (vehicleCapacityKg > 16000) return 4;
+  if (vehicleCapacityKg > 8000) return 3;
+  if (vehicleCapacityKg >= 3000) return 2;
+  return 1;
+}
+function parseScheduledFor(scheduledFor) {
+  const [datePart, timePart] = scheduledFor.split(" ");
+  return new Date(`${datePart}T${timePart}:00`);
+}
+function isFutureAdvance(scheduledFor) {
+  if (!scheduledFor) return false;
+  const datePart = scheduledFor.split(" ")[0];
+  const today = new Date().toISOString().slice(0, 10);
+  return datePart > today;
+}
+
+// Fires the moment a customer posts a new load — pushes a loud, high-priority
+// alert to every driver who is Online, KYC-approved, not blocked, whose
+// vehicle can carry this load, and who isn't currently inside their own
+// advance-booking protection window (see notificationLockHours). This is
+// what actually reaches a driver whose app is closed/backgrounded — the
+// client-side beep+toast in DriverHome only fires while that screen is open.
+exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event) => {
+  const load = event.data?.data();
+  if (!load || load.status !== "Bidding") return;
+
+  const [vehicleTypesSnap, driversSnap, ongoingSnap] = await Promise.all([
+    db.collection("vehicleTypes").get(),
+    db.collection("drivers").get(),
+    db.collection("bookings").where("status", "==", "Ongoing").get(),
+  ]);
+
+  const vehicleTypesByKey = {};
+  vehicleTypesSnap.forEach((doc) => { vehicleTypesByKey[doc.id] = doc.data(); });
+  const loadVehicleDef = vehicleTypesByKey[load.vehicle];
+
+  const ongoingByDriver = {};
+  ongoingSnap.forEach((doc) => {
+    const b = doc.data();
+    if (!b.driverName) return;
+    (ongoingByDriver[b.driverName] ||= []).push(b);
+  });
+
+  const now = Date.now();
+  const sends = [];
+  driversSnap.forEach((doc) => {
+    const driver = doc.data();
+    if (!driver.online || driver.kyc !== "Approved" || driver.blacklisted || !driver.fcmToken) return;
+
+    // Same "bigger truck can carry a smaller load" rule as the client's
+    // openLoads filter in DriverHome.
+    const driverVehicleDef = vehicleTypesByKey[driver.vehicleSpec?.type];
+    if (driverVehicleDef && loadVehicleDef && loadVehicleDef.capacityKg > driverVehicleDef.capacityKg) return;
+    if (driverVehicleDef && !loadVehicleDef && load.vehicle !== driver.vehicleSpec?.type) return;
+
+    // Respect the advance-booking protection window — no ping if locked.
+    const myAdvance = (ongoingByDriver[driver.name] || []).find((b) => isFutureAdvance(b.scheduledFor));
+    if (myAdvance) {
+      const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
+      const scheduled = parseScheduledFor(myAdvance.scheduledFor);
+      const lockStart = scheduled.getTime() - lockHours * 60 * 60 * 1000;
+      if (now >= lockStart && now < scheduled.getTime()) return;
+    }
+
+    sends.push(sendLoadAlert(driver.fcmToken, load, event.params.bookingId));
+  });
+
+  await Promise.all(sends);
+});
 
 async function getCustomerToken(customerMobile) {
   if (!customerMobile) return null;

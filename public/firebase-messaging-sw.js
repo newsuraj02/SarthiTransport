@@ -19,10 +19,35 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   const { title, body } = payload.notification || {};
+  const isLoadAlert = payload.data?.type === "new_load";
+  // New-load alerts need to actually get a driver's attention with the app
+  // closed/backgrounded — vibrate pattern + requireInteraction (stays on
+  // screen until dismissed) instead of the quiet default a normal ride
+  // status update gets.
   self.registration.showNotification(title || "Apna Transport", {
     body: body || "",
     icon: "/favicon.svg",
+    tag: isLoadAlert ? "new-load" : undefined,
+    renotify: isLoadAlert,
+    requireInteraction: isLoadAlert,
+    vibrate: isLoadAlert ? [400, 200, 400, 200, 400] : undefined,
+    data: payload.data || {},
   });
+});
+
+// Tapping the notification focuses an already-open tab if there is one,
+// otherwise opens a fresh one straight into the driver app.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.type === "new_load" ? "/?open=driver" : "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) return client.focus();
+      }
+      return self.clients.openWindow(url);
+    })
+  );
 });
 
 // Basic runtime caching so the app shell loads instantly on repeat visits
