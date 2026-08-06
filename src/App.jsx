@@ -229,11 +229,13 @@ function minAdvanceNoticeHours(weightKg) {
 }
 
 // A driver with an upcoming Advance booking stops getting pinged for new
-// Current (immediate) loads starting this many hours before that booking's
-// scheduled time — bigger vehicles get a longer quiet window since they
-// need more prep/travel time before heading out. Keyed off the driver's
-// own vehicle capacity.
+// Current (immediate) loads — and can't have a new bid accepted for one —
+// starting this many hours before that booking's scheduled time. Bigger
+// vehicles get a longer protection window since they need more prep/travel
+// time before heading out. Keyed off the driver's own vehicle capacity.
+// 1-3 ton -> 1hr, 4-8 ton -> 2hr, 9-16 ton -> 3hr, >16 ton -> 4hr.
 function notificationLockHours(vehicleCapacityKg) {
+  if (vehicleCapacityKg > 16000) return 4;
   if (vehicleCapacityKg > 8000) return 3;
   if (vehicleCapacityKg >= 3000) return 2;
   return 1;
@@ -5543,6 +5545,28 @@ export default function App() {
     });
   };
 
+  // Returns an error string if accepting a Current (immediate) booking
+  // falls inside this driver's protection window ahead of their own
+  // upcoming Advance booking — the chart-based rule, independent of how
+  // long this new job would actually take. Advance bookings themselves are
+  // never blocked by this check. null means no conflict, safe to proceed.
+  const findAdvanceLockConflict = (b, bid) => {
+    if (b.scheduledFor) return null;
+    const bidDriver = drivers.find((d) => d.name === bid.driverName);
+    const driverVehicleDef = vehicleTypes.find((v) => v.key === bidDriver?.vehicleSpec?.type);
+    const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
+    const myAdvance = bookings.find((x) => x.status === "Ongoing" && x.driverName === bid.driverName && isFutureAdvance(x.scheduledFor));
+    if (!myAdvance) return null;
+    const scheduled = parseScheduledFor(myAdvance.scheduledFor);
+    const lockStart = scheduled.getTime() - lockHours * 60 * 60 * 1000;
+    const now = Date.now();
+    if (now < lockStart || now >= scheduled.getTime()) return null;
+    const fmtTime = (d) => d.toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" });
+    return lang === "en"
+      ? `⚠️ Booking cannot be accepted! This driver has an Advance booking today at ${fmtTime(scheduled)}. As per vehicle category rules, no new booking can be accepted within ${lockHours} hour${lockHours > 1 ? "s" : ""} of an Advance booking.`
+      : `⚠️ बुकिंग स्वीकार नहीं की जा सकती! इस ड्राइवर की आज ${fmtTime(scheduled)} पर एडवांस बुकिंग तय है। गाड़ी श्रेणी के नियम के अनुसार, एडवांस बुकिंग से ${lockHours} घंटे पहले कोई नई बुकिंग स्वीकार नहीं की जा सकती।`;
+  };
+
   // Returns an error string if accepting this bid would double-book the
   // driver into two overlapping time commitments (e.g. still mid-trip on a
   // 16-hour immediate job when an advance booking for early next morning
@@ -5568,6 +5592,8 @@ export default function App() {
     const b = bookings.find((x) => x.id === bookingId);
     const bid = b?.bids?.find((x) => x.id === bidId);
     if (!b || !bid) return null;
+    const lockError = findAdvanceLockConflict(b, bid);
+    if (lockError) return lockError;
     const conflictError = findSchedulingConflict(b, bid);
     if (conflictError) return conflictError;
     const otp = String(Math.floor(1000 + Math.random() * 9000));
