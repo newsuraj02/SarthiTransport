@@ -869,7 +869,7 @@ function StarRating({ value, onRate }) {
 const ADMIN_PHONE = "+917972399892";
 const ADMIN_WHATSAPP = "917972399892";
 
-function SosScreen({ role = "customer", raiseAlert, lang }) {
+function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
   const [complaint, setComplaint] = useState("");
   const [sent, setSent] = useState(false);
   const submitComplaint = () => {
@@ -886,6 +886,12 @@ function SosScreen({ role = "customer", raiseAlert, lang }) {
         <h2 className="text-base font-bold" style={{ color: C.safety }}>SOS / {lang === "en" ? "Help" : "मदद"}</h2>
         <p className="text-xs mt-1" style={{ color: C.ink }}>{lang === "en" ? "For any problem or booking help, click the button below." : "किसी भी समस्या या बुकिंग सहायता के लिए नीचे दिए गए बटन पर क्लिक करें।"}</p>
       </div>
+      {tripLocked && (
+        <div className="rounded-xl p-4 mb-5 text-center" style={{ background: "#FCEAE3", border: `1.5px solid ${C.safety}` }}>
+          <div className="text-sm font-bold mb-1" style={{ color: C.safety }}>⚠️ {lang === "en" ? "Trip cannot be cancelled!" : "ट्रिप कैंसल नहीं की जा सकती!"}</div>
+          <p className="text-xs" style={{ color: C.ink }}>{lang === "en" ? "The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support below for any help." : "ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए नीचे सपोर्ट से संपर्क करें।"}</p>
+        </div>
+      )}
       <div className="space-y-3">
         <a href="tel:100" onClick={() => raiseAlert?.(role, "पुलिस सहायता")}
           className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: "#2A211C" }}>
@@ -2444,6 +2450,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const VEHICLES = vehicleTypes;
   const [selectedBid, setSelectedBid] = useState(null);
   const [acceptError, setAcceptError] = useState("");
+  const [cancelError, setCancelError] = useState("");
 
   const shareTrip = () => {
     const text = lang === "en"
@@ -2547,7 +2554,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                 {lang === "en" ? "Book this vehicle" : "यही गाड़ी बुक करें"}
               </button>
             )}
-            <button onClick={() => cancelBooking(b.id)} className="text-[11px] font-semibold mt-2" style={{ color: C.safety }}>{lang === "en" ? "Cancel load" : "लोड रद्द करें"}</button>
+            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold mt-2" style={{ color: C.safety }}>{lang === "en" ? "Cancel load" : "लोड रद्द करें"}</button>
+            {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
         </div>
       </div>
     );
@@ -2661,8 +2669,16 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
         <div className="flex items-center gap-4 mt-2">
           <button onClick={shareTrip} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
-          <button onClick={() => cancelBooking(b.id)} className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
+          {!b.loadingStartedAt && (
+            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
+          )}
         </div>
+        {b.loadingStartedAt && (
+          <div className="rounded-lg p-2.5 mt-2 text-[11px] font-bold" style={{ background: "#FCEAE3", color: C.safety }}>
+            ⚠️ {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
+          </div>
+        )}
+        {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
       </div>
     </div>
   );
@@ -2918,7 +2934,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold self-start" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
-        {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} />}
+        {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} />}
         {settingsView === "profile" && (
           <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} requestReferralWithdrawal={requestReferralWithdrawal} onOpenTerms={onOpenTerms} lang={lang} />
         )}
@@ -5589,9 +5605,20 @@ export default function App() {
     return null;
   };
 
+  // Once the driver has verified pickup OTP (loadingStartedAt set), the
+  // goods are considered loaded/in transit — cancellation locks out from
+  // here on, for either side, from any entry point (not just the button
+  // itself, which is hidden — this is the actual enforcement point).
+  // Returns an error string when blocked, null when the cancellation went
+  // through.
   const cancelBooking = (id) => {
     const b = bookings.find((x) => x.id === id);
-    if (!b) return;
+    if (!b) return null;
+    if (b.loadingStartedAt) {
+      return lang === "en"
+        ? "Trip cannot be cancelled! The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support for any help."
+        : "ट्रिप कैंसल नहीं की जा सकती! ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए सपोर्ट से संपर्क करें।";
+    }
     if (b.status === "Ongoing" && b.driverName === driver?.name && b.fare) {
       // New cancellation rule: the cut commission/advance is held by admin,
       // not refunded instantly — it auto-adjusts against the driver's next
@@ -5606,6 +5633,7 @@ export default function App() {
     }
     if (b.status === "Ongoing" && b.driverName) unfreezeDriverName(b.driverName);
     patchDoc("bookings", id, { status: "Cancelled" }).catch((e) => console.error(e));
+    return null;
   };
   const rateBooking = (id, rating) => patchDoc("bookings", id, { rating }).catch((e) => console.error(e));
   // Credits ₹200 to the referring customer's profile the moment a referred
