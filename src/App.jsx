@@ -1055,7 +1055,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10">
       <div className="mb-4">
-        <Logo size={88} />
+        <Logo size={128} />
       </div>
       <p className="text-xs text-center mb-8" style={{ color: C.inkSoft }}>
         {anyVerified
@@ -1460,7 +1460,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
-        <div className="mb-4"><Logo size={64} showText={false} /></div>
+        <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer" : "कस्टमर"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
         <div className="w-full space-y-3">
@@ -1482,7 +1482,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
-        <div className="mb-4"><Logo size={64} showText={false} /></div>
+        <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Login" : "कस्टमर लॉगिन"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
         <div className="w-full">
@@ -1532,7 +1532,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
       <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
         <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
       </button>
-      <div className="mb-4"><Logo size={64} showText={false} /></div>
+      <div className="mb-4"><Logo size={96} /></div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Sign Up" : "कस्टमर साइन अप"}</h2>
       <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
         {lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।"}
@@ -1855,7 +1855,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
-        <div className="mb-4"><Logo size={64} showText={false} /></div>
+        <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver" : "ड्राइवर"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
         <div className="w-full space-y-3">
@@ -1877,7 +1877,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
           <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
         </button>
-        <div className="mb-4"><Logo size={64} showText={false} /></div>
+        <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Login" : "ड्राइवर लॉगिन"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
         <div className="w-full">
@@ -1927,7 +1927,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
         <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
       </button>
-      <div className="mb-4"><Logo size={64} showText={false} /></div>
+      <div className="mb-4"><Logo size={96} /></div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Sign Up" : "ड्राइवर साइन अप"}</h2>
       <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
         {lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।"}
@@ -5804,7 +5804,7 @@ export default function App() {
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
         <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
           <div className="flex items-center gap-2 mb-4">
-            <Logo size={38} showText={false} />
+            <Logo size={64} />
             <div className="flex-1">
               <div translate="no" className="text-white font-bold text-lg leading-none">{lang === "en" ? "Apna Transport" : "अपना ट्रांसपोर्ट"}</div>
               <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
