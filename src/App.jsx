@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useId } from "react";
 import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
@@ -38,31 +38,78 @@ const C = {
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
 
-// Brand mark — an oxblood-and-mustard hexagon holding a truck, matching the
-// APNA logo. Built as CSS/SVG (not an image file) so it stays crisp at any
-// size and recolors automatically with the theme.
-function Logo({ size = 64, showText = true, textColor }) {
+// Brand mark — a glossy gold-ringed maroon badge holding a truck marked
+// "अपना", the same 3D coin-style icon used for the app's favicon/PWA icons
+// (public/favicon.svg, public/icons/*). Built as inline SVG (not an image
+// file) so it stays crisp at any size; gradient/clip ids are namespaced per
+// instance via useId so multiple Logos on one page don't clash.
+function Logo({ size = 64, showText = true }) {
+  const uid = useId();
+  const g = (name) => `${uid}-${name}`;
   return (
-    <div className="flex flex-col items-center">
-      <div
-        style={{
-          width: size,
-          height: size,
-          clipPath: "polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0% 50%)",
-          background: `linear-gradient(135deg, ${C.marigold}, ${C.marigoldDeep})`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Truck size={Math.round(size * 0.5)} color="#fff" strokeWidth={2.2} />
-      </div>
+    <svg width={size} height={size} viewBox="0 0 512 512" style={{ display: "block" }}>
+      <defs>
+        <radialGradient id={g("disc")} cx="35%" cy="28%" r="75%">
+          <stop offset="0%" stopColor="#9C4A46" />
+          <stop offset="45%" stopColor="#732823" />
+          <stop offset="100%" stopColor="#3D1512" />
+        </radialGradient>
+        <linearGradient id={g("ring")} x1="20%" y1="10%" x2="85%" y2="95%">
+          <stop offset="0%" stopColor="#FCE3A0" />
+          <stop offset="35%" stopColor="#E3A93C" />
+          <stop offset="70%" stopColor="#A8721C" />
+          <stop offset="100%" stopColor="#7A5313" />
+        </linearGradient>
+        <linearGradient id={g("gold")} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#FBE3A5" />
+          <stop offset="55%" stopColor="#E3A93C" />
+          <stop offset="100%" stopColor="#A8721C" />
+        </linearGradient>
+        <radialGradient id={g("pill")} cx="50%" cy="0%" r="120%">
+          <stop offset="0%" stopColor="#7A2A25" />
+          <stop offset="100%" stopColor="#3D1512" />
+        </radialGradient>
+        <clipPath id={g("clip")}>
+          <circle cx="256" cy="218" r="172" />
+        </clipPath>
+      </defs>
+
+      <circle cx="256" cy="218" r="188" fill={`url(#${g("ring")})`} />
+      <circle cx="256" cy="218" r="172" fill="#2A0F0D" />
+      <circle cx="256" cy="218" r="168" fill={`url(#${g("disc")})`} />
+
+      <g clipPath={`url(#${g("clip")})`}>
+        <ellipse cx="205" cy="115" rx="150" ry="75" fill="#FFFFFF" opacity="0.16" />
+        <ellipse cx="330" cy="330" rx="120" ry="60" fill="#000000" opacity="0.12" />
+      </g>
+
+      <rect x="72" y="176" width="34" height="7" rx="3.5" fill="#FBE3A5" opacity="0.85" />
+      <rect x="86" y="192" width="26" height="7" rx="3.5" fill="#FBE3A5" opacity="0.65" />
+      <rect x="98" y="208" width="18" height="7" rx="3.5" fill="#FBE3A5" opacity="0.45" />
+
+      <rect x="128" y="196" width="62" height="52" rx="8" fill={`url(#${g("gold")})`} />
+      <rect x="139" y="205" width="24" height="20" rx="3" fill="#3D1512" />
+
+      <rect x="186" y="176" width="168" height="70" rx="10" fill={`url(#${g("gold")})`} stroke="#7A5313" strokeWidth="2" />
+      <text x="270" y="220" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="30" fill="#5C1F1F">अपना</text>
+
+      <circle cx="168" cy="255" r="19" fill="#2A0F0D" />
+      <circle cx="168" cy="255" r="8" fill="#E3A93C" />
+      <circle cx="238" cy="255" r="19" fill="#2A0F0D" />
+      <circle cx="238" cy="255" r="8" fill="#E3A93C" />
+      <circle cx="322" cy="255" r="19" fill="#2A0F0D" />
+      <circle cx="322" cy="255" r="8" fill="#E3A93C" />
+
+      <path d="M392 108 L398 124 L414 130 L398 136 L392 152 L386 136 L370 130 L386 124 Z" fill="#FFFFFF" opacity="0.9" />
+      <path d="M120 320 L124 330 L134 334 L124 338 L120 348 L116 338 L106 334 L116 330 Z" fill="#FFFFFF" opacity="0.75" />
+
       {showText && (
-        <div translate="no" className="mt-1.5 font-extrabold" style={{ color: textColor || C.marigoldDeep, fontSize: Math.round(size * 0.22), letterSpacing: 1.5 }}>
-          APNA
-        </div>
+        <>
+          <rect x="106" y="372" width="300" height="56" rx="28" fill={`url(#${g("pill")})`} stroke={`url(#${g("ring")})`} strokeWidth="3" />
+          <text x="256" y="409" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="26" fill="#E3A93C">अपना ट्रांसपोर्ट</text>
+        </>
       )}
-    </div>
+    </svg>
   );
 }
 
