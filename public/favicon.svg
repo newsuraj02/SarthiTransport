@@ -48,7 +48,6 @@
 
       <rect x="89" y="212" width="207" height="86" rx="12" fill="url(#goldGrad)" stroke="#7A5313" stroke-width="2.5"/>
       <rect x="97" y="219" width="191" height="19" rx="9.5" fill="#FFFFFF" opacity="0.35"/>
-      <text x="192" y="266" text-anchor="middle" font-family="'Noto Sans','Segoe UI',sans-serif" font-weight="800" font-size="37" fill="#5C1F1F">अपना</text>
 
       <rect x="290" y="238" width="76" height="64" rx="10" fill="url(#goldGrad)"/>
       <rect x="322" y="249" width="30" height="24" rx="4" fill="#3D1512"/>

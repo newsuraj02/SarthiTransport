@@ -105,7 +105,6 @@ function Logo({ size = 64, showText = true }) {
           {/* trailer (left) */}
           <rect x="158" y="176" width="168" height="70" rx="10" fill={`url(#${g("gold")})`} stroke="#7A5313" strokeWidth="2" />
           <rect x="164" y="181" width="156" height="16" rx="8" fill="#FFFFFF" opacity="0.35" />
-          <text x="242" y="220" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="30" fill="#5C1F1F">अपना</text>
 
           {/* cab (right, facing right) */}
           <rect x="322" y="196" width="62" height="52" rx="8" fill={`url(#${g("gold")})`} />
