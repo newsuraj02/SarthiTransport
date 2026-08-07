@@ -1,52 +1,65 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="discGrad" cx="35%" cy="28%" r="75%">
-      <stop offset="0%" stop-color="#9C4A46"/>
-      <stop offset="45%" stop-color="#732823"/>
-      <stop offset="100%" stop-color="#3D1512"/>
+    <radialGradient id="discGrad" cx="35%" cy="26%" r="78%">
+      <stop offset="0%" stop-color="#B85B54"/>
+      <stop offset="40%" stop-color="#7C2C26"/>
+      <stop offset="100%" stop-color="#300F0D"/>
     </radialGradient>
-    <linearGradient id="ringGrad" x1="20%" y1="10%" x2="85%" y2="95%">
-      <stop offset="0%" stop-color="#FCE3A0"/>
-      <stop offset="35%" stop-color="#E3A93C"/>
-      <stop offset="70%" stop-color="#A8721C"/>
-      <stop offset="100%" stop-color="#7A5313"/>
+    <linearGradient id="ringGrad" x1="15%" y1="5%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#FFF4D6"/>
+      <stop offset="22%" stop-color="#FCE3A0"/>
+      <stop offset="50%" stop-color="#E3A93C"/>
+      <stop offset="78%" stop-color="#A8721C"/>
+      <stop offset="100%" stop-color="#6E4A11"/>
     </linearGradient>
     <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FBE3A5"/>
-      <stop offset="55%" stop-color="#E3A93C"/>
+      <stop offset="0%" stop-color="#FFF3D2"/>
+      <stop offset="45%" stop-color="#F0C868"/>
       <stop offset="100%" stop-color="#A8721C"/>
     </linearGradient>
     <clipPath id="discClip">
       <circle cx="256" cy="256" r="212"/>
     </clipPath>
+    <filter id="dropShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
   </defs>
 
-  <circle cx="256" cy="256" r="230" fill="url(#ringGrad)"/>
-  <circle cx="256" cy="256" r="212" fill="#2A0F0D"/>
-  <circle cx="256" cy="256" r="207" fill="url(#discGrad)"/>
+  <g filter="url(#dropShadow)">
+    <circle cx="256" cy="256" r="230" fill="url(#ringGrad)"/>
+    <circle cx="256" cy="256" r="230" fill="none" stroke="#5C3B0E" stroke-width="2" opacity="0.6"/>
+    <circle cx="256" cy="256" r="222" fill="none" stroke="#FFFFFF" stroke-width="9" opacity="0.55"
+      stroke-dasharray="270 1165" stroke-linecap="round" transform="rotate(-125 256 256)"/>
+    <circle cx="256" cy="256" r="212" fill="#240C0A"/>
+    <circle cx="256" cy="256" r="207" fill="url(#discGrad)"/>
 
-  <g clip-path="url(#discClip)">
-    <ellipse cx="200" cy="150" rx="185" ry="92" fill="#FFFFFF" opacity="0.16"/>
-    <ellipse cx="345" cy="400" rx="150" ry="75" fill="#000000" opacity="0.12"/>
+    <g clip-path="url(#discClip)">
+      <ellipse cx="345" cy="400" rx="160" ry="80" fill="#000000" opacity="0.18"/>
+      <ellipse cx="205" cy="140" rx="190" ry="96" fill="#FFFFFF" opacity="0.24"/>
+      <ellipse cx="165" cy="105" rx="80" ry="32" fill="#FFFFFF" opacity="0.55"/>
+      <ellipse cx="330" cy="90" rx="27" ry="12" fill="#FFFFFF" opacity="0.35"/>
+    </g>
+
+    <rect x="390" y="262" width="22" height="9" rx="4.5" fill="#FFF3D2" opacity="0.45"/>
+    <rect x="396" y="242" width="32" height="9" rx="4.5" fill="#FFF3D2" opacity="0.65"/>
+    <rect x="404" y="222" width="42" height="9" rx="4.5" fill="#FFF3D2" opacity="0.85"/>
+
+    <rect x="89" y="212" width="207" height="86" rx="12" fill="url(#goldGrad)" stroke="#7A5313" stroke-width="2.5"/>
+    <rect x="97" y="219" width="191" height="19" rx="9.5" fill="#FFFFFF" opacity="0.35"/>
+    <text x="192" y="266" text-anchor="middle" font-family="'Noto Sans','Segoe UI',sans-serif" font-weight="800" font-size="37" fill="#5C1F1F">अपना</text>
+
+    <rect x="290" y="238" width="76" height="64" rx="10" fill="url(#goldGrad)"/>
+    <rect x="322" y="249" width="30" height="24" rx="4" fill="#3D1512"/>
+    <rect x="322" y="249" width="30" height="9" rx="4" fill="#FFFFFF" opacity="0.3"/>
+
+    <circle cx="120" cy="313" r="23" fill="#240C0A"/>
+    <circle cx="120" cy="313" r="9.5" fill="#E3A93C"/>
+    <circle cx="224" cy="313" r="23" fill="#240C0A"/>
+    <circle cx="224" cy="313" r="9.5" fill="#E3A93C"/>
+    <circle cx="312" cy="313" r="23" fill="#240C0A"/>
+    <circle cx="312" cy="313" r="9.5" fill="#E3A93C"/>
+
+    <path d="M100 128 L107 146 L125 153 L107 160 L100 178 L93 160 L75 153 L93 146 Z" fill="#FFFFFF" opacity="0.9"/>
+    <path d="M410 372 L415 384 L427 389 L415 394 L410 406 L405 394 L393 389 L405 384 Z" fill="#FFFFFF" opacity="0.75"/>
   </g>
-
-  <rect x="66" y="222" width="42" height="9" rx="4.5" fill="#FBE3A5" opacity="0.85"/>
-  <rect x="84" y="242" width="32" height="9" rx="4.5" fill="#FBE3A5" opacity="0.65"/>
-  <rect x="100" y="262" width="22" height="9" rx="4.5" fill="#FBE3A5" opacity="0.45"/>
-
-  <rect x="146" y="238" width="76" height="64" rx="10" fill="url(#goldGrad)"/>
-  <rect x="160" y="249" width="30" height="24" rx="4" fill="#3D1512"/>
-
-  <rect x="216" y="212" width="207" height="86" rx="12" fill="url(#goldGrad)" stroke="#7A5313" stroke-width="2.5"/>
-  <text x="320" y="266" text-anchor="middle" font-family="'Noto Sans','Segoe UI',sans-serif" font-weight="800" font-size="37" fill="#5C1F1F">अपना</text>
-
-  <circle cx="200" cy="313" r="23" fill="#2A0F0D"/>
-  <circle cx="200" cy="313" r="9.5" fill="#E3A93C"/>
-  <circle cx="288" cy="313" r="23" fill="#2A0F0D"/>
-  <circle cx="288" cy="313" r="9.5" fill="#E3A93C"/>
-  <circle cx="392" cy="313" r="23" fill="#2A0F0D"/>
-  <circle cx="392" cy="313" r="9.5" fill="#E3A93C"/>
-
-  <path d="M456 128 L463 146 L481 153 L463 160 L456 178 L449 160 L431 153 L449 146 Z" fill="#FFFFFF" opacity="0.9"/>
-  <path d="M120 372 L125 384 L137 389 L125 394 L120 406 L115 394 L103 389 L115 384 Z" fill="#FFFFFF" opacity="0.75"/>
 </svg>

@@ -49,66 +49,85 @@ function Logo({ size = 64, showText = true }) {
   return (
     <svg width={size} height={size} viewBox="0 0 512 512" style={{ display: "block" }}>
       <defs>
-        <radialGradient id={g("disc")} cx="35%" cy="28%" r="75%">
-          <stop offset="0%" stopColor="#9C4A46" />
-          <stop offset="45%" stopColor="#732823" />
-          <stop offset="100%" stopColor="#3D1512" />
+        <radialGradient id={g("disc")} cx="35%" cy="26%" r="78%">
+          <stop offset="0%" stopColor="#B85B54" />
+          <stop offset="40%" stopColor="#7C2C26" />
+          <stop offset="100%" stopColor="#300F0D" />
         </radialGradient>
-        <linearGradient id={g("ring")} x1="20%" y1="10%" x2="85%" y2="95%">
-          <stop offset="0%" stopColor="#FCE3A0" />
-          <stop offset="35%" stopColor="#E3A93C" />
-          <stop offset="70%" stopColor="#A8721C" />
-          <stop offset="100%" stopColor="#7A5313" />
+        <linearGradient id={g("ring")} x1="15%" y1="5%" x2="90%" y2="100%">
+          <stop offset="0%" stopColor="#FFF4D6" />
+          <stop offset="22%" stopColor="#FCE3A0" />
+          <stop offset="50%" stopColor="#E3A93C" />
+          <stop offset="78%" stopColor="#A8721C" />
+          <stop offset="100%" stopColor="#6E4A11" />
         </linearGradient>
         <linearGradient id={g("gold")} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#FBE3A5" />
-          <stop offset="55%" stopColor="#E3A93C" />
+          <stop offset="0%" stopColor="#FFF3D2" />
+          <stop offset="45%" stopColor="#F0C868" />
           <stop offset="100%" stopColor="#A8721C" />
         </linearGradient>
         <radialGradient id={g("pill")} cx="50%" cy="0%" r="120%">
-          <stop offset="0%" stopColor="#7A2A25" />
-          <stop offset="100%" stopColor="#3D1512" />
+          <stop offset="0%" stopColor="#8A342E" />
+          <stop offset="100%" stopColor="#300F0D" />
         </radialGradient>
         <clipPath id={g("clip")}>
           <circle cx="256" cy="218" r="172" />
         </clipPath>
+        <filter id={g("shadow")} x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="10" stdDeviation="14" floodColor="#000000" floodOpacity="0.35" />
+        </filter>
       </defs>
 
-      <circle cx="256" cy="218" r="188" fill={`url(#${g("ring")})`} />
-      <circle cx="256" cy="218" r="172" fill="#2A0F0D" />
-      <circle cx="256" cy="218" r="168" fill={`url(#${g("disc")})`} />
+      <g filter={`url(#${g("shadow")})`}>
+        {/* outer glossy gold ring, with a bright rim-light sweep */}
+        <circle cx="256" cy="218" r="188" fill={`url(#${g("ring")})`} />
+        <circle cx="256" cy="218" r="188" fill="none" stroke="#5C3B0E" strokeWidth="1.5" opacity="0.6" />
+        <circle cx="256" cy="218" r="182" fill="none" stroke="#FFFFFF" strokeWidth="7" opacity="0.55"
+          strokeDasharray="220 950" strokeLinecap="round" transform="rotate(-125 256 218)" />
+        <circle cx="256" cy="218" r="172" fill="#240C0A" />
 
-      <g clipPath={`url(#${g("clip")})`}>
-        <ellipse cx="205" cy="115" rx="150" ry="75" fill="#FFFFFF" opacity="0.16" />
-        <ellipse cx="330" cy="330" rx="120" ry="60" fill="#000000" opacity="0.12" />
+        <circle cx="256" cy="218" r="168" fill={`url(#${g("disc")})`} />
+
+        <g clipPath={`url(#${g("clip")})`}>
+          <ellipse cx="330" cy="330" rx="130" ry="65" fill="#000000" opacity="0.18" />
+          <ellipse cx="210" cy="108" rx="155" ry="78" fill="#FFFFFF" opacity="0.24" />
+          <ellipse cx="180" cy="80" rx="65" ry="26" fill="#FFFFFF" opacity="0.55" />
+          <ellipse cx="300" cy="70" rx="22" ry="10" fill="#FFFFFF" opacity="0.35" />
+        </g>
+
+        {/* motion lines trailing the cab, which faces right */}
+        <rect x="396" y="208" width="18" height="7" rx="3.5" fill="#FFF3D2" opacity="0.45" />
+        <rect x="400" y="192" width="26" height="7" rx="3.5" fill="#FFF3D2" opacity="0.65" />
+        <rect x="406" y="176" width="34" height="7" rx="3.5" fill="#FFF3D2" opacity="0.85" />
+
+        {/* trailer (left) */}
+        <rect x="158" y="176" width="168" height="70" rx="10" fill={`url(#${g("gold")})`} stroke="#7A5313" strokeWidth="2" />
+        <rect x="164" y="181" width="156" height="16" rx="8" fill="#FFFFFF" opacity="0.35" />
+        <text x="242" y="220" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="30" fill="#5C1F1F">अपना</text>
+
+        {/* cab (right, facing right) */}
+        <rect x="322" y="196" width="62" height="52" rx="8" fill={`url(#${g("gold")})`} />
+        <rect x="349" y="205" width="24" height="20" rx="3" fill="#3D1512" />
+        <rect x="349" y="205" width="24" height="8" rx="3" fill="#FFFFFF" opacity="0.3" />
+
+        <circle cx="190" cy="255" r="19" fill="#240C0A" />
+        <circle cx="190" cy="255" r="8" fill="#E3A93C" />
+        <circle cx="274" cy="255" r="19" fill="#240C0A" />
+        <circle cx="274" cy="255" r="8" fill="#E3A93C" />
+        <circle cx="344" cy="255" r="19" fill="#240C0A" />
+        <circle cx="344" cy="255" r="8" fill="#E3A93C" />
+
+        <path d="M120 108 L126 124 L142 130 L126 136 L120 152 L114 136 L98 130 L114 124 Z" fill="#FFFFFF" opacity="0.9" />
+        <path d="M392 320 L396 330 L406 334 L396 338 L392 348 L388 338 L378 334 L388 330 Z" fill="#FFFFFF" opacity="0.75" />
+
+        {showText && (
+          <>
+            <rect x="106" y="372" width="300" height="56" rx="28" fill={`url(#${g("pill")})`} stroke={`url(#${g("ring")})`} strokeWidth="3" />
+            <rect x="118" y="378" width="276" height="10" rx="5" fill="#FFFFFF" opacity="0.12" />
+            <text x="256" y="409" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="26" fill="#F0C868">अपना ट्रांसपोर्ट</text>
+          </>
+        )}
       </g>
-
-      <rect x="72" y="176" width="34" height="7" rx="3.5" fill="#FBE3A5" opacity="0.85" />
-      <rect x="86" y="192" width="26" height="7" rx="3.5" fill="#FBE3A5" opacity="0.65" />
-      <rect x="98" y="208" width="18" height="7" rx="3.5" fill="#FBE3A5" opacity="0.45" />
-
-      <rect x="128" y="196" width="62" height="52" rx="8" fill={`url(#${g("gold")})`} />
-      <rect x="139" y="205" width="24" height="20" rx="3" fill="#3D1512" />
-
-      <rect x="186" y="176" width="168" height="70" rx="10" fill={`url(#${g("gold")})`} stroke="#7A5313" strokeWidth="2" />
-      <text x="270" y="220" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="30" fill="#5C1F1F">अपना</text>
-
-      <circle cx="168" cy="255" r="19" fill="#2A0F0D" />
-      <circle cx="168" cy="255" r="8" fill="#E3A93C" />
-      <circle cx="238" cy="255" r="19" fill="#2A0F0D" />
-      <circle cx="238" cy="255" r="8" fill="#E3A93C" />
-      <circle cx="322" cy="255" r="19" fill="#2A0F0D" />
-      <circle cx="322" cy="255" r="8" fill="#E3A93C" />
-
-      <path d="M392 108 L398 124 L414 130 L398 136 L392 152 L386 136 L370 130 L386 124 Z" fill="#FFFFFF" opacity="0.9" />
-      <path d="M120 320 L124 330 L134 334 L124 338 L120 348 L116 338 L106 334 L116 330 Z" fill="#FFFFFF" opacity="0.75" />
-
-      {showText && (
-        <>
-          <rect x="106" y="372" width="300" height="56" rx="28" fill={`url(#${g("pill")})`} stroke={`url(#${g("ring")})`} strokeWidth="3" />
-          <text x="256" y="409" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="26" fill="#E3A93C">अपना ट्रांसपोर्ट</text>
-        </>
-      )}
     </svg>
   );
 }
