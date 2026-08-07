@@ -95,27 +95,29 @@ function Logo({ size = 64, showText = true }) {
           <ellipse cx="300" cy="70" rx="22" ry="10" fill="#FFFFFF" opacity="0.35" />
         </g>
 
-        {/* motion lines trailing the cab, which faces right */}
-        <rect x="396" y="208" width="18" height="7" rx="3.5" fill="#FFF3D2" opacity="0.45" />
-        <rect x="400" y="192" width="26" height="7" rx="3.5" fill="#FFF3D2" opacity="0.65" />
-        <rect x="406" y="176" width="34" height="7" rx="3.5" fill="#FFF3D2" opacity="0.85" />
+        {/* truck group, centered on the disc, just 2 wheels */}
+        <g transform="translate(-15,0)">
+          {/* motion lines trailing the cab, which faces right */}
+          <rect x="396" y="208" width="18" height="7" rx="3.5" fill="#FFF3D2" opacity="0.45" />
+          <rect x="400" y="192" width="26" height="7" rx="3.5" fill="#FFF3D2" opacity="0.65" />
+          <rect x="406" y="176" width="34" height="7" rx="3.5" fill="#FFF3D2" opacity="0.85" />
 
-        {/* trailer (left) */}
-        <rect x="158" y="176" width="168" height="70" rx="10" fill={`url(#${g("gold")})`} stroke="#7A5313" strokeWidth="2" />
-        <rect x="164" y="181" width="156" height="16" rx="8" fill="#FFFFFF" opacity="0.35" />
-        <text x="242" y="220" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="30" fill="#5C1F1F">अपना</text>
+          {/* trailer (left) */}
+          <rect x="158" y="176" width="168" height="70" rx="10" fill={`url(#${g("gold")})`} stroke="#7A5313" strokeWidth="2" />
+          <rect x="164" y="181" width="156" height="16" rx="8" fill="#FFFFFF" opacity="0.35" />
+          <text x="242" y="220" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="30" fill="#5C1F1F">अपना</text>
 
-        {/* cab (right, facing right) */}
-        <rect x="322" y="196" width="62" height="52" rx="8" fill={`url(#${g("gold")})`} />
-        <rect x="349" y="205" width="24" height="20" rx="3" fill="#3D1512" />
-        <rect x="349" y="205" width="24" height="8" rx="3" fill="#FFFFFF" opacity="0.3" />
+          {/* cab (right, facing right) */}
+          <rect x="322" y="196" width="62" height="52" rx="8" fill={`url(#${g("gold")})`} />
+          <rect x="349" y="205" width="24" height="20" rx="3" fill="#3D1512" />
+          <rect x="349" y="205" width="24" height="8" rx="3" fill="#FFFFFF" opacity="0.3" />
 
-        <circle cx="190" cy="255" r="19" fill="#240C0A" />
-        <circle cx="190" cy="255" r="8" fill="#E3A93C" />
-        <circle cx="274" cy="255" r="19" fill="#240C0A" />
-        <circle cx="274" cy="255" r="8" fill="#E3A93C" />
-        <circle cx="344" cy="255" r="19" fill="#240C0A" />
-        <circle cx="344" cy="255" r="8" fill="#E3A93C" />
+          {/* 2 wheels: rear (under trailer) and front (under cab) */}
+          <circle cx="190" cy="255" r="19" fill="#240C0A" />
+          <circle cx="190" cy="255" r="8" fill="#E3A93C" />
+          <circle cx="344" cy="255" r="19" fill="#240C0A" />
+          <circle cx="344" cy="255" r="8" fill="#E3A93C" />
+        </g>
 
         <path d="M120 108 L126 124 L142 130 L126 136 L120 152 L114 136 L98 130 L114 124 Z" fill="#FFFFFF" opacity="0.9" />
         <path d="M392 320 L396 330 L406 334 L396 338 L392 348 L388 338 L378 334 L388 330 Z" fill="#FFFFFF" opacity="0.75" />

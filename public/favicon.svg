@@ -40,24 +40,25 @@
       <ellipse cx="330" cy="90" rx="27" ry="12" fill="#FFFFFF" opacity="0.35"/>
     </g>
 
-    <rect x="390" y="262" width="22" height="9" rx="4.5" fill="#FFF3D2" opacity="0.45"/>
-    <rect x="396" y="242" width="32" height="9" rx="4.5" fill="#FFF3D2" opacity="0.65"/>
-    <rect x="404" y="222" width="42" height="9" rx="4.5" fill="#FFF3D2" opacity="0.85"/>
+    <!-- truck group, centered on the disc, just 2 wheels -->
+    <g transform="translate(29,0)">
+      <rect x="390" y="262" width="22" height="9" rx="4.5" fill="#FFF3D2" opacity="0.45"/>
+      <rect x="396" y="242" width="32" height="9" rx="4.5" fill="#FFF3D2" opacity="0.65"/>
+      <rect x="404" y="222" width="42" height="9" rx="4.5" fill="#FFF3D2" opacity="0.85"/>
 
-    <rect x="89" y="212" width="207" height="86" rx="12" fill="url(#goldGrad)" stroke="#7A5313" stroke-width="2.5"/>
-    <rect x="97" y="219" width="191" height="19" rx="9.5" fill="#FFFFFF" opacity="0.35"/>
-    <text x="192" y="266" text-anchor="middle" font-family="'Noto Sans','Segoe UI',sans-serif" font-weight="800" font-size="37" fill="#5C1F1F">अपना</text>
+      <rect x="89" y="212" width="207" height="86" rx="12" fill="url(#goldGrad)" stroke="#7A5313" stroke-width="2.5"/>
+      <rect x="97" y="219" width="191" height="19" rx="9.5" fill="#FFFFFF" opacity="0.35"/>
+      <text x="192" y="266" text-anchor="middle" font-family="'Noto Sans','Segoe UI',sans-serif" font-weight="800" font-size="37" fill="#5C1F1F">अपना</text>
 
-    <rect x="290" y="238" width="76" height="64" rx="10" fill="url(#goldGrad)"/>
-    <rect x="322" y="249" width="30" height="24" rx="4" fill="#3D1512"/>
-    <rect x="322" y="249" width="30" height="9" rx="4" fill="#FFFFFF" opacity="0.3"/>
+      <rect x="290" y="238" width="76" height="64" rx="10" fill="url(#goldGrad)"/>
+      <rect x="322" y="249" width="30" height="24" rx="4" fill="#3D1512"/>
+      <rect x="322" y="249" width="30" height="9" rx="4" fill="#FFFFFF" opacity="0.3"/>
 
-    <circle cx="120" cy="313" r="23" fill="#240C0A"/>
-    <circle cx="120" cy="313" r="9.5" fill="#E3A93C"/>
-    <circle cx="224" cy="313" r="23" fill="#240C0A"/>
-    <circle cx="224" cy="313" r="9.5" fill="#E3A93C"/>
-    <circle cx="312" cy="313" r="23" fill="#240C0A"/>
-    <circle cx="312" cy="313" r="9.5" fill="#E3A93C"/>
+      <circle cx="120" cy="313" r="23" fill="#240C0A"/>
+      <circle cx="120" cy="313" r="9.5" fill="#E3A93C"/>
+      <circle cx="312" cy="313" r="23" fill="#240C0A"/>
+      <circle cx="312" cy="313" r="9.5" fill="#E3A93C"/>
+    </g>
 
     <path d="M100 128 L107 146 L125 153 L107 160 L100 178 L93 160 L75 153 L93 146 Z" fill="#FFFFFF" opacity="0.9"/>
     <path d="M410 372 L415 384 L427 389 L415 394 L410 406 L405 394 L393 389 L405 384 Z" fill="#FFFFFF" opacity="0.75"/>
