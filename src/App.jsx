@@ -940,7 +940,7 @@ function MicButton({ onResult, lang = "hi-IN", label, size = 8, iconSize = 14 })
     return (
       <button type="button" onClick={listening ? stop : start}
         className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold"
-        style={{ background: listening ? C.safety : "#F5E6C8", color: listening ? "#fff" : "#A8721C" }}>
+        style={{ background: listening ? C.safety : C.navy, color: "#fff" }}>
         <Mic size={16} /> {label}
       </button>
     );
@@ -2134,7 +2134,7 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
           glance for a first-time user. */}
       <div className="mt-2 space-y-2">
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: "#F5E6C8", color: "#A8721C" }}>
+          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.navy, color: "#fff" }}>
             <MapPin size={16} /> {lang === "en" ? "Choose from Map" : "मैप से चुनें"}
           </button>
           <MicButton onResult={onMic} label={lang === "en" ? "Speak to Enter" : "बोलकर लिखें"} />
