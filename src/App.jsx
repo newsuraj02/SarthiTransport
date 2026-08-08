@@ -2229,7 +2229,7 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial, rideView, setRideView, advanceCount }) {
+function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
   const [advanceDate, setAdvanceDate] = useState("");
@@ -2379,36 +2379,20 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
     return (
       <div className="px-5 py-8 flex flex-col justify-center" style={{ minHeight: 420 }}>
         <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : "आपको क्या चाहिए?"}</p>
-        {rideView && setRideView && (
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <button onClick={() => setRideView("current")} className="rounded-2xl p-5 text-center"
-              style={{ background: rideView === "current" ? C.navy : "#F5E6C8", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
-              <div className="text-base font-black">{lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
-            </button>
-            <button onClick={() => setRideView("advance")} className="rounded-2xl p-5 text-center"
-              style={{ background: rideView === "advance" ? C.navy : "#F5E6C8", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
-              <div className="text-base font-black">{lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}{advanceCount > 0 ? ` (${advanceCount})` : ""}</div>
-            </button>
-          </div>
-        )}
-        <button onClick={() => setBookingMode("now")} className="w-full rounded-2xl p-5 mb-4 text-left flex items-center gap-3" style={{ background: C.marigold }}>
-          <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.navy }}>
-            <Truck size={22} color="#fff" />
-          </div>
-          <div>
-            <div className="text-base font-bold" style={{ color: C.navy }}>⚡ {lang === "en" ? "Need a vehicle now" : "तुरंत गाड़ी चाहिए"}</div>
-            <div className="text-[11px]" style={{ color: "#3D1B17" }}>{lang === "en" ? "Post now and get quotes right away" : "अभी पोस्ट करें, तुरंत कोटेशन पाएं"}</div>
-          </div>
-        </button>
-        <button onClick={() => setBookingMode("advance")} className="w-full rounded-2xl p-5 text-left flex items-center gap-3" style={{ background: C.navy }}>
-          <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-            <Clock3 size={22} color={C.navy} />
-          </div>
-          <div>
-            <div className="text-base font-bold text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
-            <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Choose a future date and time" : "आगे की तारीख और समय चुनें"}</div>
-          </div>
-        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => setBookingMode("now")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.marigold }}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.navy }}>
+              <Truck size={22} color="#fff" />
+            </div>
+            <div className="text-sm font-black" style={{ color: C.navy }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
+          </button>
+          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.navy }}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+              <Clock3 size={22} color={C.navy} />
+            </div>
+            <div className="text-sm font-black text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
+          </button>
+        </div>
       </div>
     );
   }
@@ -3160,21 +3144,14 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
             <Menu size={18} color={C.navy} strokeWidth={2.5} />
           </button>
-          {/* On the booking-landing page ("What do you need?"), this toggle
-              moves down to sit under that heading (see CustomerBooking)
-              instead of showing here — everywhere else (an active ride, or
-              already inside the Advance tab) it stays in the header since
-              there's no landing heading to anchor it to. */}
-          {!(rideView === "current" && (!activeBooking || addingAnother)) && (
-            <div className="flex rounded-full p-1 shrink-0" style={{ background: "#F5E6C8" }}>
-              <button onClick={() => setRideView("current")} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "current" ? C.navy : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
-                {lang === "en" ? "Current" : "वर्तमान"}
-              </button>
-              <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "advance" ? C.navy : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
-                {lang === "en" ? "Advance" : "एडवांस"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}
-              </button>
-            </div>
-          )}
+          <div className="flex rounded-full p-1 shrink-0" style={{ background: "#F5E6C8" }}>
+            <button onClick={() => setRideView("current")} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "current" ? C.navy : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
+              {lang === "en" ? "Current" : "वर्तमान"}
+            </button>
+            <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "advance" ? C.navy : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
+              {lang === "en" ? "Advance" : "एडवांस"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}
+            </button>
+          </div>
           {onGoHome && (
             <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
               <Home size={18} color={C.navy} strokeWidth={2.5} />
@@ -3231,8 +3208,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
               onAddAnother={() => setAddingAnother(true)} />
           ) : (
-            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
-              rideView={rideView} setRideView={(v) => { setRideView(v); if (v === "advance") setSelectedAdvanceId(null); }} advanceCount={advanceBookings.length} />
+            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial} />
           )
         ) : (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
