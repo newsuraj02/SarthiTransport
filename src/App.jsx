@@ -2309,6 +2309,65 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
   );
 }
 
+// Search+dropdown city picker — a plain <select> with 100+ options is
+// painful to scroll on mobile, so this is a text field that filters
+// INDIAN_CITIES live (matches either language, so typing "pune" or "पुणे"
+// both work) and shows the matches as a tappable dropdown list underneath.
+function CitySearchField({ value, onChange, lang }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = INDIAN_CITIES.find((c) => c.key === value);
+
+  const matches = (() => {
+    const q = query.trim().toLowerCase();
+    const list = [...INDIAN_CITIES].sort((a, b) => (lang === "en" ? a.en.localeCompare(b.en) : a.hi.localeCompare(b.hi, "hi")));
+    if (!q) return list;
+    return list.filter((c) => c.en.toLowerCase().includes(q) || c.hi.includes(query.trim()));
+  })();
+
+  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+
+  return (
+    <div className="relative">
+      <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "City" : "शहर"}</label>
+      <div className="relative">
+        <input
+          className={inputCls}
+          style={{ ...inputStyle, paddingRight: 34 }}
+          placeholder={lang === "en" ? "Search city..." : "शहर खोजें..."}
+          value={open ? query : (selected ? (lang === "en" ? selected.en : selected.hi) : "")}
+          onFocus={() => { setQuery(""); setOpen(true); }}
+          onChange={(e) => { setQuery(e.target.value); if (!open) setOpen(true); }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+        />
+        {selected && !open ? (
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(""); setQuery(""); }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center" style={{ color: C.inkSoft }}>
+            <XCircle size={16} />
+          </button>
+        ) : (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: C.inkSoft }}>▾</span>
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg shadow-lg max-h-56 overflow-y-auto" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          {matches.length === 0 ? (
+            <div className="px-3 py-2.5 text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "No matching city" : "कोई मेल खाता शहर नहीं"}</div>
+          ) : matches.map((c) => (
+            <button key={c.key} type="button" onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onChange(c.key); setQuery(""); setOpen(false); }}
+              className="w-full text-left px-3 py-2.5 text-sm font-bold"
+              style={{ color: c.key === value ? C.marigoldDeep : C.ink, background: c.key === value ? "#F5E6C8" : "transparent", borderBottom: `1px solid ${C.line}` }}>
+              {lang === "en" ? c.en : c.hi}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
@@ -2328,7 +2387,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   // boundsForCity) instead of the old manual Within City/Outstation toggle.
   const [selectedCity, setSelectedCity] = useState("");
   const cityBounds = selectedCity ? boundsForCity(selectedCity) : null;
-  const sortedCities = [...INDIAN_CITIES].sort((a, b) => (lang === "en" ? a.en.localeCompare(b.en) : a.hi.localeCompare(b.hi, "hi")));
   const [material, setMaterial] = useState("");
   // The default list plus anything any customer has ever added — synced
   // live via customMaterials, so a material someone else added shows up
@@ -2518,11 +2576,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </div>
         )}
         <div>
-          <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "City" : "शहर"}</label>
-          <select className={inputCls} style={inputStyle} value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>
-            <option value="">{lang === "en" ? "Select city" : "शहर चुनें"}</option>
-            {sortedCities.map((c) => <option key={c.key} value={c.key}>{lang === "en" ? c.en : c.hi}</option>)}
-          </select>
+          <CitySearchField value={selectedCity} onChange={setSelectedCity} lang={lang} />
           {selectedCity && (
             <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>
               {lang === "en" ? `Pickup/Drop suggestions will be narrowed to ${cityLabel(selectedCity, lang)}` : `पिकअप/ड्रॉप सुझाव अब ${cityLabel(selectedCity, lang)} तक सीमित होंगे`}
