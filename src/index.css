@@ -27,3 +27,19 @@ html, body, #root {
 .font-bold      { font-weight: 900 !important; }
 .font-extrabold { font-weight: 900 !important; }
 .font-black     { font-weight: 900 !important; }
+
+/* Every <select> across the app gets one bigger, higher-contrast dropdown
+   arrow instead of the tiny default OS caret — a single global rule so
+   it applies everywhere at once (current and future selects) instead of
+   hand-editing each one. !important beats the inline `background: ...`
+   shorthand most selects use, which would otherwise reset the image. */
+select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A8721C' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 22px 22px !important;
+  padding-right: 40px !important;
+}

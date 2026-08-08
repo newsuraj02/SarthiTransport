@@ -2349,7 +2349,7 @@ function CitySearchField({ value, onChange, lang, label, dotColor }) {
             <XCircle size={16} />
           </button>
         ) : (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: C.inkSoft }}>▾</span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "#A8721C", fontSize: 22, fontWeight: 900, lineHeight: 1 }}>▾</span>
         )}
       </div>
       {open && (
