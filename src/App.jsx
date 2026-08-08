@@ -940,7 +940,7 @@ function MicButton({ onResult, lang = "hi-IN", label, size = 8, iconSize = 14 })
     return (
       <button type="button" onClick={listening ? stop : start}
         className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold"
-        style={{ background: listening ? C.safety : "#7A2E2E", color: "#fff" }}>
+        style={{ background: listening ? C.safety : C.success, color: "#fff" }}>
         <Mic size={16} /> {label}
       </button>
     );
@@ -2134,13 +2134,13 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
           glance for a first-time user. */}
       <div className="mt-2 space-y-2">
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: "#7A2E2E", color: "#fff" }}>
+          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.success, color: "#fff" }}>
             <MapPin size={16} /> {lang === "en" ? "Choose from Map" : "मैप से चुनें"}
           </button>
           <MicButton onResult={onMic} label={lang === "en" ? "Speak to Enter" : "बोलकर लिखें"} />
         </div>
         {onUseCurrentLocation && (
-          <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: "#7A2E2E", color: "#fff" }}>
+          <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.success, color: "#fff" }}>
             <Navigation size={16} /> {locating ? (lang === "en" ? "Locating..." : "ढूंढ रहे हैं...") : (lang === "en" ? "Use My Current Location" : "मेरी वर्तमान लोकेशन इस्तेमाल करें")}
           </button>
         )}
