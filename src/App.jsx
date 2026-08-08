@@ -2262,10 +2262,10 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
   const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: dotColor ? 34 : 16, paddingRight: 16 };
   const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
-  // Biases (doesn't hard-restrict) Places Autocomplete results toward the
-  // customer's selected city, so a genuinely nearby address just outside
-  // the box still shows up instead of being excluded outright.
-  const autocompleteOptions = { componentRestrictions: { country: "in" }, ...(cityBounds ? { bounds: cityBounds } : {}) };
+  // strictBounds hard-restricts Places Autocomplete results to inside the
+  // selected city's box — once a city is chosen, addresses from other
+  // cities are excluded outright, not just deprioritized.
+  const autocompleteOptions = { componentRestrictions: { country: "in" }, ...(cityBounds ? { bounds: cityBounds, strictBounds: true } : {}) };
   return (
     <div>
       <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{label}</label>
@@ -2617,8 +2617,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <CitySearchField value={selectedCity} onChange={setSelectedCity} lang={lang} label={lang === "en" ? "Drop City" : "ड्रॉप का शहर"} dotColor={C.safety} />
             <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>
               {selectedCity
-                ? (lang === "en" ? `Only Drop suggestions will be narrowed to ${cityLabel(selectedCity, lang)} — this doesn't affect Pickup.` : `केवल ड्रॉप के सुझाव ${cityLabel(selectedCity, lang)} तक सीमित होंगे — इसका पिकअप पर कोई असर नहीं है।`)
-                : (lang === "en" ? "Optional — helps narrow down Drop location suggestions only." : "वैकल्पिक — केवल ड्रॉप लोकेशन के सुझाव सीमित करने के लिए।")}
+                ? (lang === "en" ? `Drop suggestions will only show places in ${cityLabel(selectedCity, lang)}, no other city — this doesn't affect Pickup.` : `ड्रॉप के सुझाव केवल ${cityLabel(selectedCity, lang)} की जगहें दिखाएंगे, कोई और शहर नहीं — इसका पिकअप पर कोई असर नहीं है।`)
+                : (lang === "en" ? "Optional — restricts Drop location suggestions to one city only." : "वैकल्पिक — ड्रॉप लोकेशन के सुझावों को केवल एक शहर तक सीमित करता है।")}
             </div>
           </div>
 
