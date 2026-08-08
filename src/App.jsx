@@ -268,15 +268,16 @@ const INDIAN_CITIES = [
   { key: "rohtak", hi: "रोहतक", en: "Rohtak", lat: 28.8955, lng: 76.6066 },
   { key: "sonipat", hi: "सोनीपत", en: "Sonipat", lat: 28.9931, lng: 77.0151 },
 ];
-// A ~35km-ish bounding box around a selected city's center, used to bias
-// (not hard-restrict) the Pickup/Drop Places Autocomplete results — narrows
-// suggestions to that city without excluding a genuinely nearby address
-// just outside the box.
+// A ~55km-radius (110km-wide) box around a selected city's center, used to
+// hard-restrict Drop's Places Autocomplete (see strictBounds in
+// LocationField) to that city. Sized off Delhi NCT — the largest single
+// city in INDIAN_CITIES at roughly 51km across — so even a sprawling city's
+// full extent stays inside the box, not just its downtown core.
 function boundsForCity(cityKey) {
   const c = INDIAN_CITIES.find((x) => x.key === cityKey);
   if (!c) return null;
-  const dLat = 0.32;
-  const dLng = 0.32 / Math.max(0.3, Math.cos((c.lat * Math.PI) / 180));
+  const dLat = 0.5;
+  const dLng = 0.5 / Math.max(0.3, Math.cos((c.lat * Math.PI) / 180));
   return { north: c.lat + dLat, south: c.lat - dLat, east: c.lng + dLng, west: c.lng - dLng };
 }
 const cityLabel = (key, lang) => {
