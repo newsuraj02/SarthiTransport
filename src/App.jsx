@@ -1268,6 +1268,24 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
 
   const detailsValid = name.trim().length >= 3 && address.trim().split(/\s+/).length >= 2 && area.trim() && city.trim() && state.trim() && pincode.length === 6;
 
+  // Guided-step highlighting for the registration details fields — see
+  // GuidedStep. Shared by both places this form renders (post-login
+  // completion and Sign Up), since both use the same field state.
+  const regStepCompleted = [
+    name.trim().length >= 3,
+    address.trim().split(/\s+/).length >= 2,
+    !!area.trim(),
+    !!city.trim(),
+    !!state.trim(),
+    pincode.length === 6,
+  ];
+  const regActiveStep = regStepCompleted.findIndex((done) => !done);
+  const regStepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
+  useEffect(() => {
+    if (regActiveStep >= 0) regStepRefs[regActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regActiveStep]);
+
   const getRecaptcha = () => {
     if (!recaptchaRef.current) {
       recaptchaRef.current = new RecaptchaVerifier(authInstance, recaptchaContainerId, { size: "invisible" });
@@ -1399,43 +1417,43 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               </div>
             </PhotoPicker>
           </div>
-          <div>
+          <GuidedStep active={regActiveStep === 0} completed={regStepCompleted[0]} stepRef={regStepRefs[0]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
+          </GuidedStep>
           <div>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
             <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <div>
+          <GuidedStep active={regActiveStep === 1} completed={regStepCompleted[1]} stepRef={regStepRefs[1]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
-          </div>
+          </GuidedStep>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <GuidedStep active={regActiveStep === 2} completed={regStepCompleted[2]} stepRef={regStepRefs[2]} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
-            </div>
-            <div>
+            </GuidedStep>
+            <GuidedStep active={regActiveStep === 3} completed={regStepCompleted[3]} stepRef={regStepRefs[3]} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
-            </div>
+            </GuidedStep>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <GuidedStep active={regActiveStep === 4} completed={regStepCompleted[4]} stepRef={regStepRefs[4]} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
-            </div>
-            <div>
+            </GuidedStep>
+            <GuidedStep active={regActiveStep === 5} completed={regStepCompleted[5]} stepRef={regStepRefs[5]} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
               <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
                 onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-            </div>
+            </GuidedStep>
           </div>
         </div>
 
         {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
-        <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className="w-full rounded-lg py-3 font-bold text-sm mt-3"
+        <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className={`w-full rounded-lg py-3 font-bold text-sm mt-3 ${detailsValid && !photoUploading ? "guided-submit-ready" : ""}`}
           style={{ background: detailsValid && !photoUploading ? C.marigold : C.line, color: detailsValid && !photoUploading ? C.navy : "#9AA3B0" }}>
           {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें")}
         </button>
@@ -1542,38 +1560,38 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
             </div>
           </PhotoPicker>
         </div>
-        <div>
+        <GuidedStep active={regActiveStep === 0} completed={regStepCompleted[0]} stepRef={regStepRefs[0]} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
+        </GuidedStep>
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
           <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
-        <div>
+        <GuidedStep active={regActiveStep === 1} completed={regStepCompleted[1]} stepRef={regStepRefs[1]} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
-        </div>
+        </GuidedStep>
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <GuidedStep active={regActiveStep === 2} completed={regStepCompleted[2]} stepRef={regStepRefs[2]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
-          </div>
-          <div>
+          </GuidedStep>
+          <GuidedStep active={regActiveStep === 3} completed={regStepCompleted[3]} stepRef={regStepRefs[3]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
-          </div>
+          </GuidedStep>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <GuidedStep active={regActiveStep === 4} completed={regStepCompleted[4]} stepRef={regStepRefs[4]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
-          </div>
-          <div>
+          </GuidedStep>
+          <GuidedStep active={regActiveStep === 5} completed={regStepCompleted[5]} stepRef={regStepRefs[5]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
             <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
               onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-          </div>
+          </GuidedStep>
         </div>
       </div>
 
@@ -1590,7 +1608,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                className={`w-full rounded-lg py-3 font-bold text-sm ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
               </button>
             </div>
@@ -1672,6 +1690,23 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   }, [verified, driver]);
 
   const detailsValid = name.trim().length >= 3 && address.trim().length > 0 && city.trim() && state.trim() && pincode.length === 6;
+
+  // Guided-step highlighting for the registration details fields — see
+  // GuidedStep. Shared by both places this form renders (the fallback
+  // completion form and Sign Up), since both use the same field state.
+  const regStepCompleted = [
+    name.trim().length >= 3,
+    !!address.trim(),
+    !!city.trim(),
+    !!state.trim(),
+    pincode.length === 6,
+  ];
+  const regActiveStep = regStepCompleted.findIndex((done) => !done);
+  const regStepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
+  useEffect(() => {
+    if (regActiveStep >= 0) regStepRefs[regActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regActiveStep]);
 
   const getRecaptcha = () => {
     if (!recaptchaRef.current) {
@@ -1806,32 +1841,32 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Registration" : "ड्राइवर रजिस्ट्रेशन"}</h2>
         <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
         <div className="space-y-3">
-          <div>
+          <GuidedStep active={regActiveStep === 0} completed={regStepCompleted[0]} stepRef={regStepRefs[0]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
+          </GuidedStep>
+          <GuidedStep active={regActiveStep === 1} completed={regStepCompleted[1]} stepRef={regStepRefs[1]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
-          </div>
+          </GuidedStep>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <GuidedStep active={regActiveStep === 2} completed={regStepCompleted[2]} stepRef={regStepRefs[2]} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
-            </div>
-            <div>
+            </GuidedStep>
+            <GuidedStep active={regActiveStep === 3} completed={regStepCompleted[3]} stepRef={regStepRefs[3]} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
-            </div>
+            </GuidedStep>
           </div>
-          <div>
+          <GuidedStep active={regActiveStep === 4} completed={regStepCompleted[4]} stepRef={regStepRefs[4]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
             <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
               onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-          </div>
+          </GuidedStep>
         </div>
         {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें"}</div>}
-        <button onClick={completeDetails} disabled={!detailsValid} className="w-full rounded-lg py-3 font-bold text-sm mt-3"
+        <button onClick={completeDetails} disabled={!detailsValid} className={`w-full rounded-lg py-3 font-bold text-sm mt-3 ${detailsValid ? "guided-submit-ready" : ""}`}
           style={{ background: detailsValid ? C.marigold : C.line, color: detailsValid ? C.navy : "#9AA3B0" }}>
           {lang === "en" ? "Continue" : "आगे बढ़ें"}
         </button>
@@ -1930,29 +1965,29 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       </p>
 
       <div className="space-y-3">
-        <div>
+        <GuidedStep active={regActiveStep === 0} completed={regStepCompleted[0]} stepRef={regStepRefs[0]} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div>
+        </GuidedStep>
+        <GuidedStep active={regActiveStep === 1} completed={regStepCompleted[1]} stepRef={regStepRefs[1]} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
-        </div>
+        </GuidedStep>
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <GuidedStep active={regActiveStep === 2} completed={regStepCompleted[2]} stepRef={regStepRefs[2]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
-          </div>
-          <div>
+          </GuidedStep>
+          <GuidedStep active={regActiveStep === 3} completed={regStepCompleted[3]} stepRef={regStepRefs[3]} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
-          </div>
+          </GuidedStep>
         </div>
-        <div>
+        <GuidedStep active={regActiveStep === 4} completed={regStepCompleted[4]} stepRef={regStepRefs[4]} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
           <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
             onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-        </div>
+        </GuidedStep>
       </div>
 
       <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
@@ -1968,7 +2003,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                className={`w-full rounded-lg py-3 font-bold text-sm ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
               </button>
             </div>
@@ -3990,6 +4025,15 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   };
 
   const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
+  // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
+  // dimensions are optional (not part of canSubmit), so they're skipped.
+  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoFront, !!vehiclePhotoSide];
+  const kycActiveStep = kycStepCompleted.findIndex((done) => !done);
+  const kycStepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
+  useEffect(() => {
+    if (kycActiveStep >= 0) kycStepRefs[kycActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kycActiveStep]);
   // First-time submission within this driver's own 30-day trial (from
   // their own signup date) skips the admin approval wait entirely — a
   // driver who's already been reviewed before (kyc isn't null, e.g.
@@ -4034,35 +4078,39 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       <div className="grid grid-cols-2 gap-2 mb-3">
         {[
           ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
-        ].map(([key, label, val, setVal]) => (
-          <PhotoPicker key={key} label={label} lang={lang} onSelect={onDoc(setVal, key)}>
-            <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
-              {uploadingKeys[key] ? (
-                <div className="p-2 flex flex-col items-center justify-center">
-                  <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</span>
-                </div>
-              ) : (
-                <SafeImage
-                  src={val?.url}
-                  alt={label}
-                  className="w-full h-16 object-cover"
-                  fallback={
-                    <div className="p-2 flex flex-col items-center justify-center">
-                      <Camera size={16} color={C.inkSoft} />
-                      <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
-                    </div>
-                  }
-                />
-              )}
-              <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>{val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : "फोटो लें")}</span>
-            </div>
-          </PhotoPicker>
+        ].map(([key, label, val, setVal], i) => (
+          <GuidedStep key={key} active={kycActiveStep === i} completed={kycStepCompleted[i]} stepRef={kycStepRefs[i]} lang={lang}>
+            <PhotoPicker label={label} lang={lang} onSelect={onDoc(setVal, key)}>
+              <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
+                {uploadingKeys[key] ? (
+                  <div className="p-2 flex flex-col items-center justify-center">
+                    <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</span>
+                  </div>
+                ) : (
+                  <SafeImage
+                    src={val?.url}
+                    alt={label}
+                    className="w-full h-16 object-cover"
+                    fallback={
+                      <div className="p-2 flex flex-col items-center justify-center">
+                        <Camera size={16} color={C.inkSoft} />
+                        <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
+                      </div>
+                    }
+                  />
+                )}
+                <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>{val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : "फोटो लें")}</span>
+              </div>
+            </PhotoPicker>
+          </GuidedStep>
         ))}
       </div>
 
-      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : "गाड़ी रजिस्टर्ड नंबर"}</label>
-      <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 12 }} placeholder="MH-14-XX-XXXX" value={vehicleNumber}
-        onChange={(e) => setVehicleNumber(e.target.value)} />
+      <GuidedStep active={kycActiveStep === 2} completed={kycStepCompleted[2]} stepRef={kycStepRefs[2]} lang={lang}>
+        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : "गाड़ी रजिस्टर्ड नंबर"}</label>
+        <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 12 }} placeholder="MH-14-XX-XXXX" value={vehicleNumber}
+          onChange={(e) => setVehicleNumber(e.target.value)} />
+      </GuidedStep>
 
       <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Dimensions" : "गाड़ी का साइज़"}</label>
       <div className="grid grid-cols-2 gap-2 mb-4">
@@ -4088,37 +4136,41 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       <div className="rounded-xl p-3 mb-4" style={{ border: `1.5px solid #A8721C`, background: "#F5E6C8" }}>
         <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#A8721C" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
 
-        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : "गाड़ी का नाम"}</label>
-        <input className={inputCls} style={{ ...inputStyle, marginBottom: 10 }} placeholder={lang === "en" ? "e.g. Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
+        <GuidedStep active={kycActiveStep === 3} completed={kycStepCompleted[3]} stepRef={kycStepRefs[3]} lang={lang}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : "गाड़ी का नाम"}</label>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
+        </GuidedStep>
 
-        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photos (Front & Side)" : "गाड़ी की फोटो (आगे व साइड)"}</label>
+        <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photos (Front & Side)" : "गाड़ी की फोटो (आगे व साइड)"}</label>
         <div className="grid grid-cols-2 gap-2 mb-2">
           {[
             ["vehicleFront", lang === "en" ? "Front" : "आगे से", vehiclePhotoFront, setVehiclePhotoFront],
             ["vehicleSide", lang === "en" ? "Side" : "साइड से", vehiclePhotoSide, setVehiclePhotoSide],
-          ].map(([key, label, val, setVal]) => (
-            <PhotoPicker key={key} label={label} lang={lang} onSelect={onVehiclePhoto(setVal, key)}>
-              <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed #A8721C`, background: C.paper, minHeight: 110 }}>
-                {uploadingKeys[key] ? (
-                  <div className="text-xs font-semibold py-6" style={{ color: "#A8721C" }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</div>
-                ) : (
-                  <SafeImage
-                    src={val?.url}
-                    alt={label}
-                    className="w-full h-24 rounded-lg object-cover"
-                    fallback={
-                      <>
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: "#F5E6C8" }}><Camera size={18} color="#A8721C" /></div>
-                        <div className="text-[10px] font-semibold text-center" style={{ color: C.ink }}>{label}</div>
-                      </>
-                    }
-                  />
-                )}
-              </div>
-              <div className="text-[9px] mt-0.5 text-center" style={{ color: val ? C.success : C.inkSoft }}>
-                {val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : "अपलोड के लिए टैप करें")}
-              </div>
-            </PhotoPicker>
+          ].map(([key, label, val, setVal], i) => (
+            <GuidedStep key={key} active={kycActiveStep === 4 + i} completed={kycStepCompleted[4 + i]} stepRef={kycStepRefs[4 + i]} lang={lang}>
+              <PhotoPicker label={label} lang={lang} onSelect={onVehiclePhoto(setVal, key)}>
+                <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed #A8721C`, background: C.paper, minHeight: 110 }}>
+                  {uploadingKeys[key] ? (
+                    <div className="text-xs font-semibold py-6" style={{ color: "#A8721C" }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</div>
+                  ) : (
+                    <SafeImage
+                      src={val?.url}
+                      alt={label}
+                      className="w-full h-24 rounded-lg object-cover"
+                      fallback={
+                        <>
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: "#F5E6C8" }}><Camera size={18} color="#A8721C" /></div>
+                          <div className="text-[10px] font-semibold text-center" style={{ color: C.ink }}>{label}</div>
+                        </>
+                      }
+                    />
+                  )}
+                </div>
+                <div className="text-[9px] mt-0.5 text-center" style={{ color: val ? C.success : C.inkSoft }}>
+                  {val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : "अपलोड के लिए टैप करें")}
+                </div>
+              </PhotoPicker>
+            </GuidedStep>
           ))}
         </div>
         <div className="rounded-lg p-2.5" style={{ background: "#F0EAE0" }}>
@@ -4134,7 +4186,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       </div>
 
       {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle name & number to submit" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो, गाड़ी का नाम और नंबर डालें"}</div>}
-      <button onClick={submit} disabled={!canSubmit} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: canSubmit ? C.marigold : C.line, color: canSubmit ? C.navy : "#9AA3B0" }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
+      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-3 font-bold text-sm ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : C.line, color: canSubmit ? C.navy : "#9AA3B0" }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
     </div>
   );
 }
@@ -4774,6 +4826,16 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
   const canAdd = form.name.trim().length > 0 && form.mobile.trim().length === 10 && form.vehicleTypeName.trim().length > 0 && form.vehicleNumber.trim().length > 0 && !adding;
+  // Guided-step highlighting for the required Add Driver fields — see
+  // GuidedStep. Capacity/address/city/state/pincode are optional, so they
+  // aren't part of the sequence.
+  const addStepCompleted = [!!form.name.trim(), form.mobile.trim().length === 10, !!form.vehicleTypeName.trim(), !!form.vehicleNumber.trim()];
+  const addActiveStep = showAdd ? addStepCompleted.findIndex((done) => !done) : -1;
+  const addStepRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+  useEffect(() => {
+    if (addActiveStep >= 0) addStepRefs[addActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addActiveStep]);
   const resetForm = () => { setForm(blankForm); setAddError(""); };
   // Same reuse-by-name-or-create-new resolution the driver's own KYC form
   // uses, so a manually added driver's vehicle type merges into the same
@@ -4816,11 +4878,19 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
       </div>
       {showAdd && (
         <div className="rounded-lg p-3 mb-3 space-y-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
+          <GuidedStep active={addActiveStep === 0} completed={addStepCompleted[0]} stepRef={addStepRefs[0]} lang={lang}>
+            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </GuidedStep>
+          <GuidedStep active={addActiveStep === 1} completed={addStepCompleted[1]} stepRef={addStepRefs[1]} lang={lang}>
+            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
+          </GuidedStep>
           <div className="grid grid-cols-2 gap-2">
-            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Vehicle type *" : "गाड़ी का प्रकार *"} value={form.vehicleTypeName} onChange={(e) => setForm({ ...form, vehicleTypeName: e.target.value })} />
-            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Vehicle number *" : "गाड़ी नंबर *"} value={form.vehicleNumber} onChange={(e) => setForm({ ...form, vehicleNumber: e.target.value.toUpperCase() })} />
+            <GuidedStep active={addActiveStep === 2} completed={addStepCompleted[2]} stepRef={addStepRefs[2]} lang={lang}>
+              <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Vehicle type *" : "गाड़ी का प्रकार *"} value={form.vehicleTypeName} onChange={(e) => setForm({ ...form, vehicleTypeName: e.target.value })} />
+            </GuidedStep>
+            <GuidedStep active={addActiveStep === 3} completed={addStepCompleted[3]} stepRef={addStepRefs[3]} lang={lang}>
+              <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Vehicle number *" : "गाड़ी नंबर *"} value={form.vehicleNumber} onChange={(e) => setForm({ ...form, vehicleNumber: e.target.value.toUpperCase() })} />
+            </GuidedStep>
           </div>
           <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Capacity (kg)" : "क्षमता (किग्रा)"} value={form.capacityKg} onChange={(e) => setForm({ ...form, capacityKg: e.target.value.replace(/\D/g, "") })} />
           <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Address" : "पता"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
@@ -4830,7 +4900,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
             <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
           </div>
           {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
-          <button onClick={submitAdd} disabled={!canAdd} className="w-full rounded-lg py-2 text-xs font-bold" style={{ background: canAdd ? C.success : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
+          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready" : ""}`} style={{ background: canAdd ? C.success : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
             {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Driver" : "ड्राइवर सेव करें")}
           </button>
         </div>
@@ -4935,6 +5005,15 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
   const canAdd = form.name.trim().length > 0 && form.mobile.trim().length === 10 && !adding;
+  // Guided-step highlighting for the required Add Customer fields — see
+  // GuidedStep. Address/area/city/state/pincode are optional here.
+  const addStepCompleted = [!!form.name.trim(), form.mobile.trim().length === 10];
+  const addActiveStep = showAdd ? addStepCompleted.findIndex((done) => !done) : -1;
+  const addStepRefs = [useRef(null), useRef(null)];
+  useEffect(() => {
+    if (addActiveStep >= 0) addStepRefs[addActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addActiveStep]);
   const resetForm = () => { setForm({ name: "", mobile: "", address: "", area: "", city: "", state: "", pincode: "" }); setAddError(""); };
   const submitAdd = () => {
     if (!canAdd) return;
@@ -4965,8 +5044,12 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
       </div>
       {showAdd && (
         <div className="rounded-lg p-3 mb-3 space-y-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
+          <GuidedStep active={addActiveStep === 0} completed={addStepCompleted[0]} stepRef={addStepRefs[0]} lang={lang}>
+            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </GuidedStep>
+          <GuidedStep active={addActiveStep === 1} completed={addStepCompleted[1]} stepRef={addStepRefs[1]} lang={lang}>
+            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
+          </GuidedStep>
           <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Address" : "पता"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           <div className="grid grid-cols-2 gap-2">
             <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Area" : "क्षेत्र"} value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} />
@@ -4975,7 +5058,7 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
             <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
           </div>
           {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
-          <button onClick={submitAdd} disabled={!canAdd} className="w-full rounded-lg py-2 text-xs font-bold" style={{ background: canAdd ? C.success : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
+          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready" : ""}`} style={{ background: canAdd ? C.success : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
             {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Customer" : "कस्टमर सेव करें")}
           </button>
         </div>
