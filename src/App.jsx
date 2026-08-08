@@ -397,14 +397,6 @@ function suggestAreas(text) {
   if (!text.trim()) return [];
   return AREAS.filter((a) => a.toLowerCase().includes(text.trim().toLowerCase())).slice(0, 4);
 }
-function estimateDistance(pickup, drop) {
-  if (!pickup.trim() || !drop.trim()) return null;
-  const s = pickup.trim() + "|" + drop.trim();
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 977;
-  return 2 + (h % 17);
-}
-
 // Great-circle ("as the crow flies") distance between two coordinates, in km.
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
@@ -420,16 +412,35 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 // real routed distance from Google's Distance Matrix API.
 const ROAD_DISTANCE_FACTOR = 1.35;
 
-// Prefers real GPS coordinates (captured via Places Autocomplete, the map
-// picker, or "use current location") over the old text-hash guess — falls
-// back to that guess only when a coordinate is missing, e.g. the customer
-// typed an address by hand without ever picking a suggestion.
-function estimateDistanceKm(pickup, drop, pickupCoords, dropCoords) {
-  if (pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null) {
-    const straightLineKm = haversineKm(pickupCoords.lat, pickupCoords.lng, dropCoords.lat, dropCoords.lng);
-    return Math.max(1, Math.round(straightLineKm * ROAD_DISTANCE_FACTOR));
-  }
-  return estimateDistance(pickup, drop);
+// Straight-line estimate scaled up for roads — requires real GPS
+// coordinates for both ends. Returns null (not a guess) when either
+// coordinate is missing, since a distance that isn't actually derived from
+// real locations is worse than showing nothing — it used to fall back to a
+// text-hash of the two address strings, which could land anywhere from
+// 2-18km regardless of the real distance (e.g. showing "6 km" for an
+// address pair that's actually 144 km apart).
+function estimateDistanceKm(pickupCoords, dropCoords) {
+  if (pickupCoords?.lat == null || pickupCoords?.lng == null || dropCoords?.lat == null || dropCoords?.lng == null) return null;
+  const straightLineKm = haversineKm(pickupCoords.lat, pickupCoords.lng, dropCoords.lat, dropCoords.lng);
+  return Math.max(1, Math.round(straightLineKm * ROAD_DISTANCE_FACTOR));
+}
+
+// Resolves free-typed address text to coordinates via Google's Geocoder —
+// used when the customer types Pickup/Drop by hand without ever tapping an
+// Autocomplete suggestion, so pickupCoords/dropCoords (and therefore the
+// distance estimate and the booking's saved lat/lng) don't stay empty just
+// because they didn't pick from the dropdown.
+function geocodeAddress(text) {
+  return new Promise((resolve) => {
+    if (!window.google?.maps?.Geocoder || !text?.trim()) { resolve(null); return; }
+    new window.google.maps.Geocoder().geocode(
+      { address: text, componentRestrictions: { country: "in" } },
+      (results, status) => {
+        const loc = status === "OK" && results?.[0]?.geometry?.location;
+        resolve(loc ? { lat: loc.lat(), lng: loc.lng() } : null);
+      }
+    );
+  });
 }
 
 // Real routed driving distance from Google's Distance Matrix Service (part
@@ -2350,13 +2361,30 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStep]);
 
+  // If the customer typed Pickup/Drop by hand without tapping an
+  // Autocomplete suggestion, pickupCoords/dropCoords stay null — geocode
+  // the typed text after a short pause so the distance estimate (and the
+  // coordinates actually saved on the booking) are still based on the real
+  // location, not left empty or guessed.
+  useEffect(() => {
+    if (!mapsReady || pickupCoords || !pickup.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(pickup).then((loc) => { if (loc) setPickupCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [pickup, pickupCoords, mapsReady]);
+  useEffect(() => {
+    if (!mapsReady || dropCoords || !drop.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(drop).then((loc) => { if (loc) setDropCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [drop, dropCoords, mapsReady]);
+
   // Shows the straight-line estimate immediately (no blank/loading state),
   // then silently upgrades to the real routed distance from Google's
   // Distance Matrix once it resolves — keeping the straight-line number if
-  // that call fails or Maps isn't configured at all.
+  // that call fails or Maps isn't configured at all. Both stay null (no
+  // banner shown) until real coordinates for both ends are known.
   const distanceRequestRef = useRef(0);
   useEffect(() => {
-    setDistance(estimateDistanceKm(pickup, drop, pickupCoords, dropCoords));
+    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
     const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
     if (!hasBothCoords || !mapsReady) return;
     const requestId = ++distanceRequestRef.current;
@@ -2365,7 +2393,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         if (distanceRequestRef.current === requestId) setDistance(Math.max(1, Math.round(km)));
       })
       .catch((e) => console.error("[distance matrix]", e));
-  }, [pickup, drop, pickupCoords, dropCoords, mapsReady]);
+  }, [pickupCoords, dropCoords, mapsReady]);
 
   const pickupAutocompleteRef = useRef(null);
   const dropAutocompleteRef = useRef(null);
