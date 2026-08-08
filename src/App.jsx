@@ -2526,9 +2526,9 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
                 </div>
               </div>
             ) : (
-              <select className={inputCls} style={{ ...inputStyle, color: material ? inputStyle.color : C.inkSoft }} value={material}
+              <select className={inputCls} style={{ ...inputStyle, color: material ? inputStyle.color : "#9AA3B0" }} value={material}
                 onChange={(e) => { if (e.target.value === ADD_MATERIAL) setAddingMaterial(true); else setMaterial(e.target.value); }}>
-                <option value="" disabled style={{ color: C.inkSoft }}>{lang === "en" ? "Select material" : "मटेरियल चुनें"}</option>
+                <option value="" disabled style={{ color: "#9AA3B0" }}>{lang === "en" ? "Select material" : "मटेरियल चुनें"}</option>
                 {materialsList.map((m) => <option key={m} value={m} style={{ color: C.ink }}>{materialLabel(m, lang, customMaterials)}</option>)}
                 <option value={ADD_MATERIAL} style={{ color: C.ink }}>+ {lang === "en" ? "Add new material" : "नया मटेरियल जोड़ें"}</option>
               </select>
