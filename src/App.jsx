@@ -3298,6 +3298,15 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   const requiredForQuote = Number(amount || 0) * (commissionPct / 100);
   const walletShortfall = !isInTrial(driver.createdAt) && (driver.wallet - requiredForQuote) < minWallet;
 
+  // Guided-step highlighting for the 3 quote fields — see GuidedStep.
+  const stepCompleted = [Number(amount) > 0, Number(allowedHours) > 0, Number(extraHourRate) > 0];
+  const activeStep = stepCompleted.findIndex((done) => !done); // -1 once all done
+  const stepRefs = [useRef(null), useRef(null), useRef(null)];
+  useEffect(() => {
+    if (activeStep >= 0) stepRefs[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep]);
+
   const otherBids = load.bids.filter((b) => b.driverName !== driver.name);
   const lowestOther = otherBids.length ? otherBids.reduce((min, b) => b.amount < min.amount ? b : min) : null;
   const allAmounts = load.bids.map((b) => b.amount);
@@ -3365,21 +3374,27 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
           <div className="text-sm font-extrabold mb-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
           <div className="rounded-lg overflow-hidden mb-2" style={{ border: `2px solid ${C.marigoldDeep}` }}>
             <div className="grid grid-cols-3" style={{ background: "#FBEBD2" }}>
-              <div className="px-1.5 py-1.5 text-center" style={{ borderRight: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
-                <div className="text-[9px] font-extrabold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Fare ₹ *" : "कुल भाड़ा ₹ *"}</div>
-                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus
-                  className="w-full text-center outline-none bg-transparent" style={{ color: C.marigoldDeep, fontFamily: monoFont, fontSize: 18, fontWeight: 800 }} />
-              </div>
-              <div className="px-1.5 py-1.5 text-center" style={{ borderRight: `1px solid ${C.marigoldDeep}` }}>
-                <div className="text-[9px] font-bold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Allowed hrs *" : "अलाउ घंटे *"}</div>
-                <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
-                  className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 15, fontWeight: 700 }} />
-              </div>
-              <div className="px-1.5 py-1.5 text-center">
-                <div className="text-[9px] font-bold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Waiting ₹/hr *" : "वेटिंग ₹/घं *"}</div>
-                <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
-                  className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 13 }} />
-              </div>
+              <GuidedStep active={activeStep === 0} completed={stepCompleted[0]} stepRef={stepRefs[0]} lang={lang}>
+                <div className="px-1.5 py-1.5 text-center" style={{ borderRight: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
+                  <div className="text-[9px] font-extrabold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Fare ₹ *" : "कुल भाड़ा ₹ *"}</div>
+                  <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus
+                    className="w-full text-center outline-none bg-transparent" style={{ color: C.marigoldDeep, fontFamily: monoFont, fontSize: 18, fontWeight: 800 }} />
+                </div>
+              </GuidedStep>
+              <GuidedStep active={activeStep === 1} completed={stepCompleted[1]} stepRef={stepRefs[1]} lang={lang}>
+                <div className="px-1.5 py-1.5 text-center" style={{ borderRight: `1px solid ${C.marigoldDeep}` }}>
+                  <div className="text-[9px] font-bold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Allowed hrs *" : "अलाउ घंटे *"}</div>
+                  <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
+                    className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 15, fontWeight: 700 }} />
+                </div>
+              </GuidedStep>
+              <GuidedStep active={activeStep === 2} completed={stepCompleted[2]} stepRef={stepRefs[2]} lang={lang}>
+                <div className="px-1.5 py-1.5 text-center">
+                  <div className="text-[9px] font-bold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Waiting ₹/hr *" : "वेटिंग ₹/घं *"}</div>
+                  <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
+                    className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 13 }} />
+                </div>
+              </GuidedStep>
             </div>
           </div>
           <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>
@@ -3398,7 +3413,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
             <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{bidError}</div>
           )}
 
-          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className="w-full rounded-lg py-2.5 text-sm font-bold text-white flex items-center justify-center gap-1.5"
+          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-lg py-2.5 text-sm font-bold text-white flex items-center justify-center gap-1.5 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready" : ""}`}
             style={{ background: justSubmitted ? C.success : (canSubmit && !walletShortfall) ? C.marigoldDeep : C.line, color: justSubmitted || (canSubmit && !walletShortfall) ? "#fff" : "#9AA3B0" }}>
             {justSubmitted ? <><CheckCircle2 size={16} /> {lang === "en" ? "Sent" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : "कोटेशन भेजें")}
           </button>
