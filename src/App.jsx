@@ -133,158 +133,6 @@ function Logo({ size = 64, showText = true }) {
   );
 }
 
-// A curated list of major Indian cities (not exhaustive — every town in
-// India would be tens of thousands of entries) spanning every state/UT, used
-// to let the customer narrow Pickup/Drop autocomplete suggestions to their
-// own city instead of searching all of India. lat/lng are city-center
-// approximations, just precise enough to bias a ~35km search box.
-const INDIAN_CITIES = [
-  { key: "delhi", hi: "दिल्ली", en: "Delhi", lat: 28.6139, lng: 77.2090 },
-  { key: "gurugram", hi: "गुरुग्राम", en: "Gurugram", lat: 28.4595, lng: 77.0266 },
-  { key: "noida", hi: "नोएडा", en: "Noida", lat: 28.5355, lng: 77.3910 },
-  { key: "ghaziabad", hi: "गाज़ियाबाद", en: "Ghaziabad", lat: 28.6692, lng: 77.4538 },
-  { key: "faridabad", hi: "फरीदाबाद", en: "Faridabad", lat: 28.4089, lng: 77.3178 },
-  { key: "mumbai", hi: "मुंबई", en: "Mumbai", lat: 19.0760, lng: 72.8777 },
-  { key: "thane", hi: "ठाणे", en: "Thane", lat: 19.2183, lng: 72.9781 },
-  { key: "pune", hi: "पुणे", en: "Pune", lat: 18.5204, lng: 73.8567 },
-  { key: "pimprichinchwad", hi: "पिंपरी-चिंचवड", en: "Pimpri-Chinchwad", lat: 18.6298, lng: 73.7997 },
-  { key: "nagpur", hi: "नागपुर", en: "Nagpur", lat: 21.1458, lng: 79.0882 },
-  { key: "nashik", hi: "नासिक", en: "Nashik", lat: 19.9975, lng: 73.7898 },
-  { key: "aurangabad", hi: "औरंगाबाद", en: "Aurangabad (Chhatrapati Sambhajinagar)", lat: 19.8762, lng: 75.3433 },
-  { key: "solapur", hi: "सोलापुर", en: "Solapur", lat: 17.6599, lng: 75.9064 },
-  { key: "kolhapur", hi: "कोल्हापुर", en: "Kolhapur", lat: 16.7050, lng: 74.2433 },
-  { key: "sangli", hi: "सांगली", en: "Sangli", lat: 16.8524, lng: 74.5815 },
-  { key: "amravatiMh", hi: "अमरावती", en: "Amravati", lat: 20.9374, lng: 77.7796 },
-  { key: "akola", hi: "अकोला", en: "Akola", lat: 20.7002, lng: 77.0082 },
-  { key: "jalgaon", hi: "जलगांव", en: "Jalgaon", lat: 21.0077, lng: 75.5626 },
-  { key: "latur", hi: "लातूर", en: "Latur", lat: 18.4088, lng: 76.5604 },
-  { key: "bengaluru", hi: "बेंगलुरु", en: "Bengaluru", lat: 12.9716, lng: 77.5946 },
-  { key: "mysuru", hi: "मैसूरु", en: "Mysuru", lat: 12.2958, lng: 76.6394 },
-  { key: "hubballi", hi: "हुबली", en: "Hubballi-Dharwad", lat: 15.3647, lng: 75.1240 },
-  { key: "mangaluru", hi: "मंगलुरु", en: "Mangaluru", lat: 12.9141, lng: 74.8560 },
-  { key: "belagavi", hi: "बेलगावी", en: "Belagavi", lat: 15.8497, lng: 74.4977 },
-  { key: "davangere", hi: "दावणगेरे", en: "Davangere", lat: 14.4644, lng: 75.9218 },
-  { key: "ballari", hi: "बल्लारी", en: "Ballari", lat: 15.1394, lng: 76.9214 },
-  { key: "shivamogga", hi: "शिवमोग्गा", en: "Shivamogga", lat: 13.9299, lng: 75.5681 },
-  { key: "chennai", hi: "चेन्नई", en: "Chennai", lat: 13.0827, lng: 80.2707 },
-  { key: "coimbatore", hi: "कोयंबटूर", en: "Coimbatore", lat: 11.0168, lng: 76.9558 },
-  { key: "madurai", hi: "मदुरै", en: "Madurai", lat: 9.9252, lng: 78.1198 },
-  { key: "tiruchirappalli", hi: "तिरुचिरापल्ली", en: "Tiruchirappalli", lat: 10.7905, lng: 78.7047 },
-  { key: "salem", hi: "सेलम", en: "Salem", lat: 11.6643, lng: 78.1460 },
-  { key: "tirupur", hi: "तिरुपुर", en: "Tirupur", lat: 11.1085, lng: 77.3411 },
-  { key: "erode", hi: "इरोड", en: "Erode", lat: 11.3410, lng: 77.7172 },
-  { key: "vellore", hi: "वेल्लोर", en: "Vellore", lat: 12.9165, lng: 79.1325 },
-  { key: "tuticorin", hi: "तूतीकोरिन", en: "Tuticorin (Thoothukudi)", lat: 8.7642, lng: 78.1348 },
-  { key: "nagercoil", hi: "नागरकोइल", en: "Nagercoil", lat: 8.1833, lng: 77.4119 },
-  { key: "hyderabad", hi: "हैदराबाद", en: "Hyderabad", lat: 17.3850, lng: 78.4867 },
-  { key: "warangal", hi: "वारंगल", en: "Warangal", lat: 17.9689, lng: 79.5941 },
-  { key: "vijayawada", hi: "विजयवाड़ा", en: "Vijayawada", lat: 16.5062, lng: 80.6480 },
-  { key: "visakhapatnam", hi: "विशाखापत्तनम", en: "Visakhapatnam", lat: 17.6868, lng: 83.2185 },
-  { key: "guntur", hi: "गुंटूर", en: "Guntur", lat: 16.3067, lng: 80.4365 },
-  { key: "tirupati", hi: "तिरुपति", en: "Tirupati", lat: 13.6288, lng: 79.4192 },
-  { key: "rajahmundry", hi: "राजामहेंद्रवरम", en: "Rajahmundry", lat: 17.0005, lng: 81.8040 },
-  { key: "nellore", hi: "नेल्लोर", en: "Nellore", lat: 14.4426, lng: 79.9865 },
-  { key: "kurnool", hi: "कर्नूल", en: "Kurnool", lat: 15.8281, lng: 78.0373 },
-  { key: "ahmedabad", hi: "अहमदाबाद", en: "Ahmedabad", lat: 23.0225, lng: 72.5714 },
-  { key: "surat", hi: "सूरत", en: "Surat", lat: 21.1702, lng: 72.8311 },
-  { key: "vadodara", hi: "वडोदरा", en: "Vadodara", lat: 22.3072, lng: 73.1812 },
-  { key: "rajkot", hi: "राजकोट", en: "Rajkot", lat: 22.3039, lng: 70.8022 },
-  { key: "bhavnagar", hi: "भावनगर", en: "Bhavnagar", lat: 21.7645, lng: 72.1519 },
-  { key: "jaipur", hi: "जयपुर", en: "Jaipur", lat: 26.9124, lng: 75.7873 },
-  { key: "jodhpur", hi: "जोधपुर", en: "Jodhpur", lat: 26.2389, lng: 73.0243 },
-  { key: "udaipur", hi: "उदयपुर", en: "Udaipur", lat: 24.5854, lng: 73.7125 },
-  { key: "kota", hi: "कोटा", en: "Kota", lat: 25.2138, lng: 75.8648 },
-  { key: "ajmer", hi: "अजमेर", en: "Ajmer", lat: 26.4499, lng: 74.6399 },
-  { key: "bikaner", hi: "बीकानेर", en: "Bikaner", lat: 28.0229, lng: 73.3119 },
-  { key: "alwar", hi: "अलवर", en: "Alwar", lat: 27.5530, lng: 76.6346 },
-  { key: "bhilwara", hi: "भीलवाड़ा", en: "Bhilwara", lat: 25.3407, lng: 74.6313 },
-  { key: "sikar", hi: "सीकर", en: "Sikar", lat: 27.6094, lng: 75.1399 },
-  { key: "lucknow", hi: "लखनऊ", en: "Lucknow", lat: 26.8467, lng: 80.9462 },
-  { key: "kanpur", hi: "कानपुर", en: "Kanpur", lat: 26.4499, lng: 80.3319 },
-  { key: "varanasi", hi: "वाराणसी", en: "Varanasi", lat: 25.3176, lng: 82.9739 },
-  { key: "agra", hi: "आगरा", en: "Agra", lat: 27.1767, lng: 78.0081 },
-  { key: "meerut", hi: "मेरठ", en: "Meerut", lat: 28.9845, lng: 77.7064 },
-  { key: "prayagraj", hi: "प्रयागराज", en: "Prayagraj", lat: 25.4358, lng: 81.8463 },
-  { key: "bareilly", hi: "बरेली", en: "Bareilly", lat: 28.3670, lng: 79.4304 },
-  { key: "aligarh", hi: "अलीगढ़", en: "Aligarh", lat: 27.8974, lng: 78.0880 },
-  { key: "moradabad", hi: "मुरादाबाद", en: "Moradabad", lat: 28.8386, lng: 78.7733 },
-  { key: "gorakhpur", hi: "गोरखपुर", en: "Gorakhpur", lat: 26.7606, lng: 83.3732 },
-  { key: "patna", hi: "पटना", en: "Patna", lat: 25.5941, lng: 85.1376 },
-  { key: "gaya", hi: "गया", en: "Gaya", lat: 24.7955, lng: 84.9994 },
-  { key: "bhagalpur", hi: "भागलपुर", en: "Bhagalpur", lat: 25.2445, lng: 86.9718 },
-  { key: "muzaffarpur", hi: "मुज़फ्फरपुर", en: "Muzaffarpur", lat: 26.1225, lng: 85.3906 },
-  { key: "kolkata", hi: "कोलकाता", en: "Kolkata", lat: 22.5726, lng: 88.3639 },
-  { key: "howrah", hi: "हावड़ा", en: "Howrah", lat: 22.5958, lng: 88.2636 },
-  { key: "durgapur", hi: "दुर्गापुर", en: "Durgapur", lat: 23.5204, lng: 87.3119 },
-  { key: "siliguri", hi: "सिलीगुड़ी", en: "Siliguri", lat: 26.7271, lng: 88.3953 },
-  { key: "asansol", hi: "आसनसोल", en: "Asansol", lat: 23.6739, lng: 86.9524 },
-  { key: "bhubaneswar", hi: "भुवनेश्वर", en: "Bhubaneswar", lat: 20.2961, lng: 85.8245 },
-  { key: "cuttack", hi: "कटक", en: "Cuttack", lat: 20.4625, lng: 85.8828 },
-  { key: "rourkela", hi: "राउरकेला", en: "Rourkela", lat: 22.2604, lng: 84.8536 },
-  { key: "guwahati", hi: "गुवाहाटी", en: "Guwahati", lat: 26.1445, lng: 91.7362 },
-  { key: "dibrugarh", hi: "डिब्रूगढ़", en: "Dibrugarh", lat: 27.4728, lng: 94.9120 },
-  { key: "silchar", hi: "सिलचर", en: "Silchar", lat: 24.8333, lng: 92.7789 },
-  { key: "chandigarh", hi: "चंडीगढ़", en: "Chandigarh", lat: 30.7333, lng: 76.7794 },
-  { key: "ludhiana", hi: "लुधियाना", en: "Ludhiana", lat: 30.9010, lng: 75.8573 },
-  { key: "amritsar", hi: "अमृतसर", en: "Amritsar", lat: 31.6340, lng: 74.8723 },
-  { key: "jalandhar", hi: "जालंधर", en: "Jalandhar", lat: 31.3260, lng: 75.5762 },
-  { key: "patiala", hi: "पटियाला", en: "Patiala", lat: 30.3398, lng: 76.3869 },
-  { key: "bathinda", hi: "भटिंडा", en: "Bathinda", lat: 30.2110, lng: 74.9455 },
-  { key: "shimla", hi: "शिमला", en: "Shimla", lat: 31.1048, lng: 77.1734 },
-  { key: "dehradun", hi: "देहरादून", en: "Dehradun", lat: 30.3165, lng: 78.0322 },
-  { key: "haridwar", hi: "हरिद्वार", en: "Haridwar", lat: 29.9457, lng: 78.1642 },
-  { key: "bhopal", hi: "भोपाल", en: "Bhopal", lat: 23.2599, lng: 77.4126 },
-  { key: "indore", hi: "इंदौर", en: "Indore", lat: 22.7196, lng: 75.8577 },
-  { key: "jabalpur", hi: "जबलपुर", en: "Jabalpur", lat: 23.1815, lng: 79.9864 },
-  { key: "gwalior", hi: "ग्वालियर", en: "Gwalior", lat: 26.2183, lng: 78.1828 },
-  { key: "ujjain", hi: "उज्जैन", en: "Ujjain", lat: 23.1765, lng: 75.7885 },
-  { key: "raipur", hi: "रायपुर", en: "Raipur", lat: 21.2514, lng: 81.6296 },
-  { key: "bilaspurCg", hi: "बिलासपुर", en: "Bilaspur", lat: 22.0797, lng: 82.1409 },
-  { key: "durgBhilai", hi: "दुर्ग-भिलाई", en: "Durg-Bhilai", lat: 21.1938, lng: 81.3509 },
-  { key: "ranchi", hi: "रांची", en: "Ranchi", lat: 23.3441, lng: 85.3096 },
-  { key: "jamshedpur", hi: "जमशेदपुर", en: "Jamshedpur", lat: 22.8046, lng: 86.2029 },
-  { key: "dhanbad", hi: "धनबाद", en: "Dhanbad", lat: 23.7957, lng: 86.4304 },
-  { key: "bokaro", hi: "बोकारो", en: "Bokaro", lat: 23.6693, lng: 86.1511 },
-  { key: "thiruvananthapuram", hi: "तिरुवनंतपुरम", en: "Thiruvananthapuram", lat: 8.5241, lng: 76.9366 },
-  { key: "kochi", hi: "कोच्चि", en: "Kochi", lat: 9.9312, lng: 76.2673 },
-  { key: "kozhikode", hi: "कोझिकोड", en: "Kozhikode", lat: 11.2588, lng: 75.7804 },
-  { key: "thrissur", hi: "त्रिशूर", en: "Thrissur", lat: 10.5276, lng: 76.2144 },
-  { key: "panaji", hi: "पणजी", en: "Panaji", lat: 15.4909, lng: 73.8278 },
-  { key: "margao", hi: "मडगांव", en: "Margao", lat: 15.2832, lng: 73.9862 },
-  { key: "srinagar", hi: "श्रीनगर", en: "Srinagar", lat: 34.0837, lng: 74.7973 },
-  { key: "jammu", hi: "जम्मू", en: "Jammu", lat: 32.7266, lng: 74.8570 },
-  { key: "imphal", hi: "इंफाल", en: "Imphal", lat: 24.8170, lng: 93.9368 },
-  { key: "shillong", hi: "शिलांग", en: "Shillong", lat: 25.5788, lng: 91.8933 },
-  { key: "aizawl", hi: "आइज़ोल", en: "Aizawl", lat: 23.7271, lng: 92.7176 },
-  { key: "agartala", hi: "अगरतला", en: "Agartala", lat: 23.8315, lng: 91.2868 },
-  { key: "kohima", hi: "कोहिमा", en: "Kohima", lat: 25.6751, lng: 94.1086 },
-  { key: "itanagar", hi: "ईटानगर", en: "Itanagar", lat: 27.0844, lng: 93.6053 },
-  { key: "gangtok", hi: "गंगटोक", en: "Gangtok", lat: 27.3389, lng: 88.6065 },
-  { key: "puducherry", hi: "पुडुचेरी", en: "Puducherry", lat: 11.9416, lng: 79.8083 },
-  { key: "ambala", hi: "अंबाला", en: "Ambala", lat: 30.3752, lng: 76.7821 },
-  { key: "panipat", hi: "पानीपत", en: "Panipat", lat: 29.3909, lng: 76.9635 },
-  { key: "karnal", hi: "करनाल", en: "Karnal", lat: 29.6857, lng: 76.9905 },
-  { key: "hisar", hi: "हिसार", en: "Hisar", lat: 29.1492, lng: 75.7217 },
-  { key: "rohtak", hi: "रोहतक", en: "Rohtak", lat: 28.8955, lng: 76.6066 },
-  { key: "sonipat", hi: "सोनीपत", en: "Sonipat", lat: 28.9931, lng: 77.0151 },
-];
-// A ~55km-radius (110km-wide) box around a selected city's center, used to
-// hard-restrict Drop's Places Autocomplete (see strictBounds in
-// LocationField) to that city. Sized off Delhi NCT — the largest single
-// city in INDIAN_CITIES at roughly 51km across — so even a sprawling city's
-// full extent stays inside the box, not just its downtown core.
-function boundsForCity(cityKey) {
-  const c = INDIAN_CITIES.find((x) => x.key === cityKey);
-  if (!c) return null;
-  const dLat = 0.5;
-  const dLng = 0.5 / Math.max(0.3, Math.cos((c.lat * Math.PI) / 180));
-  return { north: c.lat + dLat, south: c.lat - dLat, east: c.lng + dLng, west: c.lng - dLng };
-}
-const cityLabel = (key, lang) => {
-  const c = INDIAN_CITIES.find((x) => x.key === key);
-  return c ? (lang === "en" ? c.en : c.hi) : "";
-};
-
 const DEFAULT_VEHICLES = [
   { key: "chhota", label: "छोटा हाथी", labelEn: "Chhota Hathi (Mini Truck)", rate: 20, capacity: "750 किग्रा", capacityEn: "750 kg", capacityKg: 750, l: 7, w: 4.5, h: 4.5 },
   { key: "tataAce", label: "टाटा एस", labelEn: "Tata Ace", rate: 25, capacity: "850 किग्रा", capacityEn: "850 kg", capacityKg: 850, l: 7.5, w: 4.5, h: 5 },
@@ -2310,62 +2158,70 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
   );
 }
 
-// Search+dropdown city picker — a plain <select> with 100+ options is
-// painful to scroll on mobile, so this is a text field that filters
-// INDIAN_CITIES live (matches either language, so typing "pune" or "पुणे"
-// both work) and shows the matches as a tappable dropdown list underneath.
-function CitySearchField({ value, onChange, lang, label, dotColor }) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const selected = INDIAN_CITIES.find((c) => c.key === value);
+// City/town/village picker for narrowing Drop suggestions — backed by live
+// Google Places search (types: ["(cities)"]) instead of a hand-curated
+// list, so it covers every locality Google itself knows about (not just a
+// few hundred major cities). Reports { name, bounds } up via onChange:
+// bounds comes from the place's actual viewport when Google has one
+// (accurate to that specific city/town/village's real extent), falling
+// back to a fixed box around its point location otherwise. Degrades to a
+// plain text input with no narrowing if Maps isn't configured/loaded, same
+// as Pickup/Drop's own LocationField.
+function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) {
+  const [text, setText] = useState(value?.name || "");
+  const autocompleteRef = useRef(null);
 
-  const matches = (() => {
-    const q = query.trim().toLowerCase();
-    const list = [...INDIAN_CITIES].sort((a, b) => (lang === "en" ? a.en.localeCompare(b.en) : a.hi.localeCompare(b.hi, "hi")));
-    if (!q) return list;
-    return list.filter((c) => c.en.toLowerCase().includes(q) || c.hi.includes(query.trim()));
-  })();
+  const onPlaceChanged = () => {
+    const place = autocompleteRef.current?.getPlace();
+    const loc = place?.geometry?.location;
+    if (!loc) return;
+    const name = place.formatted_address || place.name || "";
+    const vp = place.geometry.viewport;
+    let bounds;
+    if (vp) {
+      const ne = vp.getNorthEast(), sw = vp.getSouthWest();
+      bounds = { north: ne.lat(), south: sw.lat(), east: ne.lng(), west: sw.lng() };
+    } else {
+      // No viewport (rare — a very small locality) — fall back to a
+      // roughly 16km box around its point location.
+      const dLat = 0.15;
+      const dLng = dLat / Math.max(0.3, Math.cos((loc.lat() * Math.PI) / 180));
+      bounds = { north: loc.lat() + dLat, south: loc.lat() - dLat, east: loc.lng() + dLng, west: loc.lng() - dLng };
+    }
+    setText(name);
+    onChange({ name, bounds });
+  };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, paddingRight: value ? 34 : 16, paddingLeft: dotColor ? 34 : 16 };
+  const inputEl = (
+    <input
+      className={inputCls}
+      style={inputStyle}
+      placeholder={lang === "en" ? "Search city, town or village..." : "शहर, कस्बा या गांव खोजें..."}
+      value={text}
+      onChange={(e) => { setText(e.target.value); if (!e.target.value) onChange(null); }}
+    />
+  );
 
   return (
-    <div className="relative">
+    <div>
       <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{label || (lang === "en" ? "City" : "शहर")}</label>
       <div className="relative">
-        <input
-          className={inputCls}
-          style={{ ...inputStyle, paddingRight: 34, paddingLeft: dotColor ? 34 : 16 }}
-          placeholder={lang === "en" ? "Search city..." : "शहर खोजें..."}
-          value={open ? query : (selected ? (lang === "en" ? selected.en : selected.hi) : "")}
-          onFocus={() => { setQuery(""); setOpen(true); }}
-          onChange={(e) => { setQuery(e.target.value); if (!open) setOpen(true); }}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-        />
+        {mapsReady ? (
+          <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged}
+            options={{ componentRestrictions: { country: "in" }, types: ["(cities)"] }}>
+            {inputEl}
+          </Autocomplete>
+        ) : inputEl}
         {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
-        {selected && !open ? (
-          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(""); setQuery(""); }}
+        {value && (
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(null); setText(""); }}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center" style={{ color: C.inkSoft }}>
             <XCircle size={16} />
           </button>
-        ) : (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "#A8721C", fontSize: 22, fontWeight: 900, lineHeight: 1 }}>▾</span>
         )}
       </div>
-      {open && (
-        <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg shadow-lg max-h-56 overflow-y-auto" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          {matches.length === 0 ? (
-            <div className="px-3 py-2.5 text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "No matching city" : "कोई मेल खाता शहर नहीं"}</div>
-          ) : matches.map((c) => (
-            <button key={c.key} type="button" onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onChange(c.key); setQuery(""); setOpen(false); }}
-              className="w-full text-left px-3 py-2.5 text-sm font-bold"
-              style={{ color: c.key === value ? C.marigoldDeep : C.ink, background: c.key === value ? "#F5E6C8" : "transparent", borderBottom: `1px solid ${C.line}` }}>
-              {lang === "en" ? c.en : c.hi}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -2385,10 +2241,11 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [dropCoords, setDropCoords] = useState(null);
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
   const [showAllVehicles, setShowAllVehicles] = useState(true);
-  // Selected city narrows Pickup/Drop autocomplete suggestions (see
-  // boundsForCity) instead of the old manual Within City/Outstation toggle.
-  const [selectedCity, setSelectedCity] = useState("");
-  const cityBounds = selectedCity ? boundsForCity(selectedCity) : null;
+  // Selected Drop city — { name, bounds } from live Places search (see
+  // CitySearchField) — narrows Drop's autocomplete instead of the old
+  // manual Within City/Outstation toggle.
+  const [dropCity, setDropCity] = useState(null);
+  const cityBounds = dropCity?.bounds || null;
   const [material, setMaterial] = useState("");
   // The default list plus anything any customer has ever added — synced
   // live via customMaterials, so a material someone else added shows up
@@ -2511,7 +2368,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
     });
     setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
     setPickupCoords(null); setDropCoords(null);
-    // selectedCity is deliberately left as-is — most repeat bookings stay
+    // dropCity is deliberately left as-is — most repeat bookings stay
     // in the same city, no need to make the customer re-pick it.
   };
 
@@ -2615,11 +2472,11 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           />
 
           <div>
-            <CitySearchField value={selectedCity} onChange={setSelectedCity} lang={lang} label={lang === "en" ? "Drop City" : "ड्रॉप का शहर"} dotColor={C.safety} />
+            <CitySearchField value={dropCity} onChange={setDropCity} lang={lang} label={lang === "en" ? "Drop City" : "ड्रॉप का शहर"} dotColor={C.safety} mapsReady={mapsReady} />
             <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>
-              {selectedCity
-                ? (lang === "en" ? `Drop suggestions will only show places in ${cityLabel(selectedCity, lang)}, no other city — this doesn't affect Pickup.` : `ड्रॉप के सुझाव केवल ${cityLabel(selectedCity, lang)} की जगहें दिखाएंगे, कोई और शहर नहीं — इसका पिकअप पर कोई असर नहीं है।`)
-                : (lang === "en" ? "Optional — restricts Drop location suggestions to one city only." : "वैकल्पिक — ड्रॉप लोकेशन के सुझावों को केवल एक शहर तक सीमित करता है।")}
+              {dropCity
+                ? (lang === "en" ? `Drop suggestions will only show places in ${dropCity.name}, no other city — this doesn't affect Pickup.` : `ड्रॉप के सुझाव केवल ${dropCity.name} की जगहें दिखाएंगे, कोई और शहर नहीं — इसका पिकअप पर कोई असर नहीं है।`)
+                : (lang === "en" ? "Optional — search any city, town or village to restrict Drop suggestions to it." : "वैकल्पिक — किसी भी शहर, कस्बे या गांव को खोजें ताकि ड्रॉप के सुझाव उसी तक सीमित हों।")}
             </div>
           </div>
 
