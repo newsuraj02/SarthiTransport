@@ -2229,7 +2229,7 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial }) {
+function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial, hasActiveBooking, onViewCurrent, onViewAdvance, advanceCount }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
   const [advanceDate, setAdvanceDate] = useState("");
@@ -2393,6 +2393,22 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <div className="text-sm font-black text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
           </button>
         </div>
+        {(hasActiveBooking || onViewAdvance) && (
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            {hasActiveBooking && (
+              <button onClick={onViewCurrent} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: "#F5E6C8" }}>
+                <Truck size={18} color={C.marigoldDeep} />
+                <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"}</div>
+              </button>
+            )}
+            {onViewAdvance && (
+              <button onClick={onViewAdvance} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: "#F5E6C8", gridColumn: hasActiveBooking ? undefined : "1 / -1" }}>
+                <Clock3 size={18} color={C.marigoldDeep} />
+                <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "View Advance Booked Ride" : "एडवांस बुक की गई राइड देखें"}{advanceCount > 0 ? ` (${advanceCount})` : ""}</div>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -3144,14 +3160,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
             <Menu size={18} color={C.navy} strokeWidth={2.5} />
           </button>
-          <div className="flex rounded-full p-1 shrink-0" style={{ background: "#F5E6C8" }}>
-            <button onClick={() => setRideView("current")} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "current" ? C.navy : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
-              {lang === "en" ? "Current" : "वर्तमान"}
-            </button>
-            <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "advance" ? C.navy : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
-              {lang === "en" ? "Advance" : "एडवांस"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}
-            </button>
-          </div>
           {onGoHome && (
             <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
               <Home size={18} color={C.navy} strokeWidth={2.5} />
@@ -3208,35 +3216,37 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
               onAddAnother={() => setAddingAnother(true)} />
           ) : (
-            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial} />
+            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
+              hasActiveBooking={!!activeBooking} onViewCurrent={() => setAddingAnother(false)}
+              onViewAdvance={() => { setRideView("advance"); setSelectedAdvanceId(null); }} advanceCount={advanceBookings.length} />
           )
         ) : (
-          selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
-            <div>
-              <button onClick={() => setSelectedAdvanceId(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
-                <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back to list" : "लिस्ट पर वापस जाएं"}
-              </button>
+          <div>
+            <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+              <ChevronLeft size={16} strokeWidth={2.75} /> {selectedAdvanceId ? (lang === "en" ? "Back to list" : "लिस्ट पर वापस जाएं") : (lang === "en" ? "Back" : "वापस")}
+            </button>
+            {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
               <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid}
                 driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
                 drivers={drivers} lang={lang} />
-            </div>
-          ) : (
-            <div className="px-5 py-4">
-              {advanceBookings.length === 0 ? (
-                <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
-              ) : (
-                <div className="space-y-2">
-                  {advanceBookings.map((ab) => (
-                    <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                      <RideTypeBanner booking={ab} lang={lang} />
-                      <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
-                      <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ab.status === "Bidding" ? (lang === "en" ? "Waiting for bids" : "बोली का इंतज़ार") : (lang === "en" ? `Driver assigned — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`)}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
+            ) : (
+              <div className="px-5 py-4">
+                {advanceBookings.length === 0 ? (
+                  <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {advanceBookings.map((ab) => (
+                      <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                        <RideTypeBanner booking={ab} lang={lang} />
+                        <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
+                        <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ab.status === "Bidding" ? (lang === "en" ? "Waiting for bids" : "बोली का इंतज़ार") : (lang === "en" ? `Driver assigned — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`)}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </>
