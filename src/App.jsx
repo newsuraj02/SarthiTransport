@@ -2216,13 +2216,19 @@ function LocationField({ label, value, onChange, onFocus, onPlaceChanged, autoco
 function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) {
   const [text, setText] = useState(value?.name || "");
   const autocompleteRef = useRef(null);
+  // Predictions fetched for a spoken result — shown as a picklist instead
+  // of auto-selecting the first/nearest match, so speaking never confirms
+  // a city on its own; the customer still has to tap one.
+  const [micPredictions, setMicPredictions] = useState([]);
+  const [micLoading, setMicLoading] = useState(false);
 
-  const onPlaceChanged = () => {
-    const place = autocompleteRef.current?.getPlace();
-    const loc = place?.geometry?.location;
+  // Shared by both a typed-and-selected suggestion (onPlaceChanged) and a
+  // spoken-then-tapped prediction (selectMicPrediction) — resolves a
+  // place's geometry into the {name, bounds} shape the parent expects.
+  const applyPlace = (name, geometry) => {
+    const loc = geometry?.location;
     if (!loc) return;
-    const name = place.formatted_address || place.name || "";
-    const vp = place.geometry.viewport;
+    const vp = geometry.viewport;
     let bounds;
     if (vp) {
       const ne = vp.getNorthEast(), sw = vp.getSouthWest();
@@ -2238,6 +2244,40 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
     onChange({ name, bounds });
   };
 
+  const onPlaceChanged = () => {
+    const place = autocompleteRef.current?.getPlace();
+    if (!place?.geometry?.location) return;
+    applyPlace(place.formatted_address || place.name || "", place.geometry);
+  };
+
+  // After speech-to-text, fetch matching city/town/village predictions for
+  // what was heard instead of accepting it as-is — the spoken words only
+  // fill the box as a starting point; nothing is confirmed until the
+  // customer taps one of these.
+  const onSpoken = (spoken) => {
+    setText(spoken);
+    onChange(null);
+    setMicPredictions([]);
+    if (!mapsReady || !window.google?.maps?.places?.AutocompleteService || !spoken.trim()) return;
+    setMicLoading(true);
+    new window.google.maps.places.AutocompleteService().getPlacePredictions(
+      { input: spoken, componentRestrictions: { country: "in" }, types: ["(cities)"] },
+      (predictions, status) => {
+        setMicLoading(false);
+        setMicPredictions(status === "OK" && predictions ? predictions : []);
+      }
+    );
+  };
+
+  const selectMicPrediction = (prediction) => {
+    setMicPredictions([]);
+    if (!window.google?.maps?.Geocoder) return;
+    new window.google.maps.Geocoder().geocode({ placeId: prediction.place_id }, (results, status) => {
+      const r = status === "OK" && results?.[0];
+      if (r?.geometry) applyPlace(r.formatted_address || prediction.description, r.geometry);
+    });
+  };
+
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, paddingRight: 40, paddingLeft: dotColor ? 34 : 16 };
   const inputEl = (
@@ -2246,7 +2286,7 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
       style={inputStyle}
       placeholder={lang === "en" ? "Search city, town or village..." : "शहर, कस्बा या गांव खोजें..."}
       value={text}
-      onChange={(e) => { setText(e.target.value); if (!e.target.value) onChange(null); }}
+      onChange={(e) => { setText(e.target.value); setMicPredictions([]); if (!e.target.value) onChange(null); }}
     />
   );
 
@@ -2262,16 +2302,30 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
         ) : inputEl}
         {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
         {value ? (
-          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(null); setText(""); }}
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(null); setText(""); setMicPredictions([]); }}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center" style={{ color: C.inkSoft }}>
             <XCircle size={16} />
           </button>
         ) : (
           <span className="absolute right-2 top-1/2 -translate-y-1/2">
-            <MicButton onResult={(spoken) => { setText(spoken); onChange(null); }} lang={lang === "en" ? "en-IN" : "hi-IN"} />
+            <MicButton onResult={onSpoken} lang={lang === "en" ? "en-IN" : "hi-IN"} />
           </span>
         )}
       </div>
+      {micLoading && (
+        <div className="text-[11px] font-semibold mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Finding matches..." : "मिलान ढूंढे जा रहे हैं..."}</div>
+      )}
+      {micPredictions.length > 0 && (
+        <div className="mt-1.5 rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+          <div className="text-[10px] font-bold px-3 pt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Did you mean:" : "क्या आपका मतलब था:"}</div>
+          {micPredictions.map((p) => (
+            <button key={p.place_id} type="button" onClick={() => selectMicPrediction(p)}
+              className="w-full text-left px-3 py-2.5 text-xs font-semibold flex items-center gap-2" style={{ color: C.ink, borderTop: `1px solid ${C.line}` }}>
+              <MapPin size={13} color={C.marigoldDeep} /> {p.description}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
