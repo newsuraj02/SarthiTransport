@@ -5479,18 +5479,47 @@ export default function App() {
   // OTP sessions) — admin is gated by a plain password, so every fresh page
   // load must go through AdminLogin again rather than silently staying
   // signed in and jumping straight to the Customer/Driver preview toggle.
-  // Tracks the browser's connectivity so the app can show a clear "you're
-  // offline" message instead of leaving Customer/Driver stuck on a
-  // never-resolving Firestore check that otherwise looks just like being
-  // logged out (see the offline guards on the Customer/Driver branches
-  // below, and the banner rendered right after the header).
+  // Tracks real connectivity (not just navigator.onLine, which only means
+  // "some network interface is up" — WiFi connected to a router with no
+  // actual internet, or certain mobile data states, still reports true)
+  // so the app can reliably block behind a "you're offline" screen. Backed
+  // by an actual network probe: a tiny same-origin fetch with a timeout,
+  // re-checked periodically and whenever the browser's own online/offline
+  // events fire or the tab becomes visible again.
+  // connectivityChecked stays false until the very first probe resolves, so
+  // the app never briefly flashes real content (or the offline screen)
+  // based on the unverified initial guess before we actually know.
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [connectivityChecked, setConnectivityChecked] = useState(false);
   useEffect(() => {
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => setIsOnline(false);
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
-    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
+    let cancelled = false;
+    const check = async () => {
+      if (!navigator.onLine) { if (!cancelled) { setIsOnline(false); setConnectivityChecked(true); } return; }
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        await fetch(`/favicon.svg?_=${Date.now()}`, { method: "GET", cache: "no-store", signal: controller.signal });
+        clearTimeout(timeout);
+        if (!cancelled) setIsOnline(true);
+      } catch {
+        if (!cancelled) setIsOnline(false);
+      } finally {
+        if (!cancelled) setConnectivityChecked(true);
+      }
+    };
+    check();
+    const interval = setInterval(check, 6000);
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    window.addEventListener("online", check);
+    window.addEventListener("offline", check);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("online", check);
+      window.removeEventListener("offline", check);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
   const [adminAuth, setAdminAuth] = useState(false);
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
@@ -5897,16 +5926,21 @@ export default function App() {
 
   const isDesktop = role === "admin" && adminAuth;
 
-  // Offline blocks everything — no cached screen, no role-select, nothing
-  // interactive underneath. Just a plain message until the connection is
-  // back, regardless of role or what the customer/driver/admin was doing.
-  if (!isOnline) {
+  // Nothing else renders until connectivity is actually verified (avoids a
+  // flash of real content — or of the offline screen — before we know for
+  // sure), and offline blocks everything: no cached screen, no role-select,
+  // nothing interactive underneath, just this message until reconnected.
+  if (!connectivityChecked || !isOnline) {
     return (
       <div className="min-h-screen flex justify-center items-center" style={{ background: "#DCDDD6", fontFamily: bodyFont }}>
         <div className="w-full max-w-sm min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: C.bg }}>
-          <span className="text-5xl mb-4">📶</span>
-          <p className="text-base font-black mb-2" style={{ color: C.ink }}>{lang === "en" ? "You're offline" : "आप ऑफलाइन हैं"}</p>
-          <p className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Please turn on your mobile data or Wi-Fi to continue." : "जारी रखने के लिए कृपया अपना मोबाइल डेटा या वाई-फाई चालू करें।"}</p>
+          {connectivityChecked ? (
+            <>
+              <span className="text-5xl mb-4">📶</span>
+              <p className="text-base font-black mb-2" style={{ color: C.ink }}>{lang === "en" ? "You're offline" : "आप ऑफलाइन हैं"}</p>
+              <p className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Please turn on your mobile data or Wi-Fi to continue." : "जारी रखने के लिए कृपया अपना मोबाइल डेटा या वाई-फाई चालू करें।"}</p>
+            </>
+          ) : null}
         </div>
       </div>
     );
