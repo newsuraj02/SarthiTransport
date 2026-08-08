@@ -2153,14 +2153,11 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
 // Pickup/Drop address field — wires Google Places Autocomplete directly onto
 // the text input (live suggestion dropdown while typing) when Maps is
 // configured/loaded, falling back to a plain input otherwise.
-function LocationField({ label, value, onChange, onFocus, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap, lang = "hi", dotColor, cityBounds }) {
+function LocationField({ label, value, onChange, onFocus, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap, lang = "hi", dotColor }) {
   const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: dotColor ? 34 : 16, paddingRight: 16 };
   const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} onFocus={onFocus} />;
-  // strictBounds hard-restricts Places Autocomplete results to inside the
-  // selected city's box — once a city is chosen, addresses from other
-  // cities are excluded outright, not just deprioritized.
-  const autocompleteOptions = { componentRestrictions: { country: "in" }, ...(cityBounds ? { bounds: cityBounds, strictBounds: true } : {}) };
+  const autocompleteOptions = { componentRestrictions: { country: "in" } };
   return (
     <div>
       <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{label}</label>
@@ -2197,132 +2194,6 @@ function LocationField({ label, value, onChange, onFocus, onPlaceChanged, autoco
         <div className="flex flex-wrap gap-1 mt-1">
           {suggestions.map((a) => (
             <button key={a} onClick={() => onSuggestionTap(a)} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{a}</button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// City/town/village picker for narrowing Drop suggestions — backed by live
-// Google Places search (types: ["(cities)"]) instead of a hand-curated
-// list, so it covers every locality Google itself knows about (not just a
-// few hundred major cities). Reports { name, bounds } up via onChange:
-// bounds comes from the place's actual viewport when Google has one
-// (accurate to that specific city/town/village's real extent), falling
-// back to a fixed box around its point location otherwise. Degrades to a
-// plain text input with no narrowing if Maps isn't configured/loaded, same
-// as Pickup/Drop's own LocationField.
-function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) {
-  const [text, setText] = useState(value?.name || "");
-  const autocompleteRef = useRef(null);
-  // Predictions fetched for a spoken result — shown as a picklist instead
-  // of auto-selecting the first/nearest match, so speaking never confirms
-  // a city on its own; the customer still has to tap one.
-  const [micPredictions, setMicPredictions] = useState([]);
-  const [micLoading, setMicLoading] = useState(false);
-
-  // Shared by both a typed-and-selected suggestion (onPlaceChanged) and a
-  // spoken-then-tapped prediction (selectMicPrediction) — resolves a
-  // place's geometry into the {name, bounds} shape the parent expects.
-  const applyPlace = (name, geometry) => {
-    const loc = geometry?.location;
-    if (!loc) return;
-    const vp = geometry.viewport;
-    let bounds;
-    if (vp) {
-      const ne = vp.getNorthEast(), sw = vp.getSouthWest();
-      bounds = { north: ne.lat(), south: sw.lat(), east: ne.lng(), west: sw.lng() };
-    } else {
-      // No viewport (rare — a very small locality) — fall back to a
-      // roughly 16km box around its point location.
-      const dLat = 0.15;
-      const dLng = dLat / Math.max(0.3, Math.cos((loc.lat() * Math.PI) / 180));
-      bounds = { north: loc.lat() + dLat, south: loc.lat() - dLat, east: loc.lng() + dLng, west: loc.lng() - dLng };
-    }
-    setText(name);
-    onChange({ name, bounds });
-  };
-
-  const onPlaceChanged = () => {
-    const place = autocompleteRef.current?.getPlace();
-    if (!place?.geometry?.location) return;
-    applyPlace(place.formatted_address || place.name || "", place.geometry);
-  };
-
-  // After speech-to-text, fetch matching city/town/village predictions for
-  // what was heard instead of accepting it as-is — the spoken words only
-  // fill the box as a starting point; nothing is confirmed until the
-  // customer taps one of these.
-  const onSpoken = (spoken) => {
-    setText(spoken);
-    onChange(null);
-    setMicPredictions([]);
-    if (!mapsReady || !window.google?.maps?.places?.AutocompleteService || !spoken.trim()) return;
-    setMicLoading(true);
-    new window.google.maps.places.AutocompleteService().getPlacePredictions(
-      { input: spoken, componentRestrictions: { country: "in" }, types: ["(cities)"] },
-      (predictions, status) => {
-        setMicLoading(false);
-        setMicPredictions(status === "OK" && predictions ? predictions : []);
-      }
-    );
-  };
-
-  const selectMicPrediction = (prediction) => {
-    setMicPredictions([]);
-    if (!window.google?.maps?.Geocoder) return;
-    new window.google.maps.Geocoder().geocode({ placeId: prediction.place_id }, (results, status) => {
-      const r = status === "OK" && results?.[0];
-      if (r?.geometry) applyPlace(r.formatted_address || prediction.description, r.geometry);
-    });
-  };
-
-  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, paddingRight: 40, paddingLeft: dotColor ? 34 : 16 };
-  const inputEl = (
-    <input
-      className={inputCls}
-      style={inputStyle}
-      placeholder={lang === "en" ? "Search city, town or village..." : "शहर, कस्बा या गांव खोजें..."}
-      value={text}
-      onChange={(e) => { setText(e.target.value); setMicPredictions([]); if (!e.target.value) onChange(null); }}
-    />
-  );
-
-  return (
-    <div>
-      <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{label || (lang === "en" ? "City" : "शहर")}</label>
-      <div className="relative">
-        {mapsReady ? (
-          <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged}
-            options={{ componentRestrictions: { country: "in" }, types: ["(cities)"] }}>
-            {inputEl}
-          </Autocomplete>
-        ) : inputEl}
-        {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
-        {value ? (
-          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(null); setText(""); setMicPredictions([]); }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center" style={{ color: C.inkSoft }}>
-            <XCircle size={16} />
-          </button>
-        ) : (
-          <span className="absolute right-2 top-1/2 -translate-y-1/2">
-            <MicButton onResult={onSpoken} lang={lang === "en" ? "en-IN" : "hi-IN"} />
-          </span>
-        )}
-      </div>
-      {micLoading && (
-        <div className="text-[11px] font-semibold mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Finding matches..." : "मिलान ढूंढे जा रहे हैं..."}</div>
-      )}
-      {micPredictions.length > 0 && (
-        <div className="mt-1.5 rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-          <div className="text-[10px] font-bold px-3 pt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Did you mean:" : "क्या आपका मतलब था:"}</div>
-          {micPredictions.map((p) => (
-            <button key={p.place_id} type="button" onClick={() => selectMicPrediction(p)}
-              className="w-full text-left px-3 py-2.5 text-xs font-semibold flex items-center gap-2" style={{ color: C.ink, borderTop: `1px solid ${C.line}` }}>
-              <MapPin size={13} color={C.marigoldDeep} /> {p.description}
-            </button>
           ))}
         </div>
       )}
@@ -2382,19 +2253,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [dropCoords, setDropCoords] = useState(null);
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
   const [showAllVehicles, setShowAllVehicles] = useState(true);
-  // Selected Drop city — { name, bounds } from live Places search (see
-  // CitySearchField) — narrows Drop's autocomplete instead of the old
-  // manual Within City/Outstation toggle.
-  const [dropCity, setDropCity] = useState(null);
-  const cityBounds = dropCity?.bounds || null;
-  // Drop City is optional — if the customer taps straight into Drop without
-  // picking one, this flips true so the guided sequence below can move on
-  // to Drop instead of sitting stuck on a field they don't have to fill.
-  // Kept as its own state (rather than derived from `drop`'s content) so
-  // that step advances one at a time — deriving it from `drop.length > 0`
-  // used to complete both the Drop City AND Drop steps in the same
-  // keystroke, making the highlight jump two fields at once.
-  const [dropCitySkipped, setDropCitySkipped] = useState(false);
   const [material, setMaterial] = useState("");
   // The default list plus anything any customer has ever added — synced
   // live via customMaterials, so a material someone else added shows up
@@ -2410,19 +2268,18 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
-  // Guided-step highlighting for the 5 booking fields — see GuidedStep.
+  // Guided-step highlighting for the 4 booking fields — see GuidedStep.
   // Each step's own state decides completion (no cross-referencing another
   // field's value) so the active highlight only ever moves one field at a
   // time, strictly in the top-to-bottom order they appear on screen.
   const stepCompleted = [
     pickup.trim().length > 0,
-    !!dropCity || dropCitySkipped,
     drop.trim().length > 0,
     !!material,
     weight.trim().length > 0,
   ];
   const activeStep = stepCompleted.findIndex((done) => !done); // -1 once all done
-  const stepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
+  const stepRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
   useEffect(() => {
     if (activeStep >= 0) stepRefs[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2552,8 +2409,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
     });
     setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
     setPickupCoords(null); setDropCoords(null);
-    // dropCity is deliberately left as-is — most repeat bookings stay
-    // in the same city, no need to make the customer re-pick it.
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
@@ -2667,24 +2522,12 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </GuidedStep>
 
           <GuidedStep active={activeStep === 1} completed={stepCompleted[1]} stepRef={stepRefs[1]} lang={lang}>
-            <div>
-              <CitySearchField value={dropCity} onChange={setDropCity} lang={lang} label={lang === "en" ? "Drop City" : "ड्रॉप का शहर"} dotColor={C.safety} mapsReady={mapsReady} />
-              <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>
-                {dropCity
-                  ? (lang === "en" ? `Drop suggestions will only show places in ${dropCity.name}, no other city — this doesn't affect Pickup.` : `ड्रॉप के सुझाव केवल ${dropCity.name} की जगहें दिखाएंगे, कोई और शहर नहीं — इसका पिकअप पर कोई असर नहीं है।`)
-                  : (lang === "en" ? "Optional — search any city, town or village to restrict Drop suggestions to it." : "वैकल्पिक — किसी भी शहर, कस्बे या गांव को खोजें ताकि ड्रॉप के सुझाव उसी तक सीमित हों।")}
-              </div>
-            </div>
-          </GuidedStep>
-
-          <GuidedStep active={activeStep === 2} completed={stepCompleted[2]} stepRef={stepRefs[2]} lang={lang}>
             <LocationField
               label={lang === "en" ? "Drop" : "ड्रॉप"}
               lang={lang}
               dotColor={C.safety}
               value={drop}
               onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
-              onFocus={() => setDropCitySkipped(true)}
               onPlaceChanged={onDropPlaceChanged}
               autocompleteRef={dropAutocompleteRef}
               mapsReady={mapsReady}
@@ -2694,7 +2537,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               areaLabel={findArea(drop) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(drop)}` : null}
               suggestions={suggestAreas(drop)}
               onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
-              cityBounds={cityBounds}
             />
           </GuidedStep>
         </div>
@@ -2710,7 +2552,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <GuidedStep active={activeStep === 3} completed={stepCompleted[3]} stepRef={stepRefs[3]} lang={lang}>
+          <GuidedStep active={activeStep === 2} completed={stepCompleted[2]} stepRef={stepRefs[2]} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
             {addingMaterial ? (
               <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
@@ -2734,7 +2576,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               </select>
             )}
           </GuidedStep>
-          <GuidedStep active={activeStep === 4} completed={stepCompleted[4]} stepRef={stepRefs[4]} lang={lang}>
+          <GuidedStep active={activeStep === 3} completed={stepCompleted[3]} stepRef={stepRefs[3]} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
             <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
           </GuidedStep>
