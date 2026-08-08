@@ -388,6 +388,21 @@ function Greeting({ name, lang }) {
   );
 }
 
+// Shown instead of the OTP/registration screen for an already-logged-in
+// (locally remembered) Customer/Driver whose profile hasn't loaded yet
+// because the device is offline — without this, that device would sit on
+// the onboarding flow forever, looking exactly like it got logged out.
+function OfflineWaitScreen({ lang, onLogout }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+      <span className="text-4xl mb-3">📶</span>
+      <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Waiting for internet connection..." : "इंटरनेट कनेक्शन का इंतज़ार है..."}</p>
+      <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn on your mobile data or Wi-Fi — your profile will load automatically once you're back online." : "अपना मोबाइल डेटा या वाई-फाई चालू करें — ऑनलाइन आते ही आपकी प्रोफ़ाइल अपने आप लोड हो जाएगी।"}</p>
+      <button onClick={onLogout} className="text-xs font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Not you? Logout" : "आप नहीं हैं? लॉगआउट करें"}</button>
+    </div>
+  );
+}
+
 const AREAS = ["पिंपरी", "चिंचवड", "निगड़ी", "आकुर्डी", "भोसरी", "वाकड़", "तळवडे", "रावेत", "MG रोड", "MR-10", "काळेवाडी", "पिंपळे सौदागर", "थेरगाव", "चिखली", "मोशी", "भोसरी MIDC"];
 function findArea(text) {
   if (!text.trim()) return null;
@@ -5479,6 +5494,19 @@ export default function App() {
   // OTP sessions) — admin is gated by a plain password, so every fresh page
   // load must go through AdminLogin again rather than silently staying
   // signed in and jumping straight to the Customer/Driver preview toggle.
+  // Tracks the browser's connectivity so the app can show a clear "you're
+  // offline" message instead of leaving Customer/Driver stuck on a
+  // never-resolving Firestore check that otherwise looks just like being
+  // logged out (see the offline guards on the Customer/Driver branches
+  // below, and the banner rendered right after the header).
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
+  }, []);
   const [adminAuth, setAdminAuth] = useState(false);
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
   // The customer's profile is looked up live from Firestore by their
@@ -5883,6 +5911,13 @@ export default function App() {
   }, [bookings, driver]);
 
   const isDesktop = role === "admin" && adminAuth;
+  // A device that's already logged in (verified locally) but hasn't yet
+  // received its profile from Firestore, while offline, would otherwise sit
+  // on !customerChecked forever and fall through to the onboarding/OTP
+  // screen — which looks exactly like being logged out. Show a plain
+  // "waiting for connection" placeholder instead until it's back online.
+  const customerOfflineWait = customerAuth.verified && !customerChecked && !isOnline;
+  const driverOfflineWait = driverAuth.verified && !driver && !isOnline;
 
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#DCDDD6", fontFamily: bodyFont }}>
@@ -5907,6 +5942,15 @@ export default function App() {
           )}
         </div>
 
+        {!isOnline && (
+          <div className="px-5 py-2.5 flex items-center gap-2" style={{ background: "#FCEAE3", borderBottom: `1.5px solid ${C.safety}` }}>
+            <span className="text-base">📶</span>
+            <span className="text-xs font-bold" style={{ color: C.safety }}>
+              {lang === "en" ? "You're offline — please turn on your mobile data or Wi-Fi to continue." : "आप ऑफलाइन हैं — जारी रखने के लिए कृपया अपना मोबाइल डेटा या वाई-फाई चालू करें।"}
+            </span>
+          </div>
+        )}
+
         {role !== null && role !== "admin" && app !== "customer" && (
           <div className="px-5 py-2 flex items-center gap-1.5" style={{ background: "#F5E6C8", borderBottom: `1px solid ${C.line}` }}>
             <span className="text-sm">💡</span>
@@ -5926,7 +5970,10 @@ export default function App() {
           <AdminLogin lang={lang} onVerified={() => { setAdminAuth(true); setApp("admin"); }} onBack={adminEntry ? undefined : goHome} />
         )}
 
-        {role === "customer" && (!customerAuth.verified || !customerChecked || !customer) && (
+        {role === "customer" && customerOfflineWait && (
+          <OfflineWaitScreen lang={lang} onLogout={() => logoutRole("customer")} />
+        )}
+        {role === "customer" && !customerOfflineWait && (!customerAuth.verified || !customerChecked || !customer) && (
           <CustomerOnboarding lang={lang} authInstance={customerFirebaseAuth} recaptchaContainerId="recaptcha-customer"
             verified={customerAuth.verified} verifiedMobile={customerAuth.mobile} hasProfile={!!customer} checking={customerAuth.verified && !customerChecked}
             onOtpVerified={(mobile) => setCustomerAuth({ verified: true, mobile })}
@@ -5944,7 +5991,10 @@ export default function App() {
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} requestReferralWithdrawal={requestReferralWithdrawal} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
             onGoHome={goHome} />
         )}
-        {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
+        {role === "driver" && driverOfflineWait && (
+          <OfflineWaitScreen lang={lang} onLogout={() => logoutRole("driver")} />
+        )}
+        {role === "driver" && !driverOfflineWait && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
             verified={driverAuth.verified}
             onOtpVerified={(mobile) => setDriverAuth({ verified: true, mobile })}
