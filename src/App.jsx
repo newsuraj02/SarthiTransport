@@ -2174,7 +2174,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
   const [showAllVehicles, setShowAllVehicles] = useState(true);
   const [serviceType, setServiceType] = useState("withinCity"); // 'withinCity' | 'outstation'
-  const [material, setMaterial] = useState(MATERIALS[0]);
+  const [material, setMaterial] = useState("");
   // The default list plus anything any customer has ever added — synced
   // live via customMaterials, so a material someone else added shows up
   // here too instead of staying stuck on just their own device.
@@ -2264,7 +2264,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       : `इस वजन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`;
   })();
 
-  const canPost = pickup.trim() && drop.trim() && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime && !advanceNoticeError));
+  const canPost = pickup.trim() && drop.trim() && material.trim() && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime && !advanceNoticeError));
 
   useEffect(() => {
     const w = Number(weight);
@@ -2451,6 +2451,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             ) : (
               <select className={inputCls} style={inputStyle} value={material}
                 onChange={(e) => { if (e.target.value === ADD_MATERIAL) setAddingMaterial(true); else setMaterial(e.target.value); }}>
+                <option value="" disabled>{lang === "en" ? "Select material" : "मटेरियल चुनें"}</option>
                 {materialsList.map((m) => <option key={m} value={m}>{materialLabel(m, lang, customMaterials)}</option>)}
                 <option value={ADD_MATERIAL}>+ {lang === "en" ? "Add new material" : "नया मटेरियल जोड़ें"}</option>
               </select>
@@ -2458,7 +2459,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </div>
           <div>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
-            <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300" : "जैसे: 300"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
+            <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
           </div>
         </div>
 
