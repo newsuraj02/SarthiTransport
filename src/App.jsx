@@ -2230,6 +2230,26 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
   );
 }
 
+// Wraps one field/section of a multi-step form with the app-wide guided
+// pattern: the active step glows amber (see .guided-step-active in
+// index.css) so it's obvious what to fill next, and a green "Completed"
+// badge appears the instant that step is done. `stepRef` is what the
+// parent form scrolls into view when this step becomes active — see the
+// auto-scroll effect in CustomerBooking for the reference implementation.
+function GuidedStep({ active, completed, stepRef, children, lang }) {
+  return (
+    <div ref={stepRef} className={`relative rounded-2xl ${active ? "guided-step-active" : ""}`}
+      style={active ? { border: "2px solid #D9A406", background: "#FFF8E1", padding: 10 } : undefined}>
+      {children}
+      {completed && (
+        <span className="absolute -top-2 -right-2 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black text-white shadow-sm z-10" style={{ background: C.success }}>
+          <CheckCircle2 size={11} /> {lang === "en" ? "Completed" : "पूर्ण"}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
@@ -2268,6 +2288,24 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [bulkyPopupSeenFor, setBulkyPopupSeenFor] = useState("");
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
+
+  // Guided-step highlighting for the 5 booking fields — see GuidedStep.
+  // Drop City is optional, so it auto-completes the moment the customer
+  // moves on to Drop (rather than blocking the sequence on a field they
+  // don't have to fill), everything else needs a real value.
+  const stepCompleted = [
+    pickup.trim().length > 0,
+    !!dropCity || drop.trim().length > 0,
+    drop.trim().length > 0,
+    !!material,
+    weight.trim().length > 0,
+  ];
+  const activeStep = stepCompleted.findIndex((done) => !done); // -1 once all done
+  const stepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
+  useEffect(() => {
+    if (activeStep >= 0) stepRefs[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep]);
 
   // Shows the straight-line estimate immediately (no blank/loading state),
   // then silently upgrades to the real routed distance from Google's
@@ -2469,51 +2507,57 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </button>
         )}
         <div className="space-y-4">
-          <LocationField
-            label={lang === "en" ? "Pickup" : "पिकअप"}
-            lang={lang}
-            dotColor={C.success}
-            value={pickup}
-            onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
-            onPlaceChanged={onPickupPlaceChanged}
-            autocompleteRef={pickupAutocompleteRef}
-            mapsReady={mapsReady}
-            placeholder={lang === "en" ? "🟢 Where to pick up the load from? (Pickup)" : "🟢 सामान कहाँ से उठाना है? (पिकअप)"}
-            onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); }}
-            onMapPin={() => setMapField("pickup")}
-            onUseCurrentLocation={useMyCurrentLocation}
-            locating={locatingPickup}
-            areaLabel={findArea(pickup) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(pickup)}` : null}
-            suggestions={suggestAreas(pickup)}
-            onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
-          />
+          <GuidedStep active={activeStep === 0} completed={stepCompleted[0]} stepRef={stepRefs[0]} lang={lang}>
+            <LocationField
+              label={lang === "en" ? "Pickup" : "पिकअप"}
+              lang={lang}
+              dotColor={C.success}
+              value={pickup}
+              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
+              onPlaceChanged={onPickupPlaceChanged}
+              autocompleteRef={pickupAutocompleteRef}
+              mapsReady={mapsReady}
+              placeholder={lang === "en" ? "🟢 Where to pick up the load from? (Pickup)" : "🟢 सामान कहाँ से उठाना है? (पिकअप)"}
+              onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); }}
+              onMapPin={() => setMapField("pickup")}
+              onUseCurrentLocation={useMyCurrentLocation}
+              locating={locatingPickup}
+              areaLabel={findArea(pickup) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(pickup)}` : null}
+              suggestions={suggestAreas(pickup)}
+              onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
+            />
+          </GuidedStep>
 
-          <div>
-            <CitySearchField value={dropCity} onChange={setDropCity} lang={lang} label={lang === "en" ? "Drop City" : "ड्रॉप का शहर"} dotColor={C.safety} mapsReady={mapsReady} />
-            <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>
-              {dropCity
-                ? (lang === "en" ? `Drop suggestions will only show places in ${dropCity.name}, no other city — this doesn't affect Pickup.` : `ड्रॉप के सुझाव केवल ${dropCity.name} की जगहें दिखाएंगे, कोई और शहर नहीं — इसका पिकअप पर कोई असर नहीं है।`)
-                : (lang === "en" ? "Optional — search any city, town or village to restrict Drop suggestions to it." : "वैकल्पिक — किसी भी शहर, कस्बे या गांव को खोजें ताकि ड्रॉप के सुझाव उसी तक सीमित हों।")}
+          <GuidedStep active={activeStep === 1} completed={stepCompleted[1]} stepRef={stepRefs[1]} lang={lang}>
+            <div>
+              <CitySearchField value={dropCity} onChange={setDropCity} lang={lang} label={lang === "en" ? "Drop City" : "ड्रॉप का शहर"} dotColor={C.safety} mapsReady={mapsReady} />
+              <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>
+                {dropCity
+                  ? (lang === "en" ? `Drop suggestions will only show places in ${dropCity.name}, no other city — this doesn't affect Pickup.` : `ड्रॉप के सुझाव केवल ${dropCity.name} की जगहें दिखाएंगे, कोई और शहर नहीं — इसका पिकअप पर कोई असर नहीं है।`)
+                  : (lang === "en" ? "Optional — search any city, town or village to restrict Drop suggestions to it." : "वैकल्पिक — किसी भी शहर, कस्बे या गांव को खोजें ताकि ड्रॉप के सुझाव उसी तक सीमित हों।")}
+              </div>
             </div>
-          </div>
+          </GuidedStep>
 
-          <LocationField
-            label={lang === "en" ? "Drop" : "ड्रॉप"}
-            lang={lang}
-            dotColor={C.safety}
-            value={drop}
-            onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
-            onPlaceChanged={onDropPlaceChanged}
-            autocompleteRef={dropAutocompleteRef}
-            mapsReady={mapsReady}
-            placeholder={lang === "en" ? "🔴 Where to unload the goods? (Drop)" : "🔴 सामान कहाँ उतारना है? (ड्रॉप)"}
-            onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); }}
-            onMapPin={() => setMapField("drop")}
-            areaLabel={findArea(drop) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(drop)}` : null}
-            suggestions={suggestAreas(drop)}
-            onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
-            cityBounds={cityBounds}
-          />
+          <GuidedStep active={activeStep === 2} completed={stepCompleted[2]} stepRef={stepRefs[2]} lang={lang}>
+            <LocationField
+              label={lang === "en" ? "Drop" : "ड्रॉप"}
+              lang={lang}
+              dotColor={C.safety}
+              value={drop}
+              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
+              onPlaceChanged={onDropPlaceChanged}
+              autocompleteRef={dropAutocompleteRef}
+              mapsReady={mapsReady}
+              placeholder={lang === "en" ? "🔴 Where to unload the goods? (Drop)" : "🔴 सामान कहाँ उतारना है? (ड्रॉप)"}
+              onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); }}
+              onMapPin={() => setMapField("drop")}
+              areaLabel={findArea(drop) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(drop)}` : null}
+              suggestions={suggestAreas(drop)}
+              onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
+              cityBounds={cityBounds}
+            />
+          </GuidedStep>
         </div>
 
         {distance !== null && (
@@ -2527,7 +2571,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <GuidedStep active={activeStep === 3} completed={stepCompleted[3]} stepRef={stepRefs[3]} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
             {addingMaterial ? (
               <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
@@ -2550,11 +2594,11 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
                 <option value={ADD_MATERIAL} style={{ color: C.ink }}>+ {lang === "en" ? "Add new material" : "नया मटेरियल जोड़ें"}</option>
               </select>
             )}
-          </div>
-          <div>
+          </GuidedStep>
+          <GuidedStep active={activeStep === 4} completed={stepCompleted[4]} stepRef={stepRefs[4]} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
             <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
-          </div>
+          </GuidedStep>
         </div>
 
         {showBulkyPopup && (() => {
@@ -2584,7 +2628,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{advanceNoticeError}</div>
         )}
 
-        <button onClick={post} disabled={!canPost} className="w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2"
+        <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready" : ""}`}
           style={{ background: canPost ? C.success : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
           🚚 {lang === "en" ? "Find Vehicles / Book Now" : "गाड़ियां खोजें / अभी बुक करें"}
         </button>
