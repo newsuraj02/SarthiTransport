@@ -384,10 +384,6 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
     </div>
   );
 }
-const serviceTypeLabel = (t, lang) => {
-  if (t === "outstation") return lang === "en" ? "Outstation" : "आउटस्टेशन";
-  return lang === "en" ? "Within City" : "शहर के अंदर";
-};
 const ALERT_TYPE_LABELS_EN = { "पुलिस सहायता": "Police Help", "इमरजेंसी कॉल": "Emergency Call", "व्हाट्सएप सपोर्ट": "WhatsApp Support", "शिकायत": "Complaint" };
 const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_EN[t]) ? ALERT_TYPE_LABELS_EN[t] : t;
 const ADD_MATERIAL = "__add_new__";
@@ -2452,7 +2448,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       pickup, drop, vehicle, material, weight, distance, scheduledFor: bookingMode === "advance" ? `${advanceDate} ${advanceTime}` : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
-      serviceType: "withinCity",
     });
     setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
     setPickupCoords(null); setDropCoords(null);
@@ -2791,9 +2786,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
-            </div>
-            <div className="text-[10px] font-semibold flex items-center gap-1.5 mb-1">
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: b.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: b.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(b.serviceType, lang)}</span>
             </div>
             <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
             {b.scheduledFor && (
@@ -3394,7 +3386,6 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
       <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
         <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
         <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{materialLabel(load.material, lang)} · {load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
-        <span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ background: load.serviceType === "outstation" ? "#FBEBD2" : "#DFEEE2", color: load.serviceType === "outstation" ? "#A8721C" : C.success }}>{serviceTypeLabel(load.serviceType, lang)}</span>
       </div>
 
       {lowestOverall !== null && (
@@ -5064,7 +5055,7 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
                             </div>
                             <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
-                              {materialLabel(b.material, lang)} · {b.weight} {lang === "en" ? "kg" : "किग्रा"} · {serviceTypeLabel(b.serviceType, lang)}
+                              {materialLabel(b.material, lang)} · {b.weight} {lang === "en" ? "kg" : "किग्रा"}
                             </div>
                             <div className="text-[10px] flex items-center justify-between mt-1">
                               <span style={{ color: C.inkSoft }}>{b.driverName ? `${lang === "en" ? "Driver" : "ड्राइवर"}: ${b.driverName}` : (lang === "en" ? "No driver assigned" : "ड्राइवर तय नहीं")} · {bookingDate(b)}</span>
@@ -5802,12 +5793,12 @@ export default function App() {
     patchDoc("rechargeRequests", id, { status: "Approved" }).catch((e) => console.error(e));
   };
 
-  const createLoad = ({ pickup, drop, vehicle, material, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, serviceType }) => {
+  const createLoad = ({ pickup, drop, vehicle, material, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng }) => {
     createDoc("bookings", genId(), {
       pickup, drop, vehicle, material, weight, distance, status: "Bidding", bids: [], fare: null,
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
       pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null, dropLat: dropLat ?? null, dropLng: dropLng ?? null,
-      driverLocation: null, serviceType: serviceType || "withinCity",
+      driverLocation: null,
     }).catch((e) => console.error(e));
   };
 
