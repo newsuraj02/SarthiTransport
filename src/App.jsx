@@ -2738,13 +2738,13 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
     };
     return (
       <div className="px-5 py-5">
-        <div className="flex items-center justify-between mb-3 gap-2">
-          <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
+        <div className="flex items-center gap-2 mb-3">
           {onAddAnother && (
-            <button onClick={onAddAnother} className="text-sm font-black px-3.5 py-2 rounded-full flex items-center gap-1.5 shrink-0" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
-              <Plus size={16} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और गाड़ी बुक करें"}
+            <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold shrink-0" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+              <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
             </button>
           )}
+          <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
         </div>
         <RideTypeBanner booking={b} lang={lang} />
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -2793,13 +2793,13 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const v = VEHICLES.find((x) => x.key === b.vehicle);
   return (
     <div className="px-5 py-5">
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
+      <div className="flex items-center gap-2 mb-3">
         {onAddAnother && (
-          <button onClick={onAddAnother} className="text-sm font-black px-3.5 py-2 rounded-full flex items-center gap-1.5 shrink-0" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
-            <Plus size={16} strokeWidth={3} /> {lang === "en" ? "Add Another Ride" : "एक और गाड़ी बुक करें"}
+          <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold shrink-0" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+            <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
           </button>
         )}
+        <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
       </div>
       <RideTypeBanner booking={b} lang={lang} />
 
@@ -3105,8 +3105,9 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   // lookup below filters to this customer's mobile number first.
   const myBookings = bookings.filter((b) => b.customerMobile === customerMobile);
   // Posting a new ride while another one is already active/advance-booked —
-  // see the "Add Another Ride" button on ActiveRide below. Cleared the
-  // moment a new booking actually lands (myBookings.length changes).
+  // see the "Back" button on ActiveRide below, which flips this back on to
+  // return to the booking form. Cleared the moment a new booking actually
+  // lands (myBookings.length changes).
   const [addingAnother, setAddingAnother] = useState(false);
   useEffect(() => { setAddingAnother(false); }, [myBookings.length]);
   // A booking scheduled for a future date shouldn't hog the home screen or
