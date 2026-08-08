@@ -2193,7 +2193,7 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, paddingRight: value ? 34 : 16, paddingLeft: dotColor ? 34 : 16 };
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, paddingRight: 40, paddingLeft: dotColor ? 34 : 16 };
   const inputEl = (
     <input
       className={inputCls}
@@ -2215,11 +2215,15 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
           </Autocomplete>
         ) : inputEl}
         {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
-        {value && (
+        {value ? (
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(null); setText(""); }}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center" style={{ color: C.inkSoft }}>
             <XCircle size={16} />
           </button>
+        ) : (
+          <span className="absolute right-2 top-1/2 -translate-y-1/2">
+            <MicButton onResult={(spoken) => { setText(spoken); onChange(null); }} lang={lang === "en" ? "en-IN" : "hi-IN"} />
+          </span>
         )}
       </div>
     </div>
