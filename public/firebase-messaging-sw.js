@@ -55,7 +55,7 @@ self.addEventListener("notificationclick", (event) => {
 // simple: only same-origin GET requests (the built JS/CSS/HTML/icons) are
 // ever cached — Firestore, Storage, and Google Maps calls always go straight
 // to the network, since that data has to be live.
-const CACHE_NAME = "apna-transport-v1";
+const CACHE_NAME = "apna-transport-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
