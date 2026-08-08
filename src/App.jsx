@@ -2232,6 +2232,10 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
 function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial, hasActiveBooking, onViewCurrent, onViewAdvance, advanceCount }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
+  // Shows an inline "no current ride" message when View Current Booked Ride
+  // is tapped but there isn't one — the button always shows (see below),
+  // unlike View Advance which can navigate straight to an empty list.
+  const [viewedEmptyCurrent, setViewedEmptyCurrent] = useState(false);
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
   const [showTimeModal, setShowTimeModal] = useState(false);
@@ -2393,21 +2397,18 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <div className="text-sm font-black text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
           </button>
         </div>
-        {(hasActiveBooking || onViewAdvance) && (
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            {hasActiveBooking && (
-              <button onClick={onViewCurrent} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: "#F5E6C8" }}>
-                <Truck size={18} color={C.marigoldDeep} />
-                <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"}</div>
-              </button>
-            )}
-            {onViewAdvance && (
-              <button onClick={onViewAdvance} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: "#F5E6C8", gridColumn: hasActiveBooking ? undefined : "1 / -1" }}>
-                <Clock3 size={18} color={C.marigoldDeep} />
-                <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "View Advance Booked Ride" : "एडवांस बुक की गई राइड देखें"}{advanceCount > 0 ? ` (${advanceCount})` : ""}</div>
-              </button>
-            )}
-          </div>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <button onClick={() => (hasActiveBooking ? onViewCurrent() : setViewedEmptyCurrent(true))} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: "#F5E6C8" }}>
+            <Truck size={18} color={C.marigoldDeep} />
+            <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"}</div>
+          </button>
+          <button onClick={onViewAdvance} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: "#F5E6C8" }}>
+            <Clock3 size={18} color={C.marigoldDeep} />
+            <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "View Advance Booked Ride" : "एडवांस बुक की गई राइड देखें"}{advanceCount > 0 ? ` (${advanceCount})` : ""}</div>
+          </button>
+        </div>
+        {viewedEmptyCurrent && !hasActiveBooking && (
+          <p className="text-xs text-center mt-3 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "No current ride booked right now." : "अभी कोई वर्तमान राइड बुक नहीं है।"}</p>
         )}
       </div>
     );
