@@ -2313,7 +2313,7 @@ function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef
 // painful to scroll on mobile, so this is a text field that filters
 // INDIAN_CITIES live (matches either language, so typing "pune" or "पुणे"
 // both work) and shows the matches as a tappable dropdown list underneath.
-function CitySearchField({ value, onChange, lang }) {
+function CitySearchField({ value, onChange, lang, label, dotColor }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const selected = INDIAN_CITIES.find((c) => c.key === value);
@@ -2330,17 +2330,18 @@ function CitySearchField({ value, onChange, lang }) {
 
   return (
     <div className="relative">
-      <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "City" : "शहर"}</label>
+      <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{label || (lang === "en" ? "City" : "शहर")}</label>
       <div className="relative">
         <input
           className={inputCls}
-          style={{ ...inputStyle, paddingRight: 34 }}
+          style={{ ...inputStyle, paddingRight: 34, paddingLeft: dotColor ? 34 : 16 }}
           placeholder={lang === "en" ? "Search city..." : "शहर खोजें..."}
           value={open ? query : (selected ? (lang === "en" ? selected.en : selected.hi) : "")}
           onFocus={() => { setQuery(""); setOpen(true); }}
           onChange={(e) => { setQuery(e.target.value); if (!open) setOpen(true); }}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
         />
+        {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
         {selected && !open ? (
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(""); setQuery(""); }}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center" style={{ color: C.inkSoft }}>
@@ -2575,15 +2576,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
           </div>
         )}
-        <div>
-          <CitySearchField value={selectedCity} onChange={setSelectedCity} lang={lang} />
-          {selectedCity && (
-            <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>
-              {lang === "en" ? `Pickup/Drop suggestions will be narrowed to ${cityLabel(selectedCity, lang)}` : `पिकअप/ड्रॉप सुझाव अब ${cityLabel(selectedCity, lang)} तक सीमित होंगे`}
-            </div>
-          )}
-        </div>
-
         {lastBooking && !pickup && !drop && (
           <button onClick={() => {
             setPickup(lastBooking.pickup); setDrop(lastBooking.drop); setMaterial(lastBooking.material);
@@ -2619,8 +2611,17 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             areaLabel={findArea(pickup) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(pickup)}` : null}
             suggestions={suggestAreas(pickup)}
             onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
-            cityBounds={cityBounds}
           />
+
+          <div>
+            <CitySearchField value={selectedCity} onChange={setSelectedCity} lang={lang} label={lang === "en" ? "Drop City" : "ड्रॉप का शहर"} dotColor={C.safety} />
+            <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>
+              {selectedCity
+                ? (lang === "en" ? `Only Drop suggestions will be narrowed to ${cityLabel(selectedCity, lang)} — this doesn't affect Pickup.` : `केवल ड्रॉप के सुझाव ${cityLabel(selectedCity, lang)} तक सीमित होंगे — इसका पिकअप पर कोई असर नहीं है।`)
+                : (lang === "en" ? "Optional — helps narrow down Drop location suggestions only." : "वैकल्पिक — केवल ड्रॉप लोकेशन के सुझाव सीमित करने के लिए।")}
+            </div>
+          </div>
+
           <LocationField
             label={lang === "en" ? "Drop" : "ड्रॉप"}
             lang={lang}
