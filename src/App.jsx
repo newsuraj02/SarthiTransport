@@ -2336,18 +2336,22 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
 // badge appears the instant that step is done. `stepRef` is what the
 // parent form scrolls into view when this step becomes active — see the
 // auto-scroll effect in CustomerBooking for the reference implementation.
-// Every step other than the active one is locked — `inert` blocks pointer,
-// keyboard and screen-reader interaction with everything inside it in one
-// shot (dropdowns, photo pickers, mic buttons included, no matter what's
-// nested inside), and the dimmed opacity/pointer-events are a fallback for
-// the rare browser without `inert` support. This forces the form to be
-// filled strictly in the order shown on screen, matching the highlight.
+// Only a step that's neither active nor already completed is locked —
+// `inert` blocks pointer, keyboard and screen-reader interaction with
+// everything inside it in one shot (dropdowns, photo pickers, mic buttons
+// included, no matter what's nested inside), and the dimmed opacity/
+// pointer-events are a fallback for the rare browser without `inert`
+// support. This forces the form forward strictly in the order shown on
+// screen, while still letting the customer go back and fix an earlier,
+// already-filled field at any time — editing one back to incomplete just
+// re-activates it (via activeStep's findIndex in the parent) and re-locks
+// whatever comes after until it's filled again.
 function GuidedStep({ active, completed, stepRef, children, lang }) {
-  const locked = !active;
+  const locked = !active && !completed;
   return (
     <div ref={stepRef} className={`relative rounded-2xl ${active ? "guided-step-active" : ""}`}
       style={active ? { border: "2px solid #D9A406", background: "#FFF8E1", padding: 10 } : undefined}>
-      <div inert={locked ? "" : undefined} style={locked ? { pointerEvents: "none", userSelect: "none", opacity: completed ? 0.7 : 0.45 } : undefined}>
+      <div inert={locked ? "" : undefined} style={locked ? { pointerEvents: "none", userSelect: "none", opacity: 0.45 } : undefined}>
         {children}
       </div>
       {completed && (
