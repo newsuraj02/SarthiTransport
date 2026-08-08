@@ -2142,10 +2142,10 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
 // Pickup/Drop address field — wires Google Places Autocomplete directly onto
 // the text input (live suggestion dropdown while typing) when Maps is
 // configured/loaded, falling back to a plain input otherwise.
-function LocationField({ label, value, onChange, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap, lang = "hi", dotColor, cityBounds }) {
+function LocationField({ label, value, onChange, onFocus, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap, lang = "hi", dotColor, cityBounds }) {
   const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: dotColor ? 34 : 16, paddingRight: 16 };
-  const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} />;
+  const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} onFocus={onFocus} />;
   // strictBounds hard-restricts Places Autocomplete results to inside the
   // selected city's box — once a city is chosen, addresses from other
   // cities are excluded outright, not just deprioritized.
@@ -2309,6 +2309,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   // manual Within City/Outstation toggle.
   const [dropCity, setDropCity] = useState(null);
   const cityBounds = dropCity?.bounds || null;
+  // Drop City is optional — if the customer taps straight into Drop without
+  // picking one, this flips true so the guided sequence below can move on
+  // to Drop instead of sitting stuck on a field they don't have to fill.
+  // Kept as its own state (rather than derived from `drop`'s content) so
+  // that step advances one at a time — deriving it from `drop.length > 0`
+  // used to complete both the Drop City AND Drop steps in the same
+  // keystroke, making the highlight jump two fields at once.
+  const [dropCitySkipped, setDropCitySkipped] = useState(false);
   const [material, setMaterial] = useState("");
   // The default list plus anything any customer has ever added — synced
   // live via customMaterials, so a material someone else added shows up
@@ -2325,12 +2333,12 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const mapsReady = mapsHasKey && mapsLoaded;
 
   // Guided-step highlighting for the 5 booking fields — see GuidedStep.
-  // Drop City is optional, so it auto-completes the moment the customer
-  // moves on to Drop (rather than blocking the sequence on a field they
-  // don't have to fill), everything else needs a real value.
+  // Each step's own state decides completion (no cross-referencing another
+  // field's value) so the active highlight only ever moves one field at a
+  // time, strictly in the top-to-bottom order they appear on screen.
   const stepCompleted = [
     pickup.trim().length > 0,
-    !!dropCity || drop.trim().length > 0,
+    !!dropCity || dropCitySkipped,
     drop.trim().length > 0,
     !!material,
     weight.trim().length > 0,
@@ -2581,6 +2589,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               dotColor={C.safety}
               value={drop}
               onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
+              onFocus={() => setDropCitySkipped(true)}
               onPlaceChanged={onDropPlaceChanged}
               autocompleteRef={dropAutocompleteRef}
               mapsReady={mapsReady}
