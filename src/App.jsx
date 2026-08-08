@@ -2398,17 +2398,13 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </button>
         </div>
         <div className="grid grid-cols-2 gap-3 mt-3">
-          <button onClick={() => (hasActiveBooking ? onViewCurrent() : setViewedEmptyCurrent(true))} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.marigold }}>
-            <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.navy }}>
-              <Truck size={22} color="#fff" />
-            </div>
-            <div className="text-sm font-black" style={{ color: C.navy }}>{lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"}</div>
+          <button onClick={() => (hasActiveBooking ? onViewCurrent() : setViewedEmptyCurrent(true))} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.success }}>
+            <Truck size={18} color="#fff" />
+            <div className="text-xs font-black text-white">{lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"}</div>
           </button>
-          <button onClick={onViewAdvance} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.navy }}>
-            <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-              <Clock3 size={22} color={C.navy} />
-            </div>
-            <div className="text-sm font-black text-white">{lang === "en" ? "View Advance Booked Ride" : "एडवांस बुक की गई राइड देखें"}{advanceCount > 0 ? ` (${advanceCount})` : ""}</div>
+          <button onClick={onViewAdvance} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.success }}>
+            <Clock3 size={18} color="#fff" />
+            <div className="text-xs font-black text-white">{lang === "en" ? "View Advance Booked Ride" : "एडवांस बुक की गई राइड देखें"}{advanceCount > 0 ? ` (${advanceCount})` : ""}</div>
           </button>
         </div>
         {viewedEmptyCurrent && !hasActiveBooking && (
