@@ -2336,11 +2336,20 @@ function CitySearchField({ value, onChange, lang, label, dotColor, mapsReady }) 
 // badge appears the instant that step is done. `stepRef` is what the
 // parent form scrolls into view when this step becomes active — see the
 // auto-scroll effect in CustomerBooking for the reference implementation.
+// Every step other than the active one is locked — `inert` blocks pointer,
+// keyboard and screen-reader interaction with everything inside it in one
+// shot (dropdowns, photo pickers, mic buttons included, no matter what's
+// nested inside), and the dimmed opacity/pointer-events are a fallback for
+// the rare browser without `inert` support. This forces the form to be
+// filled strictly in the order shown on screen, matching the highlight.
 function GuidedStep({ active, completed, stepRef, children, lang }) {
+  const locked = !active;
   return (
     <div ref={stepRef} className={`relative rounded-2xl ${active ? "guided-step-active" : ""}`}
       style={active ? { border: "2px solid #D9A406", background: "#FFF8E1", padding: 10 } : undefined}>
-      {children}
+      <div inert={locked ? "" : undefined} style={locked ? { pointerEvents: "none", userSelect: "none", opacity: completed ? 0.7 : 0.45 } : undefined}>
+        {children}
+      </div>
       {completed && (
         <span className="absolute -top-2 -right-2 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black text-white shadow-sm z-10" style={{ background: C.success }}>
           <CheckCircle2 size={11} /> {lang === "en" ? "Completed" : "पूर्ण"}
