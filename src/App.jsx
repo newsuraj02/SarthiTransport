@@ -2268,18 +2268,25 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
-  // Guided-step highlighting for the 4 booking fields — see GuidedStep.
-  // Each step's own state decides completion (no cross-referencing another
+  // Guided-step highlighting for the booking fields — see GuidedStep. Each
+  // step's own state decides completion (no cross-referencing another
   // field's value) so the active highlight only ever moves one field at a
-  // time, strictly in the top-to-bottom order they appear on screen.
+  // time, strictly in the top-to-bottom order they appear on screen. The
+  // date/time step only exists in Advance mode, so the array (and the
+  // index every other field is wrapped at) shifts by one in that mode —
+  // stepRefs is still always a fixed 5 hooks regardless, since the number
+  // of hooks called can never change between renders.
+  const hasDateTimeStep = bookingMode === "advance";
+  const stepOffset = hasDateTimeStep ? 1 : 0;
   const stepCompleted = [
+    ...(hasDateTimeStep ? [!!advanceDate && !!advanceTime] : []),
     pickup.trim().length > 0,
     drop.trim().length > 0,
     !!material,
     weight.trim().length > 0,
   ];
   const activeStep = stepCompleted.findIndex((done) => !done); // -1 once all done
-  const stepRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+  const stepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
   useEffect(() => {
     if (activeStep >= 0) stepRefs[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2456,31 +2463,33 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       </button>
       <div className="space-y-3">
         {bookingMode === "advance" && (
-          <div className="rounded-lg p-3" style={{ background: "#F5E6C8" }}>
-            <div className="text-[11px] font-bold mb-2" style={{ color: "#A8721C" }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</div>
-            <div className="grid grid-cols-3 gap-2 mb-2">
-              {[1, 2, 3].map((n) => {
-                const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
-                const iso = d.toISOString().slice(0, 10);
-                const active = advanceDate === iso;
-                return (
-                  <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
-                    className="rounded-lg py-2 text-[11px] font-bold text-center"
-                    style={{ background: active ? "#A8721C" : C.paper, color: active ? "#fff" : "#A8721C", border: `1.5px solid #A8721C` }}>
-                    {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : `${n} दिन बाद`}
-                  </button>
-                );
-              })}
+          <GuidedStep active={activeStep === 0} completed={stepCompleted[0]} stepRef={stepRefs[0]} lang={lang}>
+            <div className="rounded-lg p-3" style={{ background: "#F5E6C8" }}>
+              <div className="text-[11px] font-bold mb-2" style={{ color: "#A8721C" }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</div>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                {[1, 2, 3].map((n) => {
+                  const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+                  const iso = d.toISOString().slice(0, 10);
+                  const active = advanceDate === iso;
+                  return (
+                    <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
+                      className="rounded-lg py-2 text-[11px] font-bold text-center"
+                      style={{ background: active ? "#A8721C" : C.paper, color: active ? "#fff" : "#A8721C", border: `1.5px solid #A8721C` }}>
+                      {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : `${n} दिन बाद`}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
+                <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-1.5" style={inputStyle}>
+                  <span className="text-xs font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : "समय चुनें")}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Change" : "बदलें"}</span>
+                </button>
+              </div>
+              <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
-              <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-1.5" style={inputStyle}>
-                <span className="text-xs font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : "समय चुनें")}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Change" : "बदलें"}</span>
-              </button>
-            </div>
-            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
-          </div>
+          </GuidedStep>
         )}
         {lastBooking && !pickup && !drop && (
           <button onClick={() => {
@@ -2500,7 +2509,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </button>
         )}
         <div className="space-y-4">
-          <GuidedStep active={activeStep === 0} completed={stepCompleted[0]} stepRef={stepRefs[0]} lang={lang}>
+          <GuidedStep active={activeStep === stepOffset + 0} completed={stepCompleted[stepOffset + 0]} stepRef={stepRefs[stepOffset + 0]} lang={lang}>
             <LocationField
               label={lang === "en" ? "Pickup" : "पिकअप"}
               lang={lang}
@@ -2521,7 +2530,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             />
           </GuidedStep>
 
-          <GuidedStep active={activeStep === 1} completed={stepCompleted[1]} stepRef={stepRefs[1]} lang={lang}>
+          <GuidedStep active={activeStep === stepOffset + 1} completed={stepCompleted[stepOffset + 1]} stepRef={stepRefs[stepOffset + 1]} lang={lang}>
             <LocationField
               label={lang === "en" ? "Drop" : "ड्रॉप"}
               lang={lang}
@@ -2552,7 +2561,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <GuidedStep active={activeStep === 2} completed={stepCompleted[2]} stepRef={stepRefs[2]} lang={lang}>
+          <GuidedStep active={activeStep === stepOffset + 2} completed={stepCompleted[stepOffset + 2]} stepRef={stepRefs[stepOffset + 2]} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
             {addingMaterial ? (
               <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
@@ -2576,7 +2585,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               </select>
             )}
           </GuidedStep>
-          <GuidedStep active={activeStep === 3} completed={stepCompleted[3]} stepRef={stepRefs[3]} lang={lang}>
+          <GuidedStep active={activeStep === stepOffset + 3} completed={stepCompleted[stepOffset + 3]} stepRef={stepRefs[stepOffset + 3]} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
             <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
           </GuidedStep>
