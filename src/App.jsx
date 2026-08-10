@@ -6050,15 +6050,21 @@ export default function App() {
         <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
           <div className="flex items-center gap-2 mb-4">
             <Logo size={64} />
-            <div className="flex-1">
-              <div translate="no" className="text-white font-bold text-lg leading-none">{lang === "en" ? "Apna Transport" : "अपना ट्रांसपोर्ट"}</div>
-              <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
+            <div className="flex-1 min-w-0">
+              <div translate="no" className="text-white font-bold text-lg leading-none truncate">{lang === "en" ? "Apna Transport" : "अपना ट्रांसपोर्ट"}</div>
+              <div className="text-[11px] truncate" style={{ color: "#D9C4B0" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
             </div>
-            <button onClick={() => setLang((l) => (l === "hi" ? "en" : "hi"))}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-bold"
-              style={{ background: "#3D1B17", color: "#fff", border: "1px solid #4A1F1F" }}>
-              <Globe size={12} /> {lang === "hi" ? "हिं" : "ENG"}
-            </button>
+            <div className="flex items-center gap-1 rounded-full pl-2 pr-1 py-1 shrink-0" style={{ background: "#3D1B17", border: `1.5px solid ${C.marigold}` }}>
+              <Globe size={22} color={C.marigold} strokeWidth={2.2} />
+              <button onClick={() => setLang("hi")} className="rounded-full"
+                style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "hi" ? C.navy : "#D9C4B0", background: lang === "hi" ? C.marigold : "transparent", boxShadow: lang === "hi" ? "0 0 8px 1px rgba(227,169,60,0.65)" : "none" }}>
+                हिं
+              </button>
+              <button onClick={() => setLang("en")} className="rounded-full"
+                style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "en" ? C.navy : "#D9C4B0", background: lang === "en" ? C.marigold : "transparent", boxShadow: lang === "en" ? "0 0 8px 1px rgba(227,169,60,0.65)" : "none" }}>
+                ENG
+              </button>
+            </div>
           </div>
           {role === "admin" && adminAuth && (
             <div className="mt-1.5 text-[10px] text-center" style={{ color: "#D9C4B0" }}>
