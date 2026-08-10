@@ -3231,9 +3231,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="text-base font-bold truncate" style={{ color: C.ink }}>{b.driverName}</div>
           <span className="inline-block mt-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: C.pimpri }}>{lang === "en" ? "Verified" : "सत्यापित"}</span>
         </div>
-        <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1 pl-2 pr-2.5 py-1.5 rounded-full text-[11px] font-black"
-          style={{ background: docsSent ? "#DFEEE2" : "#F5E6C8", color: docsSent ? C.success : C.marigoldDeep, border: `1.5px solid ${docsSent ? C.success : C.marigoldDeep}` }}>
-          <FileText size={13} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Bill" : "बिल भेजें")}
+        <button onClick={() => setShowDocs(true)} className={`shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm ${docsSent ? "" : "guided-submit-ready"}`}
+          style={{ background: docsSent ? C.success : C.marigold, color: docsSent ? "#fff" : C.navy, border: `1.5px solid ${docsSent ? C.success : C.marigoldDeep}` }}>
+          <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Bill" : "बिल भेजें")}
         </button>
       </div>
 
@@ -4121,9 +4121,9 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           <RideTypeBanner booking={myTrip} lang={lang} />
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Truck size={15} /> {lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</span>
-            <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1 pl-2 pr-2.5 py-1.5 rounded-full text-[11px] font-black"
-              style={{ background: billDocsComplete ? "#DFEEE2" : "#F5E6C8", color: billDocsComplete ? C.success : C.marigoldDeep, border: `1.5px solid ${billDocsComplete ? C.success : C.marigoldDeep}` }}>
-              <FileText size={13} /> {billDocsComplete ? (lang === "en" ? "Received ✓" : "मिल गया ✓") : (lang === "en" ? "Receive Bill" : "बिल प्राप्त करें")}
+            <button onClick={() => setShowDocs(true)} className={`shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm ${billDocsComplete ? "" : "guided-submit-ready"}`}
+              style={{ background: billDocsComplete ? C.success : C.marigold, color: billDocsComplete ? "#fff" : C.navy, border: `1.5px solid ${billDocsComplete ? C.success : C.marigoldDeep}` }}>
+              <FileText size={15} /> {billDocsComplete ? (lang === "en" ? "Received ✓" : "मिल गया ✓") : (lang === "en" ? "Receive Bill" : "बिल प्राप्त करें")}
             </button>
           </div>
 
