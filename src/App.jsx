@@ -3615,7 +3615,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
               </GuidedStep>
             </div>
           </div>
-          <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>
+          <div className="text-xs font-black mb-2" style={{ color: "#1D4ED8" }}>
             {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
           </div>
           <div className="rounded-lg p-2.5 mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
