@@ -443,6 +443,112 @@ function geocodeAddress(text) {
   });
 }
 
+// Approximate phonetic Latin<->Devanagari transliteration — a fallback for
+// place names Google Places has no Hindi (or, in reverse, no Latin) name
+// for on file, so the suggestion dropdown still reads in the app's chosen
+// script even when Google's own data doesn't. This is NOT a dictionary or
+// an official transliteration — it's a syllable-by-syllable phonetic
+// approximation, good enough for a customer to recognize the place, not
+// guaranteed to match how locals actually spell it. Only Latin-letter (or
+// Devanagari) runs within a string are converted; digits, spaces, and
+// punctuation pass through untouched, so a Google string that's already
+// partly localized (e.g. "Kudalwadi, चिखली, महाराष्ट्र") only has its
+// untranslated part converted.
+const TRANSLIT_TOKENS = [
+  { lat: "ksh", type: "C", dev: "क्ष" }, { lat: "gy", type: "C", dev: "ज्ञ" }, { lat: "chh", type: "C", dev: "छ" },
+  { lat: "kh", type: "C", dev: "ख" }, { lat: "gh", type: "C", dev: "घ" }, { lat: "ch", type: "C", dev: "च" },
+  { lat: "jh", type: "C", dev: "झ" }, { lat: "ny", type: "C", dev: "ञ" }, { lat: "th", type: "C", dev: "थ" },
+  { lat: "dh", type: "C", dev: "ध" }, { lat: "ph", type: "C", dev: "फ" }, { lat: "bh", type: "C", dev: "भ" },
+  { lat: "sh", type: "C", dev: "श" }, { lat: "ng", type: "C", dev: "ङ" },
+  { lat: "k", type: "C", dev: "क" }, { lat: "g", type: "C", dev: "ग" }, { lat: "c", type: "C", dev: "क" },
+  { lat: "j", type: "C", dev: "ज" }, { lat: "t", type: "C", dev: "त" }, { lat: "d", type: "C", dev: "द" },
+  { lat: "n", type: "C", dev: "न" }, { lat: "p", type: "C", dev: "प" }, { lat: "b", type: "C", dev: "ब" },
+  { lat: "m", type: "C", dev: "म" }, { lat: "y", type: "C", dev: "य" }, { lat: "r", type: "C", dev: "र" },
+  { lat: "l", type: "C", dev: "ल" }, { lat: "v", type: "C", dev: "व" }, { lat: "w", type: "C", dev: "व" },
+  { lat: "s", type: "C", dev: "स" }, { lat: "h", type: "C", dev: "ह" }, { lat: "f", type: "C", dev: "फ़" },
+  { lat: "z", type: "C", dev: "ज़" }, { lat: "x", type: "C", dev: "क्स" }, { lat: "q", type: "C", dev: "क़" },
+  { lat: "aa", type: "V", dev: "आ", matra: "ा" }, { lat: "ee", type: "V", dev: "ई", matra: "ी" },
+  { lat: "oo", type: "V", dev: "ऊ", matra: "ू" }, { lat: "ai", type: "V", dev: "ऐ", matra: "ै" },
+  { lat: "au", type: "V", dev: "औ", matra: "ौ" }, { lat: "a", type: "V", dev: "अ", matra: "" },
+  { lat: "i", type: "V", dev: "इ", matra: "ि" }, { lat: "u", type: "V", dev: "उ", matra: "ु" },
+  { lat: "e", type: "V", dev: "ए", matra: "े" }, { lat: "o", type: "V", dev: "ओ", matra: "ो" },
+].sort((a, b) => b.lat.length - a.lat.length);
+
+function transliterateLatinWordToDevanagari(word) {
+  const w = word.toLowerCase();
+  let out = "";
+  let i = 0;
+  let pending = null; // devanagari base of a consonant awaiting a vowel
+  while (i < w.length) {
+    const tok = TRANSLIT_TOKENS.find((t) => w.startsWith(t.lat, i));
+    if (!tok) {
+      if (pending) { out += pending; pending = null; }
+      out += w[i];
+      i += 1;
+      continue;
+    }
+    if (tok.type === "C") {
+      if (pending) out += pending + "्"; // consonant cluster -> halant
+      pending = tok.dev;
+    } else if (pending) {
+      out += pending + tok.matra;
+      pending = null;
+    } else {
+      out += tok.dev; // standalone vowel form
+    }
+    i += tok.lat.length;
+  }
+  if (pending) out += pending; // trailing consonant keeps its bare (silently-schwa) form
+  return out;
+}
+function transliterateToDevanagari(text) {
+  return text ? text.replace(/[A-Za-z]+/g, transliterateLatinWordToDevanagari) : text;
+}
+
+const DEVANAGARI_TO_LATIN_CONSONANTS = {
+  "क्ष": "ksh", "ज्ञ": "gy", "छ": "chh", "ख": "kh", "घ": "gh", "च": "ch", "झ": "jh", "ञ": "ny",
+  "थ": "th", "ध": "dh", "फ": "ph", "भ": "bh", "श": "sh", "ष": "sh", "ङ": "ng", "ट": "t", "ठ": "th",
+  "ड": "d", "ढ": "dh", "ण": "n", "क": "k", "ग": "g", "ज": "j", "त": "t", "द": "d", "न": "n", "प": "p",
+  "ब": "b", "म": "m", "य": "y", "र": "r", "ल": "l", "व": "v", "स": "s", "ह": "h", "फ़": "f", "ज़": "z",
+  "क़": "q", "ड़": "r", "ढ़": "rh",
+};
+const DEVANAGARI_TO_LATIN_MATRAS = { "ा": "aa", "ि": "i", "ी": "ee", "ु": "u", "ू": "oo", "े": "e", "ै": "ai", "ो": "o", "ौ": "au", "ं": "n", "ः": "h" };
+const DEVANAGARI_TO_LATIN_VOWELS = { "अ": "a", "आ": "aa", "इ": "i", "ई": "ee", "उ": "u", "ऊ": "oo", "ए": "e", "ऐ": "ai", "ओ": "o", "औ": "au" };
+
+function transliterateDevanagariWordToLatin(word) {
+  const chars = Array.from(word);
+  let out = "";
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (DEVANAGARI_TO_LATIN_VOWELS[ch]) { out += DEVANAGARI_TO_LATIN_VOWELS[ch]; continue; }
+    // Anusvara/visarga as their own character (not immediately following a
+    // consonant, e.g. after another matra) — the lookahead below already
+    // handles the more common case of one right after a consonant.
+    if (DEVANAGARI_TO_LATIN_MATRAS[ch] === "n" || ch === "ः") { out += ch === "ः" ? "h" : "n"; continue; }
+    if (DEVANAGARI_TO_LATIN_CONSONANTS[ch]) {
+      out += DEVANAGARI_TO_LATIN_CONSONANTS[ch];
+      const next = chars[i + 1];
+      if (next === "्") { i += 1; } // halant — no inherent vowel, clusters straight into the next consonant
+      else if (next && DEVANAGARI_TO_LATIN_MATRAS[next]) { out += DEVANAGARI_TO_LATIN_MATRAS[next]; i += 1; }
+      else out += "a"; // inherent vowel
+      continue;
+    }
+    out += ch; // punctuation/space/digit passthrough
+  }
+  return out;
+}
+function transliterateToLatin(text) {
+  return text ? text.replace(/[ऀ-ॿ]+/g, transliterateDevanagariWordToLatin) : text;
+}
+
+// Used to localize Google Places suggestion text to the app's chosen
+// script — see LocationField's custom dropdown.
+function localizeSuggestionText(text, lang) {
+  if (!text) return text;
+  if (lang === "hi") return /[A-Za-z]/.test(text) ? transliterateToDevanagari(text) : text;
+  return /[ऀ-ॿ]/.test(text) ? transliterateToLatin(text) : text;
+}
+
 // Real routed driving distance from Google's Distance Matrix Service (part
 // of the core Maps JavaScript API — no extra `libraries` entry needed,
 // unlike Places). Resolves in km, or rejects if Maps isn't loaded, the
@@ -2180,24 +2286,82 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
 // Pickup/Drop address field — wires Google Places Autocomplete directly onto
 // the text input (live suggestion dropdown while typing) when Maps is
 // configured/loaded, falling back to a plain input otherwise.
-function LocationField({ label, value, onChange, onFocus, onPlaceChanged, autocompleteRef, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap, lang = "hi", dotColor }) {
+// Custom-built suggestion dropdown (AutocompleteService + Geocoder) instead
+// of Google's own embedded Autocomplete widget — the native widget renders
+// its own popup directly into the page, completely outside React's control,
+// so there was no way to localize what it displayed (see
+// localizeSuggestionText). This version fetches predictions itself and
+// renders them as an ordinary list, so each row's text can be transliterated
+// to match the app's language toggle before it's ever shown.
+function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap, lang = "hi", dotColor }) {
+  const [predictions, setPredictions] = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const debounceRef = useRef(null);
+  const blurTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    if (!mapsReady || !window.google?.maps?.places?.AutocompleteService || !value.trim()) {
+      setPredictions([]);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      new window.google.maps.places.AutocompleteService().getPlacePredictions(
+        { input: value, componentRestrictions: { country: "in" } },
+        (preds, status) => setPredictions(status === "OK" && preds ? preds : [])
+      );
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [value, mapsReady]);
+
+  useEffect(() => () => clearTimeout(blurTimeoutRef.current), []);
+
+  const selectPrediction = (p) => {
+    setDropdownOpen(false);
+    setPredictions([]);
+    if (!window.google?.maps?.Geocoder) return;
+    new window.google.maps.Geocoder().geocode({ placeId: p.place_id }, (results, status) => {
+      const r = status === "OK" && results?.[0];
+      const loc = r?.geometry?.location;
+      if (!loc) return;
+      onPlaceSelected({ name: r.formatted_address || p.description, lat: loc.lat(), lng: loc.lng() });
+    });
+  };
+
   const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: dotColor ? 34 : 16, paddingRight: 16 };
-  const inputEl = <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value} onChange={onChange} onFocus={onFocus} />;
-  const autocompleteOptions = { componentRestrictions: { country: "in" } };
+  const showDropdown = dropdownOpen && predictions.length > 0;
+
   return (
     <div>
       <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{label}</label>
       <div className="relative w-full">
-        {mapsReady ? (
-          <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged} options={autocompleteOptions}>
-            {inputEl}
-          </Autocomplete>
-        ) : inputEl}
+        <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
+          onChange={(e) => { onChange(e); setDropdownOpen(true); }}
+          onFocus={() => setDropdownOpen(true)}
+          onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); }} />
         {/* The colored dot at the front of the box is a quick visual cue —
             green for where the load comes from, red for where it goes —
             on top of the placeholder text saying the same thing. */}
         {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
+        {showDropdown && (
+          <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+            {predictions.map((p) => {
+              const main = localizeSuggestionText(p.structured_formatting?.main_text || p.description, lang);
+              const secondary = localizeSuggestionText(p.structured_formatting?.secondary_text || "", lang);
+              return (
+                <button key={p.place_id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectPrediction(p)}
+                  className="w-full text-left px-3 py-2.5 flex items-start gap-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <MapPin size={14} color={C.marigoldDeep} className="mt-0.5 shrink-0" />
+                  <span className="text-xs leading-snug">
+                    <span className="font-bold" style={{ color: C.ink }}>{main}</span>
+                    {secondary && <span style={{ color: C.inkSoft }}> {secondary}</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
       {/* Clear, labeled buttons below the field instead of small icons
           crammed inside it — bigger touch targets and unambiguous at a
@@ -2353,22 +2517,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       .catch((e) => console.error("[distance matrix]", e));
   }, [pickupCoords, dropCoords, mapsReady]);
 
-  const pickupAutocompleteRef = useRef(null);
-  const dropAutocompleteRef = useRef(null);
-  const onPickupPlaceChanged = () => {
-    const place = pickupAutocompleteRef.current?.getPlace();
-    const loc = place?.geometry?.location;
-    if (!loc) return;
-    setPickup(place.formatted_address || place.name || "");
-    setPickupCoords({ lat: loc.lat(), lng: loc.lng() });
-  };
-  const onDropPlaceChanged = () => {
-    const place = dropAutocompleteRef.current?.getPlace();
-    const loc = place?.geometry?.location;
-    if (!loc) return;
-    setDrop(place.formatted_address || place.name || "");
-    setDropCoords({ lat: loc.lat(), lng: loc.lng() });
-  };
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); };
 
   const [locatingPickup, setLocatingPickup] = useState(false);
   const useMyCurrentLocation = () => {
@@ -2543,8 +2693,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               dotColor={C.success}
               value={pickup}
               onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
-              onPlaceChanged={onPickupPlaceChanged}
-              autocompleteRef={pickupAutocompleteRef}
+              onPlaceSelected={onPickupPlaceSelected}
               mapsReady={mapsReady}
               placeholder={lang === "en" ? "🟢 Where to pick up the load from? (Pickup)" : "🟢 सामान कहाँ से उठाना है? (पिकअप)"}
               onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); }}
@@ -2564,8 +2713,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               dotColor={C.safety}
               value={drop}
               onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
-              onPlaceChanged={onDropPlaceChanged}
-              autocompleteRef={dropAutocompleteRef}
+              onPlaceSelected={onDropPlaceSelected}
               mapsReady={mapsReady}
               placeholder={lang === "en" ? "🔴 Where to unload the goods? (Drop)" : "🔴 सामान कहाँ उतारना है? (ड्रॉप)"}
               onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); }}
