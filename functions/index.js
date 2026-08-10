@@ -4,6 +4,7 @@
 // can't hold those safely, so this is the one piece of this app that has
 // to live in a Cloud Function instead of client code.
 const { onDocumentUpdated, onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -195,4 +196,34 @@ exports.onBookingUpdate = onDocumentUpdated("bookings/{bookingId}", async (event
     const customerToken = await getCustomerToken(after.customerMobile);
     await sendPush(customerToken, "New bid received", `${newBid?.driverName || "A driver"} bid ₹${newBid?.amount ?? ""} for your load.`);
   }
+});
+
+// Mirrors src/App.jsx's isInTrial/TRIAL_DAYS — kept in sync manually, same
+// as the other client-side logic duplicated above. Actual trial gating
+// (commission, minimum wallet, KYC auto-approval) is computed live from
+// createdAt everywhere it's used, both here and on the client — nothing
+// reads trialEndNotified for that. It exists purely so this nightly job
+// doesn't re-send the same "trial ended" push every night after day 30.
+const TRIAL_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const isInTrial = (createdAt) => (createdAt?.toMillis ? (Date.now() - createdAt.toMillis()) < TRIAL_DAYS * DAY_MS : true);
+
+// Runs daily at midnight IST. A driver whose 30-day trial has just ended
+// (and who hasn't already been notified) gets a one-time push telling them
+// so — the admin's Free Trial / Main Routine split itself updates on its
+// own the moment isInTrial flips, with no dependency on this job having
+// run, so a missed night here only delays the notification, not the
+// commission/wallet rules actually taking effect.
+exports.checkTrialExpirations = onSchedule({ schedule: "0 0 * * *", timeZone: "Asia/Kolkata" }, async () => {
+  const driversSnap = await db.collection("drivers").get();
+  const updates = [];
+  driversSnap.forEach((doc) => {
+    const driver = doc.data();
+    if (driver.trialEndNotified || isInTrial(driver.createdAt) || !driver.createdAt) return;
+    updates.push(
+      sendPush(driver.fcmToken, "Free trial ended", "Your 30-day free trial has ended.")
+        .then(() => doc.ref.update({ trialEndNotified: true }))
+    );
+  });
+  await Promise.all(updates);
 });

@@ -712,6 +712,16 @@ const TRIAL_DAYS = 30;
 // from before this field existed) is treated as "in trial" — generous by
 // default rather than accidentally charging someone commission early.
 const isInTrial = (createdAt) => (createdAt?.toMillis ? (Date.now() - createdAt.toMillis()) < TRIAL_DAYS * DAY_MS : true);
+// Whole days left in trial (0 on the last day, null once it's over or
+// createdAt isn't known yet) — used only for the admin's Free Trial /
+// Main Routine driver split and the "X days left" badge, purely derived
+// from createdAt like isInTrial so it can never drift out of sync with
+// the actual gating logic above.
+const trialDaysLeft = (createdAt) => {
+  if (!createdAt?.toMillis || !isInTrial(createdAt)) return null;
+  const elapsedMs = Date.now() - createdAt.toMillis();
+  return Math.max(0, Math.ceil((TRIAL_DAYS * DAY_MS - elapsedMs) / DAY_MS) - 1);
+};
 
 // ---------------- shared: mock map ----------------
 function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" }) {
@@ -4961,7 +4971,17 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const filtered = drivers.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
+  // Free Trial vs Main Routine is computed live from each driver's own
+  // createdAt (see isInTrial/trialDaysLeft) instead of a stored status
+  // field — a driver moves the instant their 30 days are up, on every
+  // render, with nothing that can fall out of sync if a scheduled check
+  // were ever missed. The Cloud Function on the backend does the same
+  // computation independently, only for sending the one-time "trial
+  // ended" push notification (see functions/index.js).
+  const [trialTab, setTrialTab] = useState("all"); // 'all' | 'trial' | 'main'
+  const trialCount = drivers.filter((d) => isInTrial(d.createdAt)).length;
+  const byTrialTab = trialTab === "all" ? drivers : drivers.filter((d) => (trialTab === "trial" ? isInTrial(d.createdAt) : !isInTrial(d.createdAt)));
+  const filtered = byTrialTab.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
   const kycMeta = lang === "en"
     ? { Approved: { label: "Verified", color: C.success, bg: "#DFEEE2" }, Pending: { label: "Pending", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "Blocked", color: C.safety, bg: "#FCEAE3" }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#F0EAE0" } }
     : { Approved: { label: "सत्यापित", color: C.success, bg: "#DFEEE2" }, Pending: { label: "लंबित", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "ब्लॉक्ड", color: C.safety, bg: "#FCEAE3" }, none: { label: "KYC सबमिट नहीं हुआ", color: C.inkSoft, bg: "#F0EAE0" } };
@@ -5054,12 +5074,25 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
           </button>
         </div>
       )}
+      <div className="grid grid-cols-3 gap-1.5 mb-3">
+        {[
+          ["all", lang === "en" ? "All" : "सभी", drivers.length],
+          ["trial", lang === "en" ? "Free Trial" : "फ्री ट्रायल", trialCount],
+          ["main", lang === "en" ? "Main Routine" : "मुख्य रूटीन", drivers.length - trialCount],
+        ].map(([key, label, count]) => (
+          <button key={key} onClick={() => setTrialTab(key)} className="rounded-lg py-2 text-[11px] font-bold text-center"
+            style={{ background: trialTab === key ? C.marigoldDeep : C.bg, color: trialTab === key ? "#fff" : C.inkSoft, border: `1px solid ${trialTab === key ? C.marigoldDeep : C.line}` }}>
+            {label} ({count})
+          </button>
+        ))}
+      </div>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : "कोई ड्राइवर नहीं मिला।"}</p>}
         {filtered.map((d) => {
           const km = kycMeta[d.kyc] || kycMeta.none;
           const expanded = expandedId === d.id;
+          const daysLeft = trialDaysLeft(d.createdAt);
           return (
             <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: d.blacklisted ? "#FCEAE3" : C.paper }}>
               <div className="flex items-center justify-between">
@@ -5070,6 +5103,13 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: d.online ? C.success : C.inkSoft, background: d.online ? "#DFEEE2" : "#F0EAE0" }}>{d.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
+                  {daysLeft != null ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.marigoldDeep, background: "#FBEBD2" }}>
+                      {lang === "en" ? `Trial · ${daysLeft}d left` : `ट्रायल · ${daysLeft} दिन बाकी`}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.inkSoft, background: "#F0EAE0" }}>{lang === "en" ? "Main Routine" : "मुख्य रूटीन"}</span>
+                  )}
                 </div>
               </div>
 
