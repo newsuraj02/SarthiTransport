@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "sarthi-transport-74865",
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "!**/.well-known/**", "**/node_modules/**"],
     "rewrites": [
