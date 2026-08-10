@@ -1665,6 +1665,12 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   const [city, setCity] = usePersistedState("sarthi_driverReg_city", "");
   const [state, setState] = usePersistedState("sarthi_driverReg_state", "");
   const [pincode, setPincode] = usePersistedState("sarthi_driverReg_pincode", "");
+  // Mandatory acknowledgment that keeping vehicle documents (RC, insurance,
+  // fitness, permit, PUC) and the driving license valid/updated is the
+  // driver/owner's own responsibility, not the app's — see the Vehicle
+  // Documents & Legal Compliance clause in TermsModal. Required before
+  // registration can complete, same as every other field here.
+  const [acceptedDocsTerms, setAcceptedDocsTerms] = usePersistedState("sarthi_driverReg_acceptedDocsTerms", false);
 
   // Step 1 — mobile/OTP verification.
   const [mobile, setMobile] = useState("");
@@ -1695,12 +1701,12 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       const ref = new URLSearchParams(window.location.search).get("ref");
       const referredBy = ref && ref !== driver.mobile ? ref : null;
       setDriver({ ...driver, name: name.trim(), address: address.trim(), city: city.trim(), state: state.trim(), pincode, referredBy, referralCredited: false });
-      setName(""); setAddress(""); setCity(""); setState(""); setPincode("");
+      setName(""); setAddress(""); setCity(""); setState(""); setPincode(""); setAcceptedDocsTerms(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verified, driver]);
 
-  const detailsValid = name.trim().length >= 3 && address.trim().length > 0 && city.trim() && state.trim() && pincode.length === 6;
+  const detailsValid = name.trim().length >= 3 && address.trim().length > 0 && city.trim() && state.trim() && pincode.length === 6 && acceptedDocsTerms;
 
   // Guided-step highlighting for the registration details fields — see
   // GuidedStep. Shared by both places this form renders (the fallback
@@ -1876,7 +1882,17 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </GuidedStep>
         </div>
-        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें"}</div>}
+        <div className="rounded-lg p-3 mt-3" style={{ background: "#FCEAE3", border: `1.5px solid ${C.safety}` }}>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" checked={acceptedDocsTerms} onChange={(e) => setAcceptedDocsTerms(e.target.checked)} className="mt-0.5 shrink-0" style={{ width: 18, height: 18 }} />
+            <span className="text-[11px] font-semibold leading-snug" style={{ color: C.ink }}>
+              {lang === "en"
+                ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
+                : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
+            </span>
+          </label>
+        </div>
+        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
         <button onClick={completeDetails} disabled={!detailsValid} className={`w-full rounded-lg py-3 font-bold text-sm mt-3 ${detailsValid ? "guided-submit-ready" : ""}`}
           style={{ background: detailsValid ? C.marigold : C.line, color: detailsValid ? C.navy : "#9AA3B0" }}>
           {lang === "en" ? "Continue" : "आगे बढ़ें"}
@@ -2001,6 +2017,17 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         </GuidedStep>
       </div>
 
+      <div className="rounded-lg p-3 mt-3" style={{ background: "#FCEAE3", border: `1.5px solid ${C.safety}` }}>
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" checked={acceptedDocsTerms} onChange={(e) => setAcceptedDocsTerms(e.target.checked)} className="mt-0.5 shrink-0" style={{ width: 18, height: 18 }} />
+          <span className="text-[11px] font-semibold leading-snug" style={{ color: C.ink }}>
+            {lang === "en"
+              ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
+              : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
+          </span>
+        </label>
+      </div>
+
       <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
         <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
         {otpStage === "mobile" ? (
@@ -2011,7 +2038,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
                 <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
                   value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
               </div>
-              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
+              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause first" : "पहले ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
                 className={`w-full rounded-lg py-3 font-bold text-sm ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
@@ -5501,7 +5528,7 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang }) {
     ["1. Load Posting", "Once a load is posted, the pickup-drop details cannot be changed. The final fare will be whatever was agreed in the driver's Accepted Bid."],
     ["2. Bidding System", "The customer is free to accept any one bid among multiple drivers. Once a bid is accepted, it is treated as final."],
     ["3. Cancellation", "If a trip is cancelled by either side after a driver is assigned, the deducted commission/advance fare is not refunded instantly — it is held by admin and automatically adjusted against the driver's next accepted trip, so the driver is not out of pocket. Repeated cancellations may lead to temporary account suspension."],
-    ["4. Driver Responsibility", "The driver is required to submit a valid driving license, vehicle RC and KYC documents. No load will be shown until admin approves this verification."],
+    ["4. Vehicle Documents & Legal Compliance", "The driver is required to submit a valid driving license, vehicle RC and KYC documents at signup — no load will be shown until admin approves this verification. Beyond that submission, keeping all vehicle documents (RC, insurance, fitness certificate, national/state permit, PUC) and the driver's license valid, accurate, and up to date at all times is the complete and sole responsibility of the Vehicle Owner and Driver — not Apna Transport. If any document is found incomplete, incorrect, expired, or invalid during any trip or inspection, Apna Transport / the company bears no liability whatsoever. Any fine, challan, or legal action imposed by the RTO, traffic police, or any government authority — including full responsibility for payment or settlement — rests solely with the Driver and Vehicle Owner."],
     ["5. Payment", "Apna Transport does not currently charge any commission on trips. The agreed fare is paid by the customer directly to the driver (cash, UPI, or any digital mode) after delivery — the app does not collect any payment on your behalf. Once a bid is accepted, the customer's and driver's mobile numbers are shared with each other so the trip can be coordinated directly."],
     ["6. Responsibility for Goods & Loading Costs", "It is the customer's responsibility to ensure the safety and correct information (material type and weight) of the goods, and to bear the full cost of loading/unloading labour (hamali) — this is not the driver's expense. The company is not responsible for any loss, damage, or delay of goods — this responsibility lies with the concerned driver/transporter."],
     ["7. Platform's Role — Intermediary Only (Most Important)",
@@ -5511,7 +5538,7 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang }) {
     ["1. लोड पोस्टिंग", "लोड पोस्ट करने के बाद पिकअप-ड्रॉप की जानकारी बदली नहीं जा सकती। अंतिम भाड़ा वही होगा जो ड्राइवर की स्वीकृत बोली (Accepted Bid) में तय हुआ हो।"],
     ["2. बिडिंग सिस्टम", "ग्राहक कई ड्राइवरों में से किसी भी एक बोली को स्वीकार करने के लिए स्वतंत्र है। एक बार बोली स्वीकार होने के बाद वह अंतिम मानी जाएगी।"],
     ["3. रद्दीकरण", "बुकिंग फाइनल होने के बाद अगर किसी भी तरफ से ट्रिप रद्द की जाती है, तो कटा हुआ कमीशन/एडवांस भाड़ा तुरंत वापस नहीं किया जाता — यह एडमिन के पास होल्ड रहता है और ड्राइवर की अगली स्वीकृत ट्रिप के कमीशन में अपने आप एडजस्ट हो जाता है, ताकि ड्राइवर को नुकसान न हो। बार-बार रद्द करने पर खाता अस्थायी रूप से बंद किया जा सकता है।"],
-    ["4. ड्राइवर की जिम्मेदारी", "ड्राइवर को वैध ड्राइविंग लाइसेंस, गाड़ी की RC और KYC दस्तावेज़ जमा करना अनिवार्य है। एडमिन अप्रूवल तक कोई भी लोड नहीं दिखाया जाएगा।"],
+    ["4. गाड़ी के दस्तावेज़ व कानूनी अनुपालन", "ड्राइवर को साइनअप के समय वैध ड्राइविंग लाइसेंस, गाड़ी की RC और KYC दस्तावेज़ जमा करना अनिवार्य है — एडमिन अप्रूवल तक कोई भी लोड नहीं दिखाया जाएगा। इसके अलावा, गाड़ी के सभी दस्तावेज़ों (RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, नेशनल/स्टेट परमिट, PUC) और ड्राइवर के लाइसेंस को हर समय वैध, सही और अपडेट रखने की पूरी और एकमात्र जिम्मेदारी गाड़ी मालिक और ड्राइवर की होगी — अपना ट्रांसपोर्ट की नहीं। यदि किसी भी ट्रिप या जांच के दौरान कोई दस्तावेज़ अधूरा, गलत, एक्सपायर्ड या अमान्य पाया जाता है, तो अपना ट्रांसपोर्ट / कंपनी इसके लिए किसी भी प्रकार से उत्तरदायी नहीं होगी। RTO, ट्रैफिक पुलिस या किसी भी सरकारी प्राधिकरण द्वारा लगाया गया कोई भी जुर्माना, चालान या कानूनी कार्रवाई — भुगतान या निपटान की पूरी जिम्मेदारी सहित — पूरी तरह ड्राइवर और गाड़ी मालिक की होगी।"],
     ["5. भुगतान", "अपना ट्रांसपोर्ट फिलहाल किसी भी ट्रिप पर कोई कमीशन नहीं लेता। तय भाड़ा ग्राहक द्वारा डिलीवरी के बाद सीधे ड्राइवर को (नकद, UPI या किसी भी डिजिटल माध्यम से) दिया जाता है — ऐप आपकी ओर से कोई भुगतान कलेक्ट नहीं करता। बोली स्वीकार होते ही ग्राहक और ड्राइवर के मोबाइल नंबर एक-दूसरे को दिखा दिए जाते हैं, ताकि ट्रिप सीधे आपस में तय की जा सके।"],
     ["6. सामान की जिम्मेदारी व लोडिंग खर्च", "सामान की सुरक्षा और सही जानकारी (मटेरियल टाइप व वजन) देना, साथ ही लोडिंग-अनलोडिंग की हमाली का पूरा खर्च उठाना ग्राहक की जिम्मेदारी है — यह ड्राइवर का खर्च नहीं है। किसी भी प्रकार के माल के नुकसान, टूट-फूट या देरी के लिए कंपनी जिम्मेदार नहीं होगी — यह जिम्मेदारी संबंधित ड्राइवर/ट्रांसपोर्टर की होगी।"],
     ["7. प्लेटफ़ॉर्म की भूमिका — केवल मध्यस्थ (सबसे ज़रूरी)",
