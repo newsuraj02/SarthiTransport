@@ -2822,8 +2822,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{advanceNoticeError}</div>
         )}
 
-        <div className="rounded-lg p-2.5" style={{ background: "#F5E6C8" }}>
-          <div className="text-xs font-bold" style={{ color: "#A8721C" }}>
+        <div className="rounded-lg p-3" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
             {lang === "en" ? "💡 Please keep 15-20% of the fare ready as an advance for the driver once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ड्राइवर को देने के लिए भाड़े का 15-20% एडवांस तैयार रखें।"}
           </div>
         </div>
@@ -3618,8 +3618,8 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
           <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>
             {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
           </div>
-          <div className="rounded-lg p-2 mb-2" style={{ background: "#F5E6C8" }}>
-            <div className="text-[10px] font-bold" style={{ color: "#A8721C" }}>
+          <div className="rounded-lg p-2.5 mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>
               {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
             </div>
           </div>
