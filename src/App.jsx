@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye, EyeOff, Plus,
+  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye, EyeOff, Plus, Loader2,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -2935,7 +2935,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             )}
 
             {sortedBids.length === 0 ? (
-              <div className="text-[11px] py-3 text-center" style={{ color: C.inkSoft }}>{lang === "en" ? "Waiting for driver bids..." : "ड्राइवरों की बोली का इंतज़ार है..."}</div>
+              <div className="rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+                <Loader2 size={16} color={C.marigoldDeep} className="animate-spin" />
+                <span className="text-sm font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Waiting for driver bids..." : "ड्राइवरों की बोली का इंतज़ार है..."}</span>
+              </div>
             ) : (
               <div className="space-y-2">
                 {bidRow(sortedBids[0], true)}
@@ -2970,8 +2973,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
     <div className="px-5 py-5">
       <div className="flex items-center gap-2 mb-3">
         {onAddAnother && (
-          <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-xs font-bold shrink-0" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
-            <ChevronLeft size={16} strokeWidth={2.75} /> {lang === "en" ? "Back" : "वापस"}
+          <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-2 rounded-full text-sm font-black shrink-0 shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
           </button>
         )}
         <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
