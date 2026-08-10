@@ -3057,7 +3057,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
         <div className="rounded-lg p-3" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
           <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
-            {lang === "en" ? "💡 Please keep 15-20% of the fare ready as an advance for the driver once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ड्राइवर को देने के लिए भाड़े का 15-20% एडवांस तैयार रखें।"}
+            {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
           </div>
         </div>
 
