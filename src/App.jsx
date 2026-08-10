@@ -3636,9 +3636,9 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
             <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{bidError}</div>
           )}
 
-          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-lg py-2.5 text-sm font-bold text-white flex items-center justify-center gap-1.5 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready" : ""}`}
-            style={{ background: justSubmitted ? C.success : (canSubmit && !walletShortfall) ? C.marigoldDeep : C.line, color: justSubmitted || (canSubmit && !walletShortfall) ? "#fff" : "#9AA3B0" }}>
-            {justSubmitted ? <><CheckCircle2 size={16} /> {lang === "en" ? "Sent" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : "कोटेशन भेजें")}
+          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-xl py-3.5 text-base font-black text-white shadow-sm flex items-center justify-center gap-1.5 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready" : ""}`}
+            style={{ background: (canSubmit && !walletShortfall) || justSubmitted ? C.success : C.line, color: (canSubmit && !walletShortfall) || justSubmitted ? "#fff" : "#9AA3B0" }}>
+            {justSubmitted ? <><CheckCircle2 size={18} /> {lang === "en" ? "Sent" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : "कोटेशन भेजें")}
           </button>
         </>
       )}
