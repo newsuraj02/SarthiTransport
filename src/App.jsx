@@ -4591,6 +4591,10 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
 
   const todaysEarnings = (bookings || []).filter((b) => b.status === "Completed" && isToday(b)).reduce((s, b) => s + (b.fare || 0) * (commissionPct / 100), 0);
   const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b));
+  // Currently-open loads no driver has bid on yet — the core marketplace-
+  // health signal (not scoped to today, since a load that's sat with zero
+  // bids since yesterday is exactly the kind of thing admin needs to see).
+  const noBidsList = (bookings || []).filter((b) => b.status === "Bidding" && (!b.bids || b.bids.length === 0));
   // Any not-yet-finished booking scheduled for a future date, regardless of
   // whether it's still awaiting bids or already has a driver assigned.
   const advanceBookingsList = (bookings || []).filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed");
@@ -4669,6 +4673,17 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
         </div>
       ),
     },
+    noBids: {
+      title: lang === "en" ? "Loads with no bids yet" : "बिना बोली वाले लोड",
+      emptyMsg: lang === "en" ? "Every open load has at least one bid." : "हर खुले लोड पर कम से कम एक बोली आ चुकी है।",
+      items: noBidsList,
+      renderItem: (b) => (
+        <div key={b.id} className="rounded-lg p-2.5" style={{ background: "#FCEAE3" }}>
+          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+          <div className="text-[11px] mt-1" style={{ color: C.safety }}>{materialLabel(b.material, lang)} · {b.weight}{lang === "en" ? "kg" : "किग्रा"} · {activityTime(b)}{b.scheduledFor ? ` · ${b.scheduledFor}` : ""}</div>
+        </div>
+      ),
+    },
     newToday: {
       title: lang === "en" ? "New registrations today" : "आज के नए रजिस्ट्रेशन",
       emptyMsg: lang === "en" ? "No new signups today yet." : "आज तक कोई नया साइनअप नहीं हुआ।",
@@ -4722,12 +4737,15 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
 
   return (
     <div>
-      {/* Most to least important: things admin must act on right now
-          (KYC queue, at-risk wallets) first, then today's health signals
-          (cancellations, earnings, bookings, capacity), then pipeline
-          (advance bookings), then growth metrics (signups, trial) last —
-          those are useful context, not something to act on today. */}
+      {/* Most to least important: loads actively failing to get bids —
+          the core marketplace working or not, right now — comes first,
+          then other things admin must act on (KYC queue, at-risk wallets),
+          then today's health signals (cancellations, earnings, bookings,
+          capacity), then pipeline (advance bookings), then growth metrics
+          (signups, trial) last — those are useful context, not something
+          to act on today. */}
       <div className="grid grid-cols-2 gap-3 mb-5">
+        <StatTile label={lang === "en" ? "Loads with no bids yet" : "बिना बोली वाले लोड"} value={noBidsList.length} color={noBidsList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("noBids")} />
         <StatTile label={lang === "en" ? "Pending KYC approvals" : "लंबित KYC अप्रूवल"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("kyc") : undefined} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
         <StatTile label={lang === "en" ? "Cancelled today" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
