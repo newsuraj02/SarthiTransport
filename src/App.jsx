@@ -2398,7 +2398,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Upload Documents / Send Invoice" : "दस्तावेज़ अपलोड करें / इनवॉइस भेजें"}</h3>
+          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Send Bill" : "बिल भेजें"}</h3>
           <button onClick={onClose}><X size={18} color={C.inkSoft} /></button>
         </div>
 
@@ -2427,22 +2427,48 @@ function BillDocumentsModal({ booking, onClose, lang }) {
 // Driver-facing counterpart of BillDocumentsModal — shows once the customer
 // has uploaded all three documents, and links to the merged PDF as soon as
 // the Cloud Function finishes combining them.
-function BillDocumentsBanner({ trip, lang }) {
-  const docs = trip.documents;
-  const complete = docs?.original?.url && docs?.duplicate?.url && docs?.ewayBill?.url;
-  if (!complete) return null;
+// Driver-facing read-only view opened by the "Receive Bill" button — shows
+// per-document status (received/pending) and links to the merged PDF once
+// the Cloud Function has combined all three. Drivers never upload here;
+// only the customer does, from BillDocumentsModal. Works both mid-ride
+// (myTrip) and post-ride (a completed trip row), so it's a plain read of
+// whatever the passed-in booking already has on its documents field.
+function BillDocumentsViewModal({ trip, onClose, lang }) {
+  const docs = trip.documents || {};
+  const complete = docs.original?.url && docs.duplicate?.url && docs.ewayBill?.url;
+
+  const row = (label, doc) => (
+    <div className="rounded-xl p-3 mb-2 flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${doc?.url ? C.success : C.line}` }}>
+      <FileText size={16} color={doc?.url ? C.success : C.inkSoft} />
+      <span className="text-sm font-bold flex-1" style={{ color: C.ink }}>{label}</span>
+      {doc?.url ? <CheckCircle2 size={16} color={C.success} /> : <span className="text-[10px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Pending" : "बाकी"}</span>}
+    </div>
+  );
+
   return (
-    <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#DFEEE2", border: `1.5px solid ${C.success}` }}>
-      <div className="text-sm font-black flex items-center gap-1.5" style={{ color: C.success }}>
-        <FileText size={15} /> {lang === "en" ? "Invoice & E-Way Bill Received" : "इनवॉइस और ई-वे बिल मिल गया"}
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
+      <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Receive Bill" : "बिल प्राप्त करें"}</h3>
+          <button onClick={onClose}><X size={18} color={C.inkSoft} /></button>
+        </div>
+
+        {row(lang === "en" ? "📄 Original Copy (Invoice)" : "📄 ओरिजिनल कॉपी (इनवॉइस)", docs.original)}
+        {row(lang === "en" ? "📑 Duplicate Copy (For Transport)" : "📑 डुप्लीकेट कॉपी (ट्रांसपोर्ट के लिए)", docs.duplicate)}
+        {row(lang === "en" ? "🚚 E-Way Bill" : "🚚 ई-वे बिल", docs.ewayBill)}
+
+        {complete ? (
+          docs.mergedPdfUrl ? (
+            <a href={docs.mergedPdfUrl} target="_blank" rel="noreferrer" className="w-full mt-2 rounded-xl py-3 text-sm font-black text-white flex items-center justify-center gap-2" style={{ background: C.success }}>
+              <Download size={16} /> {lang === "en" ? "View / Download PDF" : "PDF देखें / डाउनलोड करें"}
+            </a>
+          ) : (
+            <div className="text-xs font-semibold text-center mt-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Preparing combined PDF..." : "PDF तैयार हो रही है..."}</div>
+          )
+        ) : (
+          <div className="text-xs font-semibold text-center mt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Waiting for the customer to send the bill." : "ग्राहक द्वारा बिल भेजे जाने का इंतज़ार है।"}</div>
+        )}
       </div>
-      {docs.mergedPdfUrl ? (
-        <a href={docs.mergedPdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold" style={{ color: C.success }}>
-          <Download size={13} /> {lang === "en" ? "View / Download PDF" : "PDF देखें / डाउनलोड करें"}
-        </a>
-      ) : (
-        <div className="text-[11px] mt-1" style={{ color: C.success }}>{lang === "en" ? "Preparing combined PDF..." : "PDF तैयार हो रही है..."}</div>
-      )}
     </div>
   );
 }
@@ -3201,10 +3227,14 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <CheckCircle2 size={15} color={C.success} />
           </div>
         </div>
-        <div>
-          <div className="text-base font-bold" style={{ color: C.ink }}>{b.driverName}</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-base font-bold truncate" style={{ color: C.ink }}>{b.driverName}</div>
           <span className="inline-block mt-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: C.pimpri }}>{lang === "en" ? "Verified" : "सत्यापित"}</span>
         </div>
+        <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1 pl-2 pr-2.5 py-1.5 rounded-full text-[11px] font-black"
+          style={{ background: docsSent ? "#DFEEE2" : "#F5E6C8", color: docsSent ? C.success : C.marigoldDeep, border: `1.5px solid ${docsSent ? C.success : C.marigoldDeep}` }}>
+          <FileText size={13} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Bill" : "बिल भेजें")}
+        </button>
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -3284,9 +3314,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
         <div className="flex items-center gap-4 mt-2 flex-wrap">
           <button onClick={shareTrip} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
-          <button onClick={() => setShowDocs(true)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: docsSent ? C.success : C.marigoldDeep }}>
-            <FileText size={12} /> {docsSent ? (lang === "en" ? "Documents Sent ✓" : "दस्तावेज़ भेजे गए ✓") : (lang === "en" ? "Upload Documents" : "दस्तावेज़ अपलोड करें")}
-          </button>
           {!b.loadingStartedAt && (
             <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
           )}
@@ -3308,6 +3335,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
   const VEHICLES = vehicleTypes;
   const others = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled");
+  const [docsBooking, setDocsBooking] = useState(null);
   const statusMeta = lang === "en"
     ? { Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
     : { Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
@@ -3347,7 +3375,12 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
                 <span className="text-lg font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{b.fare ? fmt(b.fare) : "—"}</span>
               </div>
               {b.status === "Completed" && (
-                <button onClick={() => downloadInvoice(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Download size={12} /> {lang === "en" ? "Invoice" : "इनवॉइस"}</button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setDocsBooking(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: b.documents?.original?.url && b.documents?.duplicate?.url && b.documents?.ewayBill?.url ? C.success : C.marigoldDeep }}>
+                    <FileText size={12} /> {lang === "en" ? "Send Bill" : "बिल भेजें"}
+                  </button>
+                  <button onClick={() => downloadInvoice(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Download size={12} /> {lang === "en" ? "Invoice" : "इनवॉइस"}</button>
+                </div>
               )}
             </div>
             {b.status === "Completed" && b.fare > 0 && (
@@ -3364,6 +3397,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
           </div>
         );
       })}
+      {docsBooking && <BillDocumentsModal booking={docsBooking} onClose={() => setDocsBooking(null)} lang={lang} />}
     </div>
   );
 }
@@ -3951,6 +3985,8 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
 
 function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
+  const [showDocs, setShowDocs] = useState(false);
+  const billDocsComplete = !!(myTrip?.documents?.original?.url && myTrip?.documents?.duplicate?.url && myTrip?.documents?.ewayBill?.url);
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
   // so "above" vehicle options can bid too, not just an exact match.
@@ -4085,14 +4121,16 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           <RideTypeBanner booking={myTrip} lang={lang} />
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Truck size={15} /> {lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</span>
+            <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1 pl-2 pr-2.5 py-1.5 rounded-full text-[11px] font-black"
+              style={{ background: billDocsComplete ? "#DFEEE2" : "#F5E6C8", color: billDocsComplete ? C.success : C.marigoldDeep, border: `1.5px solid ${billDocsComplete ? C.success : C.marigoldDeep}` }}>
+              <FileText size={13} /> {billDocsComplete ? (lang === "en" ? "Received ✓" : "मिल गया ✓") : (lang === "en" ? "Receive Bill" : "बिल प्राप्त करें")}
+            </button>
           </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{myTrip.pickup}</span></div>
             <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{myTrip.drop}</span></div>
           </div>
-
-          <BillDocumentsBanner trip={myTrip} lang={lang} />
 
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
             <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
@@ -4153,6 +4191,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
         </div>
       )}
+      {showDocs && myTrip && <BillDocumentsViewModal trip={myTrip} onClose={() => setShowDocs(false)} lang={lang} />}
     </div>
   );
 }
@@ -4310,6 +4349,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
 
 function DriverHistory({ tripLog, driver, commissionPct, lang }) {
   const myTrips = tripLog.filter((t) => t.driverName === driver.name);
+  const [docsTrip, setDocsTrip] = useState(null);
   return (
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Trip History" : "ट्रिप हिस्ट्री"}</h2>
@@ -4336,9 +4376,16 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
               </div>
               {t.status === "Cancelled" ? null : t.rating ? <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{stars(t.rating)}</div> : <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status === "Ongoing" ? (lang === "en" ? "In progress" : "चालू") : (lang === "en" ? "Rating pending" : "रेटिंग बाकी")}</div>}
             </div>
+            {t.status === "Completed" && (
+              <button onClick={() => setDocsTrip(t)} className="text-[11px] font-semibold mt-1.5 flex items-center gap-1"
+                style={{ color: t.documents?.original?.url && t.documents?.duplicate?.url && t.documents?.ewayBill?.url ? C.success : C.marigoldDeep }}>
+                <FileText size={12} /> {lang === "en" ? "Receive Bill" : "बिल प्राप्त करें"}
+              </button>
+            )}
           </div>
         ))}
       </div>
+      {docsTrip && <BillDocumentsViewModal trip={docsTrip} onClose={() => setDocsTrip(null)} lang={lang} />}
     </div>
   );
 }
