@@ -74,6 +74,18 @@ function parseScheduledFor(scheduledFor) {
   return new Date(`${datePart}T${timePart}:00`);
 }
 
+// Same great-circle distance + radius as src/App.jsx's haversineKm/BID_RADIUS_KM
+// — kept in sync manually, same as the other client-side logic duplicated
+// above. Only applies to current (non-advance) loads.
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+const BID_RADIUS_KM = 100;
+
 // Mirrors src/App.jsx's getBookingWindow — the real-world time window a
 // driver is committed to for an already-accepted Ongoing booking.
 function getBookingWindow(b) {
@@ -138,6 +150,15 @@ exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event
     const driverVehicleDef = vehicleTypesByKey[driver.vehicleSpec?.type];
     if (driverVehicleDef && loadVehicleDef && loadVehicleDef.capacityKg > driverVehicleDef.capacityKg) return;
     if (driverVehicleDef && !loadVehicleDef && load.vehicle !== driver.vehicleSpec?.type) return;
+
+    // Current (non-advance) loads only alert drivers within BID_RADIUS_KM of
+    // the pickup point — same rule as the client's openLoads filter. Advance
+    // bookings are exempt since the driver has time to travel there.
+    if (!load.scheduledFor && load.pickupLat != null && load.pickupLng != null) {
+      if (!driver.lastKnownLocation) return;
+      const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng);
+      if (distKm > BID_RADIUS_KM) return;
+    }
 
     // No ping if this load would conflict with a commitment the driver
     // already has (current trip in progress, or an upcoming Advance booking

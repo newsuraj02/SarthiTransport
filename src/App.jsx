@@ -406,6 +406,12 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// For a current (non-advance) booking, only drivers within this straight-line
+// radius of the pickup point can see/bid on the load — keeps bids realistic
+// for jobs that need a truck right away. Advance bookings aren't restricted
+// since the driver has time to travel to the pickup point before the slot.
+const BID_RADIUS_KM = 100;
+
 // Roads aren't a straight line, so straight-line distance is scaled up by a
 // fixed factor as a stand-in for real road distance — typical for Indian
 // urban/semi-urban road networks. Good enough until this gets replaced by a
@@ -3808,6 +3814,15 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
   // around, it's simply not in the list.
   const openLoads = bookings.filter((b) => {
     if (b.status !== "Bidding") return false;
+    // Current (immediate) loads only go to drivers within BID_RADIUS_KM of
+    // the pickup point — a driver with no location on file yet (hasn't gone
+    // Online long enough for a GPS fix) simply doesn't see these loads.
+    // Advance bookings are exempt since the driver has time to travel there.
+    if (!isFutureAdvance(b.scheduledFor) && b.pickupLat != null && b.pickupLng != null) {
+      if (!driver.lastKnownLocation) return false;
+      const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, b.pickupLat, b.pickupLng);
+      if (distKm > BID_RADIUS_KM) return false;
+    }
     if (findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor }, bookings, vehicleTypes, lang)) return false;
     if (!driverVehicleDef) return true;
     const loadVehicleDef = vehicleTypes.find((v) => v.key === b.vehicle);
@@ -3839,23 +3854,26 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
   // Real GPS live-tracking: while this driver has an active trip, share their
   // actual device location so the customer (and admin fleet map) see it live.
+  // Also runs whenever the driver is simply Online (not on a trip) so
+  // lastKnownLocation stays fresh for the 100km bid-radius check below —
+  // otherwise an idle online driver would have no location on file at all.
   const lastGpsWriteRef = useRef(0);
   useEffect(() => {
-    if (!myTrip || !navigator.geolocation) return;
+    if ((!myTrip && !driver.online) || !navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const now = Date.now();
         if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
         lastGpsWriteRef.current = now;
         const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
-        patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
+        if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
         if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
       },
       (err) => console.error("GPS tracking error", err),
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [myTrip?.id, driver.mobile]);
+  }, [myTrip?.id, driver.online, driver.mobile]);
 
   return (
     <div className="px-5 py-5">
@@ -6186,6 +6204,18 @@ export default function App() {
     const b = bookings.find((x) => x.id === bookingId);
     if (!b) return null;
     const bidDriver = drivers.find((d) => d.name === bid.driverName);
+    // Authoritative re-check (not just the client-side openLoads filter) —
+    // current loads only accept bids from drivers within BID_RADIUS_KM of
+    // the pickup point; advance bookings are exempt.
+    if (!isFutureAdvance(b.scheduledFor) && b.pickupLat != null && b.pickupLng != null) {
+      const loc = bidDriver?.lastKnownLocation;
+      const distKm = loc ? haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) : null;
+      if (distKm == null || distKm > BID_RADIUS_KM) {
+        return lang === "en"
+          ? `⚠️ You are outside the ${BID_RADIUS_KM}km bidding radius for this load's pickup point.`
+          : `⚠️ आप इस लोड के पिकअप स्थान से ${BID_RADIUS_KM}km के बोली दायरे से बाहर हैं।`;
+      }
+    }
     const conflict = findDriverLoadConflict(bidDriver, { id: b.id, scheduledFor: b.scheduledFor, hours: bid.hours }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
     const rest = (b.bids || []).filter((x) => x.driverName !== bid.driverName);
