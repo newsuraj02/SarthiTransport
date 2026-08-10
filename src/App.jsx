@@ -5756,9 +5756,9 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "fleet" && <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : "एडमिन"} 👋</div>}
       <div className="flex gap-2 mb-5 overflow-x-auto">
         {tabs.map(([k, label, Icon]) => (
-          <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap"
-            style={{ background: tab === k ? C.navy : C.paper, color: tab === k ? "#fff" : C.inkSoft, border: `1px solid ${tab === k ? C.navy : C.line}` }}>
-            <Icon size={13} /> {lang === "en" ? (EN_LABELS[k] || label) : label}
+          <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-black whitespace-nowrap shadow-sm"
+            style={{ background: tab === k ? C.navy : C.marigold, color: tab === k ? "#fff" : C.navy, border: `1.5px solid ${tab === k ? C.navy : C.marigoldDeep}` }}>
+            <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : label}
           </button>
         ))}
       </div>
