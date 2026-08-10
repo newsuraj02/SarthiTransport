@@ -2706,10 +2706,20 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   // by one in that mode.
   const hasDateTimeStep = bookingMode === "advance";
   const stepOffset = hasDateTimeStep ? 1 : 0;
+  // Pickup/Drop have a live suggestion dropdown, so their step only counts
+  // as done once a real place is actually resolved (a suggestion tapped, the
+  // map pin, current location, or — typing a full address by hand — the
+  // debounced geocode a little further down) rather than the instant any
+  // character is typed; that's what makes the guided highlight wait for an
+  // actual selection instead of jumping to Drop mid-keystroke. Falls back to
+  // the old plain non-empty check if Maps never loaded, so a Maps outage
+  // can't strand the form on this step forever. Material is a <select> (no
+  // in-between typed state) and Weight is a plain number field, so both
+  // still just need a non-empty value, same as before.
   const stepCompleted = [
     ...(hasDateTimeStep ? [!!advanceDate && !!advanceTime] : []),
-    pickup.trim().length > 0,
-    drop.trim().length > 0,
+    pickupCoords != null || (!mapsReady && pickup.trim().length > 0),
+    dropCoords != null || (!mapsReady && drop.trim().length > 0),
     !!material,
     weight.trim().length > 0,
   ];
