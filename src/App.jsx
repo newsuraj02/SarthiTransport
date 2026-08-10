@@ -3596,21 +3596,21 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
                 <div className="px-1.5 py-1.5 text-center" style={{ borderRight: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
                   <div className="text-[9px] font-extrabold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Fare ₹ *" : "कुल भाड़ा ₹ *"}</div>
                   <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus
-                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 18, fontWeight: 800 }} />
+                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 22, fontWeight: 900 }} />
                 </div>
               </GuidedStep>
               <GuidedStep {...stepProps(1)} lang={lang}>
                 <div className="px-1.5 py-1.5 text-center" style={{ borderRight: `1px solid ${C.marigoldDeep}` }}>
                   <div className="text-[9px] font-bold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Allowed hrs *" : "अलाउ घंटे *"}</div>
                   <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
-                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 15, fontWeight: 800 }} />
+                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 18, fontWeight: 900 }} />
                 </div>
               </GuidedStep>
               <GuidedStep {...stepProps(2)} lang={lang}>
                 <div className="px-1.5 py-1.5 text-center">
                   <div className="text-[9px] font-bold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Waiting ₹/hr *" : "वेटिंग ₹/घं *"}</div>
                   <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
-                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 13, fontWeight: 800 }} />
+                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 16, fontWeight: 900 }} />
                 </div>
               </GuidedStep>
             </div>
