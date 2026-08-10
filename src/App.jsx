@@ -4722,13 +4722,18 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
 
   return (
     <div>
+      {/* Most to least important: things admin must act on right now
+          (KYC queue, at-risk wallets) first, then today's health signals
+          (cancellations, earnings, bookings, capacity), then pipeline
+          (advance bookings), then growth metrics (signups, trial) last —
+          those are useful context, not something to act on today. */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         <StatTile label={lang === "en" ? "Pending KYC approvals" : "लंबित KYC अप्रूवल"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("kyc") : undefined} />
-        <StatTile label={lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
-        <StatTile label={lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
+        <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
         <StatTile label={lang === "en" ? "Cancelled today" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Today's earnings (commission)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
-        <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
+        <StatTile label={lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
+        <StatTile label={lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
         <StatTile label={lang === "en" ? "Total advance bookings" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
         <StatTile label={lang === "en" ? "New registrations today" : "आज के नए रजिस्ट्रेशन"} value={newDriversToday.length + newCustomersToday.length} color={C.pimpri} onClick={() => setDetailView("newToday")} />
         <StatTile label={lang === "en" ? "Drivers in free trial" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
