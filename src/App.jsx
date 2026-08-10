@@ -2446,7 +2446,14 @@ function useGuidedSteps(stepCompleted) {
     : rawActive;
   const stepRefsHolder = useRef([]);
   stepRefsHolder.current = stepCompleted.map((_, i) => stepRefsHolder.current[i] || { current: null });
+  // Skip the very first run — a form/card that just mounted (e.g. a new
+  // load alert appearing the moment a driver goes online) shouldn't yank
+  // the page straight to its first field before the driver has even seen
+  // what's above it. Only auto-scroll once the user has actually advanced
+  // past a step themselves.
+  const mountedRef = useRef(false);
   useEffect(() => {
+    if (!mountedRef.current) { mountedRef.current = true; return; }
     if (activeStep >= 0) stepRefsHolder.current[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStep]);
