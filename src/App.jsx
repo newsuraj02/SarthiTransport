@@ -2616,22 +2616,28 @@ function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, o
   );
 }
 
-// Shared by every multi-step guided form (see GuidedStep above). Naively
-// picking the first incomplete field as "active" made the highlight jump
-// away from a field the instant its value became non-empty/non-zero —
-// e.g. typing "5000" into Fare, one digit at a time, would yank the glow
-// to the next field right after the first "5", while still mid-keystroke.
-// This pins the active step to whichever field the user is actually still
-// focused in, even after it becomes "complete", and only really advances
-// once focus genuinely leaves that step (a true blur — not just moving
-// between two elements inside the same step, like a text input and its
-// own clear button). A step completed some other way that was never
-// focused (e.g. the "Repeat last trip" shortcut filling several fields at
-// once) still advances immediately, same as before.
-function useGuidedSteps(stepCompleted) {
+// Shared by every multi-step guided form (see GuidedStep above). By default,
+// the active step auto-shifts to the next field the instant the current one
+// becomes complete — the original, snappy behavior every guided form except
+// the driver's bid card still uses.
+//
+// The driver's Fare/Allowed Hours/Waiting bid card (LoadAlertCard) opts into
+// `pinFocus: true` instead, because naively picking the first incomplete
+// field as "active" made the highlight jump away from a field the instant
+// its value became non-empty/non-zero there specifically — e.g. typing
+// "5000" into Fare, one digit at a time, would yank the glow to the next
+// field right after the first "5", while still mid-keystroke. With
+// pinFocus on, the active step stays pinned to whichever field the user is
+// actually still focused in, even after it becomes "complete", and only
+// really advances once focus genuinely leaves that step (a true blur — not
+// just moving between two elements inside the same step). Every other
+// guided form doesn't have that mid-keystroke false-positive (their fields
+// don't flip "complete" on a truthy partial number), so they keep the
+// plain auto-shift-on-completion behavior.
+function useGuidedSteps(stepCompleted, { pinFocus = false } = {}) {
   const [focusedStep, setFocusedStep] = useState(null);
   const rawActive = stepCompleted.findIndex((done) => !done); // -1 once all done
-  const activeStep = focusedStep != null && stepCompleted[focusedStep] && (rawActive === -1 || rawActive > focusedStep)
+  const activeStep = pinFocus && focusedStep != null && stepCompleted[focusedStep] && (rawActive === -1 || rawActive > focusedStep)
     ? focusedStep
     : rawActive;
   const stepRefsHolder = useRef([]);
@@ -2651,8 +2657,8 @@ function useGuidedSteps(stepCompleted) {
     active: activeStep === i,
     completed: stepCompleted[i],
     stepRef: stepRefsHolder.current[i],
-    onFocusStep: () => setFocusedStep(i),
-    onBlurStep: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocusedStep((f) => (f === i ? null : f)); },
+    onFocusStep: pinFocus ? () => setFocusedStep(i) : undefined,
+    onBlurStep: pinFocus ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocusedStep((f) => (f === i ? null : f)); } : undefined,
   });
   return { activeStep, stepProps };
 }
@@ -3733,8 +3739,11 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   const walletShortfall = !isInTrial(driver.createdAt) && (driver.wallet - requiredForQuote) < minWallet;
 
   // Guided-step highlighting for the 3 quote fields — see GuidedStep/useGuidedSteps.
+  // pinFocus is on here specifically because these fields flip "complete"
+  // on a truthy partial number (Number("5") > 0), which caused the
+  // mid-keystroke jump bug useGuidedSteps' pinFocus mode exists to fix.
   const stepCompleted = [Number(amount) > 0, Number(allowedHours) > 0, Number(extraHourRate) > 0];
-  const { activeStep, stepProps } = useGuidedSteps(stepCompleted);
+  const { activeStep, stepProps } = useGuidedSteps(stepCompleted, { pinFocus: true });
 
   const otherBids = load.bids.filter((b) => b.driverName !== driver.name);
   const lowestOther = otherBids.length ? otherBids.reduce((min, b) => b.amount < min.amount ? b : min) : null;
