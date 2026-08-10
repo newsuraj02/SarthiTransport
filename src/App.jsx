@@ -2634,7 +2634,7 @@ function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, o
 // guided form doesn't have that mid-keystroke false-positive (their fields
 // don't flip "complete" on a truthy partial number), so they keep the
 // plain auto-shift-on-completion behavior.
-function useGuidedSteps(stepCompleted, { pinFocus = false } = {}) {
+function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true } = {}) {
   const [focusedStep, setFocusedStep] = useState(null);
   const rawActive = stepCompleted.findIndex((done) => !done); // -1 once all done
   const activeStep = pinFocus && focusedStep != null && stepCompleted[focusedStep] && (rawActive === -1 || rawActive > focusedStep)
@@ -2646,13 +2646,17 @@ function useGuidedSteps(stepCompleted, { pinFocus = false } = {}) {
   // load alert appearing the moment a driver goes online) shouldn't yank
   // the page straight to its first field before the driver has even seen
   // what's above it. Only auto-scroll once the user has actually advanced
-  // past a step themselves.
+  // past a step themselves. autoScroll:false opts a form out of this
+  // entirely — used by CustomerBooking, where scrolling the page while a
+  // Pickup/Drop suggestion dropdown is open fights with the user browsing
+  // that list themselves.
   const mountedRef = useRef(false);
   useEffect(() => {
+    if (!autoScroll) return;
     if (!mountedRef.current) { mountedRef.current = true; return; }
     if (activeStep >= 0) stepRefsHolder.current[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStep]);
+  }, [activeStep, autoScroll]);
   const stepProps = (i) => ({
     active: activeStep === i,
     completed: stepCompleted[i],
@@ -2680,6 +2684,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null); // {lat,lng} | null
   const [dropCoords, setDropCoords] = useState(null);
+  // Separate from pickupCoords/dropCoords on purpose: coords also get filled
+  // in silently by the debounced geocode below (for distance/booking data
+  // quality) whenever someone types a full address by hand and never taps a
+  // suggestion — that shouldn't count as "done" for the guided step, only an
+  // actual explicit action (tapping a suggestion, the map pin, current
+  // location, or Repeat Last Trip) does.
+  const [pickupSelected, setPickupSelected] = useState(false);
+  const [dropSelected, setDropSelected] = useState(false);
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
   const [showAllVehicles, setShowAllVehicles] = useState(true);
   const [material, setMaterial] = useState("");
@@ -2707,23 +2719,26 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const hasDateTimeStep = bookingMode === "advance";
   const stepOffset = hasDateTimeStep ? 1 : 0;
   // Pickup/Drop have a live suggestion dropdown, so their step only counts
-  // as done once a real place is actually resolved (a suggestion tapped, the
-  // map pin, current location, or — typing a full address by hand — the
-  // debounced geocode a little further down) rather than the instant any
-  // character is typed; that's what makes the guided highlight wait for an
-  // actual selection instead of jumping to Drop mid-keystroke. Falls back to
-  // the old plain non-empty check if Maps never loaded, so a Maps outage
-  // can't strand the form on this step forever. Material is a <select> (no
-  // in-between typed state) and Weight is a plain number field, so both
-  // still just need a non-empty value, same as before.
+  // as done once the user has actually taken an explicit action — tapped a
+  // suggestion, the map pin, current location, or Repeat Last Trip (see
+  // pickupSelected/dropSelected) — not just from typing, and not from the
+  // silent debounced-geocode fallback further down either (that only fills
+  // in coordinates for distance/booking data, it shouldn't auto-advance the
+  // step on its own whenever the user pauses mid-sentence while typing).
+  // Falls back to the old plain non-empty check if Maps never loaded, so a
+  // Maps outage can't strand the form on this step forever. Material is a
+  // <select> (no in-between typed state) and Weight is a plain number
+  // field, so both still just need a non-empty value, same as before.
   const stepCompleted = [
     ...(hasDateTimeStep ? [!!advanceDate && !!advanceTime] : []),
-    pickupCoords != null || (!mapsReady && pickup.trim().length > 0),
-    dropCoords != null || (!mapsReady && drop.trim().length > 0),
+    pickupSelected || (!mapsReady && pickup.trim().length > 0),
+    dropSelected || (!mapsReady && drop.trim().length > 0),
     !!material,
     weight.trim().length > 0,
   ];
-  const { activeStep, stepProps } = useGuidedSteps(stepCompleted);
+  // autoScroll:false — see useGuidedSteps; scrolling the page while the
+  // Pickup/Drop suggestion dropdown is open fights with browsing that list.
+  const { activeStep, stepProps } = useGuidedSteps(stepCompleted, { autoScroll: false });
 
   // If the customer typed Pickup/Drop by hand without tapping an
   // Autocomplete suggestion, pickupCoords/dropCoords stay null — geocode
@@ -2759,8 +2774,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       .catch((e) => console.error("[distance matrix]", e));
   }, [pickupCoords, dropCoords, mapsReady]);
 
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); };
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupSelected(true); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropSelected(true); };
 
   const [locatingPickup, setLocatingPickup] = useState(false);
   const useMyCurrentLocation = () => {
@@ -2770,6 +2785,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         setPickupCoords({ lat: latitude, lng: longitude });
+        setPickupSelected(true);
         if (mapsReady && window.google) {
           new window.google.maps.Geocoder().geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
             setPickup(status === "OK" && results?.[0] ? results[0].formatted_address : `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
@@ -2834,7 +2850,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
     setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
-    setPickupCoords(null); setDropCoords(null);
+    setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
@@ -2913,8 +2929,12 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         {lastBooking && !pickup && !drop && (
           <button onClick={() => {
             setPickup(lastBooking.pickup); setDrop(lastBooking.drop); setMaterial(lastBooking.material);
-            setPickupCoords(lastBooking.pickupLat != null && lastBooking.pickupLng != null ? { lat: lastBooking.pickupLat, lng: lastBooking.pickupLng } : null);
-            setDropCoords(lastBooking.dropLat != null && lastBooking.dropLng != null ? { lat: lastBooking.dropLat, lng: lastBooking.dropLng } : null);
+            const hasPickupCoords = lastBooking.pickupLat != null && lastBooking.pickupLng != null;
+            const hasDropCoords = lastBooking.dropLat != null && lastBooking.dropLng != null;
+            setPickupCoords(hasPickupCoords ? { lat: lastBooking.pickupLat, lng: lastBooking.pickupLng } : null);
+            setDropCoords(hasDropCoords ? { lat: lastBooking.dropLat, lng: lastBooking.dropLng } : null);
+            setPickupSelected(hasPickupCoords);
+            setDropSelected(hasDropCoords);
           }}
             className="w-full flex items-center gap-2.5 rounded-lg p-2.5 text-left" style={{ background: "#DFEEE2" }}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: C.success }}>
@@ -2934,17 +2954,17 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               lang={lang}
               dotColor={C.success}
               value={pickup}
-              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
+              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupSelected(false); }}
               onPlaceSelected={onPickupPlaceSelected}
               mapsReady={mapsReady}
               placeholder={lang === "en" ? "🟢 Where to pick up the load from? (Pickup)" : "🟢 सामान कहाँ से उठाना है? (पिकअप)"}
-              onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); }}
+              onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); setPickupSelected(false); }}
               onMapPin={() => setMapField("pickup")}
               onUseCurrentLocation={useMyCurrentLocation}
               locating={locatingPickup}
               areaLabel={findArea(pickup) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(pickup)}` : null}
               suggestions={suggestAreas(pickup)}
-              onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
+              onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); setPickupSelected(false); }}
             />
           </GuidedStep>
 
@@ -2954,15 +2974,15 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               lang={lang}
               dotColor={C.safety}
               value={drop}
-              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
+              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropSelected(false); }}
               onPlaceSelected={onDropPlaceSelected}
               mapsReady={mapsReady}
               placeholder={lang === "en" ? "🔴 Where to unload the goods? (Drop)" : "🔴 सामान कहाँ उतारना है? (ड्रॉप)"}
-              onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); }}
+              onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); setDropSelected(false); }}
               onMapPin={() => setMapField("drop")}
               areaLabel={findArea(drop) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(drop)}` : null}
               suggestions={suggestAreas(drop)}
-              onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
+              onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
             />
           </GuidedStep>
         </div>
@@ -3053,8 +3073,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           onClose={() => setMapField(null)}
           onConfirm={(address, lat, lng) => {
             const coords = lat != null && lng != null ? { lat, lng } : null;
-            if (mapField === "pickup") { setPickup(address); setPickupCoords(coords); }
-            else { setDrop(address); setDropCoords(coords); }
+            if (mapField === "pickup") { setPickup(address); setPickupCoords(coords); setPickupSelected(coords != null); }
+            else { setDrop(address); setDropCoords(coords); setDropSelected(coords != null); }
             setMapField(null);
           }}
         />
