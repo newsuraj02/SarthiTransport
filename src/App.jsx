@@ -5680,6 +5680,18 @@ export default function App() {
   // Customer/Driver by mistake and going back doesn't force a re-login.
   const goHome = () => setRole(null);
   const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
+  // Google Places Autocomplete's suggestion language is fixed when its
+  // script loads (see googleMapsContext.jsx) and can't be hot-swapped — so
+  // switching the language reloads the page. localStorage is written
+  // directly (not just via setLang's own effect) so the new value is
+  // guaranteed to be there before the reload happens, regardless of
+  // React's effect-flush timing.
+  const switchLang = (l) => {
+    if (l === lang) return;
+    try { window.localStorage.setItem("sarthi_lang", JSON.stringify(l)); } catch { /* storage unavailable */ }
+    setLang(l);
+    window.location.reload();
+  };
   const [showTerms, setShowTerms] = useState(false);
   // Shared across every customer (like vehicleTypes) so a material one
   // customer adds gets suggested to everyone else too, instead of staying
@@ -6056,11 +6068,11 @@ export default function App() {
             </div>
             <div className="flex items-center gap-1 rounded-full pl-2 pr-1 py-1 shrink-0" style={{ background: "#3D1B17", border: `1.5px solid ${C.marigold}` }}>
               <Globe size={22} color={C.marigold} strokeWidth={2.2} />
-              <button onClick={() => setLang("hi")} className="rounded-full"
+              <button onClick={() => switchLang("hi")} className="rounded-full"
                 style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "hi" ? C.navy : "#D9C4B0", background: lang === "hi" ? C.marigold : "transparent", boxShadow: lang === "hi" ? "0 0 8px 1px rgba(227,169,60,0.65)" : "none" }}>
                 हिं
               </button>
-              <button onClick={() => setLang("en")} className="rounded-full"
+              <button onClick={() => switchLang("en")} className="rounded-full"
                 style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "en" ? C.navy : "#D9C4B0", background: lang === "en" ? C.marigold : "transparent", boxShadow: lang === "en" ? "0 0 8px 1px rgba(227,169,60,0.65)" : "none" }}>
                 ENG
               </button>
