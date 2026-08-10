@@ -3862,10 +3862,10 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           )}
         </div>
         <button onClick={() => setDriver({ ...driver, online: !driver.online })}
-          className="flex items-center gap-2 rounded-full pl-3 pr-1 py-1" style={{ background: driver.online ? C.navy : "#9AA3B0" }}>
-          <span className="text-[11px] font-bold text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
-          <span className="w-9 h-5 rounded-full relative" style={{ background: driver.online ? C.marigold : "#A69686" }}>
-            <span className="w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-all" style={{ left: driver.online ? 19 : 2 }} />
+          className="flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5" style={{ background: C.marigoldDeep }}>
+          <span className="text-sm font-black text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
+          <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
+            <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 32 : 4 }} />
           </span>
         </button>
       </div>
