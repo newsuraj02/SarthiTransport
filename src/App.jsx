@@ -1406,12 +1406,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     !!state.trim(),
     pincode.length === 6,
   ];
-  const regActiveStep = regStepCompleted.findIndex((done) => !done);
-  const regStepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
-  useEffect(() => {
-    if (regActiveStep >= 0) regStepRefs[regActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [regActiveStep]);
+  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted);
 
   const getRecaptcha = () => {
     if (!recaptchaRef.current) {
@@ -1544,7 +1539,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               </div>
             </PhotoPicker>
           </div>
-          <GuidedStep active={regActiveStep === 0} completed={regStepCompleted[0]} stepRef={regStepRefs[0]} lang={lang}>
+          <GuidedStep {...regStepProps(0)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
           </GuidedStep>
@@ -1552,26 +1547,26 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
             <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <GuidedStep active={regActiveStep === 1} completed={regStepCompleted[1]} stepRef={regStepRefs[1]} lang={lang}>
+          <GuidedStep {...regStepProps(1)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
           </GuidedStep>
           <div className="grid grid-cols-2 gap-3">
-            <GuidedStep active={regActiveStep === 2} completed={regStepCompleted[2]} stepRef={regStepRefs[2]} lang={lang}>
+            <GuidedStep {...regStepProps(2)} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
             </GuidedStep>
-            <GuidedStep active={regActiveStep === 3} completed={regStepCompleted[3]} stepRef={regStepRefs[3]} lang={lang}>
+            <GuidedStep {...regStepProps(3)} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
             </GuidedStep>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <GuidedStep active={regActiveStep === 4} completed={regStepCompleted[4]} stepRef={regStepRefs[4]} lang={lang}>
+            <GuidedStep {...regStepProps(4)} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
             </GuidedStep>
-            <GuidedStep active={regActiveStep === 5} completed={regStepCompleted[5]} stepRef={regStepRefs[5]} lang={lang}>
+            <GuidedStep {...regStepProps(5)} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
               <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
                 onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
@@ -1687,7 +1682,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
             </div>
           </PhotoPicker>
         </div>
-        <GuidedStep active={regActiveStep === 0} completed={regStepCompleted[0]} stepRef={regStepRefs[0]} lang={lang}>
+        <GuidedStep {...regStepProps(0)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
         </GuidedStep>
@@ -1695,26 +1690,26 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
           <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
-        <GuidedStep active={regActiveStep === 1} completed={regStepCompleted[1]} stepRef={regStepRefs[1]} lang={lang}>
+        <GuidedStep {...regStepProps(1)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
         </GuidedStep>
         <div className="grid grid-cols-2 gap-3">
-          <GuidedStep active={regActiveStep === 2} completed={regStepCompleted[2]} stepRef={regStepRefs[2]} lang={lang}>
+          <GuidedStep {...regStepProps(2)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
           </GuidedStep>
-          <GuidedStep active={regActiveStep === 3} completed={regStepCompleted[3]} stepRef={regStepRefs[3]} lang={lang}>
+          <GuidedStep {...regStepProps(3)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
           </GuidedStep>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <GuidedStep active={regActiveStep === 4} completed={regStepCompleted[4]} stepRef={regStepRefs[4]} lang={lang}>
+          <GuidedStep {...regStepProps(4)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
           </GuidedStep>
-          <GuidedStep active={regActiveStep === 5} completed={regStepCompleted[5]} stepRef={regStepRefs[5]} lang={lang}>
+          <GuidedStep {...regStepProps(5)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
             <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
               onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
@@ -1834,12 +1829,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     !!state.trim(),
     pincode.length === 6,
   ];
-  const regActiveStep = regStepCompleted.findIndex((done) => !done);
-  const regStepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
-  useEffect(() => {
-    if (regActiveStep >= 0) regStepRefs[regActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [regActiveStep]);
+  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted);
 
   const getRecaptcha = () => {
     if (!recaptchaRef.current) {
@@ -1974,25 +1964,25 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Registration" : "ड्राइवर रजिस्ट्रेशन"}</h2>
         <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
         <div className="space-y-3">
-          <GuidedStep active={regActiveStep === 0} completed={regStepCompleted[0]} stepRef={regStepRefs[0]} lang={lang}>
+          <GuidedStep {...regStepProps(0)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
           </GuidedStep>
-          <GuidedStep active={regActiveStep === 1} completed={regStepCompleted[1]} stepRef={regStepRefs[1]} lang={lang}>
+          <GuidedStep {...regStepProps(1)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
           </GuidedStep>
           <div className="grid grid-cols-2 gap-3">
-            <GuidedStep active={regActiveStep === 2} completed={regStepCompleted[2]} stepRef={regStepRefs[2]} lang={lang}>
+            <GuidedStep {...regStepProps(2)} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
             </GuidedStep>
-            <GuidedStep active={regActiveStep === 3} completed={regStepCompleted[3]} stepRef={regStepRefs[3]} lang={lang}>
+            <GuidedStep {...regStepProps(3)} lang={lang}>
               <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
               <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
             </GuidedStep>
           </div>
-          <GuidedStep active={regActiveStep === 4} completed={regStepCompleted[4]} stepRef={regStepRefs[4]} lang={lang}>
+          <GuidedStep {...regStepProps(4)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
             <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
               onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
@@ -2108,25 +2098,25 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       </p>
 
       <div className="space-y-3">
-        <GuidedStep active={regActiveStep === 0} completed={regStepCompleted[0]} stepRef={regStepRefs[0]} lang={lang}>
+        <GuidedStep {...regStepProps(0)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
         </GuidedStep>
-        <GuidedStep active={regActiveStep === 1} completed={regStepCompleted[1]} stepRef={regStepRefs[1]} lang={lang}>
+        <GuidedStep {...regStepProps(1)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
         </GuidedStep>
         <div className="grid grid-cols-2 gap-3">
-          <GuidedStep active={regActiveStep === 2} completed={regStepCompleted[2]} stepRef={regStepRefs[2]} lang={lang}>
+          <GuidedStep {...regStepProps(2)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
           </GuidedStep>
-          <GuidedStep active={regActiveStep === 3} completed={regStepCompleted[3]} stepRef={regStepRefs[3]} lang={lang}>
+          <GuidedStep {...regStepProps(3)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
           </GuidedStep>
         </div>
-        <GuidedStep active={regActiveStep === 4} completed={regStepCompleted[4]} stepRef={regStepRefs[4]} lang={lang}>
+        <GuidedStep {...regStepProps(4)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
           <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
             onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
@@ -2418,11 +2408,12 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
 // already-filled field at any time — editing one back to incomplete just
 // re-activates it (via activeStep's findIndex in the parent) and re-locks
 // whatever comes after until it's filled again.
-function GuidedStep({ active, completed, stepRef, children, lang }) {
+function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, onBlurStep }) {
   const locked = !active && !completed;
   return (
     <div ref={stepRef} className={`relative rounded-2xl ${active ? "guided-step-active" : ""}`}
-      style={active ? { border: "2px solid #D9A406", background: "#FFF8E1", padding: 10 } : undefined}>
+      style={active ? { border: "2px solid #D9A406", background: "#FFF8E1", padding: 10 } : undefined}
+      onFocus={onFocusStep} onBlur={onBlurStep}>
       <div inert={locked ? "" : undefined} style={locked ? { pointerEvents: "none", userSelect: "none", opacity: 0.45 } : undefined}>
         {children}
       </div>
@@ -2433,6 +2424,40 @@ function GuidedStep({ active, completed, stepRef, children, lang }) {
       )}
     </div>
   );
+}
+
+// Shared by every multi-step guided form (see GuidedStep above). Naively
+// picking the first incomplete field as "active" made the highlight jump
+// away from a field the instant its value became non-empty/non-zero —
+// e.g. typing "5000" into Fare, one digit at a time, would yank the glow
+// to the next field right after the first "5", while still mid-keystroke.
+// This pins the active step to whichever field the user is actually still
+// focused in, even after it becomes "complete", and only really advances
+// once focus genuinely leaves that step (a true blur — not just moving
+// between two elements inside the same step, like a text input and its
+// own clear button). A step completed some other way that was never
+// focused (e.g. the "Repeat last trip" shortcut filling several fields at
+// once) still advances immediately, same as before.
+function useGuidedSteps(stepCompleted) {
+  const [focusedStep, setFocusedStep] = useState(null);
+  const rawActive = stepCompleted.findIndex((done) => !done); // -1 once all done
+  const activeStep = focusedStep != null && stepCompleted[focusedStep] && (rawActive === -1 || rawActive > focusedStep)
+    ? focusedStep
+    : rawActive;
+  const stepRefsHolder = useRef([]);
+  stepRefsHolder.current = stepCompleted.map((_, i) => stepRefsHolder.current[i] || { current: null });
+  useEffect(() => {
+    if (activeStep >= 0) stepRefsHolder.current[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep]);
+  const stepProps = (i) => ({
+    active: activeStep === i,
+    completed: stepCompleted[i],
+    stepRef: stepRefsHolder.current[i],
+    onFocusStep: () => setFocusedStep(i),
+    onBlurStep: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocusedStep((f) => (f === i ? null : f)); },
+  });
+  return { activeStep, stepProps };
 }
 
 // =====================================================================
@@ -2469,14 +2494,13 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
-  // Guided-step highlighting for the booking fields — see GuidedStep. Each
-  // step's own state decides completion (no cross-referencing another
-  // field's value) so the active highlight only ever moves one field at a
-  // time, strictly in the top-to-bottom order they appear on screen. The
-  // date/time step only exists in Advance mode, so the array (and the
-  // index every other field is wrapped at) shifts by one in that mode —
-  // stepRefs is still always a fixed 5 hooks regardless, since the number
-  // of hooks called can never change between renders.
+  // Guided-step highlighting for the booking fields — see GuidedStep/
+  // useGuidedSteps. Each step's own state decides completion (no cross-
+  // referencing another field's value), and useGuidedSteps only advances
+  // once the user actually leaves a field, not the instant it becomes
+  // non-empty mid-typing. The date/time step only exists in Advance mode,
+  // so the array (and the index every other field is wrapped at) shifts
+  // by one in that mode.
   const hasDateTimeStep = bookingMode === "advance";
   const stepOffset = hasDateTimeStep ? 1 : 0;
   const stepCompleted = [
@@ -2486,12 +2510,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
     !!material,
     weight.trim().length > 0,
   ];
-  const activeStep = stepCompleted.findIndex((done) => !done); // -1 once all done
-  const stepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
-  useEffect(() => {
-    if (activeStep >= 0) stepRefs[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStep]);
+  const { activeStep, stepProps } = useGuidedSteps(stepCompleted);
 
   // If the customer typed Pickup/Drop by hand without tapping an
   // Autocomplete suggestion, pickupCoords/dropCoords stay null — geocode
@@ -2650,7 +2669,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       </button>
       <div className="space-y-3">
         {bookingMode === "advance" && (
-          <GuidedStep active={activeStep === 0} completed={stepCompleted[0]} stepRef={stepRefs[0]} lang={lang}>
+          <GuidedStep {...stepProps(0)} lang={lang}>
             <div className="rounded-lg p-3" style={{ background: "#F5E6C8" }}>
               <div className="text-[11px] font-bold mb-2" style={{ color: "#A8721C" }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</div>
               <div className="grid grid-cols-3 gap-2 mb-2">
@@ -2696,7 +2715,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </button>
         )}
         <div className="space-y-4">
-          <GuidedStep active={activeStep === stepOffset + 0} completed={stepCompleted[stepOffset + 0]} stepRef={stepRefs[stepOffset + 0]} lang={lang}>
+          <GuidedStep {...stepProps(stepOffset + 0)} lang={lang}>
             <LocationField
               label={lang === "en" ? "Pickup" : "पिकअप"}
               lang={lang}
@@ -2716,7 +2735,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             />
           </GuidedStep>
 
-          <GuidedStep active={activeStep === stepOffset + 1} completed={stepCompleted[stepOffset + 1]} stepRef={stepRefs[stepOffset + 1]} lang={lang}>
+          <GuidedStep {...stepProps(stepOffset + 1)} lang={lang}>
             <LocationField
               label={lang === "en" ? "Drop" : "ड्रॉप"}
               lang={lang}
@@ -2746,7 +2765,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <GuidedStep active={activeStep === stepOffset + 2} completed={stepCompleted[stepOffset + 2]} stepRef={stepRefs[stepOffset + 2]} lang={lang}>
+          <GuidedStep {...stepProps(stepOffset + 2)} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
             {addingMaterial ? (
               <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
@@ -2770,7 +2789,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               </select>
             )}
           </GuidedStep>
-          <GuidedStep active={activeStep === stepOffset + 3} completed={stepCompleted[stepOffset + 3]} stepRef={stepRefs[stepOffset + 3]} lang={lang}>
+          <GuidedStep {...stepProps(stepOffset + 3)} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
             <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
           </GuidedStep>
@@ -3496,14 +3515,9 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   const requiredForQuote = Number(amount || 0) * (commissionPct / 100);
   const walletShortfall = !isInTrial(driver.createdAt) && (driver.wallet - requiredForQuote) < minWallet;
 
-  // Guided-step highlighting for the 3 quote fields — see GuidedStep.
+  // Guided-step highlighting for the 3 quote fields — see GuidedStep/useGuidedSteps.
   const stepCompleted = [Number(amount) > 0, Number(allowedHours) > 0, Number(extraHourRate) > 0];
-  const activeStep = stepCompleted.findIndex((done) => !done); // -1 once all done
-  const stepRefs = [useRef(null), useRef(null), useRef(null)];
-  useEffect(() => {
-    if (activeStep >= 0) stepRefs[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStep]);
+  const { activeStep, stepProps } = useGuidedSteps(stepCompleted);
 
   const otherBids = load.bids.filter((b) => b.driverName !== driver.name);
   const lowestOther = otherBids.length ? otherBids.reduce((min, b) => b.amount < min.amount ? b : min) : null;
@@ -3572,21 +3586,21 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
           <div className="text-sm font-extrabold mb-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
           <div className="rounded-lg overflow-hidden mb-2" style={{ border: `2px solid ${C.marigoldDeep}` }}>
             <div className="grid grid-cols-3" style={{ background: "#FBEBD2" }}>
-              <GuidedStep active={activeStep === 0} completed={stepCompleted[0]} stepRef={stepRefs[0]} lang={lang}>
+              <GuidedStep {...stepProps(0)} lang={lang}>
                 <div className="px-1.5 py-1.5 text-center" style={{ borderRight: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
                   <div className="text-[9px] font-extrabold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Fare ₹ *" : "कुल भाड़ा ₹ *"}</div>
                   <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus
                     className="w-full text-center outline-none bg-transparent" style={{ color: C.marigoldDeep, fontFamily: monoFont, fontSize: 18, fontWeight: 800 }} />
                 </div>
               </GuidedStep>
-              <GuidedStep active={activeStep === 1} completed={stepCompleted[1]} stepRef={stepRefs[1]} lang={lang}>
+              <GuidedStep {...stepProps(1)} lang={lang}>
                 <div className="px-1.5 py-1.5 text-center" style={{ borderRight: `1px solid ${C.marigoldDeep}` }}>
                   <div className="text-[9px] font-bold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Allowed hrs *" : "अलाउ घंटे *"}</div>
                   <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
                     className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 15, fontWeight: 700 }} />
                 </div>
               </GuidedStep>
-              <GuidedStep active={activeStep === 2} completed={stepCompleted[2]} stepRef={stepRefs[2]} lang={lang}>
+              <GuidedStep {...stepProps(2)} lang={lang}>
                 <div className="px-1.5 py-1.5 text-center">
                   <div className="text-[9px] font-bold mb-0.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Waiting ₹/hr *" : "वेटिंग ₹/घं *"}</div>
                   <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
@@ -4187,12 +4201,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
   // dimensions are optional (not part of canSubmit), so they're skipped.
   const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoFront, !!vehiclePhotoSide];
-  const kycActiveStep = kycStepCompleted.findIndex((done) => !done);
-  const kycStepRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
-  useEffect(() => {
-    if (kycActiveStep >= 0) kycStepRefs[kycActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kycActiveStep]);
+  const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted);
   // First-time submission within this driver's own 30-day trial (from
   // their own signup date) skips the admin approval wait entirely — a
   // driver who's already been reviewed before (kyc isn't null, e.g.
@@ -4238,7 +4247,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         {[
           ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
         ].map(([key, label, val, setVal], i) => (
-          <GuidedStep key={key} active={kycActiveStep === i} completed={kycStepCompleted[i]} stepRef={kycStepRefs[i]} lang={lang}>
+          <GuidedStep key={key} {...kycStepProps(i)} lang={lang}>
             <PhotoPicker label={label} lang={lang} onSelect={onDoc(setVal, key)}>
               <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
                 {uploadingKeys[key] ? (
@@ -4265,7 +4274,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         ))}
       </div>
 
-      <GuidedStep active={kycActiveStep === 2} completed={kycStepCompleted[2]} stepRef={kycStepRefs[2]} lang={lang}>
+      <GuidedStep {...kycStepProps(2)} lang={lang}>
         <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : "गाड़ी रजिस्टर्ड नंबर"}</label>
         <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 12 }} placeholder="MH-14-XX-XXXX" value={vehicleNumber}
           onChange={(e) => setVehicleNumber(e.target.value)} />
@@ -4295,7 +4304,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       <div className="rounded-xl p-3 mb-4" style={{ border: `1.5px solid #A8721C`, background: "#F5E6C8" }}>
         <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#A8721C" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
 
-        <GuidedStep active={kycActiveStep === 3} completed={kycStepCompleted[3]} stepRef={kycStepRefs[3]} lang={lang}>
+        <GuidedStep {...kycStepProps(3)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : "गाड़ी का नाम"}</label>
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
         </GuidedStep>
@@ -4306,7 +4315,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
             ["vehicleFront", lang === "en" ? "Front" : "आगे से", vehiclePhotoFront, setVehiclePhotoFront],
             ["vehicleSide", lang === "en" ? "Side" : "साइड से", vehiclePhotoSide, setVehiclePhotoSide],
           ].map(([key, label, val, setVal], i) => (
-            <GuidedStep key={key} active={kycActiveStep === 4 + i} completed={kycStepCompleted[4 + i]} stepRef={kycStepRefs[4 + i]} lang={lang}>
+            <GuidedStep key={key} {...kycStepProps(4 + i)} lang={lang}>
               <PhotoPicker label={label} lang={lang} onSelect={onVehiclePhoto(setVal, key)}>
                 <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed #A8721C`, background: C.paper, minHeight: 110 }}>
                   {uploadingKeys[key] ? (
@@ -5062,12 +5071,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
   // GuidedStep. Capacity/address/city/state/pincode are optional, so they
   // aren't part of the sequence.
   const addStepCompleted = [!!form.name.trim(), form.mobile.trim().length === 10, !!form.vehicleTypeName.trim(), !!form.vehicleNumber.trim()];
-  const addActiveStep = showAdd ? addStepCompleted.findIndex((done) => !done) : -1;
-  const addStepRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
-  useEffect(() => {
-    if (addActiveStep >= 0) addStepRefs[addActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addActiveStep]);
+  const { stepProps: addStepProps } = useGuidedSteps(addStepCompleted);
   const resetForm = () => { setForm(blankForm); setAddError(""); };
   // Same reuse-by-name-or-create-new resolution the driver's own KYC form
   // uses, so a manually added driver's vehicle type merges into the same
@@ -5110,17 +5114,17 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
       </div>
       {showAdd && (
         <div className="rounded-lg p-3 mb-3 space-y-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-          <GuidedStep active={addActiveStep === 0} completed={addStepCompleted[0]} stepRef={addStepRefs[0]} lang={lang}>
+          <GuidedStep {...addStepProps(0)} lang={lang}>
             <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </GuidedStep>
-          <GuidedStep active={addActiveStep === 1} completed={addStepCompleted[1]} stepRef={addStepRefs[1]} lang={lang}>
+          <GuidedStep {...addStepProps(1)} lang={lang}>
             <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
           </GuidedStep>
           <div className="grid grid-cols-2 gap-2">
-            <GuidedStep active={addActiveStep === 2} completed={addStepCompleted[2]} stepRef={addStepRefs[2]} lang={lang}>
+            <GuidedStep {...addStepProps(2)} lang={lang}>
               <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Vehicle type *" : "गाड़ी का प्रकार *"} value={form.vehicleTypeName} onChange={(e) => setForm({ ...form, vehicleTypeName: e.target.value })} />
             </GuidedStep>
-            <GuidedStep active={addActiveStep === 3} completed={addStepCompleted[3]} stepRef={addStepRefs[3]} lang={lang}>
+            <GuidedStep {...addStepProps(3)} lang={lang}>
               <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Vehicle number *" : "गाड़ी नंबर *"} value={form.vehicleNumber} onChange={(e) => setForm({ ...form, vehicleNumber: e.target.value.toUpperCase() })} />
             </GuidedStep>
           </div>
@@ -5260,12 +5264,7 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
   // Guided-step highlighting for the required Add Customer fields — see
   // GuidedStep. Address/area/city/state/pincode are optional here.
   const addStepCompleted = [!!form.name.trim(), form.mobile.trim().length === 10];
-  const addActiveStep = showAdd ? addStepCompleted.findIndex((done) => !done) : -1;
-  const addStepRefs = [useRef(null), useRef(null)];
-  useEffect(() => {
-    if (addActiveStep >= 0) addStepRefs[addActiveStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addActiveStep]);
+  const { stepProps: addStepProps } = useGuidedSteps(addStepCompleted);
   const resetForm = () => { setForm({ name: "", mobile: "", address: "", area: "", city: "", state: "", pincode: "" }); setAddError(""); };
   const submitAdd = () => {
     if (!canAdd) return;
@@ -5296,10 +5295,10 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
       </div>
       {showAdd && (
         <div className="rounded-lg p-3 mb-3 space-y-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-          <GuidedStep active={addActiveStep === 0} completed={addStepCompleted[0]} stepRef={addStepRefs[0]} lang={lang}>
+          <GuidedStep {...addStepProps(0)} lang={lang}>
             <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </GuidedStep>
-          <GuidedStep active={addActiveStep === 1} completed={addStepCompleted[1]} stepRef={addStepRefs[1]} lang={lang}>
+          <GuidedStep {...addStepProps(1)} lang={lang}>
             <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
           </GuidedStep>
           <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Address" : "पता"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
