@@ -4,6 +4,7 @@ import {
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye, EyeOff, Plus, Loader2,
+  FileText, X, Upload,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -2242,6 +2243,32 @@ async function uploadPhoto(file, path, maxDim = 900, quality = 0.72) {
   return { name: file.name, url: canvas.toDataURL("image/jpeg", quality) };
 }
 
+// Higher-fidelity variant of uploadPhoto for scanned bill/invoice documents —
+// the text needs to stay legible at a police/RTO checkpoint, so this uses a
+// larger max dimension and higher JPEG quality than profile/KYC photos.
+async function uploadDocumentPhoto(file, path) {
+  return uploadPhoto(file, path, 1600, 0.85);
+}
+
+// Uploads a file (e.g. a PDF) to Storage as-is, no resizing — used for the
+// E-Way Bill when the customer picks a PDF instead of scanning a photo. No
+// base64 fallback here (PDFs are too large to inline into a Firestore doc),
+// so this simply fails if Storage isn't reachable.
+async function uploadRawFile(file, path) {
+  const storage = getActiveStorage();
+  if (!storage) return null;
+  try {
+    const ref = storageRef(storage, path);
+    const attempt = uploadBytes(ref, file, { contentType: file.type || "application/pdf" }).then(() => getDownloadURL(ref));
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Storage upload timed out")), 20000));
+    const url = await Promise.race([attempt, timeout]);
+    return { name: file.name, url };
+  } catch (e) {
+    console.error("[storage upload]", e);
+    return null;
+  }
+}
+
 // Renders an <img>, falling back to `fallback` if there's no src yet or the
 // image fails to load (e.g. a stale blob: URL from an older upload that no
 // longer resolves on this device) — avoids the browser's broken-image glyph.
@@ -2286,6 +2313,137 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
         </div>
       )}
     </>
+  );
+}
+
+// Customer-facing "Upload Documents / Send Invoice" flow — scans/uploads the
+// Original invoice, Duplicate copy, and E-Way Bill (which also accepts a
+// straight PDF upload), then patches them onto the booking doc. A Cloud
+// Function (onBillDocumentsUploaded) picks up once all three are present,
+// merges them into one PDF, and pushes an "Invoice & E-Way Bill Received"
+// alert to the driver — nothing else here talks to the driver directly.
+function BillDocumentsModal({ booking, onClose, lang }) {
+  const existing = booking.documents || {};
+  const [original, setOriginal] = useState(existing.original || null);
+  const [duplicate, setDuplicate] = useState(existing.duplicate || null);
+  const [ewayBill, setEwayBill] = useState(existing.ewayBill || null);
+  const [uploading, setUploading] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const ewayPdfRef = useRef(null);
+
+  const uploadSlot = async (file, key, setSlot, isPdf) => {
+    setUploading(key);
+    setError("");
+    const path = `bookings/${booking.id}/documents/${key}.${isPdf ? "pdf" : "jpg"}`;
+    const result = isPdf ? await uploadRawFile(file, path) : await uploadDocumentPhoto(file, path);
+    setUploading(null);
+    if (!result) { setError(lang === "en" ? "Upload failed — check your connection and try again." : "अपलोड विफल — कनेक्शन जांचें और फिर कोशिश करें।"); return; }
+    setSlot({ ...result, type: isPdf ? "pdf" : "image" });
+  };
+
+  const allReady = original?.url && duplicate?.url && ewayBill?.url;
+  const alreadySent = !!(existing.original?.url && existing.duplicate?.url && existing.ewayBill?.url);
+
+  const send = async () => {
+    setSending(true);
+    setError("");
+    try {
+      await patchDoc("bookings", booking.id, {
+        "documents.original": original,
+        "documents.duplicate": duplicate,
+        "documents.ewayBill": ewayBill,
+      });
+      onClose();
+    } catch (e) {
+      console.error(e);
+      setError(lang === "en" ? "Could not send — try again." : "भेजा नहीं जा सका — फिर कोशिश करें।");
+      setSending(false);
+    }
+  };
+
+  const slot = (label, value, key, setSlot, allowPdf) => (
+    <div className="rounded-xl p-3 mb-3" style={{ background: C.paper, border: `1.5px solid ${value?.url ? C.success : C.line}` }}>
+      <div className="flex items-center gap-2 mb-2">
+        <FileText size={16} color={value?.url ? C.success : C.marigoldDeep} />
+        <span className="text-sm font-bold" style={{ color: C.ink }}>{label}</span>
+        {value?.url && <CheckCircle2 size={15} color={C.success} className="ml-auto shrink-0" />}
+      </div>
+      {value?.url && <div className="text-[11px] truncate mb-2" style={{ color: C.inkSoft }}>{value.name}</div>}
+      <div className="flex gap-2">
+        <PhotoPicker label={label} lang={lang} onSelect={(f) => uploadSlot(f, key, setSlot, false)}>
+          <div className="rounded-lg py-2 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
+            <Camera size={14} /> {value?.url ? (lang === "en" ? "Rescan" : "फिर स्कैन करें") : (lang === "en" ? "Scan Photo" : "फोटो स्कैन करें")}
+          </div>
+        </PhotoPicker>
+        {allowPdf && (
+          <>
+            <button type="button" onClick={() => ewayPdfRef.current?.click()} className="rounded-lg py-2 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>
+              <Upload size={14} /> {lang === "en" ? "Upload PDF" : "PDF अपलोड करें"}
+            </button>
+            <input ref={ewayPdfRef} type="file" accept="application/pdf" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSlot(f, key, setSlot, true); e.target.value = ""; }} />
+          </>
+        )}
+      </div>
+      {uploading === key && (
+        <div className="text-[11px] font-semibold mt-2 flex items-center gap-1.5" style={{ color: C.marigoldDeep }}>
+          <Loader2 size={12} className="animate-spin" /> {lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
+      <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Upload Documents / Send Invoice" : "दस्तावेज़ अपलोड करें / इनवॉइस भेजें"}</h3>
+          <button onClick={onClose}><X size={18} color={C.inkSoft} /></button>
+        </div>
+
+        {alreadySent && (
+          <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#DFEEE2" }}>
+            <CheckCircle2 size={14} color={C.success} />
+            <span className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "Already sent to driver — you can resend to update." : "पहले ही ड्राइवर को भेजा जा चुका है — अपडेट के लिए फिर भेज सकते हैं।"}</span>
+          </div>
+        )}
+
+        {slot(lang === "en" ? "📄 Original Copy (Invoice)" : "📄 ओरिजिनल कॉपी (इनवॉइस)", original, "original", setOriginal, false)}
+        {slot(lang === "en" ? "📑 Duplicate Copy (For Transport)" : "📑 डुप्लीकेट कॉपी (ट्रांसपोर्ट के लिए)", duplicate, "duplicate", setDuplicate, false)}
+        {slot(lang === "en" ? "🚚 E-Way Bill" : "🚚 ई-वे बिल", ewayBill, "ewayBill", setEwayBill, true)}
+
+        {error && <div className="text-xs font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
+
+        <button onClick={send} disabled={!allReady || sending} className="w-full rounded-xl py-3 text-sm font-black text-white"
+          style={{ background: allReady ? C.success : C.line, color: allReady ? "#fff" : "#9AA3B0" }}>
+          {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send to Driver" : "ड्राइवर को भेजें")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Driver-facing counterpart of BillDocumentsModal — shows once the customer
+// has uploaded all three documents, and links to the merged PDF as soon as
+// the Cloud Function finishes combining them.
+function BillDocumentsBanner({ trip, lang }) {
+  const docs = trip.documents;
+  const complete = docs?.original?.url && docs?.duplicate?.url && docs?.ewayBill?.url;
+  if (!complete) return null;
+  return (
+    <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#DFEEE2", border: `1.5px solid ${C.success}` }}>
+      <div className="text-sm font-black flex items-center gap-1.5" style={{ color: C.success }}>
+        <FileText size={15} /> {lang === "en" ? "Invoice & E-Way Bill Received" : "इनवॉइस और ई-वे बिल मिल गया"}
+      </div>
+      {docs.mergedPdfUrl ? (
+        <a href={docs.mergedPdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold" style={{ color: C.success }}>
+          <Download size={13} /> {lang === "en" ? "View / Download PDF" : "PDF देखें / डाउनलोड करें"}
+        </a>
+      ) : (
+        <div className="text-[11px] mt-1" style={{ color: C.success }}>{lang === "en" ? "Preparing combined PDF..." : "PDF तैयार हो रही है..."}</div>
+      )}
+    </div>
   );
 }
 
@@ -2906,6 +3064,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const [selectedBid, setSelectedBid] = useState(null);
   const [acceptError, setAcceptError] = useState("");
   const [cancelError, setCancelError] = useState("");
+  const [showDocs, setShowDocs] = useState(false);
+  const docsSent = !!(b.documents?.original?.url && b.documents?.duplicate?.url && b.documents?.ewayBill?.url);
 
   const shareTrip = () => {
     const text = lang === "en"
@@ -3122,8 +3282,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         </div>
         <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle location" : "गाड़ी की लोकेशन"} — {b.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
-        <div className="flex items-center gap-4 mt-2">
+        <div className="flex items-center gap-4 mt-2 flex-wrap">
           <button onClick={shareTrip} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
+          <button onClick={() => setShowDocs(true)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: docsSent ? C.success : C.marigoldDeep }}>
+            <FileText size={12} /> {docsSent ? (lang === "en" ? "Documents Sent ✓" : "दस्तावेज़ भेजे गए ✓") : (lang === "en" ? "Upload Documents" : "दस्तावेज़ अपलोड करें")}
+          </button>
           {!b.loadingStartedAt && (
             <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
           )}
@@ -3135,6 +3298,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         )}
         {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
       </div>
+      {showDocs && <BillDocumentsModal booking={b} onClose={() => setShowDocs(false)} lang={lang} />}
     </div>
   );
 }
@@ -3927,6 +4091,8 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
             <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{myTrip.pickup}</span></div>
             <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{myTrip.drop}</span></div>
           </div>
+
+          <BillDocumentsBanner trip={myTrip} lang={lang} />
 
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
             <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>

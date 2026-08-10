@@ -32,5 +32,16 @@ service firebase.storage {
     match /expenses/{fileName} {
       allow read, write: if isAdmin();
     }
+
+    // Bill & E-Way Bill documents (Original/Duplicate/E-Way Bill scans, plus
+    // the merged PDF a Cloud Function writes with the Admin SDK, which
+    // always bypasses these rules regardless). Left signed-in-gated rather
+    // than owner-scoped, matching the same trade-off already made for the
+    // bookings collection itself in firestore.rules (`allow update: if
+    // isSignedIn()`) — a customer uploads here, a driver reads here, and
+    // there's no single "owning phone" for a two-sided booking doc.
+    match /bookings/{bookingId}/documents/{fileName} {
+      allow read, write: if isSignedIn();
+    }
   }
 }
