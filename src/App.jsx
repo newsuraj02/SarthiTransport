@@ -4568,7 +4568,7 @@ function StatTile({ label, value, color, onClick }) {
   return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${color}` }}>{content}</div>;
 }
 
-function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWallet, lang, onNavigate }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionPct, minWallet, lang, onNavigate }) {
   const isToday = (b) => {
     const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
     if (!d) return false;
@@ -4582,6 +4582,12 @@ function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWall
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
   const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
   const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet);
+  // New signups today (drivers + customers) and drivers still inside their
+  // 30-day free trial — both derived live from createdAt, same source of
+  // truth as everywhere else trial/signup timing is used in the app.
+  const newDriversToday = drivers.filter(isToday);
+  const newCustomersToday = (customers || []).filter(isToday);
+  const trialDrivers = drivers.filter((d) => isInTrial(d.createdAt));
 
   const todaysEarnings = (bookings || []).filter((b) => b.status === "Completed" && isToday(b)).reduce((s, b) => s + (b.fare || 0) * (commissionPct / 100), 0);
   const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b));
@@ -4663,6 +4669,38 @@ function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWall
         </div>
       ),
     },
+    newToday: {
+      title: lang === "en" ? "New registrations today" : "आज के नए रजिस्ट्रेशन",
+      emptyMsg: lang === "en" ? "No new signups today yet." : "आज तक कोई नया साइनअप नहीं हुआ।",
+      items: [...newDriversToday.map((d) => ({ ...d, _kind: "driver" })), ...newCustomersToday.map((c) => ({ ...c, _kind: "customer" }))],
+      renderItem: (p) => (
+        <div key={`${p._kind}-${p.id}`} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: "#F8F4EC" }}>
+          <div>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{p.name}</div>
+            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{p.mobile}{p._kind === "driver" && p.vehicleSpec?.vehicleNumber ? ` · ${p.vehicleSpec.vehicleNumber}` : ""}</div>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: p._kind === "driver" ? C.marigoldDeep : C.pimpri, background: p._kind === "driver" ? "#FBEBD2" : "#E4EAF6" }}>
+            {p._kind === "driver" ? (lang === "en" ? "Driver" : "ड्राइवर") : (lang === "en" ? "Customer" : "कस्टमर")}
+          </span>
+        </div>
+      ),
+    },
+    trial: {
+      title: lang === "en" ? "Drivers in free trial" : "फ्री ट्रायल में ड्राइवर",
+      emptyMsg: lang === "en" ? "No driver is currently in their free trial." : "फिलहाल कोई भी ड्राइवर फ्री ट्रायल में नहीं है।",
+      items: trialDrivers,
+      renderItem: (d) => (
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: "#F8F4EC" }}>
+          <div>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.marigoldDeep, background: "#FBEBD2" }}>
+            {lang === "en" ? `${trialDaysLeft(d.createdAt)}d left` : `${trialDaysLeft(d.createdAt)} दिन बाकी`}
+          </span>
+        </div>
+      ),
+    },
   };
 
   if (detailView) {
@@ -4692,6 +4730,8 @@ function AdminFleet({ drivers, driver, bookings, tripLog, commissionPct, minWall
         <StatTile label={lang === "en" ? "Today's earnings (commission)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
         <StatTile label={lang === "en" ? "Total advance bookings" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
+        <StatTile label={lang === "en" ? "New registrations today" : "आज के नए रजिस्ट्रेशन"} value={newDriversToday.length + newCustomersToday.length} color={C.pimpri} onClick={() => setDetailView("newToday")} />
+        <StatTile label={lang === "en" ? "Drivers in free trial" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
       </div>
 
       <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -5699,7 +5739,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} />}
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} addManualCustomer={addManualCustomer} />}
