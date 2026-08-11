@@ -3253,9 +3253,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             started, so it takes this exact spot the moment OTP is no longer
             needed instead of the two ever being shown at once. */}
         {b.otp && !b.loadingStartedAt ? (
-          <div className="flex-1 rounded-xl px-3 py-1.5 text-center" style={{ background: "#F1EEE7", border: "1.5px dashed #9AA0A6" }}>
-            <div className="text-[8px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "OTP for driver" : "ड्राइवर के लिए OTP"}</div>
-            <div className="text-lg font-extrabold leading-none mt-0.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
+          <div className="flex-1 rounded-xl px-3 py-1.5 text-center shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <div className="text-[8px] font-bold" style={{ color: C.navy }}>{lang === "en" ? "OTP for driver" : "ड्राइवर के लिए OTP"}</div>
+            <div className="text-lg font-extrabold leading-none mt-0.5" style={{ color: C.navy, fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
           </div>
         ) : (
           <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
@@ -3657,9 +3657,9 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <Menu size={18} color={C.navy} strokeWidth={2.5} />
           </button>
           {headerRideBooking && (
-            <div className="min-w-0 rounded-full px-3 py-1.5 flex items-center justify-center gap-1.5" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
-              <Clock3 size={13} color="#fff" strokeWidth={2.5} className="shrink-0" />
-              <span className="text-[11px] font-extrabold text-white truncate">
+            <div className="flex-1 min-w-0 rounded-full px-3 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
+              <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
+              <span className="text-sm font-extrabold text-white truncate">
                 {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
               </span>
             </div>
