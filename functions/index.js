@@ -8,9 +8,6 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
-const { getStorage } = require("firebase-admin/storage");
-const { randomUUID } = require("crypto");
-const { PDFDocument } = require("pdf-lib");
 
 initializeApp();
 const db = getFirestore();
@@ -187,77 +184,17 @@ async function getDriverTokenByName(driverName) {
   return snap.empty ? null : snap.docs[0].data().fcmToken;
 }
 
-async function fetchBytes(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`fetch failed (${res.status}) for ${url}`);
-  return new Uint8Array(await res.arrayBuffer());
-}
-
-// Adds a scanned JPEG as its own full-page image in the merged PDF, sized to
-// the photo's own dimensions so nothing gets cropped or stretched.
-async function addImagePage(pdfDoc, bytes) {
-  const img = await pdfDoc.embedJpg(bytes);
-  const page = pdfDoc.addPage([img.width, img.height]);
-  page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
-}
-
-// Uploads the merged PDF and hands back a Firebase-style download URL (same
-// `...?alt=media&token=...` shape the client SDK's getDownloadURL produces)
-// so it opens directly in a browser without needing the bucket itself to be
-// public — consistent with how every other document/photo URL in this app
-// already works.
-async function uploadMergedPdf(bytes, filePath) {
-  const bucket = getStorage().bucket();
-  const file = bucket.file(filePath);
-  const token = randomUUID();
-  await file.save(Buffer.from(bytes), {
-    contentType: "application/pdf",
-    metadata: { metadata: { firebaseStorageDownloadTokens: token } },
-  });
-  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
-}
-
-// Copies an already-uploaded PDF's own pages into the merged doc as-is.
-async function addPdfPages(pdfDoc, bytes) {
-  const srcDoc = await PDFDocument.load(bytes);
-  const copiedPages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
-  copiedPages.forEach((page) => pdfDoc.addPage(page));
-}
-
-// Fires whenever a booking doc changes — once the customer has uploaded all
-// three bill documents (Original, Duplicate, E-Way Bill), combines them into
-// a single PDF (each one's own pages copied in as-is if it was uploaded as a
-// PDF — the client's "Upload Invoice" option isn't limited to E-Way Bill —
-// otherwise scanned in as an image page), stores it, and alerts the driver.
-// Guarded on documents.mergedPdfUrl already being set so the update this
-// function itself makes doesn't cause it to re-run forever.
+// Fires whenever a booking doc changes — the moment the customer's single
+// scanned/uploaded invoice shows up (documents.file), alerts the driver.
+// Guarded on the before-value so a later, unrelated update to the same
+// booking doesn't re-send this every time.
 exports.onBillDocumentsUploaded = onDocumentUpdated("bookings/{bookingId}", async (event) => {
+  const before = event.data?.before?.data();
   const after = event.data?.after?.data();
-  const docs = after?.documents;
-  if (!docs?.original?.url || !docs?.duplicate?.url || !docs?.ewayBill?.url || docs.mergedPdfUrl) return;
+  if (!after?.documents?.file?.url || before?.documents?.file?.url) return;
 
-  try {
-    const pdfDoc = await PDFDocument.create();
-    for (const key of ["original", "duplicate", "ewayBill"]) {
-      const bytes = await fetchBytes(docs[key].url);
-      if (docs[key].type === "pdf") await addPdfPages(pdfDoc, bytes);
-      else await addImagePage(pdfDoc, bytes);
-    }
-
-    const mergedBytes = await pdfDoc.save();
-    const filePath = `bookings/${event.params.bookingId}/documents/merged.pdf`;
-    const mergedPdfUrl = await uploadMergedPdf(mergedBytes, filePath);
-
-    await event.data.after.ref.update({
-      "documents.mergedPdfUrl": mergedPdfUrl,
-      "documents.mergedAt": Date.now(),
-    });
-
-    const driverToken = await getDriverTokenByName(after.driverName);
-    await sendPush(driverToken, "Invoice & E-Way Bill Received", "The customer has uploaded the Original, Duplicate, and E-Way Bill for this trip — open the app to view or print them.");
-  } catch (e) {
-    console.error("[bill-merge] failed:", e.message);
-  }
+  const driverToken = await getDriverTokenByName(after.driverName);
+  await sendPush(driverToken, "Invoice Received", "The customer has sent the invoice for this trip — open the app to view it.");
 });
 
 exports.onBookingUpdate = onDocumentUpdated("bookings/{bookingId}", async (event) => {

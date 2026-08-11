@@ -2324,75 +2324,35 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
 // alert to the driver — nothing else here talks to the driver directly.
 function BillDocumentsModal({ booking, onClose, lang }) {
   const existing = booking.documents || {};
-  const [original, setOriginal] = useState(existing.original || null);
-  const [duplicate, setDuplicate] = useState(existing.duplicate || null);
-  const [ewayBill, setEwayBill] = useState(existing.ewayBill || null);
-  const [uploading, setUploading] = useState(null);
+  const [file, setFile] = useState(existing.file || null);
+  const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const uploadFileRef = useRef(null);
 
-  const slots = {
-    original: { label: lang === "en" ? "📄 Original Copy (Invoice)" : "📄 ओरिजिनल कॉपी (इनवॉइस)", value: original, setValue: setOriginal },
-    duplicate: { label: lang === "en" ? "📑 Duplicate Copy (For Transport)" : "📑 डुप्लीकेट कॉपी (ट्रांसपोर्ट के लिए)", value: duplicate, setValue: setDuplicate },
-    ewayBill: { label: lang === "en" ? "🚚 E-Way Bill" : "🚚 ई-वे बिल", value: ewayBill, setValue: setEwayBill },
-  };
-  // Defaults to whichever document isn't done yet, but tapping any row
-  // switches the one shared scanner below to target that document instead —
-  // one camera control reused for all three, rather than three separate
-  // scan buttons.
-  const [activeSlot, setActiveSlot] = useState(
-    !original?.url ? "original" : !duplicate?.url ? "duplicate" : "ewayBill"
-  );
+  const alreadySent = !!existing.file?.url;
 
-  const uploadSlot = async (file, key, isPdf) => {
-    setUploading(key);
+  const doUpload = async (f, isPdf) => {
+    setUploading(true);
     setError("");
-    const path = `bookings/${booking.id}/documents/${key}.${isPdf ? "pdf" : "jpg"}`;
-    const result = isPdf ? await uploadRawFile(file, path) : await uploadDocumentPhoto(file, path);
-    setUploading(null);
+    const path = `bookings/${booking.id}/documents/invoice.${isPdf ? "pdf" : "jpg"}`;
+    const result = isPdf ? await uploadRawFile(f, path) : await uploadDocumentPhoto(f, path);
+    setUploading(false);
     if (!result) { setError(lang === "en" ? "Upload failed — check your connection and try again." : "अपलोड विफल — कनेक्शन जांचें और फिर कोशिश करें।"); return; }
-    slots[key].setValue({ ...result, type: isPdf ? "pdf" : "image" });
-    // Auto-advance the shared scanner to the next undone document.
-    const order = ["original", "duplicate", "ewayBill"];
-    const next = order.find((k) => k !== key && !slots[k].value?.url);
-    if (next) setActiveSlot(next);
+    setFile({ ...result, type: isPdf ? "pdf" : "image" });
   };
-
-  const allReady = original?.url && duplicate?.url && ewayBill?.url;
-  const alreadySent = !!(existing.original?.url && existing.duplicate?.url && existing.ewayBill?.url);
 
   const send = async () => {
     setSending(true);
     setError("");
     try {
-      await patchDoc("bookings", booking.id, {
-        "documents.original": original,
-        "documents.duplicate": duplicate,
-        "documents.ewayBill": ewayBill,
-      });
+      await patchDoc("bookings", booking.id, { "documents.file": file });
       onClose();
     } catch (e) {
       console.error(e);
       setError(lang === "en" ? "Could not send — try again." : "भेजा नहीं जा सका — फिर कोशिश करें।");
       setSending(false);
     }
-  };
-
-  const statusRow = (key) => {
-    const { label, value } = slots[key];
-    const active = activeSlot === key;
-    return (
-      <button type="button" key={key} onClick={() => setActiveSlot(key)} className="w-full text-left rounded-xl p-3 mb-2 flex items-center gap-2"
-        style={{ background: C.paper, border: `1.5px solid ${active ? C.marigoldDeep : value?.url ? C.success : C.line}` }}>
-        <FileText size={16} color={value?.url ? C.success : C.marigoldDeep} className="shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold" style={{ color: C.ink }}>{label}</div>
-          {value?.url && <div className="text-[11px] truncate" style={{ color: C.inkSoft }}>{value.name}</div>}
-        </div>
-        {value?.url ? <CheckCircle2 size={16} color={C.success} className="shrink-0" /> : <span className="text-[10px] font-semibold shrink-0" style={{ color: C.inkSoft }}>{lang === "en" ? "Pending" : "बाकी"}</span>}
-      </button>
-    );
   };
 
   return (
@@ -2410,29 +2370,26 @@ function BillDocumentsModal({ booking, onClose, lang }) {
           </div>
         )}
 
-        {statusRow("original")}
-        {statusRow("duplicate")}
-        {statusRow("ewayBill")}
-
-        {/* One shared scanner, reused for whichever document is selected
-            above — tap a row to pick it, then use this to scan/upload it. */}
-        <div className="rounded-xl p-3 mb-3" style={{ background: "#F5E6C8", border: `1.5px dashed ${C.marigoldDeep}` }}>
-          <div className="text-xs font-bold mb-2" style={{ color: C.marigoldDeep }}>
-            {lang === "en" ? `Scanning: ${slots[activeSlot].label}` : `स्कैन हो रहा है: ${slots[activeSlot].label}`}
+        <div className="rounded-xl p-3 mb-3" style={{ background: C.paper, border: `1.5px solid ${file?.url ? C.success : C.line}` }}>
+          <div className="flex items-center gap-2 mb-2">
+            <FileText size={16} color={file?.url ? C.success : C.marigoldDeep} className="shrink-0" />
+            <span className="text-sm font-bold flex-1 min-w-0" style={{ color: C.ink }}>{lang === "en" ? "Invoice / Bill" : "इनवॉइस / बिल"}</span>
+            {file?.url && <CheckCircle2 size={16} color={C.success} className="shrink-0" />}
           </div>
+          {file?.url && <div className="text-[11px] truncate mb-2" style={{ color: C.inkSoft }}>{file.name}</div>}
           <div className="flex gap-2">
-            <PhotoPicker label={slots[activeSlot].label} lang={lang} onSelect={(f) => uploadSlot(f, activeSlot, false)}>
+            <PhotoPicker label={lang === "en" ? "Invoice / Bill" : "इनवॉइस / बिल"} lang={lang} onSelect={(f) => doUpload(f, false)}>
               <div className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.marigoldDeep, color: "#fff" }}>
-                <Camera size={16} /> {slots[activeSlot].value?.url ? (lang === "en" ? "Rescan" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : "दस्तावेज़ स्कैन करें")}
+                <Camera size={16} /> {file?.url ? (lang === "en" ? "Rescan" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : "दस्तावेज़ स्कैन करें")}
               </div>
             </PhotoPicker>
             <button type="button" onClick={() => uploadFileRef.current?.click()} className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>
               <Upload size={16} /> {lang === "en" ? "Upload Invoice" : "इनवॉइस अपलोड करें"}
             </button>
             <input ref={uploadFileRef} type="file" accept="image/*,application/pdf" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSlot(f, activeSlot, f.type === "application/pdf"); e.target.value = ""; }} />
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, f.type === "application/pdf"); e.target.value = ""; }} />
           </div>
-          {uploading === activeSlot && (
+          {uploading && (
             <div className="text-[11px] font-semibold mt-2 flex items-center gap-1.5" style={{ color: C.marigoldDeep }}>
               <Loader2 size={12} className="animate-spin" /> {lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}
             </div>
@@ -2441,8 +2398,8 @@ function BillDocumentsModal({ booking, onClose, lang }) {
 
         {error && <div className="text-xs font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
 
-        <button onClick={send} disabled={!allReady || sending} className="w-full rounded-xl py-3 text-sm font-black text-white"
-          style={{ background: allReady ? C.success : C.line, color: allReady ? "#fff" : "#9AA3B0" }}>
+        <button onClick={send} disabled={!file?.url || sending} className="w-full rounded-xl py-3 text-sm font-black text-white"
+          style={{ background: file?.url ? C.success : C.line, color: file?.url ? "#fff" : "#9AA3B0" }}>
           {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send to Driver" : "ड्राइवर को भेजें")}
         </button>
       </div>
@@ -2450,26 +2407,14 @@ function BillDocumentsModal({ booking, onClose, lang }) {
   );
 }
 
-// Driver-facing counterpart of BillDocumentsModal — shows once the customer
-// has uploaded all three documents, and links to the merged PDF as soon as
-// the Cloud Function finishes combining them.
 // Driver-facing read-only view opened by the "Receive Bill" button — shows
-// per-document status (received/pending) and links to the merged PDF once
-// the Cloud Function has combined all three. Drivers never upload here;
-// only the customer does, from BillDocumentsModal. Works both mid-ride
-// (myTrip) and post-ride (a completed trip row), so it's a plain read of
-// whatever the passed-in booking already has on its documents field.
+// whether the invoice has arrived yet and links straight to it. Drivers
+// never upload here; only the customer does, from BillDocumentsModal. Works
+// both mid-ride (myTrip) and post-ride (a completed trip row), so it's a
+// plain read of whatever the passed-in booking already has on its
+// documents field.
 function BillDocumentsViewModal({ trip, onClose, lang }) {
-  const docs = trip.documents || {};
-  const complete = docs.original?.url && docs.duplicate?.url && docs.ewayBill?.url;
-
-  const row = (label, doc) => (
-    <div className="rounded-xl p-3 mb-2 flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${doc?.url ? C.success : C.line}` }}>
-      <FileText size={16} color={doc?.url ? C.success : C.inkSoft} />
-      <span className="text-sm font-bold flex-1" style={{ color: C.ink }}>{label}</span>
-      {doc?.url ? <CheckCircle2 size={16} color={C.success} /> : <span className="text-[10px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Pending" : "बाकी"}</span>}
-    </div>
-  );
+  const file = trip.documents?.file;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
@@ -2479,20 +2424,12 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
           <button onClick={onClose}><X size={18} color={C.inkSoft} /></button>
         </div>
 
-        {row(lang === "en" ? "📄 Original Copy (Invoice)" : "📄 ओरिजिनल कॉपी (इनवॉइस)", docs.original)}
-        {row(lang === "en" ? "📑 Duplicate Copy (For Transport)" : "📑 डुप्लीकेट कॉपी (ट्रांसपोर्ट के लिए)", docs.duplicate)}
-        {row(lang === "en" ? "🚚 E-Way Bill" : "🚚 ई-वे बिल", docs.ewayBill)}
-
-        {complete ? (
-          docs.mergedPdfUrl ? (
-            <a href={docs.mergedPdfUrl} target="_blank" rel="noreferrer" className="w-full mt-2 rounded-xl py-3 text-sm font-black text-white flex items-center justify-center gap-2" style={{ background: C.success }}>
-              <Download size={16} /> {lang === "en" ? "View / Download PDF" : "PDF देखें / डाउनलोड करें"}
-            </a>
-          ) : (
-            <div className="text-xs font-semibold text-center mt-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Preparing combined PDF..." : "PDF तैयार हो रही है..."}</div>
-          )
+        {file?.url ? (
+          <a href={file.url} target="_blank" rel="noreferrer" className="w-full rounded-xl py-3 text-sm font-black text-white flex items-center justify-center gap-2" style={{ background: C.success }}>
+            <Download size={16} /> {lang === "en" ? "View / Download Invoice" : "इनवॉइस देखें / डाउनलोड करें"}
+          </a>
         ) : (
-          <div className="text-xs font-semibold text-center mt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Waiting for the customer to send the bill." : "ग्राहक द्वारा बिल भेजे जाने का इंतज़ार है।"}</div>
+          <div className="text-xs font-semibold text-center" style={{ color: C.inkSoft }}>{lang === "en" ? "Waiting for the customer to send the invoice." : "ग्राहक द्वारा इनवॉइस भेजे जाने का इंतज़ार है।"}</div>
         )}
       </div>
     </div>
@@ -3154,7 +3091,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const [cancelError, setCancelError] = useState("");
   const [showDocs, setShowDocs] = useState(false);
   const [showMap, setShowMap] = useState(false);
-  const docsSent = !!(b.documents?.original?.url && b.documents?.duplicate?.url && b.documents?.ewayBill?.url);
+  const docsSent = !!b.documents?.file?.url;
 
   const shareTrip = () => {
     const text = lang === "en"
@@ -3423,7 +3360,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
               </div>
               {b.status === "Completed" && (
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setDocsBooking(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: b.documents?.original?.url && b.documents?.duplicate?.url && b.documents?.ewayBill?.url ? C.success : C.marigoldDeep }}>
+                  <button onClick={() => setDocsBooking(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: b.documents?.file?.url ? C.success : C.marigoldDeep }}>
                     <FileText size={12} /> {lang === "en" ? "Send Invoice" : "इनवॉइस भेजें"}
                   </button>
                   <button onClick={() => downloadInvoice(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Download size={12} /> {lang === "en" ? "Invoice" : "इनवॉइस"}</button>
@@ -4451,7 +4388,7 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
             </div>
             {t.status === "Completed" && (
               <button onClick={() => setDocsTrip(t)} className="text-[11px] font-semibold mt-1.5 flex items-center gap-1"
-                style={{ color: t.documents?.original?.url && t.documents?.duplicate?.url && t.documents?.ewayBill?.url ? C.success : C.marigoldDeep }}>
+                style={{ color: t.documents?.file?.url ? C.success : C.marigoldDeep }}>
                 <FileText size={12} /> {lang === "en" ? "Receive Bill" : "बिल प्राप्त करें"}
               </button>
             )}
