@@ -3955,36 +3955,14 @@ function TripOvertimeBanner({ booking, lang }) {
   );
 }
 
-function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
-  const [otpInput, setOtpInput] = useState("");
-  const [otpError, setOtpError] = useState(false);
+function LoadingTimer({ trip, completeBooking, lang }) {
   const clock = useTripClock(trip.loadingStartedAt, trip.hours, trip.extraHourRate);
 
-  if (!trip.loadingStartedAt) {
-    const confirmOtp = () => {
-      if (otpInput.trim() === String(trip.otp || "")) {
-        startLoading(trip.id);
-        setOtpError(false);
-      } else {
-        setOtpError(true);
-      }
-    };
-    return (
-      <div className="mt-3 rounded-lg p-3" style={{ background: "#FBEBD2", border: `1.5px dashed ${C.marigoldDeep}` }}>
-        <div className="text-xs font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Ask the customer for their 4-digit OTP to start loading" : "लोडिंग शुरू करने के लिए ग्राहक से 4-अंकों का OTP मांगें"}</div>
-        <div className="space-y-2">
-          <input value={otpInput} onChange={(e) => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4)); setOtpError(false); }}
-            placeholder="0000" maxLength={4} inputMode="numeric"
-            className="w-full rounded-lg px-3 py-2.5 text-center outline-none" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink, fontFamily: monoFont, fontSize: 20, letterSpacing: 6 }} />
-          <button onClick={confirmOtp} disabled={otpInput.length !== 4} className="w-full rounded-lg py-2.5 text-sm font-bold text-white"
-            style={{ background: otpInput.length === 4 ? C.marigoldDeep : C.line, color: otpInput.length === 4 ? "#fff" : "#9AA3B0" }}>
-            {lang === "en" ? "Confirm" : "पुष्टि करें"}
-          </button>
-        </div>
-        {otpError && <div className="text-[11px] font-semibold mt-1.5" style={{ color: C.safety }}>{lang === "en" ? "Incorrect OTP — ask the customer again" : "OTP गलत है — ग्राहक से दोबारा पूछें"}</div>}
-      </div>
-    );
-  }
+  // Entering the OTP itself now happens up top, next to the Online/Offline
+  // switch (see DriverOtpEntry) — mirrors where the customer's own OTP
+  // display sits on their Active Ride page. Nothing to show here until
+  // that's actually done and loading has started.
+  if (!trip.loadingStartedAt) return null;
 
   return (
     <div className="mt-3">
@@ -4018,6 +3996,40 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
       <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white mt-3" style={{ background: C.success }}>
         {lang === "en" ? "End Trip" : "एंड ट्रिप"}
       </button>
+    </div>
+  );
+}
+
+// Compact OTP entry sitting next to the Online/Offline switch at the top of
+// the driver's Active Ride page — same top-row position as the read-only
+// OTP the customer sees on their own Active Ride page. Pulses (via the same
+// guided-submit-ready animation used for other ready-to-act CTAs) so it's
+// impossible to miss once there's an actual trip waiting on it.
+function DriverOtpEntry({ trip, startLoading, lang }) {
+  const [otpInput, setOtpInput] = useState("");
+  const [otpError, setOtpError] = useState(false);
+
+  const confirmOtp = () => {
+    if (otpInput.trim() === String(trip.otp || "")) {
+      startLoading(trip.id);
+      setOtpError(false);
+    } else {
+      setOtpError(true);
+    }
+  };
+
+  return (
+    <div className="flex-1 min-w-0">
+      <div className="guided-submit-ready flex items-center gap-2 rounded-xl px-2.5 py-1.5" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <input value={otpInput} onChange={(e) => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4)); setOtpError(false); }}
+          placeholder={lang === "en" ? "Enter OTP" : "OTP डालें"} maxLength={4} inputMode="numeric"
+          className="flex-1 min-w-0 text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 18, letterSpacing: 4, fontWeight: 900 }} />
+        <button onClick={confirmOtp} disabled={otpInput.length !== 4} className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-black"
+          style={{ background: otpInput.length === 4 ? C.marigoldDeep : C.line, color: otpInput.length === 4 ? "#fff" : "#9AA3B0" }}>
+          {lang === "en" ? "Confirm" : "पुष्टि"}
+        </button>
+      </div>
+      {otpError && <div className="text-[10px] font-semibold mt-1" style={{ color: C.safety }}>{lang === "en" ? "Incorrect OTP — ask the customer again" : "OTP गलत है — ग्राहक से दोबारा पूछें"}</div>}
     </div>
   );
 }
@@ -4117,14 +4129,15 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
   return (
     <div className="px-5 py-5">
-      <div className="flex items-center justify-end mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4">
         <button onClick={() => setDriver({ ...driver, online: !driver.online })}
-          className="flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5" style={{ background: C.marigoldDeep }}>
+          className="shrink-0 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5" style={{ background: C.marigoldDeep }}>
           <span className="text-sm font-black text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
           <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
             <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 32 : 4 }} />
           </span>
         </button>
+        {myTrip && !myTrip.loadingStartedAt && <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />}
       </div>
 
       {newLoadToast && (
@@ -4208,7 +4221,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
           <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <div className="text-[10px]" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
-            <LoadingTimer trip={myTrip} startLoading={startLoading} completeBooking={completeBooking} lang={lang} />
+            <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} />
           </div>
         </div>
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
