@@ -2332,14 +2332,31 @@ function BillDocumentsModal({ booking, onClose, lang }) {
   const [error, setError] = useState("");
   const ewayPdfRef = useRef(null);
 
-  const uploadSlot = async (file, key, setSlot, isPdf) => {
+  const slots = {
+    original: { label: lang === "en" ? "📄 Original Copy (Invoice)" : "📄 ओरिजिनल कॉपी (इनवॉइस)", value: original, setValue: setOriginal },
+    duplicate: { label: lang === "en" ? "📑 Duplicate Copy (For Transport)" : "📑 डुप्लीकेट कॉपी (ट्रांसपोर्ट के लिए)", value: duplicate, setValue: setDuplicate },
+    ewayBill: { label: lang === "en" ? "🚚 E-Way Bill" : "🚚 ई-वे बिल", value: ewayBill, setValue: setEwayBill },
+  };
+  // Defaults to whichever document isn't done yet, but tapping any row
+  // switches the one shared scanner below to target that document instead —
+  // one camera control reused for all three, rather than three separate
+  // scan buttons.
+  const [activeSlot, setActiveSlot] = useState(
+    !original?.url ? "original" : !duplicate?.url ? "duplicate" : "ewayBill"
+  );
+
+  const uploadSlot = async (file, key, isPdf) => {
     setUploading(key);
     setError("");
     const path = `bookings/${booking.id}/documents/${key}.${isPdf ? "pdf" : "jpg"}`;
     const result = isPdf ? await uploadRawFile(file, path) : await uploadDocumentPhoto(file, path);
     setUploading(null);
     if (!result) { setError(lang === "en" ? "Upload failed — check your connection and try again." : "अपलोड विफल — कनेक्शन जांचें और फिर कोशिश करें।"); return; }
-    setSlot({ ...result, type: isPdf ? "pdf" : "image" });
+    slots[key].setValue({ ...result, type: isPdf ? "pdf" : "image" });
+    // Auto-advance the shared scanner to the next undone document.
+    const order = ["original", "duplicate", "ewayBill"];
+    const next = order.find((k) => k !== key && !slots[k].value?.url);
+    if (next) setActiveSlot(next);
   };
 
   const allReady = original?.url && duplicate?.url && ewayBill?.url;
@@ -2362,43 +2379,27 @@ function BillDocumentsModal({ booking, onClose, lang }) {
     }
   };
 
-  const slot = (label, value, key, setSlot, allowPdf) => (
-    <div className="rounded-xl p-3 mb-3" style={{ background: C.paper, border: `1.5px solid ${value?.url ? C.success : C.line}` }}>
-      <div className="flex items-center gap-2 mb-2">
-        <FileText size={16} color={value?.url ? C.success : C.marigoldDeep} />
-        <span className="text-sm font-bold" style={{ color: C.ink }}>{label}</span>
-        {value?.url && <CheckCircle2 size={15} color={C.success} className="ml-auto shrink-0" />}
-      </div>
-      {value?.url && <div className="text-[11px] truncate mb-2" style={{ color: C.inkSoft }}>{value.name}</div>}
-      <div className="flex gap-2">
-        <PhotoPicker label={label} lang={lang} onSelect={(f) => uploadSlot(f, key, setSlot, false)}>
-          <div className="rounded-lg py-2 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: "#F5E6C8", color: C.marigoldDeep }}>
-            <Camera size={14} /> {value?.url ? (lang === "en" ? "Rescan" : "फिर स्कैन करें") : (lang === "en" ? "Scan Photo" : "फोटो स्कैन करें")}
-          </div>
-        </PhotoPicker>
-        {allowPdf && (
-          <>
-            <button type="button" onClick={() => ewayPdfRef.current?.click()} className="rounded-lg py-2 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>
-              <Upload size={14} /> {lang === "en" ? "Upload PDF" : "PDF अपलोड करें"}
-            </button>
-            <input ref={ewayPdfRef} type="file" accept="application/pdf" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSlot(f, key, setSlot, true); e.target.value = ""; }} />
-          </>
-        )}
-      </div>
-      {uploading === key && (
-        <div className="text-[11px] font-semibold mt-2 flex items-center gap-1.5" style={{ color: C.marigoldDeep }}>
-          <Loader2 size={12} className="animate-spin" /> {lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}
+  const statusRow = (key) => {
+    const { label, value } = slots[key];
+    const active = activeSlot === key;
+    return (
+      <button type="button" key={key} onClick={() => setActiveSlot(key)} className="w-full text-left rounded-xl p-3 mb-2 flex items-center gap-2"
+        style={{ background: C.paper, border: `1.5px solid ${active ? C.marigoldDeep : value?.url ? C.success : C.line}` }}>
+        <FileText size={16} color={value?.url ? C.success : C.marigoldDeep} className="shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold" style={{ color: C.ink }}>{label}</div>
+          {value?.url && <div className="text-[11px] truncate" style={{ color: C.inkSoft }}>{value.name}</div>}
         </div>
-      )}
-    </div>
-  );
+        {value?.url ? <CheckCircle2 size={16} color={C.success} className="shrink-0" /> : <span className="text-[10px] font-semibold shrink-0" style={{ color: C.inkSoft }}>{lang === "en" ? "Pending" : "बाकी"}</span>}
+      </button>
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Send Bill" : "बिल भेजें"}</h3>
+          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Send Invoice" : "इनवॉइस भेजें"}</h3>
           <button onClick={onClose}><X size={18} color={C.inkSoft} /></button>
         </div>
 
@@ -2409,9 +2410,38 @@ function BillDocumentsModal({ booking, onClose, lang }) {
           </div>
         )}
 
-        {slot(lang === "en" ? "📄 Original Copy (Invoice)" : "📄 ओरिजिनल कॉपी (इनवॉइस)", original, "original", setOriginal, false)}
-        {slot(lang === "en" ? "📑 Duplicate Copy (For Transport)" : "📑 डुप्लीकेट कॉपी (ट्रांसपोर्ट के लिए)", duplicate, "duplicate", setDuplicate, false)}
-        {slot(lang === "en" ? "🚚 E-Way Bill" : "🚚 ई-वे बिल", ewayBill, "ewayBill", setEwayBill, true)}
+        {statusRow("original")}
+        {statusRow("duplicate")}
+        {statusRow("ewayBill")}
+
+        {/* One shared scanner, reused for whichever document is selected
+            above — tap a row to pick it, then use this to scan/upload it. */}
+        <div className="rounded-xl p-3 mb-3" style={{ background: "#F5E6C8", border: `1.5px dashed ${C.marigoldDeep}` }}>
+          <div className="text-xs font-bold mb-2" style={{ color: C.marigoldDeep }}>
+            {lang === "en" ? `Scanning: ${slots[activeSlot].label}` : `स्कैन हो रहा है: ${slots[activeSlot].label}`}
+          </div>
+          <div className="flex gap-2">
+            <PhotoPicker label={slots[activeSlot].label} lang={lang} onSelect={(f) => uploadSlot(f, activeSlot, false)}>
+              <div className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.marigoldDeep, color: "#fff" }}>
+                <Camera size={16} /> {slots[activeSlot].value?.url ? (lang === "en" ? "Rescan" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : "दस्तावेज़ स्कैन करें")}
+              </div>
+            </PhotoPicker>
+            {activeSlot === "ewayBill" && (
+              <>
+                <button type="button" onClick={() => ewayPdfRef.current?.click()} className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>
+                  <Upload size={16} /> {lang === "en" ? "Upload PDF" : "PDF अपलोड करें"}
+                </button>
+                <input ref={ewayPdfRef} type="file" accept="application/pdf" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSlot(f, "ewayBill", true); e.target.value = ""; }} />
+              </>
+            )}
+          </div>
+          {uploading === activeSlot && (
+            <div className="text-[11px] font-semibold mt-2 flex items-center gap-1.5" style={{ color: C.marigoldDeep }}>
+              <Loader2 size={12} className="animate-spin" /> {lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}
+            </div>
+          )}
+        </div>
 
         {error && <div className="text-xs font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
 
@@ -3249,7 +3279,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         ) : <div />}
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
             true), show it right here next to Back so it's impossible to
-            miss — Send Bill only makes sense once loading has genuinely
+            miss — Send Invoice only makes sense once loading has genuinely
             started, so it takes this exact spot the moment OTP is no longer
             needed instead of the two ever being shown at once. */}
         {b.otp && !b.loadingStartedAt ? (
@@ -3260,7 +3290,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         ) : (
           <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
             style={{ background: docsSent ? C.success : C.marigold, color: docsSent ? "#fff" : C.navy, border: `1.5px solid ${docsSent ? C.success : C.marigoldDeep}` }}>
-            <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Bill" : "बिल भेजें")}
+            <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Invoice" : "इनवॉइस भेजें")}
           </button>
         )}
       </div>
@@ -3398,7 +3428,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
               {b.status === "Completed" && (
                 <div className="flex items-center gap-3">
                   <button onClick={() => setDocsBooking(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: b.documents?.original?.url && b.documents?.duplicate?.url && b.documents?.ewayBill?.url ? C.success : C.marigoldDeep }}>
-                    <FileText size={12} /> {lang === "en" ? "Send Bill" : "बिल भेजें"}
+                    <FileText size={12} /> {lang === "en" ? "Send Invoice" : "इनवॉइस भेजें"}
                   </button>
                   <button onClick={() => downloadInvoice(b)} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Download size={12} /> {lang === "en" ? "Invoice" : "इनवॉइस"}</button>
                 </div>
@@ -4034,9 +4064,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
 
 function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
-  const [showDocs, setShowDocs] = useState(false);
   const [showMap, setShowMap] = useState(false);
-  const billDocsComplete = !!(myTrip?.documents?.original?.url && myTrip?.documents?.duplicate?.url && myTrip?.documents?.ewayBill?.url);
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
   // so "above" vehicle options can bid too, not just an exact match.
@@ -4130,9 +4158,11 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
       <div className="flex items-center justify-between gap-3 mb-4">
         {myTrip && (
           myTrip.loadingStartedAt ? (
-            <button onClick={() => setShowDocs(true)} className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-sm font-black shadow-sm"
-              style={{ background: billDocsComplete ? C.success : C.marigold, color: billDocsComplete ? "#fff" : C.navy, border: `1.5px solid ${billDocsComplete ? C.success : C.marigoldDeep}` }}>
-              <FileText size={16} /> {billDocsComplete ? (lang === "en" ? "Received ✓" : "मिल गया ✓") : (lang === "en" ? "Receive Bill" : "बिल प्राप्त करें")}
+            <button onClick={() => setShowMap((v) => !v)} className="flex-1 min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-full shadow-sm" style={{ background: C.navy }}>
+              <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
+              <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
+                <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
+              </span>
             </button>
           ) : (
             <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
@@ -4247,7 +4277,6 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
         </div>
       )}
-      {showDocs && myTrip && <BillDocumentsViewModal trip={myTrip} onClose={() => setShowDocs(false)} lang={lang} />}
     </div>
   );
 }
