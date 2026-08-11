@@ -4009,25 +4009,27 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
   const [otpInput, setOtpInput] = useState("");
   const [otpError, setOtpError] = useState(false);
 
-  const confirmOtp = () => {
-    if (otpInput.trim() === String(trip.otp || "")) {
-      startLoading(trip.id);
-      setOtpError(false);
-    } else {
-      setOtpError(true);
+  // Auto-submits the moment the 4th digit lands — no separate Confirm tap.
+  const handleChange = (e) => {
+    const next = e.target.value.replace(/\D/g, "").slice(0, 4);
+    setOtpInput(next);
+    setOtpError(false);
+    if (next.length === 4) {
+      if (next === String(trip.otp || "")) {
+        startLoading(trip.id);
+      } else {
+        setOtpError(true);
+        setOtpInput("");
+      }
     }
   };
 
   return (
     <div className="flex-1 min-w-0">
-      <div className="guided-submit-ready flex items-center gap-2 rounded-xl px-2.5 py-1.5" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
-        <input value={otpInput} onChange={(e) => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4)); setOtpError(false); }}
-          placeholder={lang === "en" ? "Enter OTP" : "OTP डालें"} maxLength={4} inputMode="numeric"
-          className="flex-1 min-w-0 text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 18, letterSpacing: 4, fontWeight: 900 }} />
-        <button onClick={confirmOtp} disabled={otpInput.length !== 4} className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-black"
-          style={{ background: otpInput.length === 4 ? C.marigoldDeep : C.line, color: otpInput.length === 4 ? "#fff" : "#9AA3B0" }}>
-          {lang === "en" ? "Confirm" : "पुष्टि"}
-        </button>
+      <div className="guided-submit-ready flex items-center justify-center rounded-xl px-2.5 py-1.5" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <input value={otpInput} onChange={handleChange}
+          placeholder={lang === "en" ? "OTP" : "OTP"} maxLength={4} inputMode="numeric"
+          className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 18, letterSpacing: 4, fontWeight: 900 }} />
       </div>
       {otpError && <div className="text-[10px] font-semibold mt-1" style={{ color: C.safety }}>{lang === "en" ? "Incorrect OTP — ask the customer again" : "OTP गलत है — ग्राहक से दोबारा पूछें"}</div>}
     </div>
@@ -4130,14 +4132,14 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
   return (
     <div className="px-5 py-5">
       <div className="flex items-center justify-between gap-3 mb-4">
+        {myTrip && !myTrip.loadingStartedAt && <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />}
         <button onClick={() => setDriver({ ...driver, online: !driver.online })}
-          className="shrink-0 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5" style={{ background: C.marigoldDeep }}>
+          className="shrink-0 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 ml-auto" style={{ background: C.marigoldDeep }}>
           <span className="text-sm font-black text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
           <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
             <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 32 : 4 }} />
           </span>
         </button>
-        {myTrip && !myTrip.loadingStartedAt && <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />}
       </div>
 
       {newLoadToast && (
@@ -4757,7 +4759,12 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         </div>
         {tab === "home" && rideView === "current" && myTrip && (
           <div className="px-5 pt-3">
-            <RideTypeBanner booking={myTrip} lang={lang} />
+            <div className="w-full rounded-full px-4 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: myTrip.scheduledFor ? C.marigoldDeep : C.success }}>
+              <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
+              <span className="text-sm font-extrabold text-white truncate">
+                {myTrip.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(myTrip)}
+              </span>
+            </div>
           </div>
         )}
         {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />}
