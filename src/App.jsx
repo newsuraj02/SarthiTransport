@@ -3192,7 +3192,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           )}
           <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
         </div>
-        <RideTypeBanner booking={b} lang={lang} />
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
@@ -3242,10 +3241,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const v = VEHICLES.find((x) => x.key === b.vehicle);
   return (
     <div className="px-5 py-5">
-      <div className="mb-3">
-        <RideTypeBanner booking={b} lang={lang} />
-      </div>
-
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {onAddAnother ? (
           <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-2 rounded-full text-sm font-black shadow-sm shrink-0" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -3258,7 +3253,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             started, so it takes this exact spot the moment OTP is no longer
             needed instead of the two ever being shown at once. */}
         {b.otp && !b.loadingStartedAt ? (
-          <div className="shrink-0 rounded-xl px-3 py-1.5 text-center" style={{ background: "#F1EEE7", border: "1.5px dashed #9AA0A6" }}>
+          <div className="flex-1 rounded-xl px-3 py-1.5 text-center" style={{ background: "#F1EEE7", border: "1.5px dashed #9AA0A6" }}>
             <div className="text-[8px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "OTP for driver" : "ड्राइवर के लिए OTP"}</div>
             <div className="text-lg font-extrabold leading-none mt-0.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
           </div>
@@ -3574,6 +3569,13 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   const advanceBookings = myBookings.filter((b) => b.status === "Ongoing" && isFutureAdvance(b.scheduledFor));
   const ongoingTrip = myBookings.find((b) => b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor));
   const activeBooking = myBookings.find((b) => b.status === "Bidding" || (b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor)));
+  // Whichever single booking ActiveRide is currently showing (if any) — used
+  // to put its "Immediate/Advance Ride · date time" badge in the header, in
+  // the gap between the hamburger menu and Home button, instead of inside
+  // the page body where RideTypeBanner used to render it.
+  const headerRideBooking = rideView === "current"
+    ? (activeBooking && !addingAnother ? activeBooking : null)
+    : advanceBookings.find((ab) => ab.id === selectedAdvanceId) || null;
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
@@ -3654,6 +3656,14 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
             <Menu size={18} color={C.navy} strokeWidth={2.5} />
           </button>
+          {headerRideBooking && (
+            <div className="min-w-0 rounded-full px-3 py-1.5 flex items-center justify-center gap-1.5" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
+              <Clock3 size={13} color="#fff" strokeWidth={2.5} className="shrink-0" />
+              <span className="text-[11px] font-extrabold text-white truncate">
+                {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
+              </span>
+            </div>
+          )}
           {onGoHome && (
             <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
               <Home size={18} color={C.navy} strokeWidth={2.5} />
