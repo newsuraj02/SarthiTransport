@@ -3127,6 +3127,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const [acceptError, setAcceptError] = useState("");
   const [cancelError, setCancelError] = useState("");
   const [showDocs, setShowDocs] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const docsSent = !!(b.documents?.original?.url && b.documents?.duplicate?.url && b.documents?.ewayBill?.url);
 
   const shareTrip = () => {
@@ -3241,14 +3242,13 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const v = VEHICLES.find((x) => x.key === b.vehicle);
   return (
     <div className="px-5 py-5">
-      <div className="flex items-center gap-2 mb-3">
-        {onAddAnother && (
+      {onAddAnother && (
+        <div className="flex items-center gap-2 mb-3">
           <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-2 rounded-full text-sm font-black shrink-0 shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
             <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
           </button>
-        )}
-        <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
-      </div>
+        </div>
+      )}
       <RideTypeBanner booking={b} lang={lang} />
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -3273,12 +3273,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         </button>
       </div>
 
-      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-xs font-mono mb-1.5" style={{ color: C.inkSoft }}>{b.id}</div>
-        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{b.pickup}</span></div>
-        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{b.drop}</span></div>
-      </div>
-
       <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex-1 p-3 flex items-center gap-2.5">
           <SafeImage
@@ -3294,6 +3288,26 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Details" : "गाड़ी की जानकारी"}</div>
           <div className="text-sm font-bold mt-0.5" style={{ color: C.ink }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "unavailable" : "उपलब्ध नहीं")}</div>
         </div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{b.id}</div>
+          <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-1.5 rounded-full pl-2.5 pr-1 py-1 shrink-0" style={{ background: C.marigoldDeep }}>
+            <span className="text-[10px] font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
+            <span className="w-9 h-5 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
+              <span className="w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-all shadow-sm" style={{ left: showMap ? 18 : 3 }} />
+            </span>
+          </button>
+        </div>
+        <div style={{ color: C.ink }}><span className="text-sm font-extrabold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
+        <div style={{ color: C.ink }}><span className="text-sm font-extrabold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
+        {showMap && (
+          <div className="mt-3" style={{ height: "35vh" }}>
+            <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
+              driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="100%" lang={lang} />
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
@@ -3328,17 +3342,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <div className="rounded-2xl p-4 mb-2.5 text-center" style={{ background: "#F1EEE7", border: "1.5px dashed #9AA0A6" }}>
           <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Give this OTP to the driver at pickup" : "पिकअप पर यह OTP ड्राइवर को बताएं"}</div>
           <div className="text-3xl font-extrabold mt-1.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 8 }}>{b.otp}</div>
-        </div>
-      )}
-
-      {/* Same live-tracking map the driver sees on their own trip screen —
-          both sides are watching the same route/GPS on the same booking
-          doc, so once loading has actually started, show it here too
-          instead of only behind the hamburger menu's Live Location page. */}
-      {b.loadingStartedAt && (
-        <div className="mb-2.5" style={{ height: "35vh" }}>
-          <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
-            driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="100%" lang={lang} />
         </div>
       )}
 
