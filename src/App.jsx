@@ -2329,6 +2329,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const uploadFileRef = useRef(null);
+  const scanInputRef = useRef(null);
 
   const alreadySent = !!existing.file?.url;
 
@@ -2378,14 +2379,19 @@ function BillDocumentsModal({ booking, onClose, lang }) {
           </div>
           {file?.url && <div className="text-[11px] truncate mb-2" style={{ color: C.inkSoft }}>{file.name}</div>}
           <div className="flex gap-2">
-            <PhotoPicker label={lang === "en" ? "Invoice / Bill" : "इनवॉइस / बिल"} lang={lang} onSelect={(f) => doUpload(f, false)}>
-              <div className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.marigoldDeep, color: "#fff" }}>
-                <Camera size={16} /> {file?.url ? (lang === "en" ? "Rescan" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : "दस्तावेज़ स्कैन करें")}
-              </div>
-            </PhotoPicker>
+            <button type="button" onClick={() => scanInputRef.current?.click()} className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.marigoldDeep, color: "#fff" }}>
+              <Camera size={16} /> {file?.url ? (lang === "en" ? "Rescan" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : "दस्तावेज़ स्कैन करें")}
+            </button>
+            {/* capture="environment" launches the camera directly — no Take
+                Photo/Choose from Library sheet — since this button's whole
+                job is scanning, not picking an existing photo. */}
+            <input ref={scanInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, false); e.target.value = ""; }} />
             <button type="button" onClick={() => uploadFileRef.current?.click()} className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>
               <Upload size={16} /> {lang === "en" ? "Upload Invoice" : "इनवॉइस अपलोड करें"}
             </button>
+            {/* No capture attribute here — this one's for picking an
+                existing file/photo, not scanning a new one. */}
             <input ref={uploadFileRef} type="file" accept="image/*,application/pdf" className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, f.type === "application/pdf"); e.target.value = ""; }} />
           </div>
