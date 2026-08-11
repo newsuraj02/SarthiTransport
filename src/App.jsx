@@ -4028,7 +4028,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
     <div className="flex-1 min-w-0">
       <div className="guided-submit-ready flex items-center justify-center rounded-xl px-2.5 py-1.5" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
         <input value={otpInput} onChange={handleChange}
-          placeholder={lang === "en" ? "OTP" : "OTP"} maxLength={4} inputMode="numeric"
+          placeholder={lang === "en" ? "Enter OTP" : "OTP डालें"} maxLength={4} inputMode="numeric"
           className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 18, letterSpacing: 4, fontWeight: 900 }} />
       </div>
       {otpError && <div className="text-[10px] font-semibold mt-1" style={{ color: C.safety }}>{lang === "en" ? "Incorrect OTP — ask the customer again" : "OTP गलत है — ग्राहक से दोबारा पूछें"}</div>}
@@ -4132,7 +4132,16 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
   return (
     <div className="px-5 py-5">
       <div className="flex items-center justify-between gap-3 mb-4">
-        {myTrip && !myTrip.loadingStartedAt && <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />}
+        {myTrip && (
+          myTrip.loadingStartedAt ? (
+            <button onClick={() => setShowDocs(true)} className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-sm font-black shadow-sm"
+              style={{ background: billDocsComplete ? C.success : C.marigold, color: billDocsComplete ? "#fff" : C.navy, border: `1.5px solid ${billDocsComplete ? C.success : C.marigoldDeep}` }}>
+              <FileText size={16} /> {billDocsComplete ? (lang === "en" ? "Received ✓" : "मिल गया ✓") : (lang === "en" ? "Receive Bill" : "बिल प्राप्त करें")}
+            </button>
+          ) : (
+            <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
+          )
+        )}
         <button onClick={() => setDriver({ ...driver, online: !driver.online })}
           className="shrink-0 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 ml-auto" style={{ background: C.marigoldDeep }}>
           <span className="text-sm font-black text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
@@ -4165,13 +4174,6 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
       {myTrip ? (
         <div>
-          <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Truck size={15} /> {lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</span>
-            <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
-              style={{ background: billDocsComplete ? C.success : C.marigold, color: billDocsComplete ? "#fff" : C.navy, border: `1.5px solid ${billDocsComplete ? C.success : C.marigoldDeep}` }}>
-              <FileText size={15} /> {billDocsComplete ? (lang === "en" ? "Received ✓" : "मिल गया ✓") : (lang === "en" ? "Receive Bill" : "बिल प्राप्त करें")}
-            </button>
-          </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between mb-1.5">
