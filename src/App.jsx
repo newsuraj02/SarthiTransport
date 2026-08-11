@@ -3252,10 +3252,22 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
           </button>
         ) : <div />}
-        <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
-          style={{ background: docsSent ? C.success : C.marigold, color: docsSent ? "#fff" : C.navy, border: `1.5px solid ${docsSent ? C.success : C.marigoldDeep}` }}>
-          <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Bill" : "बिल भेजें")}
-        </button>
+        {/* Until the driver actually enters this OTP (loadingStartedAt flips
+            true), show it right here next to Back so it's impossible to
+            miss — Send Bill only makes sense once loading has genuinely
+            started, so it takes this exact spot the moment OTP is no longer
+            needed instead of the two ever being shown at once. */}
+        {b.otp && !b.loadingStartedAt ? (
+          <div className="shrink-0 rounded-xl px-3 py-1.5 text-center" style={{ background: "#F1EEE7", border: "1.5px dashed #9AA0A6" }}>
+            <div className="text-[8px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "OTP for driver" : "ड्राइवर के लिए OTP"}</div>
+            <div className="text-lg font-extrabold leading-none mt-0.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
+          </div>
+        ) : (
+          <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
+            style={{ background: docsSent ? C.success : C.marigold, color: docsSent ? "#fff" : C.navy, border: `1.5px solid ${docsSent ? C.success : C.marigoldDeep}` }}>
+            <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Bill" : "बिल भेजें")}
+          </button>
+        )}
       </div>
 
       <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -3285,8 +3297,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             </span>
           </button>
         </div>
-        <div className="pb-2" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}><span className="text-sm font-extrabold" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
-        <div className="pt-2" style={{ color: C.ink }}><span className="text-sm font-extrabold" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
+        <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
+        <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
         {showMap && (
           <div className="mt-3" style={{ height: "35vh" }}>
             <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
@@ -3323,12 +3335,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         </div>
       </div>
 
-      {b.otp && !b.loadingStartedAt && (
-        <div className="rounded-2xl p-4 mb-2.5 text-center" style={{ background: "#F1EEE7", border: "1.5px dashed #9AA0A6" }}>
-          <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Give this OTP to the driver at pickup" : "पिकअप पर यह OTP ड्राइवर को बताएं"}</div>
-          <div className="text-3xl font-extrabold mt-1.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 8 }}>{b.otp}</div>
-        </div>
-      )}
 
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="w-full h-1.5 rounded-full" style={{ background: C.line }}>
