@@ -3318,8 +3318,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         )}
         <div className="mt-2">
           {b.driverMobile ? (
-            <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#fff", fontFamily: bodyFont, background: C.success }}>
-              <Phone size={16} color="#fff" /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{b.driverMobile}</span>
+            <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+              <Phone size={16} color="#000000" /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{b.driverMobile}</span>
             </a>
           ) : (
             <div className="flex items-center gap-1.5">
@@ -3334,9 +3334,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={shareTrip} className={`flex items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-black shadow-sm ${b.loadingStartedAt ? "col-span-2" : ""}`} style={{ background: C.success, color: "#fff" }}><MessageCircle size={16} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
+          <button onClick={shareTrip} className={`text-[11px] font-semibold flex items-center justify-center gap-1 ${b.loadingStartedAt ? "col-span-2" : ""}`} style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
           {!b.loadingStartedAt && (
-            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="flex items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-black shadow-sm" style={{ background: C.safety, color: "#fff" }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
+            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
           )}
         </div>
         {b.loadingStartedAt && (
