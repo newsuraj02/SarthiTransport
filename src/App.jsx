@@ -2330,7 +2330,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
   const [uploading, setUploading] = useState(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const ewayPdfRef = useRef(null);
+  const uploadFileRef = useRef(null);
 
   const slots = {
     original: { label: lang === "en" ? "📄 Original Copy (Invoice)" : "📄 ओरिजिनल कॉपी (इनवॉइस)", value: original, setValue: setOriginal },
@@ -2426,15 +2426,11 @@ function BillDocumentsModal({ booking, onClose, lang }) {
                 <Camera size={16} /> {slots[activeSlot].value?.url ? (lang === "en" ? "Rescan" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : "दस्तावेज़ स्कैन करें")}
               </div>
             </PhotoPicker>
-            {activeSlot === "ewayBill" && (
-              <>
-                <button type="button" onClick={() => ewayPdfRef.current?.click()} className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>
-                  <Upload size={16} /> {lang === "en" ? "Upload PDF" : "PDF अपलोड करें"}
-                </button>
-                <input ref={ewayPdfRef} type="file" accept="application/pdf" className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSlot(f, "ewayBill", true); e.target.value = ""; }} />
-              </>
-            )}
+            <button type="button" onClick={() => uploadFileRef.current?.click()} className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>
+              <Upload size={16} /> {lang === "en" ? "Upload Invoice" : "इनवॉइस अपलोड करें"}
+            </button>
+            <input ref={uploadFileRef} type="file" accept="image/*,application/pdf" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSlot(f, activeSlot, f.type === "application/pdf"); e.target.value = ""; }} />
           </div>
           {uploading === activeSlot && (
             <div className="text-[11px] font-semibold mt-2 flex items-center gap-1.5" style={{ color: C.marigoldDeep }}>
@@ -4158,7 +4154,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
       <div className="flex items-center justify-between gap-3 mb-4">
         {myTrip && (
           myTrip.loadingStartedAt ? (
-            <button onClick={() => setShowMap((v) => !v)} className="flex-1 min-w-0 flex items-center justify-center gap-2 px-3 py-2 rounded-full shadow-sm" style={{ background: C.navy }}>
+            <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
               <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
               <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
                 <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
@@ -4202,15 +4198,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
         <div>
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{myTrip.id}</div>
-              <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
-                <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
-                <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
-                  <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
-                </span>
-              </button>
-            </div>
+            <div className="text-xs font-mono mb-1.5" style={{ color: C.inkSoft }}>{myTrip.id}</div>
             <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
             <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
             {showMap && (

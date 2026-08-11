@@ -217,13 +217,20 @@ async function uploadMergedPdf(bytes, filePath) {
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
 }
 
+// Copies an already-uploaded PDF's own pages into the merged doc as-is.
+async function addPdfPages(pdfDoc, bytes) {
+  const srcDoc = await PDFDocument.load(bytes);
+  const copiedPages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+  copiedPages.forEach((page) => pdfDoc.addPage(page));
+}
+
 // Fires whenever a booking doc changes — once the customer has uploaded all
 // three bill documents (Original, Duplicate, E-Way Bill), combines them into
-// a single PDF (the E-Way Bill's own pages are copied in as-is if it was
-// uploaded as a PDF, otherwise scanned in as an image page like the other
-// two), stores it, and alerts the driver. Guarded on documents.mergedPdfUrl
-// already being set so the update this function itself makes doesn't cause
-// it to re-run forever.
+// a single PDF (each one's own pages copied in as-is if it was uploaded as a
+// PDF — the client's "Upload Invoice" option isn't limited to E-Way Bill —
+// otherwise scanned in as an image page), stores it, and alerts the driver.
+// Guarded on documents.mergedPdfUrl already being set so the update this
+// function itself makes doesn't cause it to re-run forever.
 exports.onBillDocumentsUploaded = onDocumentUpdated("bookings/{bookingId}", async (event) => {
   const after = event.data?.after?.data();
   const docs = after?.documents;
@@ -231,15 +238,10 @@ exports.onBillDocumentsUploaded = onDocumentUpdated("bookings/{bookingId}", asyn
 
   try {
     const pdfDoc = await PDFDocument.create();
-    await addImagePage(pdfDoc, await fetchBytes(docs.original.url));
-    await addImagePage(pdfDoc, await fetchBytes(docs.duplicate.url));
-
-    if (docs.ewayBill.type === "pdf") {
-      const ewayDoc = await PDFDocument.load(await fetchBytes(docs.ewayBill.url));
-      const copiedPages = await pdfDoc.copyPages(ewayDoc, ewayDoc.getPageIndices());
-      copiedPages.forEach((page) => pdfDoc.addPage(page));
-    } else {
-      await addImagePage(pdfDoc, await fetchBytes(docs.ewayBill.url));
+    for (const key of ["original", "duplicate", "ewayBill"]) {
+      const bytes = await fetchBytes(docs[key].url);
+      if (docs[key].type === "pdf") await addPdfPages(pdfDoc, bytes);
+      else await addImagePage(pdfDoc, bytes);
     }
 
     const mergedBytes = await pdfDoc.save();
