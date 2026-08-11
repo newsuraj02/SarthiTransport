@@ -3332,15 +3332,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
 
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="w-full h-1.5 rounded-full" style={{ background: C.line }}>
-          <div className="h-1.5 rounded-full" style={{ width: `${b.progress}%`, background: C.pimpri }} />
-        </div>
-        <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle location" : "गाड़ी की लोकेशन"} — {b.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
-        <div className="flex items-center gap-4 mt-2 flex-wrap">
-          <button onClick={shareTrip} className="text-[11px] font-semibold flex items-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={shareTrip} className="flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-black shadow-sm" style={{ background: C.success, color: "#fff" }}><MessageCircle size={16} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
           {!b.loadingStartedAt && (
-            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
+            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-black shadow-sm" style={{ background: C.safety, color: "#fff" }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
           )}
         </div>
         {b.loadingStartedAt && (
