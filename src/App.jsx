@@ -3246,25 +3246,12 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <RideTypeBanner booking={b} lang={lang} />
       </div>
 
-      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="relative shrink-0">
-          <SafeImage
-            src={driverVehicle?.photo?.url}
-            alt="ड्राइवर"
-            className="w-12 h-12 rounded-full object-cover"
-            fallback={<div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: C.navy }}><UserCircle2 size={26} color="#fff" /></div>}
-          />
-          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: "#fff" }}>
-            <CheckCircle2 size={15} color={C.success} />
-          </div>
-        </div>
-        <div className="flex-1 min-w-0">
-          {onAddAnother && (
-            <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-2 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
-            </button>
-          )}
-        </div>
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        {onAddAnother ? (
+          <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-2 rounded-full text-sm font-black shadow-sm shrink-0" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+          </button>
+        ) : <div />}
         <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
           style={{ background: docsSent ? C.success : C.marigold, color: docsSent ? "#fff" : C.navy, border: `1.5px solid ${docsSent ? C.success : C.marigoldDeep}` }}>
           <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Bill" : "बिल भेजें")}
