@@ -3278,15 +3278,15 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex items-center justify-between mb-1.5">
           <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{b.id}</div>
-          <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-1.5 rounded-full pl-2.5 pr-1 py-1 shrink-0" style={{ background: C.marigoldDeep }}>
+          <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-1.5 rounded-full pl-2.5 pr-1 py-1 shrink-0" style={{ background: C.navy }}>
             <span className="text-[10px] font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
             <span className="w-9 h-5 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
               <span className="w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-all shadow-sm" style={{ left: showMap ? 18 : 3 }} />
             </span>
           </button>
         </div>
-        <div style={{ color: C.ink }}><span className="text-sm font-extrabold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
-        <div style={{ color: C.ink }}><span className="text-sm font-extrabold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
+        <div className="pb-2" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}><span className="text-sm font-extrabold" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
+        <div className="pt-2" style={{ color: C.ink }}><span className="text-sm font-extrabold" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
         {showMap && (
           <div className="mt-3" style={{ height: "35vh" }}>
             <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
