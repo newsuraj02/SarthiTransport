@@ -4223,10 +4223,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
             </div>
           </div>
 
-          <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="text-[10px]" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Collect the remaining 90% fare directly from the customer (cash / UPI) after delivery." : "डिलीवरी के बाद बचा हुआ 90% भाड़ा ग्राहक से सीधे (नकद / UPI) वसूलें।"}</div>
-            <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} />
-          </div>
+          <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} />
         </div>
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
         <>
