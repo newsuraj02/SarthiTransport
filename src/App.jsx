@@ -4025,6 +4025,7 @@ function LoadingTimer({ trip, startLoading, completeBooking, lang }) {
 function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   const [showDocs, setShowDocs] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const billDocsComplete = !!(myTrip?.documents?.original?.url && myTrip?.documents?.duplicate?.url && myTrip?.documents?.ewayBill?.url);
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
@@ -4116,15 +4117,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
   return (
     <div className="px-5 py-5">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div className="text-sm font-bold" style={{ color: C.ink }}>{driver.name}</div>
-          {driver.rating > 0 && (
-            <div className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>
-              {stars(driver.rating)} <span style={{ color: C.inkSoft, fontFamily: monoFont }}>({driver.rating.toFixed(1)})</span>
-            </div>
-          )}
-        </div>
+      <div className="flex items-center justify-end mb-4">
         <button onClick={() => setDriver({ ...driver, online: !driver.online })}
           className="flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5" style={{ background: C.marigoldDeep }}>
           <span className="text-sm font-black text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
@@ -4157,7 +4150,6 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
       {myTrip ? (
         <div>
-          <RideTypeBanner booking={myTrip} lang={lang} />
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.pimpri }}><Truck size={15} /> {lang === "en" ? "Trip in progress" : "ट्रिप जारी है"}</span>
             <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
@@ -4167,8 +4159,23 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{myTrip.pickup}</span></div>
-            <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{myTrip.drop}</span></div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{myTrip.id}</div>
+              <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
+                <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
+                <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
+                  <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
+                </span>
+              </button>
+            </div>
+            <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
+            <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
+            {showMap && (
+              <div className="mt-3" style={{ height: "35vh" }}>
+                <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
+                  driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="100%" lang={lang} />
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
@@ -4735,7 +4742,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </button>
           )}
         </div>
-        {tab === "home" && rideView === "current" && <Greeting name={driver?.name} lang={lang} />}
+        {tab === "home" && rideView === "current" && myTrip && (
+          <div className="px-5 pt-3">
+            <RideTypeBanner booking={myTrip} lang={lang} />
+          </div>
+        )}
         {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />}
         <ForegroundToast toast={rideNotifications.toast} />
         {menuOpen && (
@@ -6664,15 +6675,6 @@ export default function App() {
             </div>
           )}
         </div>
-
-        {role !== null && role !== "admin" && app !== "customer" && (
-          <div className="px-5 py-2 flex items-center gap-1.5" style={{ background: "#F5E6C8", borderBottom: `1px solid ${C.line}` }}>
-            <span className="text-sm">💡</span>
-            <span className="text-[11px] font-medium" style={{ color: C.ink }}>
-              {app === "driver" && (lang === "en" ? "This screen is for truck/tempo drivers — bid on loads and track earnings." : "यह स्क्रीन ट्रक/टेम्पो ड्राइवरों के लिए है — लोड पर बोली लगाएं और कमाई देखें।")}
-            </span>
-          </div>
-        )}
 
         {role === null && (
           <RoleSelect lang={lang} onSelect={(r) => { setRole(r); setApp(r); }}
