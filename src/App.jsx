@@ -3285,10 +3285,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex items-center justify-between mb-1.5">
           <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{b.id}</div>
-          <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-1.5 rounded-full pl-2.5 pr-1 py-1 shrink-0" style={{ background: C.navy }}>
-            <span className="text-[10px] font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
-            <span className="w-9 h-5 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
-              <span className="w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-all shadow-sm" style={{ left: showMap ? 18 : 3 }} />
+          <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
+            <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
+            <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
+              <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
             </span>
           </button>
         </div>
