@@ -3242,14 +3242,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const v = VEHICLES.find((x) => x.key === b.vehicle);
   return (
     <div className="px-5 py-5">
-      {onAddAnother && (
-        <div className="flex items-center gap-2 mb-3">
-          <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-2 rounded-full text-sm font-black shrink-0 shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
-            <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
-          </button>
-        </div>
-      )}
-      <RideTypeBanner booking={b} lang={lang} />
+      <div className="mb-3">
+        <RideTypeBanner booking={b} lang={lang} />
+      </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="relative shrink-0">
@@ -3264,8 +3259,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-base font-bold truncate" style={{ color: C.ink }}>{b.driverName}</div>
-          <span className="inline-block mt-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: C.pimpri }}>{lang === "en" ? "Verified" : "सत्यापित"}</span>
+          {onAddAnother && (
+            <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-2 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+            </button>
+          )}
         </div>
         <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
           style={{ background: docsSent ? C.success : C.marigold, color: docsSent ? "#fff" : C.navy, border: `1.5px solid ${docsSent ? C.success : C.marigoldDeep}` }}>
