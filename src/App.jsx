@@ -3966,10 +3966,6 @@ function LoadingTimer({ trip, completeBooking, lang }) {
 
   return (
     <div className="mt-3">
-      <div className="mb-3" style={{ height: "35vh" }}>
-        <LiveTrackingMap pickup={trip.pickup} drop={trip.drop} pickupLat={trip.pickupLat} pickupLng={trip.pickupLng} dropLat={trip.dropLat} dropLng={trip.dropLng}
-          driverLocation={trip.driverLocation} customerLocation={trip.customerLocation} progress={trip.progress} zoneColor={C.pimpri} height="100%" lang={lang} />
-      </div>
       <div className="rounded-lg p-3" style={{ background: C.navy }}>
         {trip.hours ? (
           <>
