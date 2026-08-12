@@ -3149,6 +3149,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             </div>
             <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
             <div className="pt-2.5 pb-1" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
+            <div className="mt-3 mb-3" style={{ borderTop: `1px solid ${C.line}` }} />
             {b.scheduledFor && (
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#F5E6C8" }}>
                 <Clock3 size={12} color="#A8721C" />
