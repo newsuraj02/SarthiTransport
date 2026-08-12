@@ -3634,8 +3634,8 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         {headerHasContent && (
           <div className="flex items-center justify-between gap-2 px-5 pt-3">
             {showHamburger ? (
-              <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-                <Menu size={18} color={C.navy} strokeWidth={2.5} />
+              <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#60A5FA", border: "1.5px solid #3B82F6" }}>
+                <Menu size={18} color="#fff" strokeWidth={2.5} />
               </button>
             ) : rideView === "advance" ? (
               <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -3654,8 +3654,8 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                 </span>
               </div>
             ) : showHamburger ? (
-              <div className="flex-1 min-w-0 text-center">
-                <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
+              <div className="flex-1 min-w-0 flex justify-center">
+                <span className="rounded-full px-4 py-2 text-base font-black text-white" style={{ background: "#60A5FA" }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
               </div>
             ) : biddingHeader ? (
               <div className="flex-1 min-w-0">
@@ -4728,8 +4728,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     <>
       <div className="flex-1 overflow-y-auto relative">
         <div className="flex items-center justify-between px-5 pt-3">
-          <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-            <Menu size={18} color={C.navy} strokeWidth={2.5} />
+          <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#60A5FA", border: "1.5px solid #3B82F6" }}>
+            <Menu size={18} color="#fff" strokeWidth={2.5} />
           </button>
           {tab === "home" && (
             <div className="flex rounded-full p-1 shrink-0" style={{ background: "#F5E6C8" }}>
