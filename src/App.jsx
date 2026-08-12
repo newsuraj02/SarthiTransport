@@ -3191,7 +3191,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
   const v = VEHICLES.find((x) => x.key === b.vehicle);
   return (
-    <div className="px-5 py-5">
+    <div className="px-5 pt-3 pb-5">
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {onAddAnother ? (
           <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-2 rounded-full text-sm font-black shadow-sm shrink-0" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -3614,7 +3614,11 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   // Back + "Your Active Ride" instead of the Immediate/Advance Ride time
   // badge — that badge only makes sense once a driver is actually en route.
   const biddingHeader = rideView === "current" && !addingAnother && activeBooking?.status === "Bidding";
-  const showRideBadge = headerRideBooking && headerRideBooking.status !== "Bidding";
+  // The Ongoing (assigned-driver) ride view on the Current tab has its own
+  // Back + OTP/Send-Invoice row right at the top of the page body, so the
+  // header's ride-time badge would just be dead space above it — only show
+  // the badge for the Advance tab's own selected-ride detail view.
+  const showRideBadge = headerRideBooking && headerRideBooking.status !== "Bidding" && rideView !== "current";
   const headerHasContent = showHamburger || rideView === "advance" || biddingHeader || !!showRideBadge;
 
   return (
