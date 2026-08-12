@@ -4760,13 +4760,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         </div>
         {tab === "home" && (
           <div className="grid grid-cols-2 gap-3 px-5 pt-3">
-            <button onClick={() => setRideView("current")} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
+            <button onClick={() => setRideView("current")} className="col-span-2 rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
               <Bell size={18} color={C.navy} />
-              <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "Show Current New Load" : "वर्तमान नया लोड देखें"} ({openCurrentLoadsCount})</div>
-            </button>
-            <button onClick={() => setRideView("current")} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.navy }}>
-              <Bell size={18} color="#fff" />
-              <div className="text-xs font-black text-white">{lang === "en" ? "Show Advance New Load" : "एडवांस नया लोड देखें"} ({openAdvanceLoadsCount})</div>
+              <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "Bid Now" : "अभी बोली लगाएं"} ({openCurrentLoadsCount + openAdvanceLoadsCount})</div>
             </button>
             <button onClick={() => setRideView("current")} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
               <Truck size={18} color={C.navy} />
