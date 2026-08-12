@@ -3093,13 +3093,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const [acceptError, setAcceptError] = useState("");
   const [cancelError, setCancelError] = useState("");
   const [showDocs, setShowDocs] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const docsSent = !!b.documents?.file?.url;
-
-  const openInMaps = () => {
-    const origin = b.pickupLat != null && b.pickupLng != null ? `${b.pickupLat},${b.pickupLng}` : b.pickup;
-    const destination = b.dropLat != null && b.dropLng != null ? `${b.dropLat},${b.dropLng}` : b.drop;
-    window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`, "_blank");
-  };
 
   const shareTrip = () => {
     const text = lang === "en"
@@ -3254,48 +3249,61 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex items-center justify-between mb-1.5">
           <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{b.id}</div>
-          <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
-            <MapPinned size={14} color="#fff" />
-            <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
+          <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
+            <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
+            <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
+              <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: showMap ? "flex-start" : "flex-end", paddingLeft: showMap ? 7 : 0, paddingRight: showMap ? 0 : 7 }}>{showMap ? "ON" : "OFF"}</span>
+              <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
+            </span>
           </button>
         </div>
         <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
         <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
+        {showMap && (
+          <div className="mt-3" style={{ height: "35vh" }}>
+            <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
+              driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="100%" lang={lang} />
+          </div>
+        )}
       </div>
 
-      <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
-        <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
-        {b.scheduledFor && (
-          <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
-            <Clock3 size={13} />
-            <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(b)}</span>
-          </div>
-        )}
-        <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
-        {b.hours && (
-          <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-            {lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
-          </div>
-        )}
-        <div className="mt-2">
-          {b.driverMobile ? (
-            <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
-              <Phone size={16} color="#000000" /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{b.driverMobile}</span>
-            </a>
-          ) : (
-            <div className="flex items-center gap-1.5">
-              <Phone size={14} color="#000000" />
-              <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+      {b.loadingStartedAt && (
+        <>
+          <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
+            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
+            {b.scheduledFor && (
+              <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
+                <Clock3 size={13} />
+                <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(b)}</span>
+              </div>
+            )}
+            <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
+            {b.hours && (
+              <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
+                {lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
+              </div>
+            )}
+            <div className="mt-2">
+              {b.driverMobile ? (
+                <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+                  <Phone size={16} color="#000000" /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{b.driverMobile}</span>
+                </a>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <Phone size={14} color="#000000" />
+                  <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
-        <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
-          {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
-        </div>
-      </div>
+          <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
+              {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
@@ -4041,12 +4049,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
 
 function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
-  const openInMaps = () => {
-    if (!myTrip) return;
-    const origin = myTrip.pickupLat != null && myTrip.pickupLng != null ? `${myTrip.pickupLat},${myTrip.pickupLng}` : myTrip.pickup;
-    const destination = myTrip.dropLat != null && myTrip.dropLng != null ? `${myTrip.dropLat},${myTrip.dropLng}` : myTrip.drop;
-    window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`, "_blank");
-  };
+  const [showMap, setShowMap] = useState(false);
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
   // so "above" vehicle options can bid too, not just an exact match.
@@ -4170,48 +4173,61 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between mb-1.5">
               <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{myTrip.id}</div>
-              <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
-                <MapPinned size={14} color="#fff" />
-                <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
+              <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
+                <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
+                <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
+                  <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: showMap ? "flex-start" : "flex-end", paddingLeft: showMap ? 7 : 0, paddingRight: showMap ? 0 : 7 }}>{showMap ? "ON" : "OFF"}</span>
+                  <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
+                </span>
               </button>
             </div>
             <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
             <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
+            {showMap && (
+              <div className="mt-3" style={{ height: "35vh" }}>
+                <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
+                  driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="100%" lang={lang} />
+              </div>
+            )}
           </div>
 
-          <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
-            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
-            {myTrip.scheduledFor && (
-              <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
-                <Clock3 size={13} />
-                <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(myTrip)}</span>
-              </div>
-            )}
-            <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
-            {myTrip.hours && (
-              <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
-              </div>
-            )}
-            <div className="mt-2">
-              {myTrip.customerMobile ? (
-                <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
-                  <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{myTrip.customerMobile}</span>
-                </a>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <Phone size={14} color="#000000" />
-                  <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+          {myTrip.loadingStartedAt && (
+            <>
+              <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
+                <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
+                {myTrip.scheduledFor && (
+                  <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
+                    <Clock3 size={13} />
+                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(myTrip)}</span>
+                  </div>
+                )}
+                <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
+                {myTrip.hours && (
+                  <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
+                    {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
+                  </div>
+                )}
+                <div className="mt-2">
+                  {myTrip.customerMobile ? (
+                    <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+                      <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{myTrip.customerMobile}</span>
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <Phone size={14} color="#000000" />
+                      <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
-            <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
-              {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
-            </div>
-          </div>
+              <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+                <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
+                  {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
+                </div>
+              </div>
+            </>
+          )}
 
           <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} />
         </div>
