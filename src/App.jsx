@@ -2567,11 +2567,6 @@ function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, o
       <div inert={locked ? "" : undefined} className="h-full" style={locked ? { pointerEvents: "none", userSelect: "none", opacity: 0.45 } : undefined}>
         {children}
       </div>
-      {completed && (
-        <span className="absolute -top-2 -right-2 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black text-white shadow-sm z-10" style={{ background: C.success }}>
-          <CheckCircle2 size={11} /> {lang === "en" ? "Completed" : "पूर्ण"}
-        </span>
-      )}
     </div>
   );
 }
