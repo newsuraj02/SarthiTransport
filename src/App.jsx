@@ -4129,16 +4129,9 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
 
   return (
     <div className="px-5 py-5">
-      {myTrip && (
+      {myTrip && !myTrip.loadingStartedAt && (
         <div className="mb-4">
-          {myTrip.loadingStartedAt ? (
-            <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
-              <MapPinned size={14} color="#fff" />
-              <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
-            </button>
-          ) : (
-            <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
-          )}
+          <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
         </div>
       )}
 
@@ -4167,7 +4160,13 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         <div>
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="text-xs font-mono mb-1.5" style={{ color: C.inkSoft }}>{myTrip.id}</div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{myTrip.id}</div>
+              <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
+                <MapPinned size={14} color="#fff" />
+                <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
+              </button>
+            </div>
             <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
             <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
           </div>
