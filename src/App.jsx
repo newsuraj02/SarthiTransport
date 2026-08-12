@@ -2820,16 +2820,12 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       <div className="px-5 py-8 flex flex-col justify-center" style={{ minHeight: 420 }}>
         <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : "आपको क्या चाहिए?"}</p>
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => setBookingMode("now")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.marigold }}>
-            <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.navy }}>
-              <Truck size={22} color="#fff" />
-            </div>
-            <div className="text-sm font-black" style={{ color: C.navy }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
+          <button onClick={() => setBookingMode("now")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.success }}>
+            <Truck size={22} color="#fff" />
+            <div className="text-sm font-black text-white">⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
           </button>
-          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.navy }}>
-            <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-              <Clock3 size={22} color={C.navy} />
-            </div>
+          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.success }}>
+            <Clock3 size={22} color="#fff" />
             <div className="text-sm font-black text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
           </button>
         </div>
@@ -3535,7 +3531,12 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   // The hamburger only shows on the "What do you need?" chooser screen —
   // i.e. the Current tab, no active/being-added ride, and CustomerBooking
   // itself hasn't moved past its own mode chooser yet.
-  const showHamburger = rideView === "current" && !activeBooking && !addingAnother && customerBookingMode === null;
+  // True whenever the "What do you need?" chooser (hamburger + Customer
+  // Dashboard title) is what's actually on screen — either there's no active
+  // booking at all, or the customer tapped Back from an active ride to post
+  // another one (addingAnother) — as long as CustomerBooking hasn't moved
+  // past its own mode chooser yet.
+  const showHamburger = rideView === "current" && (!activeBooking || addingAnother) && customerBookingMode === null;
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
