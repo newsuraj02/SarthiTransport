@@ -4846,7 +4846,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   {advanceBookings.map((ab) => (
                     <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                       <RideTypeBanner booking={ab} lang={lang} />
-                      <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
+                      <div className="pb-1.5" style={{ color: C.ink, borderBottom: `1.5px solid ${C.navy}` }}><span className="text-sm font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-xs font-normal">{ab.pickup}</span></div>
+                      <div className="pt-1.5" style={{ color: C.ink }}><span className="text-sm font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-xs font-normal">{ab.drop}</span></div>
                     </button>
                   ))}
                 </div>
