@@ -3289,17 +3289,19 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
-        <div className="flex justify-end gap-3">
-          {b.loadingStartedAt && (
-            <button onClick={shareTrip} className="text-[11px] font-semibold flex items-center justify-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
-          )}
-          {!b.loadingStartedAt && (
+        {!b.loadingStartedAt && (
+          <div className="flex justify-end">
             <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
-          )}
-        </div>
+          </div>
+        )}
         {b.loadingStartedAt && (
-          <div className="rounded-lg p-2.5 mt-2 text-[11px] font-bold" style={{ background: "#FCEAE3", color: C.safety }}>
+          <div className="rounded-lg p-2.5 text-[11px] font-bold" style={{ background: "#FCEAE3", color: C.safety }}>
             ⚠️ {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
+          </div>
+        )}
+        {b.loadingStartedAt && (
+          <div className="flex justify-end mt-2">
+            <button onClick={shareTrip} className="text-[11px] font-semibold flex items-center justify-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
           </div>
         )}
         {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
