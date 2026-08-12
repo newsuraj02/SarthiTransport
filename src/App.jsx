@@ -3206,8 +3206,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
     <div className="px-5 pt-3 pb-5">
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {onAddAnother ? (
-          <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-2 rounded-full text-sm font-black shadow-sm shrink-0" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
-            <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+          <button onClick={onAddAnother} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} color={C.navy} strokeWidth={3} />
           </button>
         ) : <div />}
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
