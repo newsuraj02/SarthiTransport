@@ -3254,11 +3254,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex items-center justify-between mb-1.5">
-          <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
+          <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 shrink-0" style={{ background: "#60A5FA", height: 40 }}>
             <MapPinned size={14} color="#fff" />
             <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
           </button>
-          <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
+          <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 shrink-0" style={{ background: C.navy, height: 40 }}>
             <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
             <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
               <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: showMap ? "flex-start" : "flex-end", paddingLeft: showMap ? 7 : 0, paddingRight: showMap ? 0 : 7 }}>{showMap ? "ON" : "OFF"}</span>
@@ -4187,11 +4187,11 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between mb-1.5">
-              <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
+              <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 shrink-0" style={{ background: "#60A5FA", height: 40 }}>
                 <MapPinned size={14} color="#fff" />
                 <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
               </button>
-              <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
+              <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 shrink-0" style={{ background: C.navy, height: 40 }}>
                 <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
                 <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
                   <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: showMap ? "flex-start" : "flex-end", paddingLeft: showMap ? 7 : 0, paddingRight: showMap ? 0 : 7 }}>{showMap ? "ON" : "OFF"}</span>
