@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, Home, ChevronLeft, Eye, EyeOff, Plus, Loader2,
+  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, ChevronLeft, Eye, EyeOff, Plus, Loader2,
   FileText, X, Upload,
 } from "lucide-react";
 import {
@@ -378,15 +378,6 @@ function greetingWord(lang) {
   const hour = new Date().getHours();
   if (lang === "en") return hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
   return hour < 12 ? "सुप्रभात" : hour < 17 ? "शुभ दोपहर" : "शुभ संध्या";
-}
-function Greeting({ name, lang }) {
-  return (
-    <div className="px-5 pt-2 pb-1">
-      <div className="text-sm font-bold" style={{ color: C.ink }}>
-        {greetingWord(lang)}{name ? `, ${name}` : ""} 👋
-      </div>
-    </div>
-  );
 }
 
 const AREAS = ["पिंपरी", "चिंचवड", "निगड़ी", "आकुर्डी", "भोसरी", "वाकड़", "तळवडे", "रावेत", "MG रोड", "MR-10", "काळेवाडी", "पिंपळे सौदागर", "थेरगाव", "चिखली", "मोशी", "भोसरी MIDC"];
@@ -2639,9 +2630,13 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true } =
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial, hasActiveBooking, onViewCurrent, onViewAdvance, advanceCount }) {
+function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial, hasActiveBooking, onViewCurrent, onViewAdvance, advanceCount, onModeChange }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
+  // Reports the current mode up to CustomerApp so it can tell whether the
+  // "What do you need?" chooser (mode === null) is on screen right now —
+  // that's the only place the hamburger menu should show.
+  useEffect(() => { onModeChange?.(bookingMode); }, [bookingMode]);
   // Shows an inline "no current ride" message when View Current Booked Ride
   // is tapped but there isn't one — the button always shows (see below),
   // unlike View Advance which can navigate straight to an empty list.
@@ -3505,8 +3500,12 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, onOpenTerms, onGoHome }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, onOpenTerms }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
+  // so the header knows whether the "What do you need?" chooser is on
+  // screen right now — that's the only place the hamburger menu shows.
+  const [customerBookingMode, setCustomerBookingMode] = useState(null);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
   // Toggle between Current and Advance rides, shown as a bar in the header
@@ -3540,6 +3539,10 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   const headerRideBooking = rideView === "current"
     ? (activeBooking && !addingAnother ? activeBooking : null)
     : advanceBookings.find((ab) => ab.id === selectedAdvanceId) || null;
+  // The hamburger only shows on the "What do you need?" chooser screen —
+  // i.e. the Current tab, no active/being-added ride, and CustomerBooking
+  // itself hasn't moved past its own mode chooser yet.
+  const showHamburger = rideView === "current" && !activeBooking && !addingAnother && customerBookingMode === null;
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
@@ -3617,24 +3620,25 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
     <>
       <div className="flex-1 overflow-y-auto relative">
         <div className="flex items-center justify-between gap-2 px-5 pt-3">
-          <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-            <Menu size={18} color={C.navy} strokeWidth={2.5} />
-          </button>
-          {headerRideBooking && (
+          {showHamburger ? (
+            <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <Menu size={18} color={C.navy} strokeWidth={2.5} />
+            </button>
+          ) : <div className="w-9 h-9 shrink-0" />}
+          {headerRideBooking ? (
             <div className="flex-1 min-w-0 rounded-full px-3 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
               <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
               <span className="text-sm font-extrabold text-white truncate">
                 {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
               </span>
             </div>
+          ) : (
+            <div className="flex-1 min-w-0 text-center">
+              <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
+            </div>
           )}
-          {onGoHome && (
-            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <Home size={18} color={C.navy} strokeWidth={2.5} />
-            </button>
-          )}
+          <div className="w-9 h-9 shrink-0" />
         </div>
-        {rideView === "current" && (!activeBooking || addingAnother) && <Greeting name={customerProfile?.name} lang={lang} />}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
         <ForegroundToast toast={rideNotifications.toast} />
         {menuOpen && (
@@ -3649,11 +3653,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                   {customerMobile && <div className="text-[11px]" style={{ color: "#D9C4B0", fontFamily: monoFont }}>{customerMobile}</div>}
                 </div>
               </div>
-              {onGoHome && (
-                <button onClick={() => { onGoHome(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                  <Home size={16} color={C.marigoldDeep} /> {lang === "en" ? "Back to Main Page" : "मुख्य पेज पर वापस जाएं"}
-                </button>
-              )}
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
               </button>
@@ -3692,7 +3691,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           ) : (
             <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
               hasActiveBooking={!!activeBooking} onViewCurrent={() => setAddingAnother(false)}
-              onViewAdvance={() => { setRideView("advance"); setSelectedAdvanceId(null); }} advanceCount={advanceBookings.length} />
+              onViewAdvance={() => { setRideView("advance"); setSelectedAdvanceId(null); }} advanceCount={advanceBookings.length} onModeChange={setCustomerBookingMode} />
           )
         ) : (
           <div>
@@ -4629,7 +4628,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, onGoHome }) {
+function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | 'liveLocation' | null
@@ -4710,11 +4709,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               </button>
             </div>
           )}
-          {onGoHome && (
-            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <Home size={18} color={C.navy} strokeWidth={2.5} />
-            </button>
-          )}
         </div>
         {tab === "home" && rideView === "current" && myTrip && (
           <div className="px-5 pt-3">
@@ -4735,11 +4729,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 <div className="text-sm font-bold text-white">{driver.name}</div>
                 {driver.mobile && <div className="text-[11px]" style={{ color: "#D9C4B0", fontFamily: monoFont }}>{driver.mobile}</div>}
               </div>
-              {onGoHome && (
-                <button onClick={() => { onGoHome(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                  <Home size={16} color={C.marigoldDeep} /> {lang === "en" ? "Back to Main Page" : "मुख्य पेज पर वापस जाएं"}
-                </button>
-              )}
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
               </button>
@@ -6017,18 +6006,13 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, onGoHome, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory }) {
   const [tab, setTab] = useState("fleet");
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          {onGoHome && (
-            <button onClick={onGoHome} title={lang === "en" ? "Back to main page" : "मुख्य पेज पर वापस जाएं"} className="w-8 h-8 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <Home size={15} color={C.navy} strokeWidth={2.5} />
-            </button>
-          )}
           <LayoutDashboard size={18} color={C.marigoldDeep} />
           <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Control Panel" : "एडमिन कंट्रोल पैनल"}</h2>
         </div>
@@ -6672,8 +6656,7 @@ export default function App() {
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
-            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} requestReferralWithdrawal={requestReferralWithdrawal} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
-            onGoHome={goHome} />
+            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} requestReferralWithdrawal={requestReferralWithdrawal} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
@@ -6722,13 +6705,13 @@ export default function App() {
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
-            onOpenTerms={() => setShowTerms(true)} onGoHome={goHome} />
+            onOpenTerms={() => setShowTerms(true)} />
         )}
         {role === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
             <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
-              bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout} onGoHome={goHome}
+              bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
               expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} />
