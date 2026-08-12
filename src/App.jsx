@@ -3289,8 +3289,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={shareTrip} className={`text-[11px] font-semibold flex items-center justify-center gap-1 ${b.loadingStartedAt ? "col-span-2" : ""}`} style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
+        <div className="flex justify-end gap-3">
+          {b.loadingStartedAt && (
+            <button onClick={shareTrip} className="text-[11px] font-semibold flex items-center justify-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
+          )}
           {!b.loadingStartedAt && (
             <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
           )}
