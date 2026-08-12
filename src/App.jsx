@@ -2490,7 +2490,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
   };
 
   const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: dotColor ? 34 : 16, paddingRight: value ? 40 : 16 };
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: dotColor ? 34 : 16, paddingRight: value ? 52 : 16 };
   const showDropdown = dropdownOpen && predictions.length > 0;
 
   return (
@@ -2507,8 +2507,8 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
         {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
         {value && (
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full flex items-center justify-center" style={{ width: 22, height: 22, background: C.line }}>
-            <X size={14} color={C.inkSoft} strokeWidth={2.5} />
+            className="absolute right-0 top-0 bottom-0 rounded-r-lg flex items-center justify-center" style={{ width: 44, background: C.line }}>
+            <X size={20} color={C.inkSoft} strokeWidth={2.5} />
           </button>
         )}
         {showDropdown && (
