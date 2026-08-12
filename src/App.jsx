@@ -3130,7 +3130,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{vehicleLabel(bidVehicleType, lang) || bid.driverName}</div>
-              <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{stars(bid.rating)} · {bid.distanceKm} {lang === "en" ? "km away" : "किमी दूर"}</div>
+              <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{bid.distanceKm} {lang === "en" ? "km away" : "किमी दूर"}</div>
               {bidVehicleType && <div className="text-[9px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{vehicleCapacity(bidVehicleType, lang)}</div>}
             </div>
             <div className="text-right shrink-0">
