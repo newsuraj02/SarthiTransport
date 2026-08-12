@@ -3612,12 +3612,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             )}
           </div>
         )}
-        {settingsView === "settings" && (
-          <div className="px-5 py-5">
-            <h2 className="text-lg font-black mb-4" style={{ color: C.ink }}>{lang === "en" ? "Settings" : "सेटिंग्स"}</h2>
-            <p className="text-sm leading-relaxed" style={{ color: C.inkSoft }}>{lang === "en" ? "Use the language toggle (EN / हिं) at the top of the app to switch languages. For changes to your saved address, contact the helpline." : "भाषा बदलने के लिए ऐप के ऊपर मौजूद EN / हिं बटन इस्तेमाल करें। सेव किए गए पते में बदलाव के लिए हेल्पलाइन से संपर्क करें।"}</p>
-          </div>
-        )}
         {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
       </div>
     );
@@ -3695,9 +3689,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               </button>
               <button onClick={() => { setSettingsView("liveLocation"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <MapPinned size={16} color={C.marigoldDeep} /> {lang === "en" ? "Live Location" : "लाइव लोकेशन"}
-              </button>
-              <button onClick={() => { setSettingsView("settings"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings" : "सेटिंग्स"}
               </button>
               <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}
