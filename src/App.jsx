@@ -3154,7 +3154,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             {b.scheduledFor && (
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#F5E6C8" }}>
                 <Clock3 size={12} color="#A8721C" />
-                <span className="text-[11px] font-semibold" style={{ color: "#A8721C" }}>{lang === "en" ? "Scheduled for" : "इसके लिए शेड्यूल"}: {b.scheduledFor}</span>
+                <span className="text-[11px] font-semibold" style={{ color: "#A8721C" }}>{lang === "en" ? "Scheduled for" : "इसके लिए शेड्यूल"}: {rideDateTimeLabel(b)}</span>
               </div>
             )}
 
@@ -3251,7 +3251,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {b.scheduledFor && (
           <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
             <Clock3 size={13} />
-            <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Booked for:" : "बुकिंग की तारीख:"} {b.scheduledFor}</span>
+            <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(b)}</span>
           </div>
         )}
         <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
@@ -4173,7 +4173,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
             {myTrip.scheduledFor && (
               <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
                 <Clock3 size={13} />
-                <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Booked for:" : "बुकिंग की तारीख:"} {myTrip.scheduledFor}</span>
+                <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(myTrip)}</span>
               </div>
             )}
             <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
@@ -4798,7 +4798,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
                   <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
                     <Clock3 size={13} />
-                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Booked for:" : "बुकिंग की तारीख:"} {ab.scheduledFor}</span>
+                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(ab)}</span>
                   </div>
                   <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(ab.fare)}</div>
                   {ab.hours && (
