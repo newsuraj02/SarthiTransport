@@ -3268,7 +3268,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
         {b.hours && (
           <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-            {lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग`) : ""}
+            {lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
           </div>
         )}
         <div className="mt-2">
@@ -4184,7 +4184,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
             <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
             {myTrip.hours && (
               <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}
+                {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
               </div>
             )}
             <div className="mt-2">
