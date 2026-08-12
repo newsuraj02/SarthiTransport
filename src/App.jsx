@@ -357,18 +357,29 @@ function findDriverLoadConflict(driver, candidate, bookings, vehicleTypes, lang)
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 
-// Renders a booking's date/time in DD:MM:YYYY HH:MM — for an advance
+function to12Hour(hours, minutes) {
+  const period = hours >= 12 ? "PM" : "AM";
+  const h12 = hours % 12 || 12;
+  return `${pad2(h12)}:${pad2(minutes)} ${period}`;
+}
+
+// Renders a booking's date/time in DD:MM:YYYY HH:MM AM/PM — for an advance
 // booking that's the scheduled date/time itself; for an immediate ride
 // (no scheduledFor) it's when the ride was actually posted.
 function rideDateTimeLabel(booking) {
   if (booking.scheduledFor) {
     const [datePart, timePart] = booking.scheduledFor.split(" ");
     const [y, m, d] = datePart.split("-");
-    return `${d}:${m}:${y}${timePart ? " " + timePart : ""}`;
+    let timeLabel = "";
+    if (timePart) {
+      const [hh, mm] = timePart.split(":").map(Number);
+      timeLabel = " " + to12Hour(hh, mm);
+    }
+    return `${d}:${m}:${y}${timeLabel}`;
   }
   const d = booking.createdAt?.toDate ? booking.createdAt.toDate() : null;
   if (!d) return "";
-  return `${pad2(d.getDate())}:${pad2(d.getMonth() + 1)}:${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return `${pad2(d.getDate())}:${pad2(d.getMonth() + 1)}:${d.getFullYear()} ${to12Hour(d.getHours(), d.getMinutes())}`;
 }
 
 // Time-of-day greeting shown at the top of the Customer/Driver/Admin home
@@ -3153,8 +3164,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <div className="mt-3 mb-3" style={{ borderTop: `1px solid ${C.line}` }} />
             {b.scheduledFor && (
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#F5E6C8" }}>
-                <Clock3 size={12} color="#A8721C" />
-                <span className="text-[11px] font-semibold" style={{ color: "#A8721C" }}>{lang === "en" ? "Scheduled for" : "इसके लिए शेड्यूल"}: {rideDateTimeLabel(b)}</span>
+                <Clock3 size={12} color="#C9920B" />
+                <span className="text-[11px] font-semibold" style={{ color: "#C9920B" }}>{lang === "en" ? "Scheduled for" : "इसके लिए शेड्यूल"}: {rideDateTimeLabel(b)}</span>
               </div>
             )}
 
@@ -3249,7 +3260,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
         <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
         {b.scheduledFor && (
-          <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
+          <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
             <Clock3 size={13} />
             <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(b)}</span>
           </div>
@@ -4171,7 +4182,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
             <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
             {myTrip.scheduledFor && (
-              <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
+              <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
                 <Clock3 size={13} />
                 <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(myTrip)}</span>
               </div>
@@ -4796,7 +4807,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 </div>
                 <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
                   <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
-                  <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
+                  <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
                     <Clock3 size={13} />
                     <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(ab)}</span>
                   </div>
