@@ -2843,11 +2843,11 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         <div className="grid grid-cols-2 gap-3 mt-3">
           <button onClick={() => (hasActiveBooking ? onViewCurrent() : setViewedEmptyCurrent(true))} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
             <Truck size={18} color={C.navy} />
-            <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"}</div>
+            <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"} ({hasActiveBooking ? 1 : 0})</div>
           </button>
           <button onClick={onViewAdvance} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.navy }}>
             <Clock3 size={18} color="#fff" />
-            <div className="text-xs font-black text-white">{lang === "en" ? "View Advance Booked Ride" : "एडवांस बुक की गई राइड देखें"}{advanceCount > 0 ? ` (${advanceCount})` : ""}</div>
+            <div className="text-xs font-black text-white">{lang === "en" ? "View Advance Booked Ride" : "एडवांस बुक की गई राइड देखें"} ({advanceCount})</div>
           </button>
         </div>
         {viewedEmptyCurrent && !hasActiveBooking && (
