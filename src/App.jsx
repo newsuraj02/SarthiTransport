@@ -3395,7 +3395,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
 // Editable customer profile — photo, name, email, mobile (read-only, tied to
 // the verified login), and address, with a Save button that persists via
 // onUpdateProfile.
-function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestReferralWithdrawal, onOpenTerms, lang }) {
+function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestReferralWithdrawal, lang }) {
   const [name, setName] = useState(customerProfile?.name || "");
   const [email, setEmail] = useState(customerProfile?.email || "");
   const [photo, setPhoto] = useState(customerProfile?.photo || null);
@@ -3501,7 +3501,6 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
           {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
         </button>
       </div>
-      <button onClick={onOpenTerms} className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}</button>
     </div>
   );
 }
@@ -3587,7 +3586,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         </button>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} />}
         {settingsView === "profile" && (
-          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} requestReferralWithdrawal={requestReferralWithdrawal} onOpenTerms={onOpenTerms} lang={lang} />
+          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} requestReferralWithdrawal={requestReferralWithdrawal} lang={lang} />
         )}
         {settingsView === "liveLocation" && (
           <div className="px-5 py-4">
@@ -3673,6 +3672,12 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
               </button>
+              <button onClick={() => { onOpenTerms(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
+              </button>
+              <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : "गोपनीयता नीति"}
+              </a>
               <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.safety }}>
                 <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
               </button>
@@ -4668,7 +4673,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "KYC status" : "KYC स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : "सत्यापित") : driver.kyc}</div>
               <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Wallet" : "वॉलेट"}: {fmt(driver.wallet)}</div>
             </div>
-            <button onClick={onOpenTerms} className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}</button>
           </div>
         )}
         {settingsView === "liveLocation" && (
@@ -4754,6 +4758,12 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
               </button>
+              <button onClick={() => { onOpenTerms(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
+              </button>
+              <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : "गोपनीयता नीति"}
+              </a>
               <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.safety }}>
                 <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
               </button>
@@ -6093,20 +6103,6 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang }) {
   );
 }
 
-function TermsFooterLink({ onOpen, lang }) {
-  return (
-    <div className="flex" style={{ borderTop: `1px solid ${C.line}`, background: C.paper }}>
-      <button onClick={onOpen} className="flex-1 text-center text-sm font-semibold py-2.5" style={{ color: C.ink }}>
-        {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
-      </button>
-      <div style={{ width: 1, background: C.line }} />
-      <a href="/privacy.html" target="_blank" rel="noreferrer" className="flex-1 text-center text-sm font-semibold py-2.5" style={{ color: C.ink }}>
-        {lang === "en" ? "Privacy Policy" : "गोपनीयता नीति"}
-      </a>
-    </div>
-  );
-}
-
 // =====================================================================
 // ROOT APP
 // =====================================================================
@@ -6738,8 +6734,6 @@ export default function App() {
               expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} />
           </div>
         )}
-
-        <TermsFooterLink onOpen={() => setShowTerms(true)} lang={lang} />
       </div>
       <TermsModal open={showTerms} onClose={() => setShowTerms(false)} commissionPct={commissionPct} bonusPct={bonusPct} lang={lang} />
     </div>
