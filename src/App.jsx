@@ -3140,7 +3140,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           {(bid.hours || bid.extraHourRate) && (
             <div className="text-xs font-bold mt-1.5 pt-1.5" style={{ color: C.ink, borderTop: `1px solid ${C.marigoldDeep}` }}>
               {bid.hours ? (lang === "en" ? `${bid.hours} allowed hrs · ` : `${bid.hours} घंटे अलाउ · `) : ""}
-              {bid.extraHourRate ? (lang === "en" ? `then ${fmt(bid.extraHourRate)}/hr waiting` : `उसके बाद ${fmt(bid.extraHourRate)}/घंटा वेटिंग`) : ""}
+              {bid.extraHourRate ? (lang === "en" ? `then ${fmt(bid.extraHourRate)}/hr waiting charge` : `उसके बाद ${fmt(bid.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
             </div>
           )}
           <div className="flex justify-end mt-2">
@@ -3258,7 +3258,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
-        <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
+        <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
         {b.scheduledFor && (
           <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
             <Clock3 size={13} />
@@ -3833,7 +3833,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
           </div>
           <div className="text-sm font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(myBid.amount)}</div>
           <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
-            {lang === "en" ? `${myBid.hours} allowed hrs · then ${fmt(myBid.extraHourRate)}/hr waiting` : `${myBid.hours} घंटे अलाउ · उसके बाद ${fmt(myBid.extraHourRate)}/घंटा वेटिंग`}
+            {lang === "en" ? `${myBid.hours} allowed hrs · then ${fmt(myBid.extraHourRate)}/hr waiting charge` : `${myBid.hours} घंटे अलाउ · उसके बाद ${fmt(myBid.extraHourRate)}/घंटा वेटिंग चार्ज`}
           </div>
           <div className="text-[10px] mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "A submitted quote cannot be changed." : "एक बार भेजा गया कोटेशन बदला नहीं जा सकता।"}</div>
         </div>
@@ -4174,7 +4174,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
           </div>
 
           <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
-            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
+            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
             {myTrip.scheduledFor && (
               <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
                 <Clock3 size={13} />
@@ -4810,7 +4810,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{ab.drop}</span></div>
                 </div>
                 <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
-                  <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
+                  <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
                   <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
                     <Clock3 size={13} />
                     <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(ab)}</span>
@@ -4818,7 +4818,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(ab.fare)}</div>
                   {ab.hours && (
                     <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                      {lang === "en" ? `${ab.hours} allowed hrs` : `${ab.hours} घंटे अलाउ`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग`) : ""}
+                      {lang === "en" ? `${ab.hours} allowed hrs` : `${ab.hours} घंटे अलाउ`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
                     </div>
                   )}
                   <div className="mt-2">
