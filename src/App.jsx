@@ -3151,9 +3151,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             )}
 
             {sortedBids.length === 0 ? (
-              <div className="rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
-                <Loader2 size={16} color={C.marigoldDeep} className="animate-spin" />
-                <span className="text-sm font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Waiting for driver bids..." : "ड्राइवरों की बोली का इंतज़ार है..."}</span>
+              <div className="rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: "#DBEAFE", border: "1.5px solid #60A5FA" }}>
+                <Loader2 size={16} color="#1D4ED8" className="animate-spin" />
+                <span className="text-sm font-black" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Waiting for driver bids..." : "ड्राइवरों की बोली का इंतज़ार है..."}</span>
               </div>
             ) : (
               <div className="space-y-2">
@@ -3177,8 +3177,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                 {lang === "en" ? "Book this vehicle" : "यही गाड़ी बुक करें"}
               </button>
             )}
-            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold mt-2" style={{ color: C.safety }}>{lang === "en" ? "Cancel load" : "लोड रद्द करें"}</button>
-            {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
         </div>
       </div>
     );
