@@ -3810,13 +3810,8 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
       </div>
       <RideTypeBanner booking={load} lang={lang} />
       <div className="mb-2">
-        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{load.pickup}</span></div>
-        <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{load.drop}</span></div>
-      </div>
-      {/* Status-bar row: the key facts as scannable pills instead of a sentence. */}
-      <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
-        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{materialLabel(load.material, lang)} · {load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+        <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{load.pickup}</span></div>
+        <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{load.drop}</span></div>
       </div>
 
       {lowestOverall !== null && (
@@ -3844,30 +3839,37 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         </div>
       ) : (
         <>
-          <div className="text-sm font-extrabold mb-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
-          <div className="rounded-lg overflow-hidden mb-2" style={{ border: `2px solid ${C.marigoldDeep}` }}>
-            <div className="grid grid-cols-3" style={{ background: C.paper }}>
-              <GuidedStep {...stepProps(0)} lang={lang}>
-                <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ borderRight: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
-                  <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Fare ₹ *" : "कुल भाड़ा ₹ *"}</div>
-                  <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus
-                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 22, fontWeight: 900 }} />
-                </div>
-              </GuidedStep>
-              <GuidedStep {...stepProps(1)} lang={lang}>
-                <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ borderRight: `1px solid ${C.marigoldDeep}`, background: C.paper }}>
-                  <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Allowed hrs *" : "अलाउ घंटे *"}</div>
-                  <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
-                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 18, fontWeight: 900 }} />
-                </div>
-              </GuidedStep>
-              <GuidedStep {...stepProps(2)} lang={lang}>
-                <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ background: C.paper }}>
-                  <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Waiting ₹/hr *" : "वेटिंग ₹/घं *"}</div>
-                  <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
-                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 16, fontWeight: 900 }} />
-                </div>
-              </GuidedStep>
+          <div className="rounded-lg p-3 mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <div className="text-sm font-extrabold mb-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
+            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{materialLabel(load.material, lang)}</span>
+            </div>
+            <div className="rounded-lg overflow-hidden" style={{ border: `2px solid ${C.marigoldDeep}` }}>
+              <div className="grid grid-cols-3" style={{ background: C.paper }}>
+                <GuidedStep {...stepProps(0)} lang={lang}>
+                  <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ borderRight: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
+                    <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Fare ₹ *" : "कुल भाड़ा ₹ *"}</div>
+                    <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus
+                      className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 22, fontWeight: 900 }} />
+                  </div>
+                </GuidedStep>
+                <GuidedStep {...stepProps(1)} lang={lang}>
+                  <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ borderRight: `1px solid ${C.marigoldDeep}`, background: C.paper }}>
+                    <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Allowed hrs *" : "अलाउ घंटे *"}</div>
+                    <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
+                      className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 18, fontWeight: 900 }} />
+                  </div>
+                </GuidedStep>
+                <GuidedStep {...stepProps(2)} lang={lang}>
+                  <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ background: C.paper }}>
+                    <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Waiting ₹/hr *" : "वेटिंग ₹/घं *"}</div>
+                    <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
+                      className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 16, fontWeight: 900 }} />
+                  </div>
+                </GuidedStep>
+              </div>
             </div>
           </div>
           <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>
