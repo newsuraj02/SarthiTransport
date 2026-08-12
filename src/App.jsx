@@ -3019,12 +3019,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{advanceNoticeError}</div>
         )}
 
-        <div className="rounded-lg p-3" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
-            {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
-          </div>
-        </div>
-
         <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready" : ""}`}
           style={{ background: canPost ? C.success : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
           🚚 {lang === "en" ? "Find Vehicles / Book Now" : "गाड़ियां खोजें / अभी बुक करें"}
@@ -3294,6 +3288,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         </div>
       </div>
 
+      <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
+          {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
+        </div>
+      </div>
 
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
@@ -3850,12 +3849,6 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
           <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>
             {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
           </div>
-          <div className="rounded-lg p-2.5 mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
-            <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>
-              {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
-            </div>
-          </div>
-
           {!canSubmit && (amount || allowedHours || extraHourRate) && (
             <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>{lang === "en" ? "All three fields are required" : "तीनों फील्ड भरना ज़रूरी है"}</div>
           )}
@@ -4190,6 +4183,12 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
                   <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
                 </div>
               )}
+            </div>
+          </div>
+
+          <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
+              {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
             </div>
           </div>
 
