@@ -3209,8 +3209,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <div className="text-lg font-black leading-none mt-0.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
           </div>
         ) : (
-          <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
-            style={{ background: docsSent ? C.success : C.marigold, color: docsSent ? "#fff" : C.navy, border: `1.5px solid ${docsSent ? C.success : C.marigoldDeep}` }}>
+          <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm text-white"
+            style={{ background: docsSent ? C.success : "#60A5FA", border: `1.5px solid ${docsSent ? C.success : "#3B82F6"}` }}>
             <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Invoice" : "इनवॉइस भेजें")}
           </button>
         )}
