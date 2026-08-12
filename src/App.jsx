@@ -3137,14 +3137,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
     };
     return (
       <div className="px-5 py-5">
-        <div className="flex items-center gap-2 mb-3">
-          {onAddAnother && (
-            <button onClick={onAddAnother} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm shrink-0" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
-            </button>
-          )}
-          <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</h2>
-        </div>
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
@@ -3612,7 +3604,12 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
     );
   }
 
-  const headerHasContent = showHamburger || rideView === "advance" || !!headerRideBooking;
+  // While a load is still Bidding (no driver assigned yet), the header shows
+  // Back + "Your Active Ride" instead of the Immediate/Advance Ride time
+  // badge — that badge only makes sense once a driver is actually en route.
+  const biddingHeader = rideView === "current" && !addingAnother && activeBooking?.status === "Bidding";
+  const showRideBadge = headerRideBooking && headerRideBooking.status !== "Bidding";
+  const headerHasContent = showHamburger || rideView === "advance" || biddingHeader || !!showRideBadge;
 
   return (
     <>
@@ -3627,8 +3624,12 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
                 <ChevronLeft size={18} color={C.navy} strokeWidth={3} />
               </button>
+            ) : biddingHeader ? (
+              <button onClick={() => setAddingAnother(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                <ChevronLeft size={18} color={C.navy} strokeWidth={3} />
+              </button>
             ) : <div className="w-9 h-9 shrink-0" />}
-            {headerRideBooking ? (
+            {showRideBadge ? (
               <div className="flex-1 min-w-0 rounded-full px-3 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
                 <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
                 <span className="text-sm font-extrabold text-white truncate">
@@ -3638,6 +3639,10 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             ) : showHamburger ? (
               <div className="flex-1 min-w-0 text-center">
                 <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
+              </div>
+            ) : biddingHeader ? (
+              <div className="flex-1 min-w-0">
+                <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</span>
               </div>
             ) : (
               <div className="flex-1 min-w-0" />
