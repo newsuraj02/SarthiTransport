@@ -3103,7 +3103,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       return (
         <div key={bid.id} onClick={() => setSelectedBid(bid.id)}
           className="w-full text-left rounded-xl p-3 relative cursor-pointer"
-          style={{ background: isSelected ? "#EAC873" : "#F5D98A", border: `1.5px solid ${isSelected ? "#A8721C" : isLowest ? C.success : C.marigoldDeep}` }}>
+          style={{ background: isSelected ? "#F5E6C8" : "#FBEBD2", border: `1.5px solid ${isSelected ? "#A8721C" : isLowest ? C.success : C.marigoldDeep}` }}>
           {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>}
           <div className="flex items-center gap-3 mt-1">
             <SafeImage
@@ -3122,7 +3122,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               {bidVehicleType && <div className="text-[9px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{vehicleCapacity(bidVehicleType, lang)}</div>}
             </div>
             <div className="text-right shrink-0">
-              <div className="text-base font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(bid.amount)}</div>
+              <div className="text-base font-bold" style={{ color: "#000000" }}>{fmt(bid.amount)}</div>
             </div>
           </div>
           {(bid.hours || bid.extraHourRate) && (
@@ -3134,7 +3134,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="flex justify-end mt-2">
             <button onClick={(e) => { e.stopPropagation(); setSelectedBid(bid.id); }}
               className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-black shadow-sm text-white"
-              style={{ background: "#1D4ED8" }}>
+              style={{ background: "#60A5FA" }}>
               {isSelected ? <><CheckCircle2 size={14} /> {lang === "en" ? "Selected" : "चयनित"}</> : (lang === "en" ? "Select" : "चुनें")}
             </button>
           </div>
