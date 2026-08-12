@@ -2856,7 +2856,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   }
 
   return (
-    <div className="px-5 py-5">
+    <div className="px-5 pt-3 pb-5">
       <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
         <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
       </button>
@@ -3618,35 +3618,39 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
     );
   }
 
+  const headerHasContent = showHamburger || rideView === "advance" || !!headerRideBooking;
+
   return (
     <>
       <div className="flex-1 overflow-y-auto relative">
-        <div className="flex items-center justify-between gap-2 px-5 pt-3">
-          {showHamburger ? (
-            <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <Menu size={18} color={C.navy} strokeWidth={2.5} />
-            </button>
-          ) : rideView === "advance" ? (
-            <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ChevronLeft size={18} color={C.navy} strokeWidth={3} />
-            </button>
-          ) : <div className="w-9 h-9 shrink-0" />}
-          {headerRideBooking ? (
-            <div className="flex-1 min-w-0 rounded-full px-3 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
-              <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
-              <span className="text-sm font-extrabold text-white truncate">
-                {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
-              </span>
-            </div>
-          ) : showHamburger ? (
-            <div className="flex-1 min-w-0 text-center">
-              <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
-            </div>
-          ) : (
-            <div className="flex-1 min-w-0" />
-          )}
-          <div className="w-9 h-9 shrink-0" />
-        </div>
+        {headerHasContent && (
+          <div className="flex items-center justify-between gap-2 px-5 pt-3">
+            {showHamburger ? (
+              <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                <Menu size={18} color={C.navy} strokeWidth={2.5} />
+              </button>
+            ) : rideView === "advance" ? (
+              <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                <ChevronLeft size={18} color={C.navy} strokeWidth={3} />
+              </button>
+            ) : <div className="w-9 h-9 shrink-0" />}
+            {headerRideBooking ? (
+              <div className="flex-1 min-w-0 rounded-full px-3 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
+                <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
+                <span className="text-sm font-extrabold text-white truncate">
+                  {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
+                </span>
+              </div>
+            ) : showHamburger ? (
+              <div className="flex-1 min-w-0 text-center">
+                <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
+              </div>
+            ) : (
+              <div className="flex-1 min-w-0" />
+            )}
+            <div className="w-9 h-9 shrink-0" />
+          </div>
+        )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
         <ForegroundToast toast={rideNotifications.toast} />
         {menuOpen && (
