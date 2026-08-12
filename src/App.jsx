@@ -3096,6 +3096,12 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const [showMap, setShowMap] = useState(true);
   const docsSent = !!b.documents?.file?.url;
 
+  const openInMaps = () => {
+    const origin = b.pickupLat != null && b.pickupLng != null ? `${b.pickupLat},${b.pickupLng}` : b.pickup;
+    const destination = b.dropLat != null && b.dropLng != null ? `${b.dropLat},${b.dropLng}` : b.drop;
+    window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`, "_blank");
+  };
+
   const shareTrip = () => {
     const text = lang === "en"
       ? `My goods are moving via Apna Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
@@ -3247,14 +3253,17 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{b.id}</div>
+        <div className="flex items-center justify-end gap-2 mb-1.5">
           <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
             <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
             <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
               <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: showMap ? "flex-start" : "flex-end", paddingLeft: showMap ? 7 : 0, paddingRight: showMap ? 0 : 7 }}>{showMap ? "ON" : "OFF"}</span>
               <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
             </span>
+          </button>
+          <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
+            <MapPinned size={14} color="#fff" />
+            <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
           </button>
         </div>
         <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
@@ -4050,6 +4059,12 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
 function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   const [showMap, setShowMap] = useState(true);
+  const openInMaps = () => {
+    if (!myTrip) return;
+    const origin = myTrip.pickupLat != null && myTrip.pickupLng != null ? `${myTrip.pickupLat},${myTrip.pickupLng}` : myTrip.pickup;
+    const destination = myTrip.dropLat != null && myTrip.dropLng != null ? `${myTrip.dropLat},${myTrip.dropLng}` : myTrip.drop;
+    window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`, "_blank");
+  };
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
   // so "above" vehicle options can bid too, not just an exact match.
@@ -4171,14 +4186,17 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         <div>
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{myTrip.id}</div>
+            <div className="flex items-center justify-end gap-2 mb-1.5">
               <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
                 <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
                 <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
                   <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: showMap ? "flex-start" : "flex-end", paddingLeft: showMap ? 7 : 0, paddingRight: showMap ? 0 : 7 }}>{showMap ? "ON" : "OFF"}</span>
                   <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
                 </span>
+              </button>
+              <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
+                <MapPinned size={14} color="#fff" />
+                <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
               </button>
             </div>
             <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
