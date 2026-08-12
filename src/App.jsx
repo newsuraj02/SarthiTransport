@@ -3081,7 +3081,7 @@ function RideTypeBanner({ booking, lang }) {
 
 // Shows a single active (Bidding or Ongoing) booking — the customer's main
 // page focuses on this one card instead of a separate "My Rides" tab.
-function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driverVehicle, drivers, lang, onAddAnother }) {
+function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driverVehicle, drivers, lang, onAddAnother, onBidAccepted }) {
   const VEHICLES = vehicleTypes;
   const [selectedBid, setSelectedBid] = useState(null);
   const [acceptError, setAcceptError] = useState("");
@@ -3190,7 +3190,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               <button onClick={() => {
                 const err = acceptBid(b.id, selectedId);
                 if (err) setAcceptError(err);
-                else { setSelectedBid(null); setAcceptError(""); }
+                else { setSelectedBid(null); setAcceptError(""); onBidAccepted?.(b); }
               }}
                 className="w-full rounded-lg py-2.5 font-bold text-sm mt-2 text-white" style={{ background: C.success }}>
                 {lang === "en" ? "Book this vehicle" : "यही गाड़ी बुक करें"}
@@ -3721,7 +3721,17 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         {rideView === "current" ? (
           activeBooking && !addingAnother ? (
             <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
-              onAddAnother={() => setAddingAnother(true)} />
+              onAddAnother={() => setAddingAnother(true)}
+              onBidAccepted={(booking) => {
+                // An accepted bid on a future-dated load moves it straight out
+                // of the Current tab (see activeBooking/advanceBookings above) —
+                // jump straight to its Advance detail view instead of dropping
+                // back to the "What do you need?" chooser.
+                if (isFutureAdvance(booking.scheduledFor)) {
+                  setRideView("advance");
+                  setSelectedAdvanceId(booking.id);
+                }
+              }} />
           ) : (
             <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
               hasActiveBooking={!!activeBooking} onViewCurrent={() => setAddingAnother(false)}
