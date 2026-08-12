@@ -4031,7 +4031,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
+function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   const openInMaps = () => {
     if (!myTrip) return;
@@ -4129,26 +4129,18 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
 
   return (
     <div className="px-5 py-5">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        {myTrip && (
-          myTrip.loadingStartedAt ? (
+      {myTrip && (
+        <div className="mb-4">
+          {myTrip.loadingStartedAt ? (
             <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
               <MapPinned size={14} color="#fff" />
               <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
             </button>
           ) : (
             <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
-          )
-        )}
-        <button onClick={() => setDriver({ ...driver, online: !driver.online })}
-          className="shrink-0 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 ml-auto" style={{ background: C.marigoldDeep }}>
-          <span className="text-sm font-black text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
-          <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
-            <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 7 : 0, paddingRight: driver.online ? 0 : 7 }}>{driver.online ? "ON" : "OFF"}</span>
-            <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 32 : 4 }} />
-          </span>
-        </button>
-      </div>
+          )}
+        </div>
+      )}
 
       {newLoadToast && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.navy }}>
@@ -4727,21 +4719,36 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   return (
     <>
       <div className="flex-1 overflow-y-auto relative">
-        <div className="flex items-center justify-between px-5 pt-3">
+        <div className="flex items-center justify-between gap-2 px-5 pt-3">
           <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#60A5FA", border: "1.5px solid #3B82F6" }}>
             <Menu size={18} color="#fff" strokeWidth={2.5} />
           </button>
-          {tab === "home" && (
-            <div className="flex rounded-full p-1 shrink-0" style={{ background: "#F5E6C8" }}>
-              <button onClick={() => setRideView("current")} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "current" ? "#60A5FA" : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
-                {lang === "en" ? "Current" : "वर्तमान"}
-              </button>
-              <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "advance" ? "#60A5FA" : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
-                {lang === "en" ? "Advance" : "एडवांस"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}
-              </button>
+          {tab === "home" ? (
+            <div className="flex-1 min-w-0 flex justify-center">
+              <span className="rounded-full px-4 py-2 text-base font-black text-white" style={{ background: "#60A5FA" }}>{lang === "en" ? "Driver Dashboard" : "ड्राइवर डैशबोर्ड"}</span>
             </div>
-          )}
+          ) : <div className="flex-1 min-w-0" />}
+          <button onClick={() => setDriver({ ...driver, online: !driver.online })}
+            className="shrink-0 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5" style={{ background: C.marigoldDeep }}>
+            <span className="text-sm font-black text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
+            <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
+              <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 7 : 0, paddingRight: driver.online ? 0 : 7 }}>{driver.online ? "ON" : "OFF"}</span>
+              <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 32 : 4 }} />
+            </span>
+          </button>
         </div>
+        {tab === "home" && (
+          <div className="grid grid-cols-2 gap-3 px-5 pt-3">
+            <button onClick={() => setRideView("current")} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
+              <Truck size={18} color={C.navy} />
+              <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "View Current Rides" : "वर्तमान राइड्स देखें"}</div>
+            </button>
+            <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.navy }}>
+              <Clock3 size={18} color="#fff" />
+              <div className="text-xs font-black text-white">{lang === "en" ? "View Advance Rides" : "एडवांस राइड्स देखें"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}</div>
+            </button>
+          </div>
+        )}
         {tab === "home" && rideView === "current" && myTrip && (
           <div className="px-5 pt-3">
             <div className="w-full rounded-full px-4 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: myTrip.scheduledFor ? C.marigoldDeep : C.success }}>
@@ -4792,7 +4799,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} commissionPct={commissionPct} minWallet={minWallet} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} commissionPct={commissionPct} minWallet={minWallet} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
