@@ -3239,6 +3239,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 py-1.5 shrink-0" style={{ background: C.navy }}>
             <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
             <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
+              <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: showMap ? "flex-start" : "flex-end", paddingLeft: showMap ? 7 : 0, paddingRight: showMap ? 0 : 7 }}>{showMap ? "ON" : "OFF"}</span>
               <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
             </span>
           </button>
@@ -4131,6 +4132,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           className="shrink-0 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 ml-auto" style={{ background: C.marigoldDeep }}>
           <span className="text-sm font-black text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
           <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
+            <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 7 : 0, paddingRight: driver.online ? 0 : 7 }}>{driver.online ? "ON" : "OFF"}</span>
             <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 32 : 4 }} />
           </span>
         </button>
