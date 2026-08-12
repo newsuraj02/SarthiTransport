@@ -4667,6 +4667,28 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
 
+  // Counts for the four home-page boxes below — mirrors DriverHome's own
+  // openLoads filter (vehicle match, bid radius, conflict check) so the
+  // "new load" counts match what actually shows up there once the driver
+  // taps in. Kept as a separate pass here (rather than lifting state)
+  // since DriverHome only mounts on the Current tab.
+  const driverVehicleDefForCounts = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
+  const openLoadsForCounts = bookings.filter((b) => {
+    if (b.status !== "Bidding") return false;
+    if (!isFutureAdvance(b.scheduledFor) && b.pickupLat != null && b.pickupLng != null) {
+      if (!driver.lastKnownLocation) return false;
+      const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, b.pickupLat, b.pickupLng);
+      if (distKm > BID_RADIUS_KM) return false;
+    }
+    if (findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor }, bookings, vehicleTypes, lang)) return false;
+    if (!driverVehicleDefForCounts) return true;
+    const loadVehicleDef = vehicleTypes.find((v) => v.key === b.vehicle);
+    if (!loadVehicleDef) return b.vehicle === driver.vehicleSpec.type;
+    return loadVehicleDef.capacityKg <= driverVehicleDefForCounts.capacityKg;
+  });
+  const openCurrentLoadsCount = openLoadsForCounts.filter((b) => !isFutureAdvance(b.scheduledFor)).length;
+  const openAdvanceLoadsCount = openLoadsForCounts.filter((b) => isFutureAdvance(b.scheduledFor)).length;
+
   const shareApp = () => {
     // The ₹200 referral reward is a customer-side program (see spec) — a
     // driver's share link doesn't carry a referral code.
@@ -4739,12 +4761,20 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         {tab === "home" && (
           <div className="grid grid-cols-2 gap-3 px-5 pt-3">
             <button onClick={() => setRideView("current")} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
+              <Bell size={18} color={C.navy} />
+              <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "Show Current New Load" : "वर्तमान नया लोड देखें"} ({openCurrentLoadsCount})</div>
+            </button>
+            <button onClick={() => setRideView("current")} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.navy }}>
+              <Bell size={18} color="#fff" />
+              <div className="text-xs font-black text-white">{lang === "en" ? "Show Advance New Load" : "एडवांस नया लोड देखें"} ({openAdvanceLoadsCount})</div>
+            </button>
+            <button onClick={() => setRideView("current")} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
               <Truck size={18} color={C.navy} />
-              <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "View Current Rides" : "वर्तमान राइड्स देखें"}</div>
+              <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "View Current Ride" : "वर्तमान राइड देखें"} ({myTrip ? 1 : 0})</div>
             </button>
             <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.navy }}>
               <Clock3 size={18} color="#fff" />
-              <div className="text-xs font-black text-white">{lang === "en" ? "View Advance Rides" : "एडवांस राइड्स देखें"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}</div>
+              <div className="text-xs font-black text-white">{lang === "en" ? "View Advance Ride/s" : "एडवांस राइड/स देखें"} ({advanceBookings.length})</div>
             </button>
           </div>
         )}
