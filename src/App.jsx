@@ -3632,10 +3632,12 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                 {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
               </span>
             </div>
-          ) : (
+          ) : showHamburger ? (
             <div className="flex-1 min-w-0 text-center">
               <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
             </div>
+          ) : (
+            <div className="flex-1 min-w-0" />
           )}
           <div className="w-9 h-9 shrink-0" />
         </div>
