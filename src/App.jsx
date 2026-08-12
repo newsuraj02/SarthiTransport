@@ -4128,7 +4128,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
   }, [myTrip?.id, driver.online, driver.mobile]);
 
   return (
-    <div className="px-5 py-5">
+    <div className={`px-5 pb-5 ${myTrip ? "pt-2" : "pt-5"}`}>
       {myTrip && !myTrip.loadingStartedAt && (
         <div className="mb-4">
           <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
@@ -4739,7 +4739,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
           <div className="px-5 pt-3">
             <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="w-full rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.navy }}>
               <Clock3 size={18} color="#fff" />
-              <div className="text-xs font-black text-white">{lang === "en" ? "View Advance Ride/s" : "एडवांस राइड/स देखें"} ({advanceBookings.length})</div>
+              <div className="text-base font-black text-white">{lang === "en" ? "View Advance Ride/s" : "एडवांस राइड/स देखें"} ({advanceBookings.length})</div>
             </button>
           </div>
         )}
