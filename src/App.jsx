@@ -3101,9 +3101,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       const bidDriver = drivers.find((d) => d.name === bid.driverName);
       const bidVehicleType = VEHICLES.find((vt) => vt.key === bidDriver?.vehicleSpec?.type);
       return (
-        <button key={bid.id} onClick={() => setSelectedBid(bid.id)}
-          className="w-full text-left rounded-xl p-3 relative"
-          style={{ background: isSelected ? "#F5E6C8" : C.paper, border: `1.5px solid ${isSelected ? "#A8721C" : isLowest ? C.success : C.line}` }}>
+        <div key={bid.id} onClick={() => setSelectedBid(bid.id)}
+          className="w-full text-left rounded-xl p-3 relative cursor-pointer"
+          style={{ background: isSelected ? "#F5E6C8" : "#FBEBD2", border: `1.5px solid ${isSelected ? "#A8721C" : isLowest ? C.success : C.marigoldDeep}` }}>
           {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>}
           <div className="flex items-center gap-3 mt-1">
             <SafeImage
@@ -3122,17 +3122,23 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               {bidVehicleType && <div className="text-[9px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{vehicleCapacity(bidVehicleType, lang)}</div>}
             </div>
             <div className="text-right shrink-0">
-              <div className="text-base font-bold" style={{ color: "#A8721C", fontFamily: monoFont }}>{fmt(bid.amount)}</div>
-              {isSelected && <CheckCircle2 size={16} color="#A8721C" className="ml-auto mt-0.5" />}
+              <div className="text-base font-black" style={{ color: "#A8721C", fontFamily: monoFont }}>{fmt(bid.amount)}</div>
             </div>
           </div>
           {(bid.hours || bid.extraHourRate) && (
-            <div className="text-[10px] mt-1.5 pt-1.5" style={{ color: C.inkSoft, borderTop: `1px solid ${C.line}` }}>
+            <div className="text-xs font-bold mt-1.5 pt-1.5" style={{ color: C.ink, borderTop: `1px solid ${C.marigoldDeep}` }}>
               {bid.hours ? (lang === "en" ? `${bid.hours} allowed hrs · ` : `${bid.hours} घंटे अलाउ · `) : ""}
               {bid.extraHourRate ? (lang === "en" ? `then ${fmt(bid.extraHourRate)}/hr waiting` : `उसके बाद ${fmt(bid.extraHourRate)}/घंटा वेटिंग`) : ""}
             </div>
           )}
-        </button>
+          <div className="flex justify-end mt-2">
+            <button onClick={(e) => { e.stopPropagation(); setSelectedBid(bid.id); }}
+              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-black shadow-sm text-white"
+              style={{ background: isSelected ? C.success : C.marigoldDeep }}>
+              {isSelected ? <><CheckCircle2 size={14} /> {lang === "en" ? "Selected" : "चयनित"}</> : (lang === "en" ? "Select" : "चुनें")}
+            </button>
+          </div>
+        </div>
       );
     };
     return (
