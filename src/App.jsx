@@ -1202,7 +1202,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
 
         {showDriver && (
           <div>
-            <button onClick={() => onSelect("driver")} className="w-full rounded-xl p-4 flex items-center gap-3 text-left" style={{ background: "#60A5FA" }}>
+            <button onClick={() => onSelect("driver")} className="w-full rounded-xl p-4 flex items-center gap-3 text-left" style={{ background: C.navy }}>
               <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: C.marigold }}>
                 <Truck size={20} color={C.navy} />
               </div>
@@ -2826,7 +2826,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             </div>
             <div className="text-sm font-black" style={{ color: C.navy }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
           </button>
-          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: "#60A5FA" }}>
+          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.navy }}>
             <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
               <Clock3 size={22} color={C.navy} />
             </div>
