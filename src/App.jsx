@@ -4729,8 +4729,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </div>
           ) : <div className="flex-1 min-w-0" />}
           <button onClick={() => setDriver({ ...driver, online: !driver.online })}
-            className="shrink-0 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5" style={{ background: C.marigoldDeep }}>
-            <span className="text-sm font-black text-white">{driver.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
+            className="shrink-0 flex items-center rounded-full p-1.5" style={{ background: C.marigoldDeep }}>
             <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
               <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 7 : 0, paddingRight: driver.online ? 0 : 7 }}>{driver.online ? "ON" : "OFF"}</span>
               <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 32 : 4 }} />
