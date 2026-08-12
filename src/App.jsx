@@ -3243,7 +3243,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="text-xs font-mono" style={{ color: C.inkSoft }}>{b.id}</div>
           <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
             <MapPinned size={14} color="#fff" />
-            <span className="text-sm font-black text-white">{lang === "en" ? "Open in Maps" : "मैप्स में खोलें"}</span>
+            <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
           </button>
         </div>
         <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
@@ -4121,7 +4121,7 @@ function DriverHome({ driver, setDriver, bookings, addBid, completeBooking, star
           myTrip.loadingStartedAt ? (
             <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
               <MapPinned size={14} color="#fff" />
-              <span className="text-sm font-black text-white">{lang === "en" ? "Open in Maps" : "मैप्स में खोलें"}</span>
+              <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
             </button>
           ) : (
             <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
