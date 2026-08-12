@@ -226,7 +226,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
             })}
           </div>
           <button onClick={() => { if (pending) { onSelect(pending); onClose(); } }} disabled={!pending}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: pending ? C.navy : C.line, color: pending ? "#fff" : "#9AA3B0" }}>
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: pending ? "#60A5FA" : C.line, color: pending ? "#fff" : "#9AA3B0" }}>
             {lang === "en" ? "Done" : "ठीक है (Done)"}
           </button>
         </div>
@@ -1144,7 +1144,7 @@ function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
           className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
         {sent && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Complaint sent to admin" : "शिकायत एडमिन को भेज दी गई"}</div>}
         <button onClick={submitComplaint} disabled={!complaint.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm"
-          style={{ background: complaint.trim() ? C.navy : C.line, color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : "शिकायत भेजें"}</button>
+          style={{ background: complaint.trim() ? "#60A5FA" : C.line, color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : "शिकायत भेजें"}</button>
       </div>
     </div>
   );
@@ -1202,7 +1202,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
 
         {showDriver && (
           <div>
-            <button onClick={() => onSelect("driver")} className="w-full rounded-xl p-4 flex items-center gap-3 text-left" style={{ background: C.navy }}>
+            <button onClick={() => onSelect("driver")} className="w-full rounded-xl p-4 flex items-center gap-3 text-left" style={{ background: "#60A5FA" }}>
               <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: C.marigold }}>
                 <Truck size={20} color={C.navy} />
               </div>
@@ -2826,7 +2826,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             </div>
             <div className="text-sm font-black" style={{ color: C.navy }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
           </button>
-          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.navy }}>
+          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: "#60A5FA" }}>
             <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
               <Clock3 size={22} color={C.navy} />
             </div>
@@ -4304,7 +4304,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
           )}
         </div>
       )}
-      <button onClick={() => setShowComingSoon(true)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: C.navy, color: "#fff" }}>
+      <button onClick={() => setShowComingSoon(true)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#60A5FA", color: "#fff" }}>
         <IndianRupee size={14} /> {lang === "en" ? "Recharge" : "रीचार्ज करें"}
       </button>
       {showComingSoon && (
@@ -4720,10 +4720,10 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
           </button>
           {tab === "home" && (
             <div className="flex rounded-full p-1 shrink-0" style={{ background: "#F5E6C8" }}>
-              <button onClick={() => setRideView("current")} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "current" ? C.navy : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
+              <button onClick={() => setRideView("current")} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "current" ? "#60A5FA" : "transparent", color: rideView === "current" ? "#fff" : C.marigoldDeep }}>
                 {lang === "en" ? "Current" : "वर्तमान"}
               </button>
-              <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "advance" ? C.navy : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
+              <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }} className="px-4 py-2 rounded-full text-sm font-extrabold" style={{ background: rideView === "advance" ? "#60A5FA" : "transparent", color: rideView === "advance" ? "#fff" : C.marigoldDeep }}>
                 {lang === "en" ? "Advance" : "एडवांस"}{advanceBookings.length > 0 ? ` (${advanceBookings.length})` : ""}
               </button>
             </div>
@@ -5774,7 +5774,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
       </div>
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : "सेटिंग्स सेव हो गईं"}</div>}
       <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-2.5 font-bold text-sm"
-        style={{ background: dirty ? C.navy : C.line, color: dirty ? "#fff" : "#9AA3B0" }}>
+        style={{ background: dirty ? "#60A5FA" : C.line, color: dirty ? "#fff" : "#9AA3B0" }}>
         {lang === "en" ? "Save Changes" : "बदलाव सेव करें"}
       </button>
     </div>
@@ -6043,7 +6043,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       <div className="flex gap-2 mb-5 overflow-x-auto">
         {tabs.map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-black whitespace-nowrap shadow-sm"
-            style={{ background: tab === k ? C.navy : C.marigold, color: tab === k ? "#fff" : C.navy, border: `1.5px solid ${tab === k ? C.navy : C.marigoldDeep}` }}>
+            style={{ background: tab === k ? "#60A5FA" : C.marigold, color: tab === k ? "#fff" : C.navy, border: `1.5px solid ${tab === k ? "#3B82F6" : C.marigoldDeep}` }}>
             <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : label}
           </button>
         ))}
