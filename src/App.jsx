@@ -4031,7 +4031,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
   );
 }
 
-function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
+function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet, mode }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   const openInMaps = () => {
     if (!myTrip) return;
@@ -4129,110 +4129,113 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
 
   return (
     <div className="px-5 py-5">
-      {myTrip && (
-        <div className="mb-4">
-          {myTrip.loadingStartedAt ? (
-            <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
-              <MapPinned size={14} color="#fff" />
-              <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
-            </button>
-          ) : (
-            <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
-          )}
-        </div>
-      )}
-
-      {newLoadToast && (
-        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.navy }}>
-          <Bell size={14} color={C.marigold} />
-          <span className="text-[11px] font-bold text-white">🔔 {lang === "en" ? "New load" : "नया लोड"}: {newLoadToast.pickup} → {newLoadToast.drop}</span>
-        </div>
-      )}
-
-      {notificationsLocked && (
-        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
-          <Clock3 size={14} color={C.marigoldDeep} />
-          <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
-        </div>
-      )}
-
-      {driver.blacklisted && (
-        <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: "#FCEAE3" }}>
-          <XCircle size={15} color={C.safety} />
-          <span className="text-xs font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Your account has been blocked by admin — loads won't show." : "आपका खाता एडमिन द्वारा ब्लॉक किया गया है — लोड नहीं दिखेंगे।"}</span>
-        </div>
-      )}
-
-      {myTrip ? (
-        <div>
-
-          <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="text-xs font-mono mb-1.5" style={{ color: C.inkSoft }}>{myTrip.id}</div>
-            <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
-            <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
-          </div>
-
-          <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
-            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
-            {myTrip.scheduledFor && (
-              <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
-                <Clock3 size={13} />
-                <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(myTrip)}</span>
-              </div>
-            )}
-            <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
-            {myTrip.hours && (
-              <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}
-              </div>
-            )}
-            <div className="mt-2">
-              {myTrip.customerMobile ? (
-                <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
-                  <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{myTrip.customerMobile}</span>
-                </a>
+      {mode === "ride" ? (
+        myTrip ? (
+          <div>
+            <div className="mb-4">
+              {myTrip.loadingStartedAt ? (
+                <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 py-1.5 shrink-0" style={{ background: "#60A5FA" }}>
+                  <MapPinned size={14} color="#fff" />
+                  <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
+                </button>
               ) : (
-                <div className="flex items-center gap-1.5">
-                  <Phone size={14} color="#000000" />
-                  <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
-                </div>
+                <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
               )}
             </div>
-          </div>
 
-          <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
-            <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
-              {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
+            <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="text-xs font-mono mb-1.5" style={{ color: C.inkSoft }}>{myTrip.id}</div>
+              <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
+              <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
             </div>
-          </div>
 
-          <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} />
-        </div>
-      ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
-        <>
-          {openLoads.length === 0 ? (
-            <div className="text-center py-10 px-4">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "#FBEBD2" }}>
-                <IndianRupee size={24} color={C.marigoldDeep} />
+            <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
+              <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Policy" : "भाड़ा और वेटिंग नियम"}</div>
+              {myTrip.scheduledFor && (
+                <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
+                  <Clock3 size={13} />
+                  <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(myTrip)}</span>
+                </div>
+              )}
+              <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
+              {myTrip.hours && (
+                <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
+                  {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग`) : ""}
+                </div>
+              )}
+              <div className="mt-2">
+                {myTrip.customerMobile ? (
+                  <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+                    <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{myTrip.customerMobile}</span>
+                  </a>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <Phone size={14} color="#000000" />
+                    <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                  </div>
+                )}
               </div>
-              <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No new load right now" : "अभी कोई नया लोड नहीं है"}</p>
-              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — new loads will show here instantly." : "ऑनलाइन रहें — नया लोड आते ही यहां तुरंत दिखेगा।"}</p>
             </div>
+
+            <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
+                {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
+              </div>
+            </div>
+
+            <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} />
+          </div>
+        ) : (
+          <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No active ride right now." : "अभी कोई सक्रिय राइड नहीं है।"}</p>
+        )
+      ) : (
+        <>
+          {newLoadToast && (
+            <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.navy }}>
+              <Bell size={14} color={C.marigold} />
+              <span className="text-[11px] font-bold text-white">🔔 {lang === "en" ? "New load" : "नया लोड"}: {newLoadToast.pickup} → {newLoadToast.drop}</span>
+            </div>
+          )}
+
+          {notificationsLocked && (
+            <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
+              <Clock3 size={14} color={C.marigoldDeep} />
+              <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
+            </div>
+          )}
+
+          {driver.blacklisted && (
+            <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: "#FCEAE3" }}>
+              <XCircle size={15} color={C.safety} />
+              <span className="text-xs font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Your account has been blocked by admin — loads won't show." : "आपका खाता एडमिन द्वारा ब्लॉक किया गया है — लोड नहीं दिखेंगे।"}</span>
+            </div>
+          )}
+
+          {driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
+            openLoads.length === 0 ? (
+              <div className="text-center py-10 px-4">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "#FBEBD2" }}>
+                  <IndianRupee size={24} color={C.marigoldDeep} />
+                </div>
+                <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No new load right now" : "अभी कोई नया लोड नहीं है"}</p>
+                <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — new loads will show here instantly." : "ऑनलाइन रहें — नया लोड आते ही यहां तुरंत दिखेगा।"}</p>
+              </div>
+            ) : (
+              <>
+                <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</div>
+                {openLoads.map((load) => (
+                  <LoadAlertCard key={load.id} load={load} driver={driver} addBid={addBid} lang={lang}
+                    commissionPct={commissionPct} minWallet={minWallet} />
+                ))}
+              </>
+            )
           ) : (
-            <>
-              <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</div>
-              {openLoads.map((load) => (
-                <LoadAlertCard key={load.id} load={load} driver={driver} addBid={addBid} lang={lang}
-                  commissionPct={commissionPct} minWallet={minWallet} />
-              ))}
-            </>
+            <div className="text-center py-10">
+              <Truck size={28} color={C.inkSoft} className="mx-auto mb-2" />
+              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
+            </div>
           )}
         </>
-      ) : (
-        <div className="text-center py-10">
-          <Truck size={28} color={C.inkSoft} className="mx-auto mb-2" />
-          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
-        </div>
       )}
     </div>
   );
@@ -4655,10 +4658,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | 'liveLocation' | null
   const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
-  // Toggle between Current and Advance rides, shown as a bar in the header
-  // (between the hamburger menu and Home button) on the home tab only —
-  // replaces the old "Advance Bookings" menu item.
-  const [rideView, setRideView] = useState("current");
+  // Which of the four home-page boxes the driver tapped — null means none
+  // yet, so the home tab shows just the boxes with nothing below them.
+  // 'current' = View Current Ride, 'advance' = View Advance Ride/s,
+  // 'bid' = Bid Now (the actual bidding procedure).
+  const [rideView, setRideView] = useState(null);
   const tabs = [["home", "होम", LayoutDashboard], ["wallet", "वॉलेट", Wallet], ["history", "हिस्ट्री", Package]];
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // Jobs this driver is already assigned to but that are scheduled for a
@@ -4760,7 +4764,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         </div>
         {tab === "home" && (
           <div className="grid grid-cols-2 gap-3 px-5 pt-3">
-            <button onClick={() => setRideView("current")} className="col-span-2 rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
+            <button onClick={() => setRideView("bid")} className="col-span-2 rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
               <Bell size={18} color={C.navy} />
               <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "Bid Now" : "अभी बोली लगाएं"} ({openCurrentLoadsCount + openAdvanceLoadsCount})</div>
             </button>
@@ -4824,7 +4828,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} commissionPct={commissionPct} minWallet={minWallet} />}
+        {tab === "home" && rideView === "current" && <DriverHome mode="ride" driver={driver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} commissionPct={commissionPct} minWallet={minWallet} />}
+        {tab === "home" && rideView === "bid" && <DriverHome mode="bid" driver={driver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} commissionPct={commissionPct} minWallet={minWallet} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
