@@ -3584,31 +3584,33 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   if (settingsView) {
     return (
       <div className="flex-1 overflow-y-auto relative">
-        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
-        </button>
+        <div className="px-5 pt-3">
+          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+          </button>
+        </div>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} />}
         {settingsView === "profile" && (
           <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} requestReferralWithdrawal={requestReferralWithdrawal} lang={lang} />
         )}
         {settingsView === "liveLocation" && (
-          <div className="px-5 py-4">
-            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
+          <div className="px-5 py-5">
+            <h2 className="text-lg font-black mb-4" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
             {ongoingTrip ? (
               <>
-                <LiveTrackingMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} pickupLat={ongoingTrip.pickupLat} pickupLng={ongoingTrip.pickupLng} dropLat={ongoingTrip.dropLat} dropLng={ongoingTrip.dropLng} driverLocation={ongoingTrip.driverLocation} customerLocation={ongoingTrip.customerLocation} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
-                <div className="text-xs mt-2" style={{ color: C.ink }}>{ongoingTrip.pickup} → {ongoingTrip.drop}</div>
-                <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ongoingTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
+                <LiveTrackingMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} pickupLat={ongoingTrip.pickupLat} pickupLng={ongoingTrip.pickupLng} dropLat={ongoingTrip.dropLat} dropLng={ongoingTrip.dropLng} driverLocation={ongoingTrip.driverLocation} customerLocation={ongoingTrip.customerLocation} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={320} lang={lang} />
+                <div className="text-sm font-semibold mt-3" style={{ color: C.ink }}>{ongoingTrip.pickup} → {ongoingTrip.drop}</div>
+                <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{ongoingTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>
             ) : (
-              <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No active trip right now." : "अभी कोई सक्रिय ट्रिप नहीं है।"}</p>
+              <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No active trip right now." : "अभी कोई सक्रिय ट्रिप नहीं है।"}</p>
             )}
           </div>
         )}
         {settingsView === "settings" && (
-          <div className="px-5 py-4">
-            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Settings" : "सेटिंग्स"}</h2>
-            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Use the language toggle (EN / हिं) at the top of the app to switch languages. For changes to your saved address, contact the helpline." : "भाषा बदलने के लिए ऐप के ऊपर मौजूद EN / हिं बटन इस्तेमाल करें। सेव किए गए पते में बदलाव के लिए हेल्पलाइन से संपर्क करें।"}</p>
+          <div className="px-5 py-5">
+            <h2 className="text-lg font-black mb-4" style={{ color: C.ink }}>{lang === "en" ? "Settings" : "सेटिंग्स"}</h2>
+            <p className="text-sm leading-relaxed" style={{ color: C.inkSoft }}>{lang === "en" ? "Use the language toggle (EN / हिं) at the top of the app to switch languages. For changes to your saved address, contact the helpline." : "भाषा बदलने के लिए ऐप के ऊपर मौजूद EN / हिं बटन इस्तेमाल करें। सेव किए गए पते में बदलाव के लिए हेल्पलाइन से संपर्क करें।"}</p>
           </div>
         )}
         {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
@@ -3623,6 +3625,10 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           {showHamburger ? (
             <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
               <Menu size={18} color={C.navy} strokeWidth={2.5} />
+            </button>
+          ) : rideView === "advance" ? (
+            <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} color={C.navy} strokeWidth={3} />
             </button>
           ) : <div className="w-9 h-9 shrink-0" />}
           {headerRideBooking ? (
@@ -3697,24 +3703,21 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           )
         ) : (
           <div>
-            <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ChevronLeft size={18} strokeWidth={3} /> {selectedAdvanceId ? (lang === "en" ? "Back to list" : "लिस्ट पर वापस जाएं") : (lang === "en" ? "Back" : "वापस")}
-            </button>
             {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
               <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid}
                 driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
                 drivers={drivers} lang={lang} />
             ) : (
-              <div className="px-5 py-4">
+              <div className="px-5 py-5">
                 {advanceBookings.length === 0 ? (
-                  <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
+                  <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {advanceBookings.map((ab) => (
-                      <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                      <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                         <RideTypeBanner booking={ab} lang={lang} />
                         <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
-                        <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{ab.status === "Bidding" ? (lang === "en" ? "Waiting for bids" : "बोली का इंतज़ार") : (lang === "en" ? `Driver assigned — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`)}</div>
+                        <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{ab.status === "Bidding" ? (lang === "en" ? "Waiting for bids" : "बोली का इंतज़ार") : (lang === "en" ? `Driver assigned — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`)}</div>
                       </button>
                     ))}
                   </div>
@@ -4659,34 +4662,36 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   if (settingsView) {
     return (
       <div className="flex-1 overflow-y-auto relative">
-        <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
-        </button>
+        <div className="px-5 pt-3">
+          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+          </button>
+        </div>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
         {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
         {settingsView === "profile" && (
-          <div className="px-5 py-4">
-            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
-            <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-              <div className="text-sm font-bold" style={{ color: C.ink }}>{driver.name}</div>
-              {driver.mobile && <div className="text-xs mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driver.mobile}</div>}
-              <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle" : "गाड़ी"}: {driver.vehicleSpec?.vehicleNumber || "—"}</div>
-              <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "KYC status" : "KYC स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : "सत्यापित") : driver.kyc}</div>
-              <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Wallet" : "वॉलेट"}: {fmt(driver.wallet)}</div>
+          <div className="px-5 py-5">
+            <h2 className="text-lg font-black mb-4" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
+            <div className="rounded-xl p-5 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="text-base font-bold" style={{ color: C.ink }}>{driver.name}</div>
+              {driver.mobile && <div className="text-sm mt-1" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driver.mobile}</div>}
+              <div className="text-sm mt-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle" : "गाड़ी"}: {driver.vehicleSpec?.vehicleNumber || "—"}</div>
+              <div className="text-sm mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "KYC status" : "KYC स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : "सत्यापित") : driver.kyc}</div>
+              <div className="text-sm mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Wallet" : "वॉलेट"}: {fmt(driver.wallet)}</div>
             </div>
           </div>
         )}
         {settingsView === "liveLocation" && (
-          <div className="px-5 py-4">
-            <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
+          <div className="px-5 py-5">
+            <h2 className="text-lg font-black mb-4" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
             {myTrip ? (
               <>
-                <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={200} lang={lang} />
-                <div className="text-xs mt-2" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
-                <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{myTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
+                <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={320} lang={lang} />
+                <div className="text-sm font-semibold mt-3" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
+                <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{myTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
               </>
             ) : (
-              <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No active trip right now." : "अभी कोई सक्रिय ट्रिप नहीं है।"}</p>
+              <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No active trip right now." : "अभी कोई सक्रिय ट्रिप नहीं है।"}</p>
             )}
           </div>
         )}
