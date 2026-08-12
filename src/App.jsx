@@ -3163,7 +3163,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <div className="pt-2.5 pb-1" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
             <div className="mt-3 mb-3" style={{ borderTop: `1px solid ${C.line}` }} />
             {b.scheduledFor && (
-              <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#F5E6C8" }}>
+              <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#F7DE99" }}>
                 <Clock3 size={12} color="#C9920B" />
                 <span className="text-[11px] font-semibold" style={{ color: "#C9920B" }}>{lang === "en" ? "Scheduled for" : "इसके लिए शेड्यूल"}: {rideDateTimeLabel(b)}</span>
               </div>
