@@ -3163,10 +3163,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
     return (
       <div className="px-5 py-5">
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><IndianRupee size={13} /> {lang === "en" ? "Bidding in progress" : "बोली चल रही है"}</span>
-            </div>
-            <div className="mt-1 mb-3" style={{ borderTop: `1px solid ${C.line}` }} />
             {b.scheduledFor && (
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#F7DE99" }}>
                 <Clock3 size={12} color="#C9920B" />
@@ -3639,7 +3635,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   }
 
   // While a load is still Bidding (no driver assigned yet), the header shows
-  // Back + "Your Active Ride" instead of the Immediate/Advance Ride time
+  // Back + "My Active Booking" instead of the Immediate/Advance Ride time
   // badge — that badge only makes sense once a driver is actually en route.
   const biddingHeader = rideView === "current" && !addingAnother && activeBooking?.status === "Bidding";
   // The Ongoing (assigned-driver) ride view on the Current tab has its own
@@ -3680,7 +3676,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               </div>
             ) : biddingHeader ? (
               <div className="flex-1 min-w-0">
-                <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Your Active Ride" : "आपकी सक्रिय राइड"}</span>
+                <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "My Active Booking" : "मेरी सक्रिय बुकिंग"}</span>
               </div>
             ) : (
               <div className="flex-1 min-w-0" />
