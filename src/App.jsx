@@ -3823,13 +3823,11 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   const inputCls = "w-full py-2 text-sm outline-none";
   const boxStyle = { border: `1px solid ${C.line}`, background: C.paper };
 
-  if (myBid) {
-    return (
-      <button disabled className="w-full rounded-xl py-3.5 mb-3 text-base font-black text-white shadow-sm flex items-center justify-center gap-2" style={{ background: C.success }}>
-        <CheckCircle2 size={26} /> {lang === "en" ? "Bid sent, waiting for customer's response" : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है"}
-      </button>
-    );
-  }
+  // Once the bid lands, this card's job is done — it disappears from the
+  // New Loads list entirely (see DriverHome's bidSentToast for the
+  // confirmation the driver actually sees) instead of lingering as a
+  // permanent "waiting" box.
+  if (myBid) return null;
 
   return (
     <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: justSubmitted ? "#DFEEE2" : C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
@@ -4123,9 +4121,13 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
   // Detects the moment a load this driver quoted on resolves against them —
   // by the time that happens the load has already left openLoads entirely
   // (it's no longer status "Bidding"), so this watches the full bookings
-  // list rather than openLoads to still catch it and surface a note.
+  // list rather than openLoads to still catch it and surface a note. Also
+  // catches the opposite transition (a bid this driver just placed landing
+  // in Firestore) to confirm it with a brief toast instead of a permanent
+  // box taking over the card.
   const myPendingBidIdsRef = useRef(null);
   const [bidRejectedToast, setBidRejectedToast] = useState(false);
+  const [bidSentToast, setBidSentToast] = useState(false);
   const bidStatusKey = bookings.map((b) => `${b.id}:${b.status}:${b.driverName || ""}`).join(",");
   useEffect(() => {
     const currentPending = new Set(bookings.filter((b) => b.status === "Bidding" && b.bids?.some((x) => x.driverName === driver.name)).map((b) => b.id));
@@ -4133,7 +4135,8 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       myPendingBidIdsRef.current = currentPending;
       return;
     }
-    const lostOne = [...myPendingBidIdsRef.current].some((id) => {
+    const prevPending = myPendingBidIdsRef.current;
+    const lostOne = [...prevPending].some((id) => {
       if (currentPending.has(id)) return false;
       const b = bookings.find((x) => x.id === id);
       return b && b.status !== "Bidding" && b.driverName !== driver.name;
@@ -4142,9 +4145,30 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       setBidRejectedToast(true);
       setTimeout(() => setBidRejectedToast(false), 4000);
     }
+    const sentOne = [...currentPending].some((id) => !prevPending.has(id));
+    if (sentOne) {
+      setBidSentToast(true);
+      setTimeout(() => setBidSentToast(false), 2500);
+    }
     myPendingBidIdsRef.current = currentPending;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bidStatusKey]);
+
+  // Detects a fresh acceptance (myTrip newly populated, not just already
+  // present from a previous session/reload) to surface a dismissible note
+  // with a button that jumps straight to the OTP entry below.
+  const prevMyTripIdRef = useRef(undefined);
+  const [bidAcceptedToast, setBidAcceptedToast] = useState(false);
+  const otpSectionRef = useRef(null);
+  useEffect(() => {
+    const currentId = myTrip?.id || null;
+    if (prevMyTripIdRef.current === undefined) {
+      prevMyTripIdRef.current = currentId;
+      return;
+    }
+    if (currentId && currentId !== prevMyTripIdRef.current) setBidAcceptedToast(true);
+    prevMyTripIdRef.current = currentId;
+  }, [myTrip?.id]);
 
   // Real GPS live-tracking: while this driver has an active trip, share their
   // actual device location so the customer (and admin fleet map) see it live.
@@ -4171,9 +4195,30 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
 
   return (
     <div className={`px-5 pb-5 ${myTrip ? "pt-2" : "pt-5"}`}>
+      {bidAcceptedToast && (
+        <div className="toast-pop rounded-xl p-3 mb-3" style={{ background: C.success }}>
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 size={18} color="#fff" />
+            <span className="text-sm font-black text-white">🎉 {lang === "en" ? "Your bid was accepted!" : "आपकी बोली स्वीकार हो गई!"}</span>
+          </div>
+          <button
+            onClick={() => { setBidAcceptedToast(false); otpSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+            className="w-full rounded-lg py-2 text-sm font-black" style={{ background: "#fff", color: C.success }}>
+            {lang === "en" ? "Open OTP" : "OTP खोलें"}
+          </button>
+        </div>
+      )}
+
       {myTrip && !myTrip.loadingStartedAt && (
-        <div className="mb-4">
+        <div className="mb-4" ref={otpSectionRef}>
           <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
+        </div>
+      )}
+
+      {bidSentToast && (
+        <div className="toast-pop rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.success }}>
+          <CheckCircle2 size={16} color="#fff" />
+          <span className="text-[11px] font-bold text-white">{lang === "en" ? "Bid sent, waiting for customer's response." : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है।"}</span>
         </div>
       )}
 
@@ -4185,7 +4230,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       )}
 
       {bidRejectedToast && (
-        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#FCEAE3" }}>
+        <div className="toast-pop rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#FCEAE3" }}>
           <XCircle size={14} color={C.safety} />
           <span className="text-[11px] font-bold" style={{ color: C.safety }}>{lang === "en" ? "Customer chose someone else for one of your quotes." : "आपके किसी कोटेशन के लिए ग्राहक ने किसी और को चुन लिया।"}</span>
         </div>

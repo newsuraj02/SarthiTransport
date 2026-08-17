@@ -62,3 +62,14 @@ select {
 .guided-submit-ready {
   animation: guidedButtonPulse 1.6s ease-in-out infinite;
 }
+
+/* Bid-status toasts (sent / accepted / rejected) — a quick pop-and-settle
+   entrance so they read as a fresh notification instead of just appearing. */
+@keyframes toastPopIn {
+  0%   { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  60%  { opacity: 1; transform: translateY(1px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.toast-pop {
+  animation: toastPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
