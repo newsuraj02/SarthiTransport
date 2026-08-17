@@ -783,7 +783,7 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
         </div>
       )}
       <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
-      <div className="absolute bottom-1.5 right-2 text-[9px] font-semibold px-1.5 py-0.5 rounded pointer-events-none" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+      <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: C.metallicGold, color: "#5A3B0A" }}>
         {lang === "en" ? "Tap to open in Google Maps" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
     </div>
@@ -920,7 +920,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
         )}
       </GoogleMap>
       <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
-      <div className="absolute bottom-1.5 right-2 text-[9px] font-semibold px-1.5 py-0.5 rounded pointer-events-none" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+      <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: C.metallicGold, color: "#5A3B0A" }}>
         {lang === "en" ? "Tap to open in Google Maps" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
     </div>
