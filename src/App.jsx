@@ -4054,7 +4054,7 @@ function TripOvertimeBanner({ booking, lang }) {
   );
 }
 
-function LoadingTimer({ trip, completeBooking, lang }) {
+function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
   const clock = useTripClock(trip.loadingStartedAt, trip.hours, trip.extraHourRate);
 
   // Entering the OTP itself now happens up top, next to the Online/Offline
@@ -4105,7 +4105,12 @@ function LoadingTimer({ trip, completeBooking, lang }) {
       </div>
       </div>
 
-      <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white shadow-lg" style={{ background: C.metallicGreen }}>
+      <button
+        onClick={() => {
+          completeBooking(trip.id, clock.extraCharge);
+          onEnded?.({ ...trip, extraCharge: clock.extraCharge, billableHours: clock.billableHours, waitingElapsedStr: clock.waitingElapsedStr });
+        }}
+        className="w-full rounded-lg py-2.5 font-bold text-sm text-white shadow-lg" style={{ background: C.metallicGreen }}>
         {lang === "en" ? "End Trip" : "एंड ट्रिप"}
       </button>
     </div>
@@ -4148,8 +4153,63 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
   );
 }
 
+// Post-trip receipt shown right after End Trip is tapped — the booking has
+// already flipped to status "Completed" by then (so myTrip in DriverHome no
+// longer matches it), so this renders from the snapshot LoadingTimer's
+// onEnded captured at the moment of the tap, not from the live booking.
+function DriverTripSummary({ trip, lang, onDone }) {
+  const baseFare = trip.fare || 0;
+  const totalAmount = baseFare + (trip.extraCharge || 0);
+  return (
+    <div>
+      <div className="rounded-2xl p-4 mb-3 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
+        <CheckCircle2 size={32} color={C.success} className="mx-auto mb-1.5" />
+        <div className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : "ट्रिप पूरी हुई"}</div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{trip.pickup}</span></div>
+        <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{trip.drop}</span></div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
+        <div className="text-sm font-bold flex items-center justify-between" style={{ color: "#000000" }}>
+          <span>{lang === "en" ? "Base fare" : "बेस भाड़ा"}</span>
+          <span style={{ fontFamily: monoFont }}>{fmt(baseFare)}</span>
+        </div>
+        {trip.hours ? (
+          <div className="text-sm font-bold flex items-center justify-between mt-1" style={{ color: "#000000" }}>
+            <span>{lang === "en" ? "Allowed hours" : "अलाउ घंटे"}</span>
+            <span style={{ fontFamily: monoFont }}>{trip.hours} {lang === "en" ? "hrs" : "घंटे"}</span>
+          </div>
+        ) : null}
+        {trip.extraCharge > 0 && (
+          <div className="text-sm font-bold flex items-center justify-between mt-1" style={{ color: "#000000" }}>
+            <span>{lang === "en" ? `Waiting charge (${trip.billableHours} hr${trip.billableHours === 1 ? "" : "s"})` : `वेटिंग चार्ज (${trip.billableHours} घंटे)`}</span>
+            <span style={{ fontFamily: monoFont }}>{fmt(trip.extraCharge)}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl p-4 mb-3 shadow-lg" style={{ background: C.metallicGreen }}>
+        <div className="text-xs font-bold text-white text-center">{lang === "en" ? "Total amount to be paid by customer" : "ग्राहक को कुल भुगतान करना है"}</div>
+        <div className="text-3xl font-black text-white text-center mt-1" style={{ fontFamily: monoFont }}>{fmt(totalAmount)}</div>
+      </div>
+
+      <button onClick={onDone} className="w-full rounded-lg py-2.5 font-bold text-sm text-white shadow-lg" style={{ background: C.metallicGreen }}>
+        {lang === "en" ? "Done" : "पूर्ण"}
+      </button>
+    </div>
+  );
+}
+
 function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
+  // Snapshot of the trip End Trip was just tapped on — the booking flips to
+  // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
+  // above stop matching it on the very next render, so this is what the
+  // summary screen renders from instead of the (by then gone) live trip.
+  const [completedTrip, setCompletedTrip] = useState(null);
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
   // so "above" vehicle options can bid too, not just an exact match.
@@ -4282,6 +4342,14 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
     return () => navigator.geolocation.clearWatch(watchId);
   }, [myTrip?.id, driver.online, driver.mobile]);
 
+  if (completedTrip) {
+    return (
+      <div className="px-5 pt-5 pb-5">
+        <DriverTripSummary trip={completedTrip} lang={lang} onDone={() => setCompletedTrip(null)} />
+      </div>
+    );
+  }
+
   return (
     <div className={`px-5 pb-5 ${myTrip ? "pt-2" : "pt-5"}`}>
       {myTrip && !myTrip.loadingStartedAt && (
@@ -4385,7 +4453,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
             </>
           )}
 
-          <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} />
+          <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
         </div>
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
         <>
