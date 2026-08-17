@@ -746,9 +746,9 @@ const trialDaysLeft = (createdAt) => {
 // ---------------- shared: mock map ----------------
 function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" }) {
   const p1 = hashPos(pickup || "pickup");
-  const p2 = hashPos((drop || "drop") + "x");
-  const tx = p1.x + (p2.x - p1.x) * (progress ?? 0) / 100;
-  const ty = p1.y + (p2.y - p1.y) * (progress ?? 0) / 100;
+  const p2 = drop ? hashPos(drop + "x") : null;
+  const tx = p2 ? p1.x + (p2.x - p1.x) * (progress ?? 0) / 100 : p1.x;
+  const ty = p2 ? p1.y + (p2.y - p1.y) * (progress ?? 0) / 100 : p1.y;
   return (
     <div className="relative rounded-lg overflow-hidden" style={{ height, background: "#EDE0CC", border: `1px solid ${C.line}` }}>
       <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -758,19 +758,21 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
         {Array.from({ length: 6 }).map((_, i) => (
           <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#D9C8A8" strokeWidth="0.4" />
         ))}
-        <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={zoneColor || C.marigoldDeep} strokeWidth="1" strokeDasharray="2,2" />
+        {p2 && <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={zoneColor || C.marigoldDeep} strokeWidth="1" strokeDasharray="2,2" />}
         <circle cx={p1.x} cy={p1.y} r="2.2" fill={C.marigoldDeep} />
-        <circle cx={p2.x} cy={p2.y} r="2.2" fill={C.safety} />
-        {progress !== undefined && (
+        {p2 && <circle cx={p2.x} cy={p2.y} r="2.2" fill={C.safety} />}
+        {p2 && progress !== undefined && (
           <circle cx={tx} cy={ty} r="2.6" fill={C.navy} stroke="#fff" strokeWidth="0.6" />
         )}
       </svg>
       <div className="absolute bottom-1.5 left-2 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: C.paper, color: C.ink }}>
         📍 {lang === "en" ? "Pickup" : "पिकअप"}
       </div>
-      <div className="absolute top-1.5 right-2 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: C.paper, color: C.ink }}>
-        🏁 {lang === "en" ? "Drop" : "ड्रॉप"}
-      </div>
+      {p2 && (
+        <div className="absolute top-1.5 right-2 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: C.paper, color: C.ink }}>
+          🏁 {lang === "en" ? "Drop" : "ड्रॉप"}
+        </div>
+      )}
     </div>
   );
 }
@@ -779,14 +781,20 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
 // plus the driver's live GPS marker. Falls back to the fake MockMap when
 // Google Maps isn't configured/loaded yet, or this booking has no real
 // coordinates (e.g. it was posted before Maps was set up).
-function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng, driverLocation, customerLocation, progress, zoneColor, height = 150, lang = "hi" }) {
+function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng, driverLocation, customerLocation, progress, zoneColor, height = 150, lang = "hi", mode = "route" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
-  const hasCoords = pickupLat != null && pickupLng != null && dropLat != null && dropLng != null;
+  // "toPickup" mode (used before a driver has entered the OTP) draws only
+  // the driver's live position and the Pickup pin, with the route line
+  // between THEM instead of Pickup->Drop — Drop isn't relevant yet since
+  // the driver hasn't picked up the load. Falls back to the normal
+  // Pickup->Drop route once mode is "route" (the default, post-OTP).
+  const toPickup = mode === "toPickup";
+  const hasCoords = toPickup ? (pickupLat != null && pickupLng != null) : (pickupLat != null && pickupLng != null && dropLat != null && dropLng != null);
   if (!hasKey || !isLoaded || !hasCoords) {
-    return <MockMap pickup={pickup} drop={drop} progress={progress} zoneColor={zoneColor} height={height} lang={lang} />;
+    return <MockMap pickup={pickup} drop={toPickup ? null : drop} progress={toPickup ? undefined : progress} zoneColor={zoneColor} height={height} lang={lang} />;
   }
   const pickupPos = { lat: pickupLat, lng: pickupLng };
-  const dropPos = { lat: dropLat, lng: dropLng };
+  const dropPos = dropLat != null && dropLng != null ? { lat: dropLat, lng: dropLng } : null;
   const driverPos = driverLocation?.lat != null && driverLocation?.lng != null ? { lat: driverLocation.lat, lng: driverLocation.lng } : null;
   const customerPos = customerLocation?.lat != null && customerLocation?.lng != null ? { lat: customerLocation.lat, lng: customerLocation.lng } : null;
   return (
@@ -796,16 +804,17 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
         onLoad={(map) => {
           const bounds = new window.google.maps.LatLngBounds();
           bounds.extend(pickupPos);
-          bounds.extend(dropPos);
+          if (!toPickup && dropPos) bounds.extend(dropPos);
           if (driverPos) bounds.extend(driverPos);
-          if (customerPos) bounds.extend(customerPos);
+          if (!toPickup && customerPos) bounds.extend(customerPos);
           map.fitBounds(bounds, 28);
         }}
         options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, gestureHandling: "greedy" }}
       >
         <MarkerF position={pickupPos} label={{ text: "P", color: "#fff", fontSize: "10px", fontWeight: "bold" }} />
-        <MarkerF position={dropPos} label={{ text: "D", color: "#fff", fontSize: "10px", fontWeight: "bold" }} />
-        <PolylineF path={[pickupPos, dropPos]} options={{ strokeColor: zoneColor || C.marigoldDeep, strokeOpacity: 0.7, strokeWeight: 3 }} />
+        {!toPickup && dropPos && <MarkerF position={dropPos} label={{ text: "D", color: "#fff", fontSize: "10px", fontWeight: "bold" }} />}
+        {!toPickup && dropPos && <PolylineF path={[pickupPos, dropPos]} options={{ strokeColor: zoneColor || C.marigoldDeep, strokeOpacity: 0.7, strokeWeight: 3 }} />}
+        {toPickup && driverPos && <PolylineF path={[driverPos, pickupPos]} options={{ strokeColor: zoneColor || C.marigoldDeep, strokeOpacity: 0.7, strokeWeight: 3 }} />}
         {driverPos && (
           <MarkerF
             position={driverPos}
@@ -821,7 +830,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
             }}
           />
         )}
-        {customerPos && (
+        {!toPickup && customerPos && (
           <MarkerF
             position={customerPos}
             label={{ text: "🧍", fontSize: "14px" }}
@@ -4053,13 +4062,6 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
 
 function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
-  const [showMap, setShowMap] = useState(true);
-  const openInMaps = () => {
-    if (!myTrip) return;
-    const origin = myTrip.pickupLat != null && myTrip.pickupLng != null ? `${myTrip.pickupLat},${myTrip.pickupLng}` : myTrip.pickup;
-    const destination = myTrip.dropLat != null && myTrip.dropLng != null ? `${myTrip.dropLat},${myTrip.dropLng}` : myTrip.drop;
-    window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`, "_blank");
-  };
   // A driver sees a load if it needs their exact vehicle type, or any
   // smaller/lighter type — a bigger truck can always carry a smaller load,
   // so "above" vehicle options can bid too, not just an exact match.
@@ -4239,27 +4241,15 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         <div>
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="flex items-center justify-between mb-1.5">
-              <button onClick={openInMaps} className="flex items-center gap-1.5 rounded-full pl-3 pr-3.5 shrink-0" style={{ background: "#60A5FA", height: 40 }}>
-                <MapPinned size={14} color="#fff" />
-                <span className="text-sm font-black text-white">{lang === "en" ? "Open Map" : "मैप खोलें"}</span>
-              </button>
-              <button onClick={() => setShowMap((v) => !v)} className="flex items-center gap-2 rounded-full pl-3.5 pr-1.5 shrink-0" style={{ background: "#60A5FA", height: 40 }}>
-                <span className="text-sm font-black text-white">{lang === "en" ? "Map" : "मैप"}</span>
-                <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: showMap ? C.success : C.safety }}>
-                  <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: showMap ? "flex-start" : "flex-end", paddingLeft: showMap ? 7 : 0, paddingRight: showMap ? 0 : 7 }}>{showMap ? "ON" : "OFF"}</span>
-                  <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: showMap ? 32 : 4 }} />
-                </span>
-              </button>
-            </div>
-            <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
-            <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
-            {showMap && (
-              <div className="mt-3" style={{ height: "35vh" }}>
-                <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
-                  driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="100%" lang={lang} />
-              </div>
+            <div className={myTrip.loadingStartedAt ? "pb-2.5" : ""} style={{ color: C.ink, borderBottom: myTrip.loadingStartedAt ? `2px solid ${C.navy}` : "none" }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
+            {myTrip.loadingStartedAt && (
+              <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
             )}
+            <div className="mt-3" style={{ height: "35vh" }}>
+              <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
+                driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="100%" lang={lang}
+                mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
+            </div>
           </div>
 
           {myTrip.loadingStartedAt && (
