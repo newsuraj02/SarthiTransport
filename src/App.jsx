@@ -3848,8 +3848,8 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         </div>
       )}
 
-      <div className="rounded-lg p-3 mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
-            <div className="text-sm font-extrabold mb-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
+      <div className="rounded-lg p-3 mb-2 shadow-lg" style={{ background: "linear-gradient(135deg, #FFF3D2 0%, #F0BE55 22%, #E3A93C 45%, #C98A24 60%, #F0BE55 80%, #FFF3D2 100%)", border: `2px solid ${C.marigoldDeep}` }}>
+            <div className="text-sm font-extrabold mb-1.5" style={{ color: "#5A3B0A" }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
               <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
               <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
