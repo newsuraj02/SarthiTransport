@@ -4691,6 +4691,92 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   );
 }
 
+// Mirrors CustomerProfileEdit's layout/fields (photo, name, disabled mobile,
+// email, address, area/city, state/pincode, Save Changes) so both roles'
+// profile pages look and behave the same — minus the customer-only referral
+// section, plus a Logout button at the bottom (moved out of the hamburger
+// menu, see DriverApp).
+function DriverProfileEdit({ driver, setDriver, lang, onLogout }) {
+  const [name, setName] = useState(driver?.name || "");
+  const [email, setEmail] = useState(driver?.email || "");
+  const [photo, setPhoto] = useState(driver?.photo || null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [address, setAddress] = useState(driver?.address || "");
+  const [area, setArea] = useState(driver?.area || "");
+  const [city, setCity] = useState(driver?.city || "");
+  const [state, setState] = useState(driver?.state || "");
+  const [pincode, setPincode] = useState(driver?.pincode || "");
+  const [saved, setSaved] = useState(false);
+
+  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+
+  const save = () => {
+    setDriver({ ...driver, name: name.trim(), email: email.trim() || null, photo, address, area, city, state, pincode });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div className="px-5 py-4">
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
+      <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex justify-center">
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `drivers/${driver.mobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#F5E6C8", border: `2px dashed ${C.marigoldDeep}` }}>
+              {photoUploading
+                ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
+                : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
+            </div>
+          </PhotoPicker>
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
+          <input className={inputCls} style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : "मोबाइल"}</label>
+          <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, background: C.bg, color: C.inkSoft }} value={driver?.mobile || ""} disabled />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
+          <input type="email" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
+          <input className={inputCls} style={inputStyle} value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
+            <input className={inputCls} style={inputStyle} value={area} onChange={(e) => setArea(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
+            <input className={inputCls} style={inputStyle} value={city} onChange={(e) => setCity(e.target.value)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
+            <input className={inputCls} style={inputStyle} value={state} onChange={(e) => setState(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+            <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+          </div>
+        </div>
+        <button onClick={save} disabled={photoUploading} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: photoUploading ? C.line : saved ? C.success : C.marigoldDeep }}>
+          {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
+        </button>
+      </div>
+      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-bold text-sm" style={{ background: "#FCEAE3", color: C.safety, border: `1px solid ${C.safety}` }}>
+        <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
+      </button>
+    </div>
+  );
+}
+
 function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -4726,18 +4812,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         </div>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
         {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
-        {settingsView === "profile" && (
-          <div className="px-5 py-5">
-            <h2 className="text-lg font-black mb-4" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
-            <div className="rounded-xl p-5 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-              <div className="text-base font-bold" style={{ color: C.ink }}>{driver.name}</div>
-              {driver.mobile && <div className="text-sm mt-1" style={{ color: C.inkSoft, fontFamily: monoFont }}>{driver.mobile}</div>}
-              <div className="text-sm mt-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle" : "गाड़ी"}: {driver.vehicleSpec?.vehicleNumber || "—"}</div>
-              <div className="text-sm mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "KYC status" : "KYC स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : "सत्यापित") : driver.kyc}</div>
-              <div className="text-sm mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Wallet" : "वॉलेट"}: {fmt(driver.wallet)}</div>
-            </div>
-          </div>
-        )}
+        {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onLogout={onLogout} />}
       </div>
     );
   }
@@ -4801,12 +4876,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               <button onClick={() => { onOpenTerms(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
               </button>
-              <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+              <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink }}>
                 <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : "गोपनीयता नीति"}
               </a>
-              <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.safety }}>
-                <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
-              </button>
             </div>
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
