@@ -782,7 +782,7 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
           🏁 {lang === "en" ? "Drop" : "ड्रॉप"}
         </div>
       )}
-      <div onPointerDown={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
+      <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
       <div className="absolute bottom-1.5 right-2 text-[9px] font-semibold px-1.5 py-0.5 rounded pointer-events-none" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
         {lang === "en" ? "Tap to open in Google Maps" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
@@ -860,11 +860,13 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   }, [mapInstance, roadPath, routeOrigin?.lat, routeOrigin?.lng, routeDestination?.lat, routeDestination?.lng]);
 
   // The embedded map is a preview, not something meant to be panned/zoomed
-  // in place — any gesture on it (tap, drag, pinch) should hand off straight
-  // to the real Google Maps app/site instead. Gestures are disabled on the
-  // GoogleMap itself and a transparent overlay captures the very start of
-  // any pointer interaction (covers click, drag-start and pinch-start alike)
-  // to trigger that handoff.
+  // in place — tapping it hands off straight to the real Google Maps app/
+  // site instead. Gestures are disabled on the GoogleMap itself (so it never
+  // pans/zooms in place), and a transparent overlay listens for onClick —
+  // deliberately not onPointerDown/onTouchStart, which also fire the instant
+  // a finger lands mid-scroll (e.g. scrolling the page starting from a touch
+  // over the map), causing Maps to open on what was actually just a scroll.
+  // onClick only fires for a genuine tap, not a drag/scroll passing through.
   const openExternalMaps = () => {
     if (!routeOrigin || !routeDestination) return;
     const origin = `${routeOrigin.lat},${routeOrigin.lng}`;
@@ -917,7 +919,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
           />
         )}
       </GoogleMap>
-      <div onPointerDown={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
+      <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
       <div className="absolute bottom-1.5 right-2 text-[9px] font-semibold px-1.5 py-0.5 rounded pointer-events-none" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
         {lang === "en" ? "Tap to open in Google Maps" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
