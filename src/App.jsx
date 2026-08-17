@@ -3708,24 +3708,22 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   const ongoingTrip = myBookings.find((b) => b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor));
   const activeBooking = myBookings.find((b) => b.status === "Bidding" || (b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor)));
 
-  // Detects the driver ending the trip (ongoingTrip disappearing because its
-  // status just flipped to Completed) so a fare-review summary can be shown
-  // instead of silently dropping the customer back to the chooser — see
-  // CustomerTripSummary above.
-  const prevOngoingIdRef = useRef(undefined);
-  const [completedTripSummary, setCompletedTripSummary] = useState(null);
-  useEffect(() => {
-    const currentId = ongoingTrip?.id || null;
-    if (prevOngoingIdRef.current === undefined) {
-      prevOngoingIdRef.current = currentId;
-      return;
-    }
-    if (prevOngoingIdRef.current && !currentId) {
-      const finished = bookings.find((b) => b.id === prevOngoingIdRef.current);
-      if (finished && finished.status === "Completed") setCompletedTripSummary(finished);
-    }
-    prevOngoingIdRef.current = currentId;
-  }, [ongoingTrip?.id, bookings]);
+  // Surfaces a fare-review summary the moment the driver ends the trip,
+  // instead of silently dropping the customer back to the chooser the
+  // instant status flips to Completed (see CustomerTripSummary above).
+  // Deliberately NOT a "detect the live transition" effect — that only
+  // fires if this component happened to stay mounted at the exact moment
+  // the driver tapped End Trip. A customer's phone is very often locked/
+  // backgrounded mid-delivery, so reopening the app afterward would skip
+  // straight past that moment and never show anything. Instead this is
+  // derived every render from persisted data: the most recently completed
+  // booking, shown until acknowledged (Done) — survives the app being
+  // fully closed and reopened.
+  const [ackedTripId, setAckedTripId] = usePersistedState(`sarthi_ackedTrip_${customerMobile}`, null);
+  const recentCompleted = myBookings
+    .filter((b) => b.status === "Completed" && b.completedAt && Date.now() - b.completedAt < 2 * 60 * 60 * 1000)
+    .sort((a, b) => b.completedAt - a.completedAt)[0] || null;
+  const completedTripSummary = recentCompleted && recentCompleted.id !== ackedTripId ? recentCompleted : null;
   // Whichever single booking ActiveRide is currently showing (if any) — used
   // to put its "Immediate/Advance Ride · date time" badge in the header, in
   // the gap between the hamburger menu and Home button, instead of inside
@@ -3783,7 +3781,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   if (completedTripSummary) {
     return (
       <div className="flex-1 overflow-y-auto relative px-5 pt-5 pb-5">
-        <CustomerTripSummary trip={completedTripSummary} lang={lang} onDone={() => setCompletedTripSummary(null)} />
+        <CustomerTripSummary trip={completedTripSummary} lang={lang} onDone={() => setAckedTripId(completedTripSummary.id)} />
       </div>
     );
   }
