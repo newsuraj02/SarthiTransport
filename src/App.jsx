@@ -48,7 +48,7 @@ const C = {
   metallicGreen: "linear-gradient(135deg, #D9F0DE 0%, #6FAE82 22%, #3F7A54 45%, #245536 60%, #6FAE82 80%, #D9F0DE 100%)",
   // Same shiny-sheen treatment in a coffee brown, used for the driver's
   // Allowed Hours / Waiting Time timer boxes.
-  metallicBrown: "linear-gradient(135deg, #C89B6A 0%, #8B5E34 22%, #6B431F 45%, #4A2D14 60%, #8B5E34 80%, #C89B6A 100%)",
+  metallicBrown: "linear-gradient(135deg, #7A5A3A 0%, #4E3418 22%, #3A2611 45%, #241708 60%, #4E3418 80%, #7A5A3A 100%)",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
