@@ -3623,6 +3623,58 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
   );
 }
 
+// Shown to the customer the moment the driver taps End Trip — the booking
+// flips straight to status "Completed", which would otherwise drop the
+// customer instantly back to the "What do you need?" chooser (activeBooking
+// only matches Bidding/Ongoing) with no chance to review what they owe.
+// Mirrors the driver's own DriverTripSummary.
+function CustomerTripSummary({ trip, lang, onDone }) {
+  const baseFare = (trip.fare || 0) - (trip.extraCharge || 0);
+  const totalAmount = trip.fare || 0;
+  const hoursTakenMs = trip.completedAt && trip.loadingStartedAt ? Math.max(0, trip.completedAt - trip.loadingStartedAt) : null;
+  return (
+    <div>
+      <div className="rounded-2xl p-4 mb-3 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
+        <CheckCircle2 size={32} color={C.success} className="mx-auto mb-1.5" />
+        <div className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : "ट्रिप पूरी हुई"}</div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{trip.pickup}</span></div>
+        <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{trip.drop}</span></div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
+        <div className="text-sm font-bold flex items-center justify-between" style={{ color: "#000000" }}>
+          <span>{lang === "en" ? "Fare" : "भाड़ा"}</span>
+          <span style={{ fontFamily: monoFont }}>{fmt(baseFare)}</span>
+        </div>
+        {hoursTakenMs !== null && (
+          <div className="text-sm font-bold flex items-center justify-between mt-1" style={{ color: "#000000" }}>
+            <span>{lang === "en" ? "Hours taken" : "लगे घंटे"}</span>
+            <span style={{ fontFamily: monoFont }}>{fmtHMS(hoursTakenMs)}</span>
+          </div>
+        )}
+        {trip.extraCharge > 0 && (
+          <div className="text-sm font-bold flex items-center justify-between mt-1" style={{ color: "#000000" }}>
+            <span>{lang === "en" ? "Total waiting charge" : "कुल वेटिंग चार्ज"}</span>
+            <span style={{ fontFamily: monoFont }}>{fmt(trip.extraCharge)}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl p-4 mb-3 shadow-lg" style={{ background: C.metallicGreen }}>
+        <div className="text-xs font-bold text-white text-center">{lang === "en" ? "Total amount to pay" : "कुल भुगतान राशि"}</div>
+        <div className="text-3xl font-black text-white text-center mt-1" style={{ fontFamily: monoFont }}>{fmt(totalAmount)}</div>
+      </div>
+
+      <button onClick={onDone} className="w-full rounded-lg py-2.5 font-bold text-sm text-white shadow-lg" style={{ background: C.metallicGreen }}>
+        {lang === "en" ? "Done" : "पूर्ण"}
+      </button>
+    </div>
+  );
+}
+
 function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, onOpenTerms }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
@@ -3655,6 +3707,25 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   const advanceBookings = myBookings.filter((b) => b.status === "Ongoing" && isFutureAdvance(b.scheduledFor));
   const ongoingTrip = myBookings.find((b) => b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor));
   const activeBooking = myBookings.find((b) => b.status === "Bidding" || (b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor)));
+
+  // Detects the driver ending the trip (ongoingTrip disappearing because its
+  // status just flipped to Completed) so a fare-review summary can be shown
+  // instead of silently dropping the customer back to the chooser — see
+  // CustomerTripSummary above.
+  const prevOngoingIdRef = useRef(undefined);
+  const [completedTripSummary, setCompletedTripSummary] = useState(null);
+  useEffect(() => {
+    const currentId = ongoingTrip?.id || null;
+    if (prevOngoingIdRef.current === undefined) {
+      prevOngoingIdRef.current = currentId;
+      return;
+    }
+    if (prevOngoingIdRef.current && !currentId) {
+      const finished = bookings.find((b) => b.id === prevOngoingIdRef.current);
+      if (finished && finished.status === "Completed") setCompletedTripSummary(finished);
+    }
+    prevOngoingIdRef.current = currentId;
+  }, [ongoingTrip?.id, bookings]);
   // Whichever single booking ActiveRide is currently showing (if any) — used
   // to put its "Immediate/Advance Ride · date time" badge in the header, in
   // the gap between the hamburger menu and Home button, instead of inside
@@ -3708,6 +3779,14 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
       : `ट्रक/टेम्पो बुक करने के लिए अपना ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: ${link} — आपकी पहली बुकिंग पूरी होने पर मुझे ₹200 मिलेंगे!`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
+
+  if (completedTripSummary) {
+    return (
+      <div className="flex-1 overflow-y-auto relative px-5 pt-5 pb-5">
+        <CustomerTripSummary trip={completedTripSummary} lang={lang} onDone={() => setCompletedTripSummary(null)} />
+      </div>
+    );
+  }
 
   if (settingsView) {
     return (
@@ -6891,7 +6970,7 @@ export default function App() {
     const b = bookings.find((x) => x.id === id);
     if (!b) return;
     if (b.driverName) unfreezeDriverName(b.driverName);
-    patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge }).catch((e) => console.error(e));
+    patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge, completedAt: Date.now() }).catch((e) => console.error(e));
     if (b.driverName === driver?.name) setDriver({ ...driver, online: true });
     if (firestoreReady) {
       if (b.customerMobile) creditReferralOnce(b.customerMobile, "customers");
