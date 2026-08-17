@@ -35,6 +35,12 @@ const C = {
   navy: "#5C1F1F",
   pimpri: "#A8721C",
   chinchwad: "#3F7A54",
+  // Shiny gold gradient standing in for the old flat gold/yellow (#FBEBD2,
+  // #F5E6C8, #F7DE99) fills on the app's highlighted info/policy boxes —
+  // Fare & Waiting Charge Policy, quote-entry, Scheduled-for, KYC tips,
+  // wallet summary, etc. Not used on small badges/pills/avatar circles or
+  // repeated list rows, where a gradient would just look busy.
+  metallicGold: "linear-gradient(135deg, #FFF3D2 0%, #F0BE55 22%, #E3A93C 45%, #C98A24 60%, #F0BE55 80%, #FFF3D2 100%)",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
@@ -693,7 +699,7 @@ function NotificationBanner({ permission, onEnable, lang }) {
     );
   }
   return (
-    <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-2.5 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
+    <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-2.5 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
       <Bell size={14} color={C.marigoldDeep} />
       <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Turn on notifications for ride updates" : "राइड अपडेट के लिए नोटिफिकेशन चालू करें"}</span>
     </button>
@@ -2871,7 +2877,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       <div className="space-y-3">
         {bookingMode === "advance" && (
           <GuidedStep {...stepProps(0)} lang={lang}>
-            <div className="rounded-lg p-3" style={{ background: "#F5E6C8" }}>
+            <div className="rounded-lg p-3 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
               <div className="text-[11px] font-bold mb-2" style={{ color: "#A8721C" }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</div>
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {[1, 2, 3].map((n) => {
@@ -2960,7 +2966,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         </div>
 
         {distance !== null && (
-          <div className="rounded-lg p-2.5" style={{ background: "#F5E6C8", border: `1.5px solid #A8721C` }}>
+          <div className="rounded-lg p-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid #A8721C` }}>
             <div className="flex items-center gap-2">
               <Navigation size={16} color="#A8721C" />
               <span className="text-base font-bold" style={{ color: "#A8721C" }}>{lang === "en" ? "Estimated distance" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : "किमी"}</span>
@@ -3164,7 +3170,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="px-5 py-5">
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             {b.scheduledFor && (
-              <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: "#F7DE99" }}>
+              <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5 shadow-lg" style={{ background: C.metallicGold }}>
                 <Clock3 size={12} color="#C9920B" />
                 <span className="text-[11px] font-semibold" style={{ color: "#C9920B" }}>{lang === "en" ? "Scheduled for" : "इसके लिए शेड्यूल"}: {rideDateTimeLabel(b)}</span>
               </div>
@@ -3272,7 +3278,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
 
       {b.loadingStartedAt && (
         <>
-          <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
+          <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
             <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
             {b.scheduledFor && (
               <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
@@ -3300,7 +3306,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             </div>
           </div>
 
-          <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <div className="rounded-lg p-3 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
             <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
               {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
             </div>
@@ -3848,7 +3854,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         </div>
       )}
 
-      <div className="rounded-lg p-3 mb-2 shadow-lg" style={{ background: "linear-gradient(135deg, #FFF3D2 0%, #F0BE55 22%, #E3A93C 45%, #C98A24 60%, #F0BE55 80%, #FFF3D2 100%)", border: `2px solid ${C.marigoldDeep}` }}>
+      <div className="rounded-lg p-3 mb-2 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
             <div className="text-sm font-extrabold mb-1.5" style={{ color: "#5A3B0A" }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
               <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
@@ -4241,7 +4247,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       )}
 
       {notificationsLocked && (
-        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
+        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
           <Clock3 size={14} color={C.marigoldDeep} />
           <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
         </div>
@@ -4283,7 +4289,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
 
           {myTrip.loadingStartedAt && (
             <>
-              <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
+              <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
                 <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
                 {myTrip.scheduledFor && (
                   <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
@@ -4311,7 +4317,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
                 </div>
               </div>
 
-              <div className="rounded-lg p-3 mb-2.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <div className="rounded-lg p-3 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
                 <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
                   {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
                 </div>
@@ -4425,7 +4431,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         <IndianRupee size={14} /> {lang === "en" ? "Recharge" : "रीचार्ज करें"}
       </button>
       {showComingSoon && (
-        <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold text-center" style={{ background: "#FBEBD2", color: C.marigoldDeep }}>
+        <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#5A3B0A" }}>
           {lang === "en" ? "Online payments are coming soon. Use manual recharge below for now." : "ऑनलाइन पेमेंट जल्द आ रहा है। फिलहाल नीचे मैनुअल रीचार्ज का उपयोग करें।"}
         </div>
       )}
@@ -4482,14 +4488,14 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         </div>
       )}
 
-      <div className="rounded-lg p-3 flex items-center justify-between mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+      <div className="rounded-lg p-3 flex items-center justify-between mb-2 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
         <div>
           <div className="text-sm font-extrabold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Total commission cut so far" : "अब तक कुल कमीशन कटा"}</div>
           <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? `from ${myTrips.length} trips` : `${myTrips.length} ट्रिप्स से`}</div>
         </div>
         <div className="text-xl font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(totalCommission)}</div>
       </div>
-      <div className="rounded-lg p-3 flex items-center justify-between" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
+      <div className="rounded-lg p-3 flex items-center justify-between shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
         <div>
           <div className="text-sm font-extrabold" style={{ color: C.pimpri }}>{lang === "en" ? "Total bonus earned so far" : "अब तक कुल बोनस मिला"}</div>
           <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? `from ${myTrips.length} trips` : `${myTrips.length} ट्रिप्स से`}</div>
@@ -4704,7 +4710,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       </div>
 
       <div className="text-[11px] font-bold mb-2" style={{ color: "#A8721C" }}>{lang === "en" ? "Step 2 — Vehicle Details" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
-      <div className="rounded-xl p-3 mb-4" style={{ border: `1.5px solid #A8721C`, background: "#F5E6C8" }}>
+      <div className="rounded-xl p-3 mb-4 shadow-lg" style={{ border: `2px solid #A8721C`, background: C.metallicGold }}>
         <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#A8721C" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
 
         <GuidedStep {...kycStepProps(3)} lang={lang}>
@@ -4970,7 +4976,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{ab.pickup}</span></div>
                   <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{ab.drop}</span></div>
                 </div>
-                <div className="rounded-2xl p-3.5 mb-2.5" style={{ background: "#F5E6C8", border: `1.5px solid ${C.pimpri}` }}>
+                <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
                   <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
                   <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
                     <Clock3 size={13} />
@@ -6878,7 +6884,7 @@ export default function App() {
             <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
               <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
             </button>
-            <div className="mx-5 mt-3 rounded-lg p-3 flex items-center gap-2" style={{ background: "#FBEBD2" }}>
+            <div className="mx-5 mt-3 rounded-lg p-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
               <ShieldCheck size={15} color={C.marigoldDeep} />
               <span className="text-xs font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Completing KYC is required before opening the home page." : "होम पेज खोलने से पहले KYC पूरी करना ज़रूरी है।"}</span>
             </div>
