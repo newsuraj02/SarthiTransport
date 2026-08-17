@@ -3825,11 +3825,9 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
 
   if (myBid) {
     return (
-      <div className="rounded-xl p-3 shadow-sm mb-3" style={{ background: C.paper, border: `2px solid ${C.success}` }}>
-        <button disabled className="w-full rounded-xl py-3.5 text-base font-black text-white shadow-sm flex items-center justify-center gap-1.5" style={{ background: C.success }}>
-          <CheckCircle2 size={18} /> {lang === "en" ? "Bid sent, waiting for customer's response" : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है"}
-        </button>
-      </div>
+      <button disabled className="w-full rounded-xl py-3.5 mb-3 text-base font-black text-white shadow-sm flex items-center justify-center gap-2" style={{ background: C.success }}>
+        <CheckCircle2 size={26} /> {lang === "en" ? "Bid sent, waiting for customer's response" : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है"}
+      </button>
     );
   }
 
