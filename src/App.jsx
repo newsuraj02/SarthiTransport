@@ -3848,16 +3848,9 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
       )}
 
       {myBid ? (
-        <div className="rounded-lg p-3" style={{ background: "#DFEEE2" }}>
-          <div className="flex items-center gap-1.5 text-xs font-bold mb-1" style={{ color: C.success }}>
-            <CheckCircle2 size={14} /> {lang === "en" ? "Your quote has been sent" : "आपका कोटेशन भेज दिया गया"}
-          </div>
-          <div className="text-sm font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(myBid.amount)}</div>
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
-            {lang === "en" ? `${myBid.hours} allowed hrs · then ${fmt(myBid.extraHourRate)}/hr waiting charge` : `${myBid.hours} घंटे अलाउ · उसके बाद ${fmt(myBid.extraHourRate)}/घंटा वेटिंग चार्ज`}
-          </div>
-          <div className="text-[10px] mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "A submitted quote cannot be changed." : "एक बार भेजा गया कोटेशन बदला नहीं जा सकता।"}</div>
-        </div>
+        <button disabled className="w-full rounded-xl py-3.5 text-base font-black text-white shadow-sm flex items-center justify-center gap-1.5" style={{ background: C.success }}>
+          <CheckCircle2 size={18} /> {lang === "en" ? "Bid sent, waiting for customer's response" : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है"}
+        </button>
       ) : (
         <>
           <div className="rounded-lg p-3 mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -4128,6 +4121,32 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadIdsKey, notificationsLocked]);
 
+  // Detects the moment a load this driver quoted on resolves against them —
+  // by the time that happens the load has already left openLoads entirely
+  // (it's no longer status "Bidding"), so this watches the full bookings
+  // list rather than openLoads to still catch it and surface a note.
+  const myPendingBidIdsRef = useRef(null);
+  const [bidRejectedToast, setBidRejectedToast] = useState(false);
+  const bidStatusKey = bookings.map((b) => `${b.id}:${b.status}:${b.driverName || ""}`).join(",");
+  useEffect(() => {
+    const currentPending = new Set(bookings.filter((b) => b.status === "Bidding" && b.bids?.some((x) => x.driverName === driver.name)).map((b) => b.id));
+    if (myPendingBidIdsRef.current === null) {
+      myPendingBidIdsRef.current = currentPending;
+      return;
+    }
+    const lostOne = [...myPendingBidIdsRef.current].some((id) => {
+      if (currentPending.has(id)) return false;
+      const b = bookings.find((x) => x.id === id);
+      return b && b.status !== "Bidding" && b.driverName !== driver.name;
+    });
+    if (lostOne) {
+      setBidRejectedToast(true);
+      setTimeout(() => setBidRejectedToast(false), 4000);
+    }
+    myPendingBidIdsRef.current = currentPending;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bidStatusKey]);
+
   // Real GPS live-tracking: while this driver has an active trip, share their
   // actual device location so the customer (and admin fleet map) see it live.
   // Also runs whenever the driver is simply Online (not on a trip) so
@@ -4163,6 +4182,13 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.navy }}>
           <Bell size={14} color={C.marigold} />
           <span className="text-[11px] font-bold text-white">🔔 {lang === "en" ? "New load" : "नया लोड"}: {newLoadToast.pickup} → {newLoadToast.drop}</span>
+        </div>
+      )}
+
+      {bidRejectedToast && (
+        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#FCEAE3" }}>
+          <XCircle size={14} color={C.safety} />
+          <span className="text-[11px] font-bold" style={{ color: C.safety }}>{lang === "en" ? "Customer chose someone else for one of your quotes." : "आपके किसी कोटेशन के लिए ग्राहक ने किसी और को चुन लिया।"}</span>
         </div>
       )}
 
