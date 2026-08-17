@@ -4096,6 +4096,14 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
     return loadVehicleDef.capacityKg <= driverVehicleDef.capacityKg;
   });
 
+  // Loads still open for bidding that this driver hasn't already quoted on.
+  // LoadAlertCard renders nothing once this driver has a bid on a load (see
+  // its myBid check), so the "No new load" empty state and the list below
+  // must both key off this instead of raw openLoads — otherwise bidding on
+  // the only open load would leave a blank gap rather than either the empty
+  // state or the next available load.
+  const visibleLoads = openLoads.filter((l) => !l.bids?.some((b) => b.driverName === driver.name));
+
   // No search bar / route filter for drivers — every new matching load rings
   // (beep + toast) the moment it's posted, instead of drivers having to search.
   const seenLoadIdsRef = useRef(null);
@@ -4319,7 +4327,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         </div>
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
         <>
-          {openLoads.length === 0 ? (
+          {visibleLoads.length === 0 ? (
             <div className="text-center py-10 px-4">
               <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "#FBEBD2" }}>
                 <IndianRupee size={24} color={C.marigoldDeep} />
@@ -4329,7 +4337,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
             </div>
           ) : (
             <>
-              {openLoads.map((load) => (
+              {visibleLoads.map((load) => (
                 <LoadAlertCard key={load.id} load={load} driver={driver} addBid={addBid} lang={lang}
                   commissionPct={commissionPct} minWallet={minWallet} />
               ))}
