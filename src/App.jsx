@@ -3823,11 +3823,20 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   const inputCls = "w-full py-2 text-sm outline-none";
   const boxStyle = { border: `1px solid ${C.line}`, background: C.paper };
 
+  if (myBid) {
+    return (
+      <div className="rounded-xl p-3 shadow-sm mb-3" style={{ background: C.paper, border: `2px solid ${C.success}` }}>
+        <button disabled className="w-full rounded-xl py-3.5 text-base font-black text-white shadow-sm flex items-center justify-center gap-1.5" style={{ background: C.success }}>
+          <CheckCircle2 size={18} /> {lang === "en" ? "Bid sent, waiting for customer's response" : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है"}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: justSubmitted ? "#DFEEE2" : C.paper, border: `2px solid ${justSubmitted ? C.success : myBid ? C.success : C.marigoldDeep}` }}>
+    <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: justSubmitted ? "#DFEEE2" : C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-bold flex items-center gap-1" style={{ color: myBid ? C.success : C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}</span>
-        {myBid && <span className="text-[10px] font-bold flex items-center gap-1" style={{ color: C.success }}><CheckCircle2 size={12} /> {lang === "en" ? "Bid sent" : "बोली भेजी"}</span>}
+        <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}</span>
       </div>
       <RideTypeBanner booking={load} lang={lang} />
       <div className="mb-2">
@@ -3847,13 +3856,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         </div>
       )}
 
-      {myBid ? (
-        <button disabled className="w-full rounded-xl py-3.5 text-base font-black text-white shadow-sm flex items-center justify-center gap-1.5" style={{ background: C.success }}>
-          <CheckCircle2 size={18} /> {lang === "en" ? "Bid sent, waiting for customer's response" : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है"}
-        </button>
-      ) : (
-        <>
-          <div className="rounded-lg p-3 mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
+      <div className="rounded-lg p-3 mb-2" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigoldDeep}` }}>
             <div className="text-sm font-extrabold mb-1.5" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
               <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
@@ -3905,8 +3908,6 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
             style={{ background: (canSubmit && !walletShortfall) || justSubmitted ? C.success : C.line, color: (canSubmit && !walletShortfall) || justSubmitted ? "#fff" : "#9AA3B0" }}>
             {justSubmitted ? <><CheckCircle2 size={18} /> {lang === "en" ? "Sent" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : "कोटेशन भेजें")}
           </button>
-        </>
-      )}
     </div>
   );
 }
