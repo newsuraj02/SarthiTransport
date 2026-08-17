@@ -777,10 +777,45 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
   );
 }
 
+// Fetches an actual driving route (road-following polyline) between two
+// points via the Directions API, instead of a straight line drawn point-
+// to-point. Re-fetches when the destination changes, or when the origin
+// has moved more than ~50m from the last fetch (GPS jitter/frequent small
+// updates shouldn't each trigger a fresh Directions call) — a live-
+// tracking origin (the driver) moves continuously, a static one (Pickup)
+// never re-triggers on its own. Returns null until the first route lands,
+// so callers should fall back to a straight line in the meantime.
+function useDrivingRoute(origin, destination, isLoaded, hasKey) {
+  const [path, setPath] = useState(null);
+  const lastOriginRef = useRef(null);
+  const lastDestRef = useRef(null);
+  useEffect(() => {
+    if (!isLoaded || !hasKey || !origin || !destination || !window.google?.maps) return;
+    const originMoved = !lastOriginRef.current || haversineKm(lastOriginRef.current.lat, lastOriginRef.current.lng, origin.lat, origin.lng) > 0.05;
+    const destMoved = !lastDestRef.current || lastDestRef.current.lat !== destination.lat || lastDestRef.current.lng !== destination.lng;
+    if (!originMoved && !destMoved) return;
+    let cancelled = false;
+    new window.google.maps.DirectionsService().route(
+      { origin, destination, travelMode: window.google.maps.TravelMode.DRIVING },
+      (result, status) => {
+        if (cancelled) return;
+        lastOriginRef.current = origin;
+        lastDestRef.current = destination;
+        if (status === "OK" && result?.routes?.[0]) {
+          setPath(result.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() })));
+        }
+      }
+    );
+    return () => { cancelled = true; };
+  }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng, isLoaded, hasKey]);
+  return path;
+}
+
 // Real Google Maps live-tracking view — pickup/drop pins at real coordinates
-// plus the driver's live GPS marker. Falls back to the fake MockMap when
-// Google Maps isn't configured/loaded yet, or this booking has no real
-// coordinates (e.g. it was posted before Maps was set up).
+// plus the driver's live GPS marker, connected by the actual fastest driving
+// route (not a straight line) via useDrivingRoute. Falls back to the fake
+// MockMap when Google Maps isn't configured/loaded yet, or this booking has
+// no real coordinates (e.g. it was posted before Maps was set up).
 function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng, driverLocation, customerLocation, progress, zoneColor, height = 150, lang = "hi", mode = "route" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   // "toPickup" mode (used before a driver has entered the OTP) draws only
@@ -790,31 +825,41 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   // Pickup->Drop route once mode is "route" (the default, post-OTP).
   const toPickup = mode === "toPickup";
   const hasCoords = toPickup ? (pickupLat != null && pickupLng != null) : (pickupLat != null && pickupLng != null && dropLat != null && dropLng != null);
-  if (!hasKey || !isLoaded || !hasCoords) {
-    return <MockMap pickup={pickup} drop={toPickup ? null : drop} progress={toPickup ? undefined : progress} zoneColor={zoneColor} height={height} lang={lang} />;
-  }
-  const pickupPos = { lat: pickupLat, lng: pickupLng };
+  const pickupPos = pickupLat != null && pickupLng != null ? { lat: pickupLat, lng: pickupLng } : null;
   const dropPos = dropLat != null && dropLng != null ? { lat: dropLat, lng: dropLng } : null;
   const driverPos = driverLocation?.lat != null && driverLocation?.lng != null ? { lat: driverLocation.lat, lng: driverLocation.lng } : null;
   const customerPos = customerLocation?.lat != null && customerLocation?.lng != null ? { lat: customerLocation.lat, lng: customerLocation.lng } : null;
+  const routeOrigin = toPickup ? driverPos : pickupPos;
+  const routeDestination = toPickup ? pickupPos : dropPos;
+  const roadPath = useDrivingRoute(routeOrigin, routeDestination, isLoaded, hasKey);
+  const [mapInstance, setMapInstance] = useState(null);
+  useEffect(() => {
+    if (!mapInstance || !window.google?.maps) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    if (roadPath?.length) {
+      roadPath.forEach((p) => bounds.extend(p));
+    } else {
+      if (routeOrigin) bounds.extend(routeOrigin);
+      if (routeDestination) bounds.extend(routeDestination);
+    }
+    if (!toPickup && customerPos) bounds.extend(customerPos);
+    if (!bounds.isEmpty()) mapInstance.fitBounds(bounds, 28);
+  }, [mapInstance, roadPath, routeOrigin?.lat, routeOrigin?.lng, routeDestination?.lat, routeDestination?.lng]);
+
+  if (!hasKey || !isLoaded || !hasCoords) {
+    return <MockMap pickup={pickup} drop={toPickup ? null : drop} progress={toPickup ? undefined : progress} zoneColor={zoneColor} height={height} lang={lang} />;
+  }
   return (
     <div className="relative rounded-lg overflow-hidden" style={{ height, border: `1px solid ${C.line}` }}>
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
-        onLoad={(map) => {
-          const bounds = new window.google.maps.LatLngBounds();
-          bounds.extend(pickupPos);
-          if (!toPickup && dropPos) bounds.extend(dropPos);
-          if (driverPos) bounds.extend(driverPos);
-          if (!toPickup && customerPos) bounds.extend(customerPos);
-          map.fitBounds(bounds, 28);
-        }}
+        onLoad={setMapInstance}
         options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, gestureHandling: "greedy" }}
       >
         <MarkerF position={pickupPos} label={{ text: "P", color: "#fff", fontSize: "10px", fontWeight: "bold" }} />
         {!toPickup && dropPos && <MarkerF position={dropPos} label={{ text: "D", color: "#fff", fontSize: "10px", fontWeight: "bold" }} />}
-        {!toPickup && dropPos && <PolylineF path={[pickupPos, dropPos]} options={{ strokeColor: zoneColor || C.marigoldDeep, strokeOpacity: 0.7, strokeWeight: 3 }} />}
-        {toPickup && driverPos && <PolylineF path={[driverPos, pickupPos]} options={{ strokeColor: zoneColor || C.marigoldDeep, strokeOpacity: 0.7, strokeWeight: 3 }} />}
+        {!toPickup && dropPos && <PolylineF path={roadPath || [pickupPos, dropPos]} options={{ strokeColor: zoneColor || C.marigoldDeep, strokeOpacity: 0.7, strokeWeight: 3 }} />}
+        {toPickup && driverPos && <PolylineF path={roadPath || [driverPos, pickupPos]} options={{ strokeColor: zoneColor || C.marigoldDeep, strokeOpacity: 0.7, strokeWeight: 3 }} />}
         {driverPos && (
           <MarkerF
             position={driverPos}
