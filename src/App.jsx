@@ -4062,12 +4062,18 @@ function LoadingTimer({ trip, completeBooking, lang }) {
 
   return (
     <div className="mt-3 space-y-2.5">
-      <div className="rounded-lg p-3" style={{ background: C.navy }}>
+      <div className="rounded-lg p-3" style={{ background: clock.isOvertime ? C.safety : C.navy }}>
         {trip.hours ? (
           <>
-            <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{clock.isOvertime ? (lang === "en" ? "Allowed hours — time's up" : "अलाउ घंटे — समय खत्म") : (lang === "en" ? "Allowed hours remaining" : "बचे हुए अलाउ घंटे")}</div>
-            <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.isOvertime ? "00:00:00" : clock.remainingStr}</div>
-            <div className="text-[11px] mt-1" style={{ color: "#D9C4B0" }}>{lang === "en" ? `Allowed: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : `अलाउ समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
+            {clock.isOvertime ? (
+              <div className="text-lg font-bold text-white">⏰ {lang === "en" ? "Time's Up" : "समय खत्म"}</div>
+            ) : (
+              <>
+                <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Allowed hours remaining" : "बचे हुए अलाउ घंटे"}</div>
+                <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.remainingStr}</div>
+              </>
+            )}
+            <div className="text-[11px] mt-1" style={{ color: clock.isOvertime ? "#FCEAE3" : "#D9C4B0" }}>{lang === "en" ? `Allowed: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : `अलाउ समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
           </>
         ) : (
           <>
