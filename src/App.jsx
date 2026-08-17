@@ -4694,7 +4694,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
 function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | 'liveLocation' | null
+  const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | null
   const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
   // 'current' (default) shows the driver's own trip/bidding activity
   // automatically; 'advance' is the driver's own accepted advance bookings,
@@ -4736,20 +4736,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               <div className="text-sm mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "KYC status" : "KYC स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : "सत्यापित") : driver.kyc}</div>
               <div className="text-sm mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Wallet" : "वॉलेट"}: {fmt(driver.wallet)}</div>
             </div>
-          </div>
-        )}
-        {settingsView === "liveLocation" && (
-          <div className="px-5 py-5">
-            <h2 className="text-lg font-black mb-4" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
-            {myTrip ? (
-              <>
-                <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng} driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height={320} lang={lang} />
-                <div className="text-sm font-semibold mt-3" style={{ color: C.ink }}>{myTrip.pickup} → {myTrip.drop}</div>
-                <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{myTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
-              </>
-            ) : (
-              <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No active trip right now." : "अभी कोई सक्रिय ट्रिप नहीं है।"}</p>
-            )}
           </div>
         )}
       </div>
@@ -4802,9 +4788,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               </button>
               <button onClick={() => { setTab("wallet"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet" : "वॉलेट"}
-              </button>
-              <button onClick={() => { setSettingsView("liveLocation"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <MapPinned size={16} color={C.marigoldDeep} /> {lang === "en" ? "Live Location" : "लाइव लोकेशन"}
               </button>
               <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : "सेटिंग्स (KYC व गाड़ी)"}
