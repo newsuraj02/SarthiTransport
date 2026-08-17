@@ -46,6 +46,9 @@ const C = {
   // Changes, admin Approve/Add, etc.) — not for toggle switches, status
   // badges/pills, or decorative icon circles, where it would look busy.
   metallicGreen: "linear-gradient(135deg, #D9F0DE 0%, #6FAE82 22%, #3F7A54 45%, #245536 60%, #6FAE82 80%, #D9F0DE 100%)",
+  // Same shiny-sheen treatment in a coffee brown, used for the driver's
+  // Allowed Hours / Waiting Time timer boxes.
+  metallicBrown: "linear-gradient(135deg, #C89B6A 0%, #8B5E34 22%, #6B431F 45%, #4A2D14 60%, #8B5E34 80%, #C89B6A 100%)",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
@@ -4062,7 +4065,7 @@ function LoadingTimer({ trip, completeBooking, lang }) {
 
   return (
     <div className="mt-3 space-y-2.5">
-      <div className="rounded-lg p-3" style={{ background: clock.isOvertime ? C.safety : C.navy }}>
+      <div className="rounded-lg p-3 shadow-lg" style={{ background: C.metallicBrown }}>
         {trip.hours ? (
           <>
             {clock.isOvertime ? (
@@ -4085,15 +4088,15 @@ function LoadingTimer({ trip, completeBooking, lang }) {
       </div>
 
       {clock.isOvertime && (
-        <div className="rounded-lg p-3" style={{ background: "#4A1512" }}>
-          <div className="text-[11px] font-bold" style={{ color: "#FF8A80" }}>🔔 {lang === "en" ? "Waiting time" : "वेटिंग समय"}</div>
+        <div className="rounded-lg p-3 shadow-lg" style={{ background: C.metallicBrown }}>
+          <div className="text-[11px] font-bold" style={{ color: "#FFE6B3" }}>🔔 {lang === "en" ? "Waiting time" : "वेटिंग समय"}</div>
           <div className="text-xl font-bold" style={{ color: "#fff", fontFamily: monoFont }}>{clock.waitingElapsedStr}</div>
           {trip.extraHourRate ? (
-            <div className="text-[11px] mt-1" style={{ color: "#F5C6C2" }}>
+            <div className="text-[11px] mt-1" style={{ color: "#F0DFC8" }}>
               {lang === "en" ? `Billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"} · Waiting charge so far: ${fmt(clock.extraCharge)}` : `${clock.billableHours} घंटे के हिसाब से बिल · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
             </div>
           ) : (
-            <div className="text-[11px] mt-1" style={{ color: "#F5C6C2" }}>{lang === "en" ? "Running until you end the trip" : "ट्रिप खत्म करने तक चल रहा है"}</div>
+            <div className="text-[11px] mt-1" style={{ color: "#F0DFC8" }}>{lang === "en" ? "Running until you end the trip" : "ट्रिप खत्म करने तक चल रहा है"}</div>
           )}
         </div>
       )}
