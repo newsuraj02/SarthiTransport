@@ -4169,22 +4169,6 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bidStatusKey]);
 
-  // Detects a fresh acceptance (myTrip newly populated, not just already
-  // present from a previous session/reload) to surface a dismissible note
-  // with a button that jumps straight to the OTP entry below.
-  const prevMyTripIdRef = useRef(undefined);
-  const [bidAcceptedToast, setBidAcceptedToast] = useState(false);
-  const otpSectionRef = useRef(null);
-  useEffect(() => {
-    const currentId = myTrip?.id || null;
-    if (prevMyTripIdRef.current === undefined) {
-      prevMyTripIdRef.current = currentId;
-      return;
-    }
-    if (currentId && currentId !== prevMyTripIdRef.current) setBidAcceptedToast(true);
-    prevMyTripIdRef.current = currentId;
-  }, [myTrip?.id]);
-
   // Real GPS live-tracking: while this driver has an active trip, share their
   // actual device location so the customer (and admin fleet map) see it live.
   // Also runs whenever the driver is simply Online (not on a trip) so
@@ -4210,22 +4194,8 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
 
   return (
     <div className={`px-5 pb-5 ${myTrip ? "pt-2" : "pt-5"}`}>
-      {bidAcceptedToast && (
-        <div className="toast-pop rounded-xl p-3 mb-3" style={{ background: C.success }}>
-          <div className="flex items-center gap-2 mb-2">
-            <CheckCircle2 size={18} color="#fff" />
-            <span className="text-sm font-black text-white">🎉 {lang === "en" ? "Your bid was accepted!" : "आपकी बोली स्वीकार हो गई!"}</span>
-          </div>
-          <button
-            onClick={() => { setBidAcceptedToast(false); otpSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-            className="w-full rounded-lg py-2 text-sm font-black" style={{ background: "#fff", color: C.success }}>
-            {lang === "en" ? "Open" : "खोलें"}
-          </button>
-        </div>
-      )}
-
       {myTrip && !myTrip.loadingStartedAt && (
-        <div className="mb-4" ref={otpSectionRef}>
+        <div className="mb-4">
           <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
         </div>
       )}
@@ -4917,16 +4887,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </span>
           </button>
         </div>
-        {tab === "home" && rideView === "current" && myTrip && (
-          <div className="px-5 pt-3">
-            <div className="w-full rounded-full px-4 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: myTrip.scheduledFor ? C.marigoldDeep : C.success }}>
-              <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
-              <span className="text-sm font-extrabold text-white truncate">
-                {myTrip.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(myTrip)}
-              </span>
-            </div>
-          </div>
-        )}
         {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />}
         <ForegroundToast toast={rideNotifications.toast} />
         {menuOpen && (
