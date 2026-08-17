@@ -4204,7 +4204,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
           <button
             onClick={() => { setBidAcceptedToast(false); otpSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
             className="w-full rounded-lg py-2 text-sm font-black" style={{ background: "#fff", color: C.success }}>
-            {lang === "en" ? "Open OTP" : "OTP खोलें"}
+            {lang === "en" ? "Open" : "खोलें"}
           </button>
         </div>
       )}
