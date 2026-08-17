@@ -4021,6 +4021,9 @@ function useTripClock(loadingStartedAt, hours, extraHourRate) {
   const billableHours = extraHours > 0 ? Math.ceil(extraHours) : 0;
   const extraCharge = Math.round(billableHours * (extraHourRate || 0));
   const remainingMs = Math.max(0, bookedHours * 3600000 - elapsedMs);
+  // A separate stopwatch for the waiting-time box — starts fresh at zero the
+  // moment overtime begins, instead of reusing the trip's total elapsed time.
+  const waitingElapsedMs = Math.max(0, elapsedMs - bookedHours * 3600000);
 
   useEffect(() => {
     if (isOvertime && !beepedRef.current) {
@@ -4030,7 +4033,7 @@ function useTripClock(loadingStartedAt, hours, extraHourRate) {
     if (!isOvertime) beepedRef.current = false;
   }, [isOvertime]);
 
-  return { started, isOvertime, extraHours, billableHours, extraCharge, elapsedStr: fmtHMS(elapsedMs), remainingStr: fmtHMS(remainingMs) };
+  return { started, isOvertime, extraHours, billableHours, extraCharge, elapsedStr: fmtHMS(elapsedMs), remainingStr: fmtHMS(remainingMs), waitingElapsedStr: fmtHMS(waitingElapsedMs) };
 }
 
 // Read-only overtime banner shown on the customer's ongoing-trip card —
@@ -4058,12 +4061,12 @@ function LoadingTimer({ trip, completeBooking, lang }) {
   if (!trip.loadingStartedAt) return null;
 
   return (
-    <div className="mt-3">
+    <div className="mt-3 space-y-2.5">
       <div className="rounded-lg p-3" style={{ background: C.navy }}>
         {trip.hours ? (
           <>
-            <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{clock.isOvertime ? (lang === "en" ? "Allowed time over — extra time running" : "अलाउ समय खत्म — अतिरिक्त समय चल रहा है") : (lang === "en" ? "Time remaining (reverse timer)" : "बचा हुआ समय (रिवर्स टाइमर)")}</div>
-            <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.isOvertime ? clock.elapsedStr : clock.remainingStr}</div>
+            <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{clock.isOvertime ? (lang === "en" ? "Allowed hours — time's up" : "अलाउ घंटे — समय खत्म") : (lang === "en" ? "Allowed hours remaining" : "बचे हुए अलाउ घंटे")}</div>
+            <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.isOvertime ? "00:00:00" : clock.remainingStr}</div>
             <div className="text-[11px] mt-1" style={{ color: "#D9C4B0" }}>{lang === "en" ? `Allowed: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : `अलाउ समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
           </>
         ) : (
@@ -4073,16 +4076,23 @@ function LoadingTimer({ trip, completeBooking, lang }) {
             <div className="text-[11px] mt-1" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Driver had not set allowed hours" : "ड्राइवर ने अलाउ घंटे नहीं भरे थे"}</div>
           </>
         )}
-        {trip.extraHourRate && clock.isOvertime && (
-          <div className="rounded-lg mt-2 p-2" style={{ background: "#4A1512" }}>
-            <div className="text-[11px] font-bold" style={{ color: "#FF8A80" }}>🔔 {lang === "en" ? "Beep-beep! Allowed time is over" : "बीप-बीप! अलाउ समय खत्म हो गया"}</div>
-            <div className="text-[11px] mt-0.5" style={{ color: "#F5C6C2" }}>
-              {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs (billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"}) · Extra fare: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे (${clock.billableHours} घंटे के हिसाब से बिल) · अतिरिक्त भाड़ा: ${fmt(clock.extraCharge)}`}
-            </div>
-          </div>
-        )}
       </div>
-      <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white mt-3 shadow-lg" style={{ background: C.metallicGreen }}>
+
+      {clock.isOvertime && (
+        <div className="rounded-lg p-3" style={{ background: "#4A1512" }}>
+          <div className="text-[11px] font-bold" style={{ color: "#FF8A80" }}>🔔 {lang === "en" ? "Waiting time" : "वेटिंग समय"}</div>
+          <div className="text-xl font-bold" style={{ color: "#fff", fontFamily: monoFont }}>{clock.waitingElapsedStr}</div>
+          {trip.extraHourRate ? (
+            <div className="text-[11px] mt-1" style={{ color: "#F5C6C2" }}>
+              {lang === "en" ? `Billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"} · Waiting charge so far: ${fmt(clock.extraCharge)}` : `${clock.billableHours} घंटे के हिसाब से बिल · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
+            </div>
+          ) : (
+            <div className="text-[11px] mt-1" style={{ color: "#F5C6C2" }}>{lang === "en" ? "Running until you end the trip" : "ट्रिप खत्म करने तक चल रहा है"}</div>
+          )}
+        </div>
+      )}
+
+      <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white shadow-lg" style={{ background: C.metallicGreen }}>
         {lang === "en" ? "End Trip" : "एंड ट्रिप"}
       </button>
     </div>
