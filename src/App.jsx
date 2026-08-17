@@ -41,6 +41,11 @@ const C = {
   // wallet summary, etc. Not used on small badges/pills/avatar circles or
   // repeated list rows, where a gradient would just look busy.
   metallicGold: "linear-gradient(135deg, #FFF3D2 0%, #F0BE55 22%, #E3A93C 45%, #C98A24 60%, #F0BE55 80%, #FFF3D2 100%)",
+  // Same shiny-sheen treatment in green, for primary action buttons that
+  // used a flat C.success fill (Send Quote, Book this vehicle, Save
+  // Changes, admin Approve/Add, etc.) — not for toggle switches, status
+  // badges/pills, or decorative icon circles, where it would look busy.
+  metallicGreen: "linear-gradient(135deg, #D9F0DE 0%, #6FAE82 22%, #3F7A54 45%, #245536 60%, #6FAE82 80%, #D9F0DE 100%)",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
@@ -1143,7 +1148,7 @@ function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
           <Phone size={16} /> {lang === "en" ? "Call Admin" : "एडमिन को कॉल करें"}
         </a>
         <a href={`https://wa.me/${ADMIN_WHATSAPP}`} target="_blank" rel="noreferrer" onClick={() => raiseAlert?.(role, "व्हाट्सएप सपोर्ट")}
-          className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: C.success }}>
+          className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white shadow-lg" style={{ background: C.metallicGreen }}>
           <MessageCircle size={16} /> {lang === "en" ? "WhatsApp Support" : "व्हाट्सएप सपोर्ट"}
         </a>
       </div>
@@ -2412,8 +2417,8 @@ function BillDocumentsModal({ booking, onClose, lang }) {
 
         {error && <div className="text-xs font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
 
-        <button onClick={send} disabled={!file?.url || sending} className="w-full rounded-xl py-3 text-sm font-black text-white"
-          style={{ background: file?.url ? C.success : C.line, color: file?.url ? "#fff" : "#9AA3B0" }}>
+        <button onClick={send} disabled={!file?.url || sending} className={`w-full rounded-xl py-3 text-sm font-black text-white ${file?.url ? "shadow-lg" : ""}`}
+          style={{ background: file?.url ? C.metallicGreen : C.line, color: file?.url ? "#fff" : "#9AA3B0" }}>
           {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send to Driver" : "ड्राइवर को भेजें")}
         </button>
       </div>
@@ -2439,7 +2444,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
         </div>
 
         {file?.url ? (
-          <a href={file.url} target="_blank" rel="noreferrer" className="w-full rounded-xl py-3 text-sm font-black text-white flex items-center justify-center gap-2" style={{ background: C.success }}>
+          <a href={file.url} target="_blank" rel="noreferrer" className="w-full rounded-xl py-3 text-sm font-black text-white flex items-center justify-center gap-2 shadow-lg" style={{ background: C.metallicGreen }}>
             <Download size={16} /> {lang === "en" ? "View / Download Invoice" : "इनवॉइस देखें / डाउनलोड करें"}
           </a>
         ) : (
@@ -2541,13 +2546,13 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
           glance for a first-time user. */}
       <div className="mt-2 space-y-2">
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.success, color: "#fff" }}>
+          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold shadow-lg" style={{ background: C.metallicGreen, color: "#fff" }}>
             <MapPin size={16} /> {lang === "en" ? "Choose from Map" : "मैप से चुनें"}
           </button>
           <MicButton onResult={onMic} label={lang === "en" ? "Speak to Enter" : "बोलकर लिखें"} />
         </div>
         {onUseCurrentLocation && (
-          <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.success, color: "#fff" }}>
+          <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold shadow-lg" style={{ background: C.metallicGreen, color: "#fff" }}>
             <Navigation size={16} /> {locating ? (lang === "en" ? "Locating..." : "ढूंढ रहे हैं...") : (lang === "en" ? "Use My Current Location" : "मेरी वर्तमान लोकेशन इस्तेमाल करें")}
           </button>
         )}
@@ -3033,8 +3038,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{advanceNoticeError}</div>
         )}
 
-        <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready" : ""}`}
-          style={{ background: canPost ? C.success : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
+        <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready shadow-lg" : ""}`}
+          style={{ background: canPost ? C.metallicGreen : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
           🚚 {lang === "en" ? "Find Vehicles / Book Now" : "गाड़ियां खोजें / अभी बुक करें"}
         </button>
       </div>
@@ -3199,7 +3204,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                 if (err) setAcceptError(err);
                 else { setSelectedBid(null); setAcceptError(""); onBidAccepted?.(b); }
               }}
-                className="w-full rounded-lg py-2.5 font-bold text-sm mt-2 text-white" style={{ background: C.success }}>
+                className="w-full rounded-lg py-2.5 font-bold text-sm mt-2 text-white shadow-lg" style={{ background: C.metallicGreen }}>
                 {lang === "en" ? "Book this vehicle" : "यही गाड़ी बुक करें"}
               </button>
             )}
@@ -3229,7 +3234,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           </div>
         ) : (
           <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm text-white"
-            style={{ background: docsSent ? C.success : "#60A5FA", border: `1.5px solid ${docsSent ? C.success : "#3B82F6"}` }}>
+            style={{ background: docsSent ? C.metallicGreen : "#60A5FA", border: `1.5px solid ${docsSent ? "#245536" : "#3B82F6"}` }}>
             <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Invoice" : "इनवॉइस भेजें")}
           </button>
         )}
@@ -3462,8 +3467,8 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
           {withdrawn ? (
             <div className="text-xs font-semibold mt-2" style={{ color: C.success }}>{lang === "en" ? "Withdrawal request sent ✓" : "विड्रॉल रिक्वेस्ट भेज दी गई ✓"}</div>
           ) : (
-            <button onClick={withdrawReferral} disabled={referralAvailable <= 0} className="w-full rounded-lg py-2 font-bold text-xs mt-2"
-              style={{ background: referralAvailable > 0 ? C.success : C.line, color: referralAvailable > 0 ? "#fff" : "#9AA3B0" }}>
+            <button onClick={withdrawReferral} disabled={referralAvailable <= 0} className={`w-full rounded-lg py-2 font-bold text-xs mt-2 ${referralAvailable > 0 ? "shadow-lg" : ""}`}
+              style={{ background: referralAvailable > 0 ? C.metallicGreen : C.line, color: referralAvailable > 0 ? "#fff" : "#9AA3B0" }}>
               {referralAvailable > 0 ? (lang === "en" ? `Withdraw ${fmt(referralAvailable)}` : `${fmt(referralAvailable)} विड्रॉ करें`) : (lang === "en" ? "Nothing unlocked yet" : "अभी कुछ भी अनलॉक नहीं हुआ")}
             </button>
           )}
@@ -3515,7 +3520,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
             <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </div>
         </div>
-        <button onClick={save} disabled={photoUploading} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: photoUploading ? C.line : saved ? C.success : C.marigoldDeep }}>
+        <button onClick={save} disabled={photoUploading} className={`w-full rounded-lg py-2.5 font-bold text-sm text-white ${saved ? "shadow-lg" : ""}`} style={{ background: photoUploading ? C.line : saved ? C.metallicGreen : C.marigoldDeep }}>
           {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
         </button>
       </div>
@@ -3902,8 +3907,8 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
             <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{bidError}</div>
           )}
 
-          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-xl py-3.5 text-base font-black text-white shadow-sm flex items-center justify-center gap-1.5 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready" : ""}`}
-            style={{ background: (canSubmit && !walletShortfall) || justSubmitted ? C.success : C.line, color: (canSubmit && !walletShortfall) || justSubmitted ? "#fff" : "#9AA3B0" }}>
+          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-xl py-3.5 text-base font-black text-white flex items-center justify-center gap-1.5 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready shadow-lg" : (canSubmit && !walletShortfall) || justSubmitted ? "shadow-lg" : "shadow-sm"}`}
+            style={{ background: (canSubmit && !walletShortfall) || justSubmitted ? C.metallicGreen : C.line, color: (canSubmit && !walletShortfall) || justSubmitted ? "#fff" : "#9AA3B0" }}>
             {justSubmitted ? <><CheckCircle2 size={18} /> {lang === "en" ? "Sent" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : "कोटेशन भेजें")}
           </button>
     </div>
@@ -4003,7 +4008,7 @@ function LoadingTimer({ trip, completeBooking, lang }) {
           </div>
         )}
       </div>
-      <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white mt-3" style={{ background: C.success }}>
+      <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white mt-3 shadow-lg" style={{ background: C.metallicGreen }}>
         {lang === "en" ? "End Trip" : "एंड ट्रिप"}
       </button>
     </div>
@@ -4466,8 +4471,8 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
           <div className="text-xl font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(driver.bonus || 0)}</div>
         </div>
         <button onClick={() => requestWithdrawal(driver.bonus || 0)} disabled={!driver.bonus}
-          className="w-full rounded-lg py-2 text-xs font-bold text-white flex items-center justify-center gap-1.5"
-          style={{ background: driver.bonus ? C.success : C.line, color: driver.bonus ? "#fff" : "#9AA3B0" }}>
+          className={`w-full rounded-lg py-2 text-xs font-bold text-white flex items-center justify-center gap-1.5 ${driver.bonus ? "shadow-lg" : ""}`}
+          style={{ background: driver.bonus ? C.metallicGreen : C.line, color: driver.bonus ? "#fff" : "#9AA3B0" }}>
           <Wallet size={13} /> {lang === "en" ? "Send to Bank" : "बैंक में भेजें"}
         </button>
       </div>
@@ -4843,7 +4848,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout }) {
             <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </div>
         </div>
-        <button onClick={save} disabled={photoUploading} className="w-full rounded-lg py-2.5 font-bold text-sm text-white" style={{ background: photoUploading ? C.line : saved ? C.success : C.marigoldDeep }}>
+        <button onClick={save} disabled={photoUploading} className={`w-full rounded-lg py-2.5 font-bold text-sm text-white ${saved ? "shadow-lg" : ""}`} style={{ background: photoUploading ? C.line : saved ? C.metallicGreen : C.marigoldDeep }}>
           {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
         </button>
       </div>
@@ -5382,7 +5387,7 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                   </button>
                   <div className="flex gap-2">
                     <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: "#FCEAE3", color: C.safety }}>{lang === "en" ? "Block" : "Block"}</button>
-                    <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.success }}>{lang === "en" ? "Approve" : "Approve"}</button>
+                    <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : "Approve"}</button>
                   </div>
                 </div>
 
@@ -5466,7 +5471,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(w.amount)}</span>
-                  <button onClick={() => approveWithdrawal(w.id)} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.success }}>{lang === "en" ? "Approve" : "अप्रूव करें"}</button>
+                  <button onClick={() => approveWithdrawal(w.id)} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : "अप्रूव करें"}</button>
                 </div>
               </div>
             ))}
@@ -5593,7 +5598,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
           <Users size={16} /> {lang === "en" ? "All Drivers" : "सभी ड्राइवर"}
           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.navy, background: "#F5E6C8" }}>{drivers.length}</span>
         </div>
-        <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white" style={{ background: C.success }}>
+        <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>
           {showAdd ? (lang === "en" ? "Cancel" : "रद्द करें") : `+ ${lang === "en" ? "Add Driver" : "ड्राइवर जोड़ें"}`}
         </button>
       </div>
@@ -5621,7 +5626,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
             <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
           </div>
           {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
-          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready" : ""}`} style={{ background: canAdd ? C.success : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
+          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready shadow-lg" : ""}`} style={{ background: canAdd ? C.metallicGreen : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
             {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Driver" : "ड्राइवर सेव करें")}
           </button>
         </div>
@@ -5774,7 +5779,7 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
           <Users size={16} /> {lang === "en" ? "All Customers" : "सभी कस्टमर"}
           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.navy, background: "#F5E6C8" }}>{(customers || []).length}</span>
         </div>
-        <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white" style={{ background: C.success }}>
+        <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>
           {showAdd ? (lang === "en" ? "Cancel" : "रद्द करें") : `+ ${lang === "en" ? "Add Customer" : "कस्टमर जोड़ें"}`}
         </button>
       </div>
@@ -5794,7 +5799,7 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
             <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
           </div>
           {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
-          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready" : ""}`} style={{ background: canAdd ? C.success : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
+          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready shadow-lg" : ""}`} style={{ background: canAdd ? C.metallicGreen : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
             {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Customer" : "कस्टमर सेव करें")}
           </button>
         </div>
@@ -6176,7 +6181,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
                     addExpenseCategory(name);
                     setForm((f) => ({ ...f, category: name }));
                     setNewCategoryName(""); setAddingCategory(false);
-                  }} className="px-3 rounded-lg text-xs font-bold text-white" style={{ background: C.success }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
+                  }} className="px-3 rounded-lg text-xs font-bold text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
                 </div>
               ) : (
                 <button type="button" onClick={() => setAddingCategory(true)} className="w-full rounded-lg py-2.5 text-xs font-bold" style={{ border: `2px dashed ${C.marigold}`, color: C.marigoldDeep }}>
