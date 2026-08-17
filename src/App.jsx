@@ -4065,6 +4065,7 @@ function LoadingTimer({ trip, completeBooking, lang }) {
 
   return (
     <div className="mt-3 space-y-2.5">
+      <div className="grid grid-cols-2 gap-2.5">
       <div className="rounded-lg p-3 shadow-lg" style={{ background: C.metallicBrown }}>
         {trip.hours ? (
           <>
@@ -4101,6 +4102,7 @@ function LoadingTimer({ trip, completeBooking, lang }) {
         ) : (
           <div className="text-[11px] mt-1" style={{ color: "#F0DFC8" }}>{lang === "en" ? "Starts once allowed hours are over" : "अलाउ घंटे खत्म होने पर शुरू होगा"}</div>
         )}
+      </div>
       </div>
 
       <button onClick={() => completeBooking(trip.id, clock.extraCharge)} className="w-full rounded-lg py-2.5 font-bold text-sm text-white shadow-lg" style={{ background: C.metallicGreen }}>
