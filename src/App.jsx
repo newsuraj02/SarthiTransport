@@ -3484,6 +3484,24 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
                 <StarRating value={b.rating} onRate={(n) => rateBooking(b.id, n)} />
               </div>
             )}
+            {b.status === "Completed" && b.fare > 0 && (
+              <div className="rounded-lg p-2.5 mt-2 shadow-lg" style={{ background: C.metallicGold }}>
+                <div className="text-xs font-bold flex items-center justify-between" style={{ color: "#000000" }}>
+                  <span>{lang === "en" ? "Base fare" : "बेस भाड़ा"}</span>
+                  <span style={{ fontFamily: monoFont }}>{fmt(b.fare - (b.extraCharge || 0))}</span>
+                </div>
+                {b.extraCharge > 0 && (
+                  <div className="text-xs font-bold flex items-center justify-between mt-0.5" style={{ color: "#000000" }}>
+                    <span>{lang === "en" ? "Waiting charge" : "वेटिंग चार्ज"}</span>
+                    <span style={{ fontFamily: monoFont }}>{fmt(b.extraCharge)}</span>
+                  </div>
+                )}
+                <div className="text-sm font-black flex items-center justify-between mt-1 pt-1" style={{ color: "#000000", borderTop: "1px solid rgba(0,0,0,0.15)" }}>
+                  <span>{lang === "en" ? "Total amount" : "कुल राशि"}</span>
+                  <span style={{ fontFamily: monoFont }}>{fmt(b.fare)}</span>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
