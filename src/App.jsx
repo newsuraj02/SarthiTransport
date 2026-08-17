@@ -4329,7 +4329,6 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
             </div>
           ) : (
             <>
-              <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</div>
               {openLoads.map((load) => (
                 <LoadAlertCard key={load.id} load={load} driver={driver} addBid={addBid} lang={lang}
                   commissionPct={commissionPct} minWallet={minWallet} />
