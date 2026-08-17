@@ -4849,7 +4849,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
           <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#60A5FA", border: "1.5px solid #3B82F6" }}>
             <Menu size={18} color="#fff" strokeWidth={2.5} />
           </button>
-          <div className="flex-1 min-w-0" />
+          <div className="flex-1 min-w-0 flex justify-center">
+            <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#60A5FA" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
+          </div>
           <button onClick={() => setDriver({ ...driver, online: !driver.online })}
             className="shrink-0 flex items-center rounded-full p-1.5" style={{ background: C.marigoldDeep }}>
             <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
