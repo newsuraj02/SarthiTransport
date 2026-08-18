@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, ChevronLeft, Eye, EyeOff, Plus, Loader2,
+  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
   FileText, X, Upload,
 } from "lucide-react";
 import {
@@ -5042,6 +5042,11 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout }) {
 function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
+  // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
+  // away — it first drops down the ₹200 payout note in place, and only a
+  // second tap (now "Continue to WhatsApp") actually shares. Reset shut
+  // whenever the menu itself closes, so it's always collapsed on reopen.
+  const [shareNoteOpen, setShareNoteOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | null
   const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
   // 'current' (default) shows the driver's own trip/bidding activity
@@ -5087,7 +5092,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     <>
       <div className="flex-1 overflow-y-auto relative">
         <div className="flex items-center justify-between gap-2 px-5 pt-3">
-          <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#60A5FA", border: "1.5px solid #3B82F6" }}>
+          <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#60A5FA", border: "1.5px solid #3B82F6" }}>
             <Menu size={18} color="#fff" strokeWidth={2.5} />
           </button>
           <div className="flex-1 min-w-0 flex justify-center">
@@ -5125,13 +5130,30 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : "सेटिंग्स (KYC व गाड़ी)"}
               </button>
-              <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <MessageCircle size={16} color={C.success} className="shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold">{lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}</div>
-                  <div className="text-[10px] font-normal" style={{ color: C.inkSoft }}>{lang === "en" ? "You get ₹200 once your referral completes a ride" : "आपके रेफरल की राइड पूरी होते ही आपको ₹200 मिलेंगे"}</div>
-                </div>
-              </button>
+              <div style={{ borderBottom: `1px solid ${C.line}` }}>
+                <button
+                  onClick={() => { if (shareNoteOpen) { shareApp(); setMenuOpen(false); setShareNoteOpen(false); } else { setShareNoteOpen(true); } }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left"
+                  style={{ color: C.ink }}>
+                  <MessageCircle size={16} color={C.success} className="shrink-0" />
+                  <span className="flex-1">{lang === "en" ? "Share App" : "ऐप शेयर करें"}</span>
+                  <ChevronDown size={16} color={C.inkSoft} className="shrink-0 transition-transform" style={{ transform: shareNoteOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                {shareNoteOpen && (
+                  <div className="px-4 pb-3 -mt-1">
+                    <div className="rounded-lg p-3" style={{ background: "#DFEEE2" }}>
+                      <div className="text-xs font-semibold" style={{ color: C.success }}>
+                        {lang === "en" ? "You get ₹200 once your referral completes a ride" : "आपके रेफरल की राइड पूरी होते ही आपको ₹200 मिलेंगे"}
+                      </div>
+                      <button onClick={() => { shareApp(); setMenuOpen(false); setShareNoteOpen(false); }}
+                        className="w-full mt-2 rounded-lg py-2 text-xs font-bold text-white shadow-lg"
+                        style={{ background: C.metallicGreen }}>
+                        {lang === "en" ? "Continue to WhatsApp" : "WhatsApp पर जारी रखें"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
               </button>
