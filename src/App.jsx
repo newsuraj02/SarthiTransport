@@ -3401,9 +3401,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="rounded-lg p-2.5 mb-2.5" style={{ background: "#FBEBD2", border: `1px solid ${C.marigoldDeep}` }}>
             <div className="text-xs font-black mb-1" style={{ color: C.marigoldDeep }}>⚠️ {lang === "en" ? "Note" : "नोट"}</div>
             <div className="text-[10px] font-bold" style={{ color: "#000000" }}>
-              {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
-            </div>
-            <div className="text-[10px] font-bold mt-1" style={{ color: "#000000" }}>
               {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
             </div>
           </div>
