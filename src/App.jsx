@@ -4879,7 +4879,10 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const submit = () => {
     if (!canSubmit) return;
     setDriver({
-      ...driver, kyc: isInTrial(driver.createdAt) && isFirstSubmission ? "Approved" : "Pending", docs: { dl, photo },
+      // The KYC driver photo doubles as the profile photo (see
+      // DriverProfileEdit) — kept in sync here every time KYC is
+      // submitted/resubmitted, rather than letting the two drift apart.
+      ...driver, kyc: isInTrial(driver.createdAt) && isFirstSubmission ? "Approved" : "Pending", photo, docs: { dl, photo },
       vehicleSpec: {
         type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
         capacityKg: Number(capacityKg) || undefined, length: Number(length) || undefined,
@@ -5027,16 +5030,17 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   );
 }
 
-// Mirrors CustomerProfileEdit's layout/fields (photo, name, disabled mobile,
-// email, address, area/city, state/pincode, Save Changes) so both roles'
-// profile pages look and behave the same — minus the customer-only referral
-// section, plus a Logout button at the bottom (moved out of the hamburger
-// menu, see DriverApp).
+// Mirrors CustomerProfileEdit's layout/fields (name, disabled mobile, email,
+// address, area/city, state/pincode) so both roles' profile pages look and
+// behave the same — minus the customer-only referral section, plus a
+// Logout button at the bottom (moved out of the hamburger menu, see
+// DriverApp). Unlike the customer version, the profile photo itself isn't
+// separately uploadable here — it's the KYC "Driver Photo" (see DriverKyc's
+// submit, which writes it to driver.photo directly), shown read-only so
+// it's always exactly what the customer sees on their active ride page.
 function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments }) {
   const [name, setName] = useState(driver?.name || "");
   const [email, setEmail] = useState(driver?.email || "");
-  const [photo, setPhoto] = useState(driver?.photo || null);
-  const [photoUploading, setPhotoUploading] = useState(false);
   const [address, setAddress] = useState(driver?.address || "");
   const [area, setArea] = useState(driver?.area || "");
   const [city, setCity] = useState(driver?.city || "");
@@ -5048,7 +5052,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   const save = () => {
-    setDriver({ ...driver, name: name.trim(), email: email.trim() || null, photo, address, area, city, state, pincode });
+    setDriver({ ...driver, name: name.trim(), email: email.trim() || null, address, area, city, state, pincode });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -5058,13 +5062,9 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
-          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `drivers/${driver.mobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
-            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#F5E6C8", border: `2px dashed ${C.marigoldDeep}` }}>
-              {photoUploading
-                ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
-                : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
-            </div>
-          </PhotoPicker>
+          <div className="w-28 h-28 rounded-full flex items-center justify-center overflow-hidden" style={{ background: "#F5E6C8", border: `2px solid ${C.marigoldDeep}` }}>
+            <SafeImage src={driver?.photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={30} color={C.marigoldDeep} />} />
+          </div>
         </div>
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
@@ -5102,33 +5102,35 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
             <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </div>
         </div>
-        <button onClick={save} disabled={photoUploading} className={`w-full rounded-lg py-2.5 font-bold text-sm text-white ${saved ? "shadow-lg" : ""}`} style={{ background: photoUploading ? C.line : saved ? C.metallicGreen : C.marigoldDeep }}>
-          {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
-        </button>
-      </div>
 
-      {/* Every document submitted with KYC, visible right here — View/
-          Download per document via KycDocThumb (same component the admin
-          review screen uses), and a single Change button that jumps to the
-          existing KYC & Vehicle form to re-upload/edit any of them, instead
-          of duplicating that upload flow here. */}
-      <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Documents" : "दस्तावेज़"}</h3>
-          <button onClick={onEditDocuments} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: C.marigold, color: C.navy }}>
-            {lang === "en" ? "Change" : "बदलें"}
-          </button>
+        {/* Every document submitted with KYC, visible right here — View/
+            Download per document via KycDocThumb (same component the admin
+            review screen uses), and a single Change button that jumps to
+            the existing KYC & Vehicle form to re-upload/edit any of them
+            (including the driver photo above), instead of duplicating that
+            upload flow here. Vehicle - Front isn't shown — the side profile
+            is the only vehicle photo that matters to a customer browsing
+            bids. */}
+        <div className="pt-1">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Documents" : "दस्तावेज़"}</h3>
+            <button onClick={onEditDocuments} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: C.marigold, color: C.navy }}>
+              {lang === "en" ? "Change" : "बदलें"}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { key: "dl", label: lang === "en" ? "Driving License" : "ड्राइविंग लाइसेंस", url: driver?.docs?.dl?.url },
+              { key: "vehicleSide", label: lang === "en" ? "Vehicle - Side" : "गाड़ी - साइड", url: driver?.vehicleSpec?.photoSide?.url },
+            ].map((d) => (
+              <KycDocThumb key={d.key} url={d.url} label={d.label} lang={lang} fileName={`${driver?.name || "driver"}-${d.key}.jpg`} />
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { key: "photo", label: lang === "en" ? "Driver Photo" : "ड्राइवर फोटो", url: driver?.docs?.photo?.url },
-            { key: "dl", label: lang === "en" ? "Driving License" : "ड्राइविंग लाइसेंस", url: driver?.docs?.dl?.url },
-            { key: "vehicleFront", label: lang === "en" ? "Vehicle - Front" : "गाड़ी - आगे", url: (driver?.vehicleSpec?.photoFront || driver?.vehicleSpec?.photo)?.url },
-            { key: "vehicleSide", label: lang === "en" ? "Vehicle - Side" : "गाड़ी - साइड", url: driver?.vehicleSpec?.photoSide?.url },
-          ].map((d) => (
-            <KycDocThumb key={d.key} url={d.url} label={d.label} lang={lang} fileName={`${driver?.name || "driver"}-${d.key}.jpg`} />
-          ))}
-        </div>
+
+        <button onClick={save} className={`w-full rounded-lg py-2.5 font-bold text-sm text-white ${saved ? "shadow-lg" : ""}`} style={{ background: saved ? C.metallicGreen : C.marigoldDeep }}>
+          {saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
+        </button>
       </div>
 
       <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-bold text-sm" style={{ background: "#FCEAE3", color: C.safety, border: `1px solid ${C.safety}` }}>
