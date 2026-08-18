@@ -5061,11 +5061,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
 
   const shareApp = () => {
-    // Only drivers earn a referral reward now — the link carries this
-    // driver's own mobile number as their referral code, so ₹200 credits
-    // to their wallet once the new user (customer or driver) completes
-    // their first booking/trip (see creditReferralOnce in the root App).
-    // The reward itself isn't mentioned in the message text.
+    // The link carries this driver's own mobile number as their referral
+    // code either way, but the ₹200 only ever pays out for a driver-to-driver
+    // referral — a customer who signs up via this link is still tracked as
+    // referred by this driver, just without a payout (see creditReferralOnce
+    // in the root App). The reward itself isn't mentioned in the message text.
     const link = `https://sarthi-transport-74865.web.app?ref=${driver.mobile}`;
     const msg = lang === "en"
       ? `Join Apna Transport — book trucks/tempos or sign up as a driver-partner using my link: ${link}`
@@ -5143,7 +5143,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   <div className="px-4 pb-3 -mt-1">
                     <div className="rounded-lg p-3" style={{ background: "#DFEEE2" }}>
                       <div className="text-xs font-semibold" style={{ color: C.success }}>
-                        {lang === "en" ? "You get ₹200 once your referral completes a ride" : "आपके रेफरल की राइड पूरी होते ही आपको ₹200 मिलेंगे"}
+                        {lang === "en" ? "You get ₹200 once a driver you refer completes their first ride. Referring a customer just helps them download the app — no bonus for that." : "आपके रेफर किए हुए ड्राइवर की पहली राइड पूरी होते ही आपको ₹200 मिलेंगे। कस्टमर को रेफर करने से सिर्फ उन्हें ऐप डाउनलोड करने में मदद मिलती है — उसके लिए कोई बोनस नहीं है।"}
                       </div>
                       <button onClick={() => { shareApp(); setMenuOpen(false); setShareNoteOpen(false); }}
                         className="w-full mt-2 rounded-lg py-2 text-xs font-bold text-white shadow-lg"
@@ -6945,11 +6945,13 @@ export default function App() {
   };
   const rateBooking = (id, rating) => patchDoc("bookings", id, { rating }).catch((e) => console.error(e));
   // Credits ₹200 straight into the referring driver's wallet the moment a
-  // referred user (customer or driver, signed up via that driver's share
-  // link) completes their first successful booking/trip — checked/flagged
-  // via referralCredited so it only ever fires once per referred user, no
-  // matter how many trips they complete after that. Only drivers earn
-  // referral rewards — a referredBy mobile that isn't a driver (e.g. stale
+  // referred driver (signed up via that driver's share link) completes
+  // their first successful trip — checked/flagged via referralCredited so
+  // it only ever fires once per referred driver, no matter how many trips
+  // they complete after that. Driver-to-driver only: a customer signed up
+  // via a driver's link is still tracked as a referral (see referredBy on
+  // the customer doc) but never triggers a payout — only called for
+  // drivers below. A referredBy mobile that isn't a driver (e.g. stale
   // data) is simply ignored.
   const creditReferralOnce = async (mobile, collectionName) => {
     const entity = await getDocOnce(collectionName, mobile);
@@ -6969,7 +6971,6 @@ export default function App() {
     patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge, completedAt: Date.now() }).catch((e) => console.error(e));
     if (b.driverName === driver?.name) setDriver({ ...driver, online: true });
     if (firestoreReady) {
-      if (b.customerMobile) creditReferralOnce(b.customerMobile, "customers");
       const bookingDriver = drivers.find((d) => d.name === b.driverName);
       if (bookingDriver?.mobile) creditReferralOnce(bookingDriver.mobile, "drivers");
     }
