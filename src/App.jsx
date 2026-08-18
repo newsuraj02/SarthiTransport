@@ -3513,7 +3513,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
 // Editable customer profile — photo, name, email, mobile (read-only, tied to
 // the verified login), and address, with a Save button that persists via
 // onUpdateProfile.
-function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestReferralWithdrawal, lang }) {
+function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestReferralWithdrawal, lang, onLogout }) {
   const [name, setName] = useState(customerProfile?.name || "");
   const [email, setEmail] = useState(customerProfile?.email || "");
   const [photo, setPhoto] = useState(customerProfile?.photo || null);
@@ -3619,6 +3619,9 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
           {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
         </button>
       </div>
+      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-bold text-sm" style={{ background: "#FCEAE3", color: C.safety, border: `1px solid ${C.safety}` }}>
+        <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
+      </button>
     </div>
   );
 }
@@ -3796,21 +3799,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         </div>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} />}
         {settingsView === "profile" && (
-          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} requestReferralWithdrawal={requestReferralWithdrawal} lang={lang} />
-        )}
-        {settingsView === "liveLocation" && (
-          <div className="px-5 py-5">
-            <h2 className="text-lg font-black mb-4" style={{ color: C.ink }}>{lang === "en" ? "Live Location" : "लाइव लोकेशन"}</h2>
-            {ongoingTrip ? (
-              <>
-                <LiveTrackingMap pickup={ongoingTrip.pickup} drop={ongoingTrip.drop} pickupLat={ongoingTrip.pickupLat} pickupLng={ongoingTrip.pickupLng} dropLat={ongoingTrip.dropLat} dropLng={ongoingTrip.dropLng} driverLocation={ongoingTrip.driverLocation} customerLocation={ongoingTrip.customerLocation} progress={ongoingTrip.progress} zoneColor={C.pimpri} height={320} lang={lang} />
-                <div className="text-sm font-semibold mt-3" style={{ color: C.ink }}>{ongoingTrip.pickup} → {ongoingTrip.drop}</div>
-                <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{ongoingTrip.progress}% {lang === "en" ? "of the way complete" : "रास्ता पूरा"}</div>
-              </>
-            ) : (
-              <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No active trip right now." : "अभी कोई सक्रिय ट्रिप नहीं है।"}</p>
-            )}
-          </div>
+          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} requestReferralWithdrawal={requestReferralWithdrawal} lang={lang} onLogout={onLogout} />
         )}
         {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
       </div>
@@ -3887,9 +3876,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               <button onClick={() => { setSettingsView("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "Ride History" : "राइड हिस्ट्री"}
               </button>
-              <button onClick={() => { setSettingsView("liveLocation"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <MapPinned size={16} color={C.marigoldDeep} /> {lang === "en" ? "Live Location" : "लाइव लोकेशन"}
-              </button>
               <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}
               </button>
@@ -3899,12 +3885,9 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               <button onClick={() => { onOpenTerms(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
               </button>
-              <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+              <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink }}>
                 <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : "गोपनीयता नीति"}
               </a>
-              <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.safety }}>
-                <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
-              </button>
             </div>
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
