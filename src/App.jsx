@@ -2635,13 +2635,13 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
           glance for a first-time user. */}
       <div className="mt-2 space-y-2">
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold shadow-lg" style={{ background: C.metallicGreen, color: "#fff" }}>
+          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.success, color: "#fff" }}>
             <MapPin size={16} /> {lang === "en" ? "Choose from Map" : "मैप से चुनें"}
           </button>
           <MicButton onResult={onMic} label={lang === "en" ? "Speak to Enter" : "बोलकर लिखें"} />
         </div>
         {onUseCurrentLocation && (
-          <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold shadow-lg" style={{ background: C.metallicGreen, color: "#fff" }}>
+          <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.success, color: "#fff" }}>
             <Navigation size={16} /> {locating ? (lang === "en" ? "Locating..." : "ढूंढ रहे हैं...") : (lang === "en" ? "Use My Current Location" : "मेरी वर्तमान लोकेशन इस्तेमाल करें")}
           </button>
         )}
