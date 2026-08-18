@@ -1561,7 +1561,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     }
     const ref = new URLSearchParams(window.location.search).get("ref");
     const referredBy = ref && ref !== ownMobile ? ref : null;
-    onComplete({ name, email: email.trim() || null, photo: finalPhoto, address, area, city, state, pincode, referredBy, referralCredited: false, referralBalance: 0, referralEntries: [] });
+    onComplete({ name, email: email.trim() || null, photo: finalPhoto, address, area, city, state, pincode, referredBy, referralCredited: false });
     // Submitted for real — clear the draft so it can't leak into a future
     // registration attempt on this same device (e.g. a different customer).
     setName(""); setEmail(""); setPhoto(null); setPhotoFile(null); setAddress(""); setArea(""); setCity(""); setState(""); setPincode("");
@@ -3513,7 +3513,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
 // Editable customer profile — photo, name, email, mobile (read-only, tied to
 // the verified login), and address, with a Save button that persists via
 // onUpdateProfile.
-function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestReferralWithdrawal, lang, onLogout }) {
+function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, onLogout }) {
   const [name, setName] = useState(customerProfile?.name || "");
   const [email, setEmail] = useState(customerProfile?.email || "");
   const [photo, setPhoto] = useState(customerProfile?.photo || null);
@@ -3534,41 +3534,9 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, requestR
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const now = Date.now();
-  const referralEntries = customerProfile?.referralEntries || [];
-  const referralLocked = referralEntries.filter((e) => e.unlockAt > now).reduce((s, e) => s + e.amount, 0);
-  const referralBalance = customerProfile?.referralBalance || 0;
-  const referralAvailable = Math.max(0, referralBalance - referralLocked);
-  const [withdrawn, setWithdrawn] = useState(false);
-  const withdrawReferral = () => {
-    if (referralAvailable <= 0) return;
-    requestReferralWithdrawal?.(referralAvailable);
-    setWithdrawn(true);
-    setTimeout(() => setWithdrawn(false), 2500);
-  };
-
   return (
     <div className="px-5 py-4">
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
-      {referralBalance > 0 && (
-        <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: "#DFEEE2", border: `1px solid ${C.success}` }}>
-          <div className="text-xs font-bold mb-1 flex items-center gap-1.5" style={{ color: C.success }}>🤝 {lang === "en" ? "Referral Rewards" : "रेफरल रिवॉर्ड"}</div>
-          <div className="text-lg font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(referralBalance)}</div>
-          {referralLocked > 0 && (
-            <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
-              {lang === "en" ? `${fmt(referralLocked)} locked — unlocks 2 months after each referral` : `${fmt(referralLocked)} लॉक्ड — हर रेफरल के 2 महीने बाद अनलॉक होगा`}
-            </div>
-          )}
-          {withdrawn ? (
-            <div className="text-xs font-semibold mt-2" style={{ color: C.success }}>{lang === "en" ? "Withdrawal request sent ✓" : "विड्रॉल रिक्वेस्ट भेज दी गई ✓"}</div>
-          ) : (
-            <button onClick={withdrawReferral} disabled={referralAvailable <= 0} className={`w-full rounded-lg py-2 font-bold text-xs mt-2 ${referralAvailable > 0 ? "shadow-lg" : ""}`}
-              style={{ background: referralAvailable > 0 ? C.metallicGreen : C.line, color: referralAvailable > 0 ? "#fff" : "#9AA3B0" }}>
-              {referralAvailable > 0 ? (lang === "en" ? `Withdraw ${fmt(referralAvailable)}` : `${fmt(referralAvailable)} विड्रॉ करें`) : (lang === "en" ? "Nothing unlocked yet" : "अभी कुछ भी अनलॉक नहीं हुआ")}
-            </button>
-          )}
-        </div>
-      )}
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
           <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${customerMobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
@@ -3678,7 +3646,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, requestReferralWithdrawal, raiseAlert, onOpenTerms }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
   // so the header knows whether the "What do you need?" chooser is on
@@ -3770,14 +3738,12 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   }, [ongoingTrip?.id]);
 
   const shareApp = () => {
-    // Referral reward applies from day one (not gated by trial mode) — the
-    // link carries this customer's own mobile number as their referral
-    // code, so ₹200 credits to their profile once the new user completes
-    // their first booking/trip (see creditReferralOnce in the root App).
-    const link = `https://sarthi-transport-74865.web.app?ref=${customerMobile}`;
+    // No referral code — customers no longer earn anything for sharing
+    // (only drivers do, see DriverApp's shareApp).
+    const link = "https://sarthi-transport-74865.web.app";
     const msg = lang === "en"
-      ? `Try Apna Transport for booking trucks/tempos easily! Download: ${link} — I get ₹200 once your first booking is done!`
-      : `ट्रक/टेम्पो बुक करने के लिए अपना ट्रांसपोर्ट इस्तेमाल करें! डाउनलोड करें: ${link} — आपकी पहली बुकिंग पूरी होने पर मुझे ₹200 मिलेंगे!`;
+      ? `Book trucks and tempos easily with Apna Transport. Download the app: ${link}`
+      : `ट्रक और टेम्पो आसानी से बुक करने के लिए अपना ट्रांसपोर्ट डाउनलोड करें: ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -3799,7 +3765,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         </div>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} />}
         {settingsView === "profile" && (
-          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} requestReferralWithdrawal={requestReferralWithdrawal} lang={lang} onLogout={onLogout} />
+          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} lang={lang} onLogout={onLogout} />
         )}
         {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
       </div>
@@ -3877,7 +3843,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "Ride History" : "राइड हिस्ट्री"}
               </button>
               <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}
+                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App" : "ऐप शेयर करें"}
               </button>
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
@@ -4573,9 +4539,14 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
   const myRecharges = (rechargeRequests || []).filter((r) => r.driverName === driver.name);
   const hasPendingRecharge = myRecharges.some((r) => r.status === "Pending");
 
-  // The wallet balance only ever moves for two reasons: a commission cut the
-  // instant a bid is accepted, or an approved recharge landing — so that's
-  // the complete ledger, merged and sorted newest-first by createdAt.
+  // The wallet balance moves for three reasons: a commission cut the instant
+  // a bid is accepted, an approved recharge landing, or a referral reward —
+  // so that's the complete ledger, merged and sorted newest-first by
+  // createdAt. Referral entries store a plain millis number (Date.now())
+  // rather than a Firestore Timestamp, hence txMillis/txTime below handling
+  // both shapes.
+  const referralEntries = driver.referralEntries || [];
+  const txMillis = (createdAt) => createdAt?.toMillis?.() || (typeof createdAt === "number" ? createdAt : 0);
   const walletTransactions = [
     ...myTrips.map((t) => ({
       id: t.id, type: "debit", createdAt: t.createdAt,
@@ -4587,8 +4558,16 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
       label: lang === "en" ? "Wallet recharge" : "वॉलेट रीचार्ज",
       amount: r.amount,
     })),
-  ].sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-  const txTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+    ...referralEntries.map((r, i) => ({
+      id: `ref-${i}-${r.creditedAt}`, type: "credit", createdAt: r.creditedAt,
+      label: lang === "en" ? "Referral bonus" : "रेफरल बोनस",
+      amount: r.amount,
+    })),
+  ].sort((a, b) => txMillis(b.createdAt) - txMillis(a.createdAt));
+  const txTime = (createdAt) => {
+    const ms = txMillis(createdAt);
+    return ms ? new Date(ms).toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+  };
 
   return (
     <div className="px-5 py-5">
@@ -5077,11 +5056,15 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
 
   const shareApp = () => {
-    // The ₹200 referral reward is a customer-side program (see spec) — a
-    // driver's share link doesn't carry a referral code.
+    // Only drivers earn a referral reward now — the link carries this
+    // driver's own mobile number as their referral code, so ₹200 credits
+    // to their wallet once the new user (customer or driver) completes
+    // their first booking/trip (see creditReferralOnce in the root App).
+    // The reward itself isn't mentioned in the message text.
+    const link = `https://sarthi-transport-74865.web.app?ref=${driver.mobile}`;
     const msg = lang === "en"
-      ? "Join Apna Transport as a driver — bid your own fare, no more middlemen! Download: https://sarthi-transport-74865.web.app"
-      : "अपना ट्रांसपोर्ट में ड्राइवर बनकर जुड़ें — अपना भाड़ा खुद तय करें! डाउनलोड करें: https://sarthi-transport-74865.web.app";
+      ? `Join Apna Transport — book trucks/tempos or sign up as a driver-partner using my link: ${link}`
+      : `अपना ट्रांसपोर्ट से जुड़ें — मेरे लिंक से ट्रक/टेम्पो बुक करें या ड्राइवर-पार्टनर बनें: ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -5130,20 +5113,20 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
               </button>
+              <button onClick={() => { setTab("wallet"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet" : "वॉलेट"}
+              </button>
               <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Clock3 size={16} color={C.marigoldDeep} /> {lang === "en" ? "View Advance Ride/s" : "एडवांस राइड/स देखें"} ({advanceBookings.length})
               </button>
               <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : "मेरी ट्रिप्स"}
               </button>
-              <button onClick={() => { setTab("wallet"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet" : "वॉलेट"}
-              </button>
               <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : "सेटिंग्स (KYC व गाड़ी)"}
               </button>
               <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App" : "ऐप शेयर करें"}
+                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}
               </button>
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
@@ -6760,7 +6743,7 @@ export default function App() {
     return replaceDoc("customers", mobile, {
       mobile, name: fields.name.trim(), email: null, photo: null,
       address: fields.address || "", area: fields.area || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
-      referredBy: null, referralCredited: false, referralBalance: 0, referralEntries: [],
+      referredBy: null, referralCredited: false,
       createdAt: serverTimestamp(),
     });
   };
@@ -6788,15 +6771,6 @@ export default function App() {
     createDoc("withdrawals", genId("W"), { role: "driver", driverMobile: driver.mobile, driverName: driver.name, amount, status: "Pending" }).catch((e) => console.error(e));
   };
   const approveWithdrawal = (id) => patchDoc("withdrawals", id, { status: "Approved" }).catch((e) => console.error(e));
-  // Referral rewards unlock 2 months after being credited (see
-  // creditReferralOnce) — this only fires once that's already true, so the
-  // requested amount is always available balance, never locked money.
-  const requestReferralWithdrawal = (amount) => {
-    if (amount <= 0 || !customer || !customerAuth.mobile) return;
-    setCustomer({ ...customer, referralBalance: Math.max(0, (customer.referralBalance || 0) - amount) });
-    patchDoc("customers", customerAuth.mobile, { referralBalance: increment(-amount) }).catch((e) => console.error(e));
-    createDoc("withdrawals", genId("W"), { role: "customer", customerMobile: customerAuth.mobile, customerName: customer.name, amount, status: "Pending" }).catch((e) => console.error(e));
-  };
 
   // Recharging the main wallet is a request admin must approve (proof of an
   // outside UPI/cash payment), not an instant self-credit.
@@ -6934,17 +6908,22 @@ export default function App() {
     return null;
   };
   const rateBooking = (id, rating) => patchDoc("bookings", id, { rating }).catch((e) => console.error(e));
-  // Credits ₹200 to the referring customer's profile the moment a referred
-  // user (customer or driver) completes their first successful booking or
-  // trip — checked/flagged via referralCredited so it only ever fires once
-  // per referred user, no matter how many trips they complete after that.
+  // Credits ₹200 straight into the referring driver's wallet the moment a
+  // referred user (customer or driver, signed up via that driver's share
+  // link) completes their first successful booking/trip — checked/flagged
+  // via referralCredited so it only ever fires once per referred user, no
+  // matter how many trips they complete after that. Only drivers earn
+  // referral rewards — a referredBy mobile that isn't a driver (e.g. stale
+  // data) is simply ignored.
   const creditReferralOnce = async (mobile, collectionName) => {
     const entity = await getDocOnce(collectionName, mobile);
     if (!entity?.referredBy || entity.referralCredited) return;
     await patchDoc(collectionName, mobile, { referralCredited: true }).catch((e) => console.error("[referral]", e));
-    await patchDoc("customers", entity.referredBy, {
-      referralBalance: increment(200),
-      referralEntries: arrayUnion({ amount: 200, fromMobile: mobile, creditedAt: Date.now(), unlockAt: Date.now() + 60 * DAY_MS }),
+    const referringDriver = drivers.find((d) => d.mobile === entity.referredBy);
+    if (!referringDriver) return;
+    await patchDoc("drivers", entity.referredBy, {
+      wallet: increment(200),
+      referralEntries: arrayUnion({ amount: 200, fromMobile: mobile, creditedAt: Date.now() }),
     }).catch((e) => console.error("[referral]", e));
   };
   const completeBooking = (id, extraCharge = 0) => {
@@ -7066,7 +7045,7 @@ export default function App() {
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
-            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} requestReferralWithdrawal={requestReferralWithdrawal} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)} />
+            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
