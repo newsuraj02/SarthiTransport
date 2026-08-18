@@ -6802,6 +6802,25 @@ export default function App() {
   // denied and never retries once the user actually signs in.
   const authDeps = [role, customerAuth.verified, driverAuth.verified, adminAuth];
   useEffect(() => (firestoreReady ? subscribeCollection("drivers", setDrivers, null) : undefined), authDeps);
+  // One-time backfill for drivers approved before the profile-photo change
+  // (see DriverProfileEdit/DriverKyc) — copies the KYC driver photo into
+  // the top-level photo field for anyone missing it, so their customer-
+  // facing avatar isn't stuck blank until their next KYC resubmission.
+  // Runs opportunistically off this same drivers subscription, from
+  // whichever client happens to have the app open; the ref guards against
+  // re-patching the same driver twice in one session while the write is
+  // still in flight, and it's naturally self-terminating — once a driver's
+  // photo field is set, they never match the condition again.
+  const backfilledPhotoRef = useRef(new Set());
+  useEffect(() => {
+    if (!firestoreReady) return;
+    drivers.forEach((d) => {
+      if (!d.photo && d.docs?.photo && d.mobile && !backfilledPhotoRef.current.has(d.mobile)) {
+        backfilledPhotoRef.current.add(d.mobile);
+        patchDoc("drivers", d.mobile, { photo: d.docs.photo }).catch((e) => console.error("[driver photo backfill]", e));
+      }
+    });
+  }, [drivers, firestoreReady]);
   // Only Admin needs the full customer list (profile/address oversight).
   const [allCustomers, setAllCustomers] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("customers", setAllCustomers, null) : undefined), authDeps);
