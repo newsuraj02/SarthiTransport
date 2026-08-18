@@ -46,9 +46,9 @@ const C = {
   // Changes, admin Approve/Add, etc.) — not for toggle switches, status
   // badges/pills, or decorative icon circles, where it would look busy.
   metallicGreen: "linear-gradient(135deg, #D9F0DE 0%, #6FAE82 22%, #3F7A54 45%, #245536 60%, #6FAE82 80%, #D9F0DE 100%)",
-  // Same shiny-sheen treatment in a coffee brown, used for the driver's
+  // Same shiny-sheen treatment in a golden brown, used for the driver's
   // Loading/Unloading Time / Waiting Time timer boxes.
-  metallicBrown: "linear-gradient(135deg, #7A5A3A 0%, #4E3418 22%, #3A2611 45%, #241708 60%, #4E3418 80%, #7A5A3A 100%)",
+  metallicBrown: "linear-gradient(135deg, #E8C077 0%, #C08A3E 22%, #9C6B26 45%, #7A4F18 60%, #C08A3E 80%, #E8C077 100%)",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
@@ -4145,44 +4145,49 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
   return (
     <div className="mt-3 space-y-2.5">
       <div className="grid grid-cols-2 gap-2.5">
-      <div className="rounded-lg p-3 shadow-lg" style={{ background: C.metallicBrown }}>
+      {/* Whichever box is actually counting right now gets the same
+          guided-step glow every multi-field form on the app uses (see
+          .guided-step-active) — Loading/Unloading while active, Waiting
+          Time once overtime kicks in — so it's obvious at a glance which
+          clock matters at this moment. */}
+      <div className={`rounded-lg p-3 shadow-lg ${!clock.isOvertime ? "guided-step-active" : ""}`} style={{ background: C.metallicBrown }}>
         {trip.hours ? (
           <>
             {clock.isOvertime ? (
-              <div className="text-lg font-bold text-white">⏰ {lang === "en" ? "Time's Up" : "समय खत्म"}</div>
+              <div className="text-lg font-bold" style={{ color: C.safety }}>⏰ {lang === "en" ? "Time's Up" : "समय खत्म"}</div>
             ) : (
               <>
-                <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Loading/Unloading time remaining" : "बचा हुआ लोडिंग/अनलोडिंग समय"}</div>
-                <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.remainingStr}</div>
+                <div className="text-[11px] font-semibold" style={{ color: "#5A3B0A" }}>{lang === "en" ? "Loading/Unloading time remaining" : "बचा हुआ लोडिंग/अनलोडिंग समय"}</div>
+                <div className="text-xl font-bold" style={{ color: "#000000", fontFamily: monoFont }}>{clock.remainingStr}</div>
               </>
             )}
-            <div className="text-[11px] mt-1" style={{ color: clock.isOvertime ? "#FCEAE3" : "#D9C4B0" }}>{lang === "en" ? `Loading/Unloading: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : `लोडिंग/अनलोडिंग समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
+            <div className="text-[11px] mt-1 font-semibold" style={{ color: clock.isOvertime ? C.safety : "#5A3B0A" }}>{lang === "en" ? `Loading/Unloading: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : `लोडिंग/अनलोडिंग समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
           </>
         ) : (
           <>
-            <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Loading started" : "लोडिंग शुरू हुए"}</div>
-            <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.elapsedStr}</div>
-            <div className="text-[11px] mt-1" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Driver had not set loading/unloading time" : "ड्राइवर ने लोडिंग/अनलोडिंग समय नहीं भरा था"}</div>
+            <div className="text-[11px] font-semibold" style={{ color: "#5A3B0A" }}>{lang === "en" ? "Loading started" : "लोडिंग शुरू हुए"}</div>
+            <div className="text-xl font-bold" style={{ color: "#000000", fontFamily: monoFont }}>{clock.elapsedStr}</div>
+            <div className="text-[11px] mt-1 font-semibold" style={{ color: "#5A3B0A" }}>{lang === "en" ? "Driver had not set loading/unloading time" : "ड्राइवर ने लोडिंग/अनलोडिंग समय नहीं भरा था"}</div>
           </>
         )}
         {clock.isPaused && (
-          <div className="text-[11px] mt-1.5 font-bold" style={{ color: "#FFE6B3" }}>⏸ {lang === "en" ? "Paused — travel time isn't counted" : "रुका हुआ — यात्रा का समय नहीं गिना जाता"}</div>
+          <div className="text-[11px] mt-1.5 font-bold" style={{ color: C.safety }}>⏸ {lang === "en" ? "Paused — travel time isn't counted" : "रुका हुआ — यात्रा का समय नहीं गिना जाता"}</div>
         )}
       </div>
 
-      <div className="rounded-lg p-3 shadow-lg" style={{ background: C.metallicBrown }}>
-        <div className="text-[11px] font-bold" style={{ color: "#FFE6B3" }}>🔔 {lang === "en" ? "Waiting time" : "वेटिंग समय"}</div>
-        <div className="text-xl font-bold" style={{ color: "#fff", fontFamily: monoFont }}>{clock.isOvertime ? clock.waitingElapsedStr : "00:00:00"}</div>
+      <div className={`rounded-lg p-3 shadow-lg ${clock.isOvertime ? "guided-step-active" : ""}`} style={{ background: C.metallicBrown }}>
+        <div className="text-[11px] font-bold" style={{ color: "#5A3B0A" }}>🔔 {lang === "en" ? "Waiting time" : "वेटिंग समय"}</div>
+        <div className="text-xl font-bold" style={{ color: "#000000", fontFamily: monoFont }}>{clock.isOvertime ? clock.waitingElapsedStr : "00:00:00"}</div>
         {clock.isOvertime ? (
           trip.extraHourRate ? (
-            <div className="text-[11px] mt-1" style={{ color: "#F0DFC8" }}>
+            <div className="text-[11px] mt-1 font-semibold" style={{ color: "#5A3B0A" }}>
               {lang === "en" ? `Billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"} · Waiting charge so far: ${fmt(clock.extraCharge)}` : `${clock.billableHours} घंटे के हिसाब से बिल · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
             </div>
           ) : (
-            <div className="text-[11px] mt-1" style={{ color: "#F0DFC8" }}>{lang === "en" ? "Running until you end the trip" : "ट्रिप खत्म करने तक चल रहा है"}</div>
+            <div className="text-[11px] mt-1 font-semibold" style={{ color: "#5A3B0A" }}>{lang === "en" ? "Running until you end the trip" : "ट्रिप खत्म करने तक चल रहा है"}</div>
           )
         ) : (
-          <div className="text-[11px] mt-1" style={{ color: "#F0DFC8" }}>{lang === "en" ? "Starts once loading/unloading time is over" : "लोडिंग/अनलोडिंग समय खत्म होने पर शुरू होगा"}</div>
+          <div className="text-[11px] mt-1 font-semibold" style={{ color: "#5A3B0A" }}>{lang === "en" ? "Starts once loading/unloading time is over" : "लोडिंग/अनलोडिंग समय खत्म होने पर शुरू होगा"}</div>
         )}
       </div>
       </div>
