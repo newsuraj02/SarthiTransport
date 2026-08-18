@@ -4560,11 +4560,6 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
                 </div>
               </div>
 
-              <div className="rounded-lg p-3 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
-                <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
-                  {lang === "en" ? "💡 An advance of 15-20% of the fare is expected from the customer once the vehicle is loaded." : "💡 गाड़ी लोड होने के बाद ग्राहक से भाड़े का 15-20% एडवांस मिलने की उम्मीद रहती है।"}
-                </div>
-              </div>
             </>
           )}
 
