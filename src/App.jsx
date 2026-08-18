@@ -5257,9 +5257,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 </div>
                 <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
                   <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
-                  <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
+                  <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
                     <Clock3 size={13} />
-                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(ab)}</span>
+                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Advance ride:" : "एडवांस राइड:"} {rideDateTimeLabel(ab)}</span>
                   </div>
                   <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(ab.fare)}</div>
                   {ab.hours && (
