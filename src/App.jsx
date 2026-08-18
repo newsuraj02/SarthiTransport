@@ -3983,9 +3983,9 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
       <div className="rounded-lg p-3 mb-2 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
             <div className="text-sm font-extrabold mb-1.5" style={{ color: "#5A3B0A" }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#A8721C" }}>{materialLabel(load.material, lang)}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#1D4ED8" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#1D4ED8" }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#1D4ED8" }}>{materialLabel(load.material, lang)}</span>
             </div>
             <div className="rounded-lg overflow-hidden" style={{ border: `2px solid ${C.marigoldDeep}` }}>
               <GuidedStep {...stepProps(0)} lang={lang}>
