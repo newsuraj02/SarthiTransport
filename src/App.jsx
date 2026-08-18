@@ -3136,7 +3136,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
         <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready" : ""}`}
           style={{ background: canPost ? C.success : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
-          🚚 {lang === "en" ? "Find Vehicles / Book Now" : "गाड़ियां खोजें / अभी बुक करें"}
+          🚚 {lang === "en" ? "Book Now" : "अभी बुक करें"}
         </button>
       </div>
 
