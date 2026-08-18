@@ -3134,8 +3134,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{advanceNoticeError}</div>
         )}
 
-        <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready shadow-lg" : ""}`}
-          style={{ background: canPost ? C.metallicGreen : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
+        <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready" : ""}`}
+          style={{ background: canPost ? C.success : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
           🚚 {lang === "en" ? "Find Vehicles / Book Now" : "गाड़ियां खोजें / अभी बुक करें"}
         </button>
       </div>
