@@ -423,6 +423,16 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Loading/unloading time (the allowed-hours/waiting-charge clock) must only
+// count time actually spent at the pickup or drop point, never the drive
+// between them — see the geofence pause/resume logic in DriverHome's GPS
+// watcher and useTripClock below. Deliberately not surfaced to either side
+// as a distance/GPS concept — drivers and customers just see the existing
+// timer pause with a plain note, never the radius or the mechanism.
+// Straight-line (haversineKm), not road distance — free, instant, computed
+// entirely from coordinates already on the device/booking, no API call.
+const LOADING_GEOFENCE_M = 100;
+
 // For a current (non-advance) booking, only drivers within this straight-line
 // radius of the pickup point can see/bid on the load — keeps bids realistic
 // for jobs that need a truck right away. Advance bookings aren't restricted
@@ -4046,10 +4056,17 @@ function fmtHMS(ms) {
 // Shared elapsed/remaining-time math for a loading trip, used by both the
 // driver's timer screen and the customer's ongoing-trip overtime banner so
 // the "बीप-बीप" alarm behaves identically on both sides.
-function useTripClock(loadingStartedAt, hours, extraHourRate) {
+//
+// pausedMs (completed travel segments) and travelPausedAt (an in-progress
+// one, set while the driver is between the pickup and drop geofences — see
+// LOADING_GEOFENCE_M) are subtracted out here so every downstream number —
+// remaining time, overtime, waiting charge — reflects only time actually
+// spent at the pickup/drop point, never the drive between them.
+function useTripClock(loadingStartedAt, hours, extraHourRate, pausedMs = 0, travelPausedAt = null) {
   const [now, setNow] = useState(Date.now());
   const beepedRef = useRef(false);
   const started = !!loadingStartedAt;
+  const isPaused = !!travelPausedAt;
 
   useEffect(() => {
     if (!started) return;
@@ -4057,7 +4074,9 @@ function useTripClock(loadingStartedAt, hours, extraHourRate) {
     return () => clearInterval(t);
   }, [started, loadingStartedAt]);
 
-  const elapsedMs = started ? now - loadingStartedAt : 0;
+  const rawElapsedMs = started ? now - loadingStartedAt : 0;
+  const currentPauseMs = isPaused ? Math.max(0, now - travelPausedAt) : 0;
+  const elapsedMs = Math.max(0, rawElapsedMs - (pausedMs || 0) - currentPauseMs);
   const elapsedHoursExact = elapsedMs / 3600000;
   const bookedHours = hours || 0;
   const isOvertime = started && bookedHours > 0 && elapsedHoursExact >= bookedHours;
@@ -4080,13 +4099,13 @@ function useTripClock(loadingStartedAt, hours, extraHourRate) {
     if (!isOvertime) beepedRef.current = false;
   }, [isOvertime]);
 
-  return { started, isOvertime, extraHours, billableHours, extraCharge, elapsedStr: fmtHMS(elapsedMs), remainingStr: fmtHMS(remainingMs), waitingElapsedStr: fmtHMS(waitingElapsedMs) };
+  return { started, isPaused, isOvertime, extraHours, billableHours, extraCharge, elapsedStr: fmtHMS(elapsedMs), remainingStr: fmtHMS(remainingMs), waitingElapsedStr: fmtHMS(waitingElapsedMs) };
 }
 
 // Read-only overtime banner shown on the customer's ongoing-trip card —
 // mirrors the driver's alarm so both sides get the "समय खत्म" alert.
 function TripOvertimeBanner({ booking, lang }) {
-  const clock = useTripClock(booking.loadingStartedAt, booking.hours, booking.extraHourRate);
+  const clock = useTripClock(booking.loadingStartedAt, booking.hours, booking.extraHourRate, booking.pausedMs, booking.travelPausedAt);
   if (!clock.started || !clock.isOvertime) return null;
   return (
     <div className="rounded-lg mt-2 p-2.5" style={{ background: "#FCEAE3" }}>
@@ -4094,12 +4113,15 @@ function TripOvertimeBanner({ booking, lang }) {
       <div className="text-[11px] mt-0.5" style={{ color: C.safety }}>
         {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs (billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"}) · Waiting charge so far: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे (${clock.billableHours} घंटे के हिसाब से बिल) · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
       </div>
+      {clock.isPaused && (
+        <div className="text-[11px] mt-1 font-semibold" style={{ color: C.safety }}>⏸ {lang === "en" ? "Timer paused — travel time isn't counted" : "टाइमर रुका हुआ है — यात्रा का समय नहीं गिना जाता"}</div>
+      )}
     </div>
   );
 }
 
 function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
-  const clock = useTripClock(trip.loadingStartedAt, trip.hours, trip.extraHourRate);
+  const clock = useTripClock(trip.loadingStartedAt, trip.hours, trip.extraHourRate, trip.pausedMs, trip.travelPausedAt);
 
   // Entering the OTP itself now happens up top, next to the Online/Offline
   // switch (see DriverOtpEntry) — mirrors where the customer's own OTP
@@ -4129,6 +4151,9 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
             <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.elapsedStr}</div>
             <div className="text-[11px] mt-1" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Driver had not set loading/unloading time" : "ड्राइवर ने लोडिंग/अनलोडिंग समय नहीं भरा था"}</div>
           </>
+        )}
+        {clock.isPaused && (
+          <div className="text-[11px] mt-1.5 font-bold" style={{ color: "#FFE6B3" }}>⏸ {lang === "en" ? "Paused — travel time isn't counted" : "रुका हुआ — यात्रा का समय नहीं गिना जाता"}</div>
         )}
       </div>
 
@@ -4369,6 +4394,12 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
   // lastKnownLocation stays fresh for the 100km bid-radius check below —
   // otherwise an idle online driver would have no location on file at all.
   const lastGpsWriteRef = useRef(0);
+  // The watch below only resubscribes when the trip ID changes (see its own
+  // dependency array) — kept in sync separately here so the GPS callback
+  // always reads this trip's current pause-tracking fields instead of a
+  // stale closure from whenever that ID last changed.
+  const myTripRef = useRef(myTrip);
+  useEffect(() => { myTripRef.current = myTrip; }, [myTrip]);
   useEffect(() => {
     if ((!myTrip && !driver.online) || !navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
@@ -4379,6 +4410,33 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
         if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
         if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
+
+        // Loading/unloading-time geofence — pauses the allowed-hours/waiting
+        // clock (see useTripClock) the moment the driver's straight-line
+        // distance from the pickup point exceeds LOADING_GEOFENCE_M, and
+        // resumes it for good once straight-line distance to the drop point
+        // drops to/below it (or resumes without locking in if they're simply
+        // back near pickup — still loading, never left for real). Runs on
+        // the same 5s cadence as the GPS write itself, since haversineKm is
+        // free local math, not an API call. Never surfaced to either side
+        // beyond the plain "paused" note already added to the timer boxes.
+        const trip = myTripRef.current;
+        if (trip?.loadingStartedAt && !trip.reachedDropAt &&
+            trip.pickupLat != null && trip.pickupLng != null && trip.dropLat != null && trip.dropLng != null) {
+          const distPickupM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.pickupLat, trip.pickupLng) * 1000;
+          const distDropM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.dropLat, trip.dropLng) * 1000;
+          if (distDropM <= LOADING_GEOFENCE_M) {
+            const patch = { reachedDropAt: now, travelPausedAt: null, pausedMs: increment(trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+            patchDoc("bookings", trip.id, patch).catch((e) => console.error(e));
+            myTripRef.current = { ...trip, reachedDropAt: now, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+          } else if (distPickupM > LOADING_GEOFENCE_M && !trip.travelPausedAt) {
+            patchDoc("bookings", trip.id, { travelPausedAt: now }).catch((e) => console.error(e));
+            myTripRef.current = { ...trip, travelPausedAt: now };
+          } else if (distPickupM <= LOADING_GEOFENCE_M && trip.travelPausedAt) {
+            patchDoc("bookings", trip.id, { travelPausedAt: null, pausedMs: increment(now - trip.travelPausedAt) }).catch((e) => console.error(e));
+            myTripRef.current = { ...trip, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (now - trip.travelPausedAt) };
+          }
+        }
       },
       (err) => console.error("GPS tracking error", err),
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
@@ -6979,7 +7037,10 @@ export default function App() {
     const b = bookings.find((x) => x.id === id);
     if (!b) return;
     const loadingStartedAt = b.loadingStartedAt ? b.loadingStartedAt + adjustMs : Date.now();
-    patchDoc("bookings", id, { loadingStartedAt }).catch((e) => console.error(e));
+    // travelPausedAt/pausedMs/reachedDropAt back the loading/unloading-time
+    // geofence pause (see LOADING_GEOFENCE_M) — reset alongside the timer
+    // itself whenever it (re)starts.
+    patchDoc("bookings", id, { loadingStartedAt, travelPausedAt: null, pausedMs: 0, reachedDropAt: null }).catch((e) => console.error(e));
   };
   const updateDriverKyc = (mobile, status) => patchDoc("drivers", mobile, { kyc: status }).catch((e) => console.error(e));
   const toggleBlacklist = (mobile) => {
