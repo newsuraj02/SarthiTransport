@@ -47,7 +47,7 @@ const C = {
   // badges/pills, or decorative icon circles, where it would look busy.
   metallicGreen: "linear-gradient(135deg, #D9F0DE 0%, #6FAE82 22%, #3F7A54 45%, #245536 60%, #6FAE82 80%, #D9F0DE 100%)",
   // Same shiny-sheen treatment in a coffee brown, used for the driver's
-  // Allowed Hours / Waiting Time timer boxes.
+  // Loading/Unloading Time / Waiting Time timer boxes.
   metallicBrown: "linear-gradient(135deg, #7A5A3A 0%, #4E3418 22%, #3A2611 45%, #241708 60%, #4E3418 80%, #7A5A3A 100%)",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
@@ -2693,7 +2693,7 @@ function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, o
 // becomes complete — the original, snappy behavior every guided form except
 // the driver's bid card still uses.
 //
-// The driver's Fare/Allowed Hours/Waiting bid card (LoadAlertCard) opts into
+// The driver's Fare/Loading-Unloading Time/Waiting bid card (LoadAlertCard) opts into
 // `pinFocus: true` instead, because naively picking the first incomplete
 // field as "active" made the highlight jump away from a field the instant
 // its value became non-empty/non-zero there specifically — e.g. typing
@@ -3239,7 +3239,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           </div>
           {(bid.hours || bid.extraHourRate) && (
             <div className="text-xs font-bold mt-1.5 pt-1.5" style={{ color: C.ink, borderTop: `1px solid ${C.marigoldDeep}` }}>
-              {bid.hours ? (lang === "en" ? `${bid.hours} allowed hrs · ` : `${bid.hours} घंटे अलाउ · `) : ""}
+              {bid.hours ? (lang === "en" ? `${bid.hours} hrs loading/unloading · ` : `${bid.hours} घंटे लोडिंग/अनलोडिंग · `) : ""}
               {bid.extraHourRate ? (lang === "en" ? `then ${fmt(bid.extraHourRate)}/hr waiting charge` : `उसके बाद ${fmt(bid.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
             </div>
           )}
@@ -3371,7 +3371,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
             {b.hours && (
               <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                {lang === "en" ? `${b.hours} allowed hrs` : `${b.hours} घंटे अलाउ`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
+                {lang === "en" ? `${b.hours} hrs loading/unloading` : `${b.hours} घंटे लोडिंग/अनलोडिंग`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
               </div>
             )}
             <div className="mt-2">
@@ -3431,7 +3431,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
     : { Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
 
   const downloadInvoice = (b) => {
-    const text = `Apna Transport Invoice\nBooking: ${b.id}\nPickup: ${b.pickup}\nDrop: ${b.drop}\nVehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}\nDistance: ${b.distance} km\nQuoted Fare: ${fmt(b.fare - (b.extraCharge || 0))}\nExtra Waiting Charge: ${b.extraCharge ? fmt(b.extraCharge) : "-"}\nTotal Fare: ${fmt(b.fare)}\nAllowed Hours: ${b.hours || "-"} hrs\nWaiting Charge Rate: ${b.extraHourRate ? fmt(b.extraHourRate) + "/hr" : "-"}\nStatus: ${b.status}`;
+    const text = `Apna Transport Invoice\nBooking: ${b.id}\nPickup: ${b.pickup}\nDrop: ${b.drop}\nVehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}\nDistance: ${b.distance} km\nQuoted Fare: ${fmt(b.fare - (b.extraCharge || 0))}\nExtra Waiting Charge: ${b.extraCharge ? fmt(b.extraCharge) : "-"}\nTotal Fare: ${fmt(b.fare)}\nLoading/Unloading Time: ${b.hours || "-"} hrs\nWaiting Charge Rate: ${b.extraHourRate ? fmt(b.extraHourRate) + "/hr" : "-"}\nStatus: ${b.status}`;
     const blob = new Blob([text], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -3998,7 +3998,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
               <div className="grid grid-cols-2" style={{ background: C.paper }}>
                 <GuidedStep {...stepProps(1)} lang={lang}>
                   <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ borderRight: `1px solid ${C.marigoldDeep}`, background: C.paper }}>
-                    <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Allowed hrs *" : "अलाउ घंटे *"}</div>
+                    <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Loading/Unloading hrs *" : "लोडिंग/अनलोडिंग घंटे *"}</div>
                     <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
                       className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 18, fontWeight: 900 }} />
                   </div>
@@ -4090,7 +4090,7 @@ function TripOvertimeBanner({ booking, lang }) {
   if (!clock.started || !clock.isOvertime) return null;
   return (
     <div className="rounded-lg mt-2 p-2.5" style={{ background: "#FCEAE3" }}>
-      <div className="text-[11px] font-bold" style={{ color: C.safety }}>🔔 {lang === "en" ? "Beep-beep! Allowed loading time is over" : "बीप-बीप! अलाउ समय खत्म हो गया"}</div>
+      <div className="text-[11px] font-bold" style={{ color: C.safety }}>🔔 {lang === "en" ? "Beep-beep! Loading/Unloading time is over" : "बीप-बीप! लोडिंग/अनलोडिंग समय खत्म हो गया"}</div>
       <div className="text-[11px] mt-0.5" style={{ color: C.safety }}>
         {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs (billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"}) · Waiting charge so far: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे (${clock.billableHours} घंटे के हिसाब से बिल) · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
       </div>
@@ -4117,17 +4117,17 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
               <div className="text-lg font-bold text-white">⏰ {lang === "en" ? "Time's Up" : "समय खत्म"}</div>
             ) : (
               <>
-                <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Allowed hours remaining" : "बचे हुए अलाउ घंटे"}</div>
+                <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Loading/Unloading time remaining" : "बचा हुआ लोडिंग/अनलोडिंग समय"}</div>
                 <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.remainingStr}</div>
               </>
             )}
-            <div className="text-[11px] mt-1" style={{ color: clock.isOvertime ? "#FCEAE3" : "#D9C4B0" }}>{lang === "en" ? `Allowed: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : `अलाउ समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
+            <div className="text-[11px] mt-1" style={{ color: clock.isOvertime ? "#FCEAE3" : "#D9C4B0" }}>{lang === "en" ? `Loading/Unloading: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : `लोडिंग/अनलोडिंग समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
           </>
         ) : (
           <>
             <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Loading started" : "लोडिंग शुरू हुए"}</div>
             <div className="text-xl font-bold text-white" style={{ fontFamily: monoFont }}>{clock.elapsedStr}</div>
-            <div className="text-[11px] mt-1" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Driver had not set allowed hours" : "ड्राइवर ने अलाउ घंटे नहीं भरे थे"}</div>
+            <div className="text-[11px] mt-1" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Driver had not set loading/unloading time" : "ड्राइवर ने लोडिंग/अनलोडिंग समय नहीं भरा था"}</div>
           </>
         )}
       </div>
@@ -4144,7 +4144,7 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
             <div className="text-[11px] mt-1" style={{ color: "#F0DFC8" }}>{lang === "en" ? "Running until you end the trip" : "ट्रिप खत्म करने तक चल रहा है"}</div>
           )
         ) : (
-          <div className="text-[11px] mt-1" style={{ color: "#F0DFC8" }}>{lang === "en" ? "Starts once allowed hours are over" : "अलाउ घंटे खत्म होने पर शुरू होगा"}</div>
+          <div className="text-[11px] mt-1" style={{ color: "#F0DFC8" }}>{lang === "en" ? "Starts once loading/unloading time is over" : "लोडिंग/अनलोडिंग समय खत्म होने पर शुरू होगा"}</div>
         )}
       </div>
       </div>
@@ -4223,7 +4223,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
         </div>
         {trip.hours ? (
           <div className="text-sm font-bold flex items-center justify-between mt-1" style={{ color: "#000000" }}>
-            <span>{lang === "en" ? "Allowed hours" : "अलाउ घंटे"}</span>
+            <span>{lang === "en" ? "Loading/Unloading Time" : "लोडिंग/अनलोडिंग समय"}</span>
             <span style={{ fontFamily: monoFont }}>{trip.hours} {lang === "en" ? "hrs" : "घंटे"}</span>
           </div>
         ) : null}
@@ -4472,7 +4472,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
                 <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
                 {myTrip.hours && (
                   <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                    {lang === "en" ? `${myTrip.hours} allowed hrs` : `${myTrip.hours} घंटे अलाउ`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
+                    {lang === "en" ? `${myTrip.hours} hrs loading/unloading` : `${myTrip.hours} घंटे लोडिंग/अनलोडिंग`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
                   </div>
                 )}
                 <div className="mt-2">
@@ -5190,7 +5190,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(ab.fare)}</div>
                   {ab.hours && (
                     <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                      {lang === "en" ? `${ab.hours} allowed hrs` : `${ab.hours} घंटे अलाउ`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
+                      {lang === "en" ? `${ab.hours} hrs loading/unloading` : `${ab.hours} घंटे लोडिंग/अनलोडिंग`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
                     </div>
                   )}
                   <div className="mt-2">
