@@ -3263,6 +3263,12 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               </div>
             )}
 
+            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }}
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 mb-2 text-xs font-bold" style={{ background: "#FCEAE3", color: C.safety, border: `1px solid ${C.safety}` }}>
+              <XCircle size={14} /> {lang === "en" ? "Cancel Load" : "लोड रद्द करें"}
+            </button>
+            {cancelError && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{cancelError}</div>}
+
             {sortedBids.length === 0 ? (
               <div className="rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: "#DBEAFE", border: "1.5px solid #60A5FA" }}>
                 <Loader2 size={16} color="#1D4ED8" className="animate-spin" />
