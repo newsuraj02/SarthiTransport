@@ -5032,7 +5032,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
 // profile pages look and behave the same — minus the customer-only referral
 // section, plus a Logout button at the bottom (moved out of the hamburger
 // menu, see DriverApp).
-function DriverProfileEdit({ driver, setDriver, lang, onLogout }) {
+function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments }) {
   const [name, setName] = useState(driver?.name || "");
   const [email, setEmail] = useState(driver?.email || "");
   const [photo, setPhoto] = useState(driver?.photo || null);
@@ -5106,6 +5106,31 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout }) {
           {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
         </button>
       </div>
+
+      {/* Every document submitted with KYC, visible right here — View/
+          Download per document via KycDocThumb (same component the admin
+          review screen uses), and a single Change button that jumps to the
+          existing KYC & Vehicle form to re-upload/edit any of them, instead
+          of duplicating that upload flow here. */}
+      <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Documents" : "दस्तावेज़"}</h3>
+          <button onClick={onEditDocuments} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: C.marigold, color: C.navy }}>
+            {lang === "en" ? "Change" : "बदलें"}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { key: "photo", label: lang === "en" ? "Driver Photo" : "ड्राइवर फोटो", url: driver?.docs?.photo?.url },
+            { key: "dl", label: lang === "en" ? "Driving License" : "ड्राइविंग लाइसेंस", url: driver?.docs?.dl?.url },
+            { key: "vehicleFront", label: lang === "en" ? "Vehicle - Front" : "गाड़ी - आगे", url: (driver?.vehicleSpec?.photoFront || driver?.vehicleSpec?.photo)?.url },
+            { key: "vehicleSide", label: lang === "en" ? "Vehicle - Side" : "गाड़ी - साइड", url: driver?.vehicleSpec?.photoSide?.url },
+          ].map((d) => (
+            <KycDocThumb key={d.key} url={d.url} label={d.label} lang={lang} fileName={`${driver?.name || "driver"}-${d.key}.jpg`} />
+          ))}
+        </div>
+      </div>
+
       <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-bold text-sm" style={{ background: "#FCEAE3", color: C.safety, border: `1px solid ${C.safety}` }}>
         <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
       </button>
@@ -5157,7 +5182,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         </div>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
         {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
-        {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onLogout={onLogout} />}
+        {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
       </div>
     );
   }
