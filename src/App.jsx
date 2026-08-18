@@ -3265,8 +3265,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             {b.scheduledFor && (
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5 shadow-lg" style={{ background: C.metallicGold }}>
-                <Clock3 size={12} color="#C9920B" />
-                <span className="text-[11px] font-semibold" style={{ color: "#C9920B" }}>{lang === "en" ? "Scheduled for" : "इसके लिए शेड्यूल"}: {rideDateTimeLabel(b)}</span>
+                <Clock3 size={12} color={C.ink} />
+                <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Advance ride" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
               </div>
             )}
 
@@ -3370,9 +3370,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
             <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
             {b.scheduledFor && (
-              <div className="flex items-center gap-1.5 mt-1" style={{ color: "#C9920B" }}>
+              <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
                 <Clock3 size={13} />
-                <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Scheduled for:" : "इसके लिए शेड्यूल:"} {rideDateTimeLabel(b)}</span>
+                <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Advance ride:" : "एडवांस राइड:"} {rideDateTimeLabel(b)}</span>
               </div>
             )}
             <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
