@@ -5125,8 +5125,12 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : "सेटिंग्स (KYC व गाड़ी)"}
               </button>
-              <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}
+              <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <MessageCircle size={16} color={C.success} className="shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">{lang === "en" ? "Share App (Refer & Earn ₹200)" : "ऐप शेयर करें (Refer & Earn ₹200)"}</div>
+                  <div className="text-[10px] font-normal" style={{ color: C.inkSoft }}>{lang === "en" ? "You get ₹200 once your referral completes a ride" : "आपके रेफरल की राइड पूरी होते ही आपको ₹200 मिलेंगे"}</div>
+                </div>
               </button>
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
@@ -6582,6 +6586,16 @@ export default function App() {
   useEffect(() => {
     const open = new URLSearchParams(window.location.search).get("open");
     if ((open === "customer" || open === "driver") && role === null) { setRole(open); setApp(open); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // A referral link (?ref=...) must always land on the role-choice screen,
+  // not skip straight into whichever role this device last used (role is
+  // persisted — see sarthi_role above) — the referred person needs to be
+  // free to pick Customer or Driver. Doesn't disturb an already-verified
+  // session: RoleSelect resumes it in one tap, same as tapping "Back".
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) setRole(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // "Remembered login" is now a real Firebase Auth session (see
