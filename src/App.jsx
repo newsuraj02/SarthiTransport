@@ -3296,7 +3296,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                 if (err) setAcceptError(err);
                 else { setSelectedBid(null); setAcceptError(""); onBidAccepted?.(b); }
               }}
-                className="w-full rounded-lg py-2.5 font-bold text-sm mt-2 text-white shadow-lg" style={{ background: C.metallicGreen }}>
+                className="w-full rounded-lg py-2.5 font-bold text-sm mt-2 text-white" style={{ background: C.success }}>
                 {lang === "en" ? "Book this vehicle" : "यही गाड़ी बुक करें"}
               </button>
             )}
