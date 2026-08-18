@@ -3402,8 +3402,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             </div>
           </div>
 
-          <div className="rounded-lg p-3 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
-            <div className="text-sm font-black" style={{ color: C.marigoldDeep }}>
+          <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
+            <div className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>
               {lang === "en" ? "💡 Once the vehicle is loaded, the driver may ask for an advance payment — this is a mutual agreement between the customer and driver, not a fixed app rule." : "💡 गाड़ी लोड होने के बाद ड्राइवर एडवांस भुगतान मांग सकता है — यह ग्राहक और ड्राइवर के बीच आपसी सहमति है, ऐप का कोई तय नियम नहीं।"}
             </div>
           </div>
