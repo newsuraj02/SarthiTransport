@@ -3332,7 +3332,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex-1 p-3 flex items-center gap-2.5">
           <SafeImage
-            src={driverVehicle?.photo?.url}
+            src={drivers.find((d) => d.name === b.driverName)?.photo?.url}
             alt="ड्राइवर"
             className="w-10 h-10 rounded-full object-cover"
             fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>}
