@@ -6265,10 +6265,10 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
           <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Minimum Wallet Balance" : "न्यूनतम वॉलेट बैलेंस"}</div>
           <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver must maintain this balance to keep the app active" : "ऐप एक्टिव रखने के लिए ड्राइवर को यह बैलेंस रखना होगा"}</div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-xs font-bold" style={{ color: C.inkSoft }}>₹</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-base font-bold" style={{ color: C.ink }}>₹</span>
           <input type="number" value={draft.minWallet} onChange={(e) => updateDraft({ minWallet: Math.max(0, Number(e.target.value) || 0) })}
-            className="w-20 rounded px-2 py-1 text-xs font-bold text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}`, color: C.ink }} />
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
         </div>
       </div>
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : "सेटिंग्स सेव हो गईं"}</div>}
