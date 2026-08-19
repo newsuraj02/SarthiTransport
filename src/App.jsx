@@ -4091,10 +4091,14 @@ function useTripClock(loadingStartedAt, hours, extraHourRate, pausedMs = 0, trav
   const bookedHours = hours || 0;
   const isOvertime = started && bookedHours > 0 && elapsedHoursExact >= bookedHours;
   const extraHours = Math.max(0, elapsedHoursExact - bookedHours);
-  // Waiting is billed in full-hour blocks, not pro-rated by the minute — 5
-  // minutes into the waiting hour costs the same as the full hour, and a
-  // second hour started (even by a minute) bills a second full hour.
-  const billableHours = extraHours > 0 ? Math.ceil(extraHours) : 0;
+  // Waiting is billed in full-hour blocks, not pro-rated by the minute, but
+  // with a 15-minute grace window at the start of each block — up to 15
+  // minutes into a waiting hour costs nothing extra yet, but a single
+  // minute past that bills the whole hour.
+  const WAITING_GRACE_HOURS = 0.25;
+  const extraHoursWhole = Math.floor(extraHours);
+  const extraHoursFraction = extraHours - extraHoursWhole;
+  const billableHours = extraHours > 0 ? extraHoursWhole + (extraHoursFraction > WAITING_GRACE_HOURS ? 1 : 0) : 0;
   const extraCharge = Math.round(billableHours * (extraHourRate || 0));
   const remainingMs = Math.max(0, bookedHours * 3600000 - elapsedMs);
   // A separate stopwatch for the waiting-time box — starts fresh at zero the
