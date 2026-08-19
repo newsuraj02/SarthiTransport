@@ -3444,8 +3444,31 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
     ? { Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
     : { Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
 
+  // Same Context/Time/Charges breakdown as the in-app trip summary table
+  // (see TripBreakdownTable), laid out as a fixed-width plain-text table
+  // since this downloads as a .txt file — no HTML/CSS available to draw
+  // real borders, so column padding + a rule line stand in for them.
   const downloadInvoice = (b) => {
-    const text = `Apna Transport Invoice\nBooking: ${b.id}\nPickup: ${b.pickup}\nDrop: ${b.drop}\nVehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}\nDistance: ${b.distance} km\nQuoted Fare: ${fmt(b.fare - (b.extraCharge || 0))}\nExtra Waiting Charge: ${b.extraCharge ? fmt(b.extraCharge) : "-"}\nTotal Fare: ${fmt(b.fare)}\nLoading/Unloading Time: ${b.hours || "-"} hrs\nWaiting Charge Rate: ${b.extraHourRate ? fmt(b.extraHourRate) + "/hr" : "-"}\nStatus: ${b.status}`;
+    const baseFare = (b.fare || 0) - (b.extraCharge || 0);
+    const { totalMs, loadingUnloadingMs, travelMs, waitingMs } = tripHourBreakdown(b);
+    const col1 = 34, col2 = 16;
+    const line = (context, time, charges) => `${context.padEnd(col1)}${(time || "-").padEnd(col2)}${charges || "-"}`;
+    const rule = "-".repeat(col1 + col2 + 12);
+    const rows = [
+      line("Fare", "-", fmt(baseFare)),
+      line("Total Hours", fmtHrMin(totalMs, "en"), "-"),
+      line("Loading/Unloading time", fmtHrMin(loadingUnloadingMs, "en"), "-"),
+      line("Travel time (Uncharged/Excluded)", fmtHrMin(travelMs, "en"), "-"),
+    ];
+    if (b.extraCharge > 0) rows.push(line(`Waiting Charge (${fmt(b.extraHourRate || 0)}/hr)`, fmtHrMin(waitingMs, "en"), fmt(b.extraCharge)));
+    rows.push(rule, line("Total", "-", fmt(b.fare)));
+    const text = [
+      "Apna Transport - Trip Invoice",
+      `Booking: ${b.id}`, `Pickup: ${b.pickup}`, `Drop: ${b.drop}`,
+      `Vehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}`, `Distance: ${b.distance} km`, "",
+      line("Context", "Time", "Charges (Rs)"), rule, ...rows, "",
+      `Status: ${b.status}`,
+    ].join("\n");
     const blob = new Blob([text], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -3499,21 +3522,8 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
               </div>
             )}
             {b.status === "Completed" && b.fare > 0 && (
-              <div className="rounded-lg p-2.5 mt-2 shadow-lg" style={{ background: C.metallicGold }}>
-                <div className="text-xs font-bold flex items-center justify-between" style={{ color: "#000000" }}>
-                  <span>{lang === "en" ? "Base fare" : "बेस भाड़ा"}</span>
-                  <span style={{ fontFamily: monoFont }}>{fmt(b.fare - (b.extraCharge || 0))}</span>
-                </div>
-                {b.extraCharge > 0 && (
-                  <div className="text-xs font-bold flex items-center justify-between mt-0.5" style={{ color: "#000000" }}>
-                    <span>{lang === "en" ? "Waiting charge" : "वेटिंग चार्ज"}</span>
-                    <span style={{ fontFamily: monoFont }}>{fmt(b.extraCharge)}</span>
-                  </div>
-                )}
-                <div className="text-sm font-black flex items-center justify-between mt-1 pt-1" style={{ color: "#000000", borderTop: "1px solid rgba(0,0,0,0.15)" }}>
-                  <span>{lang === "en" ? "Total amount" : "कुल राशि"}</span>
-                  <span style={{ fontFamily: monoFont }}>{fmt(b.fare)}</span>
-                </div>
+              <div className="mt-2">
+                <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : "बेस भाड़ा"} baseFare={b.fare - (b.extraCharge || 0)} totalAmount={b.fare} trip={b} lang={lang} />
               </div>
             )}
           </div>
@@ -3616,9 +3626,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
 function CustomerTripSummary({ trip, lang, onDone }) {
   const baseFare = (trip.fare || 0) - (trip.extraCharge || 0);
   const totalAmount = trip.fare || 0;
-  const hoursTakenMs = trip.completedAt && trip.loadingStartedAt ? Math.max(0, trip.completedAt - trip.loadingStartedAt) : null;
   const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
-  const pausedMs = trip.pausedMs || 0;
   return (
     <div>
       <div className="rounded-2xl p-4 mb-3 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
@@ -3631,40 +3639,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
         <RouteLine pickup={trip.pickup} drop={trip.drop} lang={lang} />
       </div>
 
-      <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-        <div className="flex items-center justify-between text-sm font-bold" style={{ color: "#000000" }}>
-          <span className="flex items-center gap-1.5"><IndianRupee size={13} /> {lang === "en" ? "Fare" : "भाड़ा"}</span>
-          <span style={{ fontFamily: monoFont }}>{fmt(baseFare)}</span>
-        </div>
-        {hoursTakenMs !== null && (
-          <div className="flex items-center justify-between text-sm font-bold mt-2 pt-2" style={{ color: "#000000", borderTop: `1px solid rgba(0,0,0,0.12)` }}>
-            <span className="flex items-center gap-1.5"><Clock3 size={13} /> {lang === "en" ? "Hours taken" : "लगे घंटे"}</span>
-            <span style={{ fontFamily: monoFont }}>{fmtHMS(hoursTakenMs)}</span>
-          </div>
-        )}
-        {trip.extraCharge > 0 && (
-          <div className="flex items-center justify-between text-sm font-bold mt-2 pt-2" style={{ color: "#000000", borderTop: `1px solid rgba(0,0,0,0.12)` }}>
-            <span>{lang === "en" ? "Total waiting charge" : "कुल वेटिंग चार्ज"}</span>
-            <span style={{ fontFamily: monoFont }}>{fmt(trip.extraCharge)}</span>
-          </div>
-        )}
-        {trip.extraCharge > 0 && (
-          <div className="text-[11px] font-semibold text-right mt-0.5" style={{ color: "rgba(0,0,0,0.55)" }}>
-            {trip.billableHours} {lang === "en" ? "hr" : "घंटे"}{trip.billableHours === 1 ? "" : lang === "en" ? "s" : ""} {trip.extraHourRate ? `× ${fmt(trip.extraHourRate)}/${lang === "en" ? "hr" : "घं"}` : ""}
-          </div>
-        )}
-        {pausedMs > 0 && (
-          <div className="flex items-center justify-between text-[11px] font-semibold mt-2 pt-2" style={{ color: "rgba(0,0,0,0.55)", borderTop: `1px dashed rgba(0,0,0,0.2)` }}>
-            <span>⏸ {lang === "en" ? "Travel time excluded" : "यात्रा का समय बाहर"}</span>
-            <span style={{ fontFamily: monoFont }}>{fmtHMS(pausedMs)}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl p-4 mb-3 shadow-lg" style={{ background: C.metallicGreen }}>
-        <div className="text-xs font-bold text-white text-center">{lang === "en" ? "Total amount to pay" : "कुल भुगतान राशि"}</div>
-        <div className="text-3xl font-black text-white text-center mt-1" style={{ fontFamily: monoFont }}>{fmt(totalAmount)}</div>
-      </div>
+      <TripBreakdownTable baseFareLabel={lang === "en" ? "Fare" : "भाड़ा"} baseFare={baseFare} totalAmount={totalAmount} trip={trip} lang={lang} />
 
       <button onClick={onDone} className="w-full rounded-lg py-2.5 font-bold text-sm text-white shadow-lg" style={{ background: C.metallicGreen }}>
         {lang === "en" ? "Done" : "पूर्ण"}
@@ -4075,6 +4050,71 @@ function fmtHMS(ms) {
   const ss = Math.floor((ms % 60000) / 1000);
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
+// "X hr Y min" — used on the trip breakdown table/invoice, where whole
+// minutes read easier than a HH:MM:SS stopwatch face.
+function fmtHrMin(ms, lang) {
+  const totalMin = Math.round(Math.max(0, ms) / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return lang === "en" ? `${h} hr ${m} min` : `${h} घं ${m} मिनट`;
+}
+// Splits a completed trip's total loading-to-drop-off time into its three
+// billing categories — loading/unloading (up to the booked allowance),
+// travel (paused out of the clock entirely, see the geofence in
+// DriverHome), and waiting (the overage beyond the booked allowance,
+// billed via the 15-min-grace rule in useTripClock). Derived straight from
+// the persisted booking fields, not the live clock, so it works the same
+// whether it's rendered from the driver's onEnded snapshot or the
+// customer's Firestore doc.
+function tripHourBreakdown(trip) {
+  const bookedHours = trip.hours || 0;
+  const pausedMs = trip.pausedMs || 0;
+  const totalMs = trip.completedAt && trip.loadingStartedAt ? Math.max(0, trip.completedAt - trip.loadingStartedAt) : 0;
+  const activeMs = Math.max(0, totalMs - pausedMs);
+  const waitingMs = Math.max(0, activeMs - bookedHours * 3600000);
+  const loadingUnloadingMs = activeMs - waitingMs;
+  return { totalMs, loadingUnloadingMs, travelMs: pausedMs, waitingMs };
+}
+
+// The itemized Context/Time/Charges table shown on both trip summary
+// screens (and mirrored as plain text in the downloadable invoice) — bold,
+// left-aligned Time/Charges columns, and full solid-black borders per the
+// agreed design, not the app's usual thin grey hairlines.
+function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }) {
+  const { totalMs, loadingUnloadingMs, travelMs, waitingMs } = tripHourBreakdown(trip);
+  const cellStyle = { border: "1.5px solid #000000", padding: "8px 10px", fontSize: 13, textAlign: "left" };
+  const Row = ({ context, time, charges, bold, zebra }) => (
+    <tr style={{ background: bold ? C.success : zebra ? C.bg : C.paper }}>
+      <td style={{ ...cellStyle, fontFamily: bodyFont, fontWeight: bold ? 900 : 700, color: bold ? "#fff" : "#000000" }}>{context}</td>
+      <td style={{ ...cellStyle, fontFamily: monoFont, color: bold ? "#fff" : time ? "#000000" : C.inkSoft }}>{time || "—"}</td>
+      <td style={{ ...cellStyle, fontFamily: monoFont, color: bold ? "#fff" : charges ? "#000000" : C.inkSoft }}>{charges || "—"}</td>
+    </tr>
+  );
+  return (
+    <div className="rounded-xl overflow-hidden mb-2.5 shadow-sm" style={{ border: "2px solid #000000" }}>
+      <table className="w-full" style={{ borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ background: C.marigold }}>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#3A2611" }}>{lang === "en" ? "Context" : "विवरण"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#3A2611" }}>{lang === "en" ? "Time" : "समय"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#3A2611" }}>{lang === "en" ? "Charges (₹)" : "चार्ज (₹)"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Row context={baseFareLabel} charges={fmt(baseFare)} />
+          <Row context={lang === "en" ? "Total Hours" : "कुल घंटे"} time={fmtHrMin(totalMs, lang)} zebra />
+          <Row context={lang === "en" ? "Loading/Unloading time" : "लोडिंग/अनलोडिंग समय"} time={fmtHrMin(loadingUnloadingMs, lang)} />
+          <Row context={lang === "en" ? "Travel time (Uncharged/Excluded)" : "यात्रा समय (शुल्क-मुक्त)"} time={fmtHrMin(travelMs, lang)} zebra />
+          {trip.extraCharge > 0 && (
+            <Row context={`${lang === "en" ? "Waiting Charge" : "वेटिंग चार्ज"} (${fmt(trip.extraHourRate || 0)}/${lang === "en" ? "hr" : "घं"})`}
+              time={fmtHrMin(waitingMs, lang)} charges={fmt(trip.extraCharge)} />
+          )}
+          <Row context={lang === "en" ? "Total" : "कुल"} charges={fmt(totalAmount)} bold />
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 // Shared elapsed/remaining-time math for a loading trip, used by both the
 // driver's timer screen and the customer's ongoing-trip overtime banner so
@@ -4268,7 +4308,6 @@ function DriverTripSummary({ trip, lang, onDone }) {
   const baseFare = trip.fare || 0;
   const totalAmount = baseFare + (trip.extraCharge || 0);
   const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
-  const pausedMs = trip.pausedMs || 0;
   return (
     <div>
       <div className="rounded-2xl p-4 mb-3 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
@@ -4281,40 +4320,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
         <RouteLine pickup={trip.pickup} drop={trip.drop} lang={lang} />
       </div>
 
-      <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-        <div className="flex items-center justify-between text-sm font-bold" style={{ color: "#000000" }}>
-          <span className="flex items-center gap-1.5"><IndianRupee size={13} /> {lang === "en" ? "Base fare" : "बेस भाड़ा"}</span>
-          <span style={{ fontFamily: monoFont }}>{fmt(baseFare)}</span>
-        </div>
-        {trip.hours ? (
-          <div className="flex items-center justify-between text-sm font-bold mt-2 pt-2" style={{ color: "#000000", borderTop: `1px solid rgba(0,0,0,0.12)` }}>
-            <span className="flex items-center gap-1.5"><Clock3 size={13} /> {lang === "en" ? "Loading/Unloading Time" : "लोडिंग/अनलोडिंग समय"}</span>
-            <span style={{ fontFamily: monoFont }}>{trip.hours} {lang === "en" ? "hrs" : "घंटे"}</span>
-          </div>
-        ) : null}
-        {trip.extraCharge > 0 && (
-          <div className="flex items-center justify-between text-sm font-bold mt-2 pt-2" style={{ color: "#000000", borderTop: `1px solid rgba(0,0,0,0.12)` }}>
-            <span>{lang === "en" ? "Waiting charge" : "वेटिंग चार्ज"}</span>
-            <span style={{ fontFamily: monoFont }}>{fmt(trip.extraCharge)}</span>
-          </div>
-        )}
-        {trip.extraCharge > 0 && (
-          <div className="text-[11px] font-semibold text-right mt-0.5" style={{ color: "rgba(0,0,0,0.55)" }}>
-            {trip.billableHours} {lang === "en" ? "hr" : "घंटे"}{trip.billableHours === 1 ? "" : lang === "en" ? "s" : ""} {trip.extraHourRate ? `× ${fmt(trip.extraHourRate)}/${lang === "en" ? "hr" : "घं"}` : ""}
-          </div>
-        )}
-        {pausedMs > 0 && (
-          <div className="flex items-center justify-between text-[11px] font-semibold mt-2 pt-2" style={{ color: "rgba(0,0,0,0.55)", borderTop: `1px dashed rgba(0,0,0,0.2)` }}>
-            <span>⏸ {lang === "en" ? "Travel time excluded" : "यात्रा का समय बाहर"}</span>
-            <span style={{ fontFamily: monoFont }}>{fmtHMS(pausedMs)}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl p-4 mb-3 shadow-lg" style={{ background: C.metallicGreen }}>
-        <div className="text-xs font-bold text-white text-center">{lang === "en" ? "Total amount to be paid by customer" : "ग्राहक को कुल भुगतान करना है"}</div>
-        <div className="text-3xl font-black text-white text-center mt-1" style={{ fontFamily: monoFont }}>{fmt(totalAmount)}</div>
-      </div>
+      <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : "बेस भाड़ा"} baseFare={baseFare} totalAmount={totalAmount} trip={trip} lang={lang} />
 
       <button onClick={onDone} className="w-full rounded-lg py-2.5 font-bold text-sm text-white shadow-lg" style={{ background: C.metallicGreen }}>
         {lang === "en" ? "Done" : "पूर्ण"}
