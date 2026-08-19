@@ -3617,33 +3617,46 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   const baseFare = (trip.fare || 0) - (trip.extraCharge || 0);
   const totalAmount = trip.fare || 0;
   const hoursTakenMs = trip.completedAt && trip.loadingStartedAt ? Math.max(0, trip.completedAt - trip.loadingStartedAt) : null;
+  const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const pausedMs = trip.pausedMs || 0;
   return (
     <div>
       <div className="rounded-2xl p-4 mb-3 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
         <CheckCircle2 size={32} color={C.success} className="mx-auto mb-1.5" />
         <div className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : "ट्रिप पूरी हुई"}</div>
+        {completedLabel && <div className="text-xs font-bold mt-0.5" style={{ color: C.inkSoft }}>{completedLabel}</div>}
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{trip.pickup}</span></div>
-        <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{trip.drop}</span></div>
+        <RouteLine pickup={trip.pickup} drop={trip.drop} lang={lang} />
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-        <div className="text-sm font-bold flex items-center justify-between" style={{ color: "#000000" }}>
-          <span>{lang === "en" ? "Fare" : "भाड़ा"}</span>
+        <div className="flex items-center justify-between text-sm font-bold" style={{ color: "#000000" }}>
+          <span className="flex items-center gap-1.5"><IndianRupee size={13} /> {lang === "en" ? "Fare" : "भाड़ा"}</span>
           <span style={{ fontFamily: monoFont }}>{fmt(baseFare)}</span>
         </div>
         {hoursTakenMs !== null && (
-          <div className="text-sm font-bold flex items-center justify-between mt-1" style={{ color: "#000000" }}>
-            <span>{lang === "en" ? "Hours taken" : "लगे घंटे"}</span>
+          <div className="flex items-center justify-between text-sm font-bold mt-2 pt-2" style={{ color: "#000000", borderTop: `1px solid rgba(0,0,0,0.12)` }}>
+            <span className="flex items-center gap-1.5"><Clock3 size={13} /> {lang === "en" ? "Hours taken" : "लगे घंटे"}</span>
             <span style={{ fontFamily: monoFont }}>{fmtHMS(hoursTakenMs)}</span>
           </div>
         )}
         {trip.extraCharge > 0 && (
-          <div className="text-sm font-bold flex items-center justify-between mt-1" style={{ color: "#000000" }}>
+          <div className="flex items-center justify-between text-sm font-bold mt-2 pt-2" style={{ color: "#000000", borderTop: `1px solid rgba(0,0,0,0.12)` }}>
             <span>{lang === "en" ? "Total waiting charge" : "कुल वेटिंग चार्ज"}</span>
             <span style={{ fontFamily: monoFont }}>{fmt(trip.extraCharge)}</span>
+          </div>
+        )}
+        {trip.extraCharge > 0 && (
+          <div className="text-[11px] font-semibold text-right mt-0.5" style={{ color: "rgba(0,0,0,0.55)" }}>
+            {trip.billableHours} {lang === "en" ? "hr" : "घंटे"}{trip.billableHours === 1 ? "" : lang === "en" ? "s" : ""} {trip.extraHourRate ? `× ${fmt(trip.extraHourRate)}/${lang === "en" ? "hr" : "घं"}` : ""}
+          </div>
+        )}
+        {pausedMs > 0 && (
+          <div className="flex items-center justify-between text-[11px] font-semibold mt-2 pt-2" style={{ color: "rgba(0,0,0,0.55)", borderTop: `1px dashed rgba(0,0,0,0.2)` }}>
+            <span>⏸ {lang === "en" ? "Travel time excluded" : "यात्रा का समय बाहर"}</span>
+            <span style={{ fontFamily: monoFont }}>{fmtHMS(pausedMs)}</span>
           </div>
         )}
       </div>
@@ -4254,33 +4267,46 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
 function DriverTripSummary({ trip, lang, onDone }) {
   const baseFare = trip.fare || 0;
   const totalAmount = baseFare + (trip.extraCharge || 0);
+  const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const pausedMs = trip.pausedMs || 0;
   return (
     <div>
       <div className="rounded-2xl p-4 mb-3 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
         <CheckCircle2 size={32} color={C.success} className="mx-auto mb-1.5" />
         <div className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : "ट्रिप पूरी हुई"}</div>
+        {completedLabel && <div className="text-xs font-bold mt-0.5" style={{ color: C.inkSoft }}>{completedLabel}</div>}
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{trip.pickup}</span></div>
-        <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{trip.drop}</span></div>
+        <RouteLine pickup={trip.pickup} drop={trip.drop} lang={lang} />
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-        <div className="text-sm font-bold flex items-center justify-between" style={{ color: "#000000" }}>
-          <span>{lang === "en" ? "Base fare" : "बेस भाड़ा"}</span>
+        <div className="flex items-center justify-between text-sm font-bold" style={{ color: "#000000" }}>
+          <span className="flex items-center gap-1.5"><IndianRupee size={13} /> {lang === "en" ? "Base fare" : "बेस भाड़ा"}</span>
           <span style={{ fontFamily: monoFont }}>{fmt(baseFare)}</span>
         </div>
         {trip.hours ? (
-          <div className="text-sm font-bold flex items-center justify-between mt-1" style={{ color: "#000000" }}>
-            <span>{lang === "en" ? "Loading/Unloading Time" : "लोडिंग/अनलोडिंग समय"}</span>
+          <div className="flex items-center justify-between text-sm font-bold mt-2 pt-2" style={{ color: "#000000", borderTop: `1px solid rgba(0,0,0,0.12)` }}>
+            <span className="flex items-center gap-1.5"><Clock3 size={13} /> {lang === "en" ? "Loading/Unloading Time" : "लोडिंग/अनलोडिंग समय"}</span>
             <span style={{ fontFamily: monoFont }}>{trip.hours} {lang === "en" ? "hrs" : "घंटे"}</span>
           </div>
         ) : null}
         {trip.extraCharge > 0 && (
-          <div className="text-sm font-bold flex items-center justify-between mt-1" style={{ color: "#000000" }}>
-            <span>{lang === "en" ? `Waiting charge (${trip.billableHours} hr${trip.billableHours === 1 ? "" : "s"})` : `वेटिंग चार्ज (${trip.billableHours} घंटे)`}</span>
+          <div className="flex items-center justify-between text-sm font-bold mt-2 pt-2" style={{ color: "#000000", borderTop: `1px solid rgba(0,0,0,0.12)` }}>
+            <span>{lang === "en" ? "Waiting charge" : "वेटिंग चार्ज"}</span>
             <span style={{ fontFamily: monoFont }}>{fmt(trip.extraCharge)}</span>
+          </div>
+        )}
+        {trip.extraCharge > 0 && (
+          <div className="text-[11px] font-semibold text-right mt-0.5" style={{ color: "rgba(0,0,0,0.55)" }}>
+            {trip.billableHours} {lang === "en" ? "hr" : "घंटे"}{trip.billableHours === 1 ? "" : lang === "en" ? "s" : ""} {trip.extraHourRate ? `× ${fmt(trip.extraHourRate)}/${lang === "en" ? "hr" : "घं"}` : ""}
+          </div>
+        )}
+        {pausedMs > 0 && (
+          <div className="flex items-center justify-between text-[11px] font-semibold mt-2 pt-2" style={{ color: "rgba(0,0,0,0.55)", borderTop: `1px dashed rgba(0,0,0,0.2)` }}>
+            <span>⏸ {lang === "en" ? "Travel time excluded" : "यात्रा का समय बाहर"}</span>
+            <span style={{ fontFamily: monoFont }}>{fmtHMS(pausedMs)}</span>
           </div>
         )}
       </div>
