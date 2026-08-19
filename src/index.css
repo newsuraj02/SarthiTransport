@@ -28,6 +28,20 @@ html, body, #root {
 .font-extrabold { font-weight: 900 !important; }
 .font-black     { font-weight: 900 !important; }
 
+/* App-wide font unification: Arial for every plain-text element, Arial
+   Black wherever one of the weight utilities above applies. !important on
+   both rules — the universal `*` selector needs it to win over the
+   handful of components that set their own fontFamily inline (bodyFont/
+   monoFont, e.g. fare and OTP digit displays), and the class selectors
+   need it to then win back over `*` for anything bold (class specificity
+   already puts them ahead of `*`, this just keeps the override explicit). */
+* {
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+.font-normal, .font-medium, .font-semibold, .font-bold, .font-extrabold, .font-black {
+  font-family: "Arial Black", Arial, Helvetica, sans-serif !important;
+}
+
 /* Every <select> across the app gets one bigger, higher-contrast dropdown
    arrow instead of the tiny default OS caret — a single global rule so
    it applies everywhere at once (current and future selects) instead of
