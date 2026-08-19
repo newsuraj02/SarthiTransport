@@ -6117,8 +6117,8 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
                 <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#F5E6C8" }}><UserCircle2 size={20} color="#A8721C" /></div>} />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
-                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
-                  <div className="text-[10px] mt-0.5 truncate" style={{ color: C.inkSoft }}>{[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || (lang === "en" ? "No address on file" : "पता उपलब्ध नहीं")}</div>
+                  <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{c.mobile}</div>
+                  <div className="text-[10px] font-bold mt-0.5 truncate" style={{ color: C.ink }}>{[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || (lang === "en" ? "No address on file" : "पता उपलब्ध नहीं")}</div>
                 </div>
                 <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg" style={{ color: C.marigoldDeep, background: "#FBEBD2" }}>
                   {expanded ? (lang === "en" ? "Hide" : "छुपाएं") : (lang === "en" ? "View Details" : "विवरण देखें")}
