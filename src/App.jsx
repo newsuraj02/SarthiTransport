@@ -5971,7 +5971,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
                 </div>
               </div>
 
-              <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-[10px] font-semibold mt-2" style={{ color: "#A8721C" }}>
+              <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-[10px] font-bold mt-2" style={{ color: "#A8721C" }}>
                 {expanded ? (lang === "en" ? "▲ Hide KYC details" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : "▼ KYC डिटेल देखें")}
               </button>
               {expanded && (
@@ -6008,19 +6008,19 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
                   {confirmDeleteId === d.id ? (
                     <>
                       <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : "हमेशा के लिए हटाएं?"}</span>
-                      <button onClick={() => { deleteDriver(d.mobile || d.id); setConfirmDeleteId(null); }} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                      <button onClick={() => { deleteDriver(d.mobile || d.id); setConfirmDeleteId(null); }} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: "#fff", background: C.safety }}>
                         {lang === "en" ? "Yes, delete" : "हां, हटाएं"}
                       </button>
-                      <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
+                      <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
                         {lang === "en" ? "Cancel" : "रद्द करें"}
                       </button>
                     </>
                   ) : (
                     <>
-                      <button onClick={() => toggleBlacklist(d.id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: d.blacklisted ? C.success : C.safety, background: d.blacklisted ? "#DFEEE2" : "#FCEAE3" }}>
+                      <button onClick={() => toggleBlacklist(d.id)} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: d.blacklisted ? C.success : C.safety, background: d.blacklisted ? "#DFEEE2" : "#FCEAE3" }}>
                         {d.blacklisted ? (lang === "en" ? "Unblock" : "अनब्लॉक करें") : (lang === "en" ? "Block" : "ब्लॉक करें")}
                       </button>
-                      <button onClick={() => setConfirmDeleteId(d.id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
+                      <button onClick={() => setConfirmDeleteId(d.id)} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
                         {lang === "en" ? "Delete" : "हटाएं"}
                       </button>
                     </>
