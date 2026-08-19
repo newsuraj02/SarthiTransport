@@ -6235,43 +6235,43 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
 
       <div className="rounded-lg p-3 mb-4" style={{ background: "#DFEEE2" }}>
         <div className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
-        <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
+        <div className="text-[11px] font-bold mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
       </div>
 
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Commission Percentage" : "कमीशन प्रतिशत"}</div>
-          <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted, once their trial has ended" : "ट्रायल खत्म होने के बाद, बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Commission Percentage" : "कमीशन प्रतिशत"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted, once their trial has ended" : "ट्रायल खत्म होने के बाद, बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 shrink-0">
           <input type="number" value={draft.commissionPct} onChange={(e) => updateDraft({ commissionPct: Math.max(0, Number(e.target.value) || 0) })}
-            className="w-16 rounded px-2 py-1 text-xs text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}` }} />
-          <span className="text-xs" style={{ color: C.inkSoft }}>%</span>
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+          <span className="text-base font-bold" style={{ color: C.ink }}>%</span>
         </div>
       </div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Driver Bonus Percentage" : "ड्राइवर बोनस प्रतिशत"}</div>
-          <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "This % out of the commission goes back to the driver's bonus account" : "कमीशन में से यह % ड्राइवर के बोनस अकाउंट में वापस जाएगा"}</div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Bonus Percentage" : "ड्राइवर बोनस प्रतिशत"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % out of the commission goes back to the driver's bonus account" : "कमीशन में से यह % ड्राइवर के बोनस अकाउंट में वापस जाएगा"}</div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 shrink-0">
           <input type="number" value={draft.bonusPct} onChange={(e) => updateDraft({ bonusPct: Math.max(0, Number(e.target.value) || 0) })}
-            className="w-16 rounded px-2 py-1 text-xs text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}` }} />
-          <span className="text-xs" style={{ color: C.inkSoft }}>%</span>
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+          <span className="text-base font-bold" style={{ color: C.ink }}>%</span>
         </div>
       </div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-xs font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Minimum Wallet Balance" : "न्यूनतम वॉलेट बैलेंस"}</div>
-          <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver must maintain this balance to keep the app active" : "ऐप एक्टिव रखने के लिए ड्राइवर को यह बैलेंस रखना होगा"}</div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Minimum Wallet Balance" : "न्यूनतम वॉलेट बैलेंस"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver must maintain this balance to keep the app active" : "ऐप एक्टिव रखने के लिए ड्राइवर को यह बैलेंस रखना होगा"}</div>
         </div>
-        <div className="flex items-center gap-1">
-          <span className="text-xs" style={{ color: C.inkSoft }}>₹</span>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-xs font-bold" style={{ color: C.inkSoft }}>₹</span>
           <input type="number" value={draft.minWallet} onChange={(e) => updateDraft({ minWallet: Math.max(0, Number(e.target.value) || 0) })}
-            className="w-20 rounded px-2 py-1 text-xs text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}` }} />
+            className="w-20 rounded px-2 py-1 text-xs font-bold text-right" style={{ fontFamily: monoFont, border: `1px solid ${C.line}`, color: C.ink }} />
         </div>
       </div>
-      {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : "सेटिंग्स सेव हो गईं"}</div>}
+      {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : "सेटिंग्स सेव हो गईं"}</div>}
       <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-2.5 font-bold text-sm"
         style={{ background: dirty ? "#60A5FA" : C.line, color: dirty ? "#fff" : "#9AA3B0" }}>
         {lang === "en" ? "Save Changes" : "बदलाव सेव करें"}
