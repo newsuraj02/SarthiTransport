@@ -3460,7 +3460,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
       line("Loading/Unloading time", fmtHrMin(loadingUnloadingMs, "en"), "-"),
       line("Travel time (Uncharged/Excluded)", fmtHrMin(travelMs, "en"), "-"),
     ];
-    if (b.extraCharge > 0) rows.push(line(`Waiting Charge (${fmt(b.extraHourRate || 0)}/hr)`, fmtHrMin(waitingMs, "en"), fmt(b.extraCharge)));
+    if (b.extraCharge > 0) rows.push(line(`Waiting charge (${fmt(b.extraHourRate || 0)}/hr)`, fmtHrMin(waitingMs, "en"), fmt(b.extraCharge)));
     rows.push(rule, line("Total", "-", fmt(b.fare)));
     const text = [
       "Apna Transport - Trip Invoice",
@@ -4106,7 +4106,7 @@ function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }
           <Row context={lang === "en" ? "Loading/Unloading time" : "लोडिंग/अनलोडिंग समय"} time={fmtHrMin(loadingUnloadingMs, lang)} />
           <Row context={lang === "en" ? "Travel time (Uncharged/Excluded)" : "यात्रा समय (शुल्क-मुक्त)"} time={fmtHrMin(travelMs, lang)} zebra />
           {trip.extraCharge > 0 && (
-            <Row context={`${lang === "en" ? "Waiting Charge" : "वेटिंग चार्ज"} (${fmt(trip.extraHourRate || 0)}/${lang === "en" ? "hr" : "घं"})`}
+            <Row context={`${lang === "en" ? "Waiting charge" : "वेटिंग चार्ज"} (${fmt(trip.extraHourRate || 0)}/${lang === "en" ? "hr" : "घं"})`}
               time={fmtHrMin(waitingMs, lang)} charges={fmt(trip.extraCharge)} />
           )}
           <Row context={lang === "en" ? "Total" : "कुल"} charges={fmt(totalAmount)} bold />
