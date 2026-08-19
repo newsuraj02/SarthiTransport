@@ -5955,8 +5955,8 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
             <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: d.blacklisted ? "#FCEAE3" : C.paper }}>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : "वॉलेट"} {fmt(d.wallet)}</div>
+                  <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
+                  <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : "वॉलेट"} {fmt(d.wallet)}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: d.online ? C.success : C.inkSoft, background: d.online ? "#DFEEE2" : "#F0EAE0" }}>{d.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
