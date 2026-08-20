@@ -946,7 +946,7 @@ function MapPicker({ onConfirm, onClose, lang = "hi" }) {
         headers: { Accept: "application/json" },
       });
       const data = await res.json();
-      setAddress(data?.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+      setAddress(localizeSuggestionText(data?.display_name, lang) || `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
     } catch {
       setAddress(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
     }
@@ -1012,7 +1012,7 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
     if (!geocoderRef.current) geocoderRef.current = new window.google.maps.Geocoder();
     geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
       setLoading(false);
-      setAddress(status === "OK" && results?.[0] ? results[0].formatted_address : `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      setAddress(status === "OK" && results?.[0] ? localizeSuggestionText(results[0].formatted_address, lang) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
     });
   };
 
@@ -1027,7 +1027,7 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
     if (!loc) return;
     const lat = loc.lat(), lng = loc.lng();
     setMarker({ lat, lng });
-    setAddress(place.formatted_address || place.name || "");
+    setAddress(localizeSuggestionText(place.formatted_address || place.name || "", lang));
     setLoading(false);
     mapRef.current?.panTo({ lat, lng });
     mapRef.current?.setZoom(16);
@@ -1105,18 +1105,18 @@ function LocationPicker(props) {
   return <MapPicker {...props} />;
 }
 
-function MicButton({ onResult, lang = "hi-IN", label, size = 8, iconSize = 14 }) {
+function MicButton({ onResult, lang = "hi", label, size = 8, iconSize = 14 }) {
   const [listening, setListening] = useState(false);
   const recRef = useRef(null);
 
   const start = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-      alert("यह डिवाइस/ब्राउज़र वॉइस इनपुट सपोर्ट नहीं करता।");
+      alert(lang === "en" ? "This device/browser doesn't support voice input." : "यह डिवाइस/ब्राउज़र वॉइस इनपुट सपोर्ट नहीं करता।");
       return;
     }
     const rec = new SR();
-    rec.lang = lang;
+    rec.lang = lang === "en" ? "en-IN" : "hi-IN";
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
@@ -2548,7 +2548,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
       const r = status === "OK" && results?.[0];
       const loc = r?.geometry?.location;
       if (!loc) return;
-      onPlaceSelected({ name: r.formatted_address || p.description, lat: loc.lat(), lng: loc.lng() });
+      onPlaceSelected({ name: localizeSuggestionText(r.formatted_address || p.description, lang), lat: loc.lat(), lng: loc.lng() });
     });
   };
 
@@ -2601,7 +2601,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
           <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.success, color: "#fff" }}>
             <MapPin size={16} /> {lang === "en" ? "Choose from Map" : "मैप से चुनें"}
           </button>
-          <MicButton onResult={onMic} label={lang === "en" ? "Speak to Enter" : "बोलकर लिखें"} />
+          <MicButton onResult={onMic} lang={lang} label={lang === "en" ? "Speak to Enter" : "बोलकर लिखें"} />
         </div>
         {onUseCurrentLocation && (
           <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.success, color: "#fff" }}>
@@ -2827,14 +2827,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         setPickupSelected(true);
         if (mapsReady && window.google) {
           new window.google.maps.Geocoder().geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
-            setPickup(status === "OK" && results?.[0] ? results[0].formatted_address : `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+            setPickup(status === "OK" && results?.[0] ? localizeSuggestionText(results[0].formatted_address, lang) : `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
             setLocatingPickup(false);
           });
         } else {
           try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`, { headers: { Accept: "application/json" } });
             const data = await res.json();
-            setPickup(data?.display_name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+            setPickup(localizeSuggestionText(data?.display_name, lang) || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
           } catch {
             setPickup(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
           }
@@ -3289,7 +3289,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <div className="flex-1 p-3 flex items-center gap-2.5">
           <SafeImage
             src={drivers.find((d) => d.name === b.driverName)?.photo?.url}
-            alt="ड्राइवर"
+            alt={lang === "en" ? "Driver" : "ड्राइवर"}
             className="w-10 h-10 rounded-full object-cover"
             fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>}
           />
@@ -5679,8 +5679,8 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                     <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : "▼ KYC डिटेल देखें")}</div>
                   </button>
                   <div className="flex gap-2">
-                    <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : "Block"}</button>
-                    <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : "Approve"}</button>
+                    <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : "ब्लॉक करें"}</button>
+                    <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : "अप्रूव करें"}</button>
                   </div>
                 </div>
 
