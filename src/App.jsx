@@ -17,35 +17,33 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
-// Oxblood & mustard theme — chosen specifically to not read as Porter
-// (teal), BlackBuck/Rivigo (bright orange-red), or Ola/Uber (black+yellow).
-// Token names (marigold, navy, etc.) are kept as-is even though they no
-// longer mean gold/black — every screen already references these by name,
-// so this is a value-only swap.
+// Bright/high-visibility flat palette — legible in direct outdoor sunlight
+// for drivers and customers using this on the road. Solid fills only, no
+// gradients/pastel tints (readability over decoration). Token names
+// (marigold, navy, etc.) are kept as-is even though they no longer mean
+// gold/maroon — every screen already references these by name, so this is
+// a value-only swap.
 const C = {
-  bg: "#F6EFE6",
+  bg: "#FFFFFF",
   paper: "#FFFFFF",
-  ink: "#2B1512",
-  inkSoft: "#7A5C50",
-  marigold: "#E3A93C",
-  marigoldDeep: "#A8721C",
-  safety: "#C1442C",
-  success: "#3F7A54",
-  line: "#E6DDD1",
-  navy: "#5C1F1F",
-  pimpri: "#A8721C",
-  chinchwad: "#3F7A54",
-  // Shiny gold gradient standing in for the old flat gold/yellow (#FBEBD2,
-  // #F5E6C8, #F7DE99) fills on the app's highlighted info/policy boxes —
-  // Fare & Waiting Charge Policy, quote-entry, Scheduled-for, KYC tips,
-  // wallet summary, etc. Not used on small badges/pills/avatar circles or
-  // repeated list rows, where a gradient would just look busy.
-  metallicGold: "linear-gradient(135deg, #FFF3D2 0%, #F0BE55 22%, #E3A93C 45%, #C98A24 60%, #F0BE55 80%, #FFF3D2 100%)",
-  // Same shiny-sheen treatment in green, for primary action buttons that
-  // used a flat C.success fill (Send Quote, Book this vehicle, Save
-  // Changes, admin Approve/Add, etc.) — not for toggle switches, status
-  // badges/pills, or decorative icon circles, where it would look busy.
-  metallicGreen: "linear-gradient(135deg, #D9F0DE 0%, #6FAE82 22%, #3F7A54 45%, #245536 60%, #6FAE82 80%, #D9F0DE 100%)",
+  ink: "#000000",
+  inkSoft: "#333333",
+  marigold: "#FFCC00",
+  marigoldDeep: "#FF6600",
+  safety: "#FF2A2A",
+  success: "#00A854",
+  line: "#000000",
+  navy: "#0052CC",
+  pimpri: "#FF6600",
+  chinchwad: "#00A854",
+  // Flat solid fill (no gradient) for the app's highlighted info/policy
+  // boxes — Fare & Waiting Charge Policy, quote-entry, Scheduled-for, KYC
+  // tips, wallet summary, etc.
+  metallicGold: "#FFCC00",
+  // Flat solid fill for primary action buttons that used to carry a
+  // green gradient sheen — Send Quote, Book this vehicle, Save Changes,
+  // admin Approve/Add, etc.
+  metallicGreen: "#00A854",
 };
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
@@ -206,7 +204,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
             <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose Time" : "समय चुनें"}</h3>
             <button onClick={onClose} className="text-sm font-bold" style={{ color: "#fff" }}>✕</button>
           </div>
-          <p className="text-[11px] mt-0.5" style={{ color: C.marigold }}>{lang === "en" ? "Pick a period, then only that period's slots will show." : "जो पहर चुनेंगे, सिर्फ वही समय दिखेगा"}</p>
+          <p className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Pick a period, then only that period's slots will show." : "जो पहर चुनेंगे, सिर्फ वही समय दिखेगा"}</p>
         </div>
         <div className="p-5">
           <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>1. {lang === "en" ? "Choose period:" : "पहर चुनें:"}</div>
@@ -216,7 +214,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
               return (
                 <button key={p.key} type="button" onClick={() => setActivePeriod(p.key)}
                   className="rounded-lg py-2.5 flex flex-col items-center gap-1 text-[11px] font-bold"
-                  style={{ background: active ? "#FBEBD2" : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? C.marigoldDeep : C.inkSoft }}>
+                  style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.inkSoft }}>
                   <span className="text-lg leading-none">{p.icon}</span>
                   {lang === "en" ? p.labelEn : p.labelHi}
                 </button>
@@ -230,14 +228,14 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
               return (
                 <button key={s} type="button" onClick={() => setPending(s)}
                   className="rounded-lg py-2.5 text-xs font-bold text-left px-3"
-                  style={{ background: active ? "#FBEBD2" : C.paper, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? C.marigoldDeep : C.ink }}>
+                  style={{ background: active ? C.marigoldDeep : C.paper, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.ink }}>
                   {period.icon} {formatSlotShort(s, lang)}
                 </button>
               );
             })}
           </div>
           <button onClick={() => { if (pending) { onSelect(pending); onClose(); } }} disabled={!pending}
-            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: pending ? "#60A5FA" : C.line, color: pending ? "#fff" : "#9AA3B0" }}>
+            className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: pending ? "#0052CC" : "#E0E0E0", color: pending ? "#fff" : "#9AA3B0" }}>
             {lang === "en" ? "Done" : "ठीक है (Done)"}
           </button>
         </div>
@@ -249,7 +247,7 @@ const ALERT_TYPE_LABELS_EN = { "पुलिस सहायता": "Police Hel
 const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_EN[t]) ? ALERT_TYPE_LABELS_EN[t] : t;
 const ADD_MATERIAL = "__add_new__";
 
-const CITY_COLORS = ["#A8721C", "#3F7D4F", "#B87A12", "#E85D2F", "#7A5CB8", "#1C7A7A"];
+const CITY_COLORS = ["#FF6600", "#00A854", "#0052CC", "#FF2A2A", "#FFCC00", "#00A854"];
 
 const EN_LABELS = {
   book: "Book Now", rides: "My Rides", home: "Home", wallet: "Wallet", history: "History",
@@ -708,7 +706,7 @@ function NotificationBanner({ permission, onEnable, lang }) {
   if (permission === "granted" || permission === "unsupported") return null;
   if (permission === "denied") {
     return (
-      <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: "#FCEAE3", color: C.safety }}>
+      <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
         {lang === "en" ? "Notifications are blocked in your browser settings — enable them there to get ride updates." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — राइड अपडेट पाने के लिए वहां चालू करें।"}
       </div>
     );
@@ -728,7 +726,7 @@ function ForegroundToast({ toast }) {
       <Bell size={14} color={C.marigold} />
       <div>
         <div className="text-[11px] font-bold text-white">{toast.title}</div>
-        {toast.body && <div className="text-[10px]" style={{ color: "#D9C4B0" }}>{toast.body}</div>}
+        {toast.body && <div className="text-[10px]" style={{ color: "#FFFFFF" }}>{toast.body}</div>}
       </div>
     </div>
   );
@@ -769,13 +767,13 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
     window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`, "_blank");
   };
   return (
-    <div className="relative rounded-lg overflow-hidden" style={{ height, background: "#EDE0CC", border: `1px solid ${C.line}` }}>
+    <div className="relative rounded-lg overflow-hidden" style={{ height, background: "#E5E5E5", border: `1px solid ${C.line}` }}>
       <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
         {Array.from({ length: 6 }).map((_, i) => (
-          <line key={"h" + i} x1="0" y1={i * 18} x2="100" y2={i * 18} stroke="#D9C8A8" strokeWidth="0.4" />
+          <line key={"h" + i} x1="0" y1={i * 18} x2="100" y2={i * 18} stroke="#CCCCCC" strokeWidth="0.4" />
         ))}
         {Array.from({ length: 6 }).map((_, i) => (
-          <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#D9C8A8" strokeWidth="0.4" />
+          <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#CCCCCC" strokeWidth="0.4" />
         ))}
         {p2 && <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={zoneColor || C.marigoldDeep} strokeWidth="1" strokeDasharray="2,2" />}
         <circle cx={p1.x} cy={p1.y} r="2.2" fill={C.marigoldDeep} />
@@ -793,7 +791,7 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
         </div>
       )}
       <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
-      <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFE066", color: "#000000" }}>
+      <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFCC00", color: "#000000" }}>
         {lang === "en" ? "Tap to open in Google Maps" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
     </div>
@@ -930,7 +928,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
         )}
       </GoogleMap>
       <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
-      <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFE066", color: "#000000" }}>
+      <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFCC00", color: "#000000" }}>
         {lang === "en" ? "Tap to open in Google Maps" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
     </div>
@@ -1005,7 +1003,7 @@ function MapPicker({ onConfirm, onClose, lang = "hi" }) {
           <button onClick={onClose} className="text-xs font-bold px-2 py-1" style={{ color: C.inkSoft }}>✕</button>
         </div>
 
-        <div className="relative rounded-lg overflow-hidden mb-3" style={{ height: H, background: "#EDE0CC", cursor: "crosshair" }} onClick={handleTap}>
+        <div className="relative rounded-lg overflow-hidden mb-3" style={{ height: H, background: "#E5E5E5", cursor: "crosshair" }} onClick={handleTap}>
           {!imgError ? (
             <img src={mapUrl} alt="map" width={W} height={H} className="w-full h-full object-cover select-none" draggable={false} onError={() => setImgError(true)} />
           ) : (
@@ -1032,7 +1030,7 @@ function MapPicker({ onConfirm, onClose, lang = "hi" }) {
 
         <button onClick={() => pin && onConfirm(address, pin.lat, pin.lon)} disabled={!pin || loading}
           className="w-full rounded-lg py-3 font-bold text-sm"
-          style={{ background: pin && !loading ? C.marigoldDeep : C.line, color: pin && !loading ? "#fff" : "#9AA3B0" }}>
+          style={{ background: pin && !loading ? C.marigoldDeep : "#E0E0E0", color: pin && !loading ? "#fff" : "#9AA3B0" }}>
           {lang === "en" ? "Use this location" : "यह जगह इस्तेमाल करें"}
         </button>
       </div>
@@ -1116,7 +1114,7 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
           </GoogleMap>
         </div>
 
-        <button type="button" onClick={useMyLocation} className="text-xs font-semibold mb-3 flex items-center gap-1" style={{ color: "#A8721C" }}>
+        <button type="button" onClick={useMyLocation} className="text-xs font-semibold mb-3 flex items-center gap-1" style={{ color: C.marigoldDeep }}>
           <Navigation size={12} /> {lang === "en" ? "Use my current location" : "मेरी मौजूदा जगह इस्तेमाल करें"}
         </button>
 
@@ -1132,7 +1130,7 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
 
         <button onClick={() => marker && onConfirm(address, marker.lat, marker.lng)} disabled={!marker || loading}
           className="w-full rounded-lg py-3 font-bold text-sm"
-          style={{ background: marker && !loading ? C.marigoldDeep : C.line, color: marker && !loading ? "#fff" : "#9AA3B0" }}>
+          style={{ background: marker && !loading ? C.marigoldDeep : "#E0E0E0", color: marker && !loading ? "#fff" : "#9AA3B0" }}>
           {lang === "en" ? "Use this location" : "यह जगह इस्तेमाल करें"}
         </button>
       </div>
@@ -1192,8 +1190,8 @@ function MicButton({ onResult, lang = "hi-IN", label, size = 8, iconSize = 14 })
   return (
     <button type="button" onClick={listening ? stop : start}
       className="shrink-0 rounded-full flex items-center justify-center"
-      style={{ background: listening ? C.safety : "#F5E6C8", width: size * 4, height: size * 4 }}>
-      <Mic size={iconSize} color={listening ? "#fff" : "#A8721C"} />
+      style={{ background: listening ? C.safety : C.paper, border: listening ? "none" : `1.5px solid ${C.marigoldDeep}`, width: size * 4, height: size * 4 }}>
+      <Mic size={iconSize} color={listening ? "#fff" : C.marigoldDeep} />
     </button>
   );
 }
@@ -1223,20 +1221,20 @@ function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
   };
   return (
     <div className="px-5 py-5">
-      <div className="rounded-xl p-5 text-center mb-5" style={{ background: "#FCEAE3" }}>
-        <Siren size={26} color={C.safety} className="mx-auto mb-2" />
-        <h2 className="text-base font-bold" style={{ color: C.safety }}>SOS / {lang === "en" ? "Help" : "मदद"}</h2>
-        <p className="text-xs mt-1" style={{ color: C.ink }}>{lang === "en" ? "For any problem or booking help, click the button below." : "किसी भी समस्या या बुकिंग सहायता के लिए नीचे दिए गए बटन पर क्लिक करें।"}</p>
+      <div className="rounded-xl p-5 text-center mb-5" style={{ background: C.safety }}>
+        <Siren size={26} color="#FFFFFF" className="mx-auto mb-2" />
+        <h2 className="text-base font-bold" style={{ color: "#FFFFFF" }}>SOS / {lang === "en" ? "Help" : "मदद"}</h2>
+        <p className="text-xs mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "For any problem or booking help, click the button below." : "किसी भी समस्या या बुकिंग सहायता के लिए नीचे दिए गए बटन पर क्लिक करें।"}</p>
       </div>
       {tripLocked && (
-        <div className="rounded-xl p-4 mb-5 text-center" style={{ background: "#FCEAE3", border: `1.5px solid ${C.safety}` }}>
-          <div className="text-sm font-bold mb-1" style={{ color: C.safety }}>⚠️ {lang === "en" ? "Trip cannot be cancelled!" : "ट्रिप कैंसल नहीं की जा सकती!"}</div>
-          <p className="text-xs" style={{ color: C.ink }}>{lang === "en" ? "The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support below for any help." : "ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए नीचे सपोर्ट से संपर्क करें।"}</p>
+        <div className="rounded-xl p-4 mb-5 text-center" style={{ background: C.safety }}>
+          <div className="text-sm font-bold mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Trip cannot be cancelled!" : "ट्रिप कैंसल नहीं की जा सकती!"}</div>
+          <p className="text-xs" style={{ color: "#FFFFFF" }}>{lang === "en" ? "The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support below for any help." : "ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए नीचे सपोर्ट से संपर्क करें।"}</p>
         </div>
       )}
       <div className="space-y-3">
         <a href="tel:100" onClick={() => raiseAlert?.(role, "पुलिस सहायता")}
-          className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: "#2A211C" }}>
+          className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: "#000000" }}>
           <Siren size={16} /> {lang === "en" ? "Police Help (100)" : "पुलिस सहायता (100)"}
         </a>
         <a href={`tel:${ADMIN_PHONE}`} onClick={() => raiseAlert?.(role, "इमरजेंसी कॉल")}
@@ -1262,7 +1260,7 @@ function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
           className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
         {sent && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Complaint sent to admin" : "शिकायत एडमिन को भेज दी गई"}</div>}
         <button onClick={submitComplaint} disabled={!complaint.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm"
-          style={{ background: complaint.trim() ? "#60A5FA" : C.line, color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : "शिकायत भेजें"}</button>
+          style={{ background: complaint.trim() ? "#0052CC" : "#E0E0E0", color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : "शिकायत भेजें"}</button>
       </div>
     </div>
   );
@@ -1310,8 +1308,8 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
                 <Package size={20} color="#fff" />
               </div>
               <div>
-                <div className="text-sm font-bold" style={{ color: C.navy }}>{lang === "en" ? "Customer" : "कस्टमर"}</div>
-                <div className="text-[11px]" style={{ color: "#3D1B17" }}>{lang === "en" ? "Post a load & book a truck" : "लोड पोस्ट करें और ट्रक बुक करें"}</div>
+                <div className="text-sm font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Customer" : "कस्टमर"}</div>
+                <div className="text-[11px]" style={{ color: "#000000" }}>{lang === "en" ? "Post a load & book a truck" : "लोड पोस्ट करें और ट्रक बुक करें"}</div>
               </div>
             </button>
             {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : "कस्टमर")}
@@ -1322,11 +1320,11 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
           <div>
             <button onClick={() => onSelect("driver")} className="w-full rounded-xl p-4 flex items-center gap-3 text-left" style={{ background: C.navy }}>
               <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: C.marigold }}>
-                <Truck size={20} color={C.navy} />
+                <Truck size={20} color="#000000" />
               </div>
               <div>
                 <div className="text-sm font-bold text-white">{lang === "en" ? "Driver" : "ड्राइवर"}</div>
-                <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Bid on loads & earn" : "लोड पर बोली लगाएं और कमाएं"}</div>
+                <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Bid on loads & earn" : "लोड पर बोली लगाएं और कमाएं"}</div>
               </div>
             </button>
             {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : "ड्राइवर")}
@@ -1414,12 +1412,12 @@ function AdminLogin({ onVerified, lang, onBack }) {
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
       {onBack && (
-        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
         </button>
       )}
       <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.navy }}>
-        <LayoutDashboard size={26} color={C.marigold} />
+        <LayoutDashboard size={26} color="#FFFFFF" />
       </div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Admin Login" : "एडमिन लॉगिन"}</h2>
       <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Authorized personnel only" : "सिर्फ अधिकृत व्यक्ति ही आगे बढ़ें"}</p>
@@ -1441,7 +1439,7 @@ function AdminLogin({ onVerified, lang, onBack }) {
           </div>
         )}
         <button onClick={submit} disabled={!email.trim() || !password.trim() || submitting} className="w-full rounded-lg py-3 font-bold text-sm"
-          style={{ background: email.trim() && password.trim() && !submitting ? C.marigold : C.line, color: email.trim() && password.trim() && !submitting ? C.navy : "#9AA3B0" }}>
+          style={{ background: email.trim() && password.trim() && !submitting ? C.marigold : "#E0E0E0", color: email.trim() && password.trim() && !submitting ? "#000000" : "#9AA3B0" }}>
           {submitting ? (lang === "en" ? "Logging in..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : "लॉगिन करें")}
         </button>
       </div>
@@ -1594,7 +1592,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   };
 
   const backButton = (
-    <button onClick={onLogout} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+    <button onClick={onLogout} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
       <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
     </button>
   );
@@ -1621,12 +1619,12 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
         {backButton}
-        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: "#FCEAE3" }}>
-          <XCircle size={26} color={C.safety} />
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
+          <XCircle size={26} color="#FFFFFF" />
         </div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : "अभी रजिस्टर्ड नहीं है"}</h2>
         <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a customer account yet. Please sign up first." : "इस मोबाइल नंबर से अभी तक कोई कस्टमर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
-        <button onClick={() => setMode("signup")} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>
+        <button onClick={() => setMode("signup")} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.marigold, color: "#000000" }}>
           {lang === "en" ? "Sign Up Now" : "अभी साइन अप करें"}
         </button>
       </div>
@@ -1640,7 +1638,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
       <div className="flex-1 overflow-y-auto px-6 py-8 relative">
         {backButton}
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
-          <MapPin size={22} color={C.navy} />
+          <MapPin size={22} color="#000000" />
         </div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Registration" : "कस्टमर रजिस्ट्रेशन"}</h2>
         <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
@@ -1648,7 +1646,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         <div className="space-y-3">
           <div className="flex justify-center">
             <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${verifiedMobile || mobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
-              <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#F5E6C8", border: `2px dashed ${C.marigoldDeep}` }}>
+              <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
                 {photoUploading
                   ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
                   : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
@@ -1692,7 +1690,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
 
         {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
         <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className={`w-full rounded-lg py-3 font-bold text-sm mt-3 ${detailsValid && !photoUploading ? "guided-submit-ready" : ""}`}
-          style={{ background: detailsValid && !photoUploading ? C.marigold : C.line, color: detailsValid && !photoUploading ? C.navy : "#9AA3B0" }}>
+          style={{ background: detailsValid && !photoUploading ? C.marigold : "#E0E0E0", color: detailsValid && !photoUploading ? "#000000" : "#9AA3B0" }}>
           {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें")}
         </button>
         <div id={recaptchaContainerId} />
@@ -1709,14 +1707,14 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     // the registration form if this number genuinely has none yet.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
         </button>
         <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer" : "कस्टमर"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
         <div className="w-full space-y-3">
-          <button onClick={() => setMode("login")} className="w-full rounded-lg py-3.5 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>
+          <button onClick={() => setMode("login")} className="w-full rounded-lg py-3.5 font-bold text-sm" style={{ background: C.marigold, color: "#000000" }}>
             {lang === "en" ? "Login" : "लॉगिन करें"}
           </button>
           <button onClick={() => setMode("signup")} className="w-full rounded-lg py-3.5 font-bold text-sm" style={{ background: C.paper, color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -1731,7 +1729,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     // Login — mobile + OTP only, nothing else to fill in.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
         </button>
         <div className="mb-4"><Logo size={96} /></div>
@@ -1748,7 +1746,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : C.line, color: mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : "#E0E0E0", color: mobile.length === 10 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
               </button>
             </div>
@@ -1762,7 +1760,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : "#E0E0E0", color: otp.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
               </button>
               <div className="flex items-center justify-between">
@@ -1781,7 +1779,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   // verification at the bottom of this same page.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
-      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
         <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
       </button>
       <div className="mb-4"><Logo size={96} /></div>
@@ -1793,7 +1791,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
       <div className="space-y-3">
         <div className="flex justify-center">
           <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => setPhotoFile(f)}>
-            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#F5E6C8", border: `2px dashed ${C.marigoldDeep}` }}>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
               <SafeImage src={photoPreview} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />
             </div>
           </PhotoPicker>
@@ -1846,7 +1844,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
-                className={`w-full rounded-lg py-3 font-bold text-sm ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                className={`w-full rounded-lg py-3 font-bold text-sm ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : "#E0E0E0", color: detailsValid && mobile.length === 10 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
               </button>
             </div>
@@ -1860,7 +1858,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : "#E0E0E0", color: otp.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify & Continue" : "वेरीफाई करें और आगे बढ़ें")}
               </button>
               <div className="flex items-center justify-between">
@@ -2007,7 +2005,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   };
 
   const backButton = (
-    <button onClick={onLogout} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+    <button onClick={onLogout} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
       <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
     </button>
   );
@@ -2056,12 +2054,12 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
         {backButton}
-        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: "#FCEAE3" }}>
-          <XCircle size={26} color={C.safety} />
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
+          <XCircle size={26} color="#FFFFFF" />
         </div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : "अभी रजिस्टर्ड नहीं है"}</h2>
         <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a driver account yet. Please sign up first." : "इस मोबाइल नंबर से अभी तक कोई ड्राइवर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
-        <button onClick={() => setMode("signup")} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>
+        <button onClick={() => setMode("signup")} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.marigold, color: "#000000" }}>
           {lang === "en" ? "Sign Up Now" : "अभी साइन अप करें"}
         </button>
       </div>
@@ -2075,7 +2073,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       <div className="flex-1 overflow-y-auto px-6 py-8 relative">
         {backButton}
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
-          <MapPin size={22} color={C.navy} />
+          <MapPin size={22} color="#000000" />
         </div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Registration" : "ड्राइवर रजिस्ट्रेशन"}</h2>
         <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
@@ -2104,10 +2102,10 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </GuidedStep>
         </div>
-        <div className="rounded-lg p-3 mt-3" style={{ background: "#FCEAE3", border: `1.5px solid ${C.safety}` }}>
+        <div className="rounded-lg p-3 mt-3" style={{ background: C.safety }}>
           <label className="flex items-start gap-2 cursor-pointer">
             <input type="checkbox" checked={acceptedDocsTerms} onChange={(e) => setAcceptedDocsTerms(e.target.checked)} className="mt-0.5 shrink-0" style={{ width: 18, height: 18 }} />
-            <span className="text-[11px] font-semibold leading-snug" style={{ color: C.ink }}>
+            <span className="text-[11px] font-semibold leading-snug" style={{ color: "#FFFFFF" }}>
               {lang === "en"
                 ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
                 : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
@@ -2116,7 +2114,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         </div>
         {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
         <button onClick={completeDetails} disabled={!detailsValid} className={`w-full rounded-lg py-3 font-bold text-sm mt-3 ${detailsValid ? "guided-submit-ready" : ""}`}
-          style={{ background: detailsValid ? C.marigold : C.line, color: detailsValid ? C.navy : "#9AA3B0" }}>
+          style={{ background: detailsValid ? C.marigold : "#E0E0E0", color: detailsValid ? "#000000" : "#9AA3B0" }}>
           {lang === "en" ? "Continue" : "आगे बढ़ें"}
         </button>
       </div>
@@ -2132,14 +2130,14 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     // file yet?).
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
         </button>
         <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver" : "ड्राइवर"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
         <div className="w-full space-y-3">
-          <button onClick={() => setMode("login")} className="w-full rounded-lg py-3.5 font-bold text-sm" style={{ background: C.marigold, color: C.navy }}>
+          <button onClick={() => setMode("login")} className="w-full rounded-lg py-3.5 font-bold text-sm" style={{ background: C.marigold, color: "#000000" }}>
             {lang === "en" ? "Login" : "लॉगिन करें"}
           </button>
           <button onClick={() => setMode("signup")} className="w-full rounded-lg py-3.5 font-bold text-sm" style={{ background: C.paper, color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -2154,7 +2152,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     // Login — mobile + OTP only, nothing else to fill in.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
         </button>
         <div className="mb-4"><Logo size={96} /></div>
@@ -2171,7 +2169,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : C.line, color: mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: mobile.length === 10 && !sending ? C.marigold : "#E0E0E0", color: mobile.length === 10 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
               </button>
             </div>
@@ -2185,7 +2183,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : "#E0E0E0", color: otp.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
               </button>
               <div className="flex items-center justify-between">
@@ -2204,7 +2202,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   // verification at the bottom of this same page.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
-      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
         <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
       </button>
       <div className="mb-4"><Logo size={96} /></div>
@@ -2239,10 +2237,10 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         </GuidedStep>
       </div>
 
-      <div className="rounded-lg p-3 mt-3" style={{ background: "#FCEAE3", border: `1.5px solid ${C.safety}` }}>
+      <div className="rounded-lg p-3 mt-3" style={{ background: C.safety }}>
         <label className="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" checked={acceptedDocsTerms} onChange={(e) => setAcceptedDocsTerms(e.target.checked)} className="mt-0.5 shrink-0" style={{ width: 18, height: 18 }} />
-          <span className="text-[11px] font-semibold leading-snug" style={{ color: C.ink }}>
+          <span className="text-[11px] font-semibold leading-snug" style={{ color: "#FFFFFF" }}>
             {lang === "en"
               ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
               : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
@@ -2263,7 +2261,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause first" : "पहले ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
-                className={`w-full rounded-lg py-3 font-bold text-sm ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : C.line, color: detailsValid && mobile.length === 10 && !sending ? C.navy : "#9AA3B0" }}>
+                className={`w-full rounded-lg py-3 font-bold text-sm ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : "#E0E0E0", color: detailsValid && mobile.length === 10 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
               </button>
             </div>
@@ -2277,7 +2275,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
-                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : C.line, color: otp.length === 6 && !sending ? C.navy : "#9AA3B0" }}>
+                className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: otp.length === 6 && !sending ? C.marigold : "#E0E0E0", color: otp.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify & Continue" : "वेरीफाई करें और आगे बढ़ें")}
               </button>
               <div className="flex items-center justify-between">
@@ -2412,7 +2410,7 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
             <button type="button" onClick={() => cameraRef.current?.click()} className="w-full rounded-lg py-3 mb-2 font-bold text-sm flex items-center justify-center gap-2" style={{ background: C.marigold, color: "#fff" }}>
               <Camera size={16} /> {lang === "en" ? "Take Photo" : "फोटो लें"}
             </button>
-            <button type="button" onClick={() => libraryRef.current?.click()} className="w-full rounded-lg py-3 mb-2 font-bold text-sm" style={{ background: C.line, color: C.ink }}>
+            <button type="button" onClick={() => libraryRef.current?.click()} className="w-full rounded-lg py-3 mb-2 font-bold text-sm" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
               {lang === "en" ? "Choose from Library" : "लाइब्रेरी से चुनें"}
             </button>
             <button type="button" onClick={() => setChoosing(false)} className="w-full rounded-lg py-2.5 text-xs font-semibold" style={{ color: C.safety }}>
@@ -2474,9 +2472,9 @@ function BillDocumentsModal({ booking, onClose, lang }) {
         </div>
 
         {alreadySent && (
-          <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#DFEEE2" }}>
-            <CheckCircle2 size={14} color={C.success} />
-            <span className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "Already sent to driver — you can resend to update." : "पहले ही ड्राइवर को भेजा जा चुका है — अपडेट के लिए फिर भेज सकते हैं।"}</span>
+          <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.success }}>
+            <CheckCircle2 size={14} color="#FFFFFF" />
+            <span className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Already sent to driver — you can resend to update." : "पहले ही ड्राइवर को भेजा जा चुका है — अपडेट के लिए फिर भेज सकते हैं।"}</span>
           </div>
         )}
 
@@ -2496,7 +2494,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
                 job is scanning, not picking an existing photo. */}
             <input ref={scanInputRef} type="file" accept="image/*" capture="environment" className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, false); e.target.value = ""; }} />
-            <button type="button" onClick={() => uploadFileRef.current?.click()} className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>
+            <button type="button" onClick={() => uploadFileRef.current?.click()} className="rounded-lg py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
               <Upload size={16} /> {lang === "en" ? "Upload Invoice" : "इनवॉइस अपलोड करें"}
             </button>
             {/* No capture attribute here — this one's for picking an
@@ -2514,7 +2512,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
         {error && <div className="text-xs font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
 
         <button onClick={send} disabled={!file?.url || sending} className={`w-full rounded-xl py-3 text-sm font-black text-white ${file?.url ? "shadow-lg" : ""}`}
-          style={{ background: file?.url ? C.metallicGreen : C.line, color: file?.url ? "#fff" : "#9AA3B0" }}>
+          style={{ background: file?.url ? C.metallicGreen : "#E0E0E0", color: file?.url ? "#fff" : "#9AA3B0" }}>
           {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send to Driver" : "ड्राइवर को भेजें")}
         </button>
       </div>
@@ -2614,7 +2612,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
         {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
         {value && (
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
-            className="absolute right-0 top-0 bottom-0 rounded-r-lg flex items-center justify-center" style={{ width: 44, background: C.line }}>
+            className="absolute right-0 top-0 bottom-0 rounded-r-lg flex items-center justify-center" style={{ width: 44, background: C.paper }}>
             <X size={20} color={C.inkSoft} strokeWidth={2.5} />
           </button>
         )}
@@ -2654,11 +2652,11 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
         )}
       </div>
       {areaLabel ? (
-        <div className="text-[10px] mt-1 font-semibold" style={{ color: "#A8721C" }}>📍 {areaLabel}</div>
+        <div className="text-[10px] mt-1 font-semibold" style={{ color: C.marigoldDeep }}>📍 {areaLabel}</div>
       ) : suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
           {suggestions.map((a) => (
-            <button key={a} onClick={() => onSuggestionTap(a)} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#F5E6C8", color: "#A8721C" }}>{a}</button>
+            <button key={a} onClick={() => onSuggestionTap(a)} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: C.marigoldDeep, color: "#FFFFFF" }}>{a}</button>
           ))}
         </div>
       )}
@@ -2686,7 +2684,7 @@ function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, o
   const locked = !active && !completed;
   return (
     <div ref={stepRef} className={`relative rounded-2xl h-full ${active ? "guided-step-active" : ""}`}
-      style={active ? { border: "2px solid #D9A406", background: "#FFF8E1", padding: 10 } : undefined}
+      style={active ? { border: `2px solid ${C.marigoldDeep}`, background: C.marigold, padding: 10 } : undefined}
       onFocus={onFocusStep} onBlur={onBlurStep}>
       <div inert={locked ? "" : undefined} className="h-full" style={locked ? { pointerEvents: "none", userSelect: "none", opacity: 0.45 } : undefined}>
         {children}
@@ -2945,8 +2943,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : "आपको क्या चाहिए?"}</p>
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setBookingMode("now")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.marigold }}>
-            <Truck size={22} color={C.navy} />
-            <div className="text-sm font-black" style={{ color: C.navy }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
+            <Truck size={22} color="#000000" />
+            <div className="text-sm font-black" style={{ color: "#000000" }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
           </button>
           <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.navy }}>
             <Clock3 size={22} color="#fff" />
@@ -2955,8 +2953,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         </div>
         <div className="grid grid-cols-2 gap-3 mt-3">
           <button onClick={() => (hasActiveBooking ? onViewCurrent() : setViewedEmptyCurrent(true))} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.marigold }}>
-            <Truck size={18} color={C.navy} />
-            <div className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"} ({hasActiveBooking ? 1 : 0})</div>
+            <Truck size={18} color="#000000" />
+            <div className="text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"} ({hasActiveBooking ? 1 : 0})</div>
           </button>
           <button onClick={onViewAdvance} className="rounded-2xl p-4 flex flex-col items-center gap-1.5 text-center" style={{ background: C.navy }}>
             <Clock3 size={18} color="#fff" />
@@ -2972,14 +2970,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
   return (
     <div className="px-5 pt-3 pb-5">
-      <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+      <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
         <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
       </button>
       <div className="space-y-3">
         {bookingMode === "advance" && (
           <GuidedStep {...stepProps(0)} lang={lang}>
             <div className="rounded-lg p-3 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
-              <div className="text-[11px] font-bold mb-2" style={{ color: "#A8721C" }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</div>
+              <div className="text-[11px] font-bold mb-2" style={{ color: "#000000" }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</div>
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {[1, 2, 3].map((n) => {
                   const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
@@ -2988,7 +2986,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
                   return (
                     <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
                       className="rounded-lg py-2 text-[11px] font-bold text-center"
-                      style={{ background: active ? "#A8721C" : C.paper, color: active ? "#fff" : "#A8721C", border: `1.5px solid #A8721C` }}>
+                      style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
                       {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : `${n} दिन बाद`}
                     </button>
                   );
@@ -2998,7 +2996,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
                 <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
                 <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-1.5" style={inputStyle}>
                   <span className="text-xs font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : "समय चुनें")}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Change" : "बदलें"}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#000000" }}>{lang === "en" ? "Change" : "बदलें"}</span>
                 </button>
               </div>
               <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
@@ -3015,15 +3013,15 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             setPickupSelected(hasPickupCoords);
             setDropSelected(hasDropCoords);
           }}
-            className="w-full flex items-center gap-2.5 rounded-lg p-2.5 text-left" style={{ background: "#DFEEE2" }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: C.success }}>
-              <Package size={15} color="#fff" />
+            className="w-full flex items-center gap-2.5 rounded-lg p-2.5 text-left" style={{ background: C.success }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+              <Package size={15} color={C.success} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] font-bold" style={{ color: C.success }}>{lang === "en" ? "Repeat last trip" : "पिछली ट्रिप दोहराएं"}</div>
-              <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{lastBooking.pickup} → {lastBooking.drop}</div>
+              <div className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Repeat last trip" : "पिछली ट्रिप दोहराएं"}</div>
+              <div className="text-[11px] font-bold truncate" style={{ color: "#FFFFFF" }}>{lastBooking.pickup} → {lastBooking.drop}</div>
             </div>
-            <span className="text-[10px] font-bold shrink-0" style={{ color: C.success }}>{lang === "en" ? "Tap →" : "टैप करें →"}</span>
+            <span className="text-[10px] font-bold shrink-0" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Tap →" : "टैप करें →"}</span>
           </button>
         )}
         <div className="space-y-4">
@@ -3067,9 +3065,9 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         </div>
 
         {distance !== null && (
-          <div className="rounded-lg p-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid #A8721C` }}>
+          <div className="rounded-lg p-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
             <div className="flex items-center gap-2">
-              <Navigation size={16} color="#A8721C" />
+              <Navigation size={16} color="#000000" />
               <span className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Estimated distance" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : "किमी"}</span>
             </div>
             <div className="text-xs font-bold mt-1" style={{ color: C.ink }}>— {lang === "en" ? "this helps both customer and driver decide a fair price" : "इससे कस्टमर और ड्राइवर दोनों को सही बोली तय करने में आसानी होगी"}</div>
@@ -3083,13 +3081,13 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <input className={inputCls} style={{ ...inputStyle, marginBottom: 6 }} placeholder={lang === "en" ? "e.g. Tiles" : "जैसे: टाइल्स"} value={newMaterial} onChange={(e) => setNewMaterial(e.target.value)} autoFocus />
                 <div className="flex items-center gap-2">
-                  <button onClick={() => { setAddingMaterial(false); setNewMaterial(""); }} className="flex-1 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.line, color: C.ink }}>{lang === "en" ? "Cancel" : "रद्द करें"}</button>
+                  <button onClick={() => { setAddingMaterial(false); setNewMaterial(""); }} className="flex-1 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>{lang === "en" ? "Cancel" : "रद्द करें"}</button>
                   <button onClick={() => {
                     const name = newMaterial.trim();
                     if (!name) return;
                     addCustomMaterial(name, { hi: name, en: name });
                     setMaterial(name); setNewMaterial(""); setAddingMaterial(false);
-                  }} className="flex-1 rounded-lg py-2.5 text-xs font-bold text-white" style={{ background: "#A8721C" }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
+                  }} className="flex-1 rounded-lg py-2.5 text-xs font-bold text-white" style={{ background: C.marigoldDeep }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
                 </div>
               </div>
             ) : (
@@ -3121,7 +3119,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
                     {lang === "en" ? `Keep suggested vehicle (${vehicleLabel(bigFit, lang)})` : `सुझाई गई गाड़ी रखें (${vehicleLabel(bigFit, lang)})`}
                   </button>
                   <button onClick={() => { if (smallFit) setVehicle(smallFit.key); setShowAllVehicles(true); setShowBulkyPopup(false); }}
-                    className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.line, color: C.ink }}>
+                    className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
                     {lang === "en" ? `Use smaller vehicle instead (${smallFit ? vehicleLabel(smallFit, lang) : "—"})` : `छोटी गाड़ी ही रखें (${smallFit ? vehicleLabel(smallFit, lang) : "—"})`}
                   </button>
                 </div>
@@ -3131,11 +3129,11 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         })()}
 
         {advanceNoticeError && (
-          <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{advanceNoticeError}</div>
+          <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
         )}
 
         <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-4 font-extrabold text-lg flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready" : ""}`}
-          style={{ background: canPost ? C.success : C.line, color: canPost ? "#fff" : "#9AA3B0" }}>
+          style={{ background: canPost ? C.success : "#E0E0E0", color: canPost ? "#fff" : "#9AA3B0" }}>
           🚚 {lang === "en" ? "Book Now" : "अभी बुक करें"}
         </button>
       </div>
@@ -3222,7 +3220,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       return (
         <div key={bid.id} onClick={() => setSelectedBid(bid.id)}
           className="w-full text-left rounded-xl p-3 relative cursor-pointer"
-          style={{ background: isSelected ? "#F5E6C8" : "#FBEBD2", border: `1.5px solid ${isSelected ? "#A8721C" : isLowest ? C.success : C.marigoldDeep}` }}>
+          style={{ background: C.paper, border: `${isSelected ? 2.5 : 1.5}px solid ${isSelected ? C.marigoldDeep : isLowest ? C.success : C.marigoldDeep}` }}>
           {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>}
           <div className="flex items-center gap-3 mt-1">
             <SafeImage
@@ -3230,7 +3228,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               alt={lang === "en" ? `${vehicleLabel(bidVehicleType, lang)} - Side` : `${vehicleLabel(bidVehicleType, lang)} - साइड`}
               className="w-14 h-14 rounded-lg object-cover shrink-0"
               fallback={
-                <div className="w-14 h-14 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? "#A8721C" : isLowest ? C.success : C.marigoldDeep }}>
+                <div className="w-14 h-14 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.marigoldDeep : isLowest ? C.success : C.marigoldDeep }}>
                   <Truck size={22} color="#fff" />
                 </div>
               }
@@ -3253,7 +3251,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="flex justify-end mt-2">
             <button onClick={(e) => { e.stopPropagation(); setSelectedBid(bid.id); }}
               className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-black shadow-sm text-white"
-              style={{ background: "#60A5FA" }}>
+              style={{ background: "#0052CC" }}>
               {isSelected ? <><CheckCircle2 size={14} /> {lang === "en" ? "Selected" : "चयनित"}</> : (lang === "en" ? "Select" : "चुनें")}
             </button>
           </div>
@@ -3271,9 +3269,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             )}
 
             {sortedBids.length === 0 ? (
-              <div className="rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: "#DBEAFE", border: "1.5px solid #60A5FA" }}>
-                <Loader2 size={16} color="#1D4ED8" className="animate-spin" />
-                <span className="text-sm font-black" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Waiting for driver bids..." : "ड्राइवरों की बोली का इंतज़ार है..."}</span>
+              <div className="rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: C.navy }}>
+                <Loader2 size={16} color="#FFFFFF" className="animate-spin" />
+                <span className="text-sm font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Waiting for driver bids..." : "ड्राइवरों की बोली का इंतज़ार है..."}</span>
               </div>
             ) : (
               <div className="space-y-2">
@@ -3308,7 +3306,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {onAddAnother ? (
           <button onClick={onAddAnother} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-            <ChevronLeft size={18} color={C.navy} strokeWidth={3} />
+            <ChevronLeft size={18} color="#000000" strokeWidth={3} />
           </button>
         ) : <div />}
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
@@ -3323,7 +3321,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           </div>
         ) : (
           <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm text-white"
-            style={{ background: docsSent ? C.metallicGreen : "#60A5FA", border: `1.5px solid ${docsSent ? "#245536" : "#3B82F6"}` }}>
+            style={{ background: docsSent ? C.metallicGreen : C.navy, border: `1.5px solid ${docsSent ? C.success : C.navy}` }}>
             <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Invoice" : "इनवॉइस भेजें")}
           </button>
         )}
@@ -3351,7 +3349,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
         )}
         {!b.loadingStartedAt && b.driverMobile && (
-          <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+          <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
             <Phone size={16} color="#000000" /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{b.driverMobile}</span>
           </a>
         )}
@@ -3383,7 +3381,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             )}
             <div className="mt-2">
               {b.driverMobile ? (
-                <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+                <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
                   <Phone size={16} color="#000000" /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{b.driverMobile}</span>
                 </a>
               ) : (
@@ -3395,9 +3393,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             </div>
           </div>
 
-          <div className="rounded-lg p-2.5 mb-2.5" style={{ background: "#FBEBD2", border: `1px solid ${C.marigoldDeep}` }}>
-            <div className="text-xs font-black mb-1" style={{ color: C.marigoldDeep }}>⚠️ {lang === "en" ? "Note" : "नोट"}</div>
-            <div className="text-[10px] font-bold" style={{ color: "#000000" }}>
+          <div className="rounded-lg p-2.5 mb-2.5" style={{ background: C.marigoldDeep }}>
+            <div className="text-xs font-black mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Note" : "नोट"}</div>
+            <div className="text-[10px] font-bold" style={{ color: "#FFFFFF" }}>
               {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
             </div>
           </div>
@@ -3418,7 +3416,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           </div>
         )}
         {b.loadingStartedAt && (
-          <div className="rounded-lg p-2.5 text-[11px] font-bold" style={{ background: "#FCEAE3", color: C.safety }}>
+          <div className="rounded-lg p-2.5 text-[11px] font-bold" style={{ background: C.safety, color: "#FFFFFF" }}>
             ⚠️ {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
           </div>
         )}
@@ -3441,8 +3439,8 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
   const others = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled");
   const [docsBooking, setDocsBooking] = useState(null);
   const statusMeta = lang === "en"
-    ? { Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
-    : { Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
+    ? { Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
+    : { Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
 
   // Same Context/Time/Charges breakdown as the in-app trip summary table
   // (see TripBreakdownTable), laid out as a fixed-width plain-text table
@@ -3481,8 +3479,8 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Ride History" : "राइड हिस्ट्री"}</h2>
       {others.length === 0 ? (
         <div className="text-center py-12 px-6">
-          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "#FBEBD2" }}>
-            <Package size={26} color={C.marigoldDeep} />
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.marigoldDeep }}>
+            <Package size={26} color="#FFFFFF" />
           </div>
           <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No past rides yet" : "अभी कोई पुरानी राइड नहीं है"}</p>
           <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Completed and cancelled bookings will show up here." : "पूर्ण और रद्द बुकिंग यहां दिखेंगी।"}</p>
@@ -3564,7 +3562,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
           <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${customerMobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
-            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: "#F5E6C8", border: `2px dashed ${C.marigoldDeep}` }}>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
               {photoUploading
                 ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
                 : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
@@ -3611,7 +3609,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
           {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
         </button>
       </div>
-      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-bold text-sm" style={{ background: "#FCEAE3", color: C.safety, border: `1px solid ${C.safety}` }}>
+      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-bold text-sm" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
         <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
       </button>
     </div>
@@ -3761,7 +3759,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
     return (
       <div className="flex-1 overflow-y-auto relative">
         <div className="px-5 pt-3">
-          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
             <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
           </button>
         </div>
@@ -3791,16 +3789,16 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         {headerHasContent && (
           <div className="flex items-center justify-between gap-2 px-5 pt-3">
             {showHamburger ? (
-              <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#60A5FA", border: "1.5px solid #3B82F6" }}>
+              <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
                 <Menu size={18} color="#fff" strokeWidth={2.5} />
               </button>
             ) : rideView === "advance" ? (
               <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-                <ChevronLeft size={18} color={C.navy} strokeWidth={3} />
+                <ChevronLeft size={18} color="#000000" strokeWidth={3} />
               </button>
             ) : biddingHeader ? (
               <button onClick={() => setAddingAnother(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-                <ChevronLeft size={18} color={C.navy} strokeWidth={3} />
+                <ChevronLeft size={18} color="#000000" strokeWidth={3} />
               </button>
             ) : <div className="w-9 h-9 shrink-0" />}
             {showRideBadge ? (
@@ -3812,7 +3810,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               </div>
             ) : showHamburger ? (
               <div className="flex-1 min-w-0 flex justify-center">
-                <span className="rounded-full px-4 py-2 text-base font-black text-white" style={{ background: "#60A5FA" }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
+                <span className="rounded-full px-4 py-2 text-base font-black text-white" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
               </div>
             ) : biddingHeader ? (
               <div className="flex-1 min-w-0">
@@ -3831,11 +3829,11 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
               <div className="px-4 py-4 flex items-center gap-3" style={{ background: C.navy }}>
                 <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ background: C.marigold }}>
-                  {customerProfile?.photo ? <img src={customerProfile.photo.url} alt="" className="w-full h-full object-cover" /> : <UserCircle2 size={24} color={C.navy} />}
+                  {customerProfile?.photo ? <img src={customerProfile.photo.url} alt="" className="w-full h-full object-cover" /> : <UserCircle2 size={24} color="#000000" />}
                 </div>
                 <div>
                   <div className="text-sm font-bold text-white">{customerProfile?.name || (lang === "en" ? "Customer" : "कस्टमर")}</div>
-                  {customerMobile && <div className="text-[11px]" style={{ color: "#D9C4B0", fontFamily: monoFont }}>{customerMobile}</div>}
+                  {customerMobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{customerMobile}</div>}
                 </div>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
@@ -3960,7 +3958,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   if (myBid) return null;
 
   return (
-    <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: justSubmitted ? "#DFEEE2" : C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
+    <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}</span>
       </div>
@@ -3971,53 +3969,53 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
       </div>
 
       {lowestOverall !== null && (
-        <div className="rounded-lg p-2 mb-2 flex items-center justify-between" style={{ background: "#DFEEE2" }}>
-          <span className="text-[11px] font-semibold" style={{ color: C.success }}>{lang === "en" ? "Current lowest quote" : "अभी सबसे कम कोटेशन"}</span>
-          <span className="text-sm font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(lowestOverall)}</span>
+        <div className="rounded-lg p-2 mb-2 flex items-center justify-between" style={{ background: C.success }}>
+          <span className="text-[11px] font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Current lowest quote" : "अभी सबसे कम कोटेशन"}</span>
+          <span className="text-sm font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(lowestOverall)}</span>
         </div>
       )}
       {isMineHighest && (
-        <div className="rounded-lg p-2 mb-2 text-[11px] font-semibold" style={{ background: "#FCEAE3", color: C.safety }}>
+        <div className="rounded-lg p-2 mb-2 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
           ⚠ {lang === "en" ? "Your quote is the highest" : "आपका कोटेशन सबसे ज़्यादा है"} — {lowestOther ? (lang === "en" ? `${lowestOther.driverName}'s quote is ${fmt(lowestOther.amount)}` : `${lowestOther.driverName} का कोटेशन ${fmt(lowestOther.amount)} है`) : ""}
         </div>
       )}
 
       <div className="rounded-lg p-3 mb-2 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
-            <div className="text-sm font-extrabold mb-1.5" style={{ color: "#5A3B0A" }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
+            <div className="text-sm font-extrabold mb-1.5" style={{ color: "#000000" }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#1D4ED8" }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#1D4ED8" }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: "#1D4ED8" }}>{materialLabel(load.material, lang)}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{materialLabel(load.material, lang)}</span>
             </div>
             <div className="rounded-lg overflow-hidden" style={{ border: `2px solid ${C.marigoldDeep}` }}>
               <GuidedStep {...stepProps(0)} lang={lang}>
                 <div className="px-2 py-2.5 text-center" style={{ borderBottom: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
-                  <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Fare ₹ *" : "कुल भाड़ा ₹ *"}</div>
+                  <div className="text-xs font-black mb-1" style={{ color: C.navy }}>{lang === "en" ? "Fare ₹ *" : "कुल भाड़ा ₹ *"}</div>
                   <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus
-                    className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 26, fontWeight: 900 }} />
+                    className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 26, fontWeight: 900 }} />
                 </div>
               </GuidedStep>
               <div className="grid grid-cols-2" style={{ background: C.paper }}>
                 <GuidedStep {...stepProps(1)} lang={lang}>
                   <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ borderRight: `1px solid ${C.marigoldDeep}`, background: C.paper }}>
-                    <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Loading/Unloading hrs *" : "लोडिंग/अनलोडिंग घंटे *"}</div>
+                    <div className="text-xs font-black mb-1" style={{ color: C.navy }}>{lang === "en" ? "Loading/Unloading hrs *" : "लोडिंग/अनलोडिंग घंटे *"}</div>
                     <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
-                      className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 18, fontWeight: 900 }} />
+                      className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 18, fontWeight: 900 }} />
                   </div>
                 </GuidedStep>
                 <GuidedStep {...stepProps(2)} lang={lang}>
                   <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ background: C.paper }}>
-                    <div className="text-xs font-black mb-1" style={{ color: "#1D4ED8" }}>{lang === "en" ? "Waiting charges ₹/hr *" : "वेटिंग चार्ज ₹/घं *"}</div>
+                    <div className="text-xs font-black mb-1" style={{ color: C.navy }}>{lang === "en" ? "Waiting charges ₹/hr *" : "वेटिंग चार्ज ₹/घं *"}</div>
                     <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
-                      className="w-full text-center outline-none bg-transparent" style={{ color: "#1D4ED8", fontFamily: monoFont, fontSize: 16, fontWeight: 900 }} />
+                      className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 16, fontWeight: 900 }} />
                   </div>
                 </GuidedStep>
               </div>
             </div>
           </div>
-          <div className="rounded-lg p-2.5 mb-2" style={{ background: "#FBEBD2", border: `1px solid ${C.marigoldDeep}` }}>
-            <div className="text-xs font-black mb-1" style={{ color: C.marigoldDeep }}>⚠️ {lang === "en" ? "Note" : "नोट"}</div>
-            <div className="text-[10px] font-bold" style={{ color: "#000000" }}>
+          <div className="rounded-lg p-2.5 mb-2" style={{ background: C.marigoldDeep }}>
+            <div className="text-xs font-black mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Note" : "नोट"}</div>
+            <div className="text-[10px] font-bold" style={{ color: "#FFFFFF" }}>
               {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
             </div>
             <div className="text-[10px] font-bold mt-1" style={{ color: "#000000" }}>
@@ -4033,11 +4031,11 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
             </div>
           )}
           {bidError && (
-            <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: "#FCEAE3", color: C.safety }}>{bidError}</div>
+            <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bidError}</div>
           )}
 
           <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-xl py-3.5 text-base font-black text-white flex items-center justify-center gap-1.5 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready shadow-lg" : (canSubmit && !walletShortfall) || justSubmitted ? "shadow-lg" : "shadow-sm"}`}
-            style={{ background: (canSubmit && !walletShortfall) || justSubmitted ? C.metallicGreen : C.line, color: (canSubmit && !walletShortfall) || justSubmitted ? "#fff" : "#9AA3B0" }}>
+            style={{ background: (canSubmit && !walletShortfall) || justSubmitted ? C.metallicGreen : "#E0E0E0", color: (canSubmit && !walletShortfall) || justSubmitted ? "#fff" : "#9AA3B0" }}>
             {justSubmitted ? <><CheckCircle2 size={18} /> {lang === "en" ? "Sent" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : "कोटेशन भेजें")}
           </button>
     </div>
@@ -4095,9 +4093,9 @@ function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }
       <table className="w-full" style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: C.marigold }}>
-            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#3A2611" }}>{lang === "en" ? "Context" : "विवरण"}</th>
-            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#3A2611" }}>{lang === "en" ? "Time" : "समय"}</th>
-            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#3A2611" }}>{lang === "en" ? "Charges (₹)" : "चार्ज (₹)"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Context" : "विवरण"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Time" : "समय"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Charges (₹)" : "चार्ज (₹)"}</th>
           </tr>
         </thead>
         <tbody>
@@ -4175,13 +4173,13 @@ function TripOvertimeBanner({ booking, lang }) {
   const clock = useTripClock(booking.loadingStartedAt, booking.hours, booking.extraHourRate, booking.pausedMs, booking.travelPausedAt);
   if (!clock.started || !clock.isOvertime) return null;
   return (
-    <div className="rounded-lg mt-2 p-2.5" style={{ background: "#FCEAE3" }}>
-      <div className="text-[11px] font-bold" style={{ color: C.safety }}>🔔 {lang === "en" ? "Beep-beep! Loading/Unloading time is over" : "बीप-बीप! लोडिंग/अनलोडिंग समय खत्म हो गया"}</div>
-      <div className="text-[11px] mt-0.5" style={{ color: C.safety }}>
+    <div className="rounded-lg mt-2 p-2.5" style={{ background: C.safety }}>
+      <div className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>🔔 {lang === "en" ? "Beep-beep! Loading/Unloading time is over" : "बीप-बीप! लोडिंग/अनलोडिंग समय खत्म हो गया"}</div>
+      <div className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>
         {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs (billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"}) · Waiting charge so far: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे (${clock.billableHours} घंटे के हिसाब से बिल) · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
       </div>
       {clock.isPaused && (
-        <div className="text-[11px] mt-1 font-semibold" style={{ color: C.safety }}>⏸ {lang === "en" ? "Timer paused — travel time isn't counted" : "टाइमर रुका हुआ है — यात्रा का समय नहीं गिना जाता"}</div>
+        <div className="text-[11px] mt-1 font-semibold" style={{ color: "#FFFFFF" }}>⏸ {lang === "en" ? "Timer paused — travel time isn't counted" : "टाइमर रुका हुआ है — यात्रा का समय नहीं गिना जाता"}</div>
       )}
     </div>
   );
@@ -4532,23 +4530,23 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       )}
 
       {bidRejectedToast && (
-        <div className="toast-pop rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: "#FCEAE3" }}>
-          <XCircle size={14} color={C.safety} />
-          <span className="text-[11px] font-bold" style={{ color: C.safety }}>{lang === "en" ? "Customer chose someone else for one of your quotes." : "आपके किसी कोटेशन के लिए ग्राहक ने किसी और को चुन लिया।"}</span>
+        <div className="toast-pop rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.safety }}>
+          <XCircle size={14} color="#FFFFFF" />
+          <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Customer chose someone else for one of your quotes." : "आपके किसी कोटेशन के लिए ग्राहक ने किसी और को चुन लिया।"}</span>
         </div>
       )}
 
       {notificationsLocked && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
-          <Clock3 size={14} color={C.marigoldDeep} />
-          <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
+          <Clock3 size={14} color="#000000" />
+          <span className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
         </div>
       )}
 
       {driver.blacklisted && (
-        <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: "#FCEAE3" }}>
-          <XCircle size={15} color={C.safety} />
-          <span className="text-xs font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Your account has been blocked by admin — loads won't show." : "आपका खाता एडमिन द्वारा ब्लॉक किया गया है — लोड नहीं दिखेंगे।"}</span>
+        <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: C.safety }}>
+          <XCircle size={15} color="#FFFFFF" />
+          <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Your account has been blocked by admin — loads won't show." : "आपका खाता एडमिन द्वारा ब्लॉक किया गया है — लोड नहीं दिखेंगे।"}</span>
         </div>
       )}
 
@@ -4560,7 +4558,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
               <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
             )}
             {!myTrip.loadingStartedAt && myTrip.customerMobile && (
-              <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+              <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
                 <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{myTrip.customerMobile}</span>
               </a>
             )}
@@ -4592,7 +4590,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
                 )}
                 <div className="mt-2">
                   {myTrip.customerMobile ? (
-                    <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+                    <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
                       <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{myTrip.customerMobile}</span>
                     </a>
                   ) : (
@@ -4613,8 +4611,8 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         <>
           {visibleLoads.length === 0 ? (
             <div className="text-center py-10 px-4">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "#FBEBD2" }}>
-                <IndianRupee size={24} color={C.marigoldDeep} />
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.marigoldDeep }}>
+                <IndianRupee size={24} color="#FFFFFF" />
               </div>
               <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No new load right now" : "अभी कोई नया लोड नहीं है"}</p>
               <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — new loads will show here instantly." : "ऑनलाइन रहें — नया लोड आते ही यहां तुरंत दिखेगा।"}</p>
@@ -4683,21 +4681,21 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Wallet" : "मेरा वॉलेट"}</h2>
       {inTrial && (
-        <div className="rounded-lg p-3 mb-3 flex items-center gap-2" style={{ background: "#DFEEE2" }}>
-          <CheckCircle2 size={15} color={C.success} />
-          <span className="text-xs font-semibold" style={{ color: C.success }}>{lang === "en" ? "Your free trial is active — no commission will be cut and no minimum wallet balance is required." : "आपका फ्री ट्रायल चल रहा है — कोई कमीशन नहीं कटेगा और न्यूनतम वॉलेट बैलेंस की ज़रूरत नहीं है।"}</span>
+        <div className="rounded-lg p-3 mb-3 flex items-center gap-2" style={{ background: C.success }}>
+          <CheckCircle2 size={15} color="#FFFFFF" />
+          <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Your free trial is active — no commission will be cut and no minimum wallet balance is required." : "आपका फ्री ट्रायल चल रहा है — कोई कमीशन नहीं कटेगा और न्यूनतम वॉलेट बैलेंस की ज़रूरत नहीं है।"}</span>
         </div>
       )}
       <div className="rounded-xl p-4 mb-3" style={{ background: C.navy }}>
-        <div className="text-[11px]" style={{ color: "#D9C4B0" }}>{lang === "en" ? "Wallet Balance" : "वॉलेट बैलेंस"}</div>
+        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Wallet Balance" : "वॉलेट बैलेंस"}</div>
         <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
         {!inTrial && driver.wallet < minWallet && (
-          <div className="text-[11px] mt-2 font-semibold" style={{ color: C.safety }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
+          <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
         )}
         {(driver.heldCredit || 0) > 0 && (
-          <div className="text-[11px] mt-2 font-semibold" style={{ color: C.marigold }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
+          <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
         )}
-        <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1.5" style={{ background: "#3D1B17", color: "#fff" }}>
+        <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1.5" style={{ background: "#000000", color: "#fff" }}>
           <ClipboardList size={13} /> {showHistory ? (lang === "en" ? "Hide Transaction History" : "लेन-देन हिस्ट्री छुपाएं") : (lang === "en" ? "Transaction History" : "लेन-देन हिस्ट्री")}
         </button>
       </div>
@@ -4708,7 +4706,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
           ) : (
             <div className="space-y-1.5 max-h-64 overflow-y-auto">
               {walletTransactions.map((tx) => (
-                <div key={tx.id} className="rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: "#F8F4EC" }}>
+                <div key={tx.id} className="rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <div className="min-w-0">
                     <div className="text-[11px] font-semibold truncate" style={{ color: C.ink }}>{tx.label}</div>
                     <div className="text-[10px]" style={{ color: C.inkSoft }}>{txTime(tx.createdAt)}</div>
@@ -4722,17 +4720,17 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
           )}
         </div>
       )}
-      <button onClick={() => setShowComingSoon(true)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#60A5FA", color: "#fff" }}>
+      <button onClick={() => setShowComingSoon(true)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#0052CC", color: "#fff" }}>
         <IndianRupee size={14} /> {lang === "en" ? "Recharge" : "रीचार्ज करें"}
       </button>
       {showComingSoon && (
-        <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#5A3B0A" }}>
+        <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#000000" }}>
           {lang === "en" ? "Online payments are coming soon. Use manual recharge below for now." : "ऑनलाइन पेमेंट जल्द आ रहा है। फिलहाल नीचे मैनुअल रीचार्ज का उपयोग करें।"}
         </div>
       )}
       <div className="text-sm font-extrabold mb-1.5" style={{ color: C.ink }}>{lang === "en" ? "Manual recharge (until online payments launch)" : "मैनुअल रीचार्ज (ऑनलाइन पेमेंट आने तक)"}</div>
       <button onClick={() => requestRecharge(500)} disabled={hasPendingRecharge} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2"
-        style={{ background: hasPendingRecharge ? C.line : C.marigold, color: hasPendingRecharge ? "#9AA3B0" : C.navy }}>
+        style={{ background: hasPendingRecharge ? "#E0E0E0" : C.marigold, color: hasPendingRecharge ? "#9AA3B0" : "#000000" }}>
         {hasPendingRecharge ? (lang === "en" ? "Recharge request pending admin approval" : "रीचार्ज रिक्वेस्ट एडमिन अप्रूवल के इंतज़ार में") : (lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)")}
       </button>
       <div className="text-sm font-extrabold mb-2" style={{ color: C.ink }}>{lang === "en" ? "Pay admin via UPI/Paytm outside the app, then request a recharge — admin verifies and credits your wallet." : "ऐप के बाहर UPI/Paytm से एडमिन को भुगतान करें, फिर रीचार्ज रिक्वेस्ट करें — एडमिन जांच कर वॉलेट में जमा करेगा।"}</div>
@@ -4742,7 +4740,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
             {myRecharges.map((r) => (
               <div key={r.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <span className="text-xs font-semibold" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(r.amount)}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: r.status === "Approved" ? C.success : C.marigoldDeep, background: r.status === "Approved" ? "#DFEEE2" : "#FBEBD2" }}>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: r.status === "Approved" ? C.success : C.marigoldDeep }}>
                   {r.status === "Approved" ? (lang === "en" ? "Credited ✓" : "जमा हुआ ✓") : (lang === "en" ? "Pending admin approval" : "एडमिन अप्रूवल बाकी")}
                 </span>
               </div>
@@ -4752,17 +4750,17 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
       )}
       <div className="text-sm font-extrabold mb-4" style={{ color: C.ink }}>{lang === "en" ? `${commissionPct}% commission is cut from this wallet instantly the moment a bid is accepted.` : `बिड एक्सेप्ट होते ही भाड़े का ${commissionPct}% कमीशन इसी वॉलेट से तुरंत कट जाता है।`}</div>
 
-      <div className="rounded-xl p-4 mb-2" style={{ background: "#DFEEE2", border: `1.5px solid ${C.success}` }}>
+      <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
         <div className="flex items-center justify-between mb-2">
           <div>
-            <div className="text-sm font-extrabold" style={{ color: C.success }}>{lang === "en" ? "Bonus Account" : "बोनस अकाउंट"}</div>
-            <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? `You get ${bonusPct}% out of the ${commissionPct}% commission` : `${commissionPct}% कमीशन में से ${bonusPct}% बोनस आपको मिलता है`}</div>
+            <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Bonus Account" : "बोनस अकाउंट"}</div>
+            <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `You get ${bonusPct}% out of the ${commissionPct}% commission` : `${commissionPct}% कमीशन में से ${bonusPct}% बोनस आपको मिलता है`}</div>
           </div>
-          <div className="text-xl font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(driver.bonus || 0)}</div>
+          <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(driver.bonus || 0)}</div>
         </div>
         <button onClick={() => requestWithdrawal(driver.bonus || 0)} disabled={!driver.bonus}
           className={`w-full rounded-lg py-2 text-xs font-bold text-white flex items-center justify-center gap-1.5 ${driver.bonus ? "shadow-lg" : ""}`}
-          style={{ background: driver.bonus ? C.metallicGreen : C.line, color: driver.bonus ? "#fff" : "#9AA3B0" }}>
+          style={{ background: driver.bonus ? C.metallicGreen : "#E0E0E0", color: driver.bonus ? "#fff" : "#9AA3B0" }}>
           <Wallet size={13} /> {lang === "en" ? "Send to Bank" : "बैंक में भेजें"}
         </button>
       </div>
@@ -4774,7 +4772,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
             {myWithdrawals.map((w) => (
               <div key={w.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <span className="text-xs font-semibold" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(w.amount)}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: w.status === "Approved" ? C.success : C.marigoldDeep, background: w.status === "Approved" ? "#DFEEE2" : "#FBEBD2" }}>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: w.status === "Approved" ? C.success : C.marigoldDeep }}>
                   {w.status === "Approved" ? (lang === "en" ? "Sent to bank ✓" : "बैंक में भेज दिया ✓") : (lang === "en" ? "Pending admin approval" : "एडमिन अप्रूवल बाकी")}
                 </span>
               </div>
@@ -4816,7 +4814,7 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
           </div>
         )}
         {myTrips.map((t) => (
-          <div key={t.id} className="rounded-lg px-3 py-2.5" style={{ background: t.status === "Cancelled" ? "#FCEAE3" : C.paper, border: `1px solid ${t.status === "Cancelled" ? C.safety : C.line}` }}>
+          <div key={t.id} className="rounded-lg px-3 py-2.5" style={{ background: C.paper, border: `1px solid ${t.status === "Cancelled" ? C.safety : C.line}` }}>
             <div className="flex items-center justify-between">
               <div className="text-xs font-semibold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
               <div className="text-sm font-bold" style={{ color: t.status === "Cancelled" ? C.safety : C.success, fontFamily: monoFont }}>
@@ -4944,9 +4942,9 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : "दस्तावेज़ (KYC)"}</h2>
       <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Upload your photo and driving license, and enter your vehicle's number and dimensions." : "अपनी फोटो और ड्राइविंग लाइसेंस अपलोड करें, और अपनी गाड़ी का नंबर व साइज़ डालें।"}</p>
 
-      <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: driver.kyc === "Approved" ? "#DFEEE2" : "#FBEBD2" }}>
-        <ShieldCheck size={16} color={driver.kyc === "Approved" ? C.success : C.marigoldDeep} />
-        <span className="text-xs font-semibold" style={{ color: driver.kyc === "Approved" ? C.success : C.marigoldDeep }}>{lang === "en" ? "Status" : "स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : "सत्यापित") : (lang === "en" ? "Pending" : "लंबित")}</span>
+      <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: driver.kyc === "Approved" ? C.success : C.marigoldDeep }}>
+        <ShieldCheck size={16} color="#FFFFFF" />
+        <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Status" : "स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : "सत्यापित") : (lang === "en" ? "Pending" : "लंबित")}</span>
       </div>
 
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Documents" : "दस्तावेज़"}</div>
@@ -5007,9 +5005,9 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         </div>
       </div>
 
-      <div className="text-[11px] font-bold mb-2" style={{ color: "#A8721C" }}>{lang === "en" ? "Step 2 — Vehicle Details" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
-      <div className="rounded-xl p-3 mb-4 shadow-lg" style={{ border: `2px solid #A8721C`, background: C.metallicGold }}>
-        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#A8721C" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
+      <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Vehicle Details" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
+      <div className="rounded-xl p-3 mb-4 shadow-lg" style={{ border: `2px solid ${C.marigoldDeep}`, background: C.metallicGold }}>
+        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#000000" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
 
         <GuidedStep {...kycStepProps(3)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : "गाड़ी का नाम"}</label>
@@ -5024,9 +5022,9 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           ].map(([key, label, val, setVal], i) => (
             <GuidedStep key={key} {...kycStepProps(4 + i)} lang={lang}>
               <PhotoPicker label={label} lang={lang} onSelect={onVehiclePhoto(setVal, key)}>
-                <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed #A8721C`, background: C.paper, minHeight: 110 }}>
+                <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed ${C.marigoldDeep}`, background: C.paper, minHeight: 110 }}>
                   {uploadingKeys[key] ? (
-                    <div className="text-xs font-semibold py-6" style={{ color: "#A8721C" }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</div>
+                    <div className="text-xs font-semibold py-6" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</div>
                   ) : (
                     <SafeImage
                       src={val?.url}
@@ -5034,7 +5032,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                       className="w-full h-24 rounded-lg object-cover"
                       fallback={
                         <>
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: "#F5E6C8" }}><Camera size={18} color="#A8721C" /></div>
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: C.marigoldDeep }}><Camera size={18} color="#FFFFFF" /></div>
                           <div className="text-[10px] font-semibold text-center" style={{ color: C.ink }}>{label}</div>
                         </>
                       }
@@ -5048,7 +5046,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
             </GuidedStep>
           ))}
         </div>
-        <div className="rounded-lg p-2.5" style={{ background: "#F0EAE0" }}>
+        <div className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-[10px] font-semibold mb-1" style={{ color: C.ink }}>{lang === "en" ? "For a good photo:" : "अच्छी फोटो के लिए:"}</div>
           <div className="text-[10px]" style={{ color: C.inkSoft, lineHeight: 1.6 }}>
             {lang === "en" ? (
@@ -5061,7 +5059,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       </div>
 
       {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle name & number to submit" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो, गाड़ी का नाम और नंबर डालें"}</div>}
-      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-3 font-bold text-sm ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : C.line, color: canSubmit ? C.navy : "#9AA3B0" }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
+      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-3 font-bold text-sm ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : "#E0E0E0", color: canSubmit ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
     </div>
   );
 }
@@ -5098,7 +5096,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
-          <div className="w-28 h-28 rounded-full flex items-center justify-center overflow-hidden" style={{ background: "#F5E6C8", border: `2px solid ${C.marigoldDeep}` }}>
+          <div className="w-28 h-28 rounded-full flex items-center justify-center overflow-hidden" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
             <SafeImage src={driver?.photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={30} color={C.marigoldDeep} />} />
           </div>
         </div>
@@ -5150,7 +5148,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
         <div className="pt-1">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Documents" : "दस्तावेज़"}</h3>
-            <button onClick={onEditDocuments} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: C.marigold, color: C.navy }}>
+            <button onClick={onEditDocuments} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: C.marigold, color: "#000000" }}>
               {lang === "en" ? "Change" : "बदलें"}
             </button>
           </div>
@@ -5169,7 +5167,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
         </button>
       </div>
 
-      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-bold text-sm" style={{ background: "#FCEAE3", color: C.safety, border: `1px solid ${C.safety}` }}>
+      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-bold text-sm" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
         <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
       </button>
     </div>
@@ -5214,7 +5212,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     return (
       <div className="flex-1 overflow-y-auto relative">
         <div className="px-5 pt-3">
-          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
             <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
           </button>
         </div>
@@ -5229,11 +5227,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     <>
       <div className="flex-1 overflow-y-auto relative">
         <div className="flex items-center justify-between gap-2 px-5 pt-3">
-          <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#60A5FA", border: "1.5px solid #3B82F6" }}>
+          <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
             <Menu size={18} color="#fff" strokeWidth={2.5} />
           </button>
           <div className="flex-1 min-w-0 flex justify-center">
-            <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#60A5FA" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
+            <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
           </div>
           <button onClick={() => setDriver({ ...driver, online: !driver.online })}
             className="shrink-0 flex items-center rounded-full p-1.5" style={{ background: C.marigoldDeep }}>
@@ -5250,7 +5248,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
               <div className="px-4 py-4" style={{ background: C.navy }}>
                 <div className="text-sm font-bold text-white">{driver.name}</div>
-                {driver.mobile && <div className="text-[11px]" style={{ color: "#D9C4B0", fontFamily: monoFont }}>{driver.mobile}</div>}
+                {driver.mobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{driver.mobile}</div>}
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
@@ -5278,8 +5276,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 </button>
                 {shareNoteOpen && (
                   <div className="px-4 pb-3 -mt-1">
-                    <div className="rounded-lg p-3" style={{ background: "#DFEEE2" }}>
-                      <div className="text-xs font-semibold" style={{ color: C.success }}>
+                    <div className="rounded-lg p-3" style={{ background: C.success }}>
+                      <div className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>
                         {lang === "en" ? "You get ₹200 once a driver you refer completes their first ride. Referring a customer just helps them download the app — no bonus for that." : "आपके रेफर किए हुए ड्राइवर की पहली राइड पूरी होते ही आपको ₹200 मिलेंगे। कस्टमर को रेफर करने से सिर्फ उन्हें ऐप डाउनलोड करने में मदद मिलती है — उसके लिए कोई बोनस नहीं है।"}
                       </div>
                       <button onClick={() => { shareApp(); setMenuOpen(false); setShareNoteOpen(false); }}
@@ -5310,7 +5308,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
             return (
               <div className="px-5 py-4">
-                <button onClick={() => setSelectedAdvanceId(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+                <button onClick={() => setSelectedAdvanceId(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
                   <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back to list" : "लिस्ट पर वापस जाएं"}
                 </button>
                 <RideTypeBanner booking={ab} lang={lang} />
@@ -5332,7 +5330,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   )}
                   <div className="mt-2">
                     {ab.customerMobile ? (
-                      <a href={`tel:${ab.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFE066" }}>
+                      <a href={`tel:${ab.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
                         <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{ab.customerMobile}</span>
                       </a>
                     ) : (
@@ -5347,7 +5345,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             );
           })() : (
             <div className="px-5 py-4">
-              <button onClick={() => setRideView("current")} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <button onClick={() => setRideView("current")} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
                 <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
               </button>
               {advanceBookings.length === 0 ? (
@@ -5368,7 +5366,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         )}
         {(tab === "wallet" || tab === "history") && (
           <div className="px-5 pt-3">
-            <button onClick={() => setTab("home")} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <button onClick={() => setTab("home")} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
               <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
             </button>
           </div>
@@ -5441,8 +5439,8 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
   const [detailView, setDetailView] = useState(null);
 
   const statusMeta = lang === "en"
-    ? { Bidding: { label: "Awaiting bids", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "Ongoing", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
-    : { Bidding: { label: "बिड बाकी", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "चालू", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
+    ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
+    : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
   const recentActivity = (bookings || []).slice(0, 8);
   const activityTime = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleTimeString(lang === "en" ? "en-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" }) : "—");
 
@@ -5459,7 +5457,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       emptyMsg: lang === "en" ? "No drivers currently online." : "अभी कोई ड्राइवर ऑनलाइन नहीं है।",
       items: readyOnlineDrivers,
       renderItem: (d) => (
-        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: "#F8F4EC" }}>
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
           <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
         </div>
@@ -5470,7 +5468,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       emptyMsg: lang === "en" ? "No vehicles booked today yet." : "आज तक कोई गाड़ी बुक नहीं हुई।",
       items: bookedTodayList,
       renderItem: (t) => (
-        <div key={t.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
+        <div key={t.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
           <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fmt(t.fare)} · {statusMeta[t.status]?.label || t.status}</div>
         </div>
@@ -5481,7 +5479,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       emptyMsg: lang === "en" ? "Nothing cancelled today." : "आज कुछ भी रद्द नहीं हुआ।",
       items: cancelledTodayList,
       renderItem: (b) => (
-        <div key={b.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
+        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
           <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : "कोई ड्राइवर तय नहीं हुआ")}</div>
         </div>
@@ -5492,7 +5490,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       emptyMsg: lang === "en" ? "No online driver is below the minimum wallet balance." : "कोई भी ऑनलाइन ड्राइवर न्यूनतम वॉलेट से कम नहीं है।",
       items: lowWalletDrivers,
       renderItem: (d) => (
-        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: "#FCEAE3" }}>
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.safety}` }}>
           <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
           <div className="text-[11px] font-bold" style={{ color: C.safety, fontFamily: monoFont }}>{fmt(d.wallet)}</div>
         </div>
@@ -5503,7 +5501,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       emptyMsg: lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।",
       items: advanceBookingsList,
       renderItem: (b) => (
-        <div key={b.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
+        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
           <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : "बोली का इंतज़ार")}</div>
         </div>
@@ -5514,7 +5512,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       emptyMsg: lang === "en" ? "Every open load has at least one bid." : "हर खुले लोड पर कम से कम एक बोली आ चुकी है।",
       items: noBidsList,
       renderItem: (b) => (
-        <div key={b.id} className="rounded-lg p-2.5" style={{ background: "#FCEAE3" }}>
+        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.safety}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
           <div className="text-[11px] mt-1" style={{ color: C.safety }}>{materialLabel(b.material, lang)} · {b.weight}{lang === "en" ? "kg" : "किग्रा"} · {activityTime(b)}{b.scheduledFor ? ` · ${b.scheduledFor}` : ""}</div>
         </div>
@@ -5525,12 +5523,12 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       emptyMsg: lang === "en" ? "No new signups today yet." : "आज तक कोई नया साइनअप नहीं हुआ।",
       items: [...newDriversToday.map((d) => ({ ...d, _kind: "driver" })), ...newCustomersToday.map((c) => ({ ...c, _kind: "customer" }))],
       renderItem: (p) => (
-        <div key={`${p._kind}-${p.id}`} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: "#F8F4EC" }}>
+        <div key={`${p._kind}-${p.id}`} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div>
             <div className="text-xs font-bold" style={{ color: C.ink }}>{p.name}</div>
             <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{p.mobile}{p._kind === "driver" && p.vehicleSpec?.vehicleNumber ? ` · ${p.vehicleSpec.vehicleNumber}` : ""}</div>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: p._kind === "driver" ? C.marigoldDeep : C.pimpri, background: p._kind === "driver" ? "#FBEBD2" : "#E4EAF6" }}>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: p._kind === "driver" ? C.marigoldDeep : C.navy }}>
             {p._kind === "driver" ? (lang === "en" ? "Driver" : "ड्राइवर") : (lang === "en" ? "Customer" : "कस्टमर")}
           </span>
         </div>
@@ -5541,12 +5539,12 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       emptyMsg: lang === "en" ? "No driver is currently in their free trial." : "फिलहाल कोई भी ड्राइवर फ्री ट्रायल में नहीं है।",
       items: trialDrivers,
       renderItem: (d) => (
-        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: "#F8F4EC" }}>
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div>
             <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
             <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.marigoldDeep, background: "#FBEBD2" }}>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
             {lang === "en" ? `${trialDaysLeft(d.createdAt)}d left` : `${trialDaysLeft(d.createdAt)} दिन बाकी`}
           </span>
         </div>
@@ -5558,7 +5556,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
     const page = detailPages[detailView];
     return (
       <div>
-        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
         </button>
         <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{page.title}</h2>
@@ -5609,7 +5607,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
             ) : (
               <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
                 {vehicleHistory.map((t) => (
-                  <div key={t.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: "#F5E6C8", border: `1px solid ${C.pimpri}` }}>
+                  <div key={t.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                     <div>
                       <div className="text-[11px] font-bold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
                       <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status}</div>
@@ -5632,7 +5630,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
             {recentActivity.map((b) => {
               const sm = statusMeta[b.status] || statusMeta.Bidding;
               return (
-                <div key={b.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: "#F8F4EC" }}>
+                <div key={b.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <div className="min-w-0">
                     <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</div>
                     <div className="text-[10px]" style={{ color: C.inkSoft }}>{b.driverName ? `${b.driverName} · ` : ""}{activityTime(b)}</div>
@@ -5679,12 +5677,12 @@ function KycDocThumb({ url, label, lang, fileName, height = "h-24" }) {
         alt={label}
         className={`w-full ${height} object-cover`}
         fallback={
-          <div className={`w-full ${height} flex items-center justify-center`} style={{ background: "#F3F4F6" }}>
+          <div className={`w-full ${height} flex items-center justify-center`} style={{ background: C.paper }}>
             <XCircle size={16} color={C.safety} />
           </div>
         }
       />
-      <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: url ? C.success : C.safety, background: url ? "#DFEEE2" : "#FCEAE3" }}>
+      <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: "#FFFFFF", background: url ? C.success : C.safety }}>
         {url ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {label}
       </div>
       {url && (
@@ -5720,10 +5718,10 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                   <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1">
                     <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
                     <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
-                    <div className="text-[10px] font-semibold mt-0.5" style={{ color: "#A8721C" }}>{expanded ? (lang === "en" ? "▲ Hide details" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : "▼ KYC डिटेल देखें")}</div>
+                    <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : "▼ KYC डिटेल देखें")}</div>
                   </button>
                   <div className="flex gap-2">
-                    <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: "#FCEAE3", color: C.safety }}>{lang === "en" ? "Block" : "Block"}</button>
+                    <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : "Block"}</button>
                     <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : "Approve"}</button>
                   </div>
                 </div>
@@ -5782,7 +5780,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
           <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
           <div className="space-y-2">
             {pendingRecharges.map((r) => (
-              <div key={r.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: "#FBEBD2" }}>
+              <div key={r.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <div>
                   <div className="text-xs font-bold" style={{ color: C.ink }}>{r.driverName}</div>
                   <div className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(r.createdAt)}</div>
@@ -5801,7 +5799,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
           <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.success} /> {lang === "en" ? "Withdrawal Requests" : "विड्रॉल रिक्वेस्ट"}</div>
           <div className="space-y-2">
             {pendingWithdrawals.map((w) => (
-              <div key={w.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: "#DFEEE2" }}>
+              <div key={w.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <div>
                   <div className="text-xs font-bold" style={{ color: C.ink }}>{w.driverName || w.customerName} <span className="font-normal" style={{ color: C.inkSoft }}>· {w.role === "customer" ? (lang === "en" ? "Referral" : "रेफरल") : (lang === "en" ? "Driver bonus" : "ड्राइवर बोनस")}</span></div>
                   <div className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(w.createdAt)}</div>
@@ -5838,7 +5836,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
               {groupedRows.map((g) => {
                 const urgent = g.type === "इमरजेंसी कॉल" || g.type === "पुलिस सहायता";
                 return (
-                  <div key={`${g.role}|${g.type}`} className="rounded-lg p-3" style={{ background: urgent ? "#FCEAE3" : "#F0EAE0" }}>
+                  <div key={`${g.role}|${g.type}`} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${urgent ? C.safety : C.line}` }}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold flex items-center gap-1" style={{ color: urgent ? C.safety : C.ink }}>
                         {urgent && <Siren size={12} />} {roleLabel[g.role] || g.role} · {alertTypeLabel(g.type, lang)}
@@ -5850,7 +5848,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
                 );
               })}
               {complaints.map((a) => (
-                <div key={a.id} className="rounded-lg p-3" style={{ background: "#F0EAE0" }}>
+                <div key={a.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold" style={{ color: C.ink }}>{roleLabel[a.role] || a.role} · {alertTypeLabel(a.type, lang)}</span>
                     <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(a.createdAt)}</span>
@@ -5882,8 +5880,8 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
   const byTrialTab = trialTab === "all" ? drivers : drivers.filter((d) => (trialTab === "trial" ? isInTrial(d.createdAt) : !isInTrial(d.createdAt)));
   const filtered = byTrialTab.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
   const kycMeta = lang === "en"
-    ? { Approved: { label: "Verified", color: C.success, bg: "#DFEEE2" }, Pending: { label: "Pending", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "Blocked", color: C.safety, bg: "#FCEAE3" }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#F0EAE0" } }
-    : { Approved: { label: "सत्यापित", color: C.success, bg: "#DFEEE2" }, Pending: { label: "लंबित", color: C.marigoldDeep, bg: "#FBEBD2" }, Rejected: { label: "ब्लॉक्ड", color: C.safety, bg: "#FCEAE3" }, none: { label: "KYC सबमिट नहीं हुआ", color: C.inkSoft, bg: "#F0EAE0" } };
+    ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E5E5E5" } }
+    : { Approved: { label: "सत्यापित", color: "#FFFFFF", bg: C.success }, Pending: { label: "लंबित", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "ब्लॉक्ड", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC सबमिट नहीं हुआ", color: C.inkSoft, bg: "#E5E5E5" } };
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
@@ -5933,7 +5931,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
           <Users size={16} /> {lang === "en" ? "All Drivers" : "सभी ड्राइवर"}
-          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.navy, background: "#F5E6C8" }}>{drivers.length}</span>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{drivers.length}</span>
         </div>
         <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>
           {showAdd ? (lang === "en" ? "Cancel" : "रद्द करें") : `+ ${lang === "en" ? "Add Driver" : "ड्राइवर जोड़ें"}`}
@@ -5963,7 +5961,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
             <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
           </div>
           {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
-          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready shadow-lg" : ""}`} style={{ background: canAdd ? C.metallicGreen : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
+          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready shadow-lg" : ""}`} style={{ background: canAdd ? C.metallicGreen : "#E0E0E0", color: canAdd ? "#fff" : "#9AA3B0" }}>
             {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Driver" : "ड्राइवर सेव करें")}
           </button>
         </div>
@@ -5988,26 +5986,26 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
           const expanded = expandedId === d.id;
           const daysLeft = trialDaysLeft(d.createdAt);
           return (
-            <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: d.blacklisted ? "#FCEAE3" : C.paper }}>
+            <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper }}>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
                   <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : "वॉलेट"} {fmt(d.wallet)}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: d.online ? C.success : C.inkSoft, background: d.online ? "#DFEEE2" : "#F0EAE0" }}>{d.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: d.online ? C.success : C.marigoldDeep }}>{d.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
                   {daysLeft != null ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.marigoldDeep, background: "#FBEBD2" }}>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
                       {lang === "en" ? `Trial · ${daysLeft}d left` : `ट्रायल · ${daysLeft} दिन बाकी`}
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.inkSoft, background: "#F0EAE0" }}>{lang === "en" ? "Main Routine" : "मुख्य रूटीन"}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.inkSoft, background: "#E5E5E5" }}>{lang === "en" ? "Main Routine" : "मुख्य रूटीन"}</span>
                   )}
                 </div>
               </div>
 
-              <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-[10px] font-bold mt-2" style={{ color: "#A8721C" }}>
+              <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-[10px] font-bold mt-2" style={{ color: C.marigoldDeep }}>
                 {expanded ? (lang === "en" ? "▲ Hide KYC details" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : "▼ KYC डिटेल देखें")}
               </button>
               {expanded && (
@@ -6053,7 +6051,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
                     </>
                   ) : (
                     <>
-                      <button onClick={() => toggleBlacklist(d.id)} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: d.blacklisted ? C.success : C.safety, background: d.blacklisted ? "#DFEEE2" : "#FCEAE3" }}>
+                      <button onClick={() => toggleBlacklist(d.id)} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: "#FFFFFF", background: d.blacklisted ? C.success : C.safety }}>
                         {d.blacklisted ? (lang === "en" ? "Unblock" : "अनब्लॉक करें") : (lang === "en" ? "Block" : "ब्लॉक करें")}
                       </button>
                       <button onClick={() => setConfirmDeleteId(d.id)} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
@@ -6079,8 +6077,8 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
   const [expandedId, setExpandedId] = useState(null);
   const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q) || (c.city || "").toLowerCase().includes(q.toLowerCase()));
   const statusMeta = lang === "en"
-    ? { Bidding: { label: "Awaiting bids", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "Ongoing", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "Completed", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "Cancelled", color: C.safety, bg: "#FCEAE3" } }
-    : { Bidding: { label: "बिड बाकी", color: C.marigoldDeep, bg: "#FBEBD2" }, Ongoing: { label: "चालू", color: C.marigoldDeep, bg: "#FBEBD2" }, Completed: { label: "पूर्ण", color: C.success, bg: "#DFEEE2" }, Cancelled: { label: "रद्द", color: C.safety, bg: "#FCEAE3" } };
+    ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
+    : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
   const bookingDate = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleDateString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
   const [showAdd, setShowAdd] = useState(false);
@@ -6114,7 +6112,7 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
           <Users size={16} /> {lang === "en" ? "All Customers" : "सभी कस्टमर"}
-          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.navy, background: "#F5E6C8" }}>{(customers || []).length}</span>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{(customers || []).length}</span>
         </div>
         <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>
           {showAdd ? (lang === "en" ? "Cancel" : "रद्द करें") : `+ ${lang === "en" ? "Add Customer" : "कस्टमर जोड़ें"}`}
@@ -6136,7 +6134,7 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
             <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
           </div>
           {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
-          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready shadow-lg" : ""}`} style={{ background: canAdd ? C.metallicGreen : C.line, color: canAdd ? "#fff" : "#9AA3B0" }}>
+          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready shadow-lg" : ""}`} style={{ background: canAdd ? C.metallicGreen : "#E0E0E0", color: canAdd ? "#fff" : "#9AA3B0" }}>
             {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Customer" : "कस्टमर सेव करें")}
           </button>
         </div>
@@ -6150,13 +6148,13 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
           return (
             <div key={c.mobile} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
               <div className="flex items-center gap-2.5">
-                <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#F5E6C8" }}><UserCircle2 size={20} color="#A8721C" /></div>} />
+                <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
                   <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{c.mobile}</div>
                   <div className="text-[10px] font-bold mt-0.5 truncate" style={{ color: C.ink }}>{[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || (lang === "en" ? "No address on file" : "पता उपलब्ध नहीं")}</div>
                 </div>
-                <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg" style={{ color: C.marigoldDeep, background: "#FBEBD2" }}>
+                <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
                   {expanded ? (lang === "en" ? "Hide" : "छुपाएं") : (lang === "en" ? "View Details" : "विवरण देखें")}
                 </button>
               </div>
@@ -6178,7 +6176,7 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
                       {rides.map((b) => {
                         const sm = statusMeta[b.status] || statusMeta.Cancelled;
                         return (
-                          <div key={b.id} className="rounded-lg p-2" style={{ background: "#F8F4EC" }}>
+                          <div key={b.id} className="rounded-lg p-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</span>
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
@@ -6225,12 +6223,12 @@ function AdminNotify({ drivers, lang }) {
         {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
       </select>
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-      <button onClick={send} disabled={!message.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm mb-4" style={{ background: message.trim() ? C.marigold : C.line, color: message.trim() ? C.navy : "#9AA3B0" }}>{lang === "en" ? "Send" : "भेजें"}</button>
+      <button onClick={send} disabled={!message.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm mb-4" style={{ background: message.trim() ? C.marigold : "#E0E0E0", color: message.trim() ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Send" : "भेजें"}</button>
       <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Sent Notifications" : "भेजी गई सूचनाएं"}</div>
       <div className="space-y-2">
         {sentLog.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No notifications sent yet." : "अभी कोई सूचना नहीं भेजी गई।"}</p>}
         {sentLog.map((n) => (
-          <div key={n.id} className="rounded-lg p-2.5" style={{ background: "#F0EAE0" }}>
+          <div key={n.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold" style={{ color: C.ink }}>{n.to}</span>
               <span className="text-[10px]" style={{ color: C.inkSoft }}>{n.time}</span>
@@ -6269,9 +6267,9 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : "सिस्टम सेटिंग्स"}</div>
 
-      <div className="rounded-lg p-3 mb-4" style={{ background: "#DFEEE2" }}>
-        <div className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
-        <div className="text-[11px] font-bold mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
+      <div className="rounded-lg p-3 mb-4" style={{ background: C.success }}>
+        <div className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
+        <div className="text-[11px] font-bold mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
       </div>
 
       <div className="flex items-center justify-between mb-4">
@@ -6309,7 +6307,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
       </div>
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : "सेटिंग्स सेव हो गईं"}</div>}
       <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-2.5 font-bold text-sm"
-        style={{ background: dirty ? "#60A5FA" : C.line, color: dirty ? "#fff" : "#9AA3B0" }}>
+        style={{ background: dirty ? "#0052CC" : "#E0E0E0", color: dirty ? "#fff" : "#9AA3B0" }}>
         {lang === "en" ? "Save Changes" : "बदलाव सेव करें"}
       </button>
     </div>
@@ -6332,13 +6330,13 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Reports — Commission & Earnings" : "रिपोर्ट्स — कमीशन और कमाई"}</div>
         <button onClick={downloadReport} disabled={tripLog.length === 0} className="text-[11px] font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-lg"
-          style={{ color: tripLog.length ? C.marigoldDeep : C.inkSoft, background: tripLog.length ? "#FBEBD2" : "#F0EAE0" }}>
+          style={{ color: tripLog.length ? "#FFFFFF" : C.inkSoft, background: tripLog.length ? C.marigoldDeep : "#E5E5E5" }}>
           <Download size={12} /> {lang === "en" ? "Download CSV" : "एक्सेल डाउनलोड करें"}
         </button>
       </div>
-      <div className="rounded-lg p-3 mb-3" style={{ background: "#DFEEE2" }}>
-        <div className="text-[11px]" style={{ color: C.success }}>{lang === "en" ? `Total commission so far (${commissionPct}%)` : `आज का कुल कमीशन (${commissionPct}%)`}</div>
-        <div className="text-xl font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(totalCommission)}</div>
+      <div className="rounded-lg p-3 mb-3" style={{ background: C.success }}>
+        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Total commission so far (${commissionPct}%)` : `आज का कुल कमीशन (${commissionPct}%)`}</div>
+        <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(totalCommission)}</div>
       </div>
       {tripLog.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid has been accepted yet." : "आज अभी तक कोई बिड एक्सेप्ट नहीं हुई।"}</p> : (
         <table className="w-full text-xs">
@@ -6431,19 +6429,19 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
     <div>
       <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Expense Tools:" : "खर्चे के टूल:"}</div>
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <button onClick={() => openAdd()} className="rounded-xl py-4 flex flex-col items-center gap-1.5" style={{ background: "#FBEBD2", border: `1.5px solid ${C.marigold}` }}>
-          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.marigold }}><Plus size={18} color="#fff" /></div>
-          <span className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "New Expense" : "नया खर्च"}</span>
+        <button onClick={() => openAdd()} className="rounded-xl py-4 flex flex-col items-center gap-1.5" style={{ background: C.marigold }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Plus size={18} color={C.navy} /></div>
+          <span className="text-[11px] font-bold" style={{ color: "#000000" }}>{lang === "en" ? "New Expense" : "नया खर्च"}</span>
         </button>
         <PhotoPicker label={lang === "en" ? "Attach a bill photo" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => openAdd({ photo: file })}>
-          <div className="rounded-xl py-4 flex flex-col items-center gap-1.5 cursor-pointer" style={{ background: "#FCEAE3", border: `1.5px solid ${C.safety}` }}>
-            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.safety }}><Camera size={16} color="#fff" /></div>
-            <span className="text-[11px] font-bold text-center" style={{ color: C.safety }}>{lang === "en" ? "Camera / Bill" : "कैमरा / बिल"}</span>
+          <div className="rounded-xl py-4 flex flex-col items-center gap-1.5 cursor-pointer" style={{ background: C.safety }}>
+            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Camera size={16} color={C.safety} /></div>
+            <span className="text-[11px] font-bold text-center" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Camera / Bill" : "कैमरा / बिल"}</span>
           </div>
         </PhotoPicker>
-        <button onClick={downloadReport} disabled={expenses.length === 0} className="rounded-xl py-4 flex flex-col items-center gap-1.5" style={{ background: "#DFEEE2", border: `1.5px solid ${C.success}`, opacity: expenses.length ? 1 : 0.5 }}>
-          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.success }}><Download size={16} color="#fff" /></div>
-          <span className="text-[11px] font-bold" style={{ color: C.success }}>Excel {lang === "en" ? "Report" : "रिपोर्ट"}</span>
+        <button onClick={downloadReport} disabled={expenses.length === 0} className="rounded-xl py-4 flex flex-col items-center gap-1.5" style={{ background: C.success, opacity: expenses.length ? 1 : 0.5 }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Download size={16} color={C.success} /></div>
+          <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>Excel {lang === "en" ? "Report" : "रिपोर्ट"}</span>
         </button>
       </div>
 
@@ -6461,7 +6459,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
             {recent.map((e) => {
               const cat = categories.find((c) => c.hi === e.category || c.en === e.category);
               return (
-                <div key={e.id} className="rounded-lg p-2.5" style={{ background: "#F8F4EC" }}>
+                <div key={e.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{e.note || (cat ? (lang === "en" ? cat.en : cat.hi) : e.category)}</div>
@@ -6498,8 +6496,8 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
                   return (
                     <button key={c.key} type="button" onClick={() => setForm({ ...form, category: c.hi })}
                       className="w-full rounded-lg px-3 py-2.5 flex items-center justify-between"
-                      style={{ background: active ? "#FBEBD2" : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}` }}>
-                      <span className="text-xs font-bold flex items-center gap-2" style={{ color: active ? C.marigoldDeep : C.ink }}>
+                      style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}` }}>
+                      <span className="text-xs font-bold flex items-center gap-2" style={{ color: active ? "#FFFFFF" : C.ink }}>
                         <span>{c.icon}</span> {lang === "en" ? c.en : c.hi}
                       </span>
                       <span className="w-4 h-4 rounded-full shrink-0" style={{ border: `2px solid ${active ? C.marigoldDeep : C.line}`, background: active ? C.marigoldDeep : "transparent" }} />
@@ -6538,7 +6536,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
               </div>
 
               <PhotoPicker label={lang === "en" ? "Attach a bill photo" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => setForm((f) => ({ ...f, photo: file }))}>
-                <div className="w-full rounded-lg py-2.5 text-xs font-bold text-center cursor-pointer" style={{ background: form.photo ? "#DFEEE2" : C.bg, color: form.photo ? C.success : C.inkSoft, border: `1.5px dashed ${form.photo ? C.success : C.line}` }}>
+                <div className="w-full rounded-lg py-2.5 text-xs font-bold text-center cursor-pointer" style={{ background: form.photo ? C.success : C.bg, color: form.photo ? "#FFFFFF" : C.inkSoft, border: `1.5px dashed ${form.photo ? C.success : C.line}` }}>
                   {form.photo ? `✓ ${lang === "en" ? "Photo attached" : "फोटो जोड़ी गई"}` : `📷 ${lang === "en" ? "Camera Photo / Choose Gallery" : "कैमरा फोटो / गैलरी चुनिए"}`}
                 </div>
               </PhotoPicker>
@@ -6546,7 +6544,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
               {saveError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{saveError}</div>}
 
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setShowAdd(false)} className="flex-1 rounded-lg py-3 text-sm font-bold" style={{ background: C.line, color: C.inkSoft }}>{lang === "en" ? "Cancel" : "रद्द"}</button>
+                <button onClick={() => setShowAdd(false)} className="flex-1 rounded-lg py-3 text-sm font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.inkSoft }}>{lang === "en" ? "Cancel" : "रद्द"}</button>
                 <button onClick={submit} disabled={!form.amount || Number(form.amount) <= 0 || saving} className="flex-1 rounded-lg py-3 text-sm font-bold text-white flex items-center justify-center gap-1.5"
                   style={{ background: (!form.amount || Number(form.amount) <= 0 || saving) ? C.line : C.success }}>
                   <CheckCircle2 size={15} /> {saving ? (lang === "en" ? "Saving..." : "सेव हो रहा है...") : (lang === "en" ? "Save Securely" : "सुरक्षित सेव करें")}
@@ -6570,7 +6568,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           <LayoutDashboard size={18} color={C.marigoldDeep} />
           <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Control Panel" : "एडमिन कंट्रोल पैनल"}</h2>
         </div>
-        <button onClick={onLogout} className="text-[11px] font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-lg" style={{ color: C.safety, background: "#FCEAE3" }}>
+        <button onClick={onLogout} className="text-[11px] font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-lg" style={{ color: "#FFFFFF", background: C.safety }}>
           <XCircle size={12} /> {lang === "en" ? "Logout" : "लॉगआउट"}
         </button>
       </div>
@@ -6578,7 +6576,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       <div className="flex gap-2 mb-5 overflow-x-auto">
         {tabs.map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-black whitespace-nowrap shadow-sm"
-            style={{ background: tab === k ? "#60A5FA" : C.marigold, color: tab === k ? "#fff" : C.navy, border: `1.5px solid ${tab === k ? "#3B82F6" : C.marigoldDeep}` }}>
+            style={{ background: tab === k ? C.navy : C.marigold, color: tab === k ? "#fff" : "#000000", border: `1.5px solid ${tab === k ? C.navy : C.marigoldDeep}` }}>
             <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : label}
           </button>
         ))}
@@ -6637,7 +6635,7 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang }) {
             </div>
           ))}
         </div>
-        <button onClick={onClose} className="w-full rounded-lg py-2.5 font-bold text-sm mt-4" style={{ background: C.marigold, color: C.navy }}>{lang === "en" ? "Got it" : "समझ गया"}</button>
+        <button onClick={onClose} className="w-full rounded-lg py-2.5 font-bold text-sm mt-4" style={{ background: C.marigold, color: "#000000" }}>{lang === "en" ? "Got it" : "समझ गया"}</button>
       </div>
     </div>
   );
@@ -7173,7 +7171,7 @@ export default function App() {
   // nothing interactive underneath, just this message until reconnected.
   if (!connectivityChecked || !isOnline) {
     return (
-      <div className="min-h-screen flex justify-center items-center" style={{ background: "#DCDDD6", fontFamily: bodyFont }}>
+      <div className="min-h-screen flex justify-center items-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
         <div className="w-full max-w-sm min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: C.bg }}>
           {connectivityChecked ? (
             <>
@@ -7188,29 +7186,29 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex justify-center" style={{ background: "#DCDDD6", fontFamily: bodyFont }}>
+    <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
         <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
           <div className="flex items-center gap-2 mb-4">
             <Logo size={64} />
             <div className="flex-1 min-w-0">
               <div translate="no" className="text-white font-bold text-lg leading-none truncate">{lang === "en" ? "Apna Transport" : "अपना ट्रांसपोर्ट"}</div>
-              <div className="text-[11px] truncate" style={{ color: "#D9C4B0" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
+              <div className="text-[11px] truncate" style={{ color: "#FFFFFF" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
             </div>
-            <div className="flex items-center gap-1 rounded-full pl-2 pr-1 py-1 shrink-0" style={{ background: "#3D1B17", border: `1.5px solid ${C.marigold}` }}>
+            <div className="flex items-center gap-1 rounded-full pl-2 pr-1 py-1 shrink-0" style={{ background: "#000000", border: `1.5px solid ${C.marigold}` }}>
               <Globe size={22} color={C.marigold} strokeWidth={2.2} />
               <button onClick={() => switchLang("hi")} className="rounded-full"
-                style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "hi" ? C.navy : "#D9C4B0", background: lang === "hi" ? C.marigold : "transparent", boxShadow: lang === "hi" ? "0 0 8px 1px rgba(227,169,60,0.65)" : "none" }}>
+                style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "hi" ? "#000000" : "#FFFFFF", background: lang === "hi" ? C.marigold : "transparent", boxShadow: lang === "hi" ? "0 0 8px 1px rgba(255,204,0,0.65)" : "none" }}>
                 हिं
               </button>
               <button onClick={() => switchLang("en")} className="rounded-full"
-                style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "en" ? C.navy : "#D9C4B0", background: lang === "en" ? C.marigold : "transparent", boxShadow: lang === "en" ? "0 0 8px 1px rgba(227,169,60,0.65)" : "none" }}>
+                style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "en" ? "#000000" : "#FFFFFF", background: lang === "en" ? C.marigold : "transparent", boxShadow: lang === "en" ? "0 0 8px 1px rgba(255,204,0,0.65)" : "none" }}>
                 ENG
               </button>
             </div>
           </div>
           {role === "admin" && adminAuth && (
-            <div className="mt-1.5 text-[10px] text-center" style={{ color: "#D9C4B0" }}>
+            <div className="mt-1.5 text-[10px] text-center" style={{ color: "#FFFFFF" }}>
               {lang === "en" ? "Overview & approvals — Customer/Driver registration is not available here" : "ओवरव्यू और अप्रूवल — यहां कस्टमर/ड्राइवर रजिस्ट्रेशन उपलब्ध नहीं है"}
             </div>
           )}
@@ -7252,7 +7250,7 @@ export default function App() {
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
           <div className="flex-1 overflow-y-auto">
-            <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
               <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
             </button>
             <div className="mx-5 mt-3 rounded-lg p-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
@@ -7264,7 +7262,7 @@ export default function App() {
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
-            <button onClick={() => logoutRole("driver")} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: C.navy, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <button onClick={() => logoutRole("driver")} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
               <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
             </button>
             {driver.kyc === "Rejected" ? (
