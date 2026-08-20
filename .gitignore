@@ -6,3 +6,6 @@ dist
 serviceAccountKey*.json
 *-firebase-adminsdk-*.json
 .claude/worktrees
+twa/project
+twa/*.keystore
+twa/*.jks

@@ -1,0 +1,9 @@
+{
+  "name": "sarthi-transport-twa-build",
+  "private": true,
+  "type": "commonjs",
+  "description": "Not part of the web app. Used only by .github/workflows/build-twa.yml to regenerate and build the Android (Play Store) TWA package in CI, where full internet access and the real signing keystore are both available.",
+  "devDependencies": {
+    "@bubblewrap/cli": "^1.25.0"
+  }
+}
