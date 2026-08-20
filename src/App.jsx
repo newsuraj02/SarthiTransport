@@ -2570,7 +2570,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
         {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
         {value && (
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
-            className="absolute right-0 top-0 bottom-0 rounded-r-lg flex items-center justify-center" style={{ width: 44, background: C.paper }}>
+            className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
             <X size={20} color={C.inkSoft} strokeWidth={2.5} />
           </button>
         )}
