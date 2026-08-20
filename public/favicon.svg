@@ -1,65 +1,29 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="discGrad" cx="35%" cy="26%" r="78%">
-      <stop offset="0%" stop-color="#B85B54"/>
-      <stop offset="40%" stop-color="#7C2C26"/>
-      <stop offset="100%" stop-color="#300F0D"/>
-    </radialGradient>
-    <linearGradient id="ringGrad" x1="15%" y1="5%" x2="90%" y2="100%">
-      <stop offset="0%" stop-color="#FFF4D6"/>
-      <stop offset="22%" stop-color="#FCE3A0"/>
-      <stop offset="50%" stop-color="#E3A93C"/>
-      <stop offset="78%" stop-color="#A8721C"/>
-      <stop offset="100%" stop-color="#6E4A11"/>
+    <linearGradient id="ybg" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFD93D"/>
+      <stop offset="100%" stop-color="#FFC300"/>
     </linearGradient>
-    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFF3D2"/>
-      <stop offset="45%" stop-color="#F0C868"/>
-      <stop offset="100%" stop-color="#A8721C"/>
+    <linearGradient id="sheen" x1="20%" y1="0%" x2="80%" y2="60%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.5"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
-    <clipPath id="discClip">
-      <circle cx="256" cy="256" r="212"/>
-    </clipPath>
-    <filter id="dropShadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.35"/>
-    </filter>
   </defs>
 
-  <g filter="url(#dropShadow)">
-    <circle cx="256" cy="256" r="230" fill="url(#ringGrad)"/>
-    <circle cx="256" cy="256" r="230" fill="none" stroke="#5C3B0E" stroke-width="2" opacity="0.6"/>
-    <circle cx="256" cy="256" r="222" fill="none" stroke="#FFFFFF" stroke-width="9" opacity="0.55"
-      stroke-dasharray="270 1165" stroke-linecap="round" transform="rotate(-125 256 256)"/>
-    <circle cx="256" cy="256" r="212" fill="#240C0A"/>
-    <circle cx="256" cy="256" r="207" fill="url(#discGrad)"/>
+  <rect x="0" y="0" width="512" height="512" fill="url(#ybg)"/>
+  <rect x="0" y="0" width="512" height="512" fill="url(#sheen)"/>
 
-    <g clip-path="url(#discClip)">
-      <ellipse cx="345" cy="400" rx="160" ry="80" fill="#000000" opacity="0.18"/>
-      <ellipse cx="205" cy="140" rx="190" ry="96" fill="#FFFFFF" opacity="0.24"/>
-      <ellipse cx="165" cy="105" rx="80" ry="32" fill="#FFFFFF" opacity="0.55"/>
-      <ellipse cx="330" cy="90" rx="27" ry="12" fill="#FFFFFF" opacity="0.35"/>
-    </g>
+  <!-- scaled/centered up since there's no wordmark band to share the box with -->
+  <g transform="translate(0,20) scale(1.28) translate(-56,-46)">
+    <rect x="70" y="196" width="238" height="120" rx="16" fill="#0B3D91"/>
+    <rect x="90" y="214" width="150" height="30" rx="8" fill="#FFD93D" opacity="0.85"/>
 
-    <!-- truck group, centered on the disc, just 2 wheels -->
-    <g transform="translate(29,0)">
-      <rect x="390" y="262" width="22" height="9" rx="4.5" fill="#FFF3D2" opacity="0.45"/>
-      <rect x="396" y="242" width="32" height="9" rx="4.5" fill="#FFF3D2" opacity="0.65"/>
-      <rect x="404" y="222" width="42" height="9" rx="4.5" fill="#FFF3D2" opacity="0.85"/>
+    <path d="M308 224 L392 224 Q414 224 414 246 L414 316 L308 316 Z" fill="#0B3D91"/>
+    <rect x="330" y="240" width="52" height="42" rx="7" fill="#FFD93D" opacity="0.85"/>
 
-      <rect x="89" y="212" width="207" height="86" rx="12" fill="url(#goldGrad)" stroke="#7A5313" stroke-width="2.5"/>
-      <rect x="97" y="219" width="191" height="19" rx="9.5" fill="#FFFFFF" opacity="0.35"/>
-
-      <rect x="290" y="238" width="76" height="64" rx="10" fill="url(#goldGrad)"/>
-      <rect x="322" y="249" width="30" height="24" rx="4" fill="#3D1512"/>
-      <rect x="322" y="249" width="30" height="9" rx="4" fill="#FFFFFF" opacity="0.3"/>
-
-      <circle cx="120" cy="313" r="23" fill="#240C0A"/>
-      <circle cx="120" cy="313" r="9.5" fill="#E3A93C"/>
-      <circle cx="312" cy="313" r="23" fill="#240C0A"/>
-      <circle cx="312" cy="313" r="9.5" fill="#E3A93C"/>
-    </g>
-
-    <path d="M100 128 L107 146 L125 153 L107 160 L100 178 L93 160 L75 153 L93 146 Z" fill="#FFFFFF" opacity="0.9"/>
-    <path d="M410 372 L415 384 L427 389 L415 394 L410 406 L405 394 L393 389 L405 384 Z" fill="#FFFFFF" opacity="0.75"/>
+    <circle cx="150" cy="330" r="42" fill="#0B3D91"/>
+    <circle cx="150" cy="330" r="16" fill="#FFD93D" opacity="0.85"/>
+    <circle cx="356" cy="330" r="42" fill="#0B3D91"/>
+    <circle cx="356" cy="330" r="16" fill="#FFD93D" opacity="0.85"/>
   </g>
 </svg>

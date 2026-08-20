@@ -48,97 +48,55 @@ const C = {
 const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
 const monoFont = "'JetBrains Mono','Courier New',monospace";
 
-// Brand mark — a glossy gold-ringed maroon badge holding a truck marked
-// "अपना", the same 3D coin-style icon used for the app's favicon/PWA icons
-// (public/favicon.svg, public/icons/*). Built as inline SVG (not an image
-// file) so it stays crisp at any size; gradient/clip ids are namespaced per
+// Brand mark — full-bleed bright-yellow square holding a bold flat truck
+// silhouette, with an "Apna Transport" wordmark band along the bottom. Same
+// design as the app's favicon/PWA/Play Store icons (public/favicon.svg,
+// public/icons/*) so the mark reads as one consistent icon everywhere it
+// appears, in-app or on a home screen. Built as inline SVG (not an image
+// file) so it stays crisp at any size; gradient ids are namespaced per
 // instance via useId so multiple Logos on one page don't clash.
 function Logo({ size = 64, showText = true }) {
   const uid = useId();
   const g = (name) => `${uid}-${name}`;
   return (
-    <svg width={size} height={size} viewBox="0 0 512 512" style={{ display: "block" }}>
+    <svg width={size} height={size} viewBox="0 0 512 512" style={{ display: "block", borderRadius: size * 0.22, overflow: "hidden" }}>
       <defs>
-        <radialGradient id={g("disc")} cx="35%" cy="26%" r="78%">
-          <stop offset="0%" stopColor="#B85B54" />
-          <stop offset="40%" stopColor="#7C2C26" />
-          <stop offset="100%" stopColor="#300F0D" />
-        </radialGradient>
-        <linearGradient id={g("ring")} x1="15%" y1="5%" x2="90%" y2="100%">
-          <stop offset="0%" stopColor="#FFF4D6" />
-          <stop offset="22%" stopColor="#FCE3A0" />
-          <stop offset="50%" stopColor="#E3A93C" />
-          <stop offset="78%" stopColor="#A8721C" />
-          <stop offset="100%" stopColor="#6E4A11" />
+        <linearGradient id={g("ybg")} x1="50%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" stopColor="#FFD93D" />
+          <stop offset="100%" stopColor="#FFC300" />
         </linearGradient>
-        <linearGradient id={g("gold")} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#FFF3D2" />
-          <stop offset="45%" stopColor="#F0C868" />
-          <stop offset="100%" stopColor="#A8721C" />
+        <linearGradient id={g("sheen")} x1="20%" y1="0%" x2="80%" y2="60%">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.5" />
+          <stop offset="55%" stopColor="#FFFFFF" stopOpacity="0" />
         </linearGradient>
-        <radialGradient id={g("pill")} cx="50%" cy="0%" r="120%">
-          <stop offset="0%" stopColor="#8A342E" />
-          <stop offset="100%" stopColor="#300F0D" />
-        </radialGradient>
-        <clipPath id={g("clip")}>
-          <circle cx="256" cy="218" r="172" />
-        </clipPath>
-        <filter id={g("shadow")} x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="10" stdDeviation="14" floodColor="#000000" floodOpacity="0.35" />
-        </filter>
       </defs>
 
-      <g filter={`url(#${g("shadow")})`}>
-        {/* outer glossy gold ring, with a bright rim-light sweep */}
-        <circle cx="256" cy="218" r="188" fill={`url(#${g("ring")})`} />
-        <circle cx="256" cy="218" r="188" fill="none" stroke="#5C3B0E" strokeWidth="1.5" opacity="0.6" />
-        <circle cx="256" cy="218" r="182" fill="none" stroke="#FFFFFF" strokeWidth="7" opacity="0.55"
-          strokeDasharray="220 950" strokeLinecap="round" transform="rotate(-125 256 218)" />
-        <circle cx="256" cy="218" r="172" fill="#240C0A" />
+      <rect x="0" y="0" width="512" height="512" fill={`url(#${g("ybg")})`} />
+      <rect x="0" y="0" width="512" height="512" fill={`url(#${g("sheen")})`} />
 
-        <circle cx="256" cy="218" r="168" fill={`url(#${g("disc")})`} />
+      {/* truck, a bold 2-tone silhouette — window/hubs are yellow
+          negative-space cutouts rather than a 3rd color, so it stays
+          legible even shrunk down to a small header icon */}
+      <g transform={showText ? "translate(0,-14)" : "translate(0,20) scale(1.28) translate(-56,-46)"}>
+        <rect x="70" y="196" width="238" height="120" rx="16" fill="#0B3D91" />
+        <rect x="90" y="214" width="150" height="30" rx="8" fill="#FFD93D" opacity="0.85" />
 
-        <g clipPath={`url(#${g("clip")})`}>
-          <ellipse cx="330" cy="330" rx="130" ry="65" fill="#000000" opacity="0.18" />
-          <ellipse cx="210" cy="108" rx="155" ry="78" fill="#FFFFFF" opacity="0.24" />
-          <ellipse cx="180" cy="80" rx="65" ry="26" fill="#FFFFFF" opacity="0.55" />
-          <ellipse cx="300" cy="70" rx="22" ry="10" fill="#FFFFFF" opacity="0.35" />
-        </g>
+        <path d="M308 224 L392 224 Q414 224 414 246 L414 316 L308 316 Z" fill="#0B3D91" />
+        <rect x="330" y="240" width="52" height="42" rx="7" fill="#FFD93D" opacity="0.85" />
 
-        {/* truck group, centered on the disc, just 2 wheels */}
-        <g transform="translate(-15,0)">
-          {/* motion lines trailing the cab, which faces right */}
-          <rect x="396" y="208" width="18" height="7" rx="3.5" fill="#FFF3D2" opacity="0.45" />
-          <rect x="400" y="192" width="26" height="7" rx="3.5" fill="#FFF3D2" opacity="0.65" />
-          <rect x="406" y="176" width="34" height="7" rx="3.5" fill="#FFF3D2" opacity="0.85" />
-
-          {/* trailer (left) */}
-          <rect x="158" y="176" width="168" height="70" rx="10" fill={`url(#${g("gold")})`} stroke="#7A5313" strokeWidth="2" />
-          <rect x="164" y="181" width="156" height="16" rx="8" fill="#FFFFFF" opacity="0.35" />
-
-          {/* cab (right, facing right) */}
-          <rect x="322" y="196" width="62" height="52" rx="8" fill={`url(#${g("gold")})`} />
-          <rect x="349" y="205" width="24" height="20" rx="3" fill="#3D1512" />
-          <rect x="349" y="205" width="24" height="8" rx="3" fill="#FFFFFF" opacity="0.3" />
-
-          {/* 2 wheels: rear (under trailer) and front (under cab) */}
-          <circle cx="190" cy="255" r="19" fill="#240C0A" />
-          <circle cx="190" cy="255" r="8" fill="#E3A93C" />
-          <circle cx="344" cy="255" r="19" fill="#240C0A" />
-          <circle cx="344" cy="255" r="8" fill="#E3A93C" />
-        </g>
-
-        <path d="M120 108 L126 124 L142 130 L126 136 L120 152 L114 136 L98 130 L114 124 Z" fill="#FFFFFF" opacity="0.9" />
-        <path d="M392 320 L396 330 L406 334 L396 338 L392 348 L388 338 L378 334 L388 330 Z" fill="#FFFFFF" opacity="0.75" />
-
-        {showText && (
-          <>
-            <rect x="106" y="372" width="300" height="56" rx="28" fill={`url(#${g("pill")})`} stroke={`url(#${g("ring")})`} strokeWidth="3" />
-            <rect x="118" y="378" width="276" height="10" rx="5" fill="#FFFFFF" opacity="0.12" />
-            <text x="256" y="409" textAnchor="middle" fontFamily={bodyFont} fontWeight="800" fontSize="26" fill="#F0C868">अपना ट्रांसपोर्ट</text>
-          </>
-        )}
+        <circle cx="150" cy="330" r="42" fill="#0B3D91" />
+        <circle cx="150" cy="330" r="16" fill="#FFD93D" opacity="0.85" />
+        <circle cx="356" cy="330" r="42" fill="#0B3D91" />
+        <circle cx="356" cy="330" r="16" fill="#FFD93D" opacity="0.85" />
       </g>
+
+      {showText && (
+        <g>
+          <rect x="46" y="382" width="420" height="88" rx="20" fill="#0B3D91" />
+          <text x="256" y="424" textAnchor="middle" fontFamily={bodyFont} fontWeight="900" fontSize="40" letterSpacing="1" fill="#FFFFFF">APNA</text>
+          <text x="256" y="458" textAnchor="middle" fontFamily={bodyFont} fontWeight="900" fontSize="30" letterSpacing="3" fill="#FFFFFF">TRANSPORT</text>
+        </g>
+      )}
     </svg>
   );
 }
