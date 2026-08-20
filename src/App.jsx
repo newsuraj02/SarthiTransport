@@ -3351,13 +3351,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             </div>
           </div>
 
-          <div className="rounded-lg p-2.5 mb-2.5" style={{ background: C.marigoldDeep }}>
-            <div className="text-xs font-black mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Note" : "नोट"}</div>
-            <div className="text-[10px] font-bold" style={{ color: "#FFFFFF" }}>
-              {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
-            </div>
-          </div>
-
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
             <div className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>
               {lang === "en" ? "💡 Once the vehicle is loaded, the driver may ask for an advance payment — this is a mutual agreement between the customer and driver, not a fixed app rule." : "💡 गाड़ी लोड होने के बाद ड्राइवर एडवांस भुगतान मांग सकता है — यह ग्राहक और ड्राइवर के बीच आपसी सहमति है, ऐप का कोई तय नियम नहीं।"}
@@ -3374,8 +3367,13 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           </div>
         )}
         {b.loadingStartedAt && (
-          <div className="rounded-lg p-2.5 text-[11px] font-bold" style={{ background: C.safety, color: "#FFFFFF" }}>
-            ⚠️ {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
+          <div className="rounded-lg p-2.5" style={{ background: C.safety, color: "#FFFFFF" }}>
+            <div className="text-[11px] font-bold">
+              ⚠️ {lang === "en" ? "Note 1:" : "नोट 1:"} {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
+            </div>
+            <div className="text-[11px] font-bold mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.35)" }}>
+              ⚠️ {lang === "en" ? "Note 2:" : "नोट 2:"} {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
+            </div>
           </div>
         )}
         {b.loadingStartedAt && (
