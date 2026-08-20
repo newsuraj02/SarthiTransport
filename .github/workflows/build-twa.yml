@@ -41,7 +41,19 @@ jobs:
         run: npm install
 
       - name: Decode signing keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$GITHUB_WORKSPACE/twa/android.keystore"
+        # --ignore-garbage tolerates whatever the secret got encoded with —
+        # e.g. Windows' `certutil -encode` wraps its base64 output in
+        # "-----BEGIN CERTIFICATE-----"/"-----END CERTIFICATE-----" lines,
+        # which aren't valid base64 and would otherwise fail this step.
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d -i > "$GITHUB_WORKSPACE/twa/android.keystore"
+
+      - name: Verify keystore + alias + password (fails fast with a clear error instead of deep into the build)
+        env:
+          JKS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          JKS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          "$JAVA_HOME/bin/keytool" -list -keystore "$GITHUB_WORKSPACE/twa/android.keystore" \
+            -alias "$JKS_ALIAS" -storepass "$JKS_PASS" > /dev/null
 
       - name: Point Bubblewrap at the JDK/SDK setup-java and setup-android already installed
         # Skips Bubblewrap's own interactive "download JDK/SDK?" first-run prompts
