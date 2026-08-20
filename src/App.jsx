@@ -3404,15 +3404,14 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
   // real borders, so column padding + a rule line stand in for them.
   const downloadInvoice = (b) => {
     const baseFare = (b.fare || 0) - (b.extraCharge || 0);
-    const { totalMs, loadingUnloadingMs, travelMs, waitingMs } = tripHourBreakdown(b);
+    const { totalMs, loadingUnloadingMs, waitingMs } = tripHourBreakdown(b);
     const col1 = 34, col2 = 16;
     const line = (context, time, charges) => `${context.padEnd(col1)}${(time || "-").padEnd(col2)}${charges || "-"}`;
     const rule = "-".repeat(col1 + col2 + 12);
     const rows = [
       line("Fare", "-", fmt(baseFare)),
-      line("Total Hours", fmtHrMin(totalMs, "en"), "-"),
+      line("Total time", fmtHrMin(totalMs, "en"), "-"),
       line("Loading/Unloading time", fmtHrMin(loadingUnloadingMs, "en"), "-"),
-      line("Travel time (Uncharged/Excluded)", fmtHrMin(travelMs, "en"), "-"),
     ];
     if (b.extraCharge > 0) rows.push(line(`Waiting charge (${fmt(b.extraHourRate || 0)}/hr)`, fmtHrMin(waitingMs, "en"), fmt(b.extraCharge)));
     rows.push(rule, line("Total", "-", fmt(b.fare)));
@@ -4035,7 +4034,7 @@ function tripHourBreakdown(trip) {
 // left-aligned Time/Charges columns, and full solid-black borders per the
 // agreed design, not the app's usual thin grey hairlines.
 function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }) {
-  const { totalMs, loadingUnloadingMs, travelMs, waitingMs } = tripHourBreakdown(trip);
+  const { totalMs, loadingUnloadingMs, waitingMs } = tripHourBreakdown(trip);
   const cellStyle = { border: "1.5px solid #000000", padding: "8px 10px", fontSize: 13, textAlign: "left" };
   const Row = ({ context, time, charges, bold, zebra }) => (
     <tr style={{ background: bold ? C.success : zebra ? C.bg : C.paper }}>
@@ -4056,9 +4055,8 @@ function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }
         </thead>
         <tbody>
           <Row context={baseFareLabel} charges={fmt(baseFare)} />
-          <Row context={lang === "en" ? "Total Hours" : "कुल घंटे"} time={fmtHrMin(totalMs, lang)} zebra />
+          <Row context={lang === "en" ? "Total time" : "कुल समय"} time={fmtHrMin(totalMs, lang)} zebra />
           <Row context={lang === "en" ? "Loading/Unloading time" : "लोडिंग/अनलोडिंग समय"} time={fmtHrMin(loadingUnloadingMs, lang)} />
-          <Row context={lang === "en" ? "Travel time (Uncharged/Excluded)" : "यात्रा समय (शुल्क-मुक्त)"} time={fmtHrMin(travelMs, lang)} zebra />
           {trip.extraCharge > 0 && (
             <Row context={`${lang === "en" ? "Waiting charge" : "वेटिंग चार्ज"} (${fmt(trip.extraHourRate || 0)}/${lang === "en" ? "hr" : "घं"})`}
               time={fmtHrMin(waitingMs, lang)} charges={fmt(trip.extraCharge)} />
