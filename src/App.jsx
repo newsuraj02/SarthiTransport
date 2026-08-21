@@ -5783,6 +5783,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showCall, setShowCall] = useState(false);
+  const [callQ, setCallQ] = useState("");
   // Free Trial vs Main Routine is computed live from each driver's own
   // createdAt (see isInTrial/trialDaysLeft) instead of a stored status
   // field — a driver moves the instant their 30 days are up, on every
@@ -5812,22 +5813,29 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
           {showCall ? (lang === "en" ? "Cancel" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}</>}
         </button>
       </div>
-      {showCall && (
-        <div className="rounded-lg p-2 mb-3 space-y-1.5 max-h-64 overflow-y-auto" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-          {drivers.length === 0 ? (
-            <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : "कोई ड्राइवर नहीं मिला।"}</p>
-          ) : drivers.map((d) => (
-            <a key={d.id} href={`tel:${d.mobile}`} onClick={() => setShowCall(false)}
-              className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-              <div className="min-w-0">
-                <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
-                <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-              </div>
-              <Phone size={16} color={C.success} className="shrink-0" />
-            </a>
-          ))}
-        </div>
-      )}
+      {showCall && (() => {
+        const callFiltered = drivers.filter((d) => d.name.includes(callQ) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(callQ.toLowerCase()) || (d.mobile || "").includes(callQ));
+        return (
+          <div className="rounded-lg p-2 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."}
+              className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {callFiltered.length === 0 ? (
+                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : "कोई ड्राइवर नहीं मिला।"}</p>
+              ) : callFiltered.map((d) => (
+                <a key={d.id} href={`tel:${d.mobile}`} onClick={() => setShowCall(false)}
+                  className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
+                    <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+                  </div>
+                  <Phone size={16} color={C.success} className="shrink-0" />
+                </a>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       <div className="grid grid-cols-3 gap-1.5 mb-3">
         {[
           ["all", lang === "en" ? "All" : "सभी", drivers.length],
@@ -5938,6 +5946,7 @@ function AdminCustomers({ customers, bookings, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [showCall, setShowCall] = useState(false);
+  const [callQ, setCallQ] = useState("");
   const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q) || (c.city || "").toLowerCase().includes(q.toLowerCase()));
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
@@ -5955,22 +5964,29 @@ function AdminCustomers({ customers, bookings, lang }) {
           {showCall ? (lang === "en" ? "Cancel" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Customer" : "कस्टमर को कॉल करें"}</>}
         </button>
       </div>
-      {showCall && (
-        <div className="rounded-lg p-2 mb-3 space-y-1.5 max-h-64 overflow-y-auto" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-          {(customers || []).length === 0 ? (
-            <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : "कोई कस्टमर नहीं मिला।"}</p>
-          ) : (customers || []).map((c) => (
-            <a key={c.mobile} href={`tel:${c.mobile}`} onClick={() => setShowCall(false)}
-              className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-              <div className="min-w-0">
-                <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
-                <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
-              </div>
-              <Phone size={16} color={C.success} className="shrink-0" />
-            </a>
-          ))}
-        </div>
-      )}
+      {showCall && (() => {
+        const callFiltered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(callQ.toLowerCase()) || (c.mobile || "").includes(callQ));
+        return (
+          <div className="rounded-lg p-2 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name or mobile..." : "नाम या मोबाइल से खोजें..."}
+              className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {callFiltered.length === 0 ? (
+                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : "कोई कस्टमर नहीं मिला।"}</p>
+              ) : callFiltered.map((c) => (
+                <a key={c.mobile} href={`tel:${c.mobile}`} onClick={() => setShowCall(false)}
+                  className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
+                    <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                  </div>
+                  <Phone size={16} color={C.success} className="shrink-0" />
+                </a>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, mobile or city..." : "नाम, मोबाइल या शहर से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : "कोई कस्टमर नहीं मिला।"}</p>}
