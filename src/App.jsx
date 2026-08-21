@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useId } from "react";
 import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
-  Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
+  Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Globe, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
   FileText, X, Upload,
@@ -211,6 +211,7 @@ const EN_LABELS = {
   book: "Book Now", rides: "My Rides", home: "Home", wallet: "Wallet", history: "History",
   kyc: "KYC", sos: "SOS", fleet: "Live Dashboard", drivers: "Drivers", settings: "Settings",
   finance: "Reports", notify: "Notify", alerts: "Alerts", customers: "Customers", expenses: "Expenses",
+  callLogs: "Call Logs",
 };
 
 // Default business-expense categories for Admin's Expenses tab — admin can
@@ -5820,6 +5821,47 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
   );
 }
 
+// Dispute-resolution audit trail for masked calls (see functions/index.js:
+// initiateMaskedCall) -- who called who, on which booking, when. Only the
+// initial connect request gets logged (no duration/answer status, since
+// Exotel's Connect API response is all this reads -- a call-status webhook
+// would be needed for more than that, which isn't wired up).
+function AdminCallLogs({ callLogs, bookings, lang }) {
+  const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : { customer: "ग्राहक", driver: "ड्राइवर" };
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  return (
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
+        <PhoneCall size={16} color={C.marigoldDeep} /> {lang === "en" ? "Masked Call Logs" : "मास्क्ड कॉल लॉग्स"}
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{(callLogs || []).length}</span>
+      </div>
+      {(callLogs || []).length === 0 ? (
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No masked calls yet." : "अभी तक कोई मास्क्ड कॉल नहीं हुई।"}</p>
+      ) : (
+        <div className="space-y-2">
+          {callLogs.map((log) => {
+            const b = (bookings || []).find((x) => x.id === log.bookingId);
+            return (
+              <div key={log.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold" style={{ color: C.ink }}>{roleLabel[log.initiatedBy] || log.initiatedBy} {lang === "en" ? "called" : "ने कॉल किया"}</span>
+                  <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(log.createdAt)}</span>
+                </div>
+                {b ? (
+                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.pickup} → {b.drop}{b.driverName ? ` · ${b.driverName}` : ""}</div>
+                ) : (
+                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Booking" : "बुकिंग"}: {log.bookingId}</div>
+                )}
+                {log.exotelCallSid && <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>SID: {log.exotelCallSid}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
@@ -6466,9 +6508,9 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs }) {
   const [tab, setTab] = useState("fleet");
-  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
+  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren], ["callLogs", "कॉल लॉग्स", PhoneCall]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
@@ -6500,6 +6542,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
+      {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
     </div>
   );
 }
@@ -6797,6 +6840,10 @@ export default function App() {
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("alerts", setAlerts) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), authDeps);
+  // Masked-call audit trail (see functions/index.js: initiateMaskedCall) —
+  // admin-only read, same pattern as alerts above.
+  const [callLogs, setCallLogs] = useState([]);
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("callLogs", setCallLogs) : undefined), authDeps);
   // Business expenses — admin-only, same pattern as alerts.
   const [expenses, setExpenses] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("expenses", setExpenses) : undefined), authDeps);
@@ -7231,7 +7278,7 @@ export default function App() {
               bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
-              expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} />
+              expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} />
           </div>
         )}
       </div>
