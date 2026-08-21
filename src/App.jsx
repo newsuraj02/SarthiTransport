@@ -4645,13 +4645,9 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         </button>
         {showComingSoon && (
           <div className="rounded-lg p-2.5 mt-2 text-[11px] font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#000000" }}>
-            {lang === "en" ? "Online payments are coming soon. Use manual recharge below for now." : "ऑनलाइन पेमेंट जल्द आ रहा है। फिलहाल नीचे मैनुअल रीचार्ज का उपयोग करें।"}
+            {lang === "en" ? "Online payments are coming soon." : "ऑनलाइन पेमेंट जल्द आ रहा है।"}
           </div>
         )}
-        <button onClick={() => requestRecharge(500)} className="w-full mt-2 rounded-lg py-2.5 font-bold text-sm"
-          style={{ background: C.marigold, color: "#000000" }}>
-          {lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)"}
-        </button>
         <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1.5" style={{ background: "#000000", color: "#fff" }}>
           <ClipboardList size={13} /> {showHistory ? (lang === "en" ? "Hide Transaction History" : "लेन-देन हिस्ट्री छुपाएं") : (lang === "en" ? "Transaction History" : "लेन-देन हिस्ट्री")}
         </button>
