@@ -4674,10 +4674,11 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         </div>
       )}
       <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1">
           <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Driver Bonus" : "ड्राइवर बोनस"}</div>
           <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(driver.bonus || 0)}</div>
         </div>
+        <div className="text-[11px] font-semibold mb-2" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Withdraw anytime" : "कभी भी निकालें"}</div>
         <button onClick={() => requestWithdrawal(driver.bonus || 0)} disabled={!driver.bonus}
           className={`w-full rounded-lg py-2 text-xs font-bold text-white flex items-center justify-center gap-1.5 ${driver.bonus ? "shadow-lg" : ""}`}
           style={{ background: driver.bonus ? C.metallicGreen : "#E0E0E0", color: driver.bonus ? "#fff" : "#9AA3B0" }}>
