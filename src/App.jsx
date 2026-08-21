@@ -4673,7 +4673,6 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
           {lang === "en" ? "Online payments are coming soon. Use manual recharge below for now." : "ऑनलाइन पेमेंट जल्द आ रहा है। फिलहाल नीचे मैनुअल रीचार्ज का उपयोग करें।"}
         </div>
       )}
-      <div className="text-sm font-extrabold mb-1.5" style={{ color: C.ink }}>{lang === "en" ? "Manual recharge (until online payments launch)" : "मैनुअल रीचार्ज (ऑनलाइन पेमेंट आने तक)"}</div>
       <button onClick={() => requestRecharge(500)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2"
         style={{ background: C.marigold, color: "#000000" }}>
         {lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)"}
@@ -4706,7 +4705,6 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         </div>
       )}
 
-      <div className="text-sm font-extrabold mt-2" style={{ color: C.ink }}>{lang === "en" ? "See the full trip-wise list in the \"History\" tab." : "पूरी ट्रिप-वार लिस्ट \"हिस्ट्री\" टैब में देखें।"}</div>
     </div>
   );
 }
