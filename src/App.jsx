@@ -4675,7 +4675,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
       )}
       <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
         <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Bonus Account" : "बोनस अकाउंट"}</div>
+          <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Driver Bonus" : "ड्राइवर बोनस"}</div>
           <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(driver.bonus || 0)}</div>
         </div>
         <button onClick={() => requestWithdrawal(driver.bonus || 0)} disabled={!driver.bonus}
