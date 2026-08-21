@@ -115,8 +115,6 @@ function slugify(str) {
 const vehicleLabel = (v, lang) => (v ? (lang === "en" ? (v.labelEn || v.label) : v.label) : "");
 const vehicleCapacity = (v, lang) => (v ? (lang === "en" ? (v.capacityEn || v.capacity) : v.capacity) : "");
 const MATERIALS = ["लोहा", "प्लास्टिक", "बॉक्स / कार्टन", "सीमेंट / बालू", "अन्य"];
-const LIGHT_BULKY_MATERIALS = ["प्लास्टिक", "बॉक्स / कार्टन"];
-const BIG_VEHICLE_KEYS = ["pickup", "truck"];
 const MATERIAL_LABELS_EN = { "लोहा": "Iron", "प्लास्टिक": "Plastic", "बॉक्स / कार्टन": "Box / Carton", "सीमेंट / बालू": "Cement / Sand", "अन्य": "Other" };
 const materialLabel = (m, lang, customMap = {}) => {
   if (customMap[m]) return lang === "en" ? (customMap[m].en || customMap[m].hi) : (customMap[m].hi || customMap[m].en);
@@ -2771,7 +2769,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [pickupSelected, setPickupSelected] = useState(false);
   const [dropSelected, setDropSelected] = useState(false);
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
-  const [showAllVehicles, setShowAllVehicles] = useState(true);
   const [material, setMaterial] = useState("");
   // The default list plus anything any customer has ever added — synced
   // live via customMaterials, so a material someone else added shows up
@@ -2782,8 +2779,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [weight, setWeight] = useState("");
   const [distance, setDistance] = useState(null);
   const [mapField, setMapField] = useState(null); // 'pickup' | 'drop' | null
-  const [showBulkyPopup, setShowBulkyPopup] = useState(false);
-  const [bulkyPopupSeenFor, setBulkyPopupSeenFor] = useState("");
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -2902,21 +2897,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   useEffect(() => {
     const w = Number(weight);
     if (!weight || !w) return;
-    const isLightBulky = LIGHT_BULKY_MATERIALS.includes(material);
     const smallFit = VEHICLES.filter((v) => v.capacityKg >= w).sort((a, b) => a.capacityKg - b.capacityKg)[0];
-    const bigFit = VEHICLES.filter((v) => BIG_VEHICLE_KEYS.includes(v.key)).sort((a, b) => a.capacityKg - b.capacityKg)[0];
-    if (isLightBulky && bigFit) {
-      setVehicle(bigFit.key);
-      setShowAllVehicles(false);
-      const key = material + "|" + weight;
-      if (bulkyPopupSeenFor !== key) {
-        setShowBulkyPopup(true);
-        setBulkyPopupSeenFor(key);
-      }
-    } else if (smallFit) {
-      setVehicle(smallFit.key);
-      setShowAllVehicles(false);
-    }
+    if (smallFit) setVehicle(smallFit.key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weight, material]);
 
@@ -3101,28 +3083,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
           </GuidedStep>
         </div>
-
-        {showBulkyPopup && (() => {
-          const w = Number(weight);
-          const smallFit = VEHICLES.filter((v) => v.capacityKg >= w).sort((a, b) => a.capacityKg - b.capacityKg)[0];
-          const bigFit = VEHICLES.find((v) => v.key === vehicle);
-          return (
-            <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setShowBulkyPopup(false)}>
-              <div className="w-full max-w-sm rounded-t-2xl p-5" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
-                <div className="text-sm font-bold mb-4 flex items-center gap-1.5" style={{ color: C.marigoldDeep }}>⚠ {lang === "en" ? "Light but bulky load" : "हल्का पर बड़ा माल"}</div>
-                <div className="space-y-2">
-                  <button onClick={() => setShowBulkyPopup(false)} className="w-full rounded-lg py-3 font-bold text-sm text-white" style={{ background: C.marigoldDeep }}>
-                    {lang === "en" ? `Keep suggested vehicle (${vehicleLabel(bigFit, lang)})` : `सुझाई गई गाड़ी रखें (${vehicleLabel(bigFit, lang)})`}
-                  </button>
-                  <button onClick={() => { if (smallFit) setVehicle(smallFit.key); setShowAllVehicles(true); setShowBulkyPopup(false); }}
-                    className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
-                    {lang === "en" ? `Use smaller vehicle instead (${smallFit ? vehicleLabel(smallFit, lang) : "—"})` : `छोटी गाड़ी ही रखें (${smallFit ? vehicleLabel(smallFit, lang) : "—"})`}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
 
         {advanceNoticeError && (
           <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
