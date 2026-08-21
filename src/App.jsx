@@ -5316,7 +5316,7 @@ function StatTile({ label, value, color, onClick }) {
   return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${color}` }}>{content}</div>;
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionPct, minWallet, lang, onNavigate }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionPct, minWallet, lang, onNavigate, onLogout }) {
   const isToday = (b) => {
     const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
     if (!d) return false;
@@ -5355,7 +5355,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
     : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
-  const recentActivity = (bookings || []).slice(0, 8);
+  const recentActivity = (bookings || []).slice(0, 5);
   const activityTime = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleTimeString(lang === "en" ? "en-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" }) : "—");
 
   const [vehicleQuery, setVehicleQuery] = useState("");
@@ -5556,6 +5556,10 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
           </div>
         )}
       </div>
+
+      <button onClick={onLogout} className="w-full mt-5 rounded-lg py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5" style={{ color: "#FFFFFF", background: C.safety }}>
+        <XCircle size={14} /> {lang === "en" ? "Logout" : "लॉगआउट"}
+      </button>
     </div>
   );
 }
@@ -6434,9 +6438,11 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           <LayoutDashboard size={18} color={C.marigoldDeep} />
           <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Control Panel" : "एडमिन कंट्रोल पैनल"}</h2>
         </div>
-        <button onClick={onLogout} className="text-[11px] font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-lg" style={{ color: "#FFFFFF", background: C.safety }}>
-          <XCircle size={12} /> {lang === "en" ? "Logout" : "लॉगआउट"}
-        </button>
+        {tab !== "fleet" && (
+          <button onClick={onLogout} className="text-[11px] font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-lg" style={{ color: "#FFFFFF", background: C.safety }}>
+            <XCircle size={12} /> {lang === "en" ? "Logout" : "लॉगआउट"}
+          </button>
+        )}
       </div>
       {tab === "fleet" && <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : "एडमिन"} 👋</div>}
       <div className="flex gap-2 mb-5 overflow-x-auto">
@@ -6447,7 +6453,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} />}
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
