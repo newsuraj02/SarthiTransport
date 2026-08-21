@@ -5159,11 +5159,19 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 <div className="text-sm font-bold text-white">{driver.name}</div>
                 {driver.mobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{driver.mobile}</div>}
               </div>
+              <div className="p-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+                <button onClick={() => { setTab("wallet"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl shadow-lg text-left" style={{ background: C.marigold }}>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
+                    <Wallet size={18} color={C.marigold} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-black" style={{ color: "#000000" }}>{lang === "en" ? "My Wallet" : "मेरा वॉलेट"}</div>
+                    <div className="text-lg font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
+                  </div>
+                </button>
+              </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
-              </button>
-              <button onClick={() => { setTab("wallet"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet" : "वॉलेट"}
               </button>
               <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Clock3 size={16} color={C.marigoldDeep} /> {lang === "en" ? "View Advance Ride/s" : "एडवांस राइड/स देखें"} ({advanceBookings.length})
