@@ -4595,8 +4595,6 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
   const [showHistory, setShowHistory] = useState(false);
   const inTrial = isInTrial(driver.createdAt);
   const myTrips = tripLog.filter((t) => t.driverName === driver.name && t.status !== "Cancelled");
-  const totalCommission = myTrips.reduce((s, t) => s + t.fare * (commissionPct / 100), 0);
-  const totalBonus = myTrips.reduce((s, t) => s + t.fare * (bonusPct / 100), 0);
   const myWithdrawals = (withdrawals || []).filter((w) => w.driverName === driver.name);
   const myRecharges = (rechargeRequests || []).filter((r) => r.driverName === driver.name);
 
@@ -4680,14 +4678,9 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         style={{ background: C.marigold, color: "#000000" }}>
         {lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)"}
       </button>
-      <div className="text-sm font-extrabold mb-4" style={{ color: C.ink }}>{lang === "en" ? `${commissionPct}% commission is cut from this wallet instantly the moment a bid is accepted.` : `बिड एक्सेप्ट होते ही भाड़े का ${commissionPct}% कमीशन इसी वॉलेट से तुरंत कट जाता है।`}</div>
-
       <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
         <div className="flex items-center justify-between mb-2">
-          <div>
-            <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Bonus Account" : "बोनस अकाउंट"}</div>
-            <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `You get ${bonusPct}% out of the ${commissionPct}% commission` : `${commissionPct}% कमीशन में से ${bonusPct}% बोनस आपको मिलता है`}</div>
-          </div>
+          <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Bonus Account" : "बोनस अकाउंट"}</div>
           <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(driver.bonus || 0)}</div>
         </div>
         <button onClick={() => requestWithdrawal(driver.bonus || 0)} disabled={!driver.bonus}
@@ -4713,20 +4706,6 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         </div>
       )}
 
-      <div className="rounded-lg p-3 flex items-center justify-between mb-2 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
-        <div>
-          <div className="text-sm font-extrabold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Total commission cut so far" : "अब तक कुल कमीशन कटा"}</div>
-          <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? `from ${myTrips.length} trips` : `${myTrips.length} ट्रिप्स से`}</div>
-        </div>
-        <div className="text-xl font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(totalCommission)}</div>
-      </div>
-      <div className="rounded-lg p-3 flex items-center justify-between shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-        <div>
-          <div className="text-sm font-extrabold" style={{ color: C.pimpri }}>{lang === "en" ? "Total bonus earned so far" : "अब तक कुल बोनस मिला"}</div>
-          <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? `from ${myTrips.length} trips` : `${myTrips.length} ट्रिप्स से`}</div>
-        </div>
-        <div className="text-xl font-bold" style={{ color: C.pimpri, fontFamily: monoFont }}>{fmt(totalBonus)}</div>
-      </div>
       <div className="text-sm font-extrabold mt-2" style={{ color: C.ink }}>{lang === "en" ? "See the full trip-wise list in the \"History\" tab." : "पूरी ट्रिप-वार लिस्ट \"हिस्ट्री\" टैब में देखें।"}</div>
     </div>
   );
