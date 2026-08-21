@@ -4640,6 +4640,18 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         {(driver.heldCredit || 0) > 0 && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
         )}
+        <button onClick={() => setShowComingSoon(true)} className="w-full mt-3 rounded-lg py-2.5 font-bold text-sm flex items-center justify-center gap-1.5" style={{ background: "#FFFFFF", color: C.navy }}>
+          <IndianRupee size={14} /> {lang === "en" ? "Recharge" : "रीचार्ज करें"}
+        </button>
+        {showComingSoon && (
+          <div className="rounded-lg p-2.5 mt-2 text-[11px] font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#000000" }}>
+            {lang === "en" ? "Online payments are coming soon. Use manual recharge below for now." : "ऑनलाइन पेमेंट जल्द आ रहा है। फिलहाल नीचे मैनुअल रीचार्ज का उपयोग करें।"}
+          </div>
+        )}
+        <button onClick={() => requestRecharge(500)} className="w-full mt-2 rounded-lg py-2.5 font-bold text-sm"
+          style={{ background: C.marigold, color: "#000000" }}>
+          {lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)"}
+        </button>
         <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1.5" style={{ background: "#000000", color: "#fff" }}>
           <ClipboardList size={13} /> {showHistory ? (lang === "en" ? "Hide Transaction History" : "लेन-देन हिस्ट्री छुपाएं") : (lang === "en" ? "Transaction History" : "लेन-देन हिस्ट्री")}
         </button>
@@ -4665,18 +4677,6 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
           )}
         </div>
       )}
-      <button onClick={() => setShowComingSoon(true)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#0052CC", color: "#fff" }}>
-        <IndianRupee size={14} /> {lang === "en" ? "Recharge" : "रीचार्ज करें"}
-      </button>
-      {showComingSoon && (
-        <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#000000" }}>
-          {lang === "en" ? "Online payments are coming soon. Use manual recharge below for now." : "ऑनलाइन पेमेंट जल्द आ रहा है। फिलहाल नीचे मैनुअल रीचार्ज का उपयोग करें।"}
-        </div>
-      )}
-      <button onClick={() => requestRecharge(500)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2"
-        style={{ background: C.marigold, color: "#000000" }}>
-        {lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)"}
-      </button>
       <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Bonus Account" : "बोनस अकाउंट"}</div>
