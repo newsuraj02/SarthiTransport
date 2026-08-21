@@ -6705,16 +6705,20 @@ export default function App() {
   // referred person needs to be free to pick Customer or Driver. But the
   // ref param stays in the address bar forever after that (nothing strips
   // it, and CustomerOnboarding/DriverOnboarding read it again later for
-  // referral-bonus attribution, so it can't just be removed from the URL)
-  // — without the sessionStorage guard below, every single page refresh
-  // from then on would re-trigger this and boot the user back to role
-  // selection, wiping out an in-progress signup form or even an already
-  // signed-in session. Keying the guard by the ref value itself (not just
-  // a flag) still lets a genuinely different referral link force the
-  // choice again within the same tab.
+  // referral-bonus attribution, so it can't just be removed from the URL).
+  // Two guards keep it from re-firing on every future load:
+  // - Once EITHER role is actually signed in/verified, never reset again —
+  //   from that point on, the only way back to role selection is Logout,
+  //   same as for anyone who never came in via a referral link at all.
+  // - Before that (still mid-signup, not yet verified), a sessionStorage
+  //   flag keyed by the ref value stops it firing again on a same-tab
+  //   refresh, so an accidental reload doesn't wipe an in-progress form —
+  //   but still lets a genuinely different referral link force the choice
+  //   again within the same tab.
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get("ref");
-    if (ref && sessionStorage.getItem("sarthi_ref_handled") !== ref) {
+    const alreadySignedIn = customerAuth.verified || driverAuth.verified;
+    if (ref && !alreadySignedIn && sessionStorage.getItem("sarthi_ref_handled") !== ref) {
       sessionStorage.setItem("sarthi_ref_handled", ref);
       setRole(null);
     }
