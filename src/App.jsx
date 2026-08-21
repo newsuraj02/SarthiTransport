@@ -6510,7 +6510,12 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
 
 function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs }) {
   const [tab, setTab] = useState("fleet");
-  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren], ["callLogs", "कॉल लॉग्स", PhoneCall]];
+  // "kyc" is deliberately not in this list -- the KYC desk is reached only
+  // via the "Pending KYC approvals" tile on the Live Dashboard, not as a
+  // persistent top-level tab. The tab === "kyc" route below still exists,
+  // so that tile (and its onNavigate("kyc") call) keeps working exactly
+  // as before -- this only declutters the tab bar itself.
+  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren], ["callLogs", "कॉल लॉग्स", PhoneCall]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
