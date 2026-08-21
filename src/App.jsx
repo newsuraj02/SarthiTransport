@@ -5942,9 +5942,10 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
 // Read-only oversight of customer registrations — name, address, KYC info.
 // Customers are never gated by admin approval (only drivers are), so this
 // is visibility only, not a verification queue.
-function AdminCustomers({ customers, bookings, lang }) {
+function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showCall, setShowCall] = useState(false);
   const [callQ, setCallQ] = useState("");
   const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q) || (c.city || "").toLowerCase().includes(q.toLowerCase()));
@@ -6041,6 +6042,23 @@ function AdminCustomers({ customers, bookings, lang }) {
                       })}
                     </div>
                   )}
+                  <div className="flex items-center justify-end gap-2 mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                    {confirmDeleteId === c.mobile ? (
+                      <>
+                        <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : "हमेशा के लिए हटाएं?"}</span>
+                        <button onClick={() => { deleteCustomer(c.mobile); setConfirmDeleteId(null); }} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                          {lang === "en" ? "Yes, delete" : "हां, हटाएं"}
+                        </button>
+                        <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
+                          {lang === "en" ? "Cancel" : "रद्द करें"}
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => setConfirmDeleteId(c.mobile)} className="text-[11px] font-bold px-2.5 py-1 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
+                        {lang === "en" ? "Delete" : "हटाएं"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -6406,7 +6424,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory }) {
   const [tab, setTab] = useState("fleet");
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["kyc", "KYC डेस्क", Users], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren]];
   return (
@@ -6432,7 +6450,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} />}
       {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
-      {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} addManualCustomer={addManualCustomer} />}
+      {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
@@ -7016,6 +7034,7 @@ export default function App() {
     patchDoc("drivers", mobile, { blacklisted: !d.blacklisted, online: d.blacklisted ? d.online : false }).catch((e) => console.error(e));
   };
   const deleteDriver = (mobile) => removeDoc("drivers", mobile).catch((e) => console.error(e));
+  const deleteCustomer = (mobile) => removeDoc("customers", mobile).catch((e) => console.error(e));
   const raiseAlert = (role, type, note) => createDoc("alerts", genId("A"), { role, type, note: note || null }).catch((e) => console.error(e));
   const addExpense = ({ id, date, category, amount, note, photoUrl }) =>
     createDoc("expenses", id, { date, category, amount, note: note || "", photoUrl: photoUrl || null });
@@ -7163,7 +7182,7 @@ export default function App() {
         )}
         {role === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
-            <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver}
+            <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
               bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
