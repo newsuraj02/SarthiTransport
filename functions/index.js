@@ -284,7 +284,7 @@ const EXOTEL_API_KEY = defineSecret("EXOTEL_API_KEY");
 const EXOTEL_API_TOKEN = defineSecret("EXOTEL_API_TOKEN");
 const EXOTEL_CALLER_ID = defineSecret("EXOTEL_CALLER_ID");
 
-exports.initiateMaskedCall = onCall({ secrets: [EXOTEL_SID, EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_CALLER_ID] }, async (request) => {
+exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [EXOTEL_SID, EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_CALLER_ID] }, async (request) => {
   const { bookingId } = request.data || {};
   // Firebase Phone Auth sets this claim automatically on sign-in (e.g.
   // "+919876543210") -- used to verify the caller is actually a party to

@@ -80,9 +80,12 @@ export function getActiveStorage() {
 // carries over when the call goes through the same app instance the user
 // actually signed into.
 const functionsByRole = {
-  customer: customerApp ? getFunctions(customerApp) : null,
-  driver: driverApp ? getFunctions(driverApp) : null,
-  admin: adminApp ? getFunctions(adminApp) : null,
+  // Must match the region initiateMaskedCall is actually deployed to (see
+  // functions/index.js) -- getFunctions() defaults to us-central1 otherwise,
+  // and the client would silently call a region with nothing deployed there.
+  customer: customerApp ? getFunctions(customerApp, "asia-south1") : null,
+  driver: driverApp ? getFunctions(driverApp, "asia-south1") : null,
+  admin: adminApp ? getFunctions(adminApp, "asia-south1") : null,
 };
 
 // Bridges a call between this booking's customer and driver through
