@@ -5,8 +5,10 @@
 // to live in a Cloud Function instead of client code.
 const { onDocumentUpdated, onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 
 initializeApp();
@@ -260,4 +262,77 @@ exports.checkTrialExpirations = onSchedule({ schedule: "0 0 * * *", timeZone: "A
     );
   });
   await Promise.all(updates);
+});
+
+// ---------------- Number masking (Exotel) ----------------
+// Bridges a call between a booking's customer and driver through Exotel's
+// Connect API instead of exposing either side's real number to the other:
+// Exotel rings the caller's own phone first, then on answer connects them
+// to the other party with Exotel's number as the caller ID both sides see.
+// Requested specifically to stop customer/driver going direct off-platform
+// after their first trip, keep personal numbers private, make the call
+// recognizable, and leave a call log tied to the booking for disputes.
+//
+// Secrets (set via `firebase functions:secrets:set NAME`, never hardcoded
+// or committed): EXOTEL_SID/API_KEY/API_TOKEN from the Exotel dashboard,
+// EXOTEL_CALLER_ID is the ExoPhone (virtual number) provisioned for
+// masking. Until all four are set, this returns reason: "not_configured"
+// instead of throwing -- the client falls back to a plain tel: link so
+// calling keeps working while Exotel is still being set up.
+const EXOTEL_SID = defineSecret("EXOTEL_SID");
+const EXOTEL_API_KEY = defineSecret("EXOTEL_API_KEY");
+const EXOTEL_API_TOKEN = defineSecret("EXOTEL_API_TOKEN");
+const EXOTEL_CALLER_ID = defineSecret("EXOTEL_CALLER_ID");
+
+exports.initiateMaskedCall = onCall({ secrets: [EXOTEL_SID, EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_CALLER_ID] }, async (request) => {
+  const { bookingId } = request.data || {};
+  // Firebase Phone Auth sets this claim automatically on sign-in (e.g.
+  // "+919876543210") -- used to verify the caller is actually a party to
+  // this booking, not just any signed-in user who knows the bookingId.
+  const callerPhone = request.auth?.token?.phone_number;
+  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
+  if (!bookingId) throw new HttpsError("invalid-argument", "bookingId is required.");
+
+  const bookingSnap = await db.collection("bookings").doc(bookingId).get();
+  if (!bookingSnap.exists) throw new HttpsError("not-found", "Booking not found.");
+  const booking = bookingSnap.data();
+
+  const isCustomer = callerPhone === `+91${booking.customerMobile}`;
+  const isDriver = !!booking.driverMobile && callerPhone === `+91${booking.driverMobile}`;
+  if (!isCustomer && !isDriver) throw new HttpsError("permission-denied", "You're not a party to this booking.");
+
+  const otherMobile = isCustomer ? booking.driverMobile : booking.customerMobile;
+  if (!otherMobile) return { ok: false, reason: "no_other_party" };
+
+  const sid = EXOTEL_SID.value(), apiKey = EXOTEL_API_KEY.value(), apiToken = EXOTEL_API_TOKEN.value(), callerId = EXOTEL_CALLER_ID.value();
+  if (!sid || !apiKey || !apiToken || !callerId) return { ok: false, reason: "not_configured" };
+
+  const basicAuth = Buffer.from(`${apiKey}:${apiToken}`).toString("base64");
+  const body = new URLSearchParams({ From: callerPhone, To: `+91${otherMobile}`, CallerId: callerId, CallType: "trans" });
+  let exotelCallSid = null;
+  try {
+    const res = await fetch(`https://api.exotel.com/v1/Accounts/${sid}/Calls/connect.json`, {
+      method: "POST",
+      headers: { Authorization: `Basic ${basicAuth}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    const data = await res.json();
+    if (!res.ok) { console.error("[maskedCall] Exotel rejected the request:", data); return { ok: false, reason: "exotel_error" }; }
+    exotelCallSid = data?.Call?.Sid || null;
+  } catch (e) {
+    console.error("[maskedCall] Exotel request failed:", e.message);
+    return { ok: false, reason: "exotel_error" };
+  }
+
+  // Audit trail for dispute resolution -- which booking, who initiated,
+  // when. Written server-side with Admin privileges (bypasses Firestore
+  // rules), readable by admin only -- see firestore.rules.
+  await db.collection("callLogs").add({
+    bookingId,
+    initiatedBy: isCustomer ? "customer" : "driver",
+    exotelCallSid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { ok: true };
 });

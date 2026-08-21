@@ -14,7 +14,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Bright/high-visibility flat palette — legible in direct outdoor sunlight
@@ -1151,6 +1151,44 @@ function MicButton({ onResult, lang = "hi", label, size = 8, iconSize = 14 }) {
       style={{ background: listening ? C.safety : C.paper, border: listening ? "none" : `1.5px solid ${C.marigoldDeep}`, width: size * 4, height: size * 4 }}>
       <Mic size={iconSize} color={listening ? "#fff" : C.marigoldDeep} />
     </button>
+  );
+}
+
+// Calls the other party in a booking through Exotel's number-masking
+// bridge (see initiateMaskedCall in firebaseClient.js / functions/index.js)
+// instead of a plain tel: link that would show either side's real number
+// to the other -- neither party's number is displayed here either, since
+// printing it on screen would defeat the point even if the actual call is
+// masked. Falls back to a normal tel: link to fallbackMobile if masking
+// isn't configured yet or the bridge request fails for any reason --
+// calling must never break, masking is a privacy layer on top of it, not
+// a replacement for it working at all.
+function MaskedCallButton({ bookingId, fallbackMobile, label, lang, className, style }) {
+  const [calling, setCalling] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const handleClick = async () => {
+    if (calling) return;
+    setCalling(true);
+    const result = await initiateMaskedCall(bookingId);
+    setCalling(false);
+    if (result.ok) {
+      setConnected(true);
+      setTimeout(() => setConnected(false), 6000);
+    } else if (fallbackMobile) {
+      window.location.href = `tel:${fallbackMobile}`;
+    }
+  };
+  return (
+    <div>
+      <button type="button" onClick={handleClick} disabled={calling} className={className} style={style}>
+        <Phone size={16} color="#000000" /> {calling ? (lang === "en" ? "Connecting..." : "जोड़ रहे हैं...") : label}
+      </button>
+      {connected && (
+        <div className="text-[10px] font-bold text-center mt-1" style={{ color: C.success }}>
+          {lang === "en" ? "You'll receive a call shortly to connect you." : "आपको जल्द ही कॉल आएगी जो आपको जोड़ देगी।"}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -3307,9 +3345,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
         )}
         {!b.loadingStartedAt && b.driverMobile && (
-          <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
-            <Phone size={16} color="#000000" /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{b.driverMobile}</span>
-          </a>
+          <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
+            label={lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}
+            className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
         )}
         {b.loadingStartedAt && (
           <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
@@ -3339,9 +3377,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             )}
             <div className="mt-2">
               {b.driverMobile ? (
-                <a href={`tel:${b.driverMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
-                  <Phone size={16} color="#000000" /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{b.driverMobile}</span>
-                </a>
+                <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
+                  label={lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
               ) : (
                 <div className="flex items-center gap-1.5">
                   <Phone size={14} color="#000000" />
@@ -4512,9 +4550,9 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
               <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
             )}
             {!myTrip.loadingStartedAt && myTrip.customerMobile && (
-              <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
-                <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{myTrip.customerMobile}</span>
-              </a>
+              <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
+                label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
+                className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
             )}
             {myTrip.loadingStartedAt && (
               <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
@@ -4544,9 +4582,9 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
                 )}
                 <div className="mt-2">
                   {myTrip.customerMobile ? (
-                    <a href={`tel:${myTrip.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
-                      <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{myTrip.customerMobile}</span>
-                    </a>
+                    <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
+                      label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
+                      className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
                   ) : (
                     <div className="flex items-center gap-1.5">
                       <Phone size={14} color="#000000" />
@@ -5244,9 +5282,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   )}
                   <div className="mt-2">
                     {ab.customerMobile ? (
-                      <a href={`tel:${ab.customerMobile}`} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }}>
-                        <Phone size={16} color="#000000" /> {lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"} · <span style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.3 }}>{ab.customerMobile}</span>
-                      </a>
+                      <MaskedCallButton bookingId={ab.id} fallbackMobile={ab.customerMobile} lang={lang}
+                        label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
+                        className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <Phone size={14} color="#000000" />

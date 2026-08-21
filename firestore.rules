@@ -95,6 +95,15 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Masked-call audit trail (see functions/index.js: initiateMaskedCall)
+    // — written only by that Cloud Function via the Admin SDK, which
+    // bypasses these rules entirely, so no client write path is needed or
+    // allowed here. Admin-only read, for looking into a customer/driver
+    // dispute.
+    match /callLogs/{id} {
+      allow read: if isAdmin();
+    }
+
     // Business expense tracking (Admin's "Expenses" tab) — admin-only,
     // since this is internal financial data, not app-functionality data.
     match /expenses/{id} {

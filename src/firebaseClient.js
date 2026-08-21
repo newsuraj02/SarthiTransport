@@ -3,6 +3,7 @@ import { initializeFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -72,6 +73,35 @@ export function getDb() {
 }
 export function getActiveStorage() {
   return storageByRole[activeRole];
+}
+
+// Same per-role-app reasoning as Firestore/Storage above: the callable
+// function reads the caller's phone number off request.auth, which only
+// carries over when the call goes through the same app instance the user
+// actually signed into.
+const functionsByRole = {
+  customer: customerApp ? getFunctions(customerApp) : null,
+  driver: driverApp ? getFunctions(driverApp) : null,
+  admin: adminApp ? getFunctions(adminApp) : null,
+};
+
+// Bridges a call between this booking's customer and driver through
+// Exotel (see functions/index.js) so neither side sees the other's real
+// number. Always resolves (never throws) with { ok, reason? } — reason
+// "not_configured" means Exotel's secrets haven't been set on the backend
+// yet, which callers should treat as "fall back to a plain tel: link",
+// not as an error to surface to the user.
+export async function initiateMaskedCall(bookingId) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "initiateMaskedCall");
+    const result = await call({ bookingId });
+    return result.data;
+  } catch (e) {
+    console.error("[maskedCall] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
 }
 
 // Push notifications don't touch Firestore/Storage security rules, so the
