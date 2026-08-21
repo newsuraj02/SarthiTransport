@@ -264,6 +264,32 @@ exports.checkTrialExpirations = onSchedule({ schedule: "0 0 * * *", timeZone: "A
   await Promise.all(updates);
 });
 
+// Runs hourly. A customer's load that has sat in "Bidding" for 12+ hours
+// with zero driver bids gets auto-cancelled -- keeps Admin's "awaiting
+// bids" tile meaningful (a stale, unbid load isn't actually awaiting
+// anything) and frees the customer to re-post instead of it quietly
+// rotting forever. Soft-cancels via the same status flip a manual cancel
+// uses (not a delete), so it still shows up in Admin's Cancelled
+// tally/history if anyone needs to look into it later.
+const STALE_BID_HOURS = 12;
+exports.expireStaleLoads = onSchedule({ schedule: "0 * * * *", timeZone: "Asia/Kolkata" }, async () => {
+  const cutoff = Date.now() - STALE_BID_HOURS * 60 * 60 * 1000;
+  const snap = await db.collection("bookings").where("status", "==", "Bidding").get();
+  const updates = [];
+  snap.forEach((doc) => {
+    const b = doc.data();
+    if ((b.bids || []).length > 0) return;
+    if (!b.createdAt?.toMillis || b.createdAt.toMillis() > cutoff) return;
+    updates.push(
+      doc.ref.update({ status: "Cancelled" }).then(async () => {
+        const token = await getCustomerToken(b.customerMobile);
+        await sendPush(token, "Load cancelled", `No driver bid on your ${b.pickup} → ${b.drop} load within 12 hours, so it was auto-cancelled. Feel free to post it again.`);
+      })
+    );
+  });
+  await Promise.all(updates);
+});
+
 // ---------------- Number masking (Exotel) ----------------
 // Bridges a call between a booking's customer and driver through Exotel's
 // Connect API instead of exposing either side's real number to the other:
