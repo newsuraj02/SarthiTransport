@@ -6699,14 +6699,25 @@ export default function App() {
     if ((open === "customer" || open === "driver") && role === null) { setRole(open); setApp(open); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // A referral link (?ref=...) must always land on the role-choice screen,
-  // not skip straight into whichever role this device last used (role is
-  // persisted — see sarthi_role above) — the referred person needs to be
-  // free to pick Customer or Driver. Doesn't disturb an already-verified
-  // session: RoleSelect resumes it in one tap, same as tapping "Back".
+  // A referral link (?ref=...) must land on the role-choice screen the
+  // FIRST time it's opened, not skip straight into whichever role this
+  // device last used (role is persisted — see sarthi_role above) — the
+  // referred person needs to be free to pick Customer or Driver. But the
+  // ref param stays in the address bar forever after that (nothing strips
+  // it, and CustomerOnboarding/DriverOnboarding read it again later for
+  // referral-bonus attribution, so it can't just be removed from the URL)
+  // — without the sessionStorage guard below, every single page refresh
+  // from then on would re-trigger this and boot the user back to role
+  // selection, wiping out an in-progress signup form or even an already
+  // signed-in session. Keying the guard by the ref value itself (not just
+  // a flag) still lets a genuinely different referral link force the
+  // choice again within the same tab.
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get("ref");
-    if (ref) setRole(null);
+    if (ref && sessionStorage.getItem("sarthi_ref_handled") !== ref) {
+      sessionStorage.setItem("sarthi_ref_handled", ref);
+      setRole(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // "Remembered login" is now a real Firebase Auth session (see
