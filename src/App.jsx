@@ -5778,10 +5778,11 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
   );
 }
 
-function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicleTypes, addVehicleType, addManualDriver }) {
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [showCall, setShowCall] = useState(false);
   // Free Trial vs Main Routine is computed live from each driver's own
   // createdAt (see isInTrial/trialDaysLeft) instead of a stored status
   // field — a driver moves the instant their 30 days are up, on every
@@ -5800,46 +5801,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
     ? { photo: "Driver Photo", dl: "Driving License" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
 
-  const [showAdd, setShowAdd] = useState(false);
-  const blankForm = { name: "", mobile: "", vehicleTypeName: "", vehicleNumber: "", capacityKg: "", address: "", city: "", state: "", pincode: "" };
-  const [form, setForm] = useState(blankForm);
-  const [addError, setAddError] = useState("");
-  const [adding, setAdding] = useState(false);
-  const canAdd = form.name.trim().length > 0 && form.mobile.trim().length === 10 && form.vehicleTypeName.trim().length > 0 && form.vehicleNumber.trim().length > 0 && !adding;
-  // Guided-step highlighting for the required Add Driver fields — see
-  // GuidedStep. Capacity/address/city/state/pincode are optional, so they
-  // aren't part of the sequence.
-  const addStepCompleted = [!!form.name.trim(), form.mobile.trim().length === 10, !!form.vehicleTypeName.trim(), !!form.vehicleNumber.trim()];
-  const { stepProps: addStepProps } = useGuidedSteps(addStepCompleted);
-  const resetForm = () => { setForm(blankForm); setAddError(""); };
-  // Same reuse-by-name-or-create-new resolution the driver's own KYC form
-  // uses, so a manually added driver's vehicle type merges into the same
-  // shared list instead of forking it.
-  const resolveVehicleTypeKey = () => {
-    const name = form.vehicleTypeName.trim();
-    const match = vehicleTypes.find((v) => v.label.toLowerCase() === name.toLowerCase() || (v.labelEn || "").toLowerCase() === name.toLowerCase());
-    if (match) return match.key;
-    const key = slugify(name);
-    addVehicleType({ key, label: name, rate: 25, capacity: "", capacityKg: Number(form.capacityKg) || 0 });
-    return key;
-  };
-  const submitAdd = () => {
-    if (!canAdd) return;
-    setAdding(true);
-    const vehicleTypeKey = resolveVehicleTypeKey();
-    addManualDriver({ ...form, vehicleTypeKey })
-      .then(() => { resetForm(); setShowAdd(false); })
-      .catch((e) => {
-        console.error(e);
-        setAddError(e?.message === "duplicate-or-missing-mobile"
-          ? (lang === "en" ? "A driver with this mobile number already exists." : "इस मोबाइल नंबर से पहले से एक ड्राइवर मौजूद है।")
-          : (lang === "en" ? "Couldn't save — try logging out of Admin and back in, then try again." : "सेव नहीं हो सका — एडमिन से लॉगआउट करके दोबारा लॉगिन करें, फिर कोशिश करें।"));
-      })
-      .finally(() => setAdding(false));
-  };
-  const addFieldCls = "w-full rounded-lg px-3 py-2 text-xs outline-none";
-  const addFieldStyle = { border: `1px solid ${C.line}`, background: C.paper, color: C.ink };
-
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
@@ -5847,37 +5808,24 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
           <Users size={16} /> {lang === "en" ? "All Drivers" : "सभी ड्राइवर"}
           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{drivers.length}</span>
         </div>
-        <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>
-          {showAdd ? (lang === "en" ? "Cancel" : "रद्द करें") : `+ ${lang === "en" ? "Add Driver" : "ड्राइवर जोड़ें"}`}
+        <button onClick={() => setShowCall((v) => !v)} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
+          {showCall ? (lang === "en" ? "Cancel" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}</>}
         </button>
       </div>
-      {showAdd && (
-        <div className="rounded-lg p-3 mb-3 space-y-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-          <GuidedStep {...addStepProps(0)} lang={lang}>
-            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </GuidedStep>
-          <GuidedStep {...addStepProps(1)} lang={lang}>
-            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
-          </GuidedStep>
-          <div className="grid grid-cols-2 gap-2">
-            <GuidedStep {...addStepProps(2)} lang={lang}>
-              <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Vehicle type *" : "गाड़ी का प्रकार *"} value={form.vehicleTypeName} onChange={(e) => setForm({ ...form, vehicleTypeName: e.target.value })} />
-            </GuidedStep>
-            <GuidedStep {...addStepProps(3)} lang={lang}>
-              <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Vehicle number *" : "गाड़ी नंबर *"} value={form.vehicleNumber} onChange={(e) => setForm({ ...form, vehicleNumber: e.target.value.toUpperCase() })} />
-            </GuidedStep>
-          </div>
-          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Capacity (kg)" : "क्षमता (किग्रा)"} value={form.capacityKg} onChange={(e) => setForm({ ...form, capacityKg: e.target.value.replace(/\D/g, "") })} />
-          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Address" : "पता"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-          <div className="grid grid-cols-2 gap-2">
-            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "City" : "शहर"} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "State" : "राज्य"} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
-            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
-          </div>
-          {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
-          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready shadow-lg" : ""}`} style={{ background: canAdd ? C.metallicGreen : "#E0E0E0", color: canAdd ? "#fff" : "#9AA3B0" }}>
-            {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Driver" : "ड्राइवर सेव करें")}
-          </button>
+      {showCall && (
+        <div className="rounded-lg p-2 mb-3 space-y-1.5 max-h-64 overflow-y-auto" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+          {drivers.length === 0 ? (
+            <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : "कोई ड्राइवर नहीं मिला।"}</p>
+          ) : drivers.map((d) => (
+            <a key={d.id} href={`tel:${d.mobile}`} onClick={() => setShowCall(false)}
+              className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="min-w-0">
+                <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
+                <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+              </div>
+              <Phone size={16} color={C.success} className="shrink-0" />
+            </a>
+          ))}
         </div>
       )}
       <div className="grid grid-cols-3 gap-1.5 mb-3">
@@ -5986,40 +5934,15 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang, vehicle
 // Read-only oversight of customer registrations — name, address, KYC info.
 // Customers are never gated by admin approval (only drivers are), so this
 // is visibility only, not a verification queue.
-function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
+function AdminCustomers({ customers, bookings, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [showCall, setShowCall] = useState(false);
   const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q) || (c.city || "").toLowerCase().includes(q.toLowerCase()));
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
     : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
   const bookingDate = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleDateString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
-
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", mobile: "", address: "", area: "", city: "", state: "", pincode: "" });
-  const [addError, setAddError] = useState("");
-  const [adding, setAdding] = useState(false);
-  const canAdd = form.name.trim().length > 0 && form.mobile.trim().length === 10 && !adding;
-  // Guided-step highlighting for the required Add Customer fields — see
-  // GuidedStep. Address/area/city/state/pincode are optional here.
-  const addStepCompleted = [!!form.name.trim(), form.mobile.trim().length === 10];
-  const { stepProps: addStepProps } = useGuidedSteps(addStepCompleted);
-  const resetForm = () => { setForm({ name: "", mobile: "", address: "", area: "", city: "", state: "", pincode: "" }); setAddError(""); };
-  const submitAdd = () => {
-    if (!canAdd) return;
-    setAdding(true);
-    addManualCustomer(form)
-      .then(() => { resetForm(); setShowAdd(false); })
-      .catch((e) => {
-        console.error(e);
-        setAddError(e?.message === "duplicate-or-missing-mobile"
-          ? (lang === "en" ? "A customer with this mobile number already exists." : "इस मोबाइल नंबर से पहले से एक कस्टमर मौजूद है।")
-          : (lang === "en" ? "Couldn't save — try logging out of Admin and back in, then try again." : "सेव नहीं हो सका — एडमिन से लॉगआउट करके दोबारा लॉगिन करें, फिर कोशिश करें।"));
-      })
-      .finally(() => setAdding(false));
-  };
-  const addFieldCls = "w-full rounded-lg px-3 py-2 text-xs outline-none";
-  const addFieldStyle = { border: `1px solid ${C.line}`, background: C.paper, color: C.ink };
 
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -6028,29 +5951,24 @@ function AdminCustomers({ customers, bookings, lang, addManualCustomer }) {
           <Users size={16} /> {lang === "en" ? "All Customers" : "सभी कस्टमर"}
           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{(customers || []).length}</span>
         </div>
-        <button onClick={() => { setShowAdd((v) => !v); resetForm(); }} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>
-          {showAdd ? (lang === "en" ? "Cancel" : "रद्द करें") : `+ ${lang === "en" ? "Add Customer" : "कस्टमर जोड़ें"}`}
+        <button onClick={() => setShowCall((v) => !v)} className="text-[11px] font-bold px-3 py-1.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
+          {showCall ? (lang === "en" ? "Cancel" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Customer" : "कस्टमर को कॉल करें"}</>}
         </button>
       </div>
-      {showAdd && (
-        <div className="rounded-lg p-3 mb-3 space-y-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-          <GuidedStep {...addStepProps(0)} lang={lang}>
-            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Name *" : "नाम *"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </GuidedStep>
-          <GuidedStep {...addStepProps(1)} lang={lang}>
-            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number *" : "10 अंकों का मोबाइल नंबर *"} value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
-          </GuidedStep>
-          <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Address" : "पता"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-          <div className="grid grid-cols-2 gap-2">
-            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "Area" : "क्षेत्र"} value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} />
-            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "City" : "शहर"} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-            <input className={addFieldCls} style={addFieldStyle} placeholder={lang === "en" ? "State" : "राज्य"} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
-            <input className={addFieldCls} style={{ ...addFieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "Pincode" : "पिनकोड"} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })} />
-          </div>
-          {addError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{addError}</div>}
-          <button onClick={submitAdd} disabled={!canAdd} className={`w-full rounded-lg py-2 text-xs font-bold ${canAdd ? "guided-submit-ready shadow-lg" : ""}`} style={{ background: canAdd ? C.metallicGreen : "#E0E0E0", color: canAdd ? "#fff" : "#9AA3B0" }}>
-            {adding ? (lang === "en" ? "Adding..." : "जोड़ा जा रहा है...") : (lang === "en" ? "Save Customer" : "कस्टमर सेव करें")}
-          </button>
+      {showCall && (
+        <div className="rounded-lg p-2 mb-3 space-y-1.5 max-h-64 overflow-y-auto" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+          {(customers || []).length === 0 ? (
+            <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : "कोई कस्टमर नहीं मिला।"}</p>
+          ) : (customers || []).map((c) => (
+            <a key={c.mobile} href={`tel:${c.mobile}`} onClick={() => setShowCall(false)}
+              className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="min-w-0">
+                <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
+                <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+              </div>
+              <Phone size={16} color={C.success} className="shrink-0" />
+            </a>
+          ))}
         </div>
       )}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, mobile or city..." : "नाम, मोबाइल या शहर से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
