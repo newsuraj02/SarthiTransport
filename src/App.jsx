@@ -3166,7 +3166,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   };
 
   if (b.status === "Bidding") {
-    const sortedBids = b.bids.filter((x) => !x.paused).sort((x, y) => x.amount - y.amount);
+    const sortedBids = b.bids.filter((x) => !x.paused).sort((x, y) => x.amount - y.amount || (y.hours || 0) - (x.hours || 0));
     const selectedId = selectedBid;
     // Each bid comes from a driver who may have a different vehicle type,
     // so the vehicle shown per bid is that driver's own — never the load's
