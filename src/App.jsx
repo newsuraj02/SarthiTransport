@@ -6482,11 +6482,6 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           <LayoutDashboard size={18} color={C.marigoldDeep} />
           <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Control Panel" : "एडमिन कंट्रोल पैनल"}</h2>
         </div>
-        {tab !== "fleet" && (
-          <button onClick={onLogout} className="text-[11px] font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-lg" style={{ color: "#FFFFFF", background: C.safety }}>
-            <XCircle size={12} /> {lang === "en" ? "Logout" : "लॉगआउट"}
-          </button>
-        )}
       </div>
       {tab === "fleet" && <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : "एडमिन"} 👋</div>}
       <div className="flex gap-2 mb-5 overflow-x-auto">
