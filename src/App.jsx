@@ -4599,7 +4599,6 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
   const totalBonus = myTrips.reduce((s, t) => s + t.fare * (bonusPct / 100), 0);
   const myWithdrawals = (withdrawals || []).filter((w) => w.driverName === driver.name);
   const myRecharges = (rechargeRequests || []).filter((r) => r.driverName === driver.name);
-  const hasPendingRecharge = myRecharges.some((r) => r.status === "Pending");
 
   // The wallet balance moves for three reasons: a commission cut the instant
   // a bid is accepted, an approved recharge landing, or a referral reward —
@@ -4634,12 +4633,6 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
   return (
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Wallet" : "मेरा वॉलेट"}</h2>
-      {inTrial && (
-        <div className="rounded-lg p-3 mb-3 flex items-center gap-2" style={{ background: C.success }}>
-          <CheckCircle2 size={15} color="#FFFFFF" />
-          <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Your free trial is active — no commission will be cut and no minimum wallet balance is required." : "आपका फ्री ट्रायल चल रहा है — कोई कमीशन नहीं कटेगा और न्यूनतम वॉलेट बैलेंस की ज़रूरत नहीं है।"}</span>
-        </div>
-      )}
       <div className="rounded-xl p-4 mb-3" style={{ background: C.navy }}>
         <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Wallet Balance" : "वॉलेट बैलेंस"}</div>
         <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
@@ -4683,25 +4676,10 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
         </div>
       )}
       <div className="text-sm font-extrabold mb-1.5" style={{ color: C.ink }}>{lang === "en" ? "Manual recharge (until online payments launch)" : "मैनुअल रीचार्ज (ऑनलाइन पेमेंट आने तक)"}</div>
-      <button onClick={() => requestRecharge(500)} disabled={hasPendingRecharge} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2"
-        style={{ background: hasPendingRecharge ? "#E0E0E0" : C.marigold, color: hasPendingRecharge ? "#9AA3B0" : "#000000" }}>
-        {hasPendingRecharge ? (lang === "en" ? "Recharge request pending admin approval" : "रीचार्ज रिक्वेस्ट एडमिन अप्रूवल के इंतज़ार में") : (lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)")}
+      <button onClick={() => requestRecharge(500)} className="w-full rounded-lg py-2.5 font-bold text-sm mb-2"
+        style={{ background: C.marigold, color: "#000000" }}>
+        {lang === "en" ? "Request ₹500 recharge (UPI / Paytm)" : "₹500 रीचार्ज रिक्वेस्ट करें (UPI / Paytm)"}
       </button>
-      <div className="text-sm font-extrabold mb-2" style={{ color: C.ink }}>{lang === "en" ? "Pay admin via UPI/Paytm outside the app, then request a recharge — admin verifies and credits your wallet." : "ऐप के बाहर UPI/Paytm से एडमिन को भुगतान करें, फिर रीचार्ज रिक्वेस्ट करें — एडमिन जांच कर वॉलेट में जमा करेगा।"}</div>
-      {myRecharges.length > 0 && (
-        <div className="mb-2">
-          <div className="space-y-1.5">
-            {myRecharges.map((r) => (
-              <div key={r.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                <span className="text-xs font-semibold" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(r.amount)}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: r.status === "Approved" ? C.success : C.marigoldDeep }}>
-                  {r.status === "Approved" ? (lang === "en" ? "Credited ✓" : "जमा हुआ ✓") : (lang === "en" ? "Pending admin approval" : "एडमिन अप्रूवल बाकी")}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
       <div className="text-sm font-extrabold mb-4" style={{ color: C.ink }}>{lang === "en" ? `${commissionPct}% commission is cut from this wallet instantly the moment a bid is accepted.` : `बिड एक्सेप्ट होते ही भाड़े का ${commissionPct}% कमीशन इसी वॉलेट से तुरंत कट जाता है।`}</div>
 
       <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
