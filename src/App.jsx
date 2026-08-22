@@ -110,6 +110,33 @@ const DEFAULT_VEHICLES = [
 function slugify(str) {
   return "v" + str.replace(/\s+/g, "").slice(0, 10) + Math.floor(Math.random() * 900 + 100);
 }
+// Reference specs for common Indian commercial vehicle models — lets Driver
+// KYC auto-fill capacity/length/width/height the moment a driver types a
+// recognizable model name into "Vehicle Name", instead of leaving them to
+// guess these numbers. Matched loosely against free-typed text (lowercase,
+// substring), since there's no dropdown here — "Tata Ace Gold", "ace",
+// "chhota hathi" all resolve sensibly. Values are commonly published
+// reference specs, not per-unit exact; the driver can always edit any field
+// afterward, and the auto-fill never overwrites a field once they have.
+const VEHICLE_MODEL_SPECS = [
+  { keys: ["tata ace gold"], capacityKg: 850, length: 7.5, width: 4.5, height: 5 },
+  { keys: ["tata ace", "chhota hathi", "chotta hathi", "chota hathi"], capacityKg: 750, length: 7, width: 4.5, height: 4.5 },
+  { keys: ["mahindra jeeto", "jeeto"], capacityKg: 600, length: 6.5, width: 4.3, height: 4.3 },
+  { keys: ["ashok leyland dost", "dost"], capacityKg: 1250, length: 8, width: 5, height: 5 },
+  { keys: ["bolero maxitruck", "bolero pickup", "bolero"], capacityKg: 1500, length: 8.5, width: 5, height: 5.5 },
+  { keys: ["tata 407"], capacityKg: 2500, length: 10, width: 5.5, height: 6 },
+  { keys: ["tata 709"], capacityKg: 4000, length: 12, width: 6, height: 6.5 },
+  { keys: ["eicher 14", "14 ft", "14ft"], capacityKg: 5000, length: 14, width: 6, height: 6.5 },
+  { keys: ["eicher 17", "17 ft", "17ft"], capacityKg: 7000, length: 17, width: 6.5, height: 7 },
+  { keys: ["eicher 19", "19 ft", "19ft"], capacityKg: 9000, length: 19, width: 6.5, height: 7 },
+  { keys: ["6 wheeler", "six wheeler", "6-wheeler"], capacityKg: 9000, length: 19, width: 6.5, height: 7 },
+  { keys: ["10 wheeler", "ten wheeler", "10-wheeler"], capacityKg: 16000, length: 22, width: 7, height: 7.5 },
+];
+function lookupVehicleModelSpec(name) {
+  const q = (name || "").trim().toLowerCase();
+  if (!q) return null;
+  return VEHICLE_MODEL_SPECS.find((v) => v.keys.some((k) => q.includes(k))) || null;
+}
 // Vehicle types added via "+ Add new type" only have one name (like custom
 // materials), so English falls back to the same string when no labelEn exists.
 const vehicleLabel = (v, lang) => (v ? (lang === "en" ? (v.labelEn || v.label) : v.label) : "");
@@ -4771,6 +4798,20 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const [height, setHeight] = usePersistedState("sarthi_driverKyc_height", driver.vehicleSpec?.height || "");
   const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "");
 
+  // Auto-fills dimensions from VEHICLE_MODEL_SPECS the moment the typed
+  // vehicle name matches a known model — but only into fields the driver
+  // hasn't already touched, so it never clobbers a manual entry.
+  const matchedModelSpec = lookupVehicleModelSpec(vehicleTypeName);
+  useEffect(() => {
+    if (!matchedModelSpec) return;
+    if (capacityKg || length || width || height) return;
+    setCapacityKg(String(matchedModelSpec.capacityKg));
+    setLength(String(matchedModelSpec.length));
+    setWidth(String(matchedModelSpec.width));
+    setHeight(String(matchedModelSpec.height));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicleTypeName]);
+
   // Reuses a vehicleTypes entry with a matching name (case-insensitive) so
   // typing the same vehicle name as another driver doesn't fragment the
   // shared type list; otherwise creates a new one from what's typed here.
@@ -4884,6 +4925,11 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       </GuidedStep>
 
       <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Dimensions" : "गाड़ी का साइज़"}</label>
+      {matchedModelSpec && (
+        <p className="text-[10px] font-semibold mb-1.5" style={{ color: C.success }}>
+          {lang === "en" ? "Auto-filled for this vehicle model — edit any field if yours differs." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div>
           <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : "क्षमता (किलोग्राम)"}</label>
