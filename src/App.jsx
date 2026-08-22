@@ -3798,6 +3798,12 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
               </button>
+              <button onClick={() => { setRideView("current"); setAddingAnother(false); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Truck size={16} color={C.marigoldDeep} /> {lang === "en" ? "View Current Booked Ride" : "वर्तमान बुक की गई राइड देखें"} ({activeBooking ? 1 : 0})
+              </button>
+              <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Clock3 size={16} color={C.marigoldDeep} /> {lang === "en" ? "View Advance Booked Ride" : "एडवांस बुक की गई राइड देखें"} ({advanceBookings.length})
+              </button>
               <button onClick={() => { setSettingsView("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "Ride History" : "राइड हिस्ट्री"}
               </button>
