@@ -3328,7 +3328,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               {b.driverMobile ? (
                 <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
                   label={lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
+                  className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
               ) : (
                 <div className="flex items-center gap-1.5">
                   <Phone size={14} color="#000000" />
@@ -4538,7 +4538,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
                   {myTrip.customerMobile ? (
                     <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
                       label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
-                      className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
+                      className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
                   ) : (
                     <div className="flex items-center gap-1.5">
                       <Phone size={14} color="#000000" />
@@ -5238,7 +5238,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                     {ab.customerMobile ? (
                       <MaskedCallButton bookingId={ab.id} fallbackMobile={ab.customerMobile} lang={lang}
                         label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
-                        className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
+                        className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <Phone size={14} color="#000000" />
