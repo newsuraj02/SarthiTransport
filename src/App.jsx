@@ -3251,6 +3251,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                 {lang === "en" ? "Book this vehicle" : "यही गाड़ी बुक करें"}
               </button>
             )}
+            <div className="flex justify-end mt-2">
+              <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-[11px] font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel load" : "लोड रद्द करें"}</button>
+            </div>
+            {cancelError && <div className="text-[11px] font-bold mt-1 text-right" style={{ color: C.safety }}>{cancelError}</div>}
         </div>
       </div>
     );
