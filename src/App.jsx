@@ -1180,7 +1180,7 @@ function MaskedCallButton({ bookingId, fallbackMobile, label, lang, className, s
   return (
     <div>
       <button type="button" onClick={handleClick} disabled={calling} className={className} style={style}>
-        <Phone size={16} color="#000000" /> {calling ? (lang === "en" ? "Connecting..." : "जोड़ रहे हैं...") : label}
+        <Phone size={16} color={style?.color || "#000000"} /> {calling ? (lang === "en" ? "Connecting..." : "जोड़ रहे हैं...") : label}
       </button>
       {connected && (
         <div className="text-[10px] font-bold text-center mt-1" style={{ color: C.success }}>
@@ -3307,7 +3307,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {!b.loadingStartedAt && b.driverMobile && (
           <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
             label={lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}
-            className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
+            className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
         )}
         {b.loadingStartedAt && (
           <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
@@ -4512,7 +4512,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
             {!myTrip.loadingStartedAt && myTrip.customerMobile && (
               <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
                 label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
-                className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
+                className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
             )}
             {myTrip.loadingStartedAt && (
               <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
