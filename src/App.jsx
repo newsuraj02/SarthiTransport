@@ -2917,13 +2917,13 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       <div className="px-5 py-8 flex flex-col justify-center" style={{ minHeight: 420 }}>
         <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : "आपको क्या चाहिए?"}</p>
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => setBookingMode("now")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.marigold }}>
-            <Truck size={22} color="#000000" />
-            <div className="text-sm font-black" style={{ color: "#000000" }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
+          <button onClick={() => setBookingMode("now")} className="rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.marigold, minHeight: 160 }}>
+            <Truck size={30} color="#000000" />
+            <div className="text-base font-black" style={{ color: "#000000" }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
           </button>
-          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-5 flex flex-col items-center gap-2 text-center" style={{ background: C.navy }}>
-            <Clock3 size={22} color="#fff" />
-            <div className="text-sm font-black text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
+          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.navy, minHeight: 160 }}>
+            <Clock3 size={30} color="#fff" />
+            <div className="text-base font-black text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
           </button>
         </div>
       </div>
