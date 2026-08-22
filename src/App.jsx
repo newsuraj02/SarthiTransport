@@ -5139,6 +5139,12 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </span>
           </button>
         </div>
+        {!driver.trialNoteSeen && (
+          <button onClick={() => setDriver({ ...driver, trialNoteSeen: true })} className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left" style={{ background: C.metallicGold }}>
+            <span className="text-xs font-black" style={{ color: "#000000" }}>🎁 {lang === "en" ? "Free trial for 30 days" : "30 दिनों का फ्री ट्रायल"}</span>
+            <X size={14} color="#000000" strokeWidth={3} />
+          </button>
+        )}
         {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />}
         <ForegroundToast toast={rideNotifications.toast} />
         {menuOpen && (
