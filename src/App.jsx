@@ -3301,12 +3301,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <ChevronLeft size={18} color="#000000" strokeWidth={3} />
           </button>
         ) : <div />}
-        {b.driverMobile && (
-          <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
-            label={lang === "en" ? "Call Driver" : "कॉल ड्राइवर"}
-            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-full text-xs font-black shadow-sm"
-            style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
-        )}
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
             true), show it right here so it's impossible to miss — Invoice
             only makes sense once loading has genuinely started, so it takes
@@ -3341,6 +3335,13 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="text-sm font-bold mt-0.5" style={{ color: C.ink }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "unavailable" : "उपलब्ध नहीं")}</div>
         </div>
       </div>
+
+      {b.driverMobile && (
+        <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
+          label={lang === "en" ? "Call Driver" : "कॉल ड्राइवर"}
+          className="w-full flex items-center justify-center gap-2 px-3 py-3 mb-2.5 rounded-2xl text-sm font-black shadow-sm"
+          style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
+      )}
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {!b.loadingStartedAt && (
