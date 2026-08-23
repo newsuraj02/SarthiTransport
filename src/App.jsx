@@ -2724,9 +2724,14 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
 // whatever comes after until it's filled again.
 function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, onBlurStep }) {
   const locked = !active && !completed;
+  // Border and padding are reserved at all times (transparent/see-through
+  // when inactive) instead of only appearing once a step goes active --
+  // otherwise the box's own size jumps the instant the guided highlight
+  // reaches it, which is most visible when two steps sit side by side
+  // (e.g. Material Type / Enter Weight) since the neighbor visibly shifts too.
   return (
     <div ref={stepRef} className={`relative rounded-2xl h-full ${active ? "guided-step-active" : ""}`}
-      style={active ? { border: `2px solid ${C.marigoldDeep}`, background: C.marigold, padding: 10 } : undefined}
+      style={{ border: `2px solid ${active ? C.marigoldDeep : "transparent"}`, background: active ? C.marigold : "transparent", padding: 10 }}
       onFocus={onFocusStep} onBlur={onBlurStep}>
       <div inert={locked ? "" : undefined} className="h-full" style={locked ? { pointerEvents: "none", userSelect: "none", opacity: 0.45 } : undefined}>
         {children}
@@ -3014,7 +3019,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         )}
         {lastBooking && !pickup && !drop && (
           <button onClick={() => {
-            setPickup(lastBooking.pickup); setDrop(lastBooking.drop); setMaterial(lastBooking.material);
+            setPickup(lastBooking.pickup); setDrop(lastBooking.drop);
             const hasPickupCoords = lastBooking.pickupLat != null && lastBooking.pickupLng != null;
             const hasDropCoords = lastBooking.dropLat != null && lastBooking.dropLng != null;
             setPickupCoords(hasPickupCoords ? { lat: lastBooking.pickupLat, lng: lastBooking.pickupLng } : null);
