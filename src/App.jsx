@@ -3306,7 +3306,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
               label={lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}
               className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
-              style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
+              style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
           )}
         </div>
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
@@ -3359,8 +3359,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       </div>
 
       {b.loadingStartedAt && (
-        <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-          <div className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>
+        <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: "#4FC3F7", border: "2px solid #0288D1" }}>
+          <div className="text-sm font-bold" style={{ color: "#FFFFFF", fontFamily: bodyFont }}>
             {lang === "en" ? "💡 Once the vehicle is loaded, the driver may ask for an advance payment — this is a mutual agreement between the customer and driver, not a fixed app rule." : "💡 गाड़ी लोड होने के बाद ड्राइवर एडवांस भुगतान मांग सकता है — यह ग्राहक और ड्राइवर के बीच आपसी सहमति है, ऐप का कोई तय नियम नहीं।"}
           </div>
         </div>
