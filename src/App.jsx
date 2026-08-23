@@ -4525,14 +4525,16 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       {myTrip ? (
         <div>
 
+          {myTrip.customerMobile && (
+            <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
+              label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
+              className="w-full flex items-center justify-center gap-2 px-3 py-3 mb-2.5 rounded-2xl text-sm font-black shadow-sm"
+              style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
+          )}
+
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             {!myTrip.loadingStartedAt && (
               <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
-            )}
-            {!myTrip.loadingStartedAt && myTrip.customerMobile && (
-              <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
-                label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
-                className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
             )}
             {myTrip.loadingStartedAt && (
               <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
@@ -4543,39 +4545,6 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
                 mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
             </div>
           </div>
-
-          {myTrip.loadingStartedAt && (
-            <>
-              <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-                <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
-                {myTrip.scheduledFor && (
-                  <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
-                    <Clock3 size={13} />
-                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Advance ride:" : "एडवांस राइड:"} {rideDateTimeLabel(myTrip)}</span>
-                  </div>
-                )}
-                <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(myTrip.fare)}</div>
-                {myTrip.hours && (
-                  <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                    {lang === "en" ? `${myTrip.hours} hrs loading/unloading` : `${myTrip.hours} घंटे लोडिंग/अनलोडिंग`}{myTrip.extraHourRate ? (lang === "en" ? ` · then ${fmt(myTrip.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(myTrip.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
-                  </div>
-                )}
-                <div className="mt-2">
-                  {myTrip.customerMobile ? (
-                    <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
-                      label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
-                      className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
-                  ) : (
-                    <div className="flex items-center gap-1.5">
-                      <Phone size={14} color="#000000" />
-                      <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </>
-          )}
 
           <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
         </div>
