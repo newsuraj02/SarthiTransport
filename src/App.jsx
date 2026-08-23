@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Globe, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
-  FileText, X, Upload,
+  FileText, X, Upload, ArrowRight,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -700,6 +700,32 @@ function NotificationBanner({ permission, onEnable, lang }) {
       <Bell size={14} color={C.marigoldDeep} />
       <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Turn on notifications for ride updates" : "राइड अपडेट के लिए नोटिफिकेशन चालू करें"}</span>
     </button>
+  );
+}
+
+// Compact language toggle + "go to current ride" arrow, shown ONLY on the
+// Customer/Driver main dashboard screen (never on any other page — profile,
+// KYC, wallet, trip detail, etc. all just inherit whatever language was last
+// picked here). Kept as one shared row so both roles look identical.
+function DashboardTopExtras({ lang, switchLang, onGoToCurrentRide }) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-5 pb-2">
+      <div className="flex items-center gap-1 rounded-full pl-2 pr-1 py-1" style={{ background: "#000000", border: `1.5px solid ${C.marigold}` }}>
+        <Globe size={14} color={C.marigold} strokeWidth={2.2} />
+        <button onClick={() => switchLang("hi")} className="rounded-full"
+          style={{ padding: "3px 8px", fontSize: 12, fontWeight: 800, color: lang === "hi" ? "#000000" : "#FFFFFF", background: lang === "hi" ? C.marigold : "transparent" }}>
+          हिं
+        </button>
+        <button onClick={() => switchLang("en")} className="rounded-full"
+          style={{ padding: "3px 8px", fontSize: 12, fontWeight: 800, color: lang === "en" ? "#000000" : "#FFFFFF", background: lang === "en" ? C.marigold : "transparent" }}>
+          ENG
+        </button>
+      </div>
+      <button onClick={onGoToCurrentRide} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
+        className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
+      </button>
+    </div>
   );
 }
 
@@ -3615,7 +3641,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, switchLang, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
   // so the header knows whether the "What do you need?" chooser is on
@@ -3790,6 +3816,9 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             )}
             <div className="w-9 h-9 shrink-0" />
           </div>
+        )}
+        {showHamburger && (
+          <DashboardTopExtras lang={lang} switchLang={switchLang} onGoToCurrentRide={() => { setRideView("current"); setAddingAnother(false); }} />
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
         <ForegroundToast toast={rideNotifications.toast} />
@@ -5118,7 +5147,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms }) {
+function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, switchLang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
@@ -5185,6 +5214,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </span>
           </button>
         </div>
+        {tab === "home" && (
+          <DashboardTopExtras lang={lang} switchLang={switchLang} onGoToCurrentRide={() => setRideView("current")} />
+        )}
         {!driver.trialNoteSeen && (
           <button onClick={() => setDriver({ ...driver, trialNoteSeen: true })} className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left" style={{ background: C.metallicGold }}>
             <span className="text-xs font-black" style={{ color: "#000000" }}>🎁 {lang === "en" ? "Free trial for 30 days" : "30 दिनों का फ्री ट्रायल"}</span>
@@ -7181,17 +7213,6 @@ export default function App() {
               <div translate="no" className="text-white font-bold text-lg leading-none truncate">{lang === "en" ? "Apna Transport" : "अपना ट्रांसपोर्ट"}</div>
               <div className="text-[11px] truncate" style={{ color: "#FFFFFF" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
             </div>
-            <div className="flex items-center gap-1 rounded-full pl-2 pr-1 py-1 shrink-0" style={{ background: "#000000", border: `1.5px solid ${C.marigold}` }}>
-              <Globe size={22} color={C.marigold} strokeWidth={2.2} />
-              <button onClick={() => switchLang("hi")} className="rounded-full"
-                style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "hi" ? "#000000" : "#FFFFFF", background: lang === "hi" ? C.marigold : "transparent", boxShadow: lang === "hi" ? "0 0 8px 1px rgba(255,204,0,0.65)" : "none" }}>
-                हिं
-              </button>
-              <button onClick={() => switchLang("en")} className="rounded-full"
-                style={{ padding: "5px 10px", fontSize: 18, fontWeight: 800, color: lang === "en" ? "#000000" : "#FFFFFF", background: lang === "en" ? C.marigold : "transparent", boxShadow: lang === "en" ? "0 0 8px 1px rgba(255,204,0,0.65)" : "none" }}>
-                ENG
-              </button>
-            </div>
           </div>
           {role === "admin" && adminAuth && (
             <div className="mt-1.5 text-[10px] text-center" style={{ color: "#FFFFFF" }}>
@@ -7224,7 +7245,7 @@ export default function App() {
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
-            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
+            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout} switchLang={switchLang}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
@@ -7272,7 +7293,7 @@ export default function App() {
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
-            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onLogout={logout}
+            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onLogout={logout} switchLang={switchLang}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
             onOpenTerms={() => setShowTerms(true)} />
         )}
