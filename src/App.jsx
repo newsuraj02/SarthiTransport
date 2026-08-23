@@ -3295,7 +3295,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const v = VEHICLES.find((x) => x.key === b.vehicle);
   return (
     <div className="px-5 pt-3 pb-5">
-      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="rounded-2xl py-3.5 px-2 mb-2.5 shadow-sm flex items-center justify-between gap-1" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {onAddAnother ? (
           <button onClick={onAddAnother} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
             <ChevronLeft size={18} color="#000000" strokeWidth={3} />
@@ -3304,7 +3304,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {b.driverMobile && (
           <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
             label={lang === "en" ? "Call Driver" : "कॉल ड्राइवर"}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-black shadow-sm"
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-full text-xs font-black shadow-sm"
             style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
         )}
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
@@ -3318,7 +3318,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <div className="text-lg font-black leading-none mt-0.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
           </div>
         ) : (
-          <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm text-white"
+          <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2 pr-2.5 py-2 rounded-full text-xs font-black shadow-sm text-white"
             style={{ background: docsSent ? C.metallicGreen : C.navy, border: `1.5px solid ${docsSent ? C.success : C.navy}` }}>
             <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Invoice" : "इनवॉइस")}
           </button>
