@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Globe, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
+  ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
   FileText, X, Upload, ArrowRight,
 } from "lucide-react";
 import {
@@ -703,30 +703,36 @@ function NotificationBanner({ permission, onEnable, lang }) {
   );
 }
 
-// Compact language toggle + "go to current ride" arrow, shown ONLY on the
+// Language toggle sized to match the header pill it replaces ("Customer
+// Dashboard" / "Customer Requests") — shown ONLY in that exact spot, on the
 // Customer/Driver main dashboard screen (never on any other page — profile,
 // KYC, wallet, trip detail, etc. all just inherit whatever language was last
-// picked here). Kept as one shared row so both roles look identical.
-function DashboardTopExtras({ lang, switchLang, onGoToCurrentRide, hasLiveRide }) {
+// picked here).
+function DashboardLangPill({ lang, switchLang }) {
   return (
-    <div className="flex items-center justify-between gap-2 px-5 pb-2">
-      <div className="flex items-center gap-1 rounded-full pl-2 pr-1 py-1" style={{ background: "#000000", border: `1.5px solid ${C.marigold}` }}>
-        <Globe size={14} color={C.marigold} strokeWidth={2.2} />
-        <button onClick={() => switchLang("hi")} className="rounded-full"
-          style={{ padding: "3px 8px", fontSize: 12, fontWeight: 800, color: lang === "hi" ? "#000000" : "#FFFFFF", background: lang === "hi" ? C.marigold : "transparent" }}>
-          हिं
-        </button>
-        <button onClick={() => switchLang("en")} className="rounded-full"
-          style={{ padding: "3px 8px", fontSize: 12, fontWeight: 800, color: lang === "en" ? "#000000" : "#FFFFFF", background: lang === "en" ? C.marigold : "transparent" }}>
-          ENG
-        </button>
-      </div>
-      {hasLiveRide && (
-        <button onClick={onGoToCurrentRide} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
-          className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
-        </button>
-      )}
+    <div className="flex items-center gap-1 rounded-full px-1.5 py-1.5" style={{ background: "#000000", border: `1.5px solid ${C.marigold}` }}>
+      <button onClick={() => switchLang("hi")} className="rounded-full text-base font-black"
+        style={{ padding: "6px 16px", color: lang === "hi" ? "#000000" : "#FFFFFF", background: lang === "hi" ? C.marigold : "transparent" }}>
+        हिं
+      </button>
+      <button onClick={() => switchLang("en")} className="rounded-full text-base font-black"
+        style={{ padding: "6px 16px", color: lang === "en" ? "#000000" : "#FFFFFF", background: lang === "en" ? C.marigold : "transparent" }}>
+        ENG
+      </button>
+    </div>
+  );
+}
+
+// "Go to current ride" arrow, shown ONLY on the Customer/Driver main
+// dashboard screen, and only when there's actually a live ride to jump to.
+function DashboardArrow({ lang, onGoToCurrentRide, hasLiveRide }) {
+  if (!hasLiveRide) return null;
+  return (
+    <div className="flex justify-end px-5 pb-2">
+      <button onClick={onGoToCurrentRide} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
+        className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
+      </button>
     </div>
   );
 }
@@ -3807,7 +3813,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               </div>
             ) : showHamburger ? (
               <div className="flex-1 min-w-0 flex justify-center">
-                <span className="rounded-full px-4 py-2 text-base font-black text-white" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Dashboard" : "कस्टमर डैशबोर्ड"}</span>
+                <DashboardLangPill lang={lang} switchLang={switchLang} />
               </div>
             ) : biddingHeader ? (
               <div className="flex-1 min-w-0">
@@ -3820,7 +3826,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           </div>
         )}
         {showHamburger && (
-          <DashboardTopExtras lang={lang} switchLang={switchLang} hasLiveRide={!!activeBooking} onGoToCurrentRide={() => { setRideView("current"); setAddingAnother(false); }} />
+          <DashboardArrow lang={lang} hasLiveRide={!!activeBooking} onGoToCurrentRide={() => { setRideView("current"); setAddingAnother(false); }} />
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
         <ForegroundToast toast={rideNotifications.toast} />
@@ -5206,7 +5212,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <Menu size={18} color="#fff" strokeWidth={2.5} />
           </button>
           <div className="flex-1 min-w-0 flex justify-center">
-            <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
+            {tab === "home" ? (
+              <DashboardLangPill lang={lang} switchLang={switchLang} />
+            ) : (
+              <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
+            )}
           </div>
           <button onClick={() => setDriver({ ...driver, online: !driver.online })}
             className="shrink-0 flex items-center rounded-full p-1.5" style={{ background: C.marigoldDeep }}>
@@ -5217,7 +5227,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
           </button>
         </div>
         {tab === "home" && (
-          <DashboardTopExtras lang={lang} switchLang={switchLang} hasLiveRide={!!myTrip} onGoToCurrentRide={() => setRideView("current")} />
+          <DashboardArrow lang={lang} hasLiveRide={!!myTrip} onGoToCurrentRide={() => setRideView("current")} />
         )}
         {!driver.trialNoteSeen && (
           <button onClick={() => setDriver({ ...driver, trialNoteSeen: true })} className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left" style={{ background: C.metallicGold }}>
