@@ -2967,7 +2967,15 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <Truck size={30} color="#000000" />
             <div className="text-base font-black" style={{ color: "#000000" }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
           </button>
-          <button onClick={() => setBookingMode("advance")} className="rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.navy, minHeight: 160 }}>
+          <button onClick={() => {
+            // Pickup/Drop are shared state with "Book Now" -- if the customer
+            // typed something there before backing out to switch modes,
+            // starting Advance mode fresh (not silently carrying it over)
+            // avoids an address meant for a right-now trip ending up on a
+            // scheduled one by accident.
+            setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
+            setBookingMode("advance");
+          }} className="rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.navy, minHeight: 160 }}>
             <Clock3 size={30} color="#fff" />
             <div className="text-base font-black text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
           </button>
@@ -2984,31 +2992,29 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       <div className="space-y-3">
         {bookingMode === "advance" && (
           <GuidedStep {...stepProps(0)} lang={lang}>
-            <div className="rounded-lg p-3 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
-              <div className="text-[11px] font-bold mb-2" style={{ color: "#000000" }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</div>
-              <div className="grid grid-cols-3 gap-2 mb-2">
-                {[1, 2, 3].map((n) => {
-                  const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
-                  const iso = d.toISOString().slice(0, 10);
-                  const active = advanceDate === iso;
-                  return (
-                    <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
-                      className="rounded-lg py-2 text-[11px] font-bold text-center"
-                      style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
-                      {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : `${n} दिन बाद`}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
-                <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-1.5" style={inputStyle}>
-                  <span className="text-xs font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : "समय चुनें")}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#000000" }}>{lang === "en" ? "Change" : "बदलें"}</span>
-                </button>
-              </div>
-              <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
+            <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</label>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {[1, 2, 3].map((n) => {
+                const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+                const iso = d.toISOString().slice(0, 10);
+                const active = advanceDate === iso;
+                return (
+                  <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
+                    className="rounded-lg py-2 text-[11px] font-bold text-center"
+                    style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
+                    {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : `${n} दिन बाद`}
+                  </button>
+                );
+              })}
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
+              <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-lg px-3 py-2.5 flex items-center justify-between gap-1.5" style={inputStyle}>
+                <span className="text-xs font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : "समय चुनें")}</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#000000" }}>{lang === "en" ? "Change" : "बदलें"}</span>
+              </button>
+            </div>
+            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
           </GuidedStep>
         )}
         {lastBooking && !pickup && !drop && (
