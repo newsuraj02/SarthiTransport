@@ -707,7 +707,7 @@ function NotificationBanner({ permission, onEnable, lang }) {
 // Customer/Driver main dashboard screen (never on any other page — profile,
 // KYC, wallet, trip detail, etc. all just inherit whatever language was last
 // picked here). Kept as one shared row so both roles look identical.
-function DashboardTopExtras({ lang, switchLang, onGoToCurrentRide }) {
+function DashboardTopExtras({ lang, switchLang, onGoToCurrentRide, hasLiveRide }) {
   return (
     <div className="flex items-center justify-between gap-2 px-5 pb-2">
       <div className="flex items-center gap-1 rounded-full pl-2 pr-1 py-1" style={{ background: "#000000", border: `1.5px solid ${C.marigold}` }}>
@@ -721,10 +721,12 @@ function DashboardTopExtras({ lang, switchLang, onGoToCurrentRide }) {
           ENG
         </button>
       </div>
-      <button onClick={onGoToCurrentRide} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
-        className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-        <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
-      </button>
+      {hasLiveRide && (
+        <button onClick={onGoToCurrentRide} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
+          className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
+        </button>
+      )}
     </div>
   );
 }
@@ -3818,7 +3820,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           </div>
         )}
         {showHamburger && (
-          <DashboardTopExtras lang={lang} switchLang={switchLang} onGoToCurrentRide={() => { setRideView("current"); setAddingAnother(false); }} />
+          <DashboardTopExtras lang={lang} switchLang={switchLang} hasLiveRide={!!activeBooking} onGoToCurrentRide={() => { setRideView("current"); setAddingAnother(false); }} />
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
         <ForegroundToast toast={rideNotifications.toast} />
@@ -5215,7 +5217,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
           </button>
         </div>
         {tab === "home" && (
-          <DashboardTopExtras lang={lang} switchLang={switchLang} onGoToCurrentRide={() => setRideView("current")} />
+          <DashboardTopExtras lang={lang} switchLang={switchLang} hasLiveRide={!!myTrip} onGoToCurrentRide={() => setRideView("current")} />
         )}
         {!driver.trialNoteSeen && (
           <button onClick={() => setDriver({ ...driver, trialNoteSeen: true })} className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left" style={{ background: C.metallicGold }}>
