@@ -3088,7 +3088,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 items-start">
           <GuidedStep {...stepProps(stepOffset + 2)} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
             {addingMaterial ? (
