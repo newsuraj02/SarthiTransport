@@ -3110,7 +3110,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         </div>
 
         {distance !== null && (
-          <div className="rounded-lg p-2.5 shadow-lg flex items-center gap-2" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
+          <div className="rounded-lg p-2.5 shadow-sm flex items-center gap-2" style={{ background: "#F5F3EE", border: `1px solid ${C.line}` }}>
             <Navigation size={16} color="#000000" />
             <span className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Estimated distance" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : "किमी"}</span>
           </div>
