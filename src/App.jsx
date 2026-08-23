@@ -5169,31 +5169,31 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   return (
     <>
       <div className="flex-1 overflow-y-auto relative">
-        <div className="flex items-center justify-between gap-2 px-5 pt-3">
-          <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
-            <Menu size={18} color="#fff" strokeWidth={2.5} />
-          </button>
-          <div className="flex-1 min-w-0 flex justify-center">
-            {tab === "home" ? (
-              <DashboardLangPill lang={lang} switchLang={switchLang} />
-            ) : (
-              <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
-            )}
-          </div>
-          {tab === "home" && myTrip && (
-            <button onClick={() => setRideView("current")} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
-              className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
+        {/* This whole row (menu, language toggle, arrow, online/offline) is
+            for the idle main dashboard only -- once a trip is actually live,
+            none of it applies, so it's hidden rather than shown alongside
+            the trip content. */}
+        {!(tab === "home" && myTrip) && (
+          <div className="flex items-center justify-between gap-2 px-5 pt-3">
+            <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
+              <Menu size={18} color="#fff" strokeWidth={2.5} />
             </button>
-          )}
-          <button onClick={() => setDriver({ ...driver, online: !driver.online })}
-            className="shrink-0 flex items-center rounded-full p-1.5" style={{ background: C.marigoldDeep }}>
-            <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
-              <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 7 : 0, paddingRight: driver.online ? 0 : 7 }}>{driver.online ? "ON" : "OFF"}</span>
-              <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 32 : 4 }} />
-            </span>
-          </button>
-        </div>
+            <div className="flex-1 min-w-0 flex justify-center">
+              {tab === "home" ? (
+                <DashboardLangPill lang={lang} switchLang={switchLang} />
+              ) : (
+                <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
+              )}
+            </div>
+            <button onClick={() => setDriver({ ...driver, online: !driver.online })}
+              className="shrink-0 flex items-center rounded-full p-1.5" style={{ background: C.marigoldDeep }}>
+              <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
+                <span className="absolute inset-0 flex items-center text-[9px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 7 : 0, paddingRight: driver.online ? 0 : 7 }}>{driver.online ? "ON" : "OFF"}</span>
+                <span className="w-5 h-5 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 32 : 4 }} />
+              </span>
+            </button>
+          </div>
+        )}
         {!driver.trialNoteSeen && (
           <button onClick={() => setDriver({ ...driver, trialNoteSeen: true })} className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left" style={{ background: C.metallicGold }}>
             <span className="text-xs font-black" style={{ color: "#000000" }}>🎁 {lang === "en" ? "Free trial for 30 days" : "30 दिनों का फ्री ट्रायल"}</span>
