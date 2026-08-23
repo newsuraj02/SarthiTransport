@@ -3296,19 +3296,17 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   return (
     <div className="px-5 pt-3 pb-5">
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="flex items-center gap-2">
-          {onAddAnother ? (
-            <button onClick={onAddAnother} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ChevronLeft size={18} color="#000000" strokeWidth={3} />
-            </button>
-          ) : <div />}
-          {b.driverMobile && (
-            <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
-              label="Call Driver"
-              className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
-              style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
-          )}
-        </div>
+        {onAddAnother ? (
+          <button onClick={onAddAnother} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} color="#000000" strokeWidth={3} />
+          </button>
+        ) : <div />}
+        {b.driverMobile && (
+          <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
+            label={lang === "en" ? "Call Driver" : "कॉल ड्राइवर"}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-black shadow-sm"
+            style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
+        )}
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
             true), show it right here so it's impossible to miss — Invoice
             only makes sense once loading has genuinely started, so it takes
