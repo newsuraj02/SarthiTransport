@@ -3296,16 +3296,24 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   return (
     <div className="px-5 pt-3 pb-5">
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center justify-between gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        {onAddAnother ? (
-          <button onClick={onAddAnother} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-            <ChevronLeft size={18} color="#000000" strokeWidth={3} />
-          </button>
-        ) : <div />}
+        <div className="flex items-center gap-2">
+          {onAddAnother ? (
+            <button onClick={onAddAnother} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} color="#000000" strokeWidth={3} />
+            </button>
+          ) : <div />}
+          {b.driverMobile && (
+            <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
+              label={lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}
+              className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
+              style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
+          )}
+        </div>
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
-            true), show it right here next to Back so it's impossible to
-            miss — Send Invoice only makes sense once loading has genuinely
-            started, so it takes this exact spot the moment OTP is no longer
-            needed instead of the two ever being shown at once. */}
+            true), show it right here so it's impossible to miss — Invoice
+            only makes sense once loading has genuinely started, so it takes
+            this exact spot the moment OTP is no longer needed instead of
+            the two ever being shown at once. */}
         {b.otp && !b.loadingStartedAt ? (
           <div className="flex-1 rounded-xl px-3 py-1.5 text-center guided-submit-ready">
             <div className="text-[8px] font-black" style={{ color: C.inkSoft }}>{lang === "en" ? "OTP" : "OTP"}</div>
@@ -3314,7 +3322,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         ) : (
           <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm text-white"
             style={{ background: docsSent ? C.metallicGreen : C.navy, border: `1.5px solid ${docsSent ? C.success : C.navy}` }}>
-            <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Send Invoice" : "इनवॉइस भेजें")}
+            <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Invoice" : "इनवॉइस")}
           </button>
         )}
       </div>
@@ -3340,11 +3348,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {!b.loadingStartedAt && (
           <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
         )}
-        {!b.loadingStartedAt && b.driverMobile && (
-          <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
-            label={lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}
-            className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 mt-2 font-extrabold text-sm" style={{ color: "#000000", fontFamily: bodyFont, background: "#FFCC00" }} />
-        )}
         {b.loadingStartedAt && (
           <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
         )}
@@ -3356,41 +3359,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       </div>
 
       {b.loadingStartedAt && (
-        <>
-          <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
-            {b.scheduledFor && (
-              <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
-                <Clock3 size={13} />
-                <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Advance ride:" : "एडवांस राइड:"} {rideDateTimeLabel(b)}</span>
-              </div>
-            )}
-            <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(b.fare)}</div>
-            {b.hours && (
-              <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                {lang === "en" ? `${b.hours} hrs loading/unloading` : `${b.hours} घंटे लोडिंग/अनलोडिंग`}{b.extraHourRate ? (lang === "en" ? ` · then ${fmt(b.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(b.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
-              </div>
-            )}
-            <div className="mt-2">
-              {b.driverMobile ? (
-                <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
-                  label={lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 font-extrabold text-sm" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <Phone size={14} color="#000000" />
-                  <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
-                </div>
-              )}
-            </div>
+        <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
+          <div className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>
+            {lang === "en" ? "💡 Once the vehicle is loaded, the driver may ask for an advance payment — this is a mutual agreement between the customer and driver, not a fixed app rule." : "💡 गाड़ी लोड होने के बाद ड्राइवर एडवांस भुगतान मांग सकता है — यह ग्राहक और ड्राइवर के बीच आपसी सहमति है, ऐप का कोई तय नियम नहीं।"}
           </div>
-
-          <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-            <div className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>
-              {lang === "en" ? "💡 Once the vehicle is loaded, the driver may ask for an advance payment — this is a mutual agreement between the customer and driver, not a fixed app rule." : "💡 गाड़ी लोड होने के बाद ड्राइवर एडवांस भुगतान मांग सकता है — यह ग्राहक और ड्राइवर के बीच आपसी सहमति है, ऐप का कोई तय नियम नहीं।"}
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
       <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
