@@ -3078,16 +3078,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
           </GuidedStep>
         </div>
 
-        {distance !== null && (
-          <div className="rounded-lg p-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
-            <div className="flex items-center gap-2">
-              <Navigation size={16} color="#000000" />
-              <span className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Estimated distance" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : "किमी"}</span>
-            </div>
-            <div className="text-xs font-bold mt-1" style={{ color: C.ink }}>— {lang === "en" ? "this helps both customer and driver decide a fair price" : "इससे कस्टमर और ड्राइवर दोनों को सही बोली तय करने में आसानी होगी"}</div>
-          </div>
-        )}
-
         <div className="grid grid-cols-2 gap-3 items-start">
           <GuidedStep {...stepProps(stepOffset + 2)} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
@@ -3118,6 +3108,13 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
           </GuidedStep>
         </div>
+
+        {distance !== null && (
+          <div className="rounded-lg p-2.5 shadow-lg flex items-center gap-2" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
+            <Navigation size={16} color="#000000" />
+            <span className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Estimated distance" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : "किमी"}</span>
+          </div>
+        )}
 
         {advanceNoticeError && (
           <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
