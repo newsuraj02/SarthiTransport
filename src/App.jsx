@@ -723,20 +723,6 @@ function DashboardLangPill({ lang, switchLang }) {
   );
 }
 
-// "Go to current ride" arrow, shown ONLY on the Customer/Driver main
-// dashboard screen, and only when there's actually a live ride to jump to.
-function DashboardArrow({ lang, onGoToCurrentRide, hasLiveRide }) {
-  if (!hasLiveRide) return null;
-  return (
-    <div className="flex justify-end px-5 pb-2">
-      <button onClick={onGoToCurrentRide} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
-        className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-        <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
-      </button>
-    </div>
-  );
-}
-
 function ForegroundToast({ toast }) {
   if (!toast) return null;
   return (
@@ -3822,11 +3808,15 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             ) : (
               <div className="flex-1 min-w-0" />
             )}
-            <div className="w-9 h-9 shrink-0" />
+            {showHamburger && activeBooking ? (
+              <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
+                className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
+              </button>
+            ) : (
+              <div className="w-9 h-9 shrink-0" />
+            )}
           </div>
-        )}
-        {showHamburger && (
-          <DashboardArrow lang={lang} hasLiveRide={!!activeBooking} onGoToCurrentRide={() => { setRideView("current"); setAddingAnother(false); }} />
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
         <ForegroundToast toast={rideNotifications.toast} />
@@ -5218,6 +5208,12 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
             )}
           </div>
+          {tab === "home" && myTrip && (
+            <button onClick={() => setRideView("current")} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
+              className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
+            </button>
+          )}
           <button onClick={() => setDriver({ ...driver, online: !driver.online })}
             className="shrink-0 flex items-center rounded-full p-1.5" style={{ background: C.marigoldDeep }}>
             <span className="w-14 h-7 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
@@ -5226,9 +5222,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </span>
           </button>
         </div>
-        {tab === "home" && (
-          <DashboardArrow lang={lang} hasLiveRide={!!myTrip} onGoToCurrentRide={() => setRideView("current")} />
-        )}
         {!driver.trialNoteSeen && (
           <button onClick={() => setDriver({ ...driver, trialNoteSeen: true })} className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left" style={{ background: C.metallicGold }}>
             <span className="text-xs font-black" style={{ color: "#000000" }}>🎁 {lang === "en" ? "Free trial for 30 days" : "30 दिनों का फ्री ट्रायल"}</span>
