@@ -1209,7 +1209,7 @@ function MicButton({ onResult, lang = "hi", label, size = 8, iconSize = 14 }) {
 // isn't configured yet or the bridge request fails for any reason --
 // calling must never break, masking is a privacy layer on top of it, not
 // a replacement for it working at all.
-function MaskedCallButton({ bookingId, fallbackMobile, label, lang, className, style }) {
+function MaskedCallButton({ bookingId, fallbackMobile, label, lang, className, style, iconSize = 16 }) {
   const [calling, setCalling] = useState(false);
   const [connected, setConnected] = useState(false);
   const handleClick = async () => {
@@ -1227,7 +1227,7 @@ function MaskedCallButton({ bookingId, fallbackMobile, label, lang, className, s
   return (
     <div>
       <button type="button" onClick={handleClick} disabled={calling} className={className} style={style}>
-        <Phone size={16} color={style?.color || "#000000"} /> {calling ? (lang === "en" ? "Connecting..." : "जोड़ रहे हैं...") : label}
+        <Phone size={iconSize} color={style?.color || "#000000"} /> {calling ? (lang === "en" ? "Connecting..." : "जोड़ रहे हैं...") : label}
       </button>
       {connected && (
         <div className="text-[10px] font-bold text-center mt-1" style={{ color: C.success }}>
@@ -3304,7 +3304,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {b.driverMobile && (
           <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
             label={lang === "en" ? "Call Driver" : "कॉल ड्राइवर"}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-black shadow-sm"
+            iconSize={22}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-full text-lg font-black shadow-md"
             style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
         )}
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
