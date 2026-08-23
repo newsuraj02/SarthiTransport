@@ -3304,9 +3304,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           ) : <div />}
           {b.driverMobile && (
             <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
-              label={lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}
+              label="Call Driver"
               className="shrink-0 flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-black shadow-sm"
-              style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
+              style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
           )}
         </div>
         {/* Until the driver actually enters this OTP (loadingStartedAt flips
