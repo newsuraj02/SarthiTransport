@@ -385,10 +385,6 @@ function greetingWord(lang) {
 }
 
 const AREAS = ["पिंपरी", "चिंचवड", "निगड़ी", "आकुर्डी", "भोसरी", "वाकड़", "तळवडे", "रावेत", "MG रोड", "MR-10", "काळेवाडी", "पिंपळे सौदागर", "थेरगाव", "चिखली", "मोशी", "भोसरी MIDC"];
-function findArea(text) {
-  if (!text.trim()) return null;
-  return AREAS.find((a) => text.includes(a)) || null;
-}
 function suggestAreas(text) {
   if (!text.trim()) return [];
   return AREAS.filter((a) => a.toLowerCase().includes(text.trim().toLowerCase())).slice(0, 4);
@@ -2601,7 +2597,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // localizeSuggestionText). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, areaLabel, suggestions, onSuggestionTap, lang = "hi", dotColor }) {
+function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, suggestions, onSuggestionTap, lang = "hi", dotColor }) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -2693,9 +2689,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
           </button>
         )}
       </div>
-      {areaLabel ? (
-        <div className="text-[10px] mt-1 font-semibold" style={{ color: C.marigoldDeep }}>📍 {areaLabel}</div>
-      ) : suggestions.length > 0 && (
+      {suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
           {suggestions.map((a) => (
             <button key={a} onClick={() => onSuggestionTap(a)} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: C.marigoldDeep, color: "#FFFFFF" }}>{a}</button>
@@ -3053,7 +3047,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               onMapPin={() => setMapField("pickup")}
               onUseCurrentLocation={useMyCurrentLocation}
               locating={locatingPickup}
-              areaLabel={findArea(pickup) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(pickup)}` : null}
               suggestions={suggestAreas(pickup)}
               onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); setPickupSelected(false); }}
             />
@@ -3071,7 +3064,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               placeholder={lang === "en" ? "🔴 Where to unload the goods? (Drop)" : "🔴 सामान कहाँ उतारना है? (ड्रॉप)"}
               onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); setDropSelected(false); }}
               onMapPin={() => setMapField("drop")}
-              areaLabel={findArea(drop) ? `${lang === "en" ? "Area" : "क्षेत्र"}: ${findArea(drop)}` : null}
               suggestions={suggestAreas(drop)}
               onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
             />
