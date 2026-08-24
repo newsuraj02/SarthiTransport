@@ -5192,19 +5192,16 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
               )}
             </div>
-          </div>
-        )}
-        {tab === "home" && rideView === "current" && !myTrip && (
-          <div className="flex justify-end px-5 pb-2">
-            <button onClick={() => setDriver({ ...driver, online: !driver.online })}
-              className="shrink-0 flex items-center rounded-full p-1.5" style={{ background: C.marigoldDeep }}>
-              <span className="w-[150px] h-8 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
-                <span className="absolute inset-0 flex items-center justify-center text-[11px] font-black text-white select-none">
-                  {lang === "en" ? (driver.online ? "Driver duty on" : "Driver duty off") : (driver.online ? "ड्यूटी चालू" : "ड्यूटी बंद")}
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-[9px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver duty" : "ड्यूटी"}</span>
+              <button onClick={() => setDriver({ ...driver, online: !driver.online })}
+                className="shrink-0 flex items-center rounded-full p-1" style={{ background: C.marigoldDeep }}>
+                <span className="w-11 h-6 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
+                  <span className="absolute inset-0 flex items-center text-[8px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 6 : 0, paddingRight: driver.online ? 0 : 6 }}>{driver.online ? "On" : "Off"}</span>
+                  <span className="w-4 h-4 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 26 : 4 }} />
                 </span>
-                <span className="w-6 h-6 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 121 : 3 }} />
-              </span>
-            </button>
+              </button>
+            </div>
           </div>
         )}
         {!driver.trialNoteSeen && (
