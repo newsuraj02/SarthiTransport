@@ -4617,7 +4617,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
 
   return (
     <div className="px-5 py-5">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Wallet" : "मेरा वॉलेट"}</h2>
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Wallet" : "वॉलेट"}</h2>
       <div className="rounded-xl p-4 mb-3" style={{ background: C.navy }}>
         <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Wallet Balance" : "वॉलेट बैलेंस"}</div>
         <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
@@ -5139,10 +5139,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     <>
       <div className="flex-1 overflow-y-auto relative">
         {/* This whole row (menu, language toggle, arrow, online/offline) is
-            for the idle main dashboard only -- once a trip is actually live,
-            none of it applies, so it's hidden rather than shown alongside
-            the trip content. */}
-        {!(tab === "home" && myTrip) && (
+            for the idle main dashboard only -- Wallet, My Trips, and the
+            Advance Ride/s view (all reached via the hamburger menu, and all
+            with their own Back control) don't need it, same as an active
+            trip doesn't. */}
+        {tab === "home" && rideView === "current" && !myTrip && (
           <div className="flex items-center justify-between gap-2 px-5 pt-3">
             <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
               <Menu size={18} color="#fff" strokeWidth={2.5} />
@@ -5184,7 +5185,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                     <Wallet size={13} color={C.marigold} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-black" style={{ color: "#000000" }}>{lang === "en" ? "My Wallet" : "मेरा वॉलेट"}</div>
+                    <div className="text-[10px] font-black" style={{ color: "#000000" }}>{lang === "en" ? "Wallet" : "वॉलेट"}</div>
                     <div className="text-xs font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
                   </div>
                 </button>
