@@ -2993,7 +2993,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         <div className="space-y-4">
           <GuidedStep {...stepProps(stepOffset + 0)} lang={lang}>
             <LocationField
-              label={lang === "en" ? "Pickup" : "पिकअप"}
+              label={lang === "en" ? "Choose Pickup location" : "पिकअप स्थान चुनें"}
               lang={lang}
               dotColor={C.success}
               value={pickup}
@@ -3012,7 +3012,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
           <GuidedStep {...stepProps(stepOffset + 1)} lang={lang}>
             <LocationField
-              label={lang === "en" ? "Drop" : "ड्रॉप"}
+              label={lang === "en" ? "Choose Drop location" : "ड्रॉप स्थान चुनें"}
               lang={lang}
               dotColor={C.safety}
               value={drop}
