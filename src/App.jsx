@@ -1482,8 +1482,8 @@ function AdminLogin({ onVerified, lang, onBack }) {
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
       {onBack && (
-        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
         </button>
       )}
       <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.navy }}>
@@ -1662,8 +1662,8 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   };
 
   const backButton = (
-    <button onClick={onLogout} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-      <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+    <button onClick={onLogout} className="flex items-center gap-1 mb-4 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+      <ChevronLeft size={18} strokeWidth={3} />
     </button>
   );
 
@@ -1777,8 +1777,8 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     // the registration form if this number genuinely has none yet.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer" : "कस्टमर"}</h2>
@@ -1799,8 +1799,8 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     // Login — mobile + OTP only, nothing else to fill in.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Login" : "कस्टमर लॉगिन"}</h2>
@@ -1849,8 +1849,8 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   // verification at the bottom of this same page.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
-      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-        <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <ChevronLeft size={18} strokeWidth={3} />
       </button>
       <div className="mb-4"><Logo size={96} /></div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Sign Up" : "कस्टमर साइन अप"}</h2>
@@ -2075,8 +2075,8 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   };
 
   const backButton = (
-    <button onClick={onLogout} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-      <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+    <button onClick={onLogout} className="flex items-center gap-1 mb-4 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+      <ChevronLeft size={18} strokeWidth={3} />
     </button>
   );
 
@@ -2200,8 +2200,8 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     // file yet?).
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver" : "ड्राइवर"}</h2>
@@ -2222,8 +2222,8 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     // Login — mobile + OTP only, nothing else to fill in.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Login" : "ड्राइवर लॉगिन"}</h2>
@@ -2272,8 +2272,8 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   // verification at the bottom of this same page.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
-      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-        <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <ChevronLeft size={18} strokeWidth={3} />
       </button>
       <div className="mb-4"><Logo size={96} /></div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Sign Up" : "ड्राइवर साइन अप"}</h2>
@@ -3018,8 +3018,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
   return (
     <div className="px-5 pt-3 pb-5">
-      <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-        <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+      <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 mb-3 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <ChevronLeft size={18} strokeWidth={3} />
       </button>
       <div className="space-y-3">
         {bookingMode === "advance" && (
@@ -3752,8 +3752,8 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
     return (
       <div className="flex-1 overflow-y-auto relative">
         <div className="px-5 pt-3">
-          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-            <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 p-2 rounded-full shadow-sm self-start" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} />
           </button>
         </div>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} />}
@@ -5160,8 +5160,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     return (
       <div className="flex-1 overflow-y-auto relative">
         <div className="px-5 pt-3">
-          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm self-start" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-            <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 p-2 rounded-full shadow-sm self-start" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} />
           </button>
         </div>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
@@ -5291,8 +5291,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
             return (
               <div className="px-5 py-4">
-                <button onClick={() => setSelectedAdvanceId(null)} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-                  <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back to list" : "लिस्ट पर वापस जाएं"}
+                <button onClick={() => setSelectedAdvanceId(null)} className="flex items-center gap-1 mb-4 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+                  <ChevronLeft size={18} strokeWidth={3} />
                 </button>
                 <RideTypeBanner booking={ab} lang={lang} />
                 <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -5328,8 +5328,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             );
           })() : (
             <div className="px-5 py-4">
-              <button onClick={() => setRideView("current")} className="flex items-center gap-1 mb-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-                <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+              <button onClick={() => setRideView("current")} className="flex items-center gap-1 mb-4 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+                <ChevronLeft size={18} strokeWidth={3} />
               </button>
               {advanceBookings.length === 0 ? (
                 <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
@@ -5349,8 +5349,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         )}
         {(tab === "wallet" || tab === "history") && (
           <div className="px-5 pt-3">
-            <button onClick={() => setTab("home")} className="flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+            <button onClick={() => setTab("home")} className="flex items-center gap-1 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} />
             </button>
           </div>
         )}
@@ -5539,8 +5539,8 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
     const page = detailPages[detailView];
     return (
       <div>
-        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{page.title}</h2>
         {page.items.length === 0 ? (
@@ -7295,8 +7295,8 @@ export default function App() {
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
           <div className="flex-1 overflow-y-auto">
-            <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+            <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} />
             </button>
             <div className="mx-5 mt-3 rounded-lg p-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
               <ShieldCheck size={15} color={C.marigoldDeep} />
@@ -7307,8 +7307,8 @@ export default function App() {
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
-            <button onClick={() => logoutRole("driver")} className="absolute top-4 left-4 flex items-center gap-1 pl-2 pr-3 py-1.5 rounded-full text-sm font-black shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ChevronLeft size={18} strokeWidth={3} /> {lang === "en" ? "Back" : "वापस"}
+            <button onClick={() => logoutRole("driver")} className="absolute top-4 left-4 flex items-center gap-1 p-2 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} />
             </button>
             {driver.kyc === "Rejected" ? (
               <>
