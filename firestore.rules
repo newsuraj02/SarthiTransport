@@ -104,6 +104,13 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // Admin "Send Notification" history (see functions/index.js:
+    // sendAdminNotification) — written only by that Cloud Function via the
+    // Admin SDK, no client write path needed or allowed here.
+    match /adminNotifications/{id} {
+      allow read: if isAdmin();
+    }
+
     // Business expense tracking (Admin's "Expenses" tab) — admin-only,
     // since this is internal financial data, not app-functionality data.
     match /expenses/{id} {

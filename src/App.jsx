@@ -14,7 +14,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall, sendAdminNotification } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Bright/high-visibility flat palette — legible in direct outdoor sunlight
@@ -6137,16 +6137,21 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   );
 }
 
-function AdminNotify({ drivers, lang }) {
+function AdminNotify({ drivers, adminNotifications, lang }) {
   const [target, setTarget] = useState("all");
   const [message, setMessage] = useState("");
-  const [sentLog, setSentLog] = useState([]);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   const allDriversLabel = lang === "en" ? "All Drivers" : "सभी ड्राइवर";
-  const send = () => {
-    if (!message.trim()) return;
-    const label = target === "all" ? allDriversLabel : drivers.find((d) => d.id === target)?.name || target;
-    setSentLog((prev) => [{ id: genId("N"), to: label, message, time: new Date().toLocaleTimeString("hi-IN", { hour: "2-digit", minute: "2-digit" }) }, ...prev]);
-    setMessage("");
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  const send = async () => {
+    if (!message.trim() || sending) return;
+    setSending(true);
+    setError("");
+    const result = await sendAdminNotification(target, message.trim());
+    setSending(false);
+    if (result.ok) setMessage("");
+    else setError(lang === "en" ? "Couldn't send — try again." : "भेज नहीं सका — फिर कोशिश करें।");
   };
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -6154,20 +6159,28 @@ function AdminNotify({ drivers, lang }) {
       <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Send to" : "किसे भेजें"}</label>
       <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
         <option value="all">{allDriversLabel}</option>
-        {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        {drivers.map((d) => <option key={d.mobile} value={d.mobile}>{d.name}</option>)}
       </select>
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-      <button onClick={send} disabled={!message.trim()} className="w-full rounded-lg py-2.5 font-bold text-sm mb-4" style={{ background: message.trim() ? C.marigold : "#E0E0E0", color: message.trim() ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Send" : "भेजें"}</button>
+      {error && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
+      <button onClick={send} disabled={!message.trim() || sending} className="w-full rounded-lg py-2.5 font-bold text-sm mb-4" style={{ background: message.trim() && !sending ? C.marigold : "#E0E0E0", color: message.trim() && !sending ? "#000000" : "#9AA3B0" }}>
+        {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send" : "भेजें")}
+      </button>
       <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Sent Notifications" : "भेजी गई सूचनाएं"}</div>
       <div className="space-y-2">
-        {sentLog.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No notifications sent yet." : "अभी कोई सूचना नहीं भेजी गई।"}</p>}
-        {sentLog.map((n) => (
+        {(adminNotifications || []).length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No notifications sent yet." : "अभी कोई सूचना नहीं भेजी गई।"}</p>}
+        {(adminNotifications || []).map((n) => (
           <div key={n.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold" style={{ color: C.ink }}>{n.to}</span>
-              <span className="text-[10px]" style={{ color: C.inkSoft }}>{n.time}</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold" style={{ color: C.ink }}>{n.target === "all" ? allDriversLabel : (n.targetName || n.target)}</span>
+              <span className="text-[10px] shrink-0" style={{ color: C.inkSoft }}>{formatTime(n.createdAt)}</span>
             </div>
             <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>{n.message}</div>
+            <div className="text-[10px] mt-0.5" style={{ color: n.recipientCount > 0 ? C.success : C.safety }}>
+              {n.recipientCount > 0
+                ? (lang === "en" ? `Delivered to ${n.recipientCount} device${n.recipientCount > 1 ? "s" : ""}` : `${n.recipientCount} डिवाइस पर पहुंची`)
+                : (lang === "en" ? "No device had notifications enabled" : "किसी डिवाइस पर नोटिफिकेशन चालू नहीं था")}
+            </div>
           </div>
         ))}
       </div>
@@ -6492,7 +6505,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- the KYC desk is reached only
   // via the "Pending KYC approvals" tile on the Live Dashboard, not as a
@@ -6524,7 +6537,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
-      {tab === "notify" && <AdminNotify drivers={drivers} lang={lang} />}
+      {tab === "notify" && <AdminNotify drivers={drivers} adminNotifications={adminNotifications} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
     </div>
@@ -6828,6 +6841,10 @@ export default function App() {
   // admin-only read, same pattern as alerts above.
   const [callLogs, setCallLogs] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("callLogs", setCallLogs) : undefined), authDeps);
+  // Admin "Send Notification" history (see functions/index.js:
+  // sendAdminNotification) — admin-only read, same pattern as callLogs.
+  const [adminNotifications, setAdminNotifications] = useState([]);
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("adminNotifications", setAdminNotifications) : undefined), authDeps);
   // Business expenses — admin-only, same pattern as alerts.
   const [expenses, setExpenses] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("expenses", setExpenses) : undefined), authDeps);
@@ -7251,7 +7268,7 @@ export default function App() {
               bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
-              expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} />
+              expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications} />
           </div>
         )}
       </div>

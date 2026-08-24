@@ -290,6 +290,45 @@ exports.expireStaleLoads = onSchedule({ schedule: "0 * * * *", timeZone: "Asia/K
   await Promise.all(updates);
 });
 
+// Admin's "Send Notification" screen (AdminNotify) -- sends a real FCM push
+// to one driver or every driver, and logs it to adminNotifications so the
+// screen's "Sent Notifications" list is a genuine, persisted record instead
+// of a client-only one that vanished on refresh. A driver who has the app
+// open sees it immediately as the same foreground toast every other push
+// already uses (ForegroundToast/useRideNotifications on their home tab);
+// closed/backgrounded, it arrives as a normal OS notification via FCM.
+exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const { target, message } = request.data || {};
+  const text = (message || "").trim();
+  if (!text) throw new HttpsError("invalid-argument", "message is required.");
+
+  let recipients;
+  let targetName = null;
+  if (!target || target === "all") {
+    const snap = await db.collection("drivers").get();
+    recipients = snap.docs.map((d) => ({ fcmToken: d.data().fcmToken }));
+  } else {
+    const snap = await db.collection("drivers").doc(target).get();
+    if (!snap.exists) throw new HttpsError("not-found", "Driver not found.");
+    targetName = snap.data().name || target;
+    recipients = [{ fcmToken: snap.data().fcmToken }];
+  }
+
+  const sendable = recipients.filter((r) => r.fcmToken);
+  await Promise.all(sendable.map((r) => sendPush(r.fcmToken, "📢 Message from Admin", text)));
+
+  await db.collection("adminNotifications").add({
+    target: target && target !== "all" ? target : "all",
+    targetName,
+    message: text,
+    recipientCount: sendable.length,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { ok: true, sentCount: sendable.length };
+});
+
 // ---------------- Number masking (Exotel) ----------------
 // Bridges a call between a booking's customer and driver through Exotel's
 // Connect API instead of exposing either side's real number to the other:
