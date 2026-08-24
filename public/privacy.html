@@ -8,14 +8,15 @@
 <title>Privacy Policy | Apna Transport</title>
 <style>
   :root {
-    --ink: #2B1512;
-    --ink-soft: #7A5C50;
-    --navy: #5C1F1F;
-    --marigold: #E3A93C;
-    --marigold-deep: #A8721C;
-    --bg: #F6EFE6;
+    --ink: #000000;
+    --ink-soft: #333333;
+    --navy: #0052CC;
+    --marigold: #FFCC00;
+    --marigold-deep: #FF6600;
+    --success: #00A854;
+    --bg: #FFFFFF;
     --paper: #FFFFFF;
-    --line: #E6DDD1;
+    --line: #000000;
   }
   * { box-sizing: border-box; }
   body {
@@ -28,42 +29,56 @@
   header {
     background: var(--navy);
     color: #fff;
-    padding: 28px 20px;
+    padding: 24px 20px 20px;
     text-align: center;
   }
-  header h1 { margin: 0 0 6px; font-size: 22px; }
-  header p { margin: 0; color: var(--marigold); font-size: 13px; }
+  header svg { display: block; margin: 0 auto 10px; border-radius: 14px; }
+  header h1 { margin: 0 0 4px; font-size: 20px; font-weight: 800; }
+  header p { margin: 0; color: var(--marigold); font-size: 12.5px; font-weight: 600; }
   main {
     max-width: 760px;
     margin: 0 auto;
-    padding: 28px 20px 60px;
+    padding: 24px 20px 60px;
   }
   .card {
     background: var(--paper);
     border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 20px 22px;
-    margin-bottom: 20px;
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
   h2 {
-    font-size: 17px;
+    font-size: 15px;
+    font-weight: 800;
     color: var(--marigold-deep);
     margin: 0 0 10px;
   }
-  p, li { font-size: 14px; color: var(--ink); }
+  p, li { font-size: 13.5px; color: var(--ink); }
   ul { margin: 8px 0; padding-left: 20px; }
-  .updated { font-size: 12px; color: var(--ink-soft); text-align: center; margin-bottom: 24px; }
+  li { margin-bottom: 4px; }
+  .updated {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ink-soft); text-align: center; margin-bottom: 20px;
+  }
   .lang-divider {
     text-align: center;
-    margin: 40px 0 24px;
-    font-weight: 700;
-    color: var(--navy);
-    font-size: 18px;
+    margin: 36px 0 20px;
+    font-weight: 800;
+    color: #fff;
+    background: var(--navy);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 15px;
+    display: inline-block;
   }
-  a { color: var(--marigold-deep); }
+  .lang-divider-wrap { text-align: center; }
+  a { color: var(--marigold-deep); font-weight: 700; text-decoration: none; }
+  a:hover { text-decoration: underline; }
   footer {
     text-align: center;
-    font-size: 12px;
+    font-size: 11.5px;
+    font-weight: 600;
     color: var(--ink-soft);
     padding: 20px;
   }
@@ -71,6 +86,30 @@
 </head>
 <body translate="no">
   <header>
+    <svg width="56" height="56" viewBox="0 0 512 512" aria-hidden="true">
+      <defs>
+        <linearGradient id="ybg" x1="50%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" stop-color="#FFD93D" />
+          <stop offset="100%" stop-color="#FFC300" />
+        </linearGradient>
+        <linearGradient id="sheen" x1="20%" y1="0%" x2="80%" y2="60%">
+          <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.5" />
+          <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="512" height="512" fill="url(#ybg)" />
+      <rect x="0" y="0" width="512" height="512" fill="url(#sheen)" />
+      <g transform="translate(0,20) scale(1.28) translate(-56,-46)">
+        <rect x="70" y="196" width="238" height="120" rx="16" fill="#0B3D91" />
+        <rect x="90" y="214" width="150" height="30" rx="8" fill="#FFD93D" opacity="0.85" />
+        <path d="M308 224 L392 224 Q414 224 414 246 L414 316 L308 316 Z" fill="#0B3D91" />
+        <rect x="330" y="240" width="52" height="42" rx="7" fill="#FFD93D" opacity="0.85" />
+        <circle cx="150" cy="330" r="42" fill="#0B3D91" />
+        <circle cx="150" cy="330" r="16" fill="#FFD93D" opacity="0.85" />
+        <circle cx="356" cy="330" r="42" fill="#0B3D91" />
+        <circle cx="356" cy="330" r="16" fill="#FFD93D" opacity="0.85" />
+      </g>
+    </svg>
     <h1>Apna Transport — Privacy Policy</h1>
     <p>अपना ट्रांसपोर्ट</p>
   </header>
@@ -162,7 +201,7 @@
       <p>✉️ Email: <a href="mailto:sarthitransport726@gmail.com">sarthitransport726@gmail.com</a></p>
     </div>
 
-    <div class="lang-divider">हिंदी में सारांश</div>
+    <div class="lang-divider-wrap"><div class="lang-divider">हिंदी में सारांश</div></div>
 
     <div class="card">
       <h2>हम कौन हैं</h2>
