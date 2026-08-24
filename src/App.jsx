@@ -451,110 +451,27 @@ function geocodeAddress(text) {
   });
 }
 
-// Approximate phonetic Latin<->Devanagari transliteration — a fallback for
-// place names Google Places has no Hindi (or, in reverse, no Latin) name
-// for on file, so the suggestion dropdown still reads in the app's chosen
-// script even when Google's own data doesn't. This is NOT a dictionary or
-// an official transliteration — it's a syllable-by-syllable phonetic
-// approximation, good enough for a customer to recognize the place, not
-// guaranteed to match how locals actually spell it. Only Latin-letter (or
-// Devanagari) runs within a string are converted; digits, spaces, and
-// punctuation pass through untouched, so a Google string that's already
-// partly localized (e.g. "Kudalwadi, चिखली, महाराष्ट्र") only has its
-// untranslated part converted.
-const TRANSLIT_TOKENS = [
-  { lat: "ksh", type: "C", dev: "क्ष" }, { lat: "gy", type: "C", dev: "ज्ञ" }, { lat: "chh", type: "C", dev: "छ" },
-  { lat: "kh", type: "C", dev: "ख" }, { lat: "gh", type: "C", dev: "घ" }, { lat: "ch", type: "C", dev: "च" },
-  { lat: "jh", type: "C", dev: "झ" }, { lat: "ny", type: "C", dev: "ञ" }, { lat: "th", type: "C", dev: "थ" },
-  { lat: "dh", type: "C", dev: "ध" }, { lat: "ph", type: "C", dev: "फ" }, { lat: "bh", type: "C", dev: "भ" },
-  { lat: "sh", type: "C", dev: "श" }, { lat: "ng", type: "C", dev: "ङ" },
-  { lat: "k", type: "C", dev: "क" }, { lat: "g", type: "C", dev: "ग" }, { lat: "c", type: "C", dev: "क" },
-  { lat: "j", type: "C", dev: "ज" }, { lat: "t", type: "C", dev: "त" }, { lat: "d", type: "C", dev: "द" },
-  { lat: "n", type: "C", dev: "न" }, { lat: "p", type: "C", dev: "प" }, { lat: "b", type: "C", dev: "ब" },
-  { lat: "m", type: "C", dev: "म" }, { lat: "y", type: "C", dev: "य" }, { lat: "r", type: "C", dev: "र" },
-  { lat: "l", type: "C", dev: "ल" }, { lat: "v", type: "C", dev: "व" }, { lat: "w", type: "C", dev: "व" },
-  { lat: "s", type: "C", dev: "स" }, { lat: "h", type: "C", dev: "ह" }, { lat: "f", type: "C", dev: "फ़" },
-  { lat: "z", type: "C", dev: "ज़" }, { lat: "x", type: "C", dev: "क्स" }, { lat: "q", type: "C", dev: "क़" },
-  { lat: "aa", type: "V", dev: "आ", matra: "ा" }, { lat: "ee", type: "V", dev: "ई", matra: "ी" },
-  { lat: "oo", type: "V", dev: "ऊ", matra: "ू" }, { lat: "ai", type: "V", dev: "ऐ", matra: "ै" },
-  { lat: "au", type: "V", dev: "औ", matra: "ौ" }, { lat: "a", type: "V", dev: "अ", matra: "" },
-  { lat: "i", type: "V", dev: "इ", matra: "ि" }, { lat: "u", type: "V", dev: "उ", matra: "ु" },
-  { lat: "e", type: "V", dev: "ए", matra: "े" }, { lat: "o", type: "V", dev: "ओ", matra: "ो" },
-].sort((a, b) => b.lat.length - a.lat.length);
-
-function transliterateLatinWordToDevanagari(word) {
-  const w = word.toLowerCase();
-  let out = "";
-  let i = 0;
-  let pending = null; // devanagari base of a consonant awaiting a vowel
-  while (i < w.length) {
-    const tok = TRANSLIT_TOKENS.find((t) => w.startsWith(t.lat, i));
-    if (!tok) {
-      if (pending) { out += pending; pending = null; }
-      out += w[i];
-      i += 1;
-      continue;
-    }
-    if (tok.type === "C") {
-      if (pending) out += pending + "्"; // consonant cluster -> halant
-      pending = tok.dev;
-    } else if (pending) {
-      out += pending + tok.matra;
-      pending = null;
-    } else {
-      out += tok.dev; // standalone vowel form
-    }
-    i += tok.lat.length;
-  }
-  if (pending) out += pending; // trailing consonant keeps its bare (silently-schwa) form
-  return out;
-}
-function transliterateToDevanagari(text) {
-  return text ? text.replace(/[A-Za-z]+/g, transliterateLatinWordToDevanagari) : text;
-}
-
-const DEVANAGARI_TO_LATIN_CONSONANTS = {
-  "क्ष": "ksh", "ज्ञ": "gy", "छ": "chh", "ख": "kh", "घ": "gh", "च": "ch", "झ": "jh", "ञ": "ny",
-  "थ": "th", "ध": "dh", "फ": "ph", "भ": "bh", "श": "sh", "ष": "sh", "ङ": "ng", "ट": "t", "ठ": "th",
-  "ड": "d", "ढ": "dh", "ण": "n", "क": "k", "ग": "g", "ज": "j", "त": "t", "द": "d", "न": "n", "प": "p",
-  "ब": "b", "म": "m", "य": "y", "र": "r", "ल": "l", "व": "v", "स": "s", "ह": "h", "फ़": "f", "ज़": "z",
-  "क़": "q", "ड़": "r", "ढ़": "rh",
-};
-const DEVANAGARI_TO_LATIN_MATRAS = { "ा": "aa", "ि": "i", "ी": "ee", "ु": "u", "ू": "oo", "े": "e", "ै": "ai", "ो": "o", "ौ": "au", "ं": "n", "ः": "h" };
-const DEVANAGARI_TO_LATIN_VOWELS = { "अ": "a", "आ": "aa", "इ": "i", "ई": "ee", "उ": "u", "ऊ": "oo", "ए": "e", "ऐ": "ai", "ओ": "o", "औ": "au" };
-
-function transliterateDevanagariWordToLatin(word) {
-  const chars = Array.from(word);
-  let out = "";
-  for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i];
-    if (DEVANAGARI_TO_LATIN_VOWELS[ch]) { out += DEVANAGARI_TO_LATIN_VOWELS[ch]; continue; }
-    // Anusvara/visarga as their own character (not immediately following a
-    // consonant, e.g. after another matra) — the lookahead below already
-    // handles the more common case of one right after a consonant.
-    if (DEVANAGARI_TO_LATIN_MATRAS[ch] === "n" || ch === "ः") { out += ch === "ः" ? "h" : "n"; continue; }
-    if (DEVANAGARI_TO_LATIN_CONSONANTS[ch]) {
-      out += DEVANAGARI_TO_LATIN_CONSONANTS[ch];
-      const next = chars[i + 1];
-      if (next === "्") { i += 1; } // halant — no inherent vowel, clusters straight into the next consonant
-      else if (next && DEVANAGARI_TO_LATIN_MATRAS[next]) { out += DEVANAGARI_TO_LATIN_MATRAS[next]; i += 1; }
-      else out += "a"; // inherent vowel
-      continue;
-    }
-    out += ch; // punctuation/space/digit passthrough
-  }
-  return out;
-}
-function transliterateToLatin(text) {
-  return text ? text.replace(/[ऀ-ॿ]+/g, transliterateDevanagariWordToLatin) : text;
-}
-
-// Used to localize Google Places suggestion text to the app's chosen
-// script — see LocationField's custom dropdown.
-function localizeSuggestionText(text, lang) {
+// Google's Geocoder/Places can return a Plus Code (e.g. "JQ38+PRM, Wakad,
+// Pimpri-Chinchwad") as part of an address for areas without a formal
+// street address — not something a customer/driver can read as a place
+// name, so it's stripped from every address string before it's shown or
+// stored (suggestion dropdown, reverse-geocode, current-location results).
+//
+// Previously this app also transliterated place names into the app's
+// current script (e.g. spelling an English name out phonetically in
+// Devanagari) whenever Google had no native name in that script on file.
+// That produced exactly this kind of broken/unusual text, since it's a
+// syllable-by-syllable guess, not a real translation — removed in favor of
+// just showing Google's own text as-is (already in the right language most
+// of the time, thanks to the `language` param the Maps script loads with —
+// see googleMapsContext.jsx).
+function stripPlusCode(text) {
   if (!text) return text;
-  if (lang === "hi") return /[A-Za-z]/.test(text) ? transliterateToDevanagari(text) : text;
-  return /[ऀ-ॿ]/.test(text) ? transliterateToLatin(text) : text;
+  return text
+    .replace(/\b[A-Z0-9]{4,8}\+[A-Z0-9]{2,3}\b,?\s*/gi, "")
+    .replace(/^,\s*/, "")
+    .replace(/,\s*,/g, ",")
+    .trim();
 }
 
 // Real routed driving distance from Google's Distance Matrix Service (part
@@ -1020,7 +937,7 @@ function MapPicker({ onConfirm, onClose, lang = "hi" }) {
         headers: { Accept: "application/json" },
       });
       const data = await res.json();
-      setAddress(localizeSuggestionText(data?.display_name, lang) || `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+      setAddress(stripPlusCode(data?.display_name) || `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
     } catch {
       setAddress(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
     }
@@ -1086,7 +1003,7 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
     if (!geocoderRef.current) geocoderRef.current = new window.google.maps.Geocoder();
     geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
       setLoading(false);
-      setAddress(status === "OK" && results?.[0] ? localizeSuggestionText(results[0].formatted_address, lang) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      setAddress(status === "OK" && results?.[0] ? stripPlusCode(results[0].formatted_address) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
     });
   };
 
@@ -1101,7 +1018,7 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
     if (!loc) return;
     const lat = loc.lat(), lng = loc.lng();
     setMarker({ lat, lng });
-    setAddress(localizeSuggestionText(place.formatted_address || place.name || "", lang));
+    setAddress(stripPlusCode(place.formatted_address || place.name || ""));
     setLoading(false);
     mapRef.current?.panTo({ lat, lng });
     mapRef.current?.setZoom(16);
@@ -2626,7 +2543,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // of Google's own embedded Autocomplete widget — the native widget renders
 // its own popup directly into the page, completely outside React's control,
 // so there was no way to localize what it displayed (see
-// localizeSuggestionText). This version fetches predictions itself and
+// stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
 function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, suggestions, onSuggestionTap, lang = "hi", dotColor }) {
@@ -2660,7 +2577,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
       const r = status === "OK" && results?.[0];
       const loc = r?.geometry?.location;
       if (!loc) return;
-      onPlaceSelected({ name: localizeSuggestionText(r.formatted_address || p.description, lang), lat: loc.lat(), lng: loc.lng() });
+      onPlaceSelected({ name: stripPlusCode(r.formatted_address || p.description), lat: loc.lat(), lng: loc.lng() });
     });
   };
 
@@ -2689,8 +2606,8 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
         {showDropdown && (
           <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
             {predictions.map((p) => {
-              const main = localizeSuggestionText(p.structured_formatting?.main_text || p.description, lang);
-              const secondary = localizeSuggestionText(p.structured_formatting?.secondary_text || "", lang);
+              const main = stripPlusCode(p.structured_formatting?.main_text || p.description);
+              const secondary = stripPlusCode(p.structured_formatting?.secondary_text || "");
               return (
                 <button key={p.place_id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectPrediction(p)}
                   className="w-full text-left px-3 py-2.5 flex items-start gap-2" style={{ borderTop: `1px solid ${C.line}` }}>
@@ -2935,14 +2852,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         setPickupSelected(true);
         if (mapsReady && window.google) {
           new window.google.maps.Geocoder().geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
-            setPickup(status === "OK" && results?.[0] ? localizeSuggestionText(results[0].formatted_address, lang) : `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+            setPickup(status === "OK" && results?.[0] ? stripPlusCode(results[0].formatted_address) : `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
             setLocatingPickup(false);
           });
         } else {
           try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`, { headers: { Accept: "application/json" } });
             const data = await res.json();
-            setPickup(localizeSuggestionText(data?.display_name, lang) || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+            setPickup(stripPlusCode(data?.display_name) || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
           } catch {
             setPickup(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
           }
