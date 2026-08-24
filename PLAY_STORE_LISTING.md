@@ -114,15 +114,35 @@ Available in Hindi and English — switch anytime with the toggle at the top of 
 
 ---
 
-## Screenshots to capture (4–5, phone in portrait)
+## Screenshots to capture (8, phone in portrait)
 
-1. Role selection screen (Customer / Driver choice)
-2. Customer's "post a load" screen (Pickup/Drop boxes)
-3. Customer's active ride / bidding screen with a couple of driver bids visible
-4. Driver's open-loads / bidding screen
-5. Live tracking map mid-trip
+Play Store shows the first 2–3 in search results before a user taps in, so
+lead with the strongest, most self-explanatory shots — not necessarily the
+order you'd naturally click through the app in. This list also mixes
+Customer and Driver screens throughout (not front-loaded/back-loaded by
+role), since anyone Browse this listing could be looking for either.
 
-Capture these from a real phone browser (or Chrome DevTools device emulation) at the live URL, logged in with the demo credentials above.
+Google's current phone screenshot spec (double-check in Play Console at
+upload time, since Google does update these): 2–8 images, JPG or 24-bit PNG
+(no alpha), each side between 320px and 3840px, long side no more than
+2x the short side (portrait 9:16 is the natural fit here).
+
+Suggested shot list, in upload order, each with a short caption to overlay
+(a text bar top or bottom of the screenshot — not baked into the app itself,
+add it in any image editor after capturing):
+
+1. **Customer's "Book a vehicle now / Book ride in advance" dashboard** — the very first thing a customer sees. Caption: *"Book a Truck in Minutes"*
+2. **Driver's open-loads/bidding screen (Online, with a couple of loads listed)** — the flip side of the marketplace. Caption: *"Drivers: Find Loads Near You, Bid Your Price"*
+3. **Customer posting a load (Pickup/Drop/Material/Weight form filled in)**. Caption: *"Post Your Load — Pickup to Drop in Seconds"*
+4. **Customer's bid list with 2–3 driver bids visible, sorted by price**. Caption: *"Compare Bids, Pick the Best Price"*
+5. **Live tracking map mid-trip (driver en route or loaded)**. Caption: *"Track Your Load Live, Every Step of the Way"*
+6. **Driver's Wallet screen (balance + trip history visible)**. Caption: *"Track Earnings, Get Paid Directly"*
+7. **The masked "Call Driver"/"Call Customer" button in context on the ride screen** — a real differentiator, worth calling out explicitly. Caption: *"Call Safely — Your Real Number Stays Private"*
+8. **Post-trip rating screen or the downloadable invoice/breakdown**. Caption: *"Rate Your Trip, Get a Clear Invoice"*
+
+Capture these from a real phone browser (or Chrome DevTools device
+emulation) at the live URL, logged in with the demo credentials above —
+one pass as Customer, one pass as Driver.
 
 ---
 
