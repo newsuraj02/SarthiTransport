@@ -108,14 +108,16 @@ export async function initiateMaskedCall(bookingId) {
 }
 
 // Sends a real FCM push (see functions/index.js: sendAdminNotification) to
-// one driver (target = their mobile/doc id) or every driver (target = "all"
-// or omitted). Always resolves (never throws) with { ok, reason? }.
-export async function sendAdminNotification(target, message) {
+// one driver/customer (target = their mobile/doc id) or every driver/
+// customer (target = "all" or omitted), depending on audience ("driver",
+// the default, or "customer"). Always resolves (never throws) with
+// { ok, reason? }.
+export async function sendAdminNotification(target, message, audience = "driver") {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
     const call = httpsCallable(functions, "sendAdminNotification");
-    const result = await call({ target, message });
+    const result = await call({ target, message, audience });
     return result.data;
   } catch (e) {
     console.error("[adminNotify] callable failed", e);

@@ -106,9 +106,13 @@ service cloud.firestore {
 
     // Admin "Send Notification" history (see functions/index.js:
     // sendAdminNotification) — written only by that Cloud Function via the
-    // Admin SDK, no client write path needed or allowed here.
+    // Admin SDK, no client write path needed or allowed here. Any signed-in
+    // user can read (same broad-read-client-filters pattern as bookings/
+    // withdrawals/rechargeRequests above) since this doubles as the actual
+    // announcements drivers/customers read in their own "Admin
+    // Announcements" inbox, not just admin's own sent-history view.
     match /adminNotifications/{id} {
-      allow read: if isAdmin();
+      allow read: if isSignedIn();
     }
 
     // Business expense tracking (Admin's "Expenses" tab) — admin-only,

@@ -291,26 +291,30 @@ exports.expireStaleLoads = onSchedule({ schedule: "0 * * * *", timeZone: "Asia/K
 });
 
 // Admin's "Send Notification" screen (AdminNotify) -- sends a real FCM push
-// to one driver or every driver, and logs it to adminNotifications so the
-// screen's "Sent Notifications" list is a genuine, persisted record instead
-// of a client-only one that vanished on refresh. A driver who has the app
-// open sees it immediately as the same foreground toast every other push
-// already uses (ForegroundToast/useRideNotifications on their home tab);
-// closed/backgrounded, it arrives as a normal OS notification via FCM.
+// to one driver/customer or every driver/customer, and logs it to
+// adminNotifications so it becomes a genuine, persisted announcement both
+// the admin's "Sent Notifications" list AND the recipient's own "Admin
+// Announcements" inbox (hamburger menu, both roles) read from -- not just a
+// one-off push that's gone once the toast disappears. A recipient who has
+// the app open sees it immediately as the same foreground toast every other
+// push already uses; closed/backgrounded, it arrives as a normal OS
+// notification via FCM.
 exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request) => {
   if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
-  const { target, message } = request.data || {};
+  const { target, message, audience } = request.data || {};
   const text = (message || "").trim();
   if (!text) throw new HttpsError("invalid-argument", "message is required.");
+  const toRole = audience === "customer" ? "customer" : "driver";
+  const col = toRole === "customer" ? "customers" : "drivers";
 
   let recipients;
   let targetName = null;
   if (!target || target === "all") {
-    const snap = await db.collection("drivers").get();
+    const snap = await db.collection(col).get();
     recipients = snap.docs.map((d) => ({ fcmToken: d.data().fcmToken }));
   } else {
-    const snap = await db.collection("drivers").doc(target).get();
-    if (!snap.exists) throw new HttpsError("not-found", "Driver not found.");
+    const snap = await db.collection(col).doc(target).get();
+    if (!snap.exists) throw new HttpsError("not-found", `${toRole} not found.`);
     targetName = snap.data().name || target;
     recipients = [{ fcmToken: snap.data().fcmToken }];
   }
@@ -319,6 +323,7 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
   await Promise.all(sendable.map((r) => sendPush(r.fcmToken, "📢 Message from Admin", text)));
 
   await db.collection("adminNotifications").add({
+    toRole,
     target: target && target !== "all" ? target : "all",
     targetName,
     message: text,

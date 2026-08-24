@@ -732,6 +732,38 @@ function ForegroundToast({ toast }) {
   );
 }
 
+// Driver/Customer "Admin Announcements" inbox (hamburger menu, both roles) —
+// past and present broadcasts sent from AdminNotify (functions/index.js:
+// sendAdminNotification), filtered to whatever was sent to "all" of this
+// role or to this person specifically. Read-only; there's no reply/compose
+// here, only what Admin has sent out.
+function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang }) {
+  const mine = (adminNotifications || [])
+    .filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile))
+    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  return (
+    <div className="px-5 py-5">
+      <h2 className="text-base font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : "एडमिन सूचनाएं"}</h2>
+      {mine.length === 0 ? (
+        <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No announcements yet." : "अभी तक कोई सूचना नहीं।"}</p>
+      ) : (
+        <div className="space-y-2">
+          {mine.map((n) => (
+            <div key={n.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>📢 {lang === "en" ? "Admin" : "एडमिन"}</span>
+                <span className="text-[10px] shrink-0" style={{ color: C.inkSoft }}>{formatTime(n.createdAt)}</span>
+              </div>
+              <div className="text-sm" style={{ color: C.ink }}>{n.message}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TRIAL_DAYS = 30;
 // Each driver/customer gets their own 30-day trial from their own signup
@@ -3607,7 +3639,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, switchLang, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, switchLang, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
   // so the header knows whether the "What do you need?" chooser is on
@@ -3729,6 +3761,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} lang={lang} onLogout={onLogout} />
         )}
         {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
+        {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={customerMobile} toRole="customer" lang={lang} />}
       </div>
     );
   }
@@ -3815,6 +3848,9 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               </button>
               <button onClick={() => { setSettingsView("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "Ride History" : "राइड हिस्ट्री"}
+              </button>
+              <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "customer" && (n.target === "all" || n.target === customerMobile)).length})
               </button>
               <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App" : "ऐप शेयर करें"}
@@ -5086,7 +5122,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, switchLang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms }) {
+function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, switchLang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
@@ -5131,6 +5167,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
         {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
         {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
+        {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} />}
       </div>
     );
   }
@@ -5198,6 +5235,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               </button>
               <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : "मेरी ट्रिप्स"}
+              </button>
+              <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "driver" && (n.target === "all" || n.target === driver.mobile)).length})
               </button>
               <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : "सेटिंग्स (KYC व गाड़ी)"}
@@ -6137,29 +6177,47 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   );
 }
 
-function AdminNotify({ drivers, adminNotifications, lang }) {
+function AdminNotify({ drivers, customers, adminNotifications, lang }) {
+  const [audience, setAudience] = useState("driver"); // 'driver' | 'customer'
   const [target, setTarget] = useState("all");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const allDriversLabel = lang === "en" ? "All Drivers" : "सभी ड्राइवर";
+  const audiencePeople = audience === "driver" ? (drivers || []) : (customers || []);
+  const allLabel = lang === "en"
+    ? (audience === "driver" ? "All Drivers" : "All Customers")
+    : (audience === "driver" ? "सभी ड्राइवर" : "सभी कस्टमर");
   const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   const send = async () => {
     if (!message.trim() || sending) return;
     setSending(true);
     setError("");
-    const result = await sendAdminNotification(target, message.trim());
+    const result = await sendAdminNotification(target, message.trim(), audience);
     setSending(false);
     if (result.ok) setMessage("");
     else setError(lang === "en" ? "Couldn't send — try again." : "भेज नहीं सका — फिर कोशिश करें।");
   };
+  const notifLabel = (n) => {
+    const label = n.toRole === "customer"
+      ? (lang === "en" ? "All Customers" : "सभी कस्टमर")
+      : (lang === "en" ? "All Drivers" : "सभी ड्राइवर");
+    return n.target === "all" ? label : (n.targetName || n.target);
+  };
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> {lang === "en" ? "Send Notification" : "सूचना भेजें"}</div>
+      <div className="flex gap-2 mb-3">
+        {["driver", "customer"].map((a) => (
+          <button key={a} onClick={() => { setAudience(a); setTarget("all"); }} className="flex-1 rounded-lg py-2 text-xs font-bold"
+            style={{ background: audience === a ? C.navy : C.paper, color: audience === a ? "#fff" : C.inkSoft, border: `1.5px solid ${audience === a ? C.navy : C.line}` }}>
+            {a === "driver" ? (lang === "en" ? "Drivers" : "ड्राइवर") : (lang === "en" ? "Customers" : "कस्टमर")}
+          </button>
+        ))}
+      </div>
       <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Send to" : "किसे भेजें"}</label>
       <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
-        <option value="all">{allDriversLabel}</option>
-        {drivers.map((d) => <option key={d.mobile} value={d.mobile}>{d.name}</option>)}
+        <option value="all">{allLabel}</option>
+        {audiencePeople.map((p) => <option key={p.mobile} value={p.mobile}>{p.name}</option>)}
       </select>
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
       {error && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
@@ -6172,7 +6230,12 @@ function AdminNotify({ drivers, adminNotifications, lang }) {
         {(adminNotifications || []).map((n) => (
           <div key={n.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold" style={{ color: C.ink }}>{n.target === "all" ? allDriversLabel : (n.targetName || n.target)}</span>
+              <span className="text-[11px] font-bold" style={{ color: C.ink }}>
+                <span className="px-1.5 py-0.5 rounded mr-1" style={{ background: n.toRole === "customer" ? C.success : C.navy, color: "#fff", fontSize: 9 }}>
+                  {n.toRole === "customer" ? (lang === "en" ? "Customer" : "कस्टमर") : (lang === "en" ? "Driver" : "ड्राइवर")}
+                </span>
+                {notifLabel(n)}
+              </span>
               <span className="text-[10px] shrink-0" style={{ color: C.inkSoft }}>{formatTime(n.createdAt)}</span>
             </div>
             <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>{n.message}</div>
@@ -6537,7 +6600,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
-      {tab === "notify" && <AdminNotify drivers={drivers} adminNotifications={adminNotifications} lang={lang} />}
+      {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
     </div>
@@ -6842,9 +6905,13 @@ export default function App() {
   const [callLogs, setCallLogs] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("callLogs", setCallLogs) : undefined), authDeps);
   // Admin "Send Notification" history (see functions/index.js:
-  // sendAdminNotification) — admin-only read, same pattern as callLogs.
+  // sendAdminNotification) — doubles as the announcements list drivers and
+  // customers read in their own "Admin Announcements" inbox (hamburger
+  // menu), not just admin's own Sent Notifications view, so (unlike
+  // callLogs/alerts) this subscribes for every signed-in role, same pattern
+  // as bookings/drivers above.
   const [adminNotifications, setAdminNotifications] = useState([]);
-  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("adminNotifications", setAdminNotifications) : undefined), authDeps);
+  useEffect(() => (firestoreReady ? subscribeCollection("adminNotifications", setAdminNotifications) : undefined), authDeps);
   // Business expenses — admin-only, same pattern as alerts.
   const [expenses, setExpenses] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("expenses", setExpenses) : undefined), authDeps);
@@ -7210,7 +7277,8 @@ export default function App() {
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout} switchLang={switchLang}
-            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)} />
+            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
+            adminNotifications={adminNotifications} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver"
@@ -7259,7 +7327,7 @@ export default function App() {
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onLogout={logout} switchLang={switchLang}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
-            onOpenTerms={() => setShowTerms(true)} />
+            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} />
         )}
         {role === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
