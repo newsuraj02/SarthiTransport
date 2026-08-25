@@ -5241,11 +5241,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                     <div className="text-xs font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
                   </div>
                 </button>
-                <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm text-left" style={{ background: "#CC9900" }}>
+                <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm text-left" style={{ background: C.navy }}>
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
-                    <Clock3 size={13} color="#CC9900" />
+                    <Clock3 size={13} color="#FFFFFF" />
                   </div>
-                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Advance Booking/s" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance Booking/s" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
                 </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
