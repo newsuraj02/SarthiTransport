@@ -636,6 +636,45 @@ function DashboardLangPill({ lang, switchLang }) {
   );
 }
 
+// Badge + callout shown on the hamburger button right after a quote gets
+// accepted (Customer: the moment they tap Accept; Driver: the moment one of
+// their bids gets accepted) — see AppRoot's showBookingHint state. The badge
+// dot alone would be easy to miss the first time, so a "View your Booking
+// here" callout points at it too; both clear after 30s or as soon as the
+// menu is actually opened, whichever comes first. Must sit inside a
+// `relative` wrapper around the hamburger button.
+function HamburgerHint({ show, lang }) {
+  if (!show) return null;
+  return (
+    <>
+      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>1</span>
+      <div className="absolute top-11 left-0 z-40 rounded-lg px-3 py-2 shadow-lg text-xs font-bold whitespace-nowrap" style={{ background: C.ink, color: "#FFFFFF" }}>
+        {lang === "en" ? "View your Booking here" : "अपनी बुकिंग यहां देखें"}
+        <div className="absolute -top-1 left-4 w-2 h-2 rotate-45" style={{ background: C.ink }} />
+      </div>
+    </>
+  );
+}
+
+// Standalone hamburger button + HamburgerHint, floated over whatever screen
+// is currently showing. Needed because the app's real hamburger button is
+// deliberately hidden the instant there's an active booking/trip (replaced
+// by the trip view itself) — exactly the moment this hint needs to appear,
+// so there's no real hamburger to attach the badge to. Callers pass
+// show={showBookingHint && <real hamburger isn't currently visible>} so
+// this and the real HamburgerHint never both show at once.
+function FloatingHamburgerHint({ show, onOpenMenu, lang }) {
+  if (!show) return null;
+  return (
+    <div className="fixed top-3 left-5 z-50">
+      <button onClick={onOpenMenu} className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
+        <Menu size={18} color="#fff" strokeWidth={2.5} />
+      </button>
+      <HamburgerHint show={show} lang={lang} />
+    </div>
+  );
+}
+
 function ForegroundToast({ toast }) {
   if (!toast) return null;
   return (
@@ -3562,6 +3601,15 @@ function CustomerTripSummary({ trip, lang, onDone }) {
 
 function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, switchLang, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Badge + "View your Booking here" callout on the hamburger button, shown
+  // for 30s right after a bid is accepted (see the onBidAccepted callbacks
+  // below) — see HamburgerHint.
+  const [showBookingHint, setShowBookingHint] = useState(false);
+  useEffect(() => {
+    if (!showBookingHint) return;
+    const t = setTimeout(() => setShowBookingHint(false), 30000);
+    return () => clearTimeout(t);
+  }, [showBookingHint]);
   // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
   // so the header knows whether the "What do you need?" chooser is on
   // screen right now — that's the only place the hamburger menu shows.
@@ -3700,13 +3748,17 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
 
   return (
     <>
+      <FloatingHamburgerHint show={showBookingHint && !showHamburger} onOpenMenu={() => { setMenuOpen(true); setShowBookingHint(false); }} lang={lang} />
       <div className="flex-1 overflow-y-auto relative">
         {headerHasContent && (
           <div className="flex items-center justify-between gap-2 px-5 pt-3">
             {showHamburger ? (
-              <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
-                <Menu size={18} color="#fff" strokeWidth={2.5} />
-              </button>
+              <div className="relative shrink-0">
+                <button onClick={() => { setMenuOpen(true); setShowBookingHint(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
+                  <Menu size={18} color="#fff" strokeWidth={2.5} />
+                </button>
+                <HamburgerHint show={showBookingHint} lang={lang} />
+              </div>
             ) : rideView === "advance" ? (
               <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
                 <ChevronLeft size={18} color="#000000" strokeWidth={3} />
@@ -3793,6 +3845,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
               onAddAnother={() => setAddingAnother(true)}
               onBidAccepted={(booking) => {
+                setShowBookingHint(true);
                 // An accepted bid on a future-dated load moves it straight out
                 // of the Current tab (see activeBooking/advanceBookings above) —
                 // jump straight to its Advance detail view instead of dropping
@@ -3811,7 +3864,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
               <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid}
                 driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
-                drivers={drivers} lang={lang} />
+                drivers={drivers} lang={lang} onBidAccepted={() => setShowBookingHint(true)} />
             ) : (
               <div className="px-5 py-5">
                 {advanceBookings.length === 0 ? (
@@ -5065,6 +5118,34 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
 
+  // Badge + "View your Booking here" callout, shown for 30s the moment one
+  // of this driver's bids gets accepted (see HamburgerHint/FloatingHamburgerHint).
+  // Unlike the Customer side, acceptance here is a real-time Firestore event
+  // triggered by someone else (the customer), not a local button tap — so it's
+  // detected by watching for a booking id that's newly assigned to this driver
+  // (myTrip or advanceBookings) that wasn't there on the previous check. The
+  // ref starts at null so the very first run (mount, or the driver already
+  // had an active trip when they opened the app) just records the baseline
+  // instead of firing a false hint.
+  const [showBookingHint, setShowBookingHint] = useState(false);
+  useEffect(() => {
+    if (!showBookingHint) return;
+    const t = setTimeout(() => setShowBookingHint(false), 30000);
+    return () => clearTimeout(t);
+  }, [showBookingHint]);
+  const assignedIdsKey = [myTrip?.id, ...advanceBookings.map((b) => b.id)].filter(Boolean).sort().join(",");
+  const prevAssignedIdsRef = useRef(null);
+  useEffect(() => {
+    const currentIds = new Set(assignedIdsKey ? assignedIdsKey.split(",") : []);
+    if (prevAssignedIdsRef.current === null) {
+      prevAssignedIdsRef.current = currentIds;
+      return;
+    }
+    const hasNew = [...currentIds].some((id) => !prevAssignedIdsRef.current.has(id));
+    if (hasNew) setShowBookingHint(true);
+    prevAssignedIdsRef.current = currentIds;
+  }, [assignedIdsKey]);
+
   const shareApp = () => {
     // The link carries this driver's own mobile number as their referral
     // code either way, but the ₹200 only ever pays out for a driver-to-driver
@@ -5094,19 +5175,25 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     );
   }
 
+  const realHamburgerVisible = tab === "home" && rideView === "current" && !myTrip;
+
   return (
     <>
+      <FloatingHamburgerHint show={showBookingHint && !realHamburgerVisible} onOpenMenu={() => { setMenuOpen(true); setShareNoteOpen(false); setShowBookingHint(false); }} lang={lang} />
       <div className="flex-1 overflow-y-auto relative">
         {/* This whole row (menu, language toggle, arrow, online/offline) is
             for the idle main dashboard only -- Wallet, My Trips, and the
             Advance Ride/s view (all reached via the hamburger menu, and all
             with their own Back control) don't need it, same as an active
             trip doesn't. */}
-        {tab === "home" && rideView === "current" && !myTrip && (
+        {realHamburgerVisible && (
           <div className="flex items-center justify-between gap-2 px-5 pt-3">
-            <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
-              <Menu size={18} color="#fff" strokeWidth={2.5} />
-            </button>
+            <div className="relative shrink-0">
+              <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); setShowBookingHint(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
+                <Menu size={18} color="#fff" strokeWidth={2.5} />
+              </button>
+              <HamburgerHint show={showBookingHint} lang={lang} />
+            </div>
             <div className="flex-1 min-w-0 flex justify-center">
               {tab === "home" ? (
                 <DashboardLangPill lang={lang} switchLang={switchLang} />
