@@ -4509,6 +4509,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         <>
           {visibleLoads.length === 0 ? (
             <div className="text-center py-10 px-4">
+              <p className="text-sm font-black mb-10" style={{ color: C.marigoldDeep }}>{lang === "en" ? "All India booking available" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
               <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.marigoldDeep }}>
                 <IndianRupee size={24} color="#FFFFFF" />
               </div>
