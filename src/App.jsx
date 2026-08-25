@@ -4508,9 +4508,9 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
         <>
           {visibleLoads.length === 0 ? (
-            <div className="text-center py-10 px-4">
-              <p className="text-sm font-black mb-10" style={{ color: C.marigoldDeep }}>{lang === "en" ? "All India booking available" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.marigoldDeep }}>
+            <div className="flex flex-col items-center text-center py-10 px-4">
+              <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: C.marigoldDeep }}>
                 <IndianRupee size={24} color="#FFFFFF" />
               </div>
               <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No new load right now" : "अभी कोई नया लोड नहीं है"}</p>
