@@ -3810,11 +3810,11 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                   </div>
                   <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Current Booking/s" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
                 </button>
-                <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm text-left" style={{ background: "#CC9900" }}>
+                <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm text-left" style={{ background: C.navy }}>
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
-                    <Clock3 size={13} color="#CC9900" />
+                    <Clock3 size={13} color="#FFFFFF" />
                   </div>
-                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Advance Booking/s" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance Booking/s" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
                 </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
@@ -3847,12 +3847,13 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
               onAddAnother={() => setAddingAnother(true)}
               onBidAccepted={(booking) => {
-                setShowBookingHint(true);
                 // An accepted bid on a future-dated load moves it straight out
                 // of the Current tab (see activeBooking/advanceBookings above) —
                 // jump straight to its Advance detail view instead of dropping
-                // back to the "What do you need?" chooser.
+                // back to the "What do you need?" chooser. The hamburger
+                // hint is Advance-only (see task), so it only fires here.
                 if (isFutureAdvance(booking.scheduledFor)) {
+                  setShowBookingHint(true);
                   setRideView("advance");
                   setSelectedAdvanceId(booking.id);
                 }
@@ -5121,17 +5122,18 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
 
   // Badge + "View your Booking here" callout, shown the moment one of this
-  // driver's bids gets accepted (see HamburgerHint/FloatingHamburgerHint)
-  // until the menu is actually opened. Unlike the Customer side, acceptance
-  // here is a real-time Firestore event triggered by someone else (the
-  // customer), not a local button tap — so it's detected by watching for a
-  // booking id that's newly assigned to this driver (myTrip or
-  // advanceBookings) that wasn't there on the previous check. The ref starts
-  // at null so the very first run (mount, or the driver already had an
-  // active trip when they opened the app) just records the baseline instead
-  // of firing a false hint.
+  // driver's ADVANCE bids gets accepted (see HamburgerHint/
+  // FloatingHamburgerHint) until the menu is actually opened — immediate
+  // (myTrip) acceptances deliberately don't trigger this. Unlike the
+  // Customer side, acceptance here is a real-time Firestore event triggered
+  // by someone else (the customer), not a local button tap — so it's
+  // detected by watching for an advanceBookings id that's newly assigned to
+  // this driver that wasn't there on the previous check. The ref starts at
+  // null so the very first run (mount, or the driver already had an
+  // advance booking when they opened the app) just records the baseline
+  // instead of firing a false hint.
   const [showBookingHint, setShowBookingHint] = useState(false);
-  const assignedIdsKey = [myTrip?.id, ...advanceBookings.map((b) => b.id)].filter(Boolean).sort().join(",");
+  const assignedIdsKey = advanceBookings.map((b) => b.id).sort().join(",");
   const prevAssignedIdsRef = useRef(null);
   useEffect(() => {
     const currentIds = new Set(assignedIdsKey ? assignedIdsKey.split(",") : []);
