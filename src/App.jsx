@@ -3808,13 +3808,13 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
                     <Truck size={13} color={C.marigold} />
                   </div>
-                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Current Bookings" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
+                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Current Booking/s" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
                 </button>
                 <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm text-left" style={{ background: "#CC9900" }}>
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
                     <Clock3 size={13} color="#CC9900" />
                   </div>
-                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Advance Bookings" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Advance Booking/s" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
                 </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
@@ -5229,7 +5229,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 <div className="text-sm font-bold text-white">{driver.name}</div>
                 {driver.mobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{driver.mobile}</div>}
               </div>
-              <div className="p-2" style={{ borderBottom: `1px solid ${C.line}` }}>
+              <div className="p-2 space-y-2" style={{ borderBottom: `1px solid ${C.line}` }}>
                 <button onClick={() => { setTab("wallet"); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm text-left" style={{ background: C.marigold }}>
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
                     <Wallet size={13} color={C.marigold} />
@@ -5239,12 +5239,15 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                     <div className="text-xs font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
                   </div>
                 </button>
+                <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm text-left" style={{ background: "#CC9900" }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
+                    <Clock3 size={13} color="#CC9900" />
+                  </div>
+                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Advance Booking/s" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
-              </button>
-              <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Clock3 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Advance Bookings" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})
               </button>
               <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : "मेरी ट्रिप्स"}
