@@ -3915,6 +3915,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
               <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
               <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
               <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{materialLabel(load.material, lang)}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Fixed fare, no negotiation" : "तय भाड़ा, कोई मोलभाव नहीं"}</span>
             </div>
             <div className="rounded-lg overflow-hidden" style={{ border: `2px solid ${C.marigoldDeep}` }}>
               <GuidedStep {...stepProps(0)} lang={lang}>
@@ -3927,14 +3928,14 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
               <div className="grid grid-cols-2" style={{ background: C.paper }}>
                 <GuidedStep {...stepProps(1)} lang={lang}>
                   <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ borderRight: `1px solid ${C.marigoldDeep}`, background: C.paper }}>
-                    <div className="text-xs font-black mb-1" style={{ color: C.navy }}>{lang === "en" ? "Loading/Unloading hrs *" : "लोडिंग/अनलोडिंग घंटे *"}</div>
+                    <div className="text-xs font-black mb-1 break-words" style={{ color: C.navy }}>{lang === "en" ? "Loading/Unloading hrs *" : "लोडिंग/अनलोडिंग घंटे *"}</div>
                     <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
                       className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 18, fontWeight: 900 }} />
                   </div>
                 </GuidedStep>
                 <GuidedStep {...stepProps(2)} lang={lang}>
                   <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ background: C.paper }}>
-                    <div className="text-xs font-black mb-1" style={{ color: C.navy }}>{lang === "en" ? "Waiting charges ₹/hr *" : "वेटिंग चार्ज ₹/घं *"}</div>
+                    <div className="text-xs font-black mb-1 break-words" style={{ color: C.navy }}>{lang === "en" ? "Waiting charges ₹/hr *" : "वेटिंग चार्ज ₹/घं *"}</div>
                     <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
                       className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 16, fontWeight: 900 }} />
                   </div>
