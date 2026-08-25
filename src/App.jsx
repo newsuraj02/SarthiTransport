@@ -2910,6 +2910,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   if (!bookingMode) {
     return (
       <div className="px-5 py-8 flex flex-col justify-center" style={{ minHeight: 420 }}>
+        <p className="text-base font-black text-center mb-1" style={{ color: C.marigoldDeep }}>All India main chhoti se leke badi gaadi tk book kre</p>
         <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : "आपको क्या चाहिए?"}</p>
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setBookingMode("now")} className="rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.marigold, minHeight: 160 }}>
@@ -3723,7 +3724,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                 </span>
               </div>
             ) : showHamburger ? (
-              <div className="flex-1 min-w-0 flex justify-center">
+              <div className="flex-1 min-w-0 flex justify-end">
                 <DashboardLangPill lang={lang} switchLang={switchLang} />
               </div>
             ) : biddingHeader ? (
