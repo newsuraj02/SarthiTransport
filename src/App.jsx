@@ -4508,7 +4508,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
         <>
           {visibleLoads.length === 0 ? (
-            <div className="flex flex-col items-center text-center py-10 px-4">
+            <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
               <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
               <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: C.marigoldDeep }}>
                 <IndianRupee size={24} color="#FFFFFF" />
