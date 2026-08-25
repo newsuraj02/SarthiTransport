@@ -623,13 +623,13 @@ function NotificationBanner({ permission, onEnable, lang }) {
 // picked here).
 function DashboardLangPill({ lang, switchLang }) {
   return (
-    <div className="flex items-center gap-1 rounded-full px-1.5 py-1.5" style={{ background: "#000000", border: `1.5px solid ${C.marigold}` }}>
-      <button onClick={() => switchLang("hi")} className="rounded-full text-base font-black"
-        style={{ padding: "6px 16px", color: lang === "hi" ? "#000000" : "#FFFFFF", background: lang === "hi" ? C.marigold : "transparent" }}>
+    <div className="flex items-center gap-1 rounded-full px-1 py-1" style={{ background: "#000000", border: `1.5px solid ${C.marigold}` }}>
+      <button onClick={() => switchLang("hi")} className="rounded-full text-sm font-black"
+        style={{ padding: "4px 12px", color: lang === "hi" ? "#000000" : "#FFFFFF", background: lang === "hi" ? C.marigold : "transparent" }}>
         हिं
       </button>
-      <button onClick={() => switchLang("en")} className="rounded-full text-base font-black"
-        style={{ padding: "6px 16px", color: lang === "en" ? "#000000" : "#FFFFFF", background: lang === "en" ? C.marigold : "transparent" }}>
+      <button onClick={() => switchLang("en")} className="rounded-full text-sm font-black"
+        style={{ padding: "4px 12px", color: lang === "en" ? "#000000" : "#FFFFFF", background: lang === "en" ? C.marigold : "transparent" }}>
         ENG
       </button>
     </div>
@@ -3724,8 +3724,14 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                 </span>
               </div>
             ) : showHamburger ? (
-              <div className="flex-1 min-w-0 flex justify-end">
+              <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
                 <DashboardLangPill lang={lang} switchLang={switchLang} />
+                {activeBooking && (
+                  <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
+                    className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                    <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
+                  </button>
+                )}
               </div>
             ) : biddingHeader ? (
               <div className="flex-1 min-w-0">
@@ -3734,14 +3740,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             ) : (
               <div className="flex-1 min-w-0" />
             )}
-            {showHamburger && activeBooking ? (
-              <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
-                className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-                <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
-              </button>
-            ) : (
-              <div className="w-9 h-9 shrink-0" />
-            )}
+            {showHamburger ? null : <div className="w-9 h-9 shrink-0" />}
           </div>
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
