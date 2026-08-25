@@ -2940,7 +2940,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 p-2 rounded-full shadow-sm shrink-0" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
-        <p className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "* All fields below are mandatory" : "* नीचे दिए गए सभी विवरण भरना अनिवार्य है"}</p>
+        <p className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "* All fields below are mandatory" : "* नीचे दिए गए सभी विवरण भरना अनिवार्य है"}</p>
       </div>
       <div className="space-y-3">
         {bookingMode === "advance" && (
