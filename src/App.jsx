@@ -648,7 +648,7 @@ function HamburgerHint({ show, lang }) {
     <>
       <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>1</span>
       <div className="absolute top-11 left-0 z-40 rounded-lg px-3 py-2 shadow-lg text-xs font-bold whitespace-nowrap" style={{ background: C.ink, color: "#FFFFFF" }}>
-        {lang === "en" ? "View your Booking here" : "अपनी बुकिंग यहां देखें"}
+        {lang === "en" ? "View your Advance Booking here" : "अपनी एडवांस बुकिंग यहां देखें"}
         <div className="absolute -top-1 left-4 w-2 h-2 rotate-45" style={{ background: C.ink }} />
       </div>
     </>
