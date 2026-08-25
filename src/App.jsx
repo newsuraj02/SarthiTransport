@@ -640,9 +640,8 @@ function DashboardLangPill({ lang, switchLang }) {
 // accepted (Customer: the moment they tap Accept; Driver: the moment one of
 // their bids gets accepted) — see AppRoot's showBookingHint state. The badge
 // dot alone would be easy to miss the first time, so a "View your Booking
-// here" callout points at it too; both clear after 30s or as soon as the
-// menu is actually opened, whichever comes first. Must sit inside a
-// `relative` wrapper around the hamburger button.
+// here" callout points at it too; both stay up until the menu is actually
+// opened. Must sit inside a `relative` wrapper around the hamburger button.
 function HamburgerHint({ show, lang }) {
   if (!show) return null;
   return (
@@ -3602,14 +3601,9 @@ function CustomerTripSummary({ trip, lang, onDone }) {
 function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, switchLang, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
-  // for 30s right after a bid is accepted (see the onBidAccepted callbacks
-  // below) — see HamburgerHint.
+  // right after a bid is accepted (see the onBidAccepted callbacks below)
+  // until the menu is actually opened — see HamburgerHint.
   const [showBookingHint, setShowBookingHint] = useState(false);
-  useEffect(() => {
-    if (!showBookingHint) return;
-    const t = setTimeout(() => setShowBookingHint(false), 30000);
-    return () => clearTimeout(t);
-  }, [showBookingHint]);
   // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
   // so the header knows whether the "What do you need?" chooser is on
   // screen right now — that's the only place the hamburger menu shows.
@@ -5118,21 +5112,17 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
 
-  // Badge + "View your Booking here" callout, shown for 30s the moment one
-  // of this driver's bids gets accepted (see HamburgerHint/FloatingHamburgerHint).
-  // Unlike the Customer side, acceptance here is a real-time Firestore event
-  // triggered by someone else (the customer), not a local button tap — so it's
-  // detected by watching for a booking id that's newly assigned to this driver
-  // (myTrip or advanceBookings) that wasn't there on the previous check. The
-  // ref starts at null so the very first run (mount, or the driver already
-  // had an active trip when they opened the app) just records the baseline
-  // instead of firing a false hint.
+  // Badge + "View your Booking here" callout, shown the moment one of this
+  // driver's bids gets accepted (see HamburgerHint/FloatingHamburgerHint)
+  // until the menu is actually opened. Unlike the Customer side, acceptance
+  // here is a real-time Firestore event triggered by someone else (the
+  // customer), not a local button tap — so it's detected by watching for a
+  // booking id that's newly assigned to this driver (myTrip or
+  // advanceBookings) that wasn't there on the previous check. The ref starts
+  // at null so the very first run (mount, or the driver already had an
+  // active trip when they opened the app) just records the baseline instead
+  // of firing a false hint.
   const [showBookingHint, setShowBookingHint] = useState(false);
-  useEffect(() => {
-    if (!showBookingHint) return;
-    const t = setTimeout(() => setShowBookingHint(false), 30000);
-    return () => clearTimeout(t);
-  }, [showBookingHint]);
   const assignedIdsKey = [myTrip?.id, ...advanceBookings.map((b) => b.id)].filter(Boolean).sort().join(",");
   const prevAssignedIdsRef = useRef(null);
   useEffect(() => {
