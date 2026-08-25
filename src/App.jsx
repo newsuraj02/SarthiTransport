@@ -2910,7 +2910,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   if (!bookingMode) {
     return (
       <div className="px-5 py-8 flex flex-col justify-center" style={{ minHeight: 420 }}>
-        <p className="text-base font-black text-right mb-8" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Book anything from a mini truck to a full-size truck — all across India." : "पूरे भारत में छोटी से लेकर बड़ी गाड़ी तक बुक करें।"}</p>
+        <p className="text-base font-black text-center mb-8" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Book anything from a mini truck to a full-size truck — all across India." : "पूरे भारत में छोटी से लेकर बड़ी गाड़ी तक बुक करें।"}</p>
         <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : "आपको क्या चाहिए?"}</p>
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setBookingMode("now")} className="rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.marigold, minHeight: 160 }}>
