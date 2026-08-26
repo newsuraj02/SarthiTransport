@@ -2983,7 +2983,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       <div className="space-y-3">
         {bookingMode === "advance" && (
           <GuidedStep {...stepProps(0)} lang={lang}>
-            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</label>
+            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</label>
             <div className="grid grid-cols-3 gap-2 mb-2">
               {[1, 2, 3].map((n) => {
                 const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
