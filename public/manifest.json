@@ -7,7 +7,7 @@
   "id": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
-  "orientation": "portrait",
+  "orientation": "unspecified",
   "background_color": "#FFFFFF",
   "theme_color": "#0B3D91",
   "lang": "hi",
