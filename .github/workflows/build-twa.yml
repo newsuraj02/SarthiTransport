@@ -85,6 +85,18 @@ jobs:
           sed -i 's/minifyEnabled true/minifyEnabled true\n            shrinkResources true/' twa/project/app/build.gradle
           grep -q 'shrinkResources true' twa/project/app/build.gradle || { echo "::error::Failed to patch in shrinkResources — Bubblewrap's build.gradle template must have changed."; exit 1; }
 
+      - name: Bump androidbrowserhelper to 2.7.3 (Bubblewrap 1.25.0 still defaults to the older 2.6.2)
+        # LauncherActivity -- the class that decides whether to launch as a
+        # real Trusted Web Activity or fall back to a plain Custom Tab (URL
+        # bar/share/menu visible) -- had real changes land in 2.7.0/2.7.1
+        # (edge-to-edge support, "resolve deprecations" in launcher-activity
+        # specifically). Worth testing against a real reported TWA-always-
+        # falls-back-to-browser-chrome symptom even without a matching bug
+        # report, since it's the newest verified stable release.
+        run: |
+          sed -i "s/androidbrowserhelper:androidbrowserhelper:2\.6\.2/androidbrowserhelper:androidbrowserhelper:2.7.3/" twa/project/app/build.gradle
+          grep -q 'androidbrowserhelper:androidbrowserhelper:2.7.3' twa/project/app/build.gradle || { echo "::error::Failed to patch androidbrowserhelper version — Bubblewrap's default dependency version must have changed."; exit 1; }
+
       - name: Build + sign .aab and .apk
         working-directory: twa/project
         env:
