@@ -38,6 +38,11 @@ async function main() {
   twaManifest.appVersionName = appVersionName;
   twaManifest.signingKey.path = path.resolve(keystorePath);
   twaManifest.signingKey.alias = keystoreAlias;
+  // Bubblewrap defaults to minSdkVersion 21, but the CI workflow patches in
+  // a newer androidbrowserhelper (see build-twa.yml) that requires 23+ --
+  // Android 5.0/5.1 (API 21-22) devices are a negligible sliver of active
+  // devices at this point, so raising the floor here is the right trade.
+  twaManifest.minSdkVersion = 23;
 
   const manifestFile = path.join(targetDirectory, "twa-manifest.json");
   await twaManifest.saveToFile(manifestFile);
