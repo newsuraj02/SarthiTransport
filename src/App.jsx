@@ -2625,7 +2625,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
 
   return (
     <div>
-      <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{label}</label>
+      <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{label}</label>
       <div className="relative w-full">
         <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
           onChange={(e) => { onChange(e); setDropdownOpen(true); }}
@@ -2983,7 +2983,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       <div className="space-y-3">
         {bookingMode === "advance" && (
           <GuidedStep {...stepProps(0)} lang={lang}>
-            <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</label>
+            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>📅 {lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</label>
             <div className="grid grid-cols-3 gap-2 mb-2">
               {[1, 2, 3].map((n) => {
                 const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
@@ -3069,7 +3069,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
         <div className="grid grid-cols-2 gap-3 items-start">
           <GuidedStep {...stepProps(stepOffset + 2)} lang={lang}>
-            <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
+            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
             {addingMaterial ? (
               <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <input className={inputCls} style={{ ...inputStyle, marginBottom: 6 }} placeholder={lang === "en" ? "e.g. Tiles" : "जैसे: टाइल्स"} value={newMaterial} onChange={(e) => setNewMaterial(e.target.value)} autoFocus />
@@ -3093,7 +3093,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             )}
           </GuidedStep>
           <GuidedStep {...stepProps(stepOffset + 3)} lang={lang}>
-            <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
+            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
             <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
           </GuidedStep>
         </div>
