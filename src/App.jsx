@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
-  FileText, X, Upload, ArrowRight,
+  FileText, X, Upload, ArrowRight, IdCard, UserCheck,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -1314,45 +1314,62 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
       {lang === "en" ? `Not you? Logout of ${label}` : `आप नहीं हैं? ${label} से लॉगआउट करें`}
     </button>
   );
+  const bothShown = showCustomer && showDriver;
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10">
+    <div className="flex-1 overflow-y-auto flex flex-col items-center px-5 py-8">
       <div className="mb-4">
         <Logo size={128} />
       </div>
-      <p className="text-xs text-center mb-8" style={{ color: C.inkSoft }}>
-        {anyVerified
-          ? (lang === "en" ? "Continue where you left off, or logout to switch" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें")
-          : (lang === "en" ? "Choose which app you want to open" : "आप कौन सा ऐप खोलना चाहते हैं?")}
-      </p>
 
-      <div className="w-full space-y-3">
-        {showCustomer && (
-          <div>
-            <button onClick={() => onSelect("customer")} className="w-full rounded-xl p-5 flex items-center gap-3 text-left" style={{ background: C.marigold }}>
-              <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: C.navy }}>
-                <Package size={20} color="#fff" />
+      {anyVerified ? (
+        <p className="text-sm text-center mb-6" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Continue where you left off, or logout to switch" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें"}
+        </p>
+      ) : (
+        <div className="w-full rounded-2xl p-4 mb-5 text-center" style={{ background: "#FFF3C4", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <p className="text-base font-bold leading-relaxed" style={{ color: C.ink }}>
+            {lang === "en"
+              ? <>Are you a driver? If you want fare/loads, choose the <span className="font-black" style={{ color: C.navy }}>Driver App</span>.</>
+              : <>आप कौन हैं? ड्राइवर हैं? आप को भाड़ा चाहिए तो आप <span className="font-black" style={{ color: C.navy }}>ड्राइवर ऐप</span> चुनें।</>}
+          </p>
+          <p className="text-base font-bold leading-relaxed mt-2" style={{ color: C.ink }}>
+            {lang === "en"
+              ? <>Are you a customer? If you want to book a vehicle, choose the <span className="font-black" style={{ color: C.success }}>Customer App</span>.</>
+              : <>अगर आप कस्टमर हैं? आप को गाड़ी बुक करना है तो आप <span className="font-black" style={{ color: C.success }}>कस्टमर ऐप</span> चुनें।</>}
+          </p>
+        </div>
+      )}
+
+      <div className={bothShown ? "w-full grid grid-cols-2 gap-3" : "w-full flex flex-col items-center"}>
+        {showDriver && (
+          <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col"}>
+            <div className="flex-1 rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#EAF1FF" }}>
+                <IdCard size={30} color={C.navy} />
               </div>
-              <div>
-                <div className="text-sm font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Customer" : "कस्टमर"}</div>
-                <div className="text-[11px]" style={{ color: "#000000" }}>{lang === "en" ? "Post a load & book a truck" : "लोड पोस्ट करें और ट्रक बुक करें"}</div>
-              </div>
-            </button>
-            {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : "कस्टमर")}
+              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver App" : "ड्राइवर ऐप"}</div>
+              <div className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "To find fare & loads" : "भाड़ा और लोड खोजने के लिए"}</div>
+              <button onClick={() => onSelect("driver")} className="w-full rounded-xl py-3 text-sm font-black text-white mt-auto" style={{ background: C.navy }}>
+                {lang === "en" ? "Choose Driver" : "ड्राइवर चुनें"}
+              </button>
+            </div>
+            {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : "ड्राइवर")}
           </div>
         )}
 
-        {showDriver && (
-          <div>
-            <button onClick={() => onSelect("driver")} className="w-full rounded-xl p-5 flex items-center gap-3 text-left" style={{ background: C.navy }}>
-              <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: C.marigold }}>
-                <Truck size={20} color="#000000" />
+        {showCustomer && (
+          <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col mt-3"}>
+            <div className="flex-1 rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.success}` }}>
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#E6F7EE" }}>
+                <UserCheck size={30} color={C.success} />
               </div>
-              <div>
-                <div className="text-sm font-bold text-white">{lang === "en" ? "Driver" : "ड्राइवर"}</div>
-                <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Bid on loads & earn" : "लोड पर बोली लगाएं और कमाएं"}</div>
-              </div>
-            </button>
-            {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : "ड्राइवर")}
+              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : "कस्टमर ऐप"}</div>
+              <div className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "To book a vehicle" : "गाड़ी बुक करने के लिए"}</div>
+              <button onClick={() => onSelect("customer")} className="w-full rounded-xl py-3 text-sm font-black text-white mt-auto" style={{ background: C.success }}>
+                {lang === "en" ? "Choose Customer" : "कस्टमर चुनें"}
+              </button>
+            </div>
+            {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : "कस्टमर")}
           </div>
         )}
       </div>
