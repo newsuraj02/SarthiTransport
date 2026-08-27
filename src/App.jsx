@@ -1591,7 +1591,14 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     }
     const ref = new URLSearchParams(window.location.search).get("ref");
     const referredBy = ref && ref !== ownMobile ? ref : null;
-    onComplete({ name, email: email.trim() || null, photo: finalPhoto, address, area, city, state, pincode, referredBy, referralCredited: false });
+    // Pass the mobile we actually verified, not left for the caller to read
+    // off its own state — onOtpVerified's setCustomerAuth update above hasn't
+    // necessarily been re-rendered yet by the time this callback runs (no
+    // photo means submitProfile has nothing to await in between), so the
+    // caller's own "current" mobile can still be the pre-verification value.
+    // That mismatch used to make the profile save under the wrong Firestore
+    // doc ID, so the next refresh found no profile and re-asked for sign-up.
+    onComplete({ name, email: email.trim() || null, photo: finalPhoto, address, area, city, state, pincode, referredBy, referralCredited: false, mobile: ownMobile });
     // Submitted for real — clear the draft so it can't leak into a future
     // registration attempt on this same device (e.g. a different customer).
     setName(""); setEmail(""); setPhoto(null); setPhotoFile(null); setAddress(""); setArea(""); setCity(""); setState(""); setPincode("");
@@ -7286,10 +7293,14 @@ export default function App() {
             onOtpVerified={(mobile) => setCustomerAuth({ verified: true, mobile })}
             onLogout={() => (customerAuth.verified ? logoutRole("customer") : goHome())}
             onComplete={(addr) => {
-              setCustomer({ mobile: customerAuth.mobile, ...addr });
+              // addr.mobile is the number CustomerOnboarding just verified —
+              // trust it over customerAuth.mobile, which can still be stale
+              // here (see the comment in submitProfile).
+              const signedUpMobile = addr.mobile || customerAuth.mobile;
+              setCustomer({ ...addr, mobile: signedUpMobile });
               // First-ever creation of this customer's doc — stamp their real
               // signup date so their own 30-day trial can be calculated from it.
-              if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...addr, mobile: customerAuth.mobile, createdAt: serverTimestamp() }).catch((e) => console.error(e));
+              if (firestoreReady && signedUpMobile) replaceDoc("customers", signedUpMobile, { ...addr, mobile: signedUpMobile, createdAt: serverTimestamp() }).catch((e) => console.error(e));
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
