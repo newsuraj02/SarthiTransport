@@ -1317,10 +1317,6 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
   const bothShown = showCustomer && showDriver;
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center px-5 py-8">
-      <div className="mb-4">
-        <Logo size={128} />
-      </div>
-
       {anyVerified ? (
         <p className="text-sm text-center mb-6" style={{ color: C.inkSoft }}>
           {lang === "en" ? "Continue where you left off, or logout to switch" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें"}
