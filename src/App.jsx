@@ -3024,7 +3024,10 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         )}
         {bookingMode === "advance" && (
           <GuidedStep {...stepProps(0)} lang={lang}>
-            <div className="rounded-2xl p-3" style={{ background: C.marigold }}>
+            {/* Yellow only while this step is the one being filled — once the
+                customer moves on, it settles back to a plain white card
+                instead of staying highlighted forever. */}
+            <div className="rounded-2xl p-3" style={{ background: stepProps(0).active ? C.marigold : C.paper }}>
               <label className="text-base font-extrabold mb-2 block text-center" style={{ color: C.ink }}>{lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</label>
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {[1, 2, 3].map((n) => {
@@ -3034,7 +3037,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
                   return (
                     <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
                       className="rounded-xl py-4 text-base font-bold text-center"
-                      style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.ink }}>
+                      style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.ink, border: active ? "none" : `1.5px solid ${C.line}` }}>
                       {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : `${n} दिन बाद`}
                     </button>
                   );
