@@ -1351,10 +1351,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
                 <IdCard size={30} color={C.navy} />
               </div>
               <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver App" : "ड्राइवर ऐप"}</div>
-              <div className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "To find fare & loads" : "भाड़ा और लोड खोजने के लिए"}</div>
-              <div className="w-full rounded-xl py-3 text-sm font-black text-white mt-auto" style={{ background: C.navy }}>
-                {lang === "en" ? "Choose Driver" : "ड्राइवर चुनें"}
-              </div>
+              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To find fare & loads" : "भाड़ा और लोड खोजने के लिए"}</div>
             </button>
             {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : "ड्राइवर")}
           </div>
@@ -1367,10 +1364,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
                 <UserCheck size={30} color={C.success} />
               </div>
               <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : "कस्टमर ऐप"}</div>
-              <div className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "To book a vehicle" : "गाड़ी बुक करने के लिए"}</div>
-              <div className="w-full rounded-xl py-3 text-sm font-black text-white mt-auto" style={{ background: C.success }}>
-                {lang === "en" ? "Choose Customer" : "कस्टमर चुनें"}
-              </div>
+              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To book a vehicle" : "गाड़ी बुक करने के लिए"}</div>
             </button>
             {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : "कस्टमर")}
           </div>
