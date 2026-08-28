@@ -2798,13 +2798,27 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
   const clearAdvanceTimer = () => {
     if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
   };
+  // The timer callback below must NOT read stepCompleted directly out of
+  // this closure: the keystroke that flips a field from invalid to valid
+  // fires its onChange (updating that field's state) and bubbles to
+  // onFieldInput (arming this timer) as part of one and the same native
+  // event, before React has re-rendered — so armAdvanceTimer would always
+  // capture the PRE-keystroke stepCompleted, permanently false for exactly
+  // the keystroke that mattered. A single-digit entry (hits valid on its
+  // only keystroke) never released; a multi-digit one only worked because
+  // it was already valid a keystroke earlier. This ref is reassigned fresh
+  // on every render (not inside an effect), so by the time the timer
+  // actually fires — long after React has caught up — reading it here
+  // reflects the true current validity instead of that stale snapshot.
+  const stepCompletedRef = useRef(stepCompleted);
+  stepCompletedRef.current = stepCompleted;
   const armAdvanceTimer = (step) => {
     if (!autoAdvanceMs) return;
     clearAdvanceTimer();
     advanceTimerRef.current = setTimeout(() => {
       // Only release if that step is still the focused one AND it's
       // actually valid right now — otherwise leave the pin exactly as is.
-      setFocusedStep((f) => (f === step && stepCompleted[step] ? null : f));
+      setFocusedStep((f) => (f === step && stepCompletedRef.current[step] ? null : f));
     }, autoAdvanceMs);
   };
   useEffect(() => clearAdvanceTimer, []);
