@@ -1565,7 +1565,11 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     !!state.trim(),
     pincode.length === 6,
   ];
-  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted);
+  // pinFocus: true — don't jump the guided highlight/scroll to the next
+  // field the instant this one's validation passes; stay put until the
+  // customer/driver actually taps away, so they can keep typing (e.g. a
+  // name past the 3-char minimum) without the form yanking ahead of them.
+  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true });
 
   const getRecaptcha = () => {
     if (!recaptchaRef.current) {
@@ -1995,7 +1999,11 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     !!state.trim(),
     pincode.length === 6,
   ];
-  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted);
+  // pinFocus: true — don't jump the guided highlight/scroll to the next
+  // field the instant this one's validation passes; stay put until the
+  // customer/driver actually taps away, so they can keep typing (e.g. a
+  // name past the 3-char minimum) without the form yanking ahead of them.
+  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true });
 
   const getRecaptcha = () => {
     if (!recaptchaRef.current) {
@@ -4855,7 +4863,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
   // dimensions are optional (not part of canSubmit), so they're skipped.
   const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoFront, !!vehiclePhotoSide];
-  const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted);
+  const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true });
   // First-time submission within this driver's own 30-day trial (from
   // their own signup date) skips the admin approval wait entirely — a
   // driver who's already been reviewed before (kyc isn't null, e.g.
