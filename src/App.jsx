@@ -1569,7 +1569,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   // field the instant this one's validation passes; stay put until the
   // customer/driver actually taps away, so they can keep typing (e.g. a
   // name past the 3-char minimum) without the form yanking ahead of them.
-  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true });
+  // autoAdvanceMs releases it on its own after 5 quiet seconds so they
+  // don't have to tap elsewhere on screen just to move on.
+  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
 
   const getRecaptcha = () => {
     if (!recaptchaRef.current) {
@@ -2003,7 +2005,9 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   // field the instant this one's validation passes; stay put until the
   // customer/driver actually taps away, so they can keep typing (e.g. a
   // name past the 3-char minimum) without the form yanking ahead of them.
-  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true });
+  // autoAdvanceMs releases it on its own after 5 quiet seconds so they
+  // don't have to tap elsewhere on screen just to move on.
+  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
 
   const getRecaptcha = () => {
     if (!recaptchaRef.current) {
@@ -2738,7 +2742,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
 // already-filled field at any time — editing one back to incomplete just
 // re-activates it (via activeStep's findIndex in the parent) and re-locks
 // whatever comes after until it's filled again.
-function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, onBlurStep }) {
+function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, onBlurStep, onFieldInput }) {
   const locked = !active && !completed;
   // Border and padding are reserved at all times (transparent/see-through
   // when inactive) instead of only appearing once a step goes active --
@@ -2748,7 +2752,7 @@ function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, o
   return (
     <div ref={stepRef} className={`relative rounded-2xl h-full ${active ? "guided-step-active" : ""}`}
       style={{ border: `2px solid ${active ? C.marigoldDeep : "transparent"}`, background: active ? C.marigold : "transparent", padding: 10 }}
-      onFocus={onFocusStep} onBlur={onBlurStep}>
+      onFocus={onFocusStep} onBlur={onBlurStep} onInput={onFieldInput} onChange={onFieldInput}>
       <div inert={locked ? "" : undefined} className="h-full" style={locked ? { pointerEvents: "none", userSelect: "none", opacity: 0.45 } : undefined}>
         {children}
       </div>
@@ -2774,7 +2778,15 @@ function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, o
 // guided form doesn't have that mid-keystroke false-positive (their fields
 // don't flip "complete" on a truthy partial number), so they keep the
 // plain auto-shift-on-completion behavior.
-function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true } = {}) {
+//
+// autoAdvanceMs (only meaningful together with pinFocus) releases the pin
+// on its own after that many quiet milliseconds — no further typing/input
+// on the focused field — instead of making the customer/driver tap
+// somewhere else to move on. It only ever fires while the field is
+// genuinely valid at that moment; a pause on a still-incomplete field is a
+// no-op (they're just thinking), and every keystroke pushes the deadline
+// back out, so it can never cut off someone still actively typing.
+function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, autoAdvanceMs = null } = {}) {
   const [focusedStep, setFocusedStep] = useState(null);
   const rawActive = stepCompleted.findIndex((done) => !done); // -1 once all done
   const activeStep = pinFocus && focusedStep != null && stepCompleted[focusedStep] && (rawActive === -1 || rawActive > focusedStep)
@@ -2782,6 +2794,20 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true } =
     : rawActive;
   const stepRefsHolder = useRef([]);
   stepRefsHolder.current = stepCompleted.map((_, i) => stepRefsHolder.current[i] || { current: null });
+  const advanceTimerRef = useRef(null);
+  const clearAdvanceTimer = () => {
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
+  };
+  const armAdvanceTimer = (step) => {
+    if (!autoAdvanceMs) return;
+    clearAdvanceTimer();
+    advanceTimerRef.current = setTimeout(() => {
+      // Only release if that step is still the focused one AND it's
+      // actually valid right now — otherwise leave the pin exactly as is.
+      setFocusedStep((f) => (f === step && stepCompleted[step] ? null : f));
+    }, autoAdvanceMs);
+  };
+  useEffect(() => clearAdvanceTimer, []);
   // Skip the very first run — a form/card that just mounted (e.g. a new
   // load alert appearing the moment a driver goes online) shouldn't yank
   // the page straight to its first field before the driver has even seen
@@ -2801,8 +2827,9 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true } =
     active: activeStep === i,
     completed: stepCompleted[i],
     stepRef: stepRefsHolder.current[i],
-    onFocusStep: pinFocus ? () => setFocusedStep(i) : undefined,
-    onBlurStep: pinFocus ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocusedStep((f) => (f === i ? null : f)); } : undefined,
+    onFocusStep: pinFocus ? () => { setFocusedStep(i); armAdvanceTimer(i); } : undefined,
+    onBlurStep: pinFocus ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) { setFocusedStep((f) => (f === i ? null : f)); clearAdvanceTimer(); } } : undefined,
+    onFieldInput: pinFocus && autoAdvanceMs ? () => armAdvanceTimer(i) : undefined,
   });
   return { activeStep, stepProps };
 }
@@ -4863,7 +4890,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
   // dimensions are optional (not part of canSubmit), so they're skipped.
   const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoFront, !!vehiclePhotoSide];
-  const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true });
+  const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
   // First-time submission within this driver's own 30-day trial (from
   // their own signup date) skips the admin approval wait entirely — a
   // driver who's already been reviewed before (kyc isn't null, e.g.
