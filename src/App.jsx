@@ -3045,9 +3045,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
-                <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-xl px-4 py-4 flex items-center justify-between gap-1.5" style={inputStyle}>
+                <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-xl px-4 py-4 flex items-center justify-center" style={inputStyle}>
                   <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : "समय चुनें")}</span>
-                  <span className="text-xs font-bold px-3 py-1.5 rounded-full shrink-0" style={{ background: C.marigoldDeep, color: "#fff" }}>{lang === "en" ? "Change" : "बदलें"}</span>
                 </button>
               </div>
             </div>
