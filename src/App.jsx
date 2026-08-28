@@ -153,21 +153,24 @@ const materialLabel = (m, lang, customMap = {}) => {
 // tap a period, then a slot, done. Slot values stay 24-hour "HH:MM" so
 // advanceTime/scheduledFor storage format is unchanged.
 const TIME_PERIODS = [
-  { key: "morning", icon: "🌅", labelHi: "सुबह", labelEn: "Morning", slots: ["06:00", "07:00", "08:00", "09:00"] },
-  { key: "afternoon", icon: "☀️", labelHi: "दोपहर", labelEn: "Afternoon", slots: ["12:00", "13:00", "14:00", "15:00"] },
-  { key: "evening", icon: "🌆", labelHi: "शाम", labelEn: "Evening", slots: ["16:00", "17:00", "18:00", "19:00"] },
-  { key: "night", icon: "🌙", labelHi: "रात", labelEn: "Night", slots: ["20:00", "21:00", "22:00", "23:00"] },
+  { key: "morning", icon: "🌅", labelHi: "सुबह", labelEn: "Morning", labelMr: "सकाळ", slots: ["06:00", "07:00", "08:00", "09:00"] },
+  { key: "afternoon", icon: "☀️", labelHi: "दोपहर", labelEn: "Afternoon", labelMr: "दुपार", slots: ["12:00", "13:00", "14:00", "15:00"] },
+  { key: "evening", icon: "🌆", labelHi: "शाम", labelEn: "Evening", labelMr: "संध्याकाळ", slots: ["16:00", "17:00", "18:00", "19:00"] },
+  { key: "night", icon: "🌙", labelHi: "रात", labelEn: "Night", labelMr: "रात्र", slots: ["20:00", "21:00", "22:00", "23:00"] },
 ];
+function periodLabel(period, lang) {
+  return lang === "en" ? period.labelEn : lang === "mr" ? period.labelMr : period.labelHi;
+}
 function formatSlotShort(hhmm, lang) {
   const [h, m] = hhmm.split(":").map(Number);
   const h12 = h % 12 === 0 ? 12 : h % 12;
   const mm = String(m).padStart(2, "0");
-  return lang === "en" ? `${h12}:${mm} ${h < 12 ? "AM" : "PM"}` : `${h12}:${mm} बजे`;
+  return lang === "en" ? `${h12}:${mm} ${h < 12 ? "AM" : "PM"}` : lang === "mr" ? `${h12}:${mm} वाजता` : `${h12}:${mm} बजे`;
 }
 function formatTimeSlot(hhmm, lang) {
   if (!hhmm) return "";
   const period = TIME_PERIODS.find((p) => p.slots.includes(hhmm)) || TIME_PERIODS[0];
-  return `${lang === "en" ? period.labelEn : period.labelHi} ${formatSlotShort(hhmm, lang)}`;
+  return `${periodLabel(period, lang)} ${formatSlotShort(hhmm, lang)}`;
 }
 function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
   const defaultPeriod = (TIME_PERIODS.find((p) => p.slots.includes(value)) || TIME_PERIODS[0]).key;
@@ -191,13 +194,13 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
       <div className="w-full max-w-sm rounded-t-2xl overflow-hidden" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4" style={{ background: C.navy }}>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose Time" : "समय चुनें"}</h3>
+            <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें"}</h3>
             <button onClick={onClose} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
           </div>
-          <p className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Pick a period, then only that period's slots will show." : "जो पहर चुनेंगे, सिर्फ वही समय दिखेगा"}</p>
+          <p className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Pick a period, then only that period's slots will show." : lang === "mr" ? "जो प्रहर निवडाल, फक्त तीच वेळ दिसेल" : "जो पहर चुनेंगे, सिर्फ वही समय दिखेगा"}</p>
         </div>
         <div className="p-5">
-          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>1. {lang === "en" ? "Choose period:" : "पहर चुनें:"}</div>
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>1. {lang === "en" ? "Choose period:" : lang === "mr" ? "प्रहर निवडा:" : "पहर चुनें:"}</div>
           <div className="grid grid-cols-4 gap-2 mb-4">
             {TIME_PERIODS.map((p) => {
               const active = activePeriod === p.key;
@@ -206,12 +209,12 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
                   className="rounded-lg py-3.5 flex flex-col items-center gap-1 text-sm font-bold"
                   style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.inkSoft }}>
                   <span className="text-lg leading-none">{p.icon}</span>
-                  {lang === "en" ? p.labelEn : p.labelHi}
+                  {periodLabel(p, lang)}
                 </button>
               );
             })}
           </div>
-          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>2. {lang === "en" ? "Available time slots:" : "उपलब्ध समय (Time Slots):"}</div>
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>2. {lang === "en" ? "Available time slots:" : lang === "mr" ? "उपलब्ध वेळ (Time Slots):" : "उपलब्ध समय (Time Slots):"}</div>
           <div className="grid grid-cols-2 gap-2 mb-5">
             {period.slots.map((s) => {
               const active = pending === s;
@@ -226,7 +229,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
           </div>
           <button onClick={() => { if (canConfirm) { onSelect(pending); onClose(); } }} disabled={!canConfirm}
             className="w-full rounded-lg py-4 font-bold text-base" style={{ background: canConfirm ? "#0052CC" : "#E0E0E0", color: canConfirm ? "#fff" : "#9AA3B0" }}>
-            {lang === "en" ? "Done" : "ठीक है (Done)"}
+            {lang === "en" ? "Done" : lang === "mr" ? "ठीक आहे (Done)" : "ठीक है (Done)"}
           </button>
         </div>
       </div>
@@ -245,16 +248,22 @@ const EN_LABELS = {
   finance: "Reports", notify: "Notify", alerts: "Alerts", customers: "Customers", expenses: "Expenses",
   callLogs: "Call Logs",
 };
+const MR_LABELS = {
+  book: "आत्ता बुक करा", rides: "माझ्या राइड्स", home: "होम", wallet: "वॉलेट", history: "हिस्टरी",
+  kyc: "KYC", sos: "SOS", fleet: "लाइव्ह डॅशबोर्ड", drivers: "ड्रायव्हर", settings: "सेटिंग्स",
+  finance: "रिपोर्ट्स", notify: "सूचना पाठवा", alerts: "अलर्ट्स", customers: "कस्टमर", expenses: "खर्च",
+  callLogs: "कॉल लॉग्स",
+};
 
 // Default business-expense categories for Admin's Expenses tab — admin can
 // add more via "+ Add Category", stored in the expenseCategories collection
 // and merged in, same custom-list pattern as materials/vehicleTypes.
 const DEFAULT_EXPENSE_CATEGORIES = [
-  { key: "server", icon: "🌐", hi: "सर्वर / डोमेन खर्च", en: "Server / Domain Expense" },
-  { key: "ads", icon: "📢", hi: "गूगल एड्स व प्रचार", en: "Google Ads & Promotion" },
-  { key: "office", icon: "☕", hi: "ऑफिस व चाय पानी", en: "Office & Refreshments" },
-  { key: "fuel", icon: "⛽", hi: "फ्यूल व मेंटेनेंस", en: "Fuel & Maintenance" },
-  { key: "other", icon: "📦", hi: "अन्य खर्चे", en: "Other Expenses" },
+  { key: "server", icon: "🌐", hi: "सर्वर / डोमेन खर्च", en: "Server / Domain Expense", mr: "सर्व्हर / डोमेन खर्च" },
+  { key: "ads", icon: "📢", hi: "गूगल एड्स व प्रचार", en: "Google Ads & Promotion", mr: "गूगल अ‍ॅड्स व प्रचार" },
+  { key: "office", icon: "☕", hi: "ऑफिस व चाय पानी", en: "Office & Refreshments", mr: "ऑफिस व चहापाणी" },
+  { key: "fuel", icon: "⛽", hi: "फ्यूल व मेंटेनेंस", en: "Fuel & Maintenance", mr: "फ्युएल व मेंटेनन्स" },
+  { key: "other", icon: "📦", hi: "अन्य खर्चे", en: "Other Expenses", mr: "इतर खर्च" },
 ];
 
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -346,9 +355,11 @@ function findDriverLoadConflict(driver, candidate, bookings, vehicleTypes, lang)
     if (!win) continue;
     const lockStart = new Date(win.start.getTime() - lockHours * 60 * 60 * 1000);
     if (newStart < win.end && newEnd >= lockStart) {
-      const fmtTime = (d) => d.toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      const fmtTime = (d) => d.toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
       return lang === "en"
         ? `⚠️ You already have a ride booked from ${fmtTime(win.start)} to ${fmtTime(win.end)} (incl. ${lockHours}hr buffer) — you cannot bid on or take this load.`
+        : lang === "mr"
+        ? `⚠️ तुमची आधीच ${fmtTime(win.start)} पासून ${fmtTime(win.end)} पर्यंत (${lockHours} तासांच्या बफरसह) एक राइड बुक आहे — तुम्ही या लोडवर बोली लावू शकत नाही किंवा हा लोड घेऊ शकत नाही.`
         : `⚠️ आपकी पहले से ${fmtTime(win.start)} से ${fmtTime(win.end)} तक (${lockHours} घंटे के बफर सहित) एक राइड बुक है — आप इस लोड पर बोली नहीं लगा सकते या इसे नहीं ले सकते।`;
     }
   }
@@ -611,14 +622,14 @@ function NotificationBanner({ permission, onEnable, lang }) {
   if (permission === "denied") {
     return (
       <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-        {lang === "en" ? "Notifications are blocked in your browser settings — enable them there to get ride updates." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — राइड अपडेट पाने के लिए वहां चालू करें।"}
+        {lang === "en" ? "Notifications are blocked in your browser settings — enable them there to get ride updates." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये नोटिफिकेशन बंद आहेत — राइड अपडेट मिळवण्यासाठी तिथे चालू करा." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — राइड अपडेट पाने के लिए वहां चालू करें।"}
       </div>
     );
   }
   return (
     <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-3.5 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
       <Bell size={14} color={C.marigoldDeep} />
-      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Turn on notifications for ride updates" : "राइड अपडेट के लिए नोटिफिकेशन चालू करें"}</span>
+      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Turn on notifications for ride updates" : lang === "mr" ? "राइड अपडेटसाठी नोटिफिकेशन चालू करा" : "राइड अपडेट के लिए नोटिफिकेशन चालू करें"}</span>
     </button>
   );
 }
@@ -664,7 +675,7 @@ function HamburgerHint({ show, lang }) {
     <>
       <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>1</span>
       <div className="absolute top-11 left-0 z-40 rounded-lg px-3 py-2 shadow-lg text-xs font-bold whitespace-nowrap" style={{ background: C.ink, color: "#FFFFFF" }}>
-        {lang === "en" ? "View your Advance Booking here" : "अपनी एडवांस बुकिंग यहां देखें"}
+        {lang === "en" ? "View your Advance Booking here" : lang === "mr" ? "तुमची अ‍ॅडव्हान्स बुकिंग इथे पहा" : "अपनी एडवांस बुकिंग यहां देखें"}
         <div className="absolute -top-1 left-4 w-2 h-2 rotate-45" style={{ background: C.ink }} />
       </div>
     </>
@@ -712,18 +723,18 @@ function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang }) {
   const mine = (adminNotifications || [])
     .filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile))
     .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   return (
     <div className="px-5 py-5">
-      <h2 className="text-base font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : "एडमिन सूचनाएं"}</h2>
+      <h2 className="text-base font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"}</h2>
       {mine.length === 0 ? (
-        <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No announcements yet." : "अभी तक कोई सूचना नहीं।"}</p>
+        <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No announcements yet." : lang === "mr" ? "अजून कोणतीही सूचना नाही." : "अभी तक कोई सूचना नहीं।"}</p>
       ) : (
         <div className="space-y-2">
           {mine.map((n) => (
             <div key={n.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
               <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>📢 {lang === "en" ? "Admin" : "एडमिन"}</span>
+                <span className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>📢 {lang === "en" ? "Admin" : lang === "mr" ? "अ‍ॅडमिन" : "एडमिन"}</span>
                 <span className="text-[10px] shrink-0" style={{ color: C.inkSoft }}>{formatTime(n.createdAt)}</span>
               </div>
               <div className="text-sm" style={{ color: C.ink }}>{n.message}</div>
@@ -786,16 +797,16 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
         )}
       </svg>
       <div className="absolute bottom-1.5 left-2 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: C.paper, color: C.ink }}>
-        📍 {lang === "en" ? "Pickup" : "पिकअप"}
+        📍 {lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}
       </div>
       {p2 && (
         <div className="absolute top-1.5 right-2 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: C.paper, color: C.ink }}>
-          🏁 {lang === "en" ? "Drop" : "ड्रॉप"}
+          🏁 {lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}
         </div>
       )}
       <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
       <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFCC00", color: "#000000" }}>
-        {lang === "en" ? "Tap to open in Google Maps" : "गूगल मैप्स में खोलने के लिए टैप करें"}
+        {lang === "en" ? "Tap to open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडण्यासाठी टॅप करा" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
     </div>
   );
@@ -932,7 +943,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
       </GoogleMap>
       <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
       <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFCC00", color: "#000000" }}>
-        {lang === "en" ? "Tap to open in Google Maps" : "गूगल मैप्स में खोलने के लिए टैप करें"}
+        {lang === "en" ? "Tap to open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडण्यासाठी टॅप करा" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
     </div>
   );
@@ -944,7 +955,7 @@ function BottomNav({ tabs, tab, setTab, lang = "hi" }) {
       {tabs.map(([key, label, Icon]) => (
         <button key={key} onClick={() => setTab(key)} className="flex-1 flex flex-col items-center gap-1 py-4">
           <Icon size={22} color={tab === key ? C.marigoldDeep : C.ink} />
-          <span className="text-xs font-semibold" style={{ color: tab === key ? C.marigoldDeep : C.ink }}>{lang === "en" ? (EN_LABELS[key] || label) : label}</span>
+          <span className="text-xs font-semibold" style={{ color: tab === key ? C.marigoldDeep : C.ink }}>{lang === "en" ? (EN_LABELS[key] || label) : lang === "mr" ? (MR_LABELS[key] || label) : label}</span>
         </button>
       ))}
     </div>
@@ -1002,7 +1013,7 @@ function MapPicker({ onConfirm, onClose, lang = "hi" }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.7)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Tap to mark location" : "जगह चुनने के लिए टैप करें"}</span>
+          <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Tap to mark location" : lang === "mr" ? "जागा निवडण्यासाठी टॅप करा" : "जगह चुनने के लिए टैप करें"}</span>
           <button onClick={onClose} className="text-base font-bold px-3 py-2" style={{ color: C.inkSoft }}>✕</button>
         </div>
 
@@ -1011,7 +1022,7 @@ function MapPicker({ onConfirm, onClose, lang = "hi" }) {
             <img src={mapUrl} alt="map" width={W} height={H} className="w-full h-full object-cover select-none" draggable={false} onError={() => setImgError(true)} />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-center px-6">
-              <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Map couldn't load — check internet connection" : "मैप लोड नहीं हुआ — इंटरनेट कनेक्शन देखें"}</span>
+              <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Map couldn't load — check internet connection" : lang === "mr" ? "मॅप लोड झाला नाही — इंटरनेट कनेक्शन तपासा" : "मैप लोड नहीं हुआ — इंटरनेट कनेक्शन देखें"}</span>
             </div>
           )}
           {pin && (
@@ -1023,18 +1034,18 @@ function MapPicker({ onConfirm, onClose, lang = "hi" }) {
 
         <div className="rounded-lg p-3 mb-3" style={{ background: C.paper, minHeight: 50 }}>
           {loading ? (
-            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Finding address..." : "पता ढूंढा जा रहा है..."}</span>
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Finding address..." : lang === "mr" ? "पत्ता शोधला जात आहे..." : "पता ढूंढा जा रहा है..."}</span>
           ) : pin ? (
             <span className="text-xs" style={{ color: C.ink }}>{address}</span>
           ) : (
-            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Tap anywhere on the map above to drop a pin" : "ऊपर मैप पर कहीं भी टैप करके पिन लगाएं"}</span>
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Tap anywhere on the map above to drop a pin" : lang === "mr" ? "वरील मॅपवर कुठेही टॅप करून पिन लावा" : "ऊपर मैप पर कहीं भी टैप करके पिन लगाएं"}</span>
           )}
         </div>
 
         <button onClick={() => pin && onConfirm(address, pin.lat, pin.lon)} disabled={!pin || loading}
           className="w-full rounded-lg py-4 font-bold text-base"
           style={{ background: pin && !loading ? C.marigoldDeep : "#E0E0E0", color: pin && !loading ? "#fff" : "#9AA3B0" }}>
-          {lang === "en" ? "Use this location" : "यह जगह इस्तेमाल करें"}
+          {lang === "en" ? "Use this location" : lang === "mr" ? "ही जागा वापरा" : "यह जगह इस्तेमाल करें"}
         </button>
       </div>
     </div>
@@ -1092,7 +1103,7 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.7)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Search or tap to mark location" : "जगह खोजें या टैप करके चुनें"}</span>
+          <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Search or tap to mark location" : lang === "mr" ? "जागा शोधा किंवा टॅप करून निवडा" : "जगह खोजें या टैप करके चुनें"}</span>
           <button onClick={onClose} className="text-base font-bold px-3 py-2" style={{ color: C.inkSoft }}>✕</button>
         </div>
 
@@ -1100,7 +1111,7 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
           <input
             className="w-full rounded-lg px-3 py-2.5 text-sm outline-none mb-2"
             style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}
-            placeholder={lang === "en" ? "Search an address" : "पता खोजें"}
+            placeholder={lang === "en" ? "Search an address" : lang === "mr" ? "पत्ता शोधा" : "पता खोजें"}
           />
         </Autocomplete>
 
@@ -1118,23 +1129,23 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
         </div>
 
         <button type="button" onClick={useMyLocation} className="text-base font-semibold mb-3 flex items-center gap-1" style={{ color: C.marigoldDeep }}>
-          <Navigation size={12} /> {lang === "en" ? "Use my current location" : "मेरी मौजूदा जगह इस्तेमाल करें"}
+          <Navigation size={12} /> {lang === "en" ? "Use my current location" : lang === "mr" ? "माझी सध्याची जागा वापरा" : "मेरी मौजूदा जगह इस्तेमाल करें"}
         </button>
 
         <div className="rounded-lg p-3 mb-3" style={{ background: C.paper, minHeight: 50 }}>
           {loading ? (
-            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Finding address..." : "पता ढूंढा जा रहा है..."}</span>
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Finding address..." : lang === "mr" ? "पत्ता शोधला जात आहे..." : "पता ढूंढा जा रहा है..."}</span>
           ) : marker ? (
             <span className="text-xs" style={{ color: C.ink }}>{address}</span>
           ) : (
-            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Search above or tap anywhere on the map to drop a pin" : "ऊपर खोजें या मैप पर कहीं भी टैप करके पिन लगाएं"}</span>
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Search above or tap anywhere on the map to drop a pin" : lang === "mr" ? "वर शोधा किंवा मॅपवर कुठेही टॅप करून पिन लावा" : "ऊपर खोजें या मैप पर कहीं भी टैप करके पिन लगाएं"}</span>
           )}
         </div>
 
         <button onClick={() => marker && onConfirm(address, marker.lat, marker.lng)} disabled={!marker || loading}
           className="w-full rounded-lg py-4 font-bold text-base"
           style={{ background: marker && !loading ? C.marigoldDeep : "#E0E0E0", color: marker && !loading ? "#fff" : "#9AA3B0" }}>
-          {lang === "en" ? "Use this location" : "यह जगह इस्तेमाल करें"}
+          {lang === "en" ? "Use this location" : lang === "mr" ? "ही जागा वापरा" : "यह जगह इस्तेमाल करें"}
         </button>
       </div>
     </div>
@@ -1157,11 +1168,11 @@ function MicButton({ onResult, lang = "hi", label, size = 8, iconSize = 14 }) {
   const start = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-      alert(lang === "en" ? "This device/browser doesn't support voice input." : "यह डिवाइस/ब्राउज़र वॉइस इनपुट सपोर्ट नहीं करता।");
+      alert(lang === "en" ? "This device/browser doesn't support voice input." : lang === "mr" ? "हे डिव्हाइस/ब्राउझर व्हॉइस इनपुट सपोर्ट करत नाही." : "यह डिवाइस/ब्राउज़र वॉइस इनपुट सपोर्ट नहीं करता।");
       return;
     }
     const rec = new SR();
-    rec.lang = lang === "en" ? "en-IN" : "hi-IN";
+    rec.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
@@ -1226,11 +1237,11 @@ function MaskedCallButton({ bookingId, fallbackMobile, label, lang, className, s
   return (
     <div>
       <button type="button" onClick={handleClick} disabled={calling} className={className} style={style}>
-        <Phone size={16} color={style?.color || "#000000"} /> {calling ? (lang === "en" ? "Connecting..." : "जोड़ रहे हैं...") : label}
+        <Phone size={16} color={style?.color || "#000000"} /> {calling ? (lang === "en" ? "Connecting..." : lang === "mr" ? "जोडत आहोत..." : "जोड़ रहे हैं...") : label}
       </button>
       {connected && (
         <div className="text-[10px] font-bold text-center mt-1" style={{ color: C.success }}>
-          {lang === "en" ? "You'll receive a call shortly to connect you." : "आपको जल्द ही कॉल आएगी जो आपको जोड़ देगी।"}
+          {lang === "en" ? "You'll receive a call shortly to connect you." : lang === "mr" ? "तुम्हाला लवकरच कॉल येईल जो तुम्हाला जोडेल." : "आपको जल्द ही कॉल आएगी जो आपको जोड़ देगी।"}
         </div>
       )}
     </div>
@@ -1264,44 +1275,44 @@ function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
     <div className="px-5 py-5">
       <div className="rounded-xl p-5 text-center mb-5" style={{ background: C.safety }}>
         <Siren size={26} color="#FFFFFF" className="mx-auto mb-2" />
-        <h2 className="text-base font-bold" style={{ color: "#FFFFFF" }}>SOS / {lang === "en" ? "Help" : "मदद"}</h2>
-        <p className="text-xs mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "For any problem or booking help, click the button below." : "किसी भी समस्या या बुकिंग सहायता के लिए नीचे दिए गए बटन पर क्लिक करें।"}</p>
+        <h2 className="text-base font-bold" style={{ color: "#FFFFFF" }}>SOS / {lang === "en" ? "Help" : lang === "mr" ? "मदत" : "मदद"}</h2>
+        <p className="text-xs mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "For any problem or booking help, click the button below." : lang === "mr" ? "कोणत्याही समस्येसाठी किंवा बुकिंग मदतीसाठी खालील बटणावर क्लिक करा." : "किसी भी समस्या या बुकिंग सहायता के लिए नीचे दिए गए बटन पर क्लिक करें।"}</p>
       </div>
       {tripLocked && (
         <div className="rounded-xl p-4 mb-5 text-center" style={{ background: C.safety }}>
-          <div className="text-sm font-bold mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Trip cannot be cancelled!" : "ट्रिप कैंसल नहीं की जा सकती!"}</div>
-          <p className="text-xs" style={{ color: "#FFFFFF" }}>{lang === "en" ? "The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support below for any help." : "ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए नीचे सपोर्ट से संपर्क करें।"}</p>
+          <div className="text-sm font-bold mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Trip cannot be cancelled!" : lang === "mr" ? "ट्रिप रद्द केली जाऊ शकत नाही!" : "ट्रिप कैंसल नहीं की जा सकती!"}</div>
+          <p className="text-xs" style={{ color: "#FFFFFF" }}>{lang === "en" ? "The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support below for any help." : lang === "mr" ? "ड्रायव्हरने ओटीपी (OTP) सत्यापित केला आहे आणि माल लोड/ट्रान्झिटमध्ये आहे. ही ट्रिप फक्त ड्रायव्हरने प्रवास पूर्ण (End Trip) केल्यावरच संपेल. कोणत्याही मदतीसाठी खाली सपोर्टशी संपर्क करा." : "ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए नीचे सपोर्ट से संपर्क करें।"}</p>
         </div>
       )}
       <div className="space-y-3">
         <a href="tel:100" onClick={() => raiseAlert?.(role, "पुलिस सहायता")}
           className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: "#000000" }}>
-          <Siren size={16} /> {lang === "en" ? "Police Help (100)" : "पुलिस सहायता (100)"}
+          <Siren size={16} /> {lang === "en" ? "Police Help (100)" : lang === "mr" ? "पोलीस मदत (100)" : "पुलिस सहायता (100)"}
         </a>
         <a href={`tel:${ADMIN_PHONE}`} onClick={() => raiseAlert?.(role, "इमरजेंसी कॉल")}
           className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: C.safety }}>
-          <Phone size={16} /> {lang === "en" ? "Call Admin" : "एडमिन को कॉल करें"}
+          <Phone size={16} /> {lang === "en" ? "Call Admin" : lang === "mr" ? "अ‍ॅडमिनला कॉल करा" : "एडमिन को कॉल करें"}
         </a>
         <a href={`https://wa.me/${ADMIN_WHATSAPP}`} target="_blank" rel="noreferrer" onClick={() => raiseAlert?.(role, "व्हाट्सएप सपोर्ट")}
           className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white shadow-lg" style={{ background: C.metallicGreen }}>
-          <MessageCircle size={16} /> {lang === "en" ? "WhatsApp Support" : "व्हाट्सएप सपोर्ट"}
+          <MessageCircle size={16} /> {lang === "en" ? "WhatsApp Support" : lang === "mr" ? "व्हॉट्सअ‍ॅप सपोर्ट" : "व्हाट्सएप सपोर्ट"}
         </a>
       </div>
       <div className="rounded-xl p-4 mt-5 shadow-sm" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-        <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "File a Complaint" : "शिकायत दर्ज करें"}</div>
+        <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "File a Complaint" : lang === "mr" ? "तक्रार नोंदवा" : "शिकायत दर्ज करें"}</div>
         <p className="text-[11px] mb-2" style={{ color: C.inkSoft }}>
           {role === "driver"
-            ? (lang === "en" ? "Send admin details of any issue related to the customer or the goods." : "ग्राहक या सामान से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")
-            : (lang === "en" ? "Send admin details of any issue related to the driver or your booking." : "ड्राइवर या आपकी बुकिंग से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")}
+            ? (lang === "en" ? "Send admin details of any issue related to the customer or the goods." : lang === "mr" ? "ग्राहक किंवा सामानाशी संबंधित कोणत्याही समस्येची माहिती अ‍ॅडमिनला पाठवा." : "ग्राहक या सामान से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")
+            : (lang === "en" ? "Send admin details of any issue related to the driver or your booking." : lang === "mr" ? "ड्रायव्हर किंवा तुमच्या बुकिंगशी संबंधित कोणत्याही समस्येची माहिती अ‍ॅडमिनला पाठवा." : "ड्राइवर या आपकी बुकिंग से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")}
         </p>
         <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={3}
           placeholder={role === "driver"
-            ? (lang === "en" ? "e.g. Customer gave wrong address, wrong weight told..." : "जैसे: ग्राहक ने गलत पता दिया, सामान का वजन गलत बताया...")
-            : (lang === "en" ? "e.g. Driver asked for extra money, vehicle was different than promised..." : "जैसे: ड्राइवर ने अतिरिक्त पैसे मांगे, गाड़ी वादे से अलग थी...")}
+            ? (lang === "en" ? "e.g. Customer gave wrong address, wrong weight told..." : lang === "mr" ? "उदा: ग्राहकाने चुकीचा पत्ता दिला, सामानाचे वजन चुकीचे सांगितले..." : "जैसे: ग्राहक ने गलत पता दिया, सामान का वजन गलत बताया...")
+            : (lang === "en" ? "e.g. Driver asked for extra money, vehicle was different than promised..." : lang === "mr" ? "उदा: ड्रायव्हरने जास्त पैसे मागितले, गाडी वचनापेक्षा वेगळी होती..." : "जैसे: ड्राइवर ने अतिरिक्त पैसे मांगे, गाड़ी वादे से अलग थी...")}
           className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-        {sent && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Complaint sent to admin" : "शिकायत एडमिन को भेज दी गई"}</div>}
+        {sent && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Complaint sent to admin" : lang === "mr" ? "तक्रार अ‍ॅडमिनला पाठवली गेली" : "शिकायत एडमिन को भेज दी गई"}</div>}
         <button onClick={submitComplaint} disabled={!complaint.trim()} className="w-full rounded-lg py-3.5 font-bold text-base"
-          style={{ background: complaint.trim() ? "#0052CC" : "#E0E0E0", color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : "शिकायत भेजें"}</button>
+          style={{ background: complaint.trim() ? "#0052CC" : "#E0E0E0", color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : lang === "mr" ? "तक्रार पाठवा" : "शिकायत भेजें"}</button>
       </div>
     </div>
   );
@@ -1327,7 +1338,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
   const showAdmin = (adminEntry && !anyVerified) || adminVerified;
   const logoutLink = (role, label) => (
     <button onClick={() => onLogoutRole(role)} className="w-full text-center text-sm font-semibold mt-1.5" style={{ color: C.inkSoft }}>
-      {lang === "en" ? `Not you? Logout of ${label}` : `आप नहीं हैं? ${label} से लॉगआउट करें`}
+      {lang === "en" ? `Not you? Logout of ${label}` : lang === "mr" ? `तुम्ही नाही आहात? ${label} मधून लॉगआउट करा` : `आप नहीं हैं? ${label} से लॉगआउट करें`}
     </button>
   );
   const bothShown = showCustomer && showDriver;
@@ -1335,18 +1346,22 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
     <div className="flex-1 overflow-y-auto flex flex-col items-center px-5 py-8">
       {anyVerified ? (
         <p className="text-sm text-center mb-6" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "Continue where you left off, or logout to switch" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें"}
+          {lang === "en" ? "Continue where you left off, or logout to switch" : lang === "mr" ? "जिथून सोडले होते तिथून सुरू ठेवा, किंवा स्विच करण्यासाठी लॉगआउट करा" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें"}
         </p>
       ) : (
         <div className="w-full rounded-2xl p-4 mb-5 text-center" style={{ background: "#FFF3C4", border: `1.5px solid ${C.marigoldDeep}` }}>
           <p className="text-base font-bold leading-relaxed" style={{ color: C.ink }}>
             {lang === "en"
               ? <>Are you a driver? If you want fare/loads, choose the <span className="font-black" style={{ color: C.navy }}>Driver App</span>.</>
+              : lang === "mr"
+              ? <>तुम्ही कोण आहात? ड्रायव्हर आहात? तुम्हाला भाडे/लोड हवे असतील तर तुम्ही <span className="font-black" style={{ color: C.navy }}>ड्रायव्हर अ‍ॅप</span> निवडा.</>
               : <>आप कौन हैं? ड्राइवर हैं? आप को भाड़ा चाहिए तो आप <span className="font-black" style={{ color: C.navy }}>ड्राइवर ऐप</span> चुनें।</>}
           </p>
           <p className="text-base font-bold leading-relaxed mt-2" style={{ color: C.ink }}>
             {lang === "en"
               ? <>Are you a customer? If you want to book a vehicle, choose the <span className="font-black" style={{ color: C.success }}>Customer App</span>.</>
+              : lang === "mr"
+              ? <>तुम्ही कस्टमर आहात का? तुम्हाला गाडी बुक करायची असेल तर तुम्ही <span className="font-black" style={{ color: C.success }}>कस्टमर अ‍ॅप</span> निवडा.</>
               : <>अगर आप कस्टमर हैं? आप को गाड़ी बुक करना है तो आप <span className="font-black" style={{ color: C.success }}>कस्टमर ऐप</span> चुनें।</>}
           </p>
         </div>
@@ -1359,10 +1374,10 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
               <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#EAF1FF" }}>
                 <IdCard size={30} color={C.navy} />
               </div>
-              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver App" : "ड्राइवर ऐप"}</div>
-              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To find fare & loads" : "भाड़ा और लोड खोजने के लिए"}</div>
+              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver App" : lang === "mr" ? "ड्रायव्हर अ‍ॅप" : "ड्राइवर ऐप"}</div>
+              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To find fare & loads" : lang === "mr" ? "भाडे आणि लोड शोधण्यासाठी" : "भाड़ा और लोड खोजने के लिए"}</div>
             </button>
-            {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : "ड्राइवर")}
+            {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
           </div>
         )}
 
@@ -1372,20 +1387,20 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
               <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#E6F7EE" }}>
                 <UserCheck size={30} color={C.success} />
               </div>
-              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : "कस्टमर ऐप"}</div>
-              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To book a vehicle" : "गाड़ी बुक करने के लिए"}</div>
+              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : lang === "mr" ? "कस्टमर अ‍ॅप" : "कस्टमर ऐप"}</div>
+              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To book a vehicle" : lang === "mr" ? "गाडी बुक करण्यासाठी" : "गाड़ी बुक करने के लिए"}</div>
             </button>
-            {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : "कस्टमर")}
+            {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
           </div>
         )}
       </div>
 
       {showAdmin && (
         <button onClick={() => onSelect("admin")} className="mt-8 text-sm font-semibold" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "Admin Login" : "एडमिन लॉगिन"}
+          {lang === "en" ? "Admin Login" : lang === "mr" ? "अ‍ॅडमिन लॉगिन" : "एडमिन लॉगिन"}
         </button>
       )}
-      {adminVerified && logoutLink("admin", lang === "en" ? "Admin" : "एडमिन")}
+      {adminVerified && logoutLink("admin", lang === "en" ? "Admin" : lang === "mr" ? "अ‍ॅडमिन" : "एडमिन")}
     </div>
   );
 }
@@ -1432,16 +1447,16 @@ function AdminLogin({ onVerified, lang, onBack }) {
       // distinct and mean something needs fixing in Firebase Console
       // rather than the typed-in credentials, so surface those separately.
       if (e?.code === "auth/operation-not-allowed") {
-        setError(lang === "en" ? "Email/Password sign-in isn't enabled yet in Firebase Console (Authentication → Sign-in method)." : "Firebase Console में Email/Password साइन-इन अभी चालू नहीं है (Authentication → Sign-in method)।");
+        setError(lang === "en" ? "Email/Password sign-in isn't enabled yet in Firebase Console (Authentication → Sign-in method)." : lang === "mr" ? "Firebase Console मध्ये Email/Password साइन-इन अजून चालू नाही (Authentication → Sign-in method)." : "Firebase Console में Email/Password साइन-इन अभी चालू नहीं है (Authentication → Sign-in method)।");
       } else if (e?.code === "auth/too-many-requests") {
-        setError(lang === "en" ? "Too many attempts — please wait a while before trying again." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।");
+        setError(lang === "en" ? "Too many attempts — please wait a while before trying again." : lang === "mr" ? "खूप जास्त प्रयत्न — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।");
       } else if (e?.code === "auth/network-request-failed") {
-        setError(lang === "en" ? "Network error — check your internet connection." : "नेटवर्क त्रुटि — अपना इंटरनेट कनेक्शन जांचें।");
+        setError(lang === "en" ? "Network error — check your internet connection." : lang === "mr" ? "नेटवर्क त्रुटी — तुमचे इंटरनेट कनेक्शन तपासा." : "नेटवर्क त्रुटि — अपना इंटरनेट कनेक्शन जांचें।");
       } else if (e?.code === "auth/invalid-email") {
-        setError(lang === "en" ? "That doesn't look like a valid email address." : "यह एक मान्य ईमेल पता नहीं लगता।");
+        setError(lang === "en" ? "That doesn't look like a valid email address." : lang === "mr" ? "हा वैध ईमेल पत्ता वाटत नाही." : "यह एक मान्य ईमेल पता नहीं लगता।");
       } else {
         setError(
-          (lang === "en" ? "Incorrect email or password" : "ईमेल या पासवर्ड गलत है")
+          (lang === "en" ? "Incorrect email or password" : lang === "mr" ? "ईमेल किंवा पासवर्ड चुकीचा आहे" : "ईमेल या पासवर्ड गलत है")
           + (e?.code ? ` (${e.code})` : "")
         );
       }
@@ -1452,7 +1467,7 @@ function AdminLogin({ onVerified, lang, onBack }) {
   if (checking) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : "आपका सेशन जांचा जा रहा है..."}</p>
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : lang === "mr" ? "तुमचे सेशन तपासले जात आहे..." : "आपका सेशन जांचा जा रहा है..."}</p>
       </div>
     );
   }
@@ -1467,17 +1482,17 @@ function AdminLogin({ onVerified, lang, onBack }) {
       <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.navy }}>
         <LayoutDashboard size={26} color="#FFFFFF" />
       </div>
-      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Admin Login" : "एडमिन लॉगिन"}</h2>
-      <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Authorized personnel only" : "सिर्फ अधिकृत व्यक्ति ही आगे बढ़ें"}</p>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Admin Login" : lang === "mr" ? "अ‍ॅडमिन लॉगिन" : "एडमिन लॉगिन"}</h2>
+      <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Authorized personnel only" : lang === "mr" ? "फक्त अधिकृत व्यक्तींनीच पुढे जावे" : "सिर्फ अधिकृत व्यक्ति ही आगे बढ़ें"}</p>
 
       <div className="w-full space-y-3">
-        <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Admin email / ID" : "एडमिन ईमेल / आईडी"} value={email}
+        <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Admin email / ID" : lang === "mr" ? "अ‍ॅडमिन ईमेल / आयडी" : "एडमिन ईमेल / आईडी"} value={email}
           onChange={(e) => { setEmail(e.target.value); setError(""); }} />
         <div className="relative">
-          <input type={showPassword ? "text" : "password"} className={inputCls} style={{ ...inputStyle, paddingRight: 40 }} placeholder={lang === "en" ? "Password" : "पासवर्ड"} value={password}
+          <input type={showPassword ? "text" : "password"} className={inputCls} style={{ ...inputStyle, paddingRight: 40 }} placeholder={lang === "en" ? "Password" : lang === "mr" ? "पासवर्ड" : "पासवर्ड"} value={password}
             onChange={(e) => { setPassword(e.target.value); setError(""); }} />
           <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute top-1/2 -translate-y-1/2 right-3" style={{ color: C.inkSoft }}
-            aria-label={lang === "en" ? (showPassword ? "Hide password" : "Show password") : (showPassword ? "पासवर्ड छुपाएं" : "पासवर्ड दिखाएं")}>
+            aria-label={lang === "en" ? (showPassword ? "Hide password" : "Show password") : lang === "mr" ? (showPassword ? "पासवर्ड लपवा" : "पासवर्ड दाखवा") : (showPassword ? "पासवर्ड छुपाएं" : "पासवर्ड दिखाएं")}>
             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
@@ -1488,7 +1503,7 @@ function AdminLogin({ onVerified, lang, onBack }) {
         )}
         <button onClick={submit} disabled={!email.trim() || !password.trim() || submitting} className="w-full rounded-lg py-4 font-bold text-base"
           style={{ background: email.trim() && password.trim() && !submitting ? C.marigold : "#E0E0E0", color: email.trim() && password.trim() && !submitting ? "#000000" : "#9AA3B0" }}>
-          {submitting ? (lang === "en" ? "Logging in..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : "लॉगिन करें")}
+          {submitting ? (lang === "en" ? "Logging in..." : lang === "mr" ? "लॉगिन होत आहे..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें")}
         </button>
       </div>
     </div>
@@ -1599,8 +1614,8 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
       recaptchaRef.current = null;
       setError(
         e?.code === "auth/too-many-requests"
-          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
-          : (lang === "en" ? "Couldn't send OTP — check the number and try again." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।")
+          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : lang === "mr" ? "खूप जास्त प्रयत्न — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
+          : (lang === "en" ? "Couldn't send OTP — check the number and try again." : lang === "mr" ? "OTP पाठवू शकलो नाही — नंबर तपासा आणि पुन्हा प्रयत्न करा." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।")
       );
     }
     setSending(false);
@@ -1645,7 +1660,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
       if (mode === "signup" && detailsValid) submitProfile();
     } catch (e) {
       console.error(e);
-      setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
+      setError(lang === "en" ? "Incorrect OTP — try again." : lang === "mr" ? "चुकीचा OTP — पुन्हा प्रयत्न करा." : "गलत OTP — फिर कोशिश करें।");
       setSending(false);
       return;
     }
@@ -1662,14 +1677,14 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-5">
         {backButton}
-        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your profile..." : "आपकी प्रोफाइल जांची जा रही है..."}</p>
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your profile..." : lang === "mr" ? "तुमची प्रोफाइल तपासली जात आहे..." : "आपकी प्रोफाइल जांची जा रही है..."}</p>
       </div>
     );
   }
 
   if (verified && hasProfile) {
     // Root is about to swap to CustomerApp — never show anything else here.
-    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : "लोड हो रहा है..."}</p></div>;
+    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : lang === "mr" ? "लोड होत आहे..." : "लोड हो रहा है..."}</p></div>;
   }
 
   if (verified && !hasProfile && mode !== "signup") {
@@ -1683,10 +1698,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
           <XCircle size={26} color="#FFFFFF" />
         </div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : "अभी रजिस्टर्ड नहीं है"}</h2>
-        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a customer account yet. Please sign up first." : "इस मोबाइल नंबर से अभी तक कोई कस्टमर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : lang === "mr" ? "अजून रजिस्टर्ड नाही" : "अभी रजिस्टर्ड नहीं है"}</h2>
+        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a customer account yet. Please sign up first." : lang === "mr" ? "या मोबाइल नंबरने अजून कोणतेही कस्टमर खाते नाही. कृपया आधी साइन अप करा." : "इस मोबाइल नंबर से अभी तक कोई कस्टमर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
         <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
-          {lang === "en" ? "Sign Up Now" : "अभी साइन अप करें"}
+          {lang === "en" ? "Sign Up Now" : lang === "mr" ? "आत्ता साइन अप करा" : "अभी साइन अप करें"}
         </button>
       </div>
     );
@@ -1701,58 +1716,58 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
           <MapPin size={22} color="#000000" />
         </div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Registration" : "कस्टमर रजिस्ट्रेशन"}</h2>
-        <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Registration" : lang === "mr" ? "कस्टमर रजिस्ट्रेशन" : "कस्टमर रजिस्ट्रेशन"}</h2>
+        <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : lang === "mr" ? "फक्त एकदाच — सेटअप पूर्ण करण्यासाठी तुमची माहिती भरा." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
 
         <div className="space-y-3">
           <div className="flex justify-center">
-            <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${verifiedMobile || mobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
+            <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${verifiedMobile || mobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
               <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
                 {photoUploading
-                  ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
+                  ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</p>
                   : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
               </div>
             </PhotoPicker>
           </div>
           <GuidedStep {...regStepProps(0)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
           </GuidedStep>
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
-            <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : lang === "mr" ? "ईमेल (ऐच्छिक)" : "ईमेल (वैकल्पिक)"}</label>
+            <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : lang === "mr" ? "उदा: ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <GuidedStep {...regStepProps(1)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : lang === "mr" ? "पूर्ण पत्ता (घर/दुकान क्र., गल्ली)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : lang === "mr" ? "उदा: दुकान क्र. 12, MG रोड" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
           </GuidedStep>
           <div className="grid grid-cols-2 gap-3">
             <GuidedStep {...regStepProps(2)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : lang === "mr" ? "एरिया" : "एरिया"}</label>
+              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : lang === "mr" ? "उदा: पिंपरी" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
             </GuidedStep>
             <GuidedStep {...regStepProps(3)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
+              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : lang === "mr" ? "उदा: पुणे" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
             </GuidedStep>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <GuidedStep {...regStepProps(4)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
+              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : lang === "mr" ? "उदा: महाराष्ट्र" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
             </GuidedStep>
             <GuidedStep {...regStepProps(5)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
-              <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
+              <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : lang === "mr" ? "6 अंकी पिनकोड" : "6 अंकों का पिनकोड"} value={pincode}
                 onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
             </GuidedStep>
           </div>
         </div>
 
-        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
+        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील सर्व माहिती भरा (नाव, पत्ता, एरिया, शहर, राज्य, 6 अंकी पिनकोड)" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
         <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className={`w-full rounded-lg py-4 font-bold text-base mt-3 ${detailsValid && !photoUploading ? "guided-submit-ready" : ""}`}
           style={{ background: detailsValid && !photoUploading ? C.marigold : "#E0E0E0", color: detailsValid && !photoUploading ? "#000000" : "#9AA3B0" }}>
-          {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : "रजिस्ट्रेशन पूरा करें")}
+          {photoUploading ? (lang === "en" ? "Uploading photo..." : lang === "mr" ? "फोटो अपलोड होत आहे..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : lang === "mr" ? "रजिस्ट्रेशन पूर्ण करा" : "रजिस्ट्रेशन पूरा करें")}
         </button>
         <div id={recaptchaContainerId} />
       </div>
@@ -1772,14 +1787,14 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer" : "कस्टमर"}</h2>
-        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : lang === "mr" ? "तुम्ही आधीपासून रजिस्टर्ड आहात, की नवीन आहात?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
         <div className="w-full space-y-3">
           <button onClick={() => setMode("login")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
-            {lang === "en" ? "Login" : "लॉगिन करें"}
+            {lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें"}
           </button>
           <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.paper, color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
-            {lang === "en" ? "Sign Up (New Customer)" : "साइन अप करें (नया कस्टमर)"}
+            {lang === "en" ? "Sign Up (New Customer)" : lang === "mr" ? "साइन अप करा (नवीन कस्टमर)" : "साइन अप करें (नया कस्टमर)"}
           </button>
         </div>
       </div>
@@ -1794,26 +1809,26 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Login" : "कस्टमर लॉगिन"}</h2>
-        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Login" : lang === "mr" ? "कस्टमर लॉगिन" : "कस्टमर लॉगिन"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : lang === "mr" ? "सुरू करण्यासाठी तुमचा मोबाइल नंबर व्हेरिफाय करा." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
         <div className="w-full">
           {otpStage === "mobile" ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <Phone size={16} color={C.inkSoft} />
                 <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
-                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
                   value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
                 className="w-full rounded-lg py-4 font-bold text-base" style={{ background: mobile.length === 10 && !sending ? C.marigold : "#E0E0E0", color: mobile.length === 10 && !sending ? "#000000" : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+                {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : lang === "mr" ? "OTP पाठवा" : "OTP भेजें")}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : lang === "mr" ? `${mobile} वर OTP पाठवला` : `${mobile} पर OTP भेजा गया`}</p>
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <ShieldCheck size={16} color={C.inkSoft} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
@@ -1822,11 +1837,11 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
                 className="w-full rounded-lg py-4 font-bold text-base" style={{ background: otp.length === 6 && !sending ? C.marigold : "#E0E0E0", color: otp.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
+                {sending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : lang === "mr" ? "व्हेरिफाय करा" : "वेरीफाई करें")}
               </button>
               <div className="flex items-center justify-between">
-                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
-                <button onClick={sendOtp} disabled={sending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
+                <button onClick={sendOtp} disabled={sending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : lang === "mr" ? "OTP पुन्हा पाठवा" : "OTP दोबारा भेजें"}</button>
               </div>
             </div>
           )}
@@ -1844,74 +1859,74 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
         <ChevronLeft size={18} strokeWidth={3} />
       </button>
       <div className="mb-4"><Logo size={96} /></div>
-      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Sign Up" : "कस्टमर साइन अप"}</h2>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Sign Up" : lang === "mr" ? "कस्टमर साइन अप" : "कस्टमर साइन अप"}</h2>
       <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
-        {lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।"}
+        {lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : lang === "mr" ? "स्टेप 1 / 2 — तुमची माहिती भरा, नंतर खाली मोबाइल नंबर व्हेरिफाय करा." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।"}
       </p>
 
       <div className="space-y-3">
         <div className="flex justify-center">
-          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => setPhotoFile(f)}>
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => setPhotoFile(f)}>
             <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
               <SafeImage src={photoPreview} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />
             </div>
           </PhotoPicker>
         </div>
         <GuidedStep {...regStepProps(0)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
-          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
         </GuidedStep>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
-          <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : lang === "mr" ? "ईमेल (ऐच्छिक)" : "ईमेल (वैकल्पिक)"}</label>
+          <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : lang === "mr" ? "उदा: ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <GuidedStep {...regStepProps(1)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
-          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : lang === "mr" ? "पूर्ण पत्ता (घर/दुकान क्र., गल्ली)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : lang === "mr" ? "उदा: दुकान क्र. 12, MG रोड" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
         </GuidedStep>
         <div className="grid grid-cols-2 gap-3">
           <GuidedStep {...regStepProps(2)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : lang === "mr" ? "एरिया" : "एरिया"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : lang === "mr" ? "उदा: पिंपरी" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
           </GuidedStep>
           <GuidedStep {...regStepProps(3)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : lang === "mr" ? "उदा: पुणे" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
           </GuidedStep>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <GuidedStep {...regStepProps(4)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : lang === "mr" ? "उदा: महाराष्ट्र" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
           </GuidedStep>
           <GuidedStep {...regStepProps(5)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
-            <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
+            <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : lang === "mr" ? "6 अंकी पिनकोड" : "6 अंकों का पिनकोड"} value={pincode}
               onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </GuidedStep>
         </div>
       </div>
 
       <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
-        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
+        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : lang === "mr" ? "मोबाइल नंबर व्हेरिफाय करा" : "मोबाइल नंबर वेरीफाई करें"}</div>
         {otpStage === "mobile" ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <Phone size={16} color={C.inkSoft} />
                 <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
-                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
                   value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
               </div>
-              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : "पहले ऊपर सारी जानकारी भरें"}</div>}
+              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : lang === "mr" ? "आधी वरील सर्व माहिती भरा" : "पहले ऊपर सारी जानकारी भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
                 className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : "#E0E0E0", color: detailsValid && mobile.length === 10 && !sending ? "#000000" : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+                {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : lang === "mr" ? "OTP पाठवा" : "OTP भेजें")}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : lang === "mr" ? `${mobile} वर OTP पाठवला` : `${mobile} पर OTP भेजा गया`}</p>
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <ShieldCheck size={16} color={C.inkSoft} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
@@ -1920,11 +1935,11 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
                 className="w-full rounded-lg py-4 font-bold text-base" style={{ background: otp.length === 6 && !sending ? C.marigold : "#E0E0E0", color: otp.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify & Continue" : "वेरीफाई करें और आगे बढ़ें")}
+                {sending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify & Continue" : lang === "mr" ? "व्हेरिफाय करा आणि पुढे जा" : "वेरीफाई करें और आगे बढ़ें")}
               </button>
               <div className="flex items-center justify-between">
-                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
-                <button onClick={sendOtp} disabled={sending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
+                <button onClick={sendOtp} disabled={sending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : lang === "mr" ? "OTP पुन्हा पाठवा" : "OTP दोबारा भेजें"}</button>
               </div>
             </div>
           )}
@@ -2035,8 +2050,8 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       recaptchaRef.current = null;
       setError(
         e?.code === "auth/too-many-requests"
-          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
-          : (lang === "en" ? "Couldn't send OTP — check the number and try again." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।")
+          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : lang === "mr" ? "खूप जास्त प्रयत्न — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
+          : (lang === "en" ? "Couldn't send OTP — check the number and try again." : lang === "mr" ? "OTP पाठवू शकलो नाही — नंबर तपासा आणि पुन्हा प्रयत्न करा." : "OTP नहीं भेज सका — नंबर जांचें और फिर कोशिश करें।")
       );
     }
     setSending(false);
@@ -2053,7 +2068,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       // ready (see the effect above) — nothing more to do here.
     } catch (e) {
       console.error(e);
-      setError(lang === "en" ? "Incorrect OTP — try again." : "गलत OTP — फिर कोशिश करें।");
+      setError(lang === "en" ? "Incorrect OTP — try again." : lang === "mr" ? "चुकीचा OTP — पुन्हा प्रयत्न करा." : "गलत OTP — फिर कोशिश करें।");
       setSending(false);
       return;
     }
@@ -2078,7 +2093,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   );
 
   if (!verified && otpStage === "checking") {
-    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
+    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : lang === "mr" ? "तुमचे सेशन तपासले जात आहे..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
   }
 
   if (verified && driver && driver.vehicleSpec) {
@@ -2087,7 +2102,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-5">
         {backButton}
-        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : lang === "mr" ? "तुमची प्रोफाइल लोड होत आहे..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
       </div>
     );
   }
@@ -2096,7 +2111,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-5">
         {backButton}
-        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : lang === "mr" ? "तुमची प्रोफाइल लोड होत आहे..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
       </div>
     );
   }
@@ -2108,7 +2123,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       <div className="flex-1 overflow-y-auto">
         <div className="px-5 pt-4">{backButton}</div>
         <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
-          stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"} />
+          stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : lang === "mr" ? "स्टेप 2 / 2 — कागदपत्रे आणि गाडी" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"} />
       </div>
     );
   }
@@ -2124,10 +2139,10 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
           <XCircle size={26} color="#FFFFFF" />
         </div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : "अभी रजिस्टर्ड नहीं है"}</h2>
-        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a driver account yet. Please sign up first." : "इस मोबाइल नंबर से अभी तक कोई ड्राइवर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : lang === "mr" ? "अजून रजिस्टर्ड नाही" : "अभी रजिस्टर्ड नहीं है"}</h2>
+        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a driver account yet. Please sign up first." : lang === "mr" ? "या मोबाइल नंबरने अजून कोणतेही ड्रायव्हर खाते नाही. कृपया आधी साइन अप करा." : "इस मोबाइल नंबर से अभी तक कोई ड्राइवर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
         <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
-          {lang === "en" ? "Sign Up Now" : "अभी साइन अप करें"}
+          {lang === "en" ? "Sign Up Now" : lang === "mr" ? "आत्ता साइन अप करा" : "अभी साइन अप करें"}
         </button>
       </div>
     );
@@ -2142,30 +2157,30 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
           <MapPin size={22} color="#000000" />
         </div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Registration" : "ड्राइवर रजिस्ट्रेशन"}</h2>
-        <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Registration" : lang === "mr" ? "ड्रायव्हर रजिस्ट्रेशन" : "ड्राइवर रजिस्ट्रेशन"}</h2>
+        <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : lang === "mr" ? "फक्त एकदाच — सेटअप पूर्ण करण्यासाठी तुमची माहिती भरा." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
         <div className="space-y-3">
           <GuidedStep {...regStepProps(0)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
           </GuidedStep>
           <GuidedStep {...regStepProps(1)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : lang === "mr" ? "उदा: घर/दुकान क्र., गल्ली" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
           </GuidedStep>
           <div className="grid grid-cols-2 gap-3">
             <GuidedStep {...regStepProps(2)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
+              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : lang === "mr" ? "उदा: पुणे" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
             </GuidedStep>
             <GuidedStep {...regStepProps(3)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
+              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
+              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : lang === "mr" ? "उदा: महाराष्ट्र" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
             </GuidedStep>
           </div>
           <GuidedStep {...regStepProps(4)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
-            <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
+            <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : lang === "mr" ? "6 अंकी पिनकोड" : "6 अंकों का पिनकोड"} value={pincode}
               onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </GuidedStep>
         </div>
@@ -2175,14 +2190,14 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
             <span className="text-[11px] font-semibold leading-snug" style={{ color: "#FFFFFF" }}>
               {lang === "en"
                 ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
-                : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
+                : lang === "mr" ? "मी याची पुष्टी करतो/करते की माझ्या गाडीचे RC, इन्शुरन्स, फिटनेस सर्टिफिकेट, परमिट, PUC आणि माझा ड्रायव्हिंग लायसन्स वैध व अद्ययावत ठेवणे, ड्रायव्हर/गाडी मालक म्हणून, पूर्णपणे माझी जबाबदारी आहे. कोणत्याही कागदपत्राच्या कमतरतेमुळे किंवा त्यामुळे होणाऱ्या RTO/कायदेशीर कारवाई, दंड किंवा चलनासाठी अपना ट्रान्सपोर्ट जबाबदार राहणार नाही — त्याची संपूर्ण जबाबदारी माझी स्वतःची असेल." : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
             </span>
           </label>
         </div>
-        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause to continue" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
+        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील सर्व माहिती भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
         <button onClick={completeDetails} disabled={!detailsValid} className={`w-full rounded-lg py-4 font-bold text-base mt-3 ${detailsValid ? "guided-submit-ready" : ""}`}
           style={{ background: detailsValid ? C.marigold : "#E0E0E0", color: detailsValid ? "#000000" : "#9AA3B0" }}>
-          {lang === "en" ? "Continue" : "आगे बढ़ें"}
+          {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
         </button>
       </div>
     );
@@ -2201,14 +2216,14 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver" : "ड्राइवर"}</h2>
-        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : lang === "mr" ? "तुम्ही आधीपासून रजिस्टर्ड आहात, की नवीन आहात?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
         <div className="w-full space-y-3">
           <button onClick={() => setMode("login")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
-            {lang === "en" ? "Login" : "लॉगिन करें"}
+            {lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें"}
           </button>
           <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.paper, color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
-            {lang === "en" ? "Sign Up (New Driver)" : "साइन अप करें (नया ड्राइवर)"}
+            {lang === "en" ? "Sign Up (New Driver)" : lang === "mr" ? "साइन अप करा (नवीन ड्रायव्हर)" : "साइन अप करें (नया ड्राइवर)"}
           </button>
         </div>
       </div>
@@ -2223,26 +2238,26 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Login" : "ड्राइवर लॉगिन"}</h2>
-        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Login" : lang === "mr" ? "ड्रायव्हर लॉगिन" : "ड्राइवर लॉगिन"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Verify your mobile number to get started." : lang === "mr" ? "सुरू करण्यासाठी तुमचा मोबाइल नंबर व्हेरिफाय करा." : "शुरू करने के लिए अपना मोबाइल नंबर वेरीफाई करें।"}</p>
         <div className="w-full">
           {otpStage === "mobile" ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <Phone size={16} color={C.inkSoft} />
                 <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
-                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
                   value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={mobile.length !== 10 || sending}
                 className="w-full rounded-lg py-4 font-bold text-base" style={{ background: mobile.length === 10 && !sending ? C.marigold : "#E0E0E0", color: mobile.length === 10 && !sending ? "#000000" : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+                {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : lang === "mr" ? "OTP पाठवा" : "OTP भेजें")}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : lang === "mr" ? `${mobile} वर OTP पाठवला` : `${mobile} पर OTP भेजा गया`}</p>
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <ShieldCheck size={16} color={C.inkSoft} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
@@ -2251,11 +2266,11 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
                 className="w-full rounded-lg py-4 font-bold text-base" style={{ background: otp.length === 6 && !sending ? C.marigold : "#E0E0E0", color: otp.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : "वेरीफाई करें")}
+                {sending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : lang === "mr" ? "व्हेरिफाय करा" : "वेरीफाई करें")}
               </button>
               <div className="flex items-center justify-between">
-                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
-                <button onClick={sendOtp} disabled={sending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
+                <button onClick={sendOtp} disabled={sending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : lang === "mr" ? "OTP पुन्हा पाठवा" : "OTP दोबारा भेजें"}</button>
               </div>
             </div>
           )}
@@ -2273,33 +2288,33 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
         <ChevronLeft size={18} strokeWidth={3} />
       </button>
       <div className="mb-4"><Logo size={96} /></div>
-      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Sign Up" : "ड्राइवर साइन अप"}</h2>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Sign Up" : lang === "mr" ? "ड्रायव्हर साइन अप" : "ड्राइवर साइन अप"}</h2>
       <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
-        {lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।"}
+        {lang === "en" ? "Step 1 of 2 — Fill in your details, then verify your mobile number below." : lang === "mr" ? "स्टेप 1 / 2 — तुमची माहिती भरा, नंतर खाली मोबाइल नंबर व्हेरिफाय करा." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे मोबाइल नंबर वेरीफाई करें।"}
       </p>
 
       <div className="space-y-3">
         <GuidedStep {...regStepProps(0)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : "आपका नाम"}</label>
-          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</label>
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
         </GuidedStep>
         <GuidedStep {...regStepProps(1)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
-          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}</label>
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : lang === "mr" ? "उदा: घर/दुकान क्र., गल्ली" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
         </GuidedStep>
         <div className="grid grid-cols-2 gap-3">
           <GuidedStep {...regStepProps(2)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : lang === "mr" ? "उदा: पुणे" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
           </GuidedStep>
           <GuidedStep {...regStepProps(3)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : lang === "mr" ? "उदा: महाराष्ट्र" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
           </GuidedStep>
         </div>
         <GuidedStep {...regStepProps(4)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
-          <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : "6 अंकों का पिनकोड"} value={pincode}
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
+          <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : lang === "mr" ? "6 अंकी पिनकोड" : "6 अंकों का पिनकोड"} value={pincode}
             onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
         </GuidedStep>
       </div>
@@ -2310,31 +2325,31 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
           <span className="text-[11px] font-semibold leading-snug" style={{ color: "#FFFFFF" }}>
             {lang === "en"
               ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
-              : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
+              : lang === "mr" ? "मी याची पुष्टी करतो/करते की माझ्या गाडीचे RC, इन्शुरन्स, फिटनेस सर्टिफिकेट, परमिट, PUC आणि माझा ड्रायव्हिंग लायसन्स वैध व अद्ययावत ठेवणे, ड्रायव्हर/गाडी मालक म्हणून, पूर्णपणे माझी जबाबदारी आहे. कोणत्याही कागदपत्राच्या कमतरतेमुळे किंवा त्यामुळे होणाऱ्या RTO/कायदेशीर कारवाई, दंड किंवा चलनासाठी अपना ट्रान्सपोर्ट जबाबदार राहणार नाही — त्याची संपूर्ण जबाबदारी माझी स्वतःची असेल." : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
           </span>
         </label>
       </div>
 
       <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
-        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : "मोबाइल नंबर वेरीफाई करें"}</div>
+        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Verify Mobile Number" : lang === "mr" ? "मोबाइल नंबर व्हेरिफाय करा" : "मोबाइल नंबर वेरीफाई करें"}</div>
         {otpStage === "mobile" ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <Phone size={16} color={C.inkSoft} />
                 <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
-                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : "10 अंकों का मोबाइल नंबर"}
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
                   value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
               </div>
-              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause first" : "पहले ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
+              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause first" : lang === "mr" ? "आधी वरील सर्व माहिती भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "पहले ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
                 className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : "#E0E0E0", color: detailsValid && mobile.length === 10 && !sending ? "#000000" : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : "OTP भेजें")}
+                {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send OTP" : lang === "mr" ? "OTP पाठवा" : "OTP भेजें")}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : `${mobile} पर OTP भेजा गया`}</p>
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to ${mobile}` : lang === "mr" ? `${mobile} वर OTP पाठवला` : `${mobile} पर OTP भेजा गया`}</p>
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                 <ShieldCheck size={16} color={C.inkSoft} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: otp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={otp}
@@ -2343,11 +2358,11 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={verifyOtp} disabled={otp.length !== 6 || sending}
                 className="w-full rounded-lg py-4 font-bold text-base" style={{ background: otp.length === 6 && !sending ? C.marigold : "#E0E0E0", color: otp.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Verifying..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify & Continue" : "वेरीफाई करें और आगे बढ़ें")}
+                {sending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify & Continue" : lang === "mr" ? "व्हेरिफाय करा आणि पुढे जा" : "वेरीफाई करें और आगे बढ़ें")}
               </button>
               <div className="flex items-center justify-between">
-                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : "नंबर बदलें"}</button>
-                <button onClick={sendOtp} disabled={sending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : "OTP दोबारा भेजें"}</button>
+                <button onClick={() => { setOtpStage("mobile"); setOtp(""); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
+                <button onClick={sendOtp} disabled={sending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : lang === "mr" ? "OTP पुन्हा पाठवा" : "OTP दोबारा भेजें"}</button>
               </div>
             </div>
           )}
@@ -2475,13 +2490,13 @@ function PhotoPicker({ label, lang = "hi", onSelect, children }) {
           <div className="w-full max-w-sm rounded-t-2xl p-4" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
             <div className="text-sm font-bold mb-3 text-center" style={{ color: C.ink }}>{label}</div>
             <button type="button" onClick={() => cameraRef.current?.click()} className="w-full rounded-lg py-4 mb-2 font-bold text-base flex items-center justify-center gap-2" style={{ background: C.marigold, color: "#fff" }}>
-              <Camera size={16} /> {lang === "en" ? "Take Photo" : "फोटो लें"}
+              <Camera size={16} /> {lang === "en" ? "Take Photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें"}
             </button>
             <button type="button" onClick={() => libraryRef.current?.click()} className="w-full rounded-lg py-4 mb-2 font-bold text-base" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
-              {lang === "en" ? "Choose from Library" : "लाइब्रेरी से चुनें"}
+              {lang === "en" ? "Choose from Library" : lang === "mr" ? "लायब्ररीमधून निवडा" : "लाइब्रेरी से चुनें"}
             </button>
             <button type="button" onClick={() => setChoosing(false)} className="w-full rounded-lg py-3.5 text-base font-semibold" style={{ color: C.safety }}>
-              {lang === "en" ? "Cancel" : "रद्द करें"}
+              {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
             </button>
           </div>
         </div>
@@ -2513,7 +2528,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
     const path = `bookings/${booking.id}/documents/invoice.${isPdf ? "pdf" : "jpg"}`;
     const result = isPdf ? await uploadRawFile(f, path) : await uploadDocumentPhoto(f, path);
     setUploading(false);
-    if (!result) { setError(lang === "en" ? "Upload failed — check your connection and try again." : "अपलोड विफल — कनेक्शन जांचें और फिर कोशिश करें।"); return; }
+    if (!result) { setError(lang === "en" ? "Upload failed — check your connection and try again." : lang === "mr" ? "अपलोड अयशस्वी — कनेक्शन तपासा आणि पुन्हा प्रयत्न करा." : "अपलोड विफल — कनेक्शन जांचें और फिर कोशिश करें।"); return; }
     setFile({ ...result, type: isPdf ? "pdf" : "image" });
   };
 
@@ -2525,7 +2540,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
       onClose();
     } catch (e) {
       console.error(e);
-      setError(lang === "en" ? "Could not send — try again." : "भेजा नहीं जा सका — फिर कोशिश करें।");
+      setError(lang === "en" ? "Could not send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।");
       setSending(false);
     }
   };
@@ -2534,27 +2549,27 @@ function BillDocumentsModal({ booking, onClose, lang }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Send Invoice" : "इनवॉइस भेजें"}</h3>
+          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Send Invoice" : lang === "mr" ? "इनव्हॉइस पाठवा" : "इनवॉइस भेजें"}</h3>
           <button onClick={onClose}><X size={18} color={C.inkSoft} /></button>
         </div>
 
         {alreadySent && (
           <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.success }}>
             <CheckCircle2 size={14} color="#FFFFFF" />
-            <span className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Already sent to driver — you can resend to update." : "पहले ही ड्राइवर को भेजा जा चुका है — अपडेट के लिए फिर भेज सकते हैं।"}</span>
+            <span className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Already sent to driver — you can resend to update." : lang === "mr" ? "आधीच ड्रायव्हरला पाठवले गेले आहे — अपडेटसाठी पुन्हा पाठवू शकता." : "पहले ही ड्राइवर को भेजा जा चुका है — अपडेट के लिए फिर भेज सकते हैं।"}</span>
           </div>
         )}
 
         <div className="rounded-xl p-3 mb-3" style={{ background: C.paper, border: `1.5px solid ${file?.url ? C.success : C.line}` }}>
           <div className="flex items-center gap-2 mb-2">
             <FileText size={16} color={file?.url ? C.success : C.marigoldDeep} className="shrink-0" />
-            <span className="text-sm font-bold flex-1 min-w-0" style={{ color: C.ink }}>{lang === "en" ? "Invoice / Bill" : "इनवॉइस / बिल"}</span>
+            <span className="text-sm font-bold flex-1 min-w-0" style={{ color: C.ink }}>{lang === "en" ? "Invoice / Bill" : lang === "mr" ? "इनव्हॉइस / बिल" : "इनवॉइस / बिल"}</span>
             {file?.url && <CheckCircle2 size={16} color={C.success} className="shrink-0" />}
           </div>
           {file?.url && <div className="text-[11px] truncate mb-2" style={{ color: C.inkSoft }}>{file.name}</div>}
           <div className="flex gap-2">
             <button type="button" onClick={() => scanInputRef.current?.click()} className="rounded-lg py-3.5 px-3 flex items-center justify-center gap-1.5 text-base font-bold" style={{ background: C.marigoldDeep, color: "#fff" }}>
-              <Camera size={16} /> {file?.url ? (lang === "en" ? "Rescan" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : "दस्तावेज़ स्कैन करें")}
+              <Camera size={16} /> {file?.url ? (lang === "en" ? "Rescan" : lang === "mr" ? "पुन्हा स्कॅन करा" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : lang === "mr" ? "कागदपत्र स्कॅन करा" : "दस्तावेज़ स्कैन करें")}
             </button>
             {/* capture="environment" launches the camera directly — no Take
                 Photo/Choose from Library sheet — since this button's whole
@@ -2562,7 +2577,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
             <input ref={scanInputRef} type="file" accept="image/*" capture="environment" className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, false); e.target.value = ""; }} />
             <button type="button" onClick={() => uploadFileRef.current?.click()} className="rounded-lg py-3.5 px-3 flex items-center justify-center gap-1.5 text-base font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
-              <Upload size={16} /> {lang === "en" ? "Upload Invoice" : "इनवॉइस अपलोड करें"}
+              <Upload size={16} /> {lang === "en" ? "Upload Invoice" : lang === "mr" ? "इनव्हॉइस अपलोड करा" : "इनवॉइस अपलोड करें"}
             </button>
             {/* No capture attribute here — this one's for picking an
                 existing file/photo, not scanning a new one. */}
@@ -2571,7 +2586,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
           </div>
           {uploading && (
             <div className="text-[11px] font-semibold mt-2 flex items-center gap-1.5" style={{ color: C.marigoldDeep }}>
-              <Loader2 size={12} className="animate-spin" /> {lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}
+              <Loader2 size={12} className="animate-spin" /> {lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}
             </div>
           )}
         </div>
@@ -2580,7 +2595,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
 
         <button onClick={send} disabled={!file?.url || sending} className={`w-full rounded-xl py-4 text-base font-black text-white ${file?.url ? "shadow-lg" : ""}`}
           style={{ background: file?.url ? C.metallicGreen : "#E0E0E0", color: file?.url ? "#fff" : "#9AA3B0" }}>
-          {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send to Driver" : "ड्राइवर को भेजें")}
+          {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send to Driver" : lang === "mr" ? "ड्रायव्हरला पाठवा" : "ड्राइवर को भेजें")}
         </button>
       </div>
     </div>
@@ -2600,16 +2615,16 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Receive Bill" : "बिल प्राप्त करें"}</h3>
+          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Receive Bill" : lang === "mr" ? "बिल मिळवा" : "बिल प्राप्त करें"}</h3>
           <button onClick={onClose}><X size={18} color={C.inkSoft} /></button>
         </div>
 
         {file?.url ? (
           <a href={file.url} target="_blank" rel="noreferrer" className="w-full rounded-xl py-3 text-sm font-black text-white flex items-center justify-center gap-2 shadow-lg" style={{ background: C.metallicGreen }}>
-            <Download size={16} /> {lang === "en" ? "View / Download Invoice" : "इनवॉइस देखें / डाउनलोड करें"}
+            <Download size={16} /> {lang === "en" ? "View / Download Invoice" : lang === "mr" ? "इनव्हॉइस पहा / डाउनलोड करा" : "इनवॉइस देखें / डाउनलोड करें"}
           </a>
         ) : (
-          <div className="text-xs font-semibold text-center" style={{ color: C.inkSoft }}>{lang === "en" ? "Waiting for the customer to send the invoice." : "ग्राहक द्वारा इनवॉइस भेजे जाने का इंतज़ार है।"}</div>
+          <div className="text-xs font-semibold text-center" style={{ color: C.inkSoft }}>{lang === "en" ? "Waiting for the customer to send the invoice." : lang === "mr" ? "ग्राहकाकडून इनव्हॉइस पाठवण्याची वाट पाहत आहे." : "ग्राहक द्वारा इनवॉइस भेजे जाने का इंतज़ार है।"}</div>
         )}
       </div>
     </div>
@@ -2708,13 +2723,13 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
       <div className="mt-2 space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-xl py-5 text-base font-bold" style={{ background: C.success, color: "#fff" }}>
-            <MapPin size={18} /> {lang === "en" ? "Choose from Map" : "मैप से चुनें"}
+            <MapPin size={18} /> {lang === "en" ? "Choose from Map" : lang === "mr" ? "मॅपवरून निवडा" : "मैप से चुनें"}
           </button>
-          <MicButton onResult={onMic} lang={lang} label={lang === "en" ? "Speak to Enter" : "बोलकर लिखें"} />
+          <MicButton onResult={onMic} lang={lang} label={lang === "en" ? "Speak to Enter" : lang === "mr" ? "बोलून लिहा" : "बोलकर लिखें"} />
         </div>
         {onUseCurrentLocation && (
           <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-xl py-5 text-base font-bold" style={{ background: C.success, color: "#fff" }}>
-            <Navigation size={16} /> {locating ? (lang === "en" ? "Locating..." : "ढूंढ रहे हैं...") : (lang === "en" ? "Use My Current Location" : "मेरी वर्तमान लोकेशन इस्तेमाल करें")}
+            <Navigation size={16} /> {locating ? (lang === "en" ? "Locating..." : lang === "mr" ? "शोधत आहोत..." : "ढूंढ रहे हैं...") : (lang === "en" ? "Use My Current Location" : lang === "mr" ? "माझे सध्याचे लोकेशन वापरा" : "मेरी वर्तमान लोकेशन इस्तेमाल करें")}
           </button>
         )}
       </div>
@@ -3021,6 +3036,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
     if (hoursUntil >= minHours) return "";
     return lang === "en"
       ? `This weight needs at least ${minHours} hour${minHours > 1 ? "s" : ""} advance notice — please pick a later time.`
+      : lang === "mr"
+      ? `या वजनासाठी किमान ${minHours} तास आधी बुकिंग आवश्यक आहे — कृपया नंतरची वेळ निवडा.`
       : `इस वजन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`;
   })();
 
@@ -3051,12 +3068,12 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   if (!bookingMode) {
     return (
       <div className="px-5 py-8 flex flex-col justify-center" style={{ minHeight: 420 }}>
-        <p className="text-base font-black text-center mb-8" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Book anything from a mini truck to a full-size truck — all across India." : "पूरे भारत में छोटी से लेकर बड़ी गाड़ी तक बुक करें।"}</p>
-        <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : "आपको क्या चाहिए?"}</p>
+        <p className="text-base font-black text-center mb-8" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Book anything from a mini truck to a full-size truck — all across India." : lang === "mr" ? "संपूर्ण भारतात लहान ते मोठी गाडी बुक करा." : "पूरे भारत में छोटी से लेकर बड़ी गाड़ी तक बुक करें।"}</p>
+        <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : lang === "mr" ? "तुम्हाला काय हवे आहे?" : "आपको क्या चाहिए?"}</p>
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => setBookingMode("now")} className="rounded-2xl p-7 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.marigold, minHeight: 160 }}>
             <Truck size={30} color="#000000" />
-            <div className="text-base font-black" style={{ color: "#000000" }}>⚡ {lang === "en" ? "Book a vehicle now" : "अभी गाड़ी बुक करें"}</div>
+            <div className="text-base font-black" style={{ color: "#000000" }}>⚡ {lang === "en" ? "Book a vehicle now" : lang === "mr" ? "आत्ता गाडी बुक करा" : "अभी गाड़ी बुक करें"}</div>
           </button>
           <button onClick={() => {
             // Pickup/Drop are shared state with "Book Now" -- if the customer
@@ -3068,7 +3085,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             setBookingMode("advance");
           }} className="rounded-2xl p-7 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.navy, minHeight: 160 }}>
             <Clock3 size={30} color="#fff" />
-            <div className="text-base font-black text-white">📅 {lang === "en" ? "Book ride in advance" : "एडवांस गाड़ी बुक करें"}</div>
+            <div className="text-base font-black text-white">📅 {lang === "en" ? "Book ride in advance" : lang === "mr" ? "अ‍ॅडव्हान्स गाडी बुक करा" : "एडवांस गाड़ी बुक करें"}</div>
           </button>
         </div>
       </div>
@@ -3081,7 +3098,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 p-3 rounded-full shadow-sm shrink-0" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
-        <p className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "* All fields below are mandatory" : "* नीचे दिए गए सभी विवरण भरना अनिवार्य है"}</p>
+        <p className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "* All fields below are mandatory" : lang === "mr" ? "* खाली दिलेली सर्व माहिती भरणे अनिवार्य आहे" : "* नीचे दिए गए सभी विवरण भरना अनिवार्य है"}</p>
       </div>
       <div className="space-y-3">
         {lastBooking && !pickup && !drop && (
@@ -3099,10 +3116,10 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               <Package size={20} color={C.success} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Repeat last trip" : "पिछली ट्रिप दोहराएं"}</div>
+              <div className="text-sm font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Repeat last trip" : lang === "mr" ? "मागील ट्रिप पुन्हा करा" : "पिछली ट्रिप दोहराएं"}</div>
               <div className="text-sm font-bold truncate" style={{ color: "#FFFFFF" }}>{lastBooking.pickup} → {lastBooking.drop}</div>
             </div>
-            <span className="text-xs font-black shrink-0 rounded-xl px-3 py-2.5 text-center" style={{ background: "#00763C", color: "#FFFFFF" }}>{lang === "en" ? "Tap →" : "टैप करें →"}</span>
+            <span className="text-xs font-black shrink-0 rounded-xl px-3 py-2.5 text-center" style={{ background: "#00763C", color: "#FFFFFF" }}>{lang === "en" ? "Tap →" : lang === "mr" ? "टॅप करा →" : "टैप करें →"}</span>
           </button>
         )}
         {bookingMode === "advance" && (
@@ -3111,7 +3128,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
                 customer moves on, it settles back to a plain white card
                 instead of staying highlighted forever. */}
             <div className="rounded-2xl p-3" style={{ background: stepProps(0).active ? C.marigold : C.paper }}>
-              <label className="text-base font-extrabold mb-2 block text-center" style={{ color: C.ink }}>{lang === "en" ? "When do you need the vehicle?" : "गाड़ी कब चाहिए?"}</label>
+              <label className="text-base font-extrabold mb-2 block text-center" style={{ color: C.ink }}>{lang === "en" ? "When do you need the vehicle?" : lang === "mr" ? "गाडी कधी हवी?" : "गाड़ी कब चाहिए?"}</label>
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {[1, 2, 3].map((n) => {
                   const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
@@ -3121,7 +3138,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
                     <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
                       className="rounded-xl py-4 text-base font-bold text-center"
                       style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.ink, border: active ? "none" : `1.5px solid ${C.line}` }}>
-                      {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : `${n} दिन बाद`}
+                      {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : lang === "mr" ? `${n} दिवसांनी` : `${n} दिन बाद`}
                     </button>
                   );
                 })}
@@ -3129,7 +3146,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
               <div className="grid grid-cols-2 gap-2">
                 <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
                 <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-xl px-4 py-4 flex items-center justify-center" style={inputStyle}>
-                  <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : "समय चुनें")}</span>
+                  <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
                 </button>
               </div>
             </div>
@@ -3139,14 +3156,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         <div className="space-y-4">
           <GuidedStep {...stepProps(stepOffset + 0)} lang={lang}>
             <LocationField
-              label={lang === "en" ? "Choose Pickup location" : "पिकअप स्थान चुनें"}
+              label={lang === "en" ? "Choose Pickup location" : lang === "mr" ? "पिकअप ठिकाण निवडा" : "पिकअप स्थान चुनें"}
               lang={lang}
               dotColor={C.success}
               value={pickup}
               onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupSelected(false); }}
               onPlaceSelected={onPickupPlaceSelected}
               mapsReady={mapsReady}
-              placeholder={lang === "en" ? "🟢 Where to pick up the load from? (Pickup)" : "🟢 सामान कहाँ से उठाना है? (पिकअप)"}
+              placeholder={lang === "en" ? "🟢 Where to pick up the load from? (Pickup)" : lang === "mr" ? "🟢 सामान कुठून उचलायचे आहे? (पिकअप)" : "🟢 सामान कहाँ से उठाना है? (पिकअप)"}
               onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); setPickupSelected(false); }}
               onMapPin={() => setMapField("pickup")}
               onUseCurrentLocation={useMyCurrentLocation}
@@ -3158,14 +3175,14 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
           <GuidedStep {...stepProps(stepOffset + 1)} lang={lang}>
             <LocationField
-              label={lang === "en" ? "Choose Drop location" : "ड्रॉप स्थान चुनें"}
+              label={lang === "en" ? "Choose Drop location" : lang === "mr" ? "ड्रॉप ठिकाण निवडा" : "ड्रॉप स्थान चुनें"}
               lang={lang}
               dotColor={C.safety}
               value={drop}
               onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropSelected(false); }}
               onPlaceSelected={onDropPlaceSelected}
               mapsReady={mapsReady}
-              placeholder={lang === "en" ? "🔴 Where to unload the goods? (Drop)" : "🔴 सामान कहाँ उतारना है? (ड्रॉप)"}
+              placeholder={lang === "en" ? "🔴 Where to unload the goods? (Drop)" : lang === "mr" ? "🔴 सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "🔴 सामान कहाँ उतारना है? (ड्रॉप)"}
               onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); setDropSelected(false); }}
               onMapPin={() => setMapField("drop")}
               suggestions={suggestAreas(drop)}
@@ -3176,39 +3193,39 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
         <div className="grid grid-cols-2 gap-3 items-start">
           <GuidedStep {...stepProps(stepOffset + 2)} lang={lang}>
-            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : "मटेरियल टाइप"}</label>
+            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : lang === "mr" ? "मटेरियल टाइप" : "मटेरियल टाइप"}</label>
             {addingMaterial ? (
               <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                <input className={inputCls} style={{ ...inputStyle, marginBottom: 6 }} placeholder={lang === "en" ? "e.g. Tiles" : "जैसे: टाइल्स"} value={newMaterial} onChange={(e) => setNewMaterial(e.target.value)} autoFocus />
+                <input className={inputCls} style={{ ...inputStyle, marginBottom: 6 }} placeholder={lang === "en" ? "e.g. Tiles" : lang === "mr" ? "उदा: टाइल्स" : "जैसे: टाइल्स"} value={newMaterial} onChange={(e) => setNewMaterial(e.target.value)} autoFocus />
                 <div className="flex items-center gap-2">
-                  <button onClick={() => { setAddingMaterial(false); setNewMaterial(""); }} className="flex-1 rounded-lg py-3.5 text-base font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>{lang === "en" ? "Cancel" : "रद्द करें"}</button>
+                  <button onClick={() => { setAddingMaterial(false); setNewMaterial(""); }} className="flex-1 rounded-lg py-3.5 text-base font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}</button>
                   <button onClick={() => {
                     const name = newMaterial.trim();
                     if (!name) return;
                     addCustomMaterial(name, { hi: name, en: name });
                     setMaterial(name); setNewMaterial(""); setAddingMaterial(false);
-                  }} className="flex-1 rounded-lg py-3.5 text-base font-bold text-white" style={{ background: C.marigoldDeep }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
+                  }} className="flex-1 rounded-lg py-3.5 text-base font-bold text-white" style={{ background: C.marigoldDeep }}>{lang === "en" ? "Add" : lang === "mr" ? "जोडा" : "जोड़ें"}</button>
                 </div>
               </div>
             ) : (
               <select className={inputCls} style={{ ...inputStyle, color: material ? inputStyle.color : "#9AA3B0" }} value={material}
                 onChange={(e) => { if (e.target.value === ADD_MATERIAL) setAddingMaterial(true); else setMaterial(e.target.value); }}>
-                <option value="" disabled style={{ color: "#9AA3B0" }}>{lang === "en" ? "Select material" : "मटेरियल चुनें"}</option>
+                <option value="" disabled style={{ color: "#9AA3B0" }}>{lang === "en" ? "Select material" : lang === "mr" ? "मटेरियल निवडा" : "मटेरियल चुनें"}</option>
                 {materialsList.map((m) => <option key={m} value={m} style={{ color: C.ink }}>{materialLabel(m, lang, customMaterials)}</option>)}
-                <option value={ADD_MATERIAL} style={{ color: C.ink }}>+ {lang === "en" ? "Add new material" : "नया मटेरियल जोड़ें"}</option>
+                <option value={ADD_MATERIAL} style={{ color: C.ink }}>+ {lang === "en" ? "Add new material" : lang === "mr" ? "नवीन मटेरियल जोडा" : "नया मटेरियल जोड़ें"}</option>
               </select>
             )}
           </GuidedStep>
           <GuidedStep {...stepProps(stepOffset + 3)} lang={lang}>
-            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : "वजन डालें (किलोग्राम)"}</label>
-            <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
+            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"}</label>
+            <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : lang === "mr" ? "उदा: 300 किलो" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
           </GuidedStep>
         </div>
 
         {distance !== null && (
           <div className="rounded-lg p-2.5 shadow-sm flex items-center gap-2" style={{ background: "#F5F3EE", border: `1px solid ${C.line}` }}>
             <Navigation size={16} color="#000000" />
-            <span className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Estimated distance" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : "किमी"}</span>
+            <span className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Estimated distance" : lang === "mr" ? "अंदाजे अंतर" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : lang === "mr" ? "किमी" : "किमी"}</span>
           </div>
         )}
 
@@ -3218,7 +3235,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
 
         <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready" : ""}`}
           style={{ background: canPost ? C.success : "#E0E0E0", color: canPost ? "#fff" : "#9AA3B0" }}>
-          🚚 {lang === "en" ? "Book Now" : "अभी बुक करें"}
+          🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
         </button>
       </div>
 
@@ -3249,9 +3266,9 @@ function RouteLine({ pickup, drop, lang }) {
         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: C.safety }} />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : "पिकअप"}</div>
+        <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}</div>
         <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{pickup}</div>
-        <div className="text-[9px] font-bold uppercase tracking-wide mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : "ड्रॉप"}</div>
+        <div className="text-[9px] font-bold uppercase tracking-wide mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}</div>
         <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{drop}</div>
       </div>
     </div>
@@ -3268,7 +3285,7 @@ function RideTypeBanner({ booking, lang }) {
     <div className="w-full rounded-xl px-4 py-3.5 mb-3 flex items-center justify-center gap-2.5 text-center" style={{ background: advance ? C.marigoldDeep : C.success }}>
       <Clock3 size={20} color="#fff" strokeWidth={2.5} />
       <span className="text-sm sm:text-base font-extrabold text-white tracking-wide">
-        {advance ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(booking)}
+        {advance ? (lang === "en" ? "Advance Ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : lang === "mr" ? "तात्काळ राइड" : "तुरंत राइड")} · {rideDateTimeLabel(booking)}
       </span>
     </div>
   );
@@ -3287,6 +3304,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const shareTrip = () => {
     const text = lang === "en"
       ? `My goods are moving via Apna Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
+      : lang === "mr"
+      ? `माझे सामान अपना ट्रान्सपोर्टद्वारे जात आहे.\nबुकिंग: ${b.id}\nड्रायव्हर: ${b.driverName || "—"}\nगाडी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूर्ण`
       : `मेरा सामान अपना ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${b.driverName || "—"}\nगाड़ी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
@@ -3305,11 +3324,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <div key={bid.id} onClick={() => setSelectedBid(bid.id)}
           className="w-full text-left rounded-xl p-3 relative cursor-pointer"
           style={{ background: C.paper, border: `${isSelected ? 2.5 : 1.5}px solid ${isSelected ? C.marigoldDeep : isLowest ? C.success : C.marigoldDeep}` }}>
-          {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : "सबसे कम बोली"}</span>}
+          {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : lang === "mr" ? "सर्वात कमी बोली" : "सबसे कम बोली"}</span>}
           <div className="flex items-center gap-3 mt-1">
             <SafeImage
               src={bidDriver?.vehicleSpec?.photoSide?.url}
-              alt={lang === "en" ? `${vehicleLabel(bidVehicleType, lang)} - Side` : `${vehicleLabel(bidVehicleType, lang)} - साइड`}
+              alt={lang === "en" ? `${vehicleLabel(bidVehicleType, lang)} - Side` : lang === "mr" ? `${vehicleLabel(bidVehicleType, lang)} - बाजू` : `${vehicleLabel(bidVehicleType, lang)} - साइड`}
               className="w-14 h-14 rounded-lg object-cover shrink-0"
               fallback={
                 <div className="w-14 h-14 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.marigoldDeep : isLowest ? C.success : C.marigoldDeep }}>
@@ -3319,7 +3338,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{vehicleLabel(bidVehicleType, lang) || bid.driverName}</div>
-              <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{bid.distanceKm} {lang === "en" ? "km away" : "किमी दूर"}</div>
+              <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{bid.distanceKm} {lang === "en" ? "km away" : lang === "mr" ? "किमी दूर" : "किमी दूर"}</div>
               {bidVehicleType && <div className="text-[9px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{vehicleCapacity(bidVehicleType, lang)}</div>}
             </div>
             <div className="text-right shrink-0">
@@ -3328,15 +3347,15 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           </div>
           {(bid.hours || bid.extraHourRate) && (
             <div className="text-xs font-bold mt-1.5 pt-1.5" style={{ color: C.ink, borderTop: `1px solid ${C.marigoldDeep}` }}>
-              {bid.hours ? (lang === "en" ? `${bid.hours} hrs loading/unloading · ` : `${bid.hours} घंटे लोडिंग/अनलोडिंग · `) : ""}
-              {bid.extraHourRate ? (lang === "en" ? `then ${fmt(bid.extraHourRate)}/hr waiting charge` : `उसके बाद ${fmt(bid.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
+              {bid.hours ? (lang === "en" ? `${bid.hours} hrs loading/unloading · ` : lang === "mr" ? `${bid.hours} तास लोडिंग/अनलोडिंग · ` : `${bid.hours} घंटे लोडिंग/अनलोडिंग · `) : ""}
+              {bid.extraHourRate ? (lang === "en" ? `then ${fmt(bid.extraHourRate)}/hr waiting charge` : lang === "mr" ? `त्यानंतर ${fmt(bid.extraHourRate)}/तास वेटिंग चार्ज` : `उसके बाद ${fmt(bid.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
             </div>
           )}
           <div className="flex justify-end mt-2">
             <button onClick={(e) => { e.stopPropagation(); setSelectedBid(bid.id); }}
               className="flex items-center gap-1 rounded-full px-4 py-2.5 text-base font-black shadow-sm text-white"
               style={{ background: "#0052CC" }}>
-              {isSelected ? <><CheckCircle2 size={14} /> {lang === "en" ? "Selected" : "चयनित"}</> : (lang === "en" ? "Select" : "चुनें")}
+              {isSelected ? <><CheckCircle2 size={14} /> {lang === "en" ? "Selected" : lang === "mr" ? "निवडलेले" : "चयनित"}</> : (lang === "en" ? "Select" : lang === "mr" ? "निवडा" : "चुनें")}
             </button>
           </div>
         </div>
@@ -3348,14 +3367,14 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             {b.scheduledFor && (
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5 shadow-lg" style={{ background: C.metallicGold }}>
                 <Clock3 size={12} color={C.ink} />
-                <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Advance ride" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
+                <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
               </div>
             )}
 
             {sortedBids.length === 0 ? (
               <div className="rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: C.navy }}>
                 <Loader2 size={16} color="#FFFFFF" className="animate-spin" />
-                <span className="text-sm font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Waiting for driver bids..." : "ड्राइवरों की बोली का इंतज़ार है..."}</span>
+                <span className="text-sm font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Waiting for driver bids..." : lang === "mr" ? "ड्रायव्हरांच्या बोलीची वाट पाहत आहे..." : "ड्राइवरों की बोली का इंतज़ार है..."}</span>
               </div>
             ) : (
               <div className="space-y-2">
@@ -3376,12 +3395,12 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                 else { setSelectedBid(null); setAcceptError(""); onBidAccepted?.(b); }
               }}
                 className="w-full rounded-lg py-3.5 font-bold text-base mt-2 text-white" style={{ background: C.success }}>
-                {lang === "en" ? "Book this vehicle" : "यही गाड़ी बुक करें"}
+                {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"}
               </button>
             )}
             {sortedBids.length === 0 && (
               <div className="flex justify-end mt-2">
-                <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-sm font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel load" : "लोड रद्द करें"}</button>
+                <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-sm font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel load" : lang === "mr" ? "लोड रद्द करा" : "लोड रद्द करें"}</button>
               </div>
             )}
             {cancelError && <div className="text-[11px] font-bold mt-1 text-right" style={{ color: C.safety }}>{cancelError}</div>}
@@ -3406,13 +3425,13 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             the two ever being shown at once. */}
         {b.otp && !b.loadingStartedAt ? (
           <div className="flex-1 rounded-xl px-3 py-1.5 text-center guided-submit-ready">
-            <div className="text-[8px] font-black" style={{ color: C.inkSoft }}>{lang === "en" ? "OTP" : "OTP"}</div>
+            <div className="text-[8px] font-black" style={{ color: C.inkSoft }}>{lang === "en" ? "OTP" : lang === "mr" ? "OTP" : "OTP"}</div>
             <div className="text-lg font-black leading-none mt-0.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
           </div>
         ) : (
           <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-3 pr-3.5 py-3 rounded-full text-base font-black shadow-sm text-white"
             style={{ background: docsSent ? C.metallicGreen : C.navy, border: `1.5px solid ${docsSent ? C.success : C.navy}` }}>
-            <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : "भेजा गया ✓") : (lang === "en" ? "Invoice" : "इनवॉइस")}
+            <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : lang === "mr" ? "पाठवले गेले ✓" : "भेजा गया ✓") : (lang === "en" ? "Invoice" : lang === "mr" ? "इनव्हॉइस" : "इनवॉइस")}
           </button>
         )}
       </div>
@@ -3421,7 +3440,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         <div className="flex-1 p-3 flex items-center gap-2.5">
           <SafeImage
             src={drivers.find((d) => d.name === b.driverName)?.photo?.url}
-            alt={lang === "en" ? "Driver" : "ड्राइवर"}
+            alt={lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}
             className="w-10 h-10 rounded-full object-cover"
             fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>}
           />
@@ -3429,24 +3448,24 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         </div>
         <div className="w-px" style={{ background: C.line }} />
         <div className="flex-1 p-3">
-          <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Details" : "गाड़ी की जानकारी"}</div>
-          <div className="text-sm font-bold mt-0.5" style={{ color: C.ink }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "unavailable" : "उपलब्ध नहीं")}</div>
+          <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Details" : lang === "mr" ? "गाडीची माहिती" : "गाड़ी की जानकारी"}</div>
+          <div className="text-sm font-bold mt-0.5" style={{ color: C.ink }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "unavailable" : lang === "mr" ? "उपलब्ध नाही" : "उपलब्ध नहीं")}</div>
         </div>
       </div>
 
       {b.driverMobile && (
         <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
-          label={lang === "en" ? "Call Driver" : "कॉल ड्राइवर"}
+          label={lang === "en" ? "Call Driver" : lang === "mr" ? "कॉल ड्रायव्हर" : "कॉल ड्राइवर"}
           className="w-full flex items-center justify-center gap-2 px-3.5 py-3.5 mb-2.5 rounded-2xl text-base font-black shadow-sm"
           style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
       )}
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {!b.loadingStartedAt && (
-          <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
+          <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
         )}
         {b.loadingStartedAt && (
-          <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
+          <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
         )}
         <div className="mt-3" style={{ height: "35vh" }}>
           <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
@@ -3458,7 +3477,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       {b.loadingStartedAt && (
         <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: "#4FC3F7", border: "2px solid #0288D1" }}>
           <div className="text-sm font-bold" style={{ color: "#FFFFFF", fontFamily: bodyFont }}>
-            {lang === "en" ? "💡 Once the vehicle is loaded, the driver may ask for an advance payment — this is a mutual agreement between the customer and driver, not a fixed app rule." : "💡 गाड़ी लोड होने के बाद ड्राइवर एडवांस भुगतान मांग सकता है — यह ग्राहक और ड्राइवर के बीच आपसी सहमति है, ऐप का कोई तय नियम नहीं।"}
+            {lang === "en" ? "💡 Once the vehicle is loaded, the driver may ask for an advance payment — this is a mutual agreement between the customer and driver, not a fixed app rule." : lang === "mr" ? "💡 गाडी लोड झाल्यानंतर ड्रायव्हर अ‍ॅडव्हान्स पेमेंट मागू शकतो — ही ग्राहक आणि ड्रायव्हर यांच्यातील परस्पर सहमती आहे, अ‍ॅपचा कोणताही निश्चित नियम नाही." : "💡 गाड़ी लोड होने के बाद ड्राइवर एडवांस भुगतान मांग सकता है — यह ग्राहक और ड्राइवर के बीच आपसी सहमति है, ऐप का कोई तय नियम नहीं।"}
           </div>
         </div>
       )}
@@ -3467,22 +3486,22 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
         {!b.loadingStartedAt && (
           <div className="flex justify-end">
-            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-sm font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : "बुकिंग रद्द करें"}</button>
+            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-sm font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : lang === "mr" ? "बुकिंग रद्द करा" : "बुकिंग रद्द करें"}</button>
           </div>
         )}
         {b.loadingStartedAt && (
           <div className="rounded-lg p-2.5" style={{ background: C.safety, color: "#FFFFFF" }}>
             <div className="text-[11px] font-bold">
-              ⚠️ {lang === "en" ? "Note 1:" : "नोट 1:"} {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
+              ⚠️ {lang === "en" ? "Note 1:" : lang === "mr" ? "नोंद 1:" : "नोट 1:"} {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : lang === "mr" ? "पिकअप आणि ड्रॉपमधील प्रवासाचा वेळ लोडिंग/अनलोडिंग वेळेत मोजला जात नाही." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
             </div>
             <div className="text-[11px] font-bold mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.35)" }}>
-              ⚠️ {lang === "en" ? "Note 2:" : "नोट 2:"} {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
+              ⚠️ {lang === "en" ? "Note 2:" : lang === "mr" ? "नोंद 2:" : "नोट 2:"} {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : lang === "mr" ? "ही ट्रिप आता रद्द केली जाऊ शकत नाही — ही फक्त ड्रायव्हरने पूर्ण (End Trip) केल्यावरच संपेल." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
             </div>
           </div>
         )}
         {b.loadingStartedAt && (
           <div className="flex justify-end mt-2">
-            <button onClick={shareTrip} className="text-sm font-semibold flex items-center justify-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : "ट्रिप शेयर करें"}</button>
+            <button onClick={shareTrip} className="text-sm font-semibold flex items-center justify-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : lang === "mr" ? "ट्रिप शेअर करा" : "ट्रिप शेयर करें"}</button>
           </div>
         )}
         {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
@@ -3535,14 +3554,14 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
 
   return (
     <div className="px-5 py-4">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Ride History" : "राइड हिस्ट्री"}</h2>
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Ride History" : lang === "mr" ? "राइड हिस्टरी" : "राइड हिस्ट्री"}</h2>
       {others.length === 0 ? (
         <div className="text-center py-12 px-6">
           <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.marigoldDeep }}>
             <Package size={26} color="#FFFFFF" />
           </div>
-          <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No past rides yet" : "अभी कोई पुरानी राइड नहीं है"}</p>
-          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Completed and cancelled bookings will show up here." : "पूर्ण और रद्द बुकिंग यहां दिखेंगी।"}</p>
+          <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No past rides yet" : lang === "mr" ? "अजून कोणतीही जुनी राइड नाही" : "अभी कोई पुरानी राइड नहीं है"}</p>
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Completed and cancelled bookings will show up here." : lang === "mr" ? "पूर्ण आणि रद्द बुकिंग इथे दिसतील." : "पूर्ण और रद्द बुकिंग यहां दिखेंगी।"}</p>
         </div>
       ) : others.map((b) => {
         const meta = statusMeta[b.status];
@@ -3555,32 +3574,32 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
             <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
             <div className="flex items-center justify-between mt-2">
               <div>
-                <div className="text-[9px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Transaction Amount" : "लेन-देन राशि"}</div>
+                <div className="text-[9px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Transaction Amount" : lang === "mr" ? "व्यवहार रक्कम" : "लेन-देन राशि"}</div>
                 <span className="text-lg font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{b.fare ? fmt(b.fare) : "—"}</span>
               </div>
               {b.status === "Completed" && (
                 <div className="flex items-center gap-3">
                   <button onClick={() => setDocsBooking(b)} className="text-sm font-semibold flex items-center gap-1" style={{ color: b.documents?.file?.url ? C.success : C.marigoldDeep }}>
-                    <FileText size={12} /> {lang === "en" ? "Send Invoice" : "इनवॉइस भेजें"}
+                    <FileText size={12} /> {lang === "en" ? "Send Invoice" : lang === "mr" ? "इनव्हॉइस पाठवा" : "इनवॉइस भेजें"}
                   </button>
-                  <button onClick={() => downloadInvoice(b)} className="text-sm font-semibold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Download size={12} /> {lang === "en" ? "Invoice" : "इनवॉइस"}</button>
+                  <button onClick={() => downloadInvoice(b)} className="text-sm font-semibold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Download size={12} /> {lang === "en" ? "Invoice" : lang === "mr" ? "इनव्हॉइस" : "इनवॉइस"}</button>
                 </div>
               )}
             </div>
             {b.status === "Completed" && b.fare > 0 && (
               <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>
-                {lang === "en" ? "Payment Type" : "भुगतान का प्रकार"}: <span className="font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Cash / UPI (paid directly to driver)" : "नकद / UPI (सीधे ड्राइवर को)"}</span>
+                {lang === "en" ? "Payment Type" : lang === "mr" ? "पेमेंटचा प्रकार" : "भुगतान का प्रकार"}: <span className="font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Cash / UPI (paid directly to driver)" : lang === "mr" ? "रोख / UPI (थेट ड्रायव्हरला)" : "नकद / UPI (सीधे ड्राइवर को)"}</span>
               </div>
             )}
             {b.status === "Completed" && (
               <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                <span className="text-[11px]" style={{ color: C.inkSoft }}>{b.rating ? (lang === "en" ? "Your rating:" : "आपकी रेटिंग:") : (lang === "en" ? "Rate the driver:" : "ड्राइवर को रेट करें:")}</span>
+                <span className="text-[11px]" style={{ color: C.inkSoft }}>{b.rating ? (lang === "en" ? "Your rating:" : lang === "mr" ? "तुमचे रेटिंग:" : "आपकी रेटिंग:") : (lang === "en" ? "Rate the driver:" : lang === "mr" ? "ड्रायव्हरला रेट करा:" : "ड्राइवर को रेट करें:")}</span>
                 <StarRating value={b.rating} onRate={(n) => rateBooking(b.id, n)} />
               </div>
             )}
             {b.status === "Completed" && b.fare > 0 && (
               <div className="mt-2">
-                <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : "बेस भाड़ा"} baseFare={b.fare - (b.extraCharge || 0)} totalAmount={b.fare} trip={b} lang={lang} />
+                <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : lang === "mr" ? "बेस भाडे" : "बेस भाड़ा"} baseFare={b.fare - (b.extraCharge || 0)} totalAmount={b.fare} trip={b} lang={lang} />
               </div>
             )}
           </div>
@@ -3617,59 +3636,59 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
 
   return (
     <div className="px-5 py-4">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}</h2>
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
-          <PhotoPicker label={lang === "en" ? "Profile Photo" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${customerMobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${customerMobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
             <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
               {photoUploading
-                ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</p>
+                ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</p>
                 : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
             </div>
           </PhotoPicker>
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
           <input className={inputCls} style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : "मोबाइल"}</label>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : lang === "mr" ? "मोबाइल" : "मोबाइल"}</label>
           <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, background: C.bg, color: C.inkSoft }} value={customerMobile || ""} disabled />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
-          <input type="email" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : lang === "mr" ? "ईमेल (ऐच्छिक)" : "ईमेल (वैकल्पिक)"}</label>
+          <input type="email" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : lang === "mr" ? "उदा: ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}</label>
           <input className={inputCls} style={inputStyle} value={address} onChange={(e) => setAddress(e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : lang === "mr" ? "एरिया" : "एरिया"}</label>
             <input className={inputCls} style={inputStyle} value={area} onChange={(e) => setArea(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
             <input className={inputCls} style={inputStyle} value={city} onChange={(e) => setCity(e.target.value)} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
             <input className={inputCls} style={inputStyle} value={state} onChange={(e) => setState(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
             <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </div>
         </div>
         <button onClick={save} disabled={photoUploading} className={`w-full rounded-lg py-3.5 font-bold text-base text-white ${saved ? "shadow-lg" : ""}`} style={{ background: photoUploading ? C.line : saved ? C.metallicGreen : C.marigoldDeep }}>
-          {photoUploading ? (lang === "en" ? "Uploading photo..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
+          {photoUploading ? (lang === "en" ? "Uploading photo..." : lang === "mr" ? "फोटो अपलोड होत आहे..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : lang === "mr" ? "सेव्ह झाले ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें")}
         </button>
       </div>
       <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
-        <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
+        <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
       </button>
     </div>
   );
@@ -3683,12 +3702,12 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
 function CustomerTripSummary({ trip, lang, onDone }) {
   const baseFare = (trip.fare || 0) - (trip.extraCharge || 0);
   const totalAmount = trip.fare || 0;
-  const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   return (
     <div>
       <div className="rounded-2xl p-4 mb-3 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
         <CheckCircle2 size={32} color={C.success} className="mx-auto mb-1.5" />
-        <div className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : "ट्रिप पूरी हुई"}</div>
+        <div className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : lang === "mr" ? "ट्रिप पूर्ण झाली" : "ट्रिप पूरी हुई"}</div>
         {completedLabel && <div className="text-xs font-bold mt-0.5" style={{ color: C.inkSoft }}>{completedLabel}</div>}
       </div>
 
@@ -3696,10 +3715,10 @@ function CustomerTripSummary({ trip, lang, onDone }) {
         <RouteLine pickup={trip.pickup} drop={trip.drop} lang={lang} />
       </div>
 
-      <TripBreakdownTable baseFareLabel={lang === "en" ? "Fare" : "भाड़ा"} baseFare={baseFare} totalAmount={totalAmount} trip={trip} lang={lang} />
+      <TripBreakdownTable baseFareLabel={lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"} baseFare={baseFare} totalAmount={totalAmount} trip={trip} lang={lang} />
 
       <button onClick={onDone} className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
-        {lang === "en" ? "Done" : "पूर्ण"}
+        {lang === "en" ? "Done" : lang === "mr" ? "पूर्ण" : "पूर्ण"}
       </button>
     </div>
   );
@@ -3806,6 +3825,8 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
     const link = "https://sarthi-transport-74865.web.app";
     const msg = lang === "en"
       ? `Book trucks and tempos easily with Apna Transport. Download the app: ${link}`
+      : lang === "mr"
+      ? `ट्रक आणि टेम्पो सहज बुक करण्यासाठी अपना ट्रान्सपोर्ट डाउनलोड करा: ${link}`
       : `ट्रक और टेम्पो आसानी से बुक करने के लिए अपना ट्रांसपोर्ट डाउनलोड करें: ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
@@ -3873,13 +3894,13 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               <div className="flex-1 min-w-0 rounded-full px-3 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
                 <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
                 <span className="text-sm font-extrabold text-white truncate">
-                  {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
+                  {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : lang === "mr" ? "तात्काळ राइड" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
                 </span>
               </div>
             ) : showHamburger ? (
               <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
                 {activeBooking && (
-                  <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
+                  <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : lang === "mr" ? "सध्याच्या राइडवर जा" : "मौजूदा राइड पर जाएं"}
                     className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
                     <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
                   </button>
@@ -3887,7 +3908,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               </div>
             ) : biddingHeader ? (
               <div className="flex-1 min-w-0">
-                <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "My Active Booking" : "मेरी सक्रिय बुकिंग"}</span>
+                <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "My Active Booking" : lang === "mr" ? "माझी सक्रिय बुकिंग" : "मेरी सक्रिय बुकिंग"}</span>
               </div>
             ) : (
               <div className="flex-1 min-w-0" />
@@ -3905,7 +3926,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                   {customerProfile?.photo ? <img src={customerProfile.photo.url} alt="" className="w-full h-full object-cover" /> : <UserCircle2 size={24} color="#000000" />}
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-white">{customerProfile?.name || (lang === "en" ? "Customer" : "कस्टमर")}</div>
+                  <div className="text-sm font-bold text-white">{customerProfile?.name || (lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}</div>
                   {customerMobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{customerMobile}</div>}
                 </div>
               </div>
@@ -3914,35 +3935,35 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
                     <Truck size={13} color={C.marigold} />
                   </div>
-                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Current Booking/s" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
+                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#000000" }}>{lang === "en" ? "Current Booking/s" : lang === "mr" ? "सध्याची बुकिंग पहा" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
                 </button>
                 <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: C.navy }}>
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
                     <Clock3 size={13} color="#FFFFFF" />
                   </div>
-                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance Booking/s" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance Booking/s" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग पहा" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
                 </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
+                <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}
               </button>
               <button onClick={() => { setSettingsView("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "Ride History" : "राइड हिस्ट्री"}
+                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "Ride History" : lang === "mr" ? "राइड हिस्टरी" : "राइड हिस्ट्री"}
               </button>
               <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "customer" && (n.target === "all" || n.target === customerMobile)).length})
+                <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "customer" && (n.target === "all" || n.target === customerMobile)).length})
               </button>
               <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App" : "ऐप शेयर करें"}
+                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App" : lang === "mr" ? "अ‍ॅप शेअर करा" : "ऐप शेयर करें"}
               </button>
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
+                <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : lang === "mr" ? "संपर्क व हेल्पलाइन" : "संपर्क व हेल्पलाइन"}
               </button>
               <button onClick={() => { onOpenTerms(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
+                <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : lang === "mr" ? "नियम व अटी" : "नियम व शर्तें"}
               </button>
               <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink }}>
-                <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : "गोपनीयता नीति"}
+                <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : lang === "mr" ? "गोपनीयता धोरण" : "गोपनीयता नीति"}
               </a>
             </div>
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
@@ -3977,14 +3998,14 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             ) : (
               <div className="px-5 py-5">
                 {advanceBookings.length === 0 ? (
-                  <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
+                  <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
                 ) : (
                   <div className="space-y-3">
                     {advanceBookings.map((ab) => (
                       <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                         <RideTypeBanner booking={ab} lang={lang} />
                         <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
-                        <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{ab.status === "Bidding" ? (lang === "en" ? "Waiting for bids" : "बोली का इंतज़ार") : (lang === "en" ? `Driver assigned — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`)}</div>
+                        <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{ab.status === "Bidding" ? (lang === "en" ? "Waiting for bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार") : (lang === "en" ? `Driver assigned — ${ab.driverName}` : lang === "mr" ? `ड्रायव्हर निश्चित झाला — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`)}</div>
                       </button>
                     ))}
                   </div>
@@ -4054,32 +4075,32 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   return (
     <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : "नया लोड"}</span>
+        <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
       </div>
       <RideTypeBanner booking={load} lang={lang} />
       <div className="mb-2">
-        <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{load.pickup}</span></div>
-        <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{load.drop}</span></div>
+        <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{load.pickup}</span></div>
+        <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{load.drop}</span></div>
       </div>
 
       {isMineHighest && (
         <div className="rounded-lg p-2 mb-2 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-          ⚠ {lang === "en" ? "Your quote is the highest" : "आपका कोटेशन सबसे ज़्यादा है"} — {lowestOther ? (lang === "en" ? `${lowestOther.driverName}'s quote is ${fmt(lowestOther.amount)}` : `${lowestOther.driverName} का कोटेशन ${fmt(lowestOther.amount)} है`) : ""}
+          ⚠ {lang === "en" ? "Your quote is the highest" : lang === "mr" ? "तुमचे कोटेशन सर्वात जास्त आहे" : "आपका कोटेशन सबसे ज़्यादा है"} — {lowestOther ? (lang === "en" ? `${lowestOther.driverName}'s quote is ${fmt(lowestOther.amount)}` : lang === "mr" ? `${lowestOther.driverName} चे कोटेशन ${fmt(lowestOther.amount)} आहे` : `${lowestOther.driverName} का कोटेशन ${fmt(lowestOther.amount)} है`) : ""}
         </div>
       )}
 
       <div className="rounded-lg p-3 mb-2 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
-            <div className="text-sm font-extrabold mb-1.5" style={{ color: "#000000" }}>{lang === "en" ? "Enter your quote (all fields required)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
+            <div className="text-sm font-extrabold mb-1.5" style={{ color: "#000000" }}>{lang === "en" ? "Enter your quote (all fields required)" : lang === "mr" ? "तुमचे कोटेशन भरा (सर्व फील्ड आवश्यक)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.distance} {lang === "en" ? "km" : lang === "mr" ? "किमी" : "किमी"}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.weight}{lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}</span>
               <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{materialLabel(load.material, lang)}</span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Fixed fare, no negotiation" : "तय भाड़ा, कोई मोलभाव नहीं"}</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Fixed fare, no negotiation" : lang === "mr" ? "निश्चित भाडे, कोणतीही घासाघीस नाही" : "तय भाड़ा, कोई मोलभाव नहीं"}</span>
             </div>
             <div className="rounded-lg overflow-hidden" style={{ border: `2px solid ${C.marigoldDeep}` }}>
               <GuidedStep {...stepProps(0)} lang={lang}>
                 <div className="px-2 py-2.5 text-center" style={{ borderBottom: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
-                  <div className="text-xs font-black mb-1" style={{ color: C.navy }}>{lang === "en" ? "Fare ₹ *" : "कुल भाड़ा ₹ *"}</div>
+                  <div className="text-xs font-black mb-1" style={{ color: C.navy }}>{lang === "en" ? "Fare ₹ *" : lang === "mr" ? "एकूण भाडे ₹ *" : "कुल भाड़ा ₹ *"}</div>
                   <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus
                     className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 26, fontWeight: 900 }} />
                 </div>
@@ -4087,14 +4108,14 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
               <div className="grid grid-cols-2" style={{ background: C.paper }}>
                 <GuidedStep {...stepProps(1)} lang={lang}>
                   <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ borderRight: `1px solid ${C.marigoldDeep}`, background: C.paper }}>
-                    <div className="text-xs font-black mb-1 break-words" style={{ color: C.navy }}>{lang === "en" ? "Loading/Unloading hrs *" : "लोडिंग/अनलोडिंग घंटे *"}</div>
+                    <div className="text-xs font-black mb-1 break-words" style={{ color: C.navy }}>{lang === "en" ? "Loading/Unloading hrs *" : lang === "mr" ? "लोडिंग/अनलोडिंग तास *" : "लोडिंग/अनलोडिंग घंटे *"}</div>
                     <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
                       className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 18, fontWeight: 900 }} />
                   </div>
                 </GuidedStep>
                 <GuidedStep {...stepProps(2)} lang={lang}>
                   <div className="px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ background: C.paper }}>
-                    <div className="text-xs font-black mb-1 break-words" style={{ color: C.navy }}>{lang === "en" ? "Waiting charges ₹/hr *" : "वेटिंग चार्ज ₹/घं *"}</div>
+                    <div className="text-xs font-black mb-1 break-words" style={{ color: C.navy }}>{lang === "en" ? "Waiting charges ₹/hr *" : lang === "mr" ? "वेटिंग चार्ज ₹/तास *" : "वेटिंग चार्ज ₹/घं *"}</div>
                     <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
                       className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 16, fontWeight: 900 }} />
                   </div>
@@ -4103,20 +4124,20 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
             </div>
           </div>
           <div className="rounded-lg p-2.5 mb-2" style={{ background: C.marigoldDeep }}>
-            <div className="text-xs font-black mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Note" : "नोट"}</div>
+            <div className="text-xs font-black mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Note" : lang === "mr" ? "नोंद" : "नोट"}</div>
             <div className="text-[10px] font-bold" style={{ color: "#FFFFFF" }}>
-              {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
+              {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : lang === "mr" ? "रस्त्यावरील टोल टॅक्स याच भाड्यातून ड्रायव्हरला द्यावा लागेल — ग्राहक वेगळा टोल देणार नाही." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
             </div>
             <div className="text-[10px] font-bold mt-1" style={{ color: "#000000" }}>
-              {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
+              {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : lang === "mr" ? "पिकअप आणि ड्रॉपमधील प्रवासाचा वेळ लोडिंग/अनलोडिंग वेळेत मोजला जात नाही." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
             </div>
           </div>
           {!canSubmit && (amount || allowedHours || extraHourRate) && (
-            <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>{lang === "en" ? "All three fields are required" : "तीनों फील्ड भरना ज़रूरी है"}</div>
+            <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>{lang === "en" ? "All three fields are required" : lang === "mr" ? "तिन्ही फील्ड भरणे आवश्यक आहे" : "तीनों फील्ड भरना ज़रूरी है"}</div>
           )}
           {canSubmit && walletShortfall && (
             <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>
-              {lang === "en" ? `Not enough wallet balance to cover ${commissionPct}% commission on this fare — recharge your wallet first.` : `इस भाड़े पर ${commissionPct}% कमीशन के लिए वॉलेट में पर्याप्त बैलेंस नहीं है — पहले वॉलेट रीचार्ज करें।`}
+              {lang === "en" ? `Not enough wallet balance to cover ${commissionPct}% commission on this fare — recharge your wallet first.` : lang === "mr" ? `या भाड्यावर ${commissionPct}% कमिशनसाठी वॉलेटमध्ये पुरेसे बॅलन्स नाही — आधी वॉलेट रिचार्ज करा.` : `इस भाड़े पर ${commissionPct}% कमीशन के लिए वॉलेट में पर्याप्त बैलेंस नहीं है — पहले वॉलेट रीचार्ज करें।`}
             </div>
           )}
           {bidError && (
@@ -4125,7 +4146,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
 
           <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-xl py-4 text-lg font-black text-white flex items-center justify-center gap-1.5 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready shadow-lg" : (canSubmit && !walletShortfall) || justSubmitted ? "shadow-lg" : "shadow-sm"}`}
             style={{ background: (canSubmit && !walletShortfall) || justSubmitted ? C.metallicGreen : "#E0E0E0", color: (canSubmit && !walletShortfall) || justSubmitted ? "#fff" : "#9AA3B0" }}>
-            {justSubmitted ? <><CheckCircle2 size={18} /> {lang === "en" ? "Sent" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : "कोटेशन भेजें")}
+            {justSubmitted ? <><CheckCircle2 size={18} /> {lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : lang === "mr" ? "कोटेशन पाठवा" : "कोटेशन भेजें")}
           </button>
     </div>
   );
@@ -4143,7 +4164,7 @@ function fmtHrMin(ms, lang) {
   const totalMin = Math.round(Math.max(0, ms) / 60000);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  return lang === "en" ? `${h} hr ${m} min` : `${h} घं ${m} मिनट`;
+  return lang === "en" ? `${h} hr ${m} min` : lang === "mr" ? `${h} तास ${m} मिनिट` : `${h} घं ${m} मिनट`;
 }
 // Splits a completed trip's total loading-to-drop-off time into its three
 // billing categories — loading/unloading (up to the booked allowance),
@@ -4182,20 +4203,20 @@ function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }
       <table className="w-full" style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: C.marigold }}>
-            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Context" : "विवरण"}</th>
-            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Time" : "समय"}</th>
-            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Charges (₹)" : "चार्ज (₹)"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Context" : lang === "mr" ? "तपशील" : "विवरण"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Time" : lang === "mr" ? "वेळ" : "समय"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Charges (₹)" : lang === "mr" ? "चार्ज (₹)" : "चार्ज (₹)"}</th>
           </tr>
         </thead>
         <tbody>
           <Row context={baseFareLabel} charges={fmt(baseFare)} />
-          <Row context={lang === "en" ? "Total time" : "कुल समय"} time={fmtHrMin(totalMs, lang)} zebra />
-          <Row context={lang === "en" ? "Loading/Unloading time" : "लोडिंग/अनलोडिंग समय"} time={fmtHrMin(loadingUnloadingMs, lang)} />
+          <Row context={lang === "en" ? "Total time" : lang === "mr" ? "एकूण वेळ" : "कुल समय"} time={fmtHrMin(totalMs, lang)} zebra />
+          <Row context={lang === "en" ? "Loading/Unloading time" : lang === "mr" ? "लोडिंग/अनलोडिंग वेळ" : "लोडिंग/अनलोडिंग समय"} time={fmtHrMin(loadingUnloadingMs, lang)} />
           {trip.extraCharge > 0 && (
-            <Row context={`${lang === "en" ? "Waiting charge" : "वेटिंग चार्ज"} (${fmt(trip.extraHourRate || 0)}/${lang === "en" ? "hr" : "घं"})`}
+            <Row context={`${lang === "en" ? "Waiting charge" : lang === "mr" ? "वेटिंग चार्ज" : "वेटिंग चार्ज"} (${fmt(trip.extraHourRate || 0)}/${lang === "en" ? "hr" : lang === "mr" ? "तास" : "घं"})`}
               time={fmtHrMin(waitingMs, lang)} charges={fmt(trip.extraCharge)} />
           )}
-          <Row context={lang === "en" ? "Total" : "कुल"} charges={fmt(totalAmount)} bold />
+          <Row context={lang === "en" ? "Total" : lang === "mr" ? "एकूण" : "कुल"} charges={fmt(totalAmount)} bold />
         </tbody>
       </table>
     </div>
@@ -4262,12 +4283,12 @@ function TripOvertimeBanner({ booking, lang }) {
   if (!clock.started || !clock.isOvertime) return null;
   return (
     <div className="rounded-lg mt-2 p-2.5" style={{ background: C.safety }}>
-      <div className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>🔔 {lang === "en" ? "Beep-beep! Loading/Unloading time is over" : "बीप-बीप! लोडिंग/अनलोडिंग समय खत्म हो गया"}</div>
+      <div className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>🔔 {lang === "en" ? "Beep-beep! Loading/Unloading time is over" : lang === "mr" ? "बीप-बीप! लोडिंग/अनलोडिंग वेळ संपली" : "बीप-बीप! लोडिंग/अनलोडिंग समय खत्म हो गया"}</div>
       <div className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>
-        {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs (billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"}) · Waiting charge so far: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे (${clock.billableHours} घंटे के हिसाब से बिल) · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
+        {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs (billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"}) · Waiting charge so far: ${fmt(clock.extraCharge)}` : lang === "mr" ? `अतिरिक्त वेळ: ${clock.extraHours.toFixed(2)} तास (${clock.billableHours} तासांनुसार बिल) · आतापर्यंत वेटिंग चार्ज: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे (${clock.billableHours} घंटे के हिसाब से बिल) · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
       </div>
       {clock.isPaused && (
-        <div className="text-[11px] mt-1 font-semibold" style={{ color: "#FFFFFF" }}>⏸ {lang === "en" ? "Timer paused — travel time isn't counted" : "टाइमर रुका हुआ है — यात्रा का समय नहीं गिना जाता"}</div>
+        <div className="text-[11px] mt-1 font-semibold" style={{ color: "#FFFFFF" }}>⏸ {lang === "en" ? "Timer paused — travel time isn't counted" : lang === "mr" ? "टायमर थांबलेला आहे — प्रवासाचा वेळ मोजला जात नाही" : "टाइमर रुका हुआ है — यात्रा का समय नहीं गिना जाता"}</div>
       )}
     </div>
   );
@@ -4294,24 +4315,24 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
         {trip.hours ? (
           <>
             {clock.isOvertime ? (
-              <div className="text-base font-extrabold" style={{ color: C.safety, fontFamily: bodyFont }}>⏰ {lang === "en" ? "Time's Up" : "समय खत्म"}</div>
+              <div className="text-base font-extrabold" style={{ color: C.safety, fontFamily: bodyFont }}>⏰ {lang === "en" ? "Time's Up" : lang === "mr" ? "वेळ संपली" : "समय खत्म"}</div>
             ) : (
               <>
-                <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading/Unloading time remaining" : "बचा हुआ लोडिंग/अनलोडिंग समय"}</div>
+                <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading/Unloading time remaining" : lang === "mr" ? "उरलेला लोडिंग/अनलोडिंग वेळ" : "बचा हुआ लोडिंग/अनलोडिंग समय"}</div>
                 <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{clock.remainingStr}</div>
               </>
             )}
-            <div className="text-sm font-bold mt-1" style={{ color: clock.isOvertime ? C.safety : "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? `Loading/Unloading: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : `लोडिंग/अनलोडिंग समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
+            <div className="text-sm font-bold mt-1" style={{ color: clock.isOvertime ? C.safety : "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? `Loading/Unloading: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : lang === "mr" ? `लोडिंग/अनलोडिंग वेळ: ${trip.hours} तास · आतापर्यंत ${clock.elapsedStr}` : `लोडिंग/अनलोडिंग समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
           </>
         ) : (
           <>
-            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading started" : "लोडिंग शुरू हुए"}</div>
+            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading started" : lang === "mr" ? "लोडिंग सुरू होऊन" : "लोडिंग शुरू हुए"}</div>
             <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{clock.elapsedStr}</div>
-            <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Driver had not set loading/unloading time" : "ड्राइवर ने लोडिंग/अनलोडिंग समय नहीं भरा था"}</div>
+            <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Driver had not set loading/unloading time" : lang === "mr" ? "ड्रायव्हरने लोडिंग/अनलोडिंग वेळ भरली नव्हती" : "ड्राइवर ने लोडिंग/अनलोडिंग समय नहीं भरा था"}</div>
           </>
         )}
         {clock.isPaused && (
-          <div className="text-xs mt-1.5 font-bold" style={{ color: C.safety, fontFamily: bodyFont }}>⏸ {lang === "en" ? "Paused — travel time isn't counted" : "रुका हुआ — यात्रा का समय नहीं गिना जाता"}</div>
+          <div className="text-xs mt-1.5 font-bold" style={{ color: C.safety, fontFamily: bodyFont }}>⏸ {lang === "en" ? "Paused — travel time isn't counted" : lang === "mr" ? "थांबलेले — प्रवासाचा वेळ मोजला जात नाही" : "रुका हुआ — यात्रा का समय नहीं गिना जाता"}</div>
         )}
       </div>
 
@@ -4322,18 +4343,18 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
           loading/unloading box is never blurred, including once it's done. */}
       <div className={`rounded-2xl p-3.5 shadow-lg transition-[filter] duration-300 ${clock.isOvertime ? "guided-step-active" : ""}`}
         style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}`, filter: clock.isOvertime ? "none" : "blur(4px)" }}>
-        <div className="text-xs" style={{ color: C.inkSoft }}>🔔 {lang === "en" ? "Waiting time" : "वेटिंग समय"}</div>
+        <div className="text-xs" style={{ color: C.inkSoft }}>🔔 {lang === "en" ? "Waiting time" : lang === "mr" ? "वेटिंग वेळ" : "वेटिंग समय"}</div>
         <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{clock.isOvertime ? clock.waitingElapsedStr : "00:00:00"}</div>
         {clock.isOvertime ? (
           trip.extraHourRate ? (
             <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>
-              {lang === "en" ? `Billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"} · Waiting charge so far: ${fmt(clock.extraCharge)}` : `${clock.billableHours} घंटे के हिसाब से बिल · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
+              {lang === "en" ? `Billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"} · Waiting charge so far: ${fmt(clock.extraCharge)}` : lang === "mr" ? `${clock.billableHours} तासांनुसार बिल · आतापर्यंत वेटिंग चार्ज: ${fmt(clock.extraCharge)}` : `${clock.billableHours} घंटे के हिसाब से बिल · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
             </div>
           ) : (
-            <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Running until you end the trip" : "ट्रिप खत्म करने तक चल रहा है"}</div>
+            <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Running until you end the trip" : lang === "mr" ? "ट्रिप संपेपर्यंत सुरू आहे" : "ट्रिप खत्म करने तक चल रहा है"}</div>
           )
         ) : (
-          <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Starts once loading/unloading time is over" : "लोडिंग/अनलोडिंग समय खत्म होने पर शुरू होगा"}</div>
+          <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Starts once loading/unloading time is over" : lang === "mr" ? "लोडिंग/अनलोडिंग वेळ संपल्यावर सुरू होईल" : "लोडिंग/अनलोडिंग समय खत्म होने पर शुरू होगा"}</div>
         )}
       </div>
       </div>
@@ -4344,7 +4365,7 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
           onEnded?.({ ...trip, extraCharge: clock.extraCharge, billableHours: clock.billableHours, waitingElapsedStr: clock.waitingElapsedStr });
         }}
         className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
-        {lang === "en" ? "End Trip" : "एंड ट्रिप"}
+        {lang === "en" ? "End Trip" : lang === "mr" ? "एंड ट्रिप" : "एंड ट्रिप"}
       </button>
     </div>
   );
@@ -4378,10 +4399,10 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
     <div className="flex-1 min-w-0">
       <div className="guided-submit-ready flex items-center justify-center rounded-xl px-2.5 py-1.5" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
         <input value={otpInput} onChange={handleChange}
-          placeholder={lang === "en" ? "Enter OTP" : "OTP डालें"} maxLength={4} inputMode="numeric"
+          placeholder={lang === "en" ? "Enter OTP" : lang === "mr" ? "OTP टाका" : "OTP डालें"} maxLength={4} inputMode="numeric"
           className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 18, letterSpacing: 4, fontWeight: 900 }} />
       </div>
-      {otpError && <div className="text-[10px] font-semibold mt-1" style={{ color: C.safety }}>{lang === "en" ? "Incorrect OTP — ask the customer again" : "OTP गलत है — ग्राहक से दोबारा पूछें"}</div>}
+      {otpError && <div className="text-[10px] font-semibold mt-1" style={{ color: C.safety }}>{lang === "en" ? "Incorrect OTP — ask the customer again" : lang === "mr" ? "OTP चुकीचा आहे — ग्राहकाला पुन्हा विचारा" : "OTP गलत है — ग्राहक से दोबारा पूछें"}</div>}
     </div>
   );
 }
@@ -4393,12 +4414,12 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
 function DriverTripSummary({ trip, lang, onDone }) {
   const baseFare = trip.fare || 0;
   const totalAmount = baseFare + (trip.extraCharge || 0);
-  const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   return (
     <div>
       <div className="rounded-2xl p-4 mb-3 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
         <CheckCircle2 size={32} color={C.success} className="mx-auto mb-1.5" />
-        <div className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : "ट्रिप पूरी हुई"}</div>
+        <div className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : lang === "mr" ? "ट्रिप पूर्ण झाली" : "ट्रिप पूरी हुई"}</div>
         {completedLabel && <div className="text-xs font-bold mt-0.5" style={{ color: C.inkSoft }}>{completedLabel}</div>}
       </div>
 
@@ -4406,10 +4427,10 @@ function DriverTripSummary({ trip, lang, onDone }) {
         <RouteLine pickup={trip.pickup} drop={trip.drop} lang={lang} />
       </div>
 
-      <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : "बेस भाड़ा"} baseFare={baseFare} totalAmount={totalAmount} trip={trip} lang={lang} />
+      <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : lang === "mr" ? "बेस भाडे" : "बेस भाड़ा"} baseFare={baseFare} totalAmount={totalAmount} trip={trip} lang={lang} />
 
       <button onClick={onDone} className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
-        {lang === "en" ? "Done" : "पूर्ण"}
+        {lang === "en" ? "Done" : lang === "mr" ? "पूर्ण" : "पूर्ण"}
       </button>
     </div>
   );
@@ -4606,35 +4627,35 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       {bidSentToast && (
         <div className="toast-pop rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.success }}>
           <CheckCircle2 size={16} color="#fff" />
-          <span className="text-[11px] font-bold text-white">{lang === "en" ? "Bid sent, waiting for customer's response." : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है।"}</span>
+          <span className="text-[11px] font-bold text-white">{lang === "en" ? "Bid sent, waiting for customer's response." : lang === "mr" ? "बोली पाठवली, ग्राहकाच्या उत्तराची वाट पाहत आहे." : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है।"}</span>
         </div>
       )}
 
       {newLoadToast && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.navy }}>
           <Bell size={14} color={C.marigold} />
-          <span className="text-[11px] font-bold text-white">🔔 {lang === "en" ? "New load" : "नया लोड"}: {newLoadToast.pickup} → {newLoadToast.drop}</span>
+          <span className="text-[11px] font-bold text-white">🔔 {lang === "en" ? "New load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}: {newLoadToast.pickup} → {newLoadToast.drop}</span>
         </div>
       )}
 
       {bidRejectedToast && (
         <div className="toast-pop rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.safety }}>
           <XCircle size={14} color="#FFFFFF" />
-          <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Customer chose someone else for one of your quotes." : "आपके किसी कोटेशन के लिए ग्राहक ने किसी और को चुन लिया।"}</span>
+          <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Customer chose someone else for one of your quotes." : lang === "mr" ? "तुमच्या एका कोटेशनसाठी ग्राहकाने दुसऱ्याला निवडले." : "आपके किसी कोटेशन के लिए ग्राहक ने किसी और को चुन लिया।"}</span>
         </div>
       )}
 
       {notificationsLocked && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
           <Clock3 size={14} color="#000000" />
-          <span className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
+          <span className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : lang === "mr" ? "तुमची अ‍ॅडव्हान्स बुकिंग लवकरच आहे — तोपर्यंत करंट (तात्काळ) लोड दिसणार नाहीत." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
         </div>
       )}
 
       {driver.blacklisted && (
         <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: C.safety }}>
           <XCircle size={15} color="#FFFFFF" />
-          <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Your account has been blocked by admin — loads won't show." : "आपका खाता एडमिन द्वारा ब्लॉक किया गया है — लोड नहीं दिखेंगे।"}</span>
+          <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Your account has been blocked by admin — loads won't show." : lang === "mr" ? "तुमचे खाते अ‍ॅडमिनने ब्लॉक केले आहे — लोड दिसणार नाहीत." : "आपका खाता एडमिन द्वारा ब्लॉक किया गया है — लोड नहीं दिखेंगे।"}</span>
         </div>
       )}
 
@@ -4643,17 +4664,17 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
 
           {myTrip.customerMobile && (
             <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
-              label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
+              label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
               className="w-full flex items-center justify-center gap-2 px-3.5 py-3.5 mb-2.5 rounded-2xl text-base font-black shadow-sm"
               style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
           )}
 
           <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             {!myTrip.loadingStartedAt && (
-              <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
+              <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
             )}
             {myTrip.loadingStartedAt && (
-              <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
+              <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
             )}
             <div className="mt-3" style={{ height: "35vh" }}>
               <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
@@ -4668,12 +4689,12 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         <>
           {visibleLoads.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
-              <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
+              <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
               <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: C.marigoldDeep }}>
                 <IndianRupee size={24} color="#FFFFFF" />
               </div>
-              <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No new load right now" : "अभी कोई नया लोड नहीं है"}</p>
-              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — new loads will show here instantly." : "ऑनलाइन रहें — नया लोड आते ही यहां तुरंत दिखेगा।"}</p>
+              <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No new load right now" : lang === "mr" ? "अजून कोणताही नवीन लोड नाही" : "अभी कोई नया लोड नहीं है"}</p>
+              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — new loads will show here instantly." : lang === "mr" ? "ऑनलाइन रहा — नवीन लोड येताच इथे लगेच दिसेल." : "ऑनलाइन रहें — नया लोड आते ही यहां तुरंत दिखेगा।"}</p>
             </div>
           ) : (
             <>
@@ -4687,7 +4708,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
       ) : (
         <div className="text-center py-10">
           <Truck size={28} color={C.inkSoft} className="mx-auto mb-2" />
-          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : lang === "mr" ? "लोड मिळवण्यासाठी ड्युटी ऑन करा" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
         </div>
       )}
     </div>
@@ -4713,53 +4734,53 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
   const walletTransactions = [
     ...myTrips.map((t) => ({
       id: t.id, type: "debit", createdAt: t.createdAt,
-      label: lang === "en" ? `Commission — ${t.pickup} → ${t.drop}` : `कमीशन — ${t.pickup} → ${t.drop}`,
+      label: lang === "en" ? `Commission — ${t.pickup} → ${t.drop}` : lang === "mr" ? `कमिशन — ${t.pickup} → ${t.drop}` : `कमीशन — ${t.pickup} → ${t.drop}`,
       amount: t.fare * (commissionPct / 100),
     })),
     ...myRecharges.filter((r) => r.status === "Approved").map((r) => ({
       id: r.id, type: "credit", createdAt: r.createdAt,
-      label: lang === "en" ? "Wallet recharge" : "वॉलेट रीचार्ज",
+      label: lang === "en" ? "Wallet recharge" : lang === "mr" ? "वॉलेट रिचार्ज" : "वॉलेट रीचार्ज",
       amount: r.amount,
     })),
     ...referralEntries.map((r, i) => ({
       id: `ref-${i}-${r.creditedAt}`, type: "credit", createdAt: r.creditedAt,
-      label: lang === "en" ? "Referral bonus" : "रेफरल बोनस",
+      label: lang === "en" ? "Referral bonus" : lang === "mr" ? "रेफरल बोनस" : "रेफरल बोनस",
       amount: r.amount,
     })),
   ].sort((a, b) => txMillis(b.createdAt) - txMillis(a.createdAt));
   const txTime = (createdAt) => {
     const ms = txMillis(createdAt);
-    return ms ? new Date(ms).toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+    return ms ? new Date(ms).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
   };
 
   return (
     <div className="px-5 py-5">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Wallet" : "वॉलेट"}</h2>
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"}</h2>
       <div className="rounded-xl p-4 mb-3" style={{ background: C.navy }}>
-        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Wallet Balance" : "वॉलेट बैलेंस"}</div>
+        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Wallet Balance" : lang === "mr" ? "वॉलेट बॅलन्स" : "वॉलेट बैलेंस"}</div>
         <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
         {!inTrial && driver.wallet < minWallet && (
-          <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
+          <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : lang === "mr" ? `किमान ${fmt(minWallet)} बॅलन्स आवश्यक आहे — अ‍ॅप बंद होऊ शकते` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
         )}
         {(driver.heldCredit || 0) > 0 && (
-          <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
+          <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : lang === "mr" ? `रद्द झालेल्या ट्रिपमधून ${fmt(driver.heldCredit)} होल्डमध्ये आहे — पुढील ट्रिपच्या कमिशनमध्ये आपोआप अ‍ॅडजस्ट होईल.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
         )}
         <button onClick={() => setShowComingSoon(true)} className="w-full mt-3 rounded-lg py-3.5 font-bold text-base flex items-center justify-center gap-1.5" style={{ background: "#FFFFFF", color: C.navy }}>
-          <IndianRupee size={14} /> {lang === "en" ? "Recharge" : "रीचार्ज करें"}
+          <IndianRupee size={14} /> {lang === "en" ? "Recharge" : lang === "mr" ? "रिचार्ज करा" : "रीचार्ज करें"}
         </button>
         {showComingSoon && (
           <div className="rounded-lg p-2.5 mt-2 text-[11px] font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#000000" }}>
-            {lang === "en" ? "Online payments are coming soon." : "ऑनलाइन पेमेंट जल्द आ रहा है।"}
+            {lang === "en" ? "Online payments are coming soon." : lang === "mr" ? "ऑनलाइन पेमेंट लवकरच येत आहे." : "ऑनलाइन पेमेंट जल्द आ रहा है।"}
           </div>
         )}
         <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-lg py-3 text-base font-bold flex items-center justify-center gap-1.5" style={{ background: "#000000", color: "#fff" }}>
-          <ClipboardList size={13} /> {showHistory ? (lang === "en" ? "Hide Transaction History" : "लेन-देन हिस्ट्री छुपाएं") : (lang === "en" ? "Transaction History" : "लेन-देन हिस्ट्री")}
+          <ClipboardList size={13} /> {showHistory ? (lang === "en" ? "Hide Transaction History" : lang === "mr" ? "व्यवहार हिस्टरी लपवा" : "लेन-देन हिस्ट्री छुपाएं") : (lang === "en" ? "Transaction History" : lang === "mr" ? "व्यवहार हिस्टरी" : "लेन-देन हिस्ट्री")}
         </button>
       </div>
       {showHistory && (
         <div className="rounded-xl p-3 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           {walletTransactions.length === 0 ? (
-            <p className="text-[11px] text-center py-2" style={{ color: C.inkSoft }}>{lang === "en" ? "No wallet transactions yet." : "अभी तक कोई लेन-देन नहीं हुआ।"}</p>
+            <p className="text-[11px] text-center py-2" style={{ color: C.inkSoft }}>{lang === "en" ? "No wallet transactions yet." : lang === "mr" ? "अजून कोणताही व्यवहार झाला नाही." : "अभी तक कोई लेन-देन नहीं हुआ।"}</p>
           ) : (
             <div className="space-y-1.5 max-h-64 overflow-y-auto">
               {walletTransactions.map((tx) => (
@@ -4779,26 +4800,26 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
       )}
       <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
         <div className="flex items-center justify-between mb-1">
-          <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Driver Bonus" : "ड्राइवर बोनस"}</div>
+          <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Driver Bonus" : lang === "mr" ? "ड्रायव्हर बोनस" : "ड्राइवर बोनस"}</div>
           <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(driver.bonus || 0)}</div>
         </div>
-        <div className="text-[11px] font-semibold mb-2" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Withdraw anytime" : "कभी भी निकालें"}</div>
+        <div className="text-[11px] font-semibold mb-2" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Withdraw anytime" : lang === "mr" ? "कधीही काढा" : "कभी भी निकालें"}</div>
         <button onClick={() => requestWithdrawal(driver.bonus || 0)} disabled={!driver.bonus}
           className={`w-full rounded-lg py-3 text-base font-bold text-white flex items-center justify-center gap-1.5 ${driver.bonus ? "shadow-lg" : ""}`}
           style={{ background: driver.bonus ? C.metallicGreen : "#E0E0E0", color: driver.bonus ? "#fff" : "#9AA3B0" }}>
-          <Wallet size={13} /> {lang === "en" ? "Send to Bank" : "बैंक में भेजें"}
+          <Wallet size={13} /> {lang === "en" ? "Send to Bank" : lang === "mr" ? "बँकेत पाठवा" : "बैंक में भेजें"}
         </button>
       </div>
 
       {myWithdrawals.length > 0 && (
         <div className="mb-4">
-          <div className="text-[11px] font-bold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Withdrawal Requests" : "विड्रॉल रिक्वेस्ट"}</div>
+          <div className="text-[11px] font-bold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Withdrawal Requests" : lang === "mr" ? "विड्रॉल रिक्वेस्ट" : "विड्रॉल रिक्वेस्ट"}</div>
           <div className="space-y-1.5">
             {myWithdrawals.map((w) => (
               <div key={w.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <span className="text-xs font-semibold" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(w.amount)}</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: w.status === "Approved" ? C.success : C.marigoldDeep }}>
-                  {w.status === "Approved" ? (lang === "en" ? "Sent to bank ✓" : "बैंक में भेज दिया ✓") : (lang === "en" ? "Pending admin approval" : "एडमिन अप्रूवल बाकी")}
+                  {w.status === "Approved" ? (lang === "en" ? "Sent to bank ✓" : lang === "mr" ? "बँकेत पाठवले ✓" : "बैंक में भेज दिया ✓") : (lang === "en" ? "Pending admin approval" : lang === "mr" ? "अ‍ॅडमिन अप्रूव्हल बाकी" : "एडमिन अप्रूवल बाकी")}
                 </span>
               </div>
             ))}
@@ -4815,12 +4836,12 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
   const [docsTrip, setDocsTrip] = useState(null);
   return (
     <div className="px-5 py-5">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Trip History" : "ट्रिप हिस्ट्री"}</h2>
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Trip History" : lang === "mr" ? "ट्रिप हिस्टरी" : "ट्रिप हिस्ट्री"}</h2>
       <div className="space-y-2">
         {myTrips.length === 0 && (
           <div className="text-center py-10">
             <Package size={28} color={C.inkSoft} className="mx-auto mb-2" />
-            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid accepted yet." : "अभी कोई बिड एक्सेप्ट नहीं हुई।"}</p>
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid accepted yet." : lang === "mr" ? "अजून कोणतीही बिड अ‍ॅक्सेप्ट झाली नाही." : "अभी कोई बिड एक्सेप्ट नहीं हुई।"}</p>
           </div>
         )}
         {myTrips.map((t) => (
@@ -4828,21 +4849,21 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
             <div className="flex items-center justify-between">
               <div className="text-xs font-semibold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
               <div className="text-sm font-bold" style={{ color: t.status === "Cancelled" ? C.safety : C.success, fontFamily: monoFont }}>
-                {t.status === "Cancelled" ? (lang === "en" ? "Cancelled" : "रद्द") : fmt(t.fare * (1 - commissionPct / 100))}
+                {t.status === "Cancelled" ? (lang === "en" ? "Cancelled" : lang === "mr" ? "रद्द" : "रद्द") : fmt(t.fare * (1 - commissionPct / 100))}
               </div>
             </div>
             <div className="flex items-center justify-between mt-1">
               <div className="text-[10px]" style={{ color: C.inkSoft }}>
                 {t.status === "Cancelled"
-                  ? (lang === "en" ? `Fare ${fmt(t.fare)} · commission ${fmt(t.fare * (commissionPct / 100))} refunded to wallet` : `भाड़ा ${fmt(t.fare)} · कमीशन ${fmt(t.fare * (commissionPct / 100))} वापस वॉलेट में जमा`)
-                  : (lang === "en" ? `Fare ${fmt(t.fare)} · commission − ${fmt(t.fare * (commissionPct / 100))}` : `भाड़ा ${fmt(t.fare)} · कमीशन − ${fmt(t.fare * (commissionPct / 100))}`)}
+                  ? (lang === "en" ? `Fare ${fmt(t.fare)} · commission ${fmt(t.fare * (commissionPct / 100))} refunded to wallet` : lang === "mr" ? `भाडे ${fmt(t.fare)} · कमिशन ${fmt(t.fare * (commissionPct / 100))} वॉलेटमध्ये परत जमा` : `भाड़ा ${fmt(t.fare)} · कमीशन ${fmt(t.fare * (commissionPct / 100))} वापस वॉलेट में जमा`)
+                  : (lang === "en" ? `Fare ${fmt(t.fare)} · commission − ${fmt(t.fare * (commissionPct / 100))}` : lang === "mr" ? `भाडे ${fmt(t.fare)} · कमिशन − ${fmt(t.fare * (commissionPct / 100))}` : `भाड़ा ${fmt(t.fare)} · कमीशन − ${fmt(t.fare * (commissionPct / 100))}`)}
               </div>
-              {t.status === "Cancelled" ? null : t.rating ? <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{stars(t.rating)}</div> : <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status === "Ongoing" ? (lang === "en" ? "In progress" : "चालू") : (lang === "en" ? "Rating pending" : "रेटिंग बाकी")}</div>}
+              {t.status === "Cancelled" ? null : t.rating ? <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{stars(t.rating)}</div> : <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status === "Ongoing" ? (lang === "en" ? "In progress" : lang === "mr" ? "चालू" : "चालू") : (lang === "en" ? "Rating pending" : lang === "mr" ? "रेटिंग बाकी" : "रेटिंग बाकी")}</div>}
             </div>
             {t.status === "Completed" && (
               <button onClick={() => setDocsTrip(t)} className="text-sm font-semibold mt-1.5 flex items-center gap-1"
                 style={{ color: t.documents?.file?.url ? C.success : C.marigoldDeep }}>
-                <FileText size={12} /> {lang === "en" ? "Receive Bill" : "बिल प्राप्त करें"}
+                <FileText size={12} /> {lang === "en" ? "Receive Bill" : lang === "mr" ? "बिल मिळवा" : "बिल प्राप्त करें"}
               </button>
             )}
           </div>
@@ -4958,20 +4979,22 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
+    : lang === "mr"
+    ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
 
   return (
     <div className="px-5 py-5">
       {stepLabel && <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{stepLabel}</div>}
-      <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : "दस्तावेज़ (KYC)"}</h2>
-      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Upload your photo and driving license, and enter your vehicle's number and dimensions." : "अपनी फोटो और ड्राइविंग लाइसेंस अपलोड करें, और अपनी गाड़ी का नंबर व साइज़ डालें।"}</p>
+      <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : lang === "mr" ? "कागदपत्रे (KYC)" : "दस्तावेज़ (KYC)"}</h2>
+      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Upload your photo and driving license, and enter your vehicle's number and dimensions." : lang === "mr" ? "तुमचा फोटो आणि ड्रायव्हिंग लायसन्स अपलोड करा, आणि तुमच्या गाडीचा नंबर व साइझ टाका." : "अपनी फोटो और ड्राइविंग लाइसेंस अपलोड करें, और अपनी गाड़ी का नंबर व साइज़ डालें।"}</p>
 
       <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: driver.kyc === "Approved" ? C.success : C.marigoldDeep }}>
         <ShieldCheck size={16} color="#FFFFFF" />
-        <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Status" : "स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : "सत्यापित") : (lang === "en" ? "Pending" : "लंबित")}</span>
+        <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Status" : lang === "mr" ? "स्टेटस" : "स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित") : (lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित")}</span>
       </div>
 
-      <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Documents" : "दस्तावेज़"}</div>
+      <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Documents" : lang === "mr" ? "कागदपत्रे" : "दस्तावेज़"}</div>
       <div className="grid grid-cols-2 gap-2 mb-3">
         {[
           ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
@@ -4981,7 +5004,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
               <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
                 {uploadingKeys[key] ? (
                   <div className="p-2 flex flex-col items-center justify-center">
-                    <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</span>
+                    <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</span>
                   </div>
                 ) : (
                   <SafeImage
@@ -4996,7 +5019,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                     }
                   />
                 )}
-                <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>{val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : "फोटो लें")}</span>
+                <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>{val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}</span>
               </div>
             </PhotoPicker>
           </GuidedStep>
@@ -5004,56 +5027,56 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       </div>
 
       <GuidedStep {...kycStepProps(2)} lang={lang}>
-        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : "गाड़ी रजिस्टर्ड नंबर"}</label>
+        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : lang === "mr" ? "गाडी रजिस्टर्ड नंबर" : "गाड़ी रजिस्टर्ड नंबर"}</label>
         <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 12 }} placeholder="MH-14-XX-XXXX" value={vehicleNumber}
           onChange={(e) => setVehicleNumber(e.target.value)} />
       </GuidedStep>
 
-      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Dimensions" : "गाड़ी का साइज़"}</label>
+      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Dimensions" : lang === "mr" ? "गाडीचा साइझ" : "गाड़ी का साइज़"}</label>
       {matchedModelSpec && (
         <p className="text-[10px] font-semibold mb-1.5" style={{ color: C.success }}>
-          {lang === "en" ? "Auto-filled for this vehicle model — edit any field if yours differs." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
+          {lang === "en" ? "Auto-filled for this vehicle model — edit any field if yours differs." : lang === "mr" ? "या गाडी मॉडेलनुसार आपोआप भरले गेले आहे — वेगळे असल्यास बदलू शकता." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
         </p>
       )}
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div>
-          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : "क्षमता (किलोग्राम)"}</label>
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
+          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलोग्राम)" : "क्षमता (किलोग्राम)"}</label>
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
         </div>
         <div>
-          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : "लंबाई (फीट)"}</label>
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 7" : "जैसे: 7"} value={length} onChange={(e) => setLength(e.target.value)} />
+          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</label>
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 7" : lang === "mr" ? "उदा: 7" : "जैसे: 7"} value={length} onChange={(e) => setLength(e.target.value)} />
         </div>
         <div>
-          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : "चौड़ाई (फीट)"}</label>
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : "जैसे: 4.5"} value={width} onChange={(e) => setWidth(e.target.value)} />
+          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</label>
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : lang === "mr" ? "उदा: 4.5" : "जैसे: 4.5"} value={width} onChange={(e) => setWidth(e.target.value)} />
         </div>
         <div>
-          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : "ऊंचाई (फीट)"}</label>
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : "जैसे: 4.5"} value={height} onChange={(e) => setHeight(e.target.value)} />
+          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</label>
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : lang === "mr" ? "उदा: 4.5" : "जैसे: 4.5"} value={height} onChange={(e) => setHeight(e.target.value)} />
         </div>
       </div>
 
-      <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Vehicle Details" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
+      <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Vehicle Details" : lang === "mr" ? "स्टेप 2 — गाडीची माहिती" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
       <div className="rounded-xl p-3 mb-4 shadow-lg" style={{ border: `2px solid ${C.marigoldDeep}`, background: C.metallicGold }}>
-        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#000000" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
+        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#000000" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : lang === "mr" ? "स्पष्ट भरा — कस्टमरला हीच दिसेल" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
 
         <GuidedStep {...kycStepProps(3)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : "गाड़ी का नाम"}</label>
-          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : lang === "mr" ? "गाडीचे नाव" : "गाड़ी का नाम"}</label>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tata 109" : lang === "mr" ? "उदा: Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
         </GuidedStep>
 
-        <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photos (Front & Side)" : "गाड़ी की फोटो (आगे व साइड)"}</label>
+        <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photos (Front & Side)" : lang === "mr" ? "गाडीचा फोटो (पुढून व बाजूने)" : "गाड़ी की फोटो (आगे व साइड)"}</label>
         <div className="grid grid-cols-2 gap-2 mb-2">
           {[
-            ["vehicleFront", lang === "en" ? "Front" : "आगे से", vehiclePhotoFront, setVehiclePhotoFront],
-            ["vehicleSide", lang === "en" ? "Side" : "साइड से", vehiclePhotoSide, setVehiclePhotoSide],
+            ["vehicleFront", lang === "en" ? "Front" : lang === "mr" ? "पुढून" : "आगे से", vehiclePhotoFront, setVehiclePhotoFront],
+            ["vehicleSide", lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से", vehiclePhotoSide, setVehiclePhotoSide],
           ].map(([key, label, val, setVal], i) => (
             <GuidedStep key={key} {...kycStepProps(4 + i)} lang={lang}>
               <PhotoPicker label={label} lang={lang} onSelect={onVehiclePhoto(setVal, key)}>
                 <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed ${C.marigoldDeep}`, background: C.paper, minHeight: 110 }}>
                   {uploadingKeys[key] ? (
-                    <div className="text-xs font-semibold py-6" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : "अपलोड हो रहा है..."}</div>
+                    <div className="text-xs font-semibold py-6" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</div>
                   ) : (
                     <SafeImage
                       src={val?.url}
@@ -5069,17 +5092,19 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                   )}
                 </div>
                 <div className="text-[9px] mt-0.5 text-center" style={{ color: val ? C.success : C.inkSoft }}>
-                  {val ? (lang === "en" ? "Uploaded ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : "अपलोड के लिए टैप करें")}
+                  {val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
                 </div>
               </PhotoPicker>
             </GuidedStep>
           ))}
         </div>
         <div className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div className="text-[10px] font-semibold mb-1" style={{ color: C.ink }}>{lang === "en" ? "For a good photo:" : "अच्छी फोटो के लिए:"}</div>
+          <div className="text-[10px] font-semibold mb-1" style={{ color: C.ink }}>{lang === "en" ? "For a good photo:" : lang === "mr" ? "चांगल्या फोटोसाठी:" : "अच्छी फोटो के लिए:"}</div>
           <div className="text-[10px]" style={{ color: C.inkSoft, lineHeight: 1.6 }}>
             {lang === "en" ? (
               <>• Take it in daylight, at a clean spot<br />• The full vehicle should be in frame<br />• The number plate should be clearly visible<br />• Don't upload blurry, dark, or cropped photos</>
+            ) : lang === "mr" ? (
+              <>• दिवसाच्या उजेडात, स्वच्छ जागी फोटो घ्या<br />• संपूर्ण गाडी फ्रेममध्ये यायला हवी<br />• गाडी नंबर प्लेट स्पष्ट दिसायला हवी<br />• धूसर, अंधारी किंवा कापलेली फोटो टाकू नका</>
             ) : (
               <>• दिन की रोशनी में, साफ जगह पर फोटो लें<br />• पूरी गाड़ी फ्रेम में आनी चाहिए<br />• गाड़ी नंबर प्लेट साफ दिखनी चाहिए<br />• धुंधली, अंधेरी या कटी हुई फोटो न डालें</>
             )}
@@ -5087,8 +5112,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         </div>
       </div>
 
-      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle name & number to submit" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो, गाड़ी का नाम और नंबर डालें"}</div>}
-      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-4 font-bold text-base ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : "#E0E0E0", color: canSubmit ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Submit" : "सबमिट करें"}</button>
+      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle name & number to submit" : lang === "mr" ? "सबमिट करण्यासाठी तुमचा फोटो, लायसन्स, गाडीचे दोन्ही फोटो, गाडीचे नाव आणि नंबर टाका" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो, गाड़ी का नाम और नंबर डालें"}</div>}
+      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-4 font-bold text-base ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : "#E0E0E0", color: canSubmit ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Submit" : lang === "mr" ? "सबमिट करा" : "सबमिट करें"}</button>
     </div>
   );
 }
@@ -5122,7 +5147,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
 
   return (
     <div className="px-5 py-4">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}</h2>
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}</h2>
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
           <div className="w-28 h-28 rounded-full flex items-center justify-center overflow-hidden" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
@@ -5130,38 +5155,38 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
           </div>
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : "पूरा नाम"}</label>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
           <input className={inputCls} style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : "मोबाइल"}</label>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : lang === "mr" ? "मोबाइल" : "मोबाइल"}</label>
           <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, background: C.bg, color: C.inkSoft }} value={driver?.mobile || ""} disabled />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : "ईमेल (वैकल्पिक)"}</label>
-          <input type="email" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : lang === "mr" ? "ईमेल (ऐच्छिक)" : "ईमेल (वैकल्पिक)"}</label>
+          <input type="email" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : lang === "mr" ? "उदा: ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : "पता"}</label>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}</label>
           <input className={inputCls} style={inputStyle} value={address} onChange={(e) => setAddress(e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : "एरिया"}</label>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : lang === "mr" ? "एरिया" : "एरिया"}</label>
             <input className={inputCls} style={inputStyle} value={area} onChange={(e) => setArea(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : "शहर"}</label>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
             <input className={inputCls} style={inputStyle} value={city} onChange={(e) => setCity(e.target.value)} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : "राज्य"}</label>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
             <input className={inputCls} style={inputStyle} value={state} onChange={(e) => setState(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : "पिनकोड"}</label>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
             <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
           </div>
         </div>
@@ -5176,15 +5201,15 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
             bids. */}
         <div className="pt-1">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Documents" : "दस्तावेज़"}</h3>
+            <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Documents" : lang === "mr" ? "कागदपत्रे" : "दस्तावेज़"}</h3>
             <button onClick={onEditDocuments} className="text-base font-bold px-4 py-2.5 rounded-lg" style={{ background: C.marigold, color: "#000000" }}>
-              {lang === "en" ? "Change" : "बदलें"}
+              {lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"}
             </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { key: "dl", label: lang === "en" ? "Driving License" : "ड्राइविंग लाइसेंस", url: driver?.docs?.dl?.url },
-              { key: "vehicleSide", label: lang === "en" ? "Vehicle - Side" : "गाड़ी - साइड", url: driver?.vehicleSpec?.photoSide?.url },
+              { key: "dl", label: lang === "en" ? "Driving License" : lang === "mr" ? "ड्रायव्हिंग लायसन्स" : "ड्राइविंग लाइसेंस", url: driver?.docs?.dl?.url },
+              { key: "vehicleSide", label: lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड", url: driver?.vehicleSpec?.photoSide?.url },
             ].map((d) => (
               <KycDocThumb key={d.key} url={d.url} label={d.label} lang={lang} fileName={`${driver?.name || "driver"}-${d.key}.jpg`} />
             ))}
@@ -5192,12 +5217,12 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
         </div>
 
         <button onClick={save} className={`w-full rounded-lg py-3.5 font-bold text-base text-white ${saved ? "shadow-lg" : ""}`} style={{ background: saved ? C.metallicGreen : C.marigoldDeep }}>
-          {saved ? (lang === "en" ? "Saved ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : "बदलाव सेव करें")}
+          {saved ? (lang === "en" ? "Saved ✓" : lang === "mr" ? "सेव्ह झाले ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें")}
         </button>
       </div>
 
       <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
-        <XCircle size={16} /> {lang === "en" ? "Logout" : "लॉगआउट"}
+        <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
       </button>
     </div>
   );
@@ -5258,6 +5283,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     const link = `https://sarthi-transport-74865.web.app?ref=${driver.mobile}`;
     const msg = lang === "en"
       ? `Join Apna Transport — book trucks/tempos or sign up as a driver-partner using my link: ${link}`
+      : lang === "mr"
+      ? `अपना ट्रान्सपोर्टमध्ये सामील व्हा — माझ्या लिंकवरून ट्रक/टेम्पो बुक करा किंवा ड्रायव्हर-पार्टनर व्हा: ${link}`
       : `अपना ट्रांसपोर्ट से जुड़ें — मेरे लिंक से ट्रक/टेम्पो बुक करें या ड्राइवर-पार्टनर बनें: ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
@@ -5301,13 +5328,13 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               {tab === "home" ? (
                 <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Driver Dashboard" : lang === "mr" ? "ड्रायव्हर डॅशबोर्ड" : "ड्राइवर डैशबोर्ड"}</span>
               ) : (
-                <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
+                <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : lang === "mr" ? "कस्टमर रिक्वेस्ट" : "कस्टमर रिक्वेस्ट"}</span>
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="flex flex-col items-center leading-none" style={{ color: C.inkSoft }}>
-                <span className="text-[9px] font-bold">{lang === "en" ? "Driver" : "ड्राइवर"}</span>
-                <span className="text-[9px] font-bold mt-0.5">{lang === "en" ? "Duty" : "ड्यूटी"}</span>
+                <span className="text-[9px] font-bold">{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</span>
+                <span className="text-[9px] font-bold mt-0.5">{lang === "en" ? "Duty" : lang === "mr" ? "ड्युटी" : "ड्यूटी"}</span>
               </div>
               <button onClick={() => setDriver({ ...driver, online: !driver.online })}
                 className="shrink-0 flex items-center rounded-full p-2" style={{ background: C.marigoldDeep }}>
@@ -5321,7 +5348,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         )}
         {!driver.trialNoteSeen && (
           <button onClick={() => setDriver({ ...driver, trialNoteSeen: true })} className="w-full flex items-center justify-between gap-2 px-5 py-3.5 text-left" style={{ background: C.metallicGold }}>
-            <span className="text-xs font-black" style={{ color: "#000000" }}>🎁 {lang === "en" ? "Free trial for 30 days" : "30 दिनों का फ्री ट्रायल"}</span>
+            <span className="text-xs font-black" style={{ color: "#000000" }}>🎁 {lang === "en" ? "Free trial for 30 days" : lang === "mr" ? "30 दिवसांची फ्री ट्रायल" : "30 दिनों का फ्री ट्रायल"}</span>
             <X size={14} color="#000000" strokeWidth={3} />
           </button>
         )}
@@ -5340,7 +5367,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                     <Wallet size={13} color={C.marigold} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-black" style={{ color: "#000000" }}>{lang === "en" ? "Wallet" : "वॉलेट"}</div>
+                    <div className="text-[10px] font-black" style={{ color: "#000000" }}>{lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"}</div>
                     <div className="text-xs font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
                   </div>
                 </button>
@@ -5348,20 +5375,20 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
                     <Clock3 size={13} color="#FFFFFF" />
                   </div>
-                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance Booking/s" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance Booking/s" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग पहा" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
                 </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : "मेरी प्रोफाइल"}
+                <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}
               </button>
               <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : "मेरी ट्रिप्स"}
+                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : lang === "mr" ? "माझ्या ट्रिप्स" : "मेरी ट्रिप्स"}
               </button>
               <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "driver" && (n.target === "all" || n.target === driver.mobile)).length})
+                <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "driver" && (n.target === "all" || n.target === driver.mobile)).length})
               </button>
               <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : "सेटिंग्स (KYC व गाड़ी)"}
+                <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : lang === "mr" ? "सेटिंग्स (KYC व गाडी)" : "सेटिंग्स (KYC व गाड़ी)"}
               </button>
               <div style={{ borderBottom: `1px solid ${C.line}` }}>
                 <button
@@ -5369,32 +5396,32 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                   className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left"
                   style={{ color: C.ink }}>
                   <MessageCircle size={16} color={C.success} className="shrink-0" />
-                  <span className="flex-1">{lang === "en" ? "Share App" : "ऐप शेयर करें"}</span>
+                  <span className="flex-1">{lang === "en" ? "Share App" : lang === "mr" ? "अ‍ॅप शेअर करा" : "ऐप शेयर करें"}</span>
                   <ChevronDown size={16} color={C.inkSoft} className="shrink-0 transition-transform" style={{ transform: shareNoteOpen ? "rotate(180deg)" : "none" }} />
                 </button>
                 {shareNoteOpen && (
                   <div className="px-4 pb-3 -mt-1">
                     <div className="rounded-lg p-3" style={{ background: C.success }}>
                       <div className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>
-                        {lang === "en" ? "You get ₹200 once a driver you refer completes their first ride. Referring a customer just helps them download the app — no bonus for that." : "आपके रेफर किए हुए ड्राइवर की पहली राइड पूरी होते ही आपको ₹200 मिलेंगे। कस्टमर को रेफर करने से सिर्फ उन्हें ऐप डाउनलोड करने में मदद मिलती है — उसके लिए कोई बोनस नहीं है।"}
+                        {lang === "en" ? "You get ₹200 once a driver you refer completes their first ride. Referring a customer just helps them download the app — no bonus for that." : lang === "mr" ? "तुम्ही रेफर केलेल्या ड्रायव्हरची पहिली राइड पूर्ण होताच तुम्हाला ₹200 मिळतील. कस्टमरला रेफर केल्याने फक्त त्यांना अ‍ॅप डाउनलोड करण्यास मदत होते — त्यासाठी कोणताही बोनस नाही." : "आपके रेफर किए हुए ड्राइवर की पहली राइड पूरी होते ही आपको ₹200 मिलेंगे। कस्टमर को रेफर करने से सिर्फ उन्हें ऐप डाउनलोड करने में मदद मिलती है — उसके लिए कोई बोनस नहीं है।"}
                       </div>
                       <button onClick={() => { shareApp(); setMenuOpen(false); setShareNoteOpen(false); }}
                         className="w-full mt-2 rounded-lg py-3 text-base font-bold text-white shadow-lg"
                         style={{ background: C.metallicGreen }}>
-                        {lang === "en" ? "Continue to WhatsApp" : "WhatsApp पर जारी रखें"}
+                        {lang === "en" ? "Continue to WhatsApp" : lang === "mr" ? "WhatsApp वर सुरू ठेवा" : "WhatsApp पर जारी रखें"}
                       </button>
                     </div>
                   </div>
                 )}
               </div>
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : "संपर्क व हेल्पलाइन"}
+                <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : lang === "mr" ? "संपर्क व हेल्पलाइन" : "संपर्क व हेल्पलाइन"}
               </button>
               <button onClick={() => { onOpenTerms(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : "नियम व शर्तें"}
+                <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : lang === "mr" ? "नियम व अटी" : "नियम व शर्तें"}
               </button>
               <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink }}>
-                <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : "गोपनीयता नीति"}
+                <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : lang === "mr" ? "गोपनीयता धोरण" : "गोपनीयता नीति"}
               </a>
             </div>
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
@@ -5411,30 +5438,30 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 </button>
                 <RideTypeBanner booking={ab} lang={lang} />
                 <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                  <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-extrabold">{ab.pickup}</span></div>
-                  <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{ab.drop}</span></div>
+                  <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-extrabold">{ab.pickup}</span></div>
+                  <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{ab.drop}</span></div>
                 </div>
                 <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-                  <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
+                  <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : lang === "mr" ? "भाडे आणि वेटिंग चार्ज नियम" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
                   <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
                     <Clock3 size={13} />
-                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Advance ride:" : "एडवांस राइड:"} {rideDateTimeLabel(ab)}</span>
+                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Advance ride:" : lang === "mr" ? "अ‍ॅडव्हान्स राइड:" : "एडवांस राइड:"} {rideDateTimeLabel(ab)}</span>
                   </div>
-                  <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : "तय भाड़ा:"} {fmt(ab.fare)}</div>
+                  <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : lang === "mr" ? "निश्चित भाडे:" : "तय भाड़ा:"} {fmt(ab.fare)}</div>
                   {ab.hours && (
                     <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
-                      {lang === "en" ? `${ab.hours} hrs loading/unloading` : `${ab.hours} घंटे लोडिंग/अनलोडिंग`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting charge` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
+                      {lang === "en" ? `${ab.hours} hrs loading/unloading` : lang === "mr" ? `${ab.hours} तास लोडिंग/अनलोडिंग` : `${ab.hours} घंटे लोडिंग/अनलोडिंग`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting charge` : lang === "mr" ? ` · त्यानंतर ${fmt(ab.extraHourRate)}/तास वेटिंग चार्ज` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
                     </div>
                   )}
                   <div className="mt-2">
                     {ab.customerMobile ? (
                       <MaskedCallButton bookingId={ab.id} fallbackMobile={ab.customerMobile} lang={lang}
-                        label={lang === "en" ? "Call Customer" : "ग्राहक को कॉल करें"}
+                        label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
                         className="w-full flex items-center justify-center gap-2 rounded-lg py-3 font-extrabold text-base" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <Phone size={14} color="#000000" />
-                        <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                        <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : lang === "mr" ? "कमिशन कापल्यानंतर दिसेल..." : "कमीशन कटने के बाद दिखेगा..."}</span>
                       </div>
                     )}
                   </div>
@@ -5447,14 +5474,14 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 <ChevronLeft size={18} strokeWidth={3} />
               </button>
               {advanceBookings.length === 0 ? (
-                <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
+                <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
               ) : (
                 <div className="space-y-2">
                   {advanceBookings.map((ab) => (
                     <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                       <RideTypeBanner booking={ab} lang={lang} />
-                      <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{ab.pickup}</span></div>
-                      <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{ab.drop}</span></div>
+                      <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{ab.pickup}</span></div>
+                      <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{ab.drop}</span></div>
                     </button>
                   ))}
                 </div>
@@ -5540,7 +5567,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
     : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
   const recentActivity = (bookings || []).slice(0, 5);
-  const activityTime = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleTimeString(lang === "en" ? "en-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" }) : "—");
+  const activityTime = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleTimeString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" }) : "—");
 
   const [vehicleQuery, setVehicleQuery] = useState("");
   const q = vehicleQuery.trim().toUpperCase();
@@ -5551,8 +5578,8 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
   // message, the live items array, and how to render one row.
   const detailPages = {
     online: {
-      title: lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार",
-      emptyMsg: lang === "en" ? "No drivers currently online." : "अभी कोई ड्राइवर ऑनलाइन नहीं है।",
+      title: lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार",
+      emptyMsg: lang === "en" ? "No drivers currently online." : lang === "mr" ? "अजून कोणताही ड्रायव्हर ऑनलाइन नाही." : "अभी कोई ड्राइवर ऑनलाइन नहीं है।",
       items: readyOnlineDrivers,
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -5562,8 +5589,8 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       ),
     },
     booked: {
-      title: lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं",
-      emptyMsg: lang === "en" ? "No vehicles booked today yet." : "आज तक कोई गाड़ी बुक नहीं हुई।",
+      title: lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं",
+      emptyMsg: lang === "en" ? "No vehicles booked today yet." : lang === "mr" ? "आज अद्याप कोणतीही गाडी बुक झाली नाही." : "आज तक कोई गाड़ी बुक नहीं हुई।",
       items: bookedTodayList,
       renderItem: (t) => (
         <div key={t.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -5573,19 +5600,19 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       ),
     },
     cancelled: {
-      title: lang === "en" ? "Cancelled today" : "आज रद्द हुईं",
-      emptyMsg: lang === "en" ? "Nothing cancelled today." : "आज कुछ भी रद्द नहीं हुआ।",
+      title: lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं",
+      emptyMsg: lang === "en" ? "Nothing cancelled today." : lang === "mr" ? "आज काहीही रद्द झाले नाही." : "आज कुछ भी रद्द नहीं हुआ।",
       items: cancelledTodayList,
       renderItem: (b) => (
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : "कोई ड्राइवर तय नहीं हुआ")}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : lang === "mr" ? "कोणताही ड्रायव्हर निश्चित झाला नाही" : "कोई ड्राइवर तय नहीं हुआ")}</div>
         </div>
       ),
     },
     lowWallet: {
-      title: lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर",
-      emptyMsg: lang === "en" ? "No online driver is below the minimum wallet balance." : "कोई भी ऑनलाइन ड्राइवर न्यूनतम वॉलेट से कम नहीं है।",
+      title: lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर",
+      emptyMsg: lang === "en" ? "No online driver is below the minimum wallet balance." : lang === "mr" ? "कोणताही ऑनलाइन ड्रायव्हर किमान वॉलेटपेक्षा कमी नाही." : "कोई भी ऑनलाइन ड्राइवर न्यूनतम वॉलेट से कम नहीं है।",
       items: lowWalletDrivers,
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.safety}` }}>
@@ -5595,30 +5622,30 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       ),
     },
     advance: {
-      title: lang === "en" ? "Total advance bookings" : "कुल एडवांस बुकिंग",
-      emptyMsg: lang === "en" ? "No advance bookings yet." : "अभी तक कोई एडवांस बुकिंग नहीं है।",
+      title: lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग",
+      emptyMsg: lang === "en" ? "No advance bookings yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही." : "अभी तक कोई एडवांस बुकिंग नहीं है।",
       items: advanceBookingsList,
       renderItem: (b) => (
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : "बोली का इंतज़ार")}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}</div>
         </div>
       ),
     },
     noBids: {
-      title: lang === "en" ? "Loads with no bids yet" : "बिना बोली वाले लोड",
-      emptyMsg: lang === "en" ? "Every open load has at least one bid." : "हर खुले लोड पर कम से कम एक बोली आ चुकी है।",
+      title: lang === "en" ? "Loads with no bids yet" : lang === "mr" ? "बोली नसलेले लोड" : "बिना बोली वाले लोड",
+      emptyMsg: lang === "en" ? "Every open load has at least one bid." : lang === "mr" ? "प्रत्येक खुल्या लोडवर किमान एक बोली आली आहे." : "हर खुले लोड पर कम से कम एक बोली आ चुकी है।",
       items: noBidsList,
       renderItem: (b) => (
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.safety}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.safety }}>{materialLabel(b.material, lang)} · {b.weight}{lang === "en" ? "kg" : "किग्रा"} · {activityTime(b)}{b.scheduledFor ? ` · ${b.scheduledFor}` : ""}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.safety }}>{materialLabel(b.material, lang)} · {b.weight}{lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"} · {activityTime(b)}{b.scheduledFor ? ` · ${b.scheduledFor}` : ""}</div>
         </div>
       ),
     },
     newToday: {
-      title: lang === "en" ? "New registrations today" : "आज के नए रजिस्ट्रेशन",
-      emptyMsg: lang === "en" ? "No new signups today yet." : "आज तक कोई नया साइनअप नहीं हुआ।",
+      title: lang === "en" ? "New registrations today" : lang === "mr" ? "आजचे नवीन रजिस्ट्रेशन" : "आज के नए रजिस्ट्रेशन",
+      emptyMsg: lang === "en" ? "No new signups today yet." : lang === "mr" ? "आज अद्याप कोणतेही नवीन साइनअप झाले नाही." : "आज तक कोई नया साइनअप नहीं हुआ।",
       items: [...newDriversToday.map((d) => ({ ...d, _kind: "driver" })), ...newCustomersToday.map((c) => ({ ...c, _kind: "customer" }))],
       renderItem: (p) => (
         <div key={`${p._kind}-${p.id}`} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -5627,14 +5654,14 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
             <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{p.mobile}{p._kind === "driver" && p.vehicleSpec?.vehicleNumber ? ` · ${p.vehicleSpec.vehicleNumber}` : ""}</div>
           </div>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: p._kind === "driver" ? C.marigoldDeep : C.navy }}>
-            {p._kind === "driver" ? (lang === "en" ? "Driver" : "ड्राइवर") : (lang === "en" ? "Customer" : "कस्टमर")}
+            {p._kind === "driver" ? (lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर") : (lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
           </span>
         </div>
       ),
     },
     trial: {
-      title: lang === "en" ? "Drivers in free trial" : "फ्री ट्रायल में ड्राइवर",
-      emptyMsg: lang === "en" ? "No driver is currently in their free trial." : "फिलहाल कोई भी ड्राइवर फ्री ट्रायल में नहीं है।",
+      title: lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर",
+      emptyMsg: lang === "en" ? "No driver is currently in their free trial." : lang === "mr" ? "सध्या कोणताही ड्रायव्हर फ्री ट्रायलमध्ये नाही." : "फिलहाल कोई भी ड्राइवर फ्री ट्रायल में नहीं है।",
       items: trialDrivers,
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -5643,7 +5670,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
             <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
           </div>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-            {lang === "en" ? `${trialDaysLeft(d.createdAt)}d left` : `${trialDaysLeft(d.createdAt)} दिन बाकी`}
+            {lang === "en" ? `${trialDaysLeft(d.createdAt)}d left` : lang === "mr" ? `${trialDaysLeft(d.createdAt)} दिवस बाकी` : `${trialDaysLeft(d.createdAt)} दिन बाकी`}
           </span>
         </div>
       ),
@@ -5677,31 +5704,31 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
           (signups, trial) last — those are useful context, not something
           to act on today. */}
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <StatTile label={lang === "en" ? "Loads with no bids yet" : "बिना बोली वाले लोड"} value={noBidsList.length} color={noBidsList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("noBids")} />
-        <StatTile label={lang === "en" ? "Pending KYC approvals" : "लंबित KYC अप्रूवल"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("kyc") : undefined} />
-        <StatTile label={lang === "en" ? "Online drivers below min. wallet" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
-        <StatTile label={lang === "en" ? "Cancelled today" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
-        <StatTile label={lang === "en" ? "Today's earnings (commission)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
-        <StatTile label={lang === "en" ? "Booked today" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
-        <StatTile label={lang === "en" ? "Online — ready for bookings" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
-        <StatTile label={lang === "en" ? "Total advance bookings" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
-        <StatTile label={lang === "en" ? "New registrations today" : "आज के नए रजिस्ट्रेशन"} value={newDriversToday.length + newCustomersToday.length} color={C.pimpri} onClick={() => setDetailView("newToday")} />
-        <StatTile label={lang === "en" ? "Drivers in free trial" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
+        <StatTile label={lang === "en" ? "Loads with no bids yet" : lang === "mr" ? "बोली नसलेले लोड" : "बिना बोली वाले लोड"} value={noBidsList.length} color={noBidsList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("noBids")} />
+        <StatTile label={lang === "en" ? "Pending KYC approvals" : lang === "mr" ? "प्रलंबित KYC अप्रूव्हल" : "लंबित KYC अप्रूवल"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("kyc") : undefined} />
+        <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
+        <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
+        <StatTile label={lang === "en" ? "Today's earnings (commission)" : lang === "mr" ? "आजची कमाई (कमिशन)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
+        <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
+        <StatTile label={lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
+        <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
+        <StatTile label={lang === "en" ? "New registrations today" : lang === "mr" ? "आजचे नवीन रजिस्ट्रेशन" : "आज के नए रजिस्ट्रेशन"} value={newDriversToday.length + newCustomersToday.length} color={C.pimpri} onClick={() => setDetailView("newToday")} />
+        <StatTile label={lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
       </div>
 
       <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Truck size={16} /> {lang === "en" ? "Search history by vehicle number" : "गाड़ी नंबर से हिस्ट्री देखें"}</div>
+        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Truck size={16} /> {lang === "en" ? "Search history by vehicle number" : lang === "mr" ? "गाडी नंबरने हिस्टरी पहा" : "गाड़ी नंबर से हिस्ट्री देखें"}</div>
         <input value={vehicleQuery} onChange={(e) => setVehicleQuery(e.target.value)} placeholder="जैसे: MH-14-AB-4521"
           className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
         {q && !matchedDriver && (
-          <div className="text-[11px] mt-2" style={{ color: C.safety }}>{lang === "en" ? "No vehicle found with this number." : "इस नंबर की कोई गाड़ी नहीं मिली।"}</div>
+          <div className="text-[11px] mt-2" style={{ color: C.safety }}>{lang === "en" ? "No vehicle found with this number." : lang === "mr" ? "या नंबरची कोणतीही गाडी सापडली नाही." : "इस नंबर की कोई गाड़ी नहीं मिली।"}</div>
         )}
         {matchedDriver && (
           <div className="mt-3">
             <div className="text-xs font-bold" style={{ color: C.ink }}>{matchedDriver.name} · {matchedDriver.vehicleSpec?.vehicleNumber || "—"}</div>
-            <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Total trips" : "कुल ट्रिप्स"}: {vehicleHistory.length}</div>
+            <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Total trips" : lang === "mr" ? "एकूण ट्रिप्स" : "कुल ट्रिप्स"}: {vehicleHistory.length}</div>
             {vehicleHistory.length === 0 ? (
-              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No trip history for this vehicle yet." : "इस गाड़ी की अभी कोई ट्रिप हिस्ट्री नहीं है।"}</p>
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No trip history for this vehicle yet." : lang === "mr" ? "या गाडीची अजून कोणतीही ट्रिप हिस्टरी नाही." : "इस गाड़ी की अभी कोई ट्रिप हिस्ट्री नहीं है।"}</p>
             ) : (
               <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
                 {vehicleHistory.map((t) => (
@@ -5720,9 +5747,9 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       </div>
 
       <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Activity size={16} /> {lang === "en" ? "Recent Activity" : "हाल की गतिविधि"}</div>
+        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Activity size={16} /> {lang === "en" ? "Recent Activity" : lang === "mr" ? "अलीकडील हालचाल" : "हाल की गतिविधि"}</div>
         {recentActivity.length === 0 ? (
-          <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No activity yet." : "अभी तक कोई गतिविधि नहीं।"}</p>
+          <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No activity yet." : lang === "mr" ? "अजून कोणतीही हालचाल नाही." : "अभी तक कोई गतिविधि नहीं।"}</p>
         ) : (
           <div className="space-y-1.5">
             {recentActivity.map((b) => {
@@ -5742,7 +5769,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       </div>
 
       <button onClick={onLogout} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold flex items-center justify-center gap-1.5" style={{ color: "#FFFFFF", background: C.safety }}>
-        <XCircle size={14} /> {lang === "en" ? "Logout" : "लॉगआउट"}
+        <XCircle size={14} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
       </button>
     </div>
   );
@@ -5790,10 +5817,10 @@ function KycDocThumb({ url, label, lang, fileName, height = "h-24" }) {
       {url && (
         <div className="flex" style={{ borderTop: `1px solid ${C.line}` }}>
           <button onClick={() => window.open(url, "_blank", "noopener,noreferrer")} className="flex-1 flex items-center justify-center gap-1 py-2 text-sm font-semibold" style={{ color: C.marigoldDeep }}>
-            <Eye size={11} /> {lang === "en" ? "View" : "देखें"}
+            <Eye size={11} /> {lang === "en" ? "View" : lang === "mr" ? "पहा" : "देखें"}
           </button>
           <button onClick={handleDownload} className="flex-1 flex items-center justify-center gap-1 py-2 text-sm font-semibold" style={{ color: C.marigoldDeep, borderLeft: `1px solid ${C.line}` }}>
-            <Download size={11} /> {lang === "en" ? "Download" : "डाउनलोड"}
+            <Download size={11} /> {lang === "en" ? "Download" : lang === "mr" ? "डाउनलोड" : "डाउनलोड"}
           </button>
         </div>
       )}
@@ -5806,11 +5833,13 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   const [expandedId, setExpandedId] = useState(null);
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
+    : lang === "mr"
+    ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "Driver Approval (KYC Desk)" : "ड्राइवर अप्रूवल (KYC Desk)"}</div>
-      {pending.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No pending approvals." : "कोई पेंडिंग अप्रूवल नहीं है।"}</p> : (
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "Driver Approval (KYC Desk)" : lang === "mr" ? "ड्रायव्हर अप्रूव्हल (KYC Desk)" : "ड्राइवर अप्रूवल (KYC Desk)"}</div>
+      {pending.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No pending approvals." : lang === "mr" ? "कोणतेही पेंडिंग अप्रूव्हल नाही." : "कोई पेंडिंग अप्रूवल नहीं है।"}</p> : (
         <div className="space-y-2">
           {pending.map((d) => {
             const expanded = expandedId === d.id;
@@ -5820,17 +5849,17 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                   <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1">
                     <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
                     <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
-                    <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : "▼ KYC डिटेल देखें")}</div>
+                    <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
                   </button>
                   <div className="flex gap-2">
-                    <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : "ब्लॉक करें"}</button>
-                    <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : "अप्रूव करें"}</button>
+                    <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें"}</button>
+                    <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
                   </div>
                 </div>
 
                 {expanded && (
                   <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
-                    <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : "जमा किए गए दस्तावेज़:"}</div>
+                    <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       {Object.entries(docLabels).map(([key, label]) => {
                         const doc = d.docs?.[key];
@@ -5839,22 +5868,22 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                     </div>
                     {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
                       <>
-                        <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : "गाड़ी की फोटो:"}</div>
+                        <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
                         <div className="grid grid-cols-2 gap-2 mb-2">
-                          {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} height="h-28" />}
-                          {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} height="h-28" />}
+                          {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} height="h-28" />}
+                          {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} height="h-28" />}
                         </div>
                       </>
                     )}
                     {d.vehicleSpec && (
                       <div className="text-[11px] mb-2" style={{ color: C.ink }}>
-                        <b>{lang === "en" ? "Vehicle number" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
-                        <b>{lang === "en" ? "Capacity/size" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : "किग्रा"}` : "—"} ·{" "}
-                        {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : "फीट"}
+                        <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
+                        <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} ·{" "}
+                        {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
                       </div>
                     )}
                     {!d.vehicleSpec && !d.docs && (
-                      <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>
+                      <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>
                     )}
                   </div>
                 )}
@@ -5868,18 +5897,18 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
 }
 
 function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
-  const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : { customer: "ग्राहक", driver: "ड्राइवर" };
+  const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
   const pendingWithdrawals = (withdrawals || []).filter((w) => w.status === "Pending");
   const pendingRecharges = (rechargeRequests || []).filter((r) => r.status === "Pending");
   // Docs only ever get a createdAt (server timestamp) — there's no separate
   // "time" field — so format that instead of the undefined w.time/r.time/a.time
   // this used to read (which is why timestamps never actually showed up).
-  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   return (
     <div className="space-y-4">
       {pendingRecharges.length > 0 && (
         <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
+          <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : lang === "mr" ? "वॉलेट रिचार्ज रिक्वेस्ट" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
           <div className="space-y-2">
             {pendingRecharges.map((r) => (
               <div key={r.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -5889,7 +5918,7 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(r.amount)}</span>
-                  <button onClick={() => approveRecharge(r.id)} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white" style={{ background: C.marigoldDeep }}>{lang === "en" ? "Approve" : "अप्रूव करें"}</button>
+                  <button onClick={() => approveRecharge(r.id)} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white" style={{ background: C.marigoldDeep }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
                 </div>
               </div>
             ))}
@@ -5898,17 +5927,17 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
       )}
       {pendingWithdrawals.length > 0 && (
         <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.success} /> {lang === "en" ? "Withdrawal Requests" : "विड्रॉल रिक्वेस्ट"}</div>
+          <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.success} /> {lang === "en" ? "Withdrawal Requests" : lang === "mr" ? "विड्रॉल रिक्वेस्ट" : "विड्रॉल रिक्वेस्ट"}</div>
           <div className="space-y-2">
             {pendingWithdrawals.map((w) => (
               <div key={w.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <div>
-                  <div className="text-xs font-bold" style={{ color: C.ink }}>{w.driverName || w.customerName} <span className="font-normal" style={{ color: C.inkSoft }}>· {w.role === "customer" ? (lang === "en" ? "Referral" : "रेफरल") : (lang === "en" ? "Driver bonus" : "ड्राइवर बोनस")}</span></div>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{w.driverName || w.customerName} <span className="font-normal" style={{ color: C.inkSoft }}>· {w.role === "customer" ? (lang === "en" ? "Referral" : lang === "mr" ? "रेफरल" : "रेफरल") : (lang === "en" ? "Driver bonus" : lang === "mr" ? "ड्रायव्हर बोनस" : "ड्राइवर बोनस")}</span></div>
                   <div className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(w.createdAt)}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(w.amount)}</span>
-                  <button onClick={() => approveWithdrawal(w.id)} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : "अप्रूव करें"}</button>
+                  <button onClick={() => approveWithdrawal(w.id)} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
                 </div>
               </div>
             ))}
@@ -5916,8 +5945,8 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
         </div>
       )}
       <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Siren size={16} color={C.safety} /> {lang === "en" ? "Emergency Alerts" : "इमरजेंसी अलर्ट्स"}</div>
-        {alerts.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No alerts yet." : "अभी कोई अलर्ट नहीं आया।"}</p> : (() => {
+        <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Siren size={16} color={C.safety} /> {lang === "en" ? "Emergency Alerts" : lang === "mr" ? "इमर्जन्सी अलर्ट्स" : "इमरजेंसी अलर्ट्स"}</div>
+        {alerts.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No alerts yet." : lang === "mr" ? "अजून कोणताही अलर्ट आला नाही." : "अभी कोई अलर्ट नहीं आया।"}</p> : (() => {
           // Police Help / Emergency Call / WhatsApp Support carry no extra
           // info per tap — a driver tapping "WhatsApp Support" 5 times just
           // adds 5 identical rows. Collapse those into one row per role+type
@@ -5972,16 +6001,16 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
 // Exotel's Connect API response is all this reads -- a call-status webhook
 // would be needed for more than that, which isn't wired up).
 function AdminCallLogs({ callLogs, bookings, lang }) {
-  const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : { customer: "ग्राहक", driver: "ड्राइवर" };
-  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
-        <PhoneCall size={16} color={C.marigoldDeep} /> {lang === "en" ? "Masked Call Logs" : "मास्क्ड कॉल लॉग्स"}
+        <PhoneCall size={16} color={C.marigoldDeep} /> {lang === "en" ? "Masked Call Logs" : lang === "mr" ? "मास्क्ड कॉल लॉग्स" : "मास्क्ड कॉल लॉग्स"}
         <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{(callLogs || []).length}</span>
       </div>
       {(callLogs || []).length === 0 ? (
-        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No masked calls yet." : "अभी तक कोई मास्क्ड कॉल नहीं हुई।"}</p>
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No masked calls yet." : lang === "mr" ? "अजून कोणताही मास्क्ड कॉल झाला नाही." : "अभी तक कोई मास्क्ड कॉल नहीं हुई।"}</p>
       ) : (
         <div className="space-y-2">
           {callLogs.map((log) => {
@@ -5989,13 +6018,13 @@ function AdminCallLogs({ callLogs, bookings, lang }) {
             return (
               <div key={log.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold" style={{ color: C.ink }}>{roleLabel[log.initiatedBy] || log.initiatedBy} {lang === "en" ? "called" : "ने कॉल किया"}</span>
+                  <span className="text-xs font-bold" style={{ color: C.ink }}>{roleLabel[log.initiatedBy] || log.initiatedBy} {lang === "en" ? "called" : lang === "mr" ? "ने कॉल केला" : "ने कॉल किया"}</span>
                   <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(log.createdAt)}</span>
                 </div>
                 {b ? (
                   <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.pickup} → {b.drop}{b.driverName ? ` · ${b.driverName}` : ""}</div>
                 ) : (
-                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Booking" : "बुकिंग"}: {log.bookingId}</div>
+                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Booking" : lang === "mr" ? "बुकिंग" : "बुकिंग"}: {log.bookingId}</div>
                 )}
                 {log.exotelCallSid && <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>SID: {log.exotelCallSid}</div>}
               </div>
@@ -6026,31 +6055,35 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   const filtered = byTrialTab.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
   const kycMeta = lang === "en"
     ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E5E5E5" } }
+    : lang === "mr"
+    ? { Approved: { label: "सत्यापित", color: "#FFFFFF", bg: C.success }, Pending: { label: "प्रलंबित", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "ब्लॉक्ड", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC सबमिट झाले नाही", color: C.inkSoft, bg: "#E5E5E5" } }
     : { Approved: { label: "सत्यापित", color: "#FFFFFF", bg: C.success }, Pending: { label: "लंबित", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "ब्लॉक्ड", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC सबमिट नहीं हुआ", color: C.inkSoft, bg: "#E5E5E5" } };
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
+    : lang === "mr"
+    ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
 
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
-          <Users size={16} /> {lang === "en" ? "All Drivers" : "सभी ड्राइवर"}
+          <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"}
           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{drivers.length}</span>
         </div>
         <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
-          {showCall ? (lang === "en" ? "Cancel" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : "ड्राइवर को कॉल करें"}</>}
+          {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : lang === "mr" ? "ड्रायव्हरला कॉल करा" : "ड्राइवर को कॉल करें"}</>}
         </button>
       </div>
       {showCall && (() => {
         const callFiltered = drivers.filter((d) => d.name.includes(callQ) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(callQ.toLowerCase()) || (d.mobile || "").includes(callQ));
         return (
           <div className="rounded-lg p-2 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."}
+            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : lang === "mr" ? "नाव, गाडी नंबर किंवा मोबाइलने शोधा..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."}
               className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
             <div className="space-y-1.5 max-h-64 overflow-y-auto">
               {callFiltered.length === 0 ? (
-                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : "कोई ड्राइवर नहीं मिला।"}</p>
+                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : lang === "mr" ? "कोणताही ड्रायव्हर सापडला नाही." : "कोई ड्राइवर नहीं मिला।"}</p>
               ) : callFiltered.map((d) => (
                 <a key={d.id} href={`tel:${d.mobile}`} onClick={() => setShowCall(false)}
                   className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -6067,9 +6100,9 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
       })()}
       <div className="grid grid-cols-3 gap-1.5 mb-3">
         {[
-          ["all", lang === "en" ? "All" : "सभी", drivers.length],
-          ["trial", lang === "en" ? "Free Trial" : "फ्री ट्रायल", trialCount],
-          ["main", lang === "en" ? "Main Routine" : "मुख्य रूटीन", drivers.length - trialCount],
+          ["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी", drivers.length],
+          ["trial", lang === "en" ? "Free Trial" : lang === "mr" ? "फ्री ट्रायल" : "फ्री ट्रायल", trialCount],
+          ["main", lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन", drivers.length - trialCount],
         ].map(([key, label, count]) => (
           <button key={key} onClick={() => setTrialTab(key)} className="rounded-lg py-3 text-sm font-bold text-center"
             style={{ background: trialTab === key ? C.marigoldDeep : C.bg, color: trialTab === key ? "#fff" : C.inkSoft, border: `1px solid ${trialTab === key ? C.marigoldDeep : C.line}` }}>
@@ -6077,9 +6110,9 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
           </button>
         ))}
       </div>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : lang === "mr" ? "नाव, गाडी नंबर किंवा मोबाइलने शोधा..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
-        {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : "कोई ड्राइवर नहीं मिला।"}</p>}
+        {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : lang === "mr" ? "कोणताही ड्रायव्हर सापडला नाही." : "कोई ड्राइवर नहीं मिला।"}</p>}
         {filtered.map((d) => {
           const km = kycMeta[d.kyc] || kycMeta.none;
           const expanded = expandedId === d.id;
@@ -6089,27 +6122,27 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
-                  <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : "वॉलेट"} {fmt(d.wallet)}</div>
+                  <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"} {fmt(d.wallet)}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: d.online ? C.success : C.marigoldDeep }}>{d.online ? (lang === "en" ? "Online" : "ऑनलाइन") : (lang === "en" ? "Offline" : "ऑफलाइन")}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: d.online ? C.success : C.marigoldDeep }}>{d.online ? (lang === "en" ? "Online" : lang === "mr" ? "ऑनलाइन" : "ऑनलाइन") : (lang === "en" ? "Offline" : lang === "mr" ? "ऑफलाइन" : "ऑफलाइन")}</span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
                   {daysLeft != null ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-                      {lang === "en" ? `Trial · ${daysLeft}d left` : `ट्रायल · ${daysLeft} दिन बाकी`}
+                      {lang === "en" ? `Trial · ${daysLeft}d left` : lang === "mr" ? `ट्रायल · ${daysLeft} दिवस बाकी` : `ट्रायल · ${daysLeft} दिन बाकी`}
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.inkSoft, background: "#E5E5E5" }}>{lang === "en" ? "Main Routine" : "मुख्य रूटीन"}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.inkSoft, background: "#E5E5E5" }}>{lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन"}</span>
                   )}
                 </div>
               </div>
 
               <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-sm font-bold mt-2" style={{ color: C.marigoldDeep }}>
-                {expanded ? (lang === "en" ? "▲ Hide KYC details" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : "▼ KYC डिटेल देखें")}
+                {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
               </button>
               {expanded && (
                 <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                  <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : "जमा किए गए दस्तावेज़:"}</div>
+                  <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     {Object.entries(docLabels).map(([key, label]) => {
                       const doc = d.docs?.[key];
@@ -6118,43 +6151,43 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
                   </div>
                   {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
                     <>
-                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : "गाड़ी की फोटो:"}</div>
+                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
                       <div className="grid grid-cols-2 gap-2 mb-2">
-                        {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} />}
-                        {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} />}
+                        {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} />}
+                        {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} />}
                       </div>
                     </>
                   )}
                   {d.vehicleSpec && (
                     <div className="text-[11px] mb-2" style={{ color: C.ink }}>
-                      <b>{lang === "en" ? "Vehicle number" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
-                      <b>{lang === "en" ? "Capacity/size" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : "फीट"}
+                      <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
+                      <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
                     </div>
                   )}
-                  {!d.vehicleSpec && !d.docs && <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>}
+                  {!d.vehicleSpec && !d.docs && <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>}
                 </div>
               )}
 
               <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                {d.blacklisted ? <span className="text-[11px] font-bold" style={{ color: C.safety }}>⛔ {lang === "en" ? "Blocked — won't get bookings" : "ब्लॉक्ड — बुकिंग नहीं मिलेगी"}</span> : <span />}
+                {d.blacklisted ? <span className="text-[11px] font-bold" style={{ color: C.safety }}>⛔ {lang === "en" ? "Blocked — won't get bookings" : lang === "mr" ? "ब्लॉक्ड — बुकिंग मिळणार नाही" : "ब्लॉक्ड — बुकिंग नहीं मिलेगी"}</span> : <span />}
                 <div className="flex items-center gap-2">
                   {confirmDeleteId === d.id ? (
                     <>
-                      <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : "हमेशा के लिए हटाएं?"}</span>
+                      <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : lang === "mr" ? "कायमचे काढून टाकायचे?" : "हमेशा के लिए हटाएं?"}</span>
                       <button onClick={() => { deleteDriver(d.mobile || d.id); setConfirmDeleteId(null); }} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
-                        {lang === "en" ? "Yes, delete" : "हां, हटाएं"}
+                        {lang === "en" ? "Yes, delete" : lang === "mr" ? "हो, काढा" : "हां, हटाएं"}
                       </button>
                       <button onClick={() => setConfirmDeleteId(null)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
-                        {lang === "en" ? "Cancel" : "रद्द करें"}
+                        {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
                       </button>
                     </>
                   ) : (
                     <>
                       <button onClick={() => toggleBlacklist(d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#FFFFFF", background: d.blacklisted ? C.success : C.safety }}>
-                        {d.blacklisted ? (lang === "en" ? "Unblock" : "अनब्लॉक करें") : (lang === "en" ? "Block" : "ब्लॉक करें")}
+                        {d.blacklisted ? (lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें") : (lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें")}
                       </button>
                       <button onClick={() => setConfirmDeleteId(d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
-                        {lang === "en" ? "Delete" : "हटाएं"}
+                        {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
                       </button>
                     </>
                   )}
@@ -6181,28 +6214,28 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
     : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
-  const bookingDate = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleDateString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
+  const bookingDate = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
-          <Users size={16} /> {lang === "en" ? "All Customers" : "सभी कस्टमर"}
+          <Users size={16} /> {lang === "en" ? "All Customers" : lang === "mr" ? "सर्व कस्टमर" : "सभी कस्टमर"}
           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{(customers || []).length}</span>
         </div>
         <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
-          {showCall ? (lang === "en" ? "Cancel" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Customer" : "कस्टमर को कॉल करें"}</>}
+          {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Customer" : lang === "mr" ? "कस्टमरला कॉल करा" : "कस्टमर को कॉल करें"}</>}
         </button>
       </div>
       {showCall && (() => {
         const callFiltered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(callQ.toLowerCase()) || (c.mobile || "").includes(callQ));
         return (
           <div className="rounded-lg p-2 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name or mobile..." : "नाम या मोबाइल से खोजें..."}
+            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name or mobile..." : lang === "mr" ? "नाव किंवा मोबाइलने शोधा..." : "नाम या मोबाइल से खोजें..."}
               className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
             <div className="space-y-1.5 max-h-64 overflow-y-auto">
               {callFiltered.length === 0 ? (
-                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : "कोई कस्टमर नहीं मिला।"}</p>
+                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : lang === "mr" ? "कोणताही कस्टमर सापडला नाही." : "कोई कस्टमर नहीं मिला।"}</p>
               ) : callFiltered.map((c) => (
                 <a key={c.mobile} href={`tel:${c.mobile}`} onClick={() => setShowCall(false)}
                   className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -6217,9 +6250,9 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
           </div>
         );
       })()}
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, mobile or city..." : "नाम, मोबाइल या शहर से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, mobile or city..." : lang === "mr" ? "नाव, मोबाइल किंवा शहराने शोधा..." : "नाम, मोबाइल या शहर से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
-        {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : "कोई कस्टमर नहीं मिला।"}</p>}
+        {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : lang === "mr" ? "कोणताही कस्टमर सापडला नाही." : "कोई कस्टमर नहीं मिला।"}</p>}
         {filtered.map((c) => {
           const expanded = expandedId === c.mobile;
           const rides = (bookings || []).filter((b) => b.customerMobile === c.mobile);
@@ -6230,25 +6263,25 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
                   <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{c.mobile}</div>
-                  <div className="text-[10px] font-bold mt-0.5 truncate" style={{ color: C.ink }}>{[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || (lang === "en" ? "No address on file" : "पता उपलब्ध नहीं")}</div>
+                  <div className="text-[10px] font-bold mt-0.5 truncate" style={{ color: C.ink }}>{[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || (lang === "en" ? "No address on file" : lang === "mr" ? "पत्ता उपलब्ध नाही" : "पता उपलब्ध नहीं")}</div>
                 </div>
                 <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-sm font-semibold px-3.5 py-2.5 rounded-lg" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-                  {expanded ? (lang === "en" ? "Hide" : "छुपाएं") : (lang === "en" ? "View Details" : "विवरण देखें")}
+                  {expanded ? (lang === "en" ? "Hide" : lang === "mr" ? "लपवा" : "छुपाएं") : (lang === "en" ? "View Details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें")}
                 </button>
               </div>
 
               {expanded && (
                 <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
                   <div className="text-[11px] mb-3" style={{ color: C.ink }}>
-                    <b>{lang === "en" ? "Contact number" : "संपर्क नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{c.mobile}</span><br />
-                    {c.email && (<><b>{lang === "en" ? "Email" : "ईमेल"}:</b> {c.email}<br /></>)}
-                    <b>{lang === "en" ? "Address" : "पता"}:</b> {[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || "—"}
+                    <b>{lang === "en" ? "Contact number" : lang === "mr" ? "संपर्क नंबर" : "संपर्क नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{c.mobile}</span><br />
+                    {c.email && (<><b>{lang === "en" ? "Email" : lang === "mr" ? "ईमेल" : "ईमेल"}:</b> {c.email}<br /></>)}
+                    <b>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}:</b> {[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || "—"}
                   </div>
                   <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>
-                    {lang === "en" ? `Ride history (${rides.length})` : `राइड हिस्ट्री (${rides.length})`}
+                    {lang === "en" ? `Ride history (${rides.length})` : lang === "mr" ? `राइड हिस्टरी (${rides.length})` : `राइड हिस्ट्री (${rides.length})`}
                   </div>
                   {rides.length === 0 ? (
-                    <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No bookings yet." : "अभी तक कोई बुकिंग नहीं।"}</p>
+                    <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No bookings yet." : lang === "mr" ? "अजून कोणतीही बुकिंग नाही." : "अभी तक कोई बुकिंग नहीं।"}</p>
                   ) : (
                     <div className="space-y-1.5 max-h-64 overflow-y-auto">
                       {rides.map((b) => {
@@ -6260,10 +6293,10 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
                             </div>
                             <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
-                              {materialLabel(b.material, lang)} · {b.weight} {lang === "en" ? "kg" : "किग्रा"}
+                              {materialLabel(b.material, lang)} · {b.weight} {lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}
                             </div>
                             <div className="text-[10px] flex items-center justify-between mt-1">
-                              <span style={{ color: C.inkSoft }}>{b.driverName ? `${lang === "en" ? "Driver" : "ड्राइवर"}: ${b.driverName}` : (lang === "en" ? "No driver assigned" : "ड्राइवर तय नहीं")} · {bookingDate(b)}</span>
+                              <span style={{ color: C.inkSoft }}>{b.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${b.driverName}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(b)}</span>
                               {b.fare != null && <span className="font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(b.fare)}</span>}
                             </div>
                           </div>
@@ -6274,17 +6307,17 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                   <div className="flex items-center justify-end gap-2 mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
                     {confirmDeleteId === c.mobile ? (
                       <>
-                        <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : "हमेशा के लिए हटाएं?"}</span>
+                        <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : lang === "mr" ? "कायमचे काढून टाकायचे?" : "हमेशा के लिए हटाएं?"}</span>
                         <button onClick={() => { deleteCustomer(c.mobile); setConfirmDeleteId(null); }} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
-                          {lang === "en" ? "Yes, delete" : "हां, हटाएं"}
+                          {lang === "en" ? "Yes, delete" : lang === "mr" ? "हो, काढा" : "हां, हटाएं"}
                         </button>
                         <button onClick={() => setConfirmDeleteId(null)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
-                          {lang === "en" ? "Cancel" : "रद्द करें"}
+                          {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
                         </button>
                       </>
                     ) : (
                       <button onClick={() => setConfirmDeleteId(c.mobile)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
-                        {lang === "en" ? "Delete" : "हटाएं"}
+                        {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
                       </button>
                     )}
                   </div>
@@ -6307,8 +6340,10 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
   const audiencePeople = audience === "driver" ? (drivers || []) : (customers || []);
   const allLabel = lang === "en"
     ? (audience === "driver" ? "All Drivers" : "All Customers")
+    : lang === "mr"
+    ? (audience === "driver" ? "सर्व ड्रायव्हर" : "सर्व कस्टमर")
     : (audience === "driver" ? "सभी ड्राइवर" : "सभी कस्टमर");
-  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   const send = async () => {
     if (!message.trim() || sending) return;
     setSending(true);
@@ -6316,44 +6351,44 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
     const result = await sendAdminNotification(target, message.trim(), audience);
     setSending(false);
     if (result.ok) setMessage("");
-    else setError(lang === "en" ? "Couldn't send — try again." : "भेज नहीं सका — फिर कोशिश करें।");
+    else setError(lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।");
   };
   const notifLabel = (n) => {
     const label = n.toRole === "customer"
-      ? (lang === "en" ? "All Customers" : "सभी कस्टमर")
-      : (lang === "en" ? "All Drivers" : "सभी ड्राइवर");
+      ? (lang === "en" ? "All Customers" : lang === "mr" ? "सर्व कस्टमर" : "सभी कस्टमर")
+      : (lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर");
     return n.target === "all" ? label : (n.targetName || n.target);
   };
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> {lang === "en" ? "Send Notification" : "सूचना भेजें"}</div>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> {lang === "en" ? "Send Notification" : lang === "mr" ? "सूचना पाठवा" : "सूचना भेजें"}</div>
       <div className="flex gap-2 mb-3">
         {["driver", "customer"].map((a) => (
           <button key={a} onClick={() => { setAudience(a); setTarget("all"); }} className="flex-1 rounded-lg py-3 text-base font-bold"
             style={{ background: audience === a ? C.navy : C.paper, color: audience === a ? "#fff" : C.inkSoft, border: `1.5px solid ${audience === a ? C.navy : C.line}` }}>
-            {a === "driver" ? (lang === "en" ? "Drivers" : "ड्राइवर") : (lang === "en" ? "Customers" : "कस्टमर")}
+            {a === "driver" ? (lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर") : (lang === "en" ? "Customers" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
           </button>
         ))}
       </div>
-      <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Send to" : "किसे भेजें"}</label>
+      <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Send to" : lang === "mr" ? "कोणाला पाठवायचे" : "किसे भेजें"}</label>
       <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
         <option value="all">{allLabel}</option>
         {audiencePeople.map((p) => <option key={p.mobile} value={p.mobile}>{p.name}</option>)}
       </select>
-      <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+      <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : lang === "mr" ? "संदेश लिहा..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
       {error && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
       <button onClick={send} disabled={!message.trim() || sending} className="w-full rounded-lg py-3.5 font-bold text-base mb-4" style={{ background: message.trim() && !sending ? C.marigold : "#E0E0E0", color: message.trim() && !sending ? "#000000" : "#9AA3B0" }}>
-        {sending ? (lang === "en" ? "Sending..." : "भेजा जा रहा है...") : (lang === "en" ? "Send" : "भेजें")}
+        {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send" : lang === "mr" ? "पाठवा" : "भेजें")}
       </button>
-      <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Sent Notifications" : "भेजी गई सूचनाएं"}</div>
+      <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Sent Notifications" : lang === "mr" ? "पाठवलेल्या सूचना" : "भेजी गई सूचनाएं"}</div>
       <div className="space-y-2">
-        {(adminNotifications || []).length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No notifications sent yet." : "अभी कोई सूचना नहीं भेजी गई।"}</p>}
+        {(adminNotifications || []).length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No notifications sent yet." : lang === "mr" ? "अजून कोणतीही सूचना पाठवली गेली नाही." : "अभी कोई सूचना नहीं भेजी गई।"}</p>}
         {(adminNotifications || []).map((n) => (
           <div key={n.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-bold" style={{ color: C.ink }}>
                 <span className="px-1.5 py-0.5 rounded mr-1" style={{ background: n.toRole === "customer" ? C.success : C.navy, color: "#fff", fontSize: 9 }}>
-                  {n.toRole === "customer" ? (lang === "en" ? "Customer" : "कस्टमर") : (lang === "en" ? "Driver" : "ड्राइवर")}
+                  {n.toRole === "customer" ? (lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर") : (lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
                 </span>
                 {notifLabel(n)}
               </span>
@@ -6362,8 +6397,8 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
             <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>{n.message}</div>
             <div className="text-[10px] mt-0.5" style={{ color: n.recipientCount > 0 ? C.success : C.safety }}>
               {n.recipientCount > 0
-                ? (lang === "en" ? `Delivered to ${n.recipientCount} device${n.recipientCount > 1 ? "s" : ""}` : `${n.recipientCount} डिवाइस पर पहुंची`)
-                : (lang === "en" ? "No device had notifications enabled" : "किसी डिवाइस पर नोटिफिकेशन चालू नहीं था")}
+                ? (lang === "en" ? `Delivered to ${n.recipientCount} device${n.recipientCount > 1 ? "s" : ""}` : lang === "mr" ? `${n.recipientCount} डिव्हाइसवर पोहोचली` : `${n.recipientCount} डिवाइस पर पहुंची`)
+                : (lang === "en" ? "No device had notifications enabled" : lang === "mr" ? "कोणत्याही डिव्हाइसवर नोटिफिकेशन चालू नव्हते" : "किसी डिवाइस पर नोटिफिकेशन चालू नहीं था")}
             </div>
           </div>
         ))}
@@ -6396,17 +6431,17 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
   };
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : "सिस्टम सेटिंग्स"}</div>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : lang === "mr" ? "सिस्टम सेटिंग्स" : "सिस्टम सेटिंग्स"}</div>
 
       <div className="rounded-lg p-3 mb-4" style={{ background: C.success }}>
-        <div className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
-        <div className="text-[11px] font-bold mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
+        <div className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : lang === "mr" ? "लॉगिनच्या तारखेपासून, नवीन ड्रायव्हर आणि कस्टमरसाठी 30 दिवसांचा ट्रायल मोड आपोआप सुरू होतो" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
+        <div className="text-[11px] font-bold mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : lang === "mr" ? "त्या ड्रायव्हरच्या ट्रायल दरम्यान कोणतेही कमिशन किंवा किमान बॅलन्स लागू होत नाही. ट्रायल संपल्यावर खाली दिलेले दर आपोआप लागू होतील." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
       </div>
 
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Commission Percentage" : "कमीशन प्रतिशत"}</div>
-          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted, once their trial has ended" : "ट्रायल खत्म होने के बाद, बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Commission Percentage" : lang === "mr" ? "कमिशन टक्केवारी" : "कमीशन प्रतिशत"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted, once their trial has ended" : lang === "mr" ? "ट्रायल संपल्यानंतर, बिड अ‍ॅक्सेप्ट होताच हे % ड्रायव्हरच्या वॉलेटमधून कापले जाईल" : "ट्रायल खत्म होने के बाद, बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <input type="number" value={draft.commissionPct} onChange={(e) => updateDraft({ commissionPct: Math.max(0, Number(e.target.value) || 0) })}
@@ -6416,8 +6451,8 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
       </div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Bonus Percentage" : "ड्राइवर बोनस प्रतिशत"}</div>
-          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % out of the commission goes back to the driver's bonus account" : "कमीशन में से यह % ड्राइवर के बोनस अकाउंट में वापस जाएगा"}</div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Bonus Percentage" : lang === "mr" ? "ड्रायव्हर बोनस टक्केवारी" : "ड्राइवर बोनस प्रतिशत"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % out of the commission goes back to the driver's bonus account" : lang === "mr" ? "कमिशनमधून हे % ड्रायव्हरच्या बोनस खात्यात परत जाईल" : "कमीशन में से यह % ड्राइवर के बोनस अकाउंट में वापस जाएगा"}</div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <input type="number" value={draft.bonusPct} onChange={(e) => updateDraft({ bonusPct: Math.max(0, Number(e.target.value) || 0) })}
@@ -6427,8 +6462,8 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
       </div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Minimum Wallet Balance" : "न्यूनतम वॉलेट बैलेंस"}</div>
-          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver must maintain this balance to keep the app active" : "ऐप एक्टिव रखने के लिए ड्राइवर को यह बैलेंस रखना होगा"}</div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Minimum Wallet Balance" : lang === "mr" ? "किमान वॉलेट बॅलन्स" : "न्यूनतम वॉलेट बैलेंस"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver must maintain this balance to keep the app active" : lang === "mr" ? "अ‍ॅप अ‍ॅक्टिव्ह ठेवण्यासाठी ड्रायव्हरला हे बॅलन्स ठेवावे लागेल" : "ऐप एक्टिव रखने के लिए ड्राइवर को यह बैलेंस रखना होगा"}</div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-base font-bold" style={{ color: C.ink }}>₹</span>
@@ -6436,10 +6471,10 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
             className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
         </div>
       </div>
-      {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : "सेटिंग्स सेव हो गईं"}</div>}
+      {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
       <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-3.5 font-bold text-base"
         style={{ background: dirty ? "#0052CC" : "#E0E0E0", color: dirty ? "#fff" : "#9AA3B0" }}>
-        {lang === "en" ? "Save Changes" : "बदलाव सेव करें"}
+        {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
       </button>
     </div>
   );
@@ -6459,23 +6494,23 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Reports — Commission & Earnings" : "रिपोर्ट्स — कमीशन और कमाई"}</div>
+        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Reports — Commission & Earnings" : lang === "mr" ? "रिपोर्ट्स — कमिशन आणि कमाई" : "रिपोर्ट्स — कमीशन और कमाई"}</div>
         <button onClick={downloadReport} disabled={tripLog.length === 0} className="text-sm font-semibold flex items-center gap-1 px-3.5 py-2.5 rounded-lg"
           style={{ color: tripLog.length ? "#FFFFFF" : C.inkSoft, background: tripLog.length ? C.marigoldDeep : "#E5E5E5" }}>
-          <Download size={12} /> {lang === "en" ? "Download CSV" : "एक्सेल डाउनलोड करें"}
+          <Download size={12} /> {lang === "en" ? "Download CSV" : lang === "mr" ? "एक्सेल डाउनलोड करा" : "एक्सेल डाउनलोड करें"}
         </button>
       </div>
       <div className="rounded-lg p-3 mb-3" style={{ background: C.success }}>
-        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Total commission so far (${commissionPct}%)` : `आज का कुल कमीशन (${commissionPct}%)`}</div>
+        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Total commission so far (${commissionPct}%)` : lang === "mr" ? `आजपर्यंतचे एकूण कमिशन (${commissionPct}%)` : `आज का कुल कमीशन (${commissionPct}%)`}</div>
         <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(totalCommission)}</div>
       </div>
-      {tripLog.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid has been accepted yet." : "आज अभी तक कोई बिड एक्सेप्ट नहीं हुई।"}</p> : (
+      {tripLog.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid has been accepted yet." : lang === "mr" ? "आज अजून कोणतीही बिड अ‍ॅक्सेप्ट झाली नाही." : "आज अभी तक कोई बिड एक्सेप्ट नहीं हुई।"}</p> : (
         <table className="w-full text-xs">
           <thead><tr style={{ color: C.inkSoft }}>
-            <th className="text-left font-semibold pb-1">{lang === "en" ? "Driver" : "ड्राइवर"}</th>
-            <th className="text-left font-semibold pb-1">{lang === "en" ? "Route" : "रूट"}</th>
-            <th className="text-right font-semibold pb-1">{lang === "en" ? "Fare" : "भाड़ा"}</th>
-            <th className="text-right font-semibold pb-1">{lang === "en" ? "Commission" : "कमीशन"}</th>
+            <th className="text-left font-semibold pb-1">{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</th>
+            <th className="text-left font-semibold pb-1">{lang === "en" ? "Route" : lang === "mr" ? "रूट" : "रूट"}</th>
+            <th className="text-right font-semibold pb-1">{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}</th>
+            <th className="text-right font-semibold pb-1">{lang === "en" ? "Commission" : lang === "mr" ? "कमिशन" : "कमीशन"}</th>
           </tr></thead>
           <tbody>
             {tripLog.map((t) => (
@@ -6484,7 +6519,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
                 <td className="py-1.5" style={{ color: C.inkSoft }}>{t.pickup} → {t.drop}</td>
                 <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: C.ink }}>{fmt(t.fare)}</td>
                 <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: t.status === "Cancelled" ? C.safety : C.success }}>
-                  {t.status === "Cancelled" ? (lang === "en" ? "Cancelled (refunded)" : "रद्द (वापस)") : fmt(t.fare * (commissionPct / 100))}
+                  {t.status === "Cancelled" ? (lang === "en" ? "Cancelled (refunded)" : lang === "mr" ? "रद्द (परत)" : "रद्द (वापस)") : fmt(t.fare * (commissionPct / 100))}
                 </td>
               </tr>
             ))}
@@ -6537,7 +6572,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
       resetForm();
     } catch (e) {
       console.error(e);
-      setSaveError(lang === "en" ? "Couldn't save — please try again." : "सेव नहीं हो सका — दोबारा कोशिश करें।");
+      setSaveError(lang === "en" ? "Couldn't save — please try again." : lang === "mr" ? "सेव्ह होऊ शकले नाही — पुन्हा प्रयत्न करा." : "सेव नहीं हो सका — दोबारा कोशिश करें।");
     } finally {
       setSaving(false);
     }
@@ -6558,33 +6593,33 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
 
   return (
     <div>
-      <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Expense Tools:" : "खर्चे के टूल:"}</div>
+      <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Expense Tools:" : lang === "mr" ? "खर्चाचे टूल:" : "खर्चे के टूल:"}</div>
       <div className="grid grid-cols-3 gap-2 mb-4">
         <button onClick={() => openAdd()} className="rounded-xl py-5 flex flex-col items-center gap-1.5" style={{ background: C.marigold }}>
           <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Plus size={18} color={C.navy} /></div>
-          <span className="text-[11px] font-bold" style={{ color: "#000000" }}>{lang === "en" ? "New Expense" : "नया खर्च"}</span>
+          <span className="text-[11px] font-bold" style={{ color: "#000000" }}>{lang === "en" ? "New Expense" : lang === "mr" ? "नवीन खर्च" : "नया खर्च"}</span>
         </button>
-        <PhotoPicker label={lang === "en" ? "Attach a bill photo" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => openAdd({ photo: file })}>
+        <PhotoPicker label={lang === "en" ? "Attach a bill photo" : lang === "mr" ? "बिलाचा फोटो जोडा" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => openAdd({ photo: file })}>
           <div className="rounded-xl py-4 flex flex-col items-center gap-1.5 cursor-pointer" style={{ background: C.safety }}>
             <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Camera size={16} color={C.safety} /></div>
-            <span className="text-[11px] font-bold text-center" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Camera / Bill" : "कैमरा / बिल"}</span>
+            <span className="text-[11px] font-bold text-center" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Camera / Bill" : lang === "mr" ? "कॅमेरा / बिल" : "कैमरा / बिल"}</span>
           </div>
         </PhotoPicker>
         <button onClick={downloadReport} disabled={expenses.length === 0} className="rounded-xl py-5 flex flex-col items-center gap-1.5" style={{ background: C.success, opacity: expenses.length ? 1 : 0.5 }}>
           <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Download size={16} color={C.success} /></div>
-          <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>Excel {lang === "en" ? "Report" : "रिपोर्ट"}</span>
+          <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>Excel {lang === "en" ? "Report" : lang === "mr" ? "रिपोर्ट" : "रिपोर्ट"}</span>
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
-        <StatTile label={lang === "en" ? "Total expenses (this month)" : "कुल खर्च (इस महीने)"} value={fmt(totalThisMonth)} color={C.ink} />
-        <StatTile label={lang === "en" ? "Secured receipts" : "सुरक्षित रसीदें"} value={`${receiptsCount} ${lang === "en" ? "bills" : "बिल"}`} color={C.marigoldDeep} />
+        <StatTile label={lang === "en" ? "Total expenses (this month)" : lang === "mr" ? "एकूण खर्च (या महिन्यात)" : "कुल खर्च (इस महीने)"} value={fmt(totalThisMonth)} color={C.ink} />
+        <StatTile label={lang === "en" ? "Secured receipts" : lang === "mr" ? "सुरक्षित पावत्या" : "सुरक्षित रसीदें"} value={`${receiptsCount} ${lang === "en" ? "bills" : lang === "mr" ? "बिल" : "बिल"}`} color={C.marigoldDeep} />
       </div>
 
       <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><ClipboardList size={16} /> {lang === "en" ? "Expense History" : "खर्चों का इतिहास"}</div>
+        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><ClipboardList size={16} /> {lang === "en" ? "Expense History" : lang === "mr" ? "खर्चांचा इतिहास" : "खर्चों का इतिहास"}</div>
         {recent.length === 0 ? (
-          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No expenses recorded yet." : "अभी तक कोई खर्च दर्ज नहीं हुआ।"}</p>
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No expenses recorded yet." : lang === "mr" ? "अजून कोणताही खर्च नोंदवला गेला नाही." : "अभी तक कोई खर्च दर्ज नहीं हुआ।"}</p>
         ) : (
           <div className="space-y-2">
             {recent.map((e) => {
@@ -6593,14 +6628,14 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
                 <div key={e.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{e.note || (cat ? (lang === "en" ? cat.en : cat.hi) : e.category)}</div>
-                      <div className="text-[10px]" style={{ color: C.inkSoft }}>{e.date} · {cat ? `${cat.icon} ${lang === "en" ? cat.en : cat.hi}` : e.category}</div>
+                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{e.note || (cat ? (lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi) : e.category)}</div>
+                      <div className="text-[10px]" style={{ color: C.inkSoft }}>{e.date} · {cat ? `${cat.icon} ${lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi}` : e.category}</div>
                     </div>
                     <div className="text-sm font-bold shrink-0" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(e.amount)}</div>
                   </div>
                   {e.photoUrl && (
                     <a href={e.photoUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold mt-1.5 inline-flex items-center gap-1" style={{ color: C.success }}>
-                      <CheckCircle2 size={11} /> {lang === "en" ? "Photo secured" : "फोटो सुरक्षित"}
+                      <CheckCircle2 size={11} /> {lang === "en" ? "Photo secured" : lang === "mr" ? "फोटो सुरक्षित" : "फोटो सुरक्षित"}
                     </a>
                   )}
                 </div>
@@ -6614,13 +6649,13 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setShowAdd(false)}>
           <div className="w-full max-w-sm rounded-t-2xl max-h-[85vh] overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 flex items-center justify-between" style={{ background: C.navy }}>
-              <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: "#fff" }}><ClipboardList size={15} /> {lang === "en" ? "Add New Expense" : "नया खर्च दर्ज करें"}</h3>
+              <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: "#fff" }}><ClipboardList size={15} /> {lang === "en" ? "Add New Expense" : lang === "mr" ? "नवीन खर्च नोंदवा" : "नया खर्च दर्ज करें"}</h3>
               <button onClick={() => setShowAdd(false)} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
             </div>
             <div className="p-5 space-y-3">
               <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
 
-              <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Choose expense category:" : "खर्च की कैटेगरी चुनें:"}</div>
+              <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Choose expense category:" : lang === "mr" ? "खर्चाची कॅटेगरी निवडा:" : "खर्च की कैटेगरी चुनें:"}</div>
               <div className="space-y-1.5">
                 {categories.map((c) => {
                   const active = form.category === c.hi;
@@ -6629,7 +6664,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
                       className="w-full rounded-lg px-4 py-3.5 flex items-center justify-between"
                       style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}` }}>
                       <span className="text-xs font-bold flex items-center gap-2" style={{ color: active ? "#FFFFFF" : C.ink }}>
-                        <span>{c.icon}</span> {lang === "en" ? c.en : c.hi}
+                        <span>{c.icon}</span> {lang === "en" ? c.en : lang === "mr" ? (c.mr || c.hi) : c.hi}
                       </span>
                       <span className="w-4 h-4 rounded-full shrink-0" style={{ border: `2px solid ${active ? C.marigoldDeep : C.line}`, background: active ? C.marigoldDeep : "transparent" }} />
                     </button>
@@ -6639,7 +6674,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
 
               {addingCategory ? (
                 <div className="flex gap-2">
-                  <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={lang === "en" ? "New category name" : "नई कैटेगरी का नाम"}
+                  <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={lang === "en" ? "New category name" : lang === "mr" ? "नवीन कॅटेगरीचे नाव" : "नई कैटेगरी का नाम"}
                     className="flex-1 min-w-0 rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
                   <button type="button" onClick={() => {
                     const name = newCategoryName.trim();
@@ -6647,38 +6682,38 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
                     addExpenseCategory(name);
                     setForm((f) => ({ ...f, category: name }));
                     setNewCategoryName(""); setAddingCategory(false);
-                  }} className="px-4 rounded-lg text-base font-bold text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Add" : "जोड़ें"}</button>
+                  }} className="px-4 rounded-lg text-base font-bold text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Add" : lang === "mr" ? "जोडा" : "जोड़ें"}</button>
                 </div>
               ) : (
                 <button type="button" onClick={() => setAddingCategory(true)} className="w-full rounded-lg py-3.5 text-base font-bold" style={{ border: `2px dashed ${C.marigold}`, color: C.marigoldDeep }}>
-                  + {lang === "en" ? "Add Category" : "नयी कैटेगरी जोड़ें (Add Category)"}
+                  + {lang === "en" ? "Add Category" : lang === "mr" ? "नवीन कॅटेगरी जोडा (Add Category)" : "नयी कैटेगरी जोड़ें (Add Category)"}
                 </button>
               )}
 
               <div>
-                <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>💰 {lang === "en" ? "Amount (₹)" : "रकम (₹)"}</label>
-                <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder={lang === "en" ? "e.g. 2500" : "उदा: 2500"}
+                <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>💰 {lang === "en" ? "Amount (₹)" : lang === "mr" ? "रक्कम (₹)" : "रकम (₹)"}</label>
+                <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder={lang === "en" ? "e.g. 2500" : lang === "mr" ? "उदा: 2500" : "उदा: 2500"}
                   className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
               </div>
               <div>
-                <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>📝 {lang === "en" ? "Description (note)" : "विवरण (नोट लिखें)"}</label>
-                <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder={lang === "en" ? "e.g. Firebase domain & server charge" : "उदा: फायरबेस डोमेन और सर्वर चार्ज"}
+                <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>📝 {lang === "en" ? "Description (note)" : lang === "mr" ? "तपशील (नोंद लिहा)" : "विवरण (नोट लिखें)"}</label>
+                <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder={lang === "en" ? "e.g. Firebase domain & server charge" : lang === "mr" ? "उदा: फायरबेस डोमेन आणि सर्व्हर चार्ज" : "उदा: फायरबेस डोमेन और सर्वर चार्ज"}
                   className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
               </div>
 
-              <PhotoPicker label={lang === "en" ? "Attach a bill photo" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => setForm((f) => ({ ...f, photo: file }))}>
+              <PhotoPicker label={lang === "en" ? "Attach a bill photo" : lang === "mr" ? "बिलाचा फोटो जोडा" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => setForm((f) => ({ ...f, photo: file }))}>
                 <div className="w-full rounded-lg py-2.5 text-xs font-bold text-center cursor-pointer" style={{ background: form.photo ? C.success : C.bg, color: form.photo ? "#FFFFFF" : C.inkSoft, border: `1.5px dashed ${form.photo ? C.success : C.line}` }}>
-                  {form.photo ? `✓ ${lang === "en" ? "Photo attached" : "फोटो जोड़ी गई"}` : `📷 ${lang === "en" ? "Camera Photo / Choose Gallery" : "कैमरा फोटो / गैलरी चुनिए"}`}
+                  {form.photo ? `✓ ${lang === "en" ? "Photo attached" : lang === "mr" ? "फोटो जोडला गेला" : "फोटो जोड़ी गई"}` : `📷 ${lang === "en" ? "Camera Photo / Choose Gallery" : lang === "mr" ? "कॅमेरा फोटो / गॅलरी निवडा" : "कैमरा फोटो / गैलरी चुनिए"}`}
                 </div>
               </PhotoPicker>
 
               {saveError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{saveError}</div>}
 
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setShowAdd(false)} className="flex-1 rounded-lg py-4 text-base font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.inkSoft }}>{lang === "en" ? "Cancel" : "रद्द"}</button>
+                <button onClick={() => setShowAdd(false)} className="flex-1 rounded-lg py-4 text-base font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.inkSoft }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द" : "रद्द"}</button>
                 <button onClick={submit} disabled={!form.amount || Number(form.amount) <= 0 || saving} className="flex-1 rounded-lg py-4 text-base font-bold text-white flex items-center justify-center gap-1.5"
                   style={{ background: (!form.amount || Number(form.amount) <= 0 || saving) ? C.line : C.success }}>
-                  <CheckCircle2 size={15} /> {saving ? (lang === "en" ? "Saving..." : "सेव हो रहा है...") : (lang === "en" ? "Save Securely" : "सुरक्षित सेव करें")}
+                  <CheckCircle2 size={15} /> {saving ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save Securely" : lang === "mr" ? "सुरक्षित सेव्ह करा" : "सुरक्षित सेव करें")}
                 </button>
               </div>
             </div>
@@ -6702,15 +6737,15 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <LayoutDashboard size={18} color={C.marigoldDeep} />
-          <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Control Panel" : "एडमिन कंट्रोल पैनल"}</h2>
+          <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Control Panel" : lang === "mr" ? "अ‍ॅडमिन कंट्रोल पॅनल" : "एडमिन कंट्रोल पैनल"}</h2>
         </div>
       </div>
-      {tab === "fleet" && <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : "एडमिन"} 👋</div>}
+      {tab === "fleet" && <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : lang === "mr" ? "अ‍ॅडमिन" : "एडमिन"} 👋</div>}
       <div className="flex gap-2 mb-5 overflow-x-auto">
         {tabs.map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-4 py-3 rounded-full text-base font-black whitespace-nowrap shadow-sm"
             style={{ background: tab === k ? C.navy : C.marigold, color: tab === k ? "#fff" : "#000000", border: `1.5px solid ${tab === k ? C.navy : C.marigoldDeep}` }}>
-            <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : label}
+            <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : lang === "mr" ? (MR_LABELS[k] || label) : label}
           </button>
         ))}
       </div>
@@ -6747,6 +6782,17 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang, role }) {
       "Apna Transport is a technology platform that only serves as a medium to connect the customer (load owner) and independent drivers/transporters. The company/admin is not itself a party to any transport of goods, nor a transport service provider. The platform does not currently charge any fee or commission for connecting customers and drivers; this may change in the future with prior notice to users. Every deal between customer and driver (fare, timing, terms) is entirely a private agreement between the two. The company, admin, or platform will not be liable in any way for theft, damage, delay, accident, wrong payment, dispute, or any direct/indirect loss related to the goods. Full responsibility for any such matter rests with the concerned customer and driver themselves.", false],
     ["Disputes and Jurisdiction", "In case of any complaint or dispute, contact admin via the SOS section — admin can only help as a facilitator, this does not mean admin is responsible for the dispute. In case of any legal dispute, jurisdiction will lie only with Pimpri-Chinchwad / Pune courts.", false],
     ["Overload Charges", "Apna Transport is not responsible for any overload fine, challan, or penalty charged by the RTO, traffic police, or any other authority to either the customer or the driver. Ensuring the vehicle is loaded within its permitted capacity is the joint responsibility of the customer (who declares the weight) and the driver/vehicle owner (who accepts the load) — any overload-related charge or legal action must be settled directly between them.", false],
+  ] : lang === "mr" ? [
+    ["लोड पोस्टिंग", "लोड पोस्ट केल्यानंतर पिकअप-ड्रॉपची माहिती बदलली जाऊ शकत नाही. अंतिम भाडे तेच असेल जे ड्रायव्हरच्या स्वीकृत बोलीमध्ये (Accepted Bid) ठरले असेल.", false],
+    ["बिडिंग सिस्टम", "ग्राहक अनेक ड्रायव्हरांपैकी कोणतीही एक बोली स्वीकारण्यास मोकळा आहे. एकदा बोली स्वीकारल्यानंतर ती अंतिम मानली जाईल.", false],
+    ["रद्दीकरण", "बुकिंग फायनल झाल्यानंतर जर कोणत्याही बाजूने ट्रिप रद्द केली गेली, तर कापलेले कमिशन/अ‍ॅडव्हान्स भाडे लगेच परत केले जात नाही — ते अ‍ॅडमिनकडे होल्ड राहते आणि ड्रायव्हरच्या पुढील स्वीकृत ट्रिपच्या कमिशनमध्ये आपोआप अ‍ॅडजस्ट होते, जेणेकरून ड्रायव्हरचे नुकसान होणार नाही. वारंवार रद्द केल्यास खाते तात्पुरते बंद केले जाऊ शकते.", true],
+    ["गाडीचे कागदपत्र व कायदेशीर पालन", "ड्रायव्हरने साइनअपच्या वेळी वैध ड्रायव्हिंग लायसन्स, गाडीचे RC आणि KYC कागदपत्रे जमा करणे अनिवार्य आहे — अ‍ॅडमिन अप्रूव्हलपर्यंत कोणताही लोड दाखवला जाणार नाही. याशिवाय, गाडीची सर्व कागदपत्रे (RC, इन्शुरन्स, फिटनेस सर्टिफिकेट, नॅशनल/स्टेट परमिट, PUC) आणि ड्रायव्हरचा लायसन्स नेहमी वैध, बरोबर आणि अद्ययावत ठेवण्याची संपूर्ण व एकमेव जबाबदारी गाडी मालक आणि ड्रायव्हरची असेल — अपना ट्रान्सपोर्टची नाही. जर कोणत्याही ट्रिप किंवा तपासणी दरम्यान एखादे कागदपत्र अपूर्ण, चुकीचे, एक्सपायर्ड किंवा अवैध आढळले, तर अपना ट्रान्सपोर्ट / कंपनी यासाठी कोणत्याही प्रकारे जबाबदार राहणार नाही. RTO, ट्रॅफिक पोलीस किंवा कोणत्याही सरकारी प्राधिकरणाने लावलेला कोणताही दंड, चलन किंवा कायदेशीर कारवाई — पेमेंट किंवा निपटाऱ्याच्या संपूर्ण जबाबदारीसह — पूर्णपणे ड्रायव्हर आणि गाडी मालकाची असेल.", true],
+    ["पेमेंट", "अपना ट्रान्सपोर्ट सध्या कोणत्याही ट्रिपवर कोणतेही कमिशन घेत नाही. निश्चित भाडे ग्राहकाकडून डिलिव्हरीनंतर थेट ड्रायव्हरला (रोख, UPI किंवा कोणत्याही डिजिटल माध्यमाने) दिले जाते — अ‍ॅप तुमच्या वतीने कोणतेही पेमेंट गोळा करत नाही.", false],
+    ["सामानाची जबाबदारी व लोडिंग खर्च", "सामानाची सुरक्षा आणि बरोबर माहिती (मटेरियल टाइप व वजन) देणे, तसेच लोडिंग-अनलोडिंगच्या हमालीचा संपूर्ण खर्च उचलणे ही ग्राहकाची जबाबदारी आहे — हा ड्रायव्हरचा खर्च नाही. कोणत्याही प्रकारच्या मालाचे नुकसान, तुटफूट किंवा उशीर यासाठी कंपनी जबाबदार राहणार नाही — ही जबाबदारी संबंधित ड्रायव्हर/ट्रान्सपोर्टरची असेल.", false],
+    ["प्लॅटफॉर्मची भूमिका — फक्त मध्यस्थ (सर्वात महत्त्वाचे)",
+      "अपना ट्रान्सपोर्ट हे एक टेक्नॉलॉजी प्लॅटफॉर्म आहे जे फक्त ग्राहक (लोड मालक) आणि स्वतंत्र ड्रायव्हर/ट्रान्सपोर्टर यांना एकमेकांशी जोडण्याचे माध्यम आहे. कंपनी/अ‍ॅडमिन कोणत्याही मालाच्या वाहतुकीत स्वतः पक्षकार (party) नाही आणि ट्रान्सपोर्ट सेवा पुरवठादारही नाही. प्लॅटफॉर्म सध्या ग्राहक आणि ड्रायव्हरला जोडण्यासाठी कोणतेही शुल्क किंवा कमिशन घेत नाही; भविष्यात यात बदल झाल्यास वापरकर्त्यांना आधीच सूचित केले जाईल. ग्राहक आणि ड्रायव्हर यांच्यात झालेला प्रत्येक व्यवहार (भाडे, वेळ, अटी) पूर्णपणे त्या दोघांमधील खासगी करार आहे. मालाची चोरी, नुकसान, उशीर, अपघात, चुकीचे पेमेंट, वाद, किंवा कोणत्याही प्रकारच्या प्रत्यक्ष/अप्रत्यक्ष नुकसानीसाठी कंपनी, अ‍ॅडमिन किंवा प्लॅटफॉर्म कोणत्याही प्रकारे जबाबदार (liable) राहणार नाही. अशा कोणत्याही प्रकरणाची संपूर्ण जबाबदारी संबंधित ग्राहक आणि ड्रायव्हरची स्वतःची असेल.", false],
+    ["वाद आणि क्षेत्राधिकार", "कोणत्याही तक्रारीच्या किंवा वादाच्या स्थितीत SOS सेक्शनद्वारे अ‍ॅडमिनशी संपर्क करा — अ‍ॅडमिन फक्त सहाय्य (facilitation) म्हणून मदत करू शकतो, याचा अर्थ असा नाही की वादाची जबाबदारी अ‍ॅडमिनची आहे. कोणत्याही कायदेशीर वादाच्या स्थितीत क्षेत्राधिकार (Jurisdiction) फक्त पिंपरी-चिंचवड / पुणे कोर्टाचा राहील.", false],
+    ["ओव्हरलोड चार्ज", "RTO, ट्रॅफिक पोलीस किंवा इतर कोणत्याही प्राधिकरणाने ग्राहक किंवा ड्रायव्हरवर लावलेल्या कोणत्याही ओव्हरलोड दंड, चलन किंवा पेनल्टीसाठी अपना ट्रान्सपोर्ट जबाबदार नाही. गाडी तिच्या निश्चित क्षमतेच्या आत लोड करणे सुनिश्चित करणे ही ग्राहक (जो वजन सांगतो) आणि ड्रायव्हर/गाडी मालक (जो लोड स्वीकारतो) — दोघांची संयुक्त जबाबदारी आहे. ओव्हरलोडशी संबंधित कोणताही चार्ज किंवा कायदेशीर कारवाई दोघांमध्ये थेट निपटवली गेली पाहिजे.", false],
   ] : [
     ["लोड पोस्टिंग", "लोड पोस्ट करने के बाद पिकअप-ड्रॉप की जानकारी बदली नहीं जा सकती। अंतिम भाड़ा वही होगा जो ड्राइवर की स्वीकृत बोली (Accepted Bid) में तय हुआ हो।", false],
     ["बिडिंग सिस्टम", "ग्राहक कई ड्राइवरों में से किसी भी एक बोली को स्वीकार करने के लिए स्वतंत्र है। एक बार बोली स्वीकार होने के बाद वह अंतिम मानी जाएगी।", false],
@@ -6766,7 +6812,7 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang, role }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Terms & Conditions" : "नियम व शर्तें (Terms & Conditions)"}</h3>
+          <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Terms & Conditions" : lang === "mr" ? "नियम व अटी (Terms & Conditions)" : "नियम व शर्तें (Terms & Conditions)"}</h3>
           <button onClick={onClose} className="text-base font-bold px-3 py-2 rounded" style={{ color: C.inkSoft }}>✕</button>
         </div>
         <div className="space-y-3">
@@ -6777,7 +6823,7 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang, role }) {
             </div>
           ))}
         </div>
-        <button onClick={onClose} className="w-full rounded-lg py-3.5 font-bold text-base mt-4" style={{ background: C.marigold, color: "#000000" }}>{lang === "en" ? "Got it" : "समझ गया"}</button>
+        <button onClick={onClose} className="w-full rounded-lg py-3.5 font-bold text-base mt-4" style={{ background: C.marigold, color: "#000000" }}>{lang === "en" ? "Got it" : lang === "mr" ? "समजले" : "समझ गया"}</button>
       </div>
     </div>
   );
@@ -7176,6 +7222,8 @@ export default function App() {
       if (distKm == null || distKm > BID_RADIUS_KM) {
         return lang === "en"
           ? `⚠️ You are outside the ${BID_RADIUS_KM}km bidding radius for this load's pickup point.`
+          : lang === "mr"
+          ? `⚠️ तुम्ही या लोडच्या पिकअप ठिकाणापासून ${BID_RADIUS_KM}km च्या बोली परिघाबाहेर आहात.`
           : `⚠️ आप इस लोड के पिकअप स्थान से ${BID_RADIUS_KM}km के बोली दायरे से बाहर हैं।`;
       }
     }
@@ -7250,7 +7298,7 @@ export default function App() {
     if (b.loadingStartedAt) {
       return lang === "en"
         ? "Trip cannot be cancelled! The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support for any help."
-        : "ट्रिप कैंसल नहीं की जा सकती! ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए सपोर्ट से संपर्क करें।";
+        : lang === "mr" ? "ट्रिप रद्द केली जाऊ शकत नाही! ड्रायव्हरने ओटीपी (OTP) सत्यापित केला आहे आणि माल लोड/ट्रान्झिटमध्ये आहे. ही ट्रिप फक्त ड्रायव्हरने प्रवास पूर्ण (End Trip) केल्यावरच संपेल. कोणत्याही मदतीसाठी सपोर्टशी संपर्क करा." : "ट्रिप कैंसल नहीं की जा सकती! ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए सपोर्ट से संपर्क करें।";
     }
     if (b.status === "Ongoing" && b.driverName === driver?.name && b.fare) {
       // New cancellation rule: the cut commission/advance is held by admin,
@@ -7367,8 +7415,8 @@ export default function App() {
           {connectivityChecked ? (
             <>
               <span className="text-5xl mb-4">📶</span>
-              <p className="text-base font-black mb-2" style={{ color: C.ink }}>{lang === "en" ? "You're offline" : "आप ऑफलाइन हैं"}</p>
-              <p className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Please turn on your mobile data or Wi-Fi to continue." : "जारी रखने के लिए कृपया अपना मोबाइल डेटा या वाई-फाई चालू करें।"}</p>
+              <p className="text-base font-black mb-2" style={{ color: C.ink }}>{lang === "en" ? "You're offline" : lang === "mr" ? "तुम्ही ऑफलाइन आहात" : "आप ऑफलाइन हैं"}</p>
+              <p className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Please turn on your mobile data or Wi-Fi to continue." : lang === "mr" ? "सुरू ठेवण्यासाठी कृपया तुमचा मोबाइल डेटा किंवा वाय-फाय चालू करा." : "जारी रखने के लिए कृपया अपना मोबाइल डेटा या वाई-फाई चालू करें।"}</p>
             </>
           ) : null}
         </div>
@@ -7383,13 +7431,13 @@ export default function App() {
           <div className="flex items-center gap-2 mb-4">
             <Logo size={64} />
             <div className="flex-1 min-w-0">
-              <div translate="no" className="text-white font-bold text-lg leading-none truncate">{lang === "en" ? "Apna Transport" : "अपना ट्रांसपोर्ट"}</div>
-              <div className="text-[11px] truncate" style={{ color: "#FFFFFF" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
+              <div translate="no" className="text-white font-bold text-lg leading-none truncate">{lang === "en" ? "Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्ट" : "अपना ट्रांसपोर्ट"}</div>
+              <div className="text-[11px] truncate" style={{ color: "#FFFFFF" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : lang === "mr" ? "ऑल इंडिया ऑन-डिमांड ट्रान्सपोर्ट बिडिंग" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
             </div>
           </div>
           {role === "admin" && adminAuth && (
             <div className="mt-1.5 text-[10px] text-center" style={{ color: "#FFFFFF" }}>
-              {lang === "en" ? "Overview & approvals — Customer/Driver registration is not available here" : "ओवरव्यू और अप्रूवल — यहां कस्टमर/ड्राइवर रजिस्ट्रेशन उपलब्ध नहीं है"}
+              {lang === "en" ? "Overview & approvals — Customer/Driver registration is not available here" : lang === "mr" ? "ओव्हरव्ह्यू आणि अप्रूव्हल — इथे कस्टमर/ड्रायव्हर रजिस्ट्रेशन उपलब्ध नाही" : "ओवरव्यू और अप्रूवल — यहां कस्टमर/ड्राइवर रजिस्ट्रेशन उपलब्ध नहीं है"}
             </div>
           )}
         </div>
@@ -7440,7 +7488,7 @@ export default function App() {
             </button>
             <div className="mx-5 mt-3 rounded-lg p-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
               <ShieldCheck size={15} color={C.marigoldDeep} />
-              <span className="text-xs font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Completing KYC is required before opening the home page." : "होम पेज खोलने से पहले KYC पूरी करना ज़रूरी है।"}</span>
+              <span className="text-xs font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Completing KYC is required before opening the home page." : lang === "mr" ? "होम पेज उघडण्यापूर्वी KYC पूर्ण करणे आवश्यक आहे." : "होम पेज खोलने से पहले KYC पूरी करना ज़रूरी है।"}</span>
             </div>
             <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
           </div>
@@ -7453,17 +7501,17 @@ export default function App() {
             {driver.kyc === "Rejected" ? (
               <>
                 <XCircle size={40} color={C.safety} className="mb-3" />
-                <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "KYC rejected" : "KYC अस्वीकृत"}</h2>
-                <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Your documents were rejected by admin. Please review and resubmit." : "आपके दस्तावेज़ एडमिन द्वारा अस्वीकृत किए गए हैं। कृपया दोबारा जांच कर सबमिट करें।"}</p>
+                <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "KYC rejected" : lang === "mr" ? "KYC नाकारले" : "KYC अस्वीकृत"}</h2>
+                <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Your documents were rejected by admin. Please review and resubmit." : lang === "mr" ? "तुमची कागदपत्रे अ‍ॅडमिनने नाकारली आहेत. कृपया पुन्हा तपासून सबमिट करा." : "आपके दस्तावेज़ एडमिन द्वारा अस्वीकृत किए गए हैं। कृपया दोबारा जांच कर सबमिट करें।"}</p>
                 <button onClick={() => setDriverResubmitting(true)} className="rounded-lg px-6 py-3.5 text-base font-bold text-white" style={{ background: C.marigoldDeep }}>
-                  {lang === "en" ? "Resubmit KYC" : "KYC दोबारा भरें"}
+                  {lang === "en" ? "Resubmit KYC" : lang === "mr" ? "KYC पुन्हा भरा" : "KYC दोबारा भरें"}
                 </button>
               </>
             ) : (
               <>
                 <Clock3 size={40} color={C.marigoldDeep} className="mb-3" />
-                <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "KYC verification pending" : "KYC सत्यापन लंबित है"}</h2>
-                <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Your documents are under review. The dashboard unlocks once admin approves." : "आपके दस्तावेज़ों की समीक्षा हो रही है। एडमिन अप्रूवल के बाद डैशबोर्ड खुलेगा।"}</p>
+                <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "KYC verification pending" : lang === "mr" ? "KYC सत्यापन प्रलंबित आहे" : "KYC सत्यापन लंबित है"}</h2>
+                <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Your documents are under review. The dashboard unlocks once admin approves." : lang === "mr" ? "तुमच्या कागदपत्रांचे पुनरावलोकन होत आहे. अ‍ॅडमिन अप्रूव्हलनंतर डॅशबोर्ड उघडेल." : "आपके दस्तावेज़ों की समीक्षा हो रही है। एडमिन अप्रूवल के बाद डैशबोर्ड खुलेगा।"}</p>
               </>
             )}
           </div>
