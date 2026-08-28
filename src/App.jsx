@@ -4060,12 +4060,6 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{load.drop}</span></div>
       </div>
 
-      {lowestOverall !== null && (
-        <div className="rounded-lg p-2 mb-2 flex items-center justify-between" style={{ background: C.success }}>
-          <span className="text-[11px] font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Current lowest quote" : "अभी सबसे कम कोटेशन"}</span>
-          <span className="text-sm font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(lowestOverall)}</span>
-        </div>
-      )}
       {isMineHighest && (
         <div className="rounded-lg p-2 mb-2 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
           ⚠ {lang === "en" ? "Your quote is the highest" : "आपका कोटेशन सबसे ज़्यादा है"} — {lowestOther ? (lang === "en" ? `${lowestOther.driverName}'s quote is ${fmt(lowestOther.amount)}` : `${lowestOther.driverName} का कोटेशन ${fmt(lowestOther.amount)} है`) : ""}
