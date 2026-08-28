@@ -3977,8 +3977,11 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   // pinFocus is on here specifically because these fields flip "complete"
   // on a truthy partial number (Number("5") > 0), which caused the
   // mid-keystroke jump bug useGuidedSteps' pinFocus mode exists to fix.
+  // autoAdvanceMs is shorter here (2.5s vs. the sign-up forms' 5s) — a fare/
+  // hours/rate digit entry is quick to finish typing, so a driver bidding on
+  // a fresh load alert shouldn't have to wait as long between fields.
   const stepCompleted = [Number(amount) > 0, Number(allowedHours) > 0, Number(extraHourRate) > 0];
-  const { activeStep, stepProps } = useGuidedSteps(stepCompleted, { pinFocus: true });
+  const { activeStep, stepProps } = useGuidedSteps(stepCompleted, { pinFocus: true, autoAdvanceMs: 2500 });
 
   const otherBids = load.bids.filter((b) => b.driverName !== driver.name);
   const lowestOther = otherBids.length ? otherBids.reduce((min, b) => b.amount < min.amount ? b : min) : null;
