@@ -634,10 +634,11 @@ function NotificationBanner({ permission, onEnable, lang }) {
   );
 }
 
-// First-launch language picker — shown once, before role select, when no
-// language has ever been chosen on this device yet (see the lang === null
-// gate in AppRoot). Once picked it's persisted and applied everywhere;
-// there is no in-app toggle to change it afterwards.
+// Post-signup language picker — shown once, right after a brand-new
+// Customer/Driver signup completes (see the langPromptPending gate in
+// AppRoot). Everything up through signup itself stays in Hindi; a
+// returning/login user never sees this. Once picked it's persisted and
+// applied everywhere; there is no in-app toggle to change it afterwards.
 function LanguageSelect({ onSelect }) {
   const options = [
     { code: "en", label: "English", sub: "Continue in English" },
@@ -1953,7 +1954,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
 // DRIVER REGISTRATION — one continuous page: phone OTP, then straight
 // into KYC submission, instead of two separate screens.
 // =====================================================================
-function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType }) {
+function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType, onFirstSignupComplete }) {
   // Which button they tapped on the very first screen — purely about
   // labels/copy, since the mobile+OTP mechanics are identical either way.
   const [mode, setMode] = useState(null); // null | "login" | "signup"
@@ -2123,7 +2124,8 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
       <div className="flex-1 overflow-y-auto">
         <div className="px-5 pt-4">{backButton}</div>
         <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
-          stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : lang === "mr" ? "स्टेप 2 / 2 — कागदपत्रे आणि गाडी" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"} />
+          stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : lang === "mr" ? "स्टेप 2 / 2 — कागदपत्रे आणि गाडी" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"}
+          onFirstSubmit={onFirstSignupComplete} />
       </div>
     );
   }
@@ -4874,7 +4876,7 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
   );
 }
 
-function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel }) {
+function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, onFirstSubmit }) {
   const VEHICLES = vehicleTypes;
   // Persisted to localStorage so a refresh mid-fill (slow connection,
   // accidental reload) doesn't force re-uploading photos or retyping —
@@ -4973,6 +4975,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     // rejection) starts from the driver's actual saved data, not this.
     setDl(null); setPhoto(null); setVehicleTypeName(""); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
     setCapacityKg(""); setLength(""); setWidth(""); setHeight(""); setVehicleNumber("");
+    if (isFirstSubmission) onFirstSubmit?.();
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
@@ -6980,10 +6983,13 @@ export default function App() {
   // Returns to role selection without clearing OTP verification, so tapping
   // Customer/Driver by mistake and going back doesn't force a re-login.
   const goHome = () => setRole(null);
-  // null until the first-launch LanguageSelect screen is answered — see the
-  // lang === null gate below. Existing installs already have "hi"/"en"/"mr"
-  // persisted from before, so they skip straight past it.
-  const [lang, setLang] = usePersistedState("sarthi_lang", null);
+  // Defaults to Hindi — every screen up through signup (role select, OTP,
+  // registration forms) stays in Hindi for a brand-new install. The
+  // LanguageSelect prompt only appears once, right after a genuinely new
+  // Customer/Driver signup completes (see langPromptPending below); a
+  // returning/login user never has this flag set, so they never see it.
+  const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
+  const [langPromptPending, setLangPromptPending] = usePersistedState("sarthi_langPromptPending", false);
   // Google Places Autocomplete's suggestion language is fixed when its
   // script loads (see googleMapsContext.jsx) and can't be hot-swapped — so
   // picking a language reloads the page. localStorage is written directly
@@ -6992,7 +6998,9 @@ export default function App() {
   // timing. There is no in-app toggle to change it afterwards.
   const chooseLang = (l) => {
     try { window.localStorage.setItem("sarthi_lang", JSON.stringify(l)); } catch { /* storage unavailable */ }
+    try { window.localStorage.setItem("sarthi_langPromptPending", "false"); } catch { /* storage unavailable */ }
     setLang(l);
+    setLangPromptPending(false);
     window.location.reload();
   };
   const [showTerms, setShowTerms] = useState(false);
@@ -7385,10 +7393,11 @@ export default function App() {
 
   const isDesktop = role === "admin" && adminAuth;
 
-  // First launch only: nothing else in the app (not even the offline
-  // check) renders until a language has been picked, since picking one
-  // needs no network and everything downstream reads `lang`.
-  if (lang === null) {
+  // Shown once, right after a brand-new Customer/Driver signup completes
+  // (langPromptPending is set true there — see onComplete/onFirstSignupComplete
+  // below). Placed ahead of the offline check since picking a language
+  // needs no network.
+  if (langPromptPending) {
     return (
       <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
         <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
@@ -7466,6 +7475,8 @@ export default function App() {
               // First-ever creation of this customer's doc — stamp their real
               // signup date so their own 30-day trial can be calculated from it.
               if (firestoreReady && signedUpMobile) replaceDoc("customers", signedUpMobile, { ...addr, mobile: signedUpMobile, createdAt: serverTimestamp() }).catch((e) => console.error(e));
+              // Brand-new signup — prompt for a language once, right after.
+              setLangPromptPending(true);
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
@@ -7479,7 +7490,8 @@ export default function App() {
             verified={driverAuth.verified}
             onOtpVerified={(mobile) => setDriverAuth({ verified: true, mobile })}
             onLogout={() => (driverAuth.verified ? logoutRole("driver") : goHome())}
-            driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
+            driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType}
+            onFirstSignupComplete={() => setLangPromptPending(true)} />
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
           <div className="flex-1 overflow-y-auto">
