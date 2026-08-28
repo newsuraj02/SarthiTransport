@@ -2812,13 +2812,25 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
   // reflects the true current validity instead of that stale snapshot.
   const stepCompletedRef = useRef(stepCompleted);
   stepCompletedRef.current = stepCompleted;
+  // Set right before the timer releases the pin, so the effect below knows
+  // this particular activeStep change was an auto-advance (not the user
+  // manually tapping/focusing elsewhere) and should carry keyboard focus
+  // along with it — a tap-away already leaves focus wherever the user put
+  // it, so that path never touches this flag.
+  const autoAdvancedRef = useRef(false);
   const armAdvanceTimer = (step) => {
     if (!autoAdvanceMs) return;
     clearAdvanceTimer();
     advanceTimerRef.current = setTimeout(() => {
       // Only release if that step is still the focused one AND it's
       // actually valid right now — otherwise leave the pin exactly as is.
-      setFocusedStep((f) => (f === step && stepCompletedRef.current[step] ? null : f));
+      setFocusedStep((f) => {
+        if (f === step && stepCompletedRef.current[step]) {
+          autoAdvancedRef.current = true;
+          return null;
+        }
+        return f;
+      });
     }, autoAdvanceMs);
   };
   useEffect(() => clearAdvanceTimer, []);
@@ -2837,6 +2849,18 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
     if (activeStep >= 0) stepRefsHolder.current[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStep, autoScroll]);
+  // Carries the cursor to the next field on an auto-advance, so typing can
+  // just continue without a tap — prefers a real text field over a button
+  // (a photo-upload step has only the latter to fall back to).
+  useEffect(() => {
+    if (!autoAdvancedRef.current) return;
+    autoAdvancedRef.current = false;
+    if (activeStep < 0) return;
+    const wrapper = stepRefsHolder.current[activeStep]?.current;
+    const focusable = wrapper?.querySelector("input, select, textarea") || wrapper?.querySelector("button");
+    focusable?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep]);
   const stepProps = (i) => ({
     active: activeStep === i,
     completed: stepCompleted[i],
