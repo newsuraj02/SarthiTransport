@@ -1346,32 +1346,32 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
       <div className={bothShown ? "w-full grid grid-cols-2 gap-3" : "w-full flex flex-col items-center"}>
         {showDriver && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col"}>
-            <div className="flex-1 rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
+            <button onClick={() => onSelect("driver")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
               <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#EAF1FF" }}>
                 <IdCard size={30} color={C.navy} />
               </div>
               <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver App" : "ड्राइवर ऐप"}</div>
               <div className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "To find fare & loads" : "भाड़ा और लोड खोजने के लिए"}</div>
-              <button onClick={() => onSelect("driver")} className="w-full rounded-xl py-3 text-sm font-black text-white mt-auto" style={{ background: C.navy }}>
+              <div className="w-full rounded-xl py-3 text-sm font-black text-white mt-auto" style={{ background: C.navy }}>
                 {lang === "en" ? "Choose Driver" : "ड्राइवर चुनें"}
-              </button>
-            </div>
+              </div>
+            </button>
             {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : "ड्राइवर")}
           </div>
         )}
 
         {showCustomer && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col mt-3"}>
-            <div className="flex-1 rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.success}` }}>
+            <button onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.success}` }}>
               <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#E6F7EE" }}>
                 <UserCheck size={30} color={C.success} />
               </div>
               <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : "कस्टमर ऐप"}</div>
               <div className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "To book a vehicle" : "गाड़ी बुक करने के लिए"}</div>
-              <button onClick={() => onSelect("customer")} className="w-full rounded-xl py-3 text-sm font-black text-white mt-auto" style={{ background: C.success }}>
+              <div className="w-full rounded-xl py-3 text-sm font-black text-white mt-auto" style={{ background: C.success }}>
                 {lang === "en" ? "Choose Customer" : "कस्टमर चुनें"}
-              </button>
-            </div>
+              </div>
+            </button>
             {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : "कस्टमर")}
           </div>
         )}
