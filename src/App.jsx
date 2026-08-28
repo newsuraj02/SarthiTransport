@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
-  FileText, X, Upload, ArrowRight, IdCard, UserCheck,
+  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -623,22 +623,31 @@ function NotificationBanner({ permission, onEnable, lang }) {
   );
 }
 
-// Language toggle sized to match the header pill it replaces ("Customer
-// Dashboard" / "Customer Requests") — shown ONLY in that exact spot, on the
-// Customer/Driver main dashboard screen (never on any other page — profile,
-// KYC, wallet, trip detail, etc. all just inherit whatever language was last
-// picked here).
-function DashboardLangPill({ lang, switchLang }) {
+// First-launch language picker — shown once, before role select, when no
+// language has ever been chosen on this device yet (see the lang === null
+// gate in AppRoot). Once picked it's persisted and applied everywhere;
+// there is no in-app toggle to change it afterwards.
+function LanguageSelect({ onSelect }) {
+  const options = [
+    { code: "en", label: "English", sub: "Continue in English" },
+    { code: "hi", label: "हिंदी", sub: "हिंदी में जारी रखें" },
+    { code: "mr", label: "मराठी", sub: "मराठीत सुरू ठेवा" },
+  ];
   return (
-    <div className="flex items-center gap-1 rounded-full px-1 py-1" style={{ background: "#000000", border: `1.5px solid ${C.marigold}` }}>
-      <button onClick={() => switchLang("hi")} className="rounded-full text-base font-black"
-        style={{ padding: "4px 12px", color: lang === "hi" ? "#000000" : "#FFFFFF", background: lang === "hi" ? C.marigold : "transparent" }}>
-        हिं
-      </button>
-      <button onClick={() => switchLang("en")} className="rounded-full text-base font-black"
-        style={{ padding: "4px 12px", color: lang === "en" ? "#000000" : "#FFFFFF", background: lang === "en" ? C.marigold : "transparent" }}>
-        ENG
-      </button>
+    <div className="flex-1 overflow-y-auto flex flex-col items-center px-6 py-10">
+      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: "#EAF1FF" }}>
+        <Languages size={30} color={C.navy} />
+      </div>
+      <p className="text-lg font-black text-center mb-1" style={{ color: C.ink }}>Select your language</p>
+      <p className="text-sm font-semibold text-center mb-7" style={{ color: C.inkSoft }}>भाषा चुनें · भाषा निवडा</p>
+      <div className="w-full max-w-xs flex flex-col gap-3">
+        {options.map((o) => (
+          <button key={o.code} onClick={() => onSelect(o.code)} className="w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
+            <div className="text-lg font-black mb-0.5" style={{ color: C.ink }}>{o.label}</div>
+            <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{o.sub}</div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -3696,7 +3705,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, switchLang, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -3869,7 +3878,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               </div>
             ) : showHamburger ? (
               <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
-                <DashboardLangPill lang={lang} switchLang={switchLang} />
                 {activeBooking && (
                   <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : "मौजूदा राइड पर जाएं"}
                     className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -5195,7 +5203,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, switchLang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
+function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
@@ -5291,7 +5299,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </div>
             <div className="flex-1 min-w-0 flex justify-center">
               {tab === "home" ? (
-                <DashboardLangPill lang={lang} switchLang={switchLang} />
+                <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Driver Dashboard" : lang === "mr" ? "ड्रायव्हर डॅशबोर्ड" : "ड्राइवर डैशबोर्ड"}</span>
               ) : (
                 <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : "कस्टमर रिक्वेस्ट"}</span>
               )}
@@ -6926,15 +6934,17 @@ export default function App() {
   // Returns to role selection without clearing OTP verification, so tapping
   // Customer/Driver by mistake and going back doesn't force a re-login.
   const goHome = () => setRole(null);
-  const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
+  // null until the first-launch LanguageSelect screen is answered — see the
+  // lang === null gate below. Existing installs already have "hi"/"en"/"mr"
+  // persisted from before, so they skip straight past it.
+  const [lang, setLang] = usePersistedState("sarthi_lang", null);
   // Google Places Autocomplete's suggestion language is fixed when its
   // script loads (see googleMapsContext.jsx) and can't be hot-swapped — so
-  // switching the language reloads the page. localStorage is written
-  // directly (not just via setLang's own effect) so the new value is
-  // guaranteed to be there before the reload happens, regardless of
-  // React's effect-flush timing.
-  const switchLang = (l) => {
-    if (l === lang) return;
+  // picking a language reloads the page. localStorage is written directly
+  // (not just via setLang's own effect) so the new value is guaranteed to
+  // be there before the reload happens, regardless of React's effect-flush
+  // timing. There is no in-app toggle to change it afterwards.
+  const chooseLang = (l) => {
     try { window.localStorage.setItem("sarthi_lang", JSON.stringify(l)); } catch { /* storage unavailable */ }
     setLang(l);
     window.location.reload();
@@ -7327,6 +7337,25 @@ export default function App() {
 
   const isDesktop = role === "admin" && adminAuth;
 
+  // First launch only: nothing else in the app (not even the offline
+  // check) renders until a language has been picked, since picking one
+  // needs no network and everything downstream reads `lang`.
+  if (lang === null) {
+    return (
+      <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+        <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
+          <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
+            <div className="flex items-center gap-2">
+              <Logo size={64} />
+              <div translate="no" className="text-white font-bold text-lg leading-none truncate">Apna Transport</div>
+            </div>
+          </div>
+          <LanguageSelect onSelect={chooseLang} />
+        </div>
+      </div>
+    );
+  }
+
   // Nothing else renders until connectivity is actually verified (avoids a
   // flash of real content — or of the offline screen — before we know for
   // sure), and offline blocks everything: no cached screen, no role-select,
@@ -7393,7 +7422,7 @@ export default function App() {
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
-            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout} switchLang={switchLang}
+            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
             adminNotifications={adminNotifications} />
         )}
@@ -7442,7 +7471,7 @@ export default function App() {
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
-            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onLogout={logout} switchLang={switchLang}
+            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
             onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} />
         )}

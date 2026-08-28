@@ -22,11 +22,12 @@ function readPersistedLang() {
 
 export function GoogleMapsProvider({ children }) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const persistedLang = readPersistedLang();
   const { isLoaded, loadError } = useJsApiLoader({
     id: "sarthi-google-maps",
     googleMapsApiKey: apiKey || "",
     libraries: GOOGLE_MAPS_LIBRARIES,
-    language: readPersistedLang() === "en" ? "en" : "hi",
+    language: persistedLang === "en" ? "en" : persistedLang === "mr" ? "mr" : "hi",
     region: "IN",
   });
   return (
