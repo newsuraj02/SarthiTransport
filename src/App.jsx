@@ -173,12 +173,19 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
   const defaultPeriod = (TIME_PERIODS.find((p) => p.slots.includes(value)) || TIME_PERIODS[0]).key;
   const [activePeriod, setActivePeriod] = useState(defaultPeriod);
   const [pending, setPending] = useState(value || "");
+  // Reselecting an already-set time shouldn't let Done through on the old
+  // value alone — the period defaults to the right one for convenience
+  // (so the relevant slots show immediately), but both it and a slot must
+  // be actively tapped again before Done unlocks.
+  const [periodPicked, setPeriodPicked] = useState(false);
+  const [slotPicked, setSlotPicked] = useState(false);
   useEffect(() => {
-    if (open) { setActivePeriod(defaultPeriod); setPending(value || ""); }
+    if (open) { setActivePeriod(defaultPeriod); setPending(""); setPeriodPicked(false); setSlotPicked(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   if (!open) return null;
   const period = TIME_PERIODS.find((p) => p.key === activePeriod);
+  const canConfirm = periodPicked && slotPicked && !!pending;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl overflow-hidden" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -195,7 +202,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
             {TIME_PERIODS.map((p) => {
               const active = activePeriod === p.key;
               return (
-                <button key={p.key} type="button" onClick={() => setActivePeriod(p.key)}
+                <button key={p.key} type="button" onClick={() => { setActivePeriod(p.key); setPeriodPicked(true); }}
                   className="rounded-lg py-3.5 flex flex-col items-center gap-1 text-sm font-bold"
                   style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.inkSoft }}>
                   <span className="text-lg leading-none">{p.icon}</span>
@@ -209,7 +216,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
             {period.slots.map((s) => {
               const active = pending === s;
               return (
-                <button key={s} type="button" onClick={() => setPending(s)}
+                <button key={s} type="button" onClick={() => { setPending(s); setSlotPicked(true); }}
                   className="rounded-lg py-3.5 text-base font-bold text-left px-4"
                   style={{ background: active ? C.marigoldDeep : C.paper, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.ink }}>
                   {period.icon} {formatSlotShort(s, lang)}
@@ -217,8 +224,8 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
               );
             })}
           </div>
-          <button onClick={() => { if (pending) { onSelect(pending); onClose(); } }} disabled={!pending}
-            className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pending ? "#0052CC" : "#E0E0E0", color: pending ? "#fff" : "#9AA3B0" }}>
+          <button onClick={() => { if (canConfirm) { onSelect(pending); onClose(); } }} disabled={!canConfirm}
+            className="w-full rounded-lg py-4 font-bold text-base" style={{ background: canConfirm ? "#0052CC" : "#E0E0E0", color: canConfirm ? "#fff" : "#9AA3B0" }}>
             {lang === "en" ? "Done" : "ठीक है (Done)"}
           </button>
         </div>
