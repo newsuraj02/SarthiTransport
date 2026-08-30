@@ -5935,6 +5935,7 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   // they signed up.
   const complete = drivers.filter((d) => d.vehicleSpec);
   const incomplete = drivers.filter((d) => !d.vehicleSpec);
+  const [view, setView] = useState("incomplete"); // 'incomplete' | 'complete'
   const [expandedId, setExpandedId] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null); // { ok, sentCount? } | null
@@ -5999,76 +6000,83 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-1 flex items-center gap-1.5" style={{ color: C.ink }}>
-          <XCircle size={16} color={C.safety} /> {lang === "en" ? "KYC Incomplete" : lang === "mr" ? "KYC अपूर्ण" : "KYC अधूरी"} ({incomplete.length})
-        </div>
-        <p className="text-[11px] mb-3" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "These drivers haven't submitted any KYC documents yet." : lang === "mr" ? "या ड्रायव्हरांनी अजून कोणतेही KYC कागदपत्र जमा केलेले नाहीत." : "इन ड्राइवरों ने अभी तक कोई KYC दस्तावेज़ जमा नहीं किया है।"}
-        </p>
-        <button onClick={sendToIncomplete} disabled={incomplete.length === 0 || sending}
-          className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5"
-          style={{ background: incomplete.length && !sending ? C.marigold : "#E0E0E0", color: incomplete.length && !sending ? "#000000" : "#9AA3B0" }}>
-          <Bell size={14} />
-          {sending
-            ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...")
-            : (lang === "en" ? `Send KYC reminder to all (${incomplete.length})` : lang === "mr" ? `सर्वांना KYC रिमाइंडर पाठवा (${incomplete.length})` : `सभी को KYC रिमाइंडर भेजें (${incomplete.length})`)}
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setView("incomplete")} className="flex-1 rounded-lg py-3 text-sm font-bold flex items-center justify-center gap-1.5"
+          style={{ background: view === "incomplete" ? C.navy : C.paper, color: view === "incomplete" ? "#fff" : C.inkSoft, border: `1.5px solid ${view === "incomplete" ? C.navy : C.line}` }}>
+          <XCircle size={14} /> {lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरी"} ({incomplete.length})
         </button>
-        {sendResult && (
-          <div className="text-[11px] font-semibold mb-3" style={{ color: sendResult.ok ? C.success : C.safety }}>
-            {sendResult.ok
-              ? (lang === "en" ? `Sent — delivered to ${sendResult.sentCount || 0} device(s).` : lang === "mr" ? `पाठवले — ${sendResult.sentCount || 0} डिव्हाइसवर पोहोचले.` : `भेज दिया — ${sendResult.sentCount || 0} डिवाइस पर पहुंचा।`)
-              : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।")}
-          </div>
-        )}
-        {incomplete.length === 0 ? (
-          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver has submitted KYC." : lang === "mr" ? "सर्व ड्रायव्हरांनी KYC जमा केली आहे." : "सभी ड्राइवरों ने KYC जमा कर दी है।"}</p>
-        ) : (
-          <div className="space-y-1.5">
-            {incomplete.map((d) => (
-              <div key={d.id} className="rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
-                <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-              </div>
-            ))}
-          </div>
-        )}
+        <button onClick={() => setView("complete")} className="flex-1 rounded-lg py-3 text-sm font-bold flex items-center justify-center gap-1.5"
+          style={{ background: view === "complete" ? C.navy : C.paper, color: view === "complete" ? "#fff" : C.inkSoft, border: `1.5px solid ${view === "complete" ? C.navy : C.line}` }}>
+          <Users size={14} /> {lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी"} ({complete.length})
+        </button>
       </div>
 
-      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
-          <Users size={16} /> {lang === "en" ? "KYC Complete" : lang === "mr" ? "KYC पूर्ण" : "KYC पूरी"} ({complete.length})
-        </div>
-        {complete.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver has submitted KYC yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरने KYC जमा केलेली नाही." : "अभी तक किसी ड्राइवर ने KYC जमा नहीं की।"}</p> : (
-          <div className="space-y-2">
-            {complete.map((d) => {
-              const expanded = expandedId === d.id;
-              const meta = statusMeta[d.kyc] || statusMeta.Pending;
-              return (
-                <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1 min-w-0">
-                      <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                      <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
-                      <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
-                    </button>
-                    {d.kyc === "Pending" ? (
-                      <div className="flex gap-2 shrink-0">
-                        <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें"}</button>
-                        <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] font-bold px-2.5 py-1.5 rounded-full text-white shrink-0" style={{ background: meta.bg }}>{meta.label}</span>
-                    )}
-                  </div>
-                  {expanded && docSection(d)}
+      {view === "incomplete" ? (
+        <div>
+          <p className="text-[11px] mb-3" style={{ color: C.inkSoft }}>
+            {lang === "en" ? "These drivers haven't submitted any KYC documents yet." : lang === "mr" ? "या ड्रायव्हरांनी अजून कोणतेही KYC कागदपत्र जमा केलेले नाहीत." : "इन ड्राइवरों ने अभी तक कोई KYC दस्तावेज़ जमा नहीं किया है।"}
+          </p>
+          <button onClick={sendToIncomplete} disabled={incomplete.length === 0 || sending}
+            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5"
+            style={{ background: incomplete.length && !sending ? C.marigold : "#E0E0E0", color: incomplete.length && !sending ? "#000000" : "#9AA3B0" }}>
+            <Bell size={14} />
+            {sending
+              ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...")
+              : (lang === "en" ? `Send KYC reminder to all (${incomplete.length})` : lang === "mr" ? `सर्वांना KYC रिमाइंडर पाठवा (${incomplete.length})` : `सभी को KYC रिमाइंडर भेजें (${incomplete.length})`)}
+          </button>
+          {sendResult && (
+            <div className="text-[11px] font-semibold mb-3" style={{ color: sendResult.ok ? C.success : C.safety }}>
+              {sendResult.ok
+                ? (lang === "en" ? `Sent — delivered to ${sendResult.sentCount || 0} device(s).` : lang === "mr" ? `पाठवले — ${sendResult.sentCount || 0} डिव्हाइसवर पोहोचले.` : `भेज दिया — ${sendResult.sentCount || 0} डिवाइस पर पहुंचा।`)
+                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।")}
+            </div>
+          )}
+          {incomplete.length === 0 ? (
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver has submitted KYC." : lang === "mr" ? "सर्व ड्रायव्हरांनी KYC जमा केली आहे." : "सभी ड्राइवरों ने KYC जमा कर दी है।"}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {incomplete.map((d) => (
+                <div key={d.id} className="rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          {complete.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver has submitted KYC yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरने KYC जमा केलेली नाही." : "अभी तक किसी ड्राइवर ने KYC जमा नहीं की।"}</p> : (
+            <div className="space-y-2">
+              {complete.map((d) => {
+                const expanded = expandedId === d.id;
+                const meta = statusMeta[d.kyc] || statusMeta.Pending;
+                return (
+                  <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1 min-w-0">
+                        <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                        <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+                        <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
+                      </button>
+                      {d.kyc === "Pending" ? (
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें"}</button>
+                          <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2.5 py-1.5 rounded-full text-white shrink-0" style={{ background: meta.bg }}>{meta.label}</span>
+                      )}
+                    </div>
+                    {expanded && docSection(d)}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
