@@ -2743,7 +2743,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, suggestions, onSuggestionTap, lang = "hi", dotColor }) {
+function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, suggestions, onSuggestionTap, lang = "hi" }) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -2779,7 +2779,7 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
   };
 
   const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: dotColor ? 34 : 16, paddingRight: value ? 52 : 16 };
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16 };
   const showDropdown = dropdownOpen && predictions.length > 0;
 
   return (
@@ -2790,10 +2790,6 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
           onChange={(e) => { onChange(e); setDropdownOpen(true); }}
           onFocus={() => setDropdownOpen(true)}
           onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); }} />
-        {/* The colored dot at the front of the box is a quick visual cue —
-            green for where the load comes from, red for where it goes —
-            on top of the placeholder text saying the same thing. */}
-        {dotColor && <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full" style={{ width: 11, height: 11, background: dotColor, boxShadow: "0 0 0 2px #fff" }} />}
         {value && (
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
             className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
@@ -3260,12 +3256,11 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <LocationField
               label={lang === "en" ? "Choose Pickup location" : lang === "mr" ? "पिकअप ठिकाण निवडा" : "पिकअप स्थान चुनें"}
               lang={lang}
-              dotColor={C.success}
               value={pickup}
               onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupSelected(false); }}
               onPlaceSelected={onPickupPlaceSelected}
               mapsReady={mapsReady}
-              placeholder={lang === "en" ? "🟢 Where to pick up the load from? (Pickup)" : lang === "mr" ? "🟢 सामान कुठून उचलायचे आहे? (पिकअप)" : "🟢 सामान कहाँ से उठाना है? (पिकअप)"}
+              placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
               onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); setPickupSelected(false); }}
               onMapPin={() => setMapField("pickup")}
               onUseCurrentLocation={useMyCurrentLocation}
@@ -3279,12 +3274,11 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
             <LocationField
               label={lang === "en" ? "Choose Drop location" : lang === "mr" ? "ड्रॉप ठिकाण निवडा" : "ड्रॉप स्थान चुनें"}
               lang={lang}
-              dotColor={C.safety}
               value={drop}
               onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropSelected(false); }}
               onPlaceSelected={onDropPlaceSelected}
               mapsReady={mapsReady}
-              placeholder={lang === "en" ? "🔴 Where to unload the goods? (Drop)" : lang === "mr" ? "🔴 सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "🔴 सामान कहाँ उतारना है? (ड्रॉप)"}
+              placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
               onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); setDropSelected(false); }}
               onMapPin={() => setMapField("drop")}
               suggestions={suggestAreas(drop)}
