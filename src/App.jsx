@@ -2293,6 +2293,11 @@ function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
     const next = typeof updater === "function" ? updater(portalDriver) : updater;
     if (firestoreReady && mobile) replaceDoc("drivers", mobile, next).catch((e) => console.error("[driver kyc portal save]", e));
   };
+  // DriverOnboarding's own back button normally logs out of the app — not
+  // meaningful here (there's no login to leave). Repurposed instead to
+  // step back to a plain name-review screen, since this is the only
+  // "step 1" left to recheck once KYC (step 2) is showing.
+  const [editingName, setEditingName] = useState(false);
 
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
@@ -2342,6 +2347,8 @@ function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
               {lang === "en" ? "Nothing more to do here — you can close this page." : lang === "mr" ? "इथे आणखी काही करायचे नाही — तुम्ही हे पेज बंद करू शकता." : "यहां और कुछ करने की जरूरत नहीं — आप यह पेज बंद कर सकते हैं।"}
             </p>
           </div>
+        ) : editingName ? (
+          <DriverKycPortalNameEdit driver={portalDriver} setDriver={setPortalDriver} lang={lang} onDone={() => setEditingName(false)} />
         ) : (
           // driver is known (from the URL, no login needed) and just
           // hasn't submitted KYC yet — verified is a constant true (no
@@ -2351,10 +2358,40 @@ function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
           // "not registered — sign up now" interstitial in between.
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver-kyc-portal"
             verified={true} forceMode="signup"
-            onOtpVerified={() => {}} onLogout={() => {}}
+            onOtpVerified={() => {}} onLogout={() => setEditingName(true)}
             driver={portalDriver} setDriver={setPortalDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
         )}
       </div>
+    </div>
+  );
+}
+
+// Reached via the KYC (step 2) screen's back button inside DriverKycPortal
+// — lets a driver recheck/fix their name before continuing, without any
+// of DriverOnboarding's own OTP/step machinery (which assumes a first-time
+// fill, not editing a value that's already saved).
+function DriverKycPortalNameEdit({ driver, setDriver, lang, onDone }) {
+  const [name, setName] = useState(driver?.name === driver?.mobile ? "" : (driver?.name || ""));
+  const valid = name.trim().length >= 3;
+  const save = () => {
+    if (!valid) return;
+    setDriver({ ...driver, name: name.trim() });
+    onDone();
+  };
+  return (
+    <div className="flex-1 overflow-y-auto px-6 py-8 relative">
+      <button onClick={onDone} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <ChevronLeft size={18} strokeWidth={3} />
+      </button>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</h2>
+      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Review or update your name." : lang === "mr" ? "तुमचे नाव तपासा किंवा बदला." : "अपना नाम जांचें या बदलें।"}</p>
+      <input className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}
+        placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+      {!valid && <div className="text-[11px] font-semibold mt-2" style={{ color: C.safety }}>{lang === "en" ? "Name must be at least 3 characters" : lang === "mr" ? "नाव किमान 3 अक्षरांचे असावे" : "नाम कम से कम 3 अक्षर का होना चाहिए"}</div>}
+      <button onClick={save} disabled={!valid} className="w-full rounded-lg py-4 font-bold text-base mt-4"
+        style={{ background: valid ? C.marigold : "#E0E0E0", color: valid ? "#000000" : "#9AA3B0" }}>
+        {lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें"}
+      </button>
     </div>
   );
 }
