@@ -108,10 +108,11 @@ export async function initiateMaskedCall(bookingId) {
 }
 
 // Sends a real FCM push (see functions/index.js: sendAdminNotification) to
-// one driver/customer (target = their mobile/doc id) or every driver/
-// customer (target = "all" or omitted), depending on audience ("driver",
-// the default, or "customer"). Always resolves (never throws) with
-// { ok, reason? }.
+// one driver/customer (target = their mobile/doc id), a specific list of
+// them (target = an array of mobiles, e.g. Admin's KYC desk "Send to all
+// incomplete" button), or every driver/customer (target = "all" or
+// omitted), depending on audience ("driver", the default, or "customer").
+// Always resolves (never throws) with { ok, reason? }.
 export async function sendAdminNotification(target, message, audience = "driver") {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };

@@ -312,6 +312,12 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
   if (!target || target === "all") {
     const snap = await db.collection(col).get();
     recipients = snap.docs.map((d) => ({ fcmToken: d.data().fcmToken }));
+  } else if (Array.isArray(target)) {
+    // A specific list of mobiles (e.g. Admin's KYC desk "Send reminder to
+    // all incomplete" button) rather than a single recipient or everyone.
+    const snaps = await Promise.all(target.map((m) => db.collection(col).doc(m).get()));
+    recipients = snaps.filter((s) => s.exists).map((s) => ({ fcmToken: s.data().fcmToken }));
+    targetName = `${target.length} ${toRole === "driver" ? "drivers" : "customers"}`;
   } else {
     const snap = await db.collection(col).doc(target).get();
     if (!snap.exists) throw new HttpsError("not-found", `${toRole} not found.`);

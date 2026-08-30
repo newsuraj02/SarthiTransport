@@ -722,7 +722,7 @@ function ForegroundToast({ toast }) {
 // here, only what Admin has sent out.
 function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang }) {
   const mine = (adminNotifications || [])
-    .filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile))
+    .filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile || (Array.isArray(n.target) && n.target.includes(myMobile))))
     .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   return (
@@ -1954,10 +1954,13 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
 // DRIVER REGISTRATION — one continuous page: phone OTP, then straight
 // into KYC submission, instead of two separate screens.
 // =====================================================================
-function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType, onFirstSignupComplete }) {
+function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType, onFirstSignupComplete, forceMode = null }) {
   // Which button they tapped on the very first screen — purely about
   // labels/copy, since the mobile+OTP mechanics are identical either way.
-  const [mode, setMode] = useState(null); // null | "login" | "signup"
+  // forceMode skips that first screen entirely (used by DriverKycPortal,
+  // where the visitor is always an already-registered driver completing
+  // KYC, so there's no real "new here?" choice to ask).
+  const [mode, setMode] = useState(forceMode); // null | "login" | "signup"
 
   // Personal details — only ever asked for AFTER OTP verifies, and only if
   // this driver doc genuinely has none yet (first-time signup). Persisted
@@ -2370,6 +2373,86 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
           )}
       </div>
       <div id={recaptchaContainerId} />
+    </div>
+  );
+}
+
+// =====================================================================
+// DRIVER KYC PORTAL — a standalone route (?driverKyc=1), reached only via
+// the "Send" button on Admin's KYC desk (AdminKyc), separate from the
+// normal role-select/app flow entirely. Wraps DriverOnboarding/DriverKyc
+// (reusing their OTP-verify + document-upload logic wholesale) with the
+// mandatory-KYC banner up top, forces the "Login" first screen since
+// every visitor here already has a driver account (no "new here?"
+// choice to ask), and swaps in its own messages for "KYC already done"
+// and "no such driver" instead of DriverOnboarding's versions of those,
+// which assume a full driver dashboard is waiting behind them.
+// =====================================================================
+function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
+  const [portalAuth, setPortalAuth] = useState({ verified: false, mobile: "" });
+  const portalDriver = drivers.find((d) => d.mobile === portalAuth.mobile) || null;
+  const setPortalDriver = (updater) => {
+    if (!portalDriver) return;
+    const next = typeof updater === "function" ? updater(portalDriver) : updater;
+    if (firestoreReady && portalAuth.mobile) replaceDoc("drivers", portalAuth.mobile, next).catch((e) => console.error("[driver kyc portal save]", e));
+  };
+  const logoutPortal = () => {
+    signOut(driverFirebaseAuth).catch(() => { /* already signed out */ });
+    setPortalAuth({ verified: false, mobile: "" });
+  };
+
+  return (
+    <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+      <div className="w-full max-w-sm min-h-screen flex flex-col" style={{ background: C.bg }}>
+        <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
+          <div className="flex items-center gap-2">
+            <Logo size={64} />
+            <div translate="no" className="text-white font-bold text-lg leading-none truncate">
+              {lang === "en" ? "Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्ट" : "अपना ट्रांसपोर्ट"}
+            </div>
+          </div>
+        </div>
+        <div className="px-5 py-3" style={{ background: C.safety }}>
+          <p className="text-xs font-bold text-center" style={{ color: "#FFFFFF" }}>
+            {lang === "en"
+              ? "⚠️ Completing your KYC is mandatory to receive new loads."
+              : lang === "mr"
+              ? "⚠️ नवीन लोड मिळवण्यासाठी तुमची KYC पूर्ण करणे अनिवार्य आहे."
+              : "⚠️ नए लोड पाने के लिए अपनी KYC पूरी करना अनिवार्य है।"}
+          </p>
+        </div>
+        {portalAuth.verified && portalDriver?.vehicleSpec ? (
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.success }}>
+              <CheckCircle2 size={26} color="#FFFFFF" />
+            </div>
+            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
+              {lang === "en" ? "Your KYC is already on file" : lang === "mr" ? "तुमची KYC आधीच जमा आहे" : "आपकी KYC पहले से जमा है"}
+            </h2>
+            <p className="text-xs" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "Nothing more to do here — you can close this page." : lang === "mr" ? "इथे आणखी काही करायचे नाही — तुम्ही हे पेज बंद करू शकता." : "यहां और कुछ करने की जरूरत नहीं — आप यह पेज बंद कर सकते हैं।"}
+            </p>
+          </div>
+        ) : portalAuth.verified && !portalDriver ? (
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
+              <XCircle size={26} color="#FFFFFF" />
+            </div>
+            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
+              {lang === "en" ? "No driver account found" : lang === "mr" ? "कोणतेही ड्रायव्हर खाते सापडले नाही" : "कोई ड्राइवर खाता नहीं मिला"}
+            </h2>
+            <p className="text-xs" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "This number doesn't have a driver account yet — please sign up in the Apna Transport app first." : lang === "mr" ? "या नंबरचे अजून कोणतेही ड्रायव्हर खाते नाही — कृपया आधी अपना ट्रान्सपोर्ट अ‍ॅपमध्ये साइन अप करा." : "इस नंबर से अभी तक कोई ड्राइवर खाता नहीं है — कृपया पहले अपना ट्रांसपोर्ट ऐप में साइन अप करें।"}
+            </p>
+          </div>
+        ) : (
+          <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver-kyc-portal"
+            verified={portalAuth.verified} forceMode="login"
+            onOtpVerified={(mobile) => setPortalAuth({ verified: true, mobile })}
+            onLogout={logoutPortal}
+            driver={portalDriver} setDriver={setPortalDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
+        )}
+      </div>
     </div>
   );
 }
@@ -5832,69 +5915,146 @@ function KycDocThumb({ url, label, lang, fileName, height = "h-24" }) {
 }
 
 function AdminKyc({ drivers, updateDriverKyc, lang }) {
-  const pending = drivers.filter((d) => d.kyc === "Pending");
+  // "Complete" = has submitted vehicle/document info at least once
+  // (Approved, Pending review, or Rejected all count — they've done the
+  // form); "Incomplete" = never submitted, regardless of how long ago
+  // they signed up.
+  const complete = drivers.filter((d) => d.vehicleSpec);
+  const incomplete = drivers.filter((d) => !d.vehicleSpec);
   const [expandedId, setExpandedId] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState(null); // { ok, sentCount? } | null
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
     : lang === "mr"
     ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
-  return (
-    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Users size={16} /> {lang === "en" ? "Driver Approval (KYC Desk)" : lang === "mr" ? "ड्रायव्हर अप्रूव्हल (KYC Desk)" : "ड्राइवर अप्रूवल (KYC Desk)"}</div>
-      {pending.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No pending approvals." : lang === "mr" ? "कोणतेही पेंडिंग अप्रूव्हल नाही." : "कोई पेंडिंग अप्रूवल नहीं है।"}</p> : (
-        <div className="space-y-2">
-          {pending.map((d) => {
-            const expanded = expandedId === d.id;
-            return (
-              <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
-                <div className="flex items-center justify-between">
-                  <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1">
-                    <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                    <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
-                    <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
-                  </button>
-                  <div className="flex gap-2">
-                    <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें"}</button>
-                    <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
-                  </div>
-                </div>
+  const statusMeta = {
+    Approved: { label: lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित", bg: C.success },
+    Pending: { label: lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित", bg: C.marigoldDeep },
+    Rejected: { label: lang === "en" ? "Blocked" : lang === "mr" ? "ब्लॉक्ड" : "ब्लॉक्ड", bg: C.safety },
+  };
 
-                {expanded && (
-                  <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
-                    <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      {Object.entries(docLabels).map(([key, label]) => {
-                        const doc = d.docs?.[key];
-                        return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
-                      })}
-                    </div>
-                    {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
-                      <>
-                        <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
-                        <div className="grid grid-cols-2 gap-2 mb-2">
-                          {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} height="h-28" />}
-                          {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} height="h-28" />}
-                        </div>
-                      </>
-                    )}
-                    {d.vehicleSpec && (
-                      <div className="text-[11px] mb-2" style={{ color: C.ink }}>
-                        <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
-                        <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} ·{" "}
-                        {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
-                      </div>
-                    )}
-                    {!d.vehicleSpec && !d.docs && (
-                      <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+  // Same link the standalone Driver KYC Portal route checks for (see
+  // driverKycPortal in App() and DriverKycPortal) — OTP-verify, then
+  // straight to the document form, no role-select/login maze.
+  const portalLink = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?driverKyc=1` : "";
+  const sendToIncomplete = async () => {
+    if (sending || incomplete.length === 0) return;
+    setSending(true);
+    setSendResult(null);
+    const message = lang === "en"
+      ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}`
+      : lang === "mr"
+      ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}`
+      : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}`;
+    const result = await sendAdminNotification(incomplete.map((d) => d.mobile), message, "driver");
+    setSending(false);
+    setSendResult(result);
+  };
+
+  const docSection = (d) => (
+    <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {Object.entries(docLabels).map(([key, label]) => {
+          const doc = d.docs?.[key];
+          return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
+        })}
+      </div>
+      {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
+        <>
+          <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} height="h-28" />}
+            {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} height="h-28" />}
+          </div>
+        </>
+      )}
+      {d.vehicleSpec && (
+        <div className="text-[11px] mb-2" style={{ color: C.ink }}>
+          <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
+          <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} ·{" "}
+          {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
         </div>
       )}
+      {!d.vehicleSpec && !d.docs && (
+        <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-1 flex items-center gap-1.5" style={{ color: C.ink }}>
+          <XCircle size={16} color={C.safety} /> {lang === "en" ? "KYC Incomplete" : lang === "mr" ? "KYC अपूर्ण" : "KYC अधूरी"} ({incomplete.length})
+        </div>
+        <p className="text-[11px] mb-3" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "These drivers haven't submitted any KYC documents yet." : lang === "mr" ? "या ड्रायव्हरांनी अजून कोणतेही KYC कागदपत्र जमा केलेले नाहीत." : "इन ड्राइवरों ने अभी तक कोई KYC दस्तावेज़ जमा नहीं किया है।"}
+        </p>
+        <button onClick={sendToIncomplete} disabled={incomplete.length === 0 || sending}
+          className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5"
+          style={{ background: incomplete.length && !sending ? C.marigold : "#E0E0E0", color: incomplete.length && !sending ? "#000000" : "#9AA3B0" }}>
+          <Bell size={14} />
+          {sending
+            ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...")
+            : (lang === "en" ? `Send KYC reminder to all (${incomplete.length})` : lang === "mr" ? `सर्वांना KYC रिमाइंडर पाठवा (${incomplete.length})` : `सभी को KYC रिमाइंडर भेजें (${incomplete.length})`)}
+        </button>
+        {sendResult && (
+          <div className="text-[11px] font-semibold mb-3" style={{ color: sendResult.ok ? C.success : C.safety }}>
+            {sendResult.ok
+              ? (lang === "en" ? `Sent — delivered to ${sendResult.sentCount || 0} device(s).` : lang === "mr" ? `पाठवले — ${sendResult.sentCount || 0} डिव्हाइसवर पोहोचले.` : `भेज दिया — ${sendResult.sentCount || 0} डिवाइस पर पहुंचा।`)
+              : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।")}
+          </div>
+        )}
+        {incomplete.length === 0 ? (
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver has submitted KYC." : lang === "mr" ? "सर्व ड्रायव्हरांनी KYC जमा केली आहे." : "सभी ड्राइवरों ने KYC जमा कर दी है।"}</p>
+        ) : (
+          <div className="space-y-1.5">
+            {incomplete.map((d) => (
+              <div key={d.id} className="rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
+                <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
+          <Users size={16} /> {lang === "en" ? "KYC Complete" : lang === "mr" ? "KYC पूर्ण" : "KYC पूरी"} ({complete.length})
+        </div>
+        {complete.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver has submitted KYC yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरने KYC जमा केलेली नाही." : "अभी तक किसी ड्राइवर ने KYC जमा नहीं की।"}</p> : (
+          <div className="space-y-2">
+            {complete.map((d) => {
+              const expanded = expandedId === d.id;
+              const meta = statusMeta[d.kyc] || statusMeta.Pending;
+              return (
+                <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1 min-w-0">
+                      <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                      <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+                      <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
+                    </button>
+                    {d.kyc === "Pending" ? (
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें"}</button>
+                        <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2.5 py-1.5 rounded-full text-white shrink-0" style={{ background: meta.bg }}>{meta.label}</span>
+                    )}
+                  </div>
+                  {expanded && docSection(d)}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -6360,7 +6520,9 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
     const label = n.toRole === "customer"
       ? (lang === "en" ? "All Customers" : lang === "mr" ? "सर्व कस्टमर" : "सभी कस्टमर")
       : (lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर");
-    return n.target === "all" ? label : (n.targetName || n.target);
+    if (n.target === "all") return label;
+    if (Array.isArray(n.target)) return n.targetName || (lang === "en" ? `${n.target.length} drivers` : lang === "mr" ? `${n.target.length} ड्रायव्हर` : `${n.target.length} ड्राइवर`);
+    return n.targetName || n.target;
   };
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -6852,6 +7014,11 @@ export default function App() {
   // link (e.g. https://yourapp/?admin=1) — regular Customer/Driver users
   // never see it on the plain URL.
   const adminEntry = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("admin") === "1";
+  // The standalone Driver KYC portal (e.g. https://yourapp/?driverKyc=1) —
+  // linked from Admin's KYC desk "Send" button — is a self-contained route
+  // that bypasses role-select/login entirely, see the render gate below
+  // and DriverKycPortal.
+  const driverKycPortal = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("driverKyc") === "1";
   // Not persisted like customer/driver auth (those are real Firebase phone
   // OTP sessions) — admin is gated by a plain password, so every fresh page
   // load must go through AdminLogin again rather than silently staying
@@ -7392,6 +7559,14 @@ export default function App() {
   }, [bookings, driver]);
 
   const isDesktop = role === "admin" && adminAuth;
+
+  // Standalone Driver KYC portal (?driverKyc=1) — entirely separate from
+  // role-select/login, so it takes priority over every other gate below
+  // and doesn't touch role/lang-prompt/connectivity state at all. Needs
+  // only drivers/vehicleTypes, both already loading regardless of role.
+  if (driverKycPortal) {
+    return <DriverKycPortal lang={lang} drivers={drivers} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />;
+  }
 
   // Shown once, right after a brand-new Customer/Driver signup completes
   // (langPromptPending is set true there — see onComplete/onFirstSignupComplete
