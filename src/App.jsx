@@ -1526,7 +1526,6 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
   // connection, an accidental reload) doesn't force retyping everything —
   // cleared once submitProfile actually completes.
   const [name, setName] = usePersistedState("sarthi_customerReg_name", "");
-  const [email, setEmail] = usePersistedState("sarthi_customerReg_email", "");
   const [photo, setPhoto] = usePersistedPhoto("sarthi_customerReg_photo", null);
   const [photoUploading, setPhotoUploading] = useState(false);
   // Sign Up's photo picker runs before OTP verifies, but Storage's security
@@ -1541,11 +1540,6 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     setPhotoPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [photoFile]);
-  const [address, setAddress] = usePersistedState("sarthi_customerReg_address", "");
-  const [area, setArea] = usePersistedState("sarthi_customerReg_area", "");
-  const [city, setCity] = usePersistedState("sarthi_customerReg_city", "");
-  const [state, setState] = usePersistedState("sarthi_customerReg_state", "");
-  const [pincode, setPincode] = usePersistedState("sarthi_customerReg_pincode", "");
 
   // Which button they tapped on the very first screen — purely about
   // showing the right labels/copy, since the underlying mobile+OTP flow is
@@ -1575,19 +1569,12 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const detailsValid = name.trim().length >= 3 && address.trim().split(/\s+/).length >= 2 && area.trim() && city.trim() && state.trim() && pincode.length === 6;
+  const detailsValid = name.trim().length >= 3;
 
-  // Guided-step highlighting for the registration details fields — see
+  // Guided-step highlighting for the registration details field — see
   // GuidedStep. Shared by both places this form renders (post-login
   // completion and Sign Up), since both use the same field state.
-  const regStepCompleted = [
-    name.trim().length >= 3,
-    address.trim().split(/\s+/).length >= 2,
-    !!area.trim(),
-    !!city.trim(),
-    !!state.trim(),
-    pincode.length === 6,
-  ];
+  const regStepCompleted = [name.trim().length >= 3];
   // pinFocus: true — don't jump the guided highlight/scroll to the next
   // field the instant this one's validation passes; stay put until the
   // customer/driver actually taps away, so they can keep typing (e.g. a
@@ -1647,10 +1634,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
     // caller's own "current" mobile can still be the pre-verification value.
     // That mismatch used to make the profile save under the wrong Firestore
     // doc ID, so the next refresh found no profile and re-asked for sign-up.
-    onComplete({ name, email: email.trim() || null, photo: finalPhoto, address, area, city, state, pincode, referredBy, referralCredited: false, mobile: ownMobile });
+    onComplete({ name, photo: finalPhoto, referredBy, referralCredited: false, mobile: ownMobile });
     // Submitted for real — clear the draft so it can't leak into a future
     // registration attempt on this same device (e.g. a different customer).
-    setName(""); setEmail(""); setPhoto(null); setPhotoFile(null); setAddress(""); setArea(""); setCity(""); setState(""); setPincode("");
+    setName(""); setPhoto(null); setPhotoFile(null);
   };
 
   const verifyOtp = async () => {
@@ -1738,38 +1725,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
           </GuidedStep>
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : lang === "mr" ? "ईमेल (ऐच्छिक)" : "ईमेल (वैकल्पिक)"}</label>
-            <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : lang === "mr" ? "उदा: ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <GuidedStep {...regStepProps(1)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : lang === "mr" ? "पूर्ण पत्ता (घर/दुकान क्र., गल्ली)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : lang === "mr" ? "उदा: दुकान क्र. 12, MG रोड" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
-          </GuidedStep>
-          <div className="grid grid-cols-2 gap-3">
-            <GuidedStep {...regStepProps(2)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : lang === "mr" ? "एरिया" : "एरिया"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : lang === "mr" ? "उदा: पिंपरी" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
-            </GuidedStep>
-            <GuidedStep {...regStepProps(3)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : lang === "mr" ? "उदा: पुणे" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
-            </GuidedStep>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <GuidedStep {...regStepProps(4)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : lang === "mr" ? "उदा: महाराष्ट्र" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
-            </GuidedStep>
-            <GuidedStep {...regStepProps(5)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
-              <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : lang === "mr" ? "6 अंकी पिनकोड" : "6 अंकों का पिनकोड"} value={pincode}
-                onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-            </GuidedStep>
-          </div>
         </div>
 
-        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above (name, address, area, city, state, 6-digit pincode) to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील सर्व माहिती भरा (नाव, पत्ता, एरिया, शहर, राज्य, 6 अंकी पिनकोड)" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें (नाम, पता, एरिया, शहर, राज्य, 6 अंकों का पिनकोड)"}</div>}
+        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा" : "आगे बढ़ने के लिए ऊपर नाम भरें"}</div>}
         <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className={`w-full rounded-lg py-4 font-bold text-base mt-3 ${detailsValid && !photoUploading ? "guided-submit-ready" : ""}`}
           style={{ background: detailsValid && !photoUploading ? C.marigold : "#E0E0E0", color: detailsValid && !photoUploading ? "#000000" : "#9AA3B0" }}>
           {photoUploading ? (lang === "en" ? "Uploading photo..." : lang === "mr" ? "फोटो अपलोड होत आहे..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : lang === "mr" ? "रजिस्ट्रेशन पूर्ण करा" : "रजिस्ट्रेशन पूरा करें")}
@@ -1881,35 +1839,6 @@ function CustomerOnboarding({ lang = "hi", authInstance, recaptchaContainerId, v
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
         </GuidedStep>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : lang === "mr" ? "ईमेल (ऐच्छिक)" : "ईमेल (वैकल्पिक)"}</label>
-          <input type="email" className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : lang === "mr" ? "उदा: ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <GuidedStep {...regStepProps(1)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Address (House/Shop No., Street)" : lang === "mr" ? "पूर्ण पत्ता (घर/दुकान क्र., गल्ली)" : "पूरा पता (मकान/दुकान नं., गली)"}</label>
-          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Shop No. 12, MG Road" : lang === "mr" ? "उदा: दुकान क्र. 12, MG रोड" : "जैसे: दुकान नं. 12, MG रोड"} value={address} onChange={(e) => setAddress(e.target.value)} />
-        </GuidedStep>
-        <div className="grid grid-cols-2 gap-3">
-          <GuidedStep {...regStepProps(2)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : lang === "mr" ? "एरिया" : "एरिया"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pimpri" : lang === "mr" ? "उदा: पिंपरी" : "जैसे: पिंपरी"} value={area} onChange={(e) => setArea(e.target.value)} />
-          </GuidedStep>
-          <GuidedStep {...regStepProps(3)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : lang === "mr" ? "उदा: पुणे" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
-          </GuidedStep>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <GuidedStep {...regStepProps(4)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : lang === "mr" ? "उदा: महाराष्ट्र" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
-          </GuidedStep>
-          <GuidedStep {...regStepProps(5)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
-            <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : lang === "mr" ? "6 अंकी पिनकोड" : "6 अंकों का पिनकोड"} value={pincode}
-              onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-          </GuidedStep>
-        </div>
       </div>
 
       <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
@@ -1970,10 +1899,6 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
   // this driver doc genuinely has none yet (first-time signup). Persisted
   // to localStorage so a refresh mid-fill doesn't wipe it.
   const [name, setName] = usePersistedState("sarthi_driverReg_name", "");
-  const [address, setAddress] = usePersistedState("sarthi_driverReg_address", "");
-  const [city, setCity] = usePersistedState("sarthi_driverReg_city", "");
-  const [state, setState] = usePersistedState("sarthi_driverReg_state", "");
-  const [pincode, setPincode] = usePersistedState("sarthi_driverReg_pincode", "");
   // Mandatory acknowledgment that keeping vehicle documents (RC, insurance,
   // fitness, permit, PUC) and the driving license valid/updated is the
   // driver/owner's own responsibility, not the app's — see the Vehicle
@@ -2002,31 +1927,29 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
 
   // Once OTP verifies and the driver doc exists, attach whatever was
   // collected on the Sign Up form (pre-OTP). Login has no fields to apply —
-  // this simply won't fire for that path since name stays empty.
+  // this simply won't fire for that path since name stays empty. A driver
+  // doc's name is seeded to its own mobile number as a placeholder at
+  // creation (see getOrCreateDoc in App()), so "name still equals mobile"
+  // is the signal that registration details haven't been given yet —
+  // there's no separate address field anymore to check instead.
   const infoAppliedRef = useRef(false);
   useEffect(() => {
-    if (verified && driver && !driver.address && !infoAppliedRef.current && name.trim()) {
+    if (verified && driver && driver.name === driver.mobile && !infoAppliedRef.current && name.trim()) {
       infoAppliedRef.current = true;
       const ref = new URLSearchParams(window.location.search).get("ref");
       const referredBy = ref && ref !== driver.mobile ? ref : null;
-      setDriver({ ...driver, name: name.trim(), address: address.trim(), city: city.trim(), state: state.trim(), pincode, referredBy, referralCredited: false });
-      setName(""); setAddress(""); setCity(""); setState(""); setPincode(""); setAcceptedDocsTerms(false);
+      setDriver({ ...driver, name: name.trim(), referredBy, referralCredited: false });
+      setName(""); setAcceptedDocsTerms(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verified, driver]);
 
-  const detailsValid = name.trim().length >= 3 && address.trim().length > 0 && city.trim() && state.trim() && pincode.length === 6 && acceptedDocsTerms;
+  const detailsValid = name.trim().length >= 3 && acceptedDocsTerms;
 
-  // Guided-step highlighting for the registration details fields — see
+  // Guided-step highlighting for the registration details field — see
   // GuidedStep. Shared by both places this form renders (the fallback
   // completion form and Sign Up), since both use the same field state.
-  const regStepCompleted = [
-    name.trim().length >= 3,
-    !!address.trim(),
-    !!city.trim(),
-    !!state.trim(),
-    pincode.length === 6,
-  ];
+  const regStepCompleted = [name.trim().length >= 3];
   // pinFocus: true — don't jump the guided highlight/scroll to the next
   // field the instant this one's validation passes; stay put until the
   // customer/driver actually taps away, so they can keep typing (e.g. a
@@ -2083,15 +2006,15 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     setSending(false);
   };
 
-  // Fallback completion form (see the "no address, nothing typed" branch
-  // below) — covers someone who tapped Login but turned out to be a new
-  // driver, so they're not stuck with no way to finish setting up.
+  // Fallback completion form (see the "still just a placeholder name"
+  // branch below) — covers someone who tapped Login but turned out to be
+  // a new driver, so they're not stuck with no way to finish setting up.
   const completeDetails = () => {
     if (!detailsValid || !driver) return;
     const ref = new URLSearchParams(window.location.search).get("ref");
     const referredBy = ref && ref !== driver.mobile ? ref : null;
-    setDriver({ ...driver, name: name.trim(), address: address.trim(), city: city.trim(), state: state.trim(), pincode, referredBy, referralCredited: false });
-    setName(""); setAddress(""); setCity(""); setState(""); setPincode("");
+    setDriver({ ...driver, name: name.trim(), referredBy, referralCredited: false });
+    setName("");
   };
 
   const backButton = (
@@ -2124,7 +2047,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     );
   }
 
-  if (verified && driver && driver.address) {
+  if (verified && driver && driver.name !== driver.mobile) {
     // Details already on file (normal returning-driver path) — move
     // straight to documents.
     return (
@@ -2137,7 +2060,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     );
   }
 
-  if (verified && driver && !driver.vehicleSpec && !driver.address && mode !== "signup") {
+  if (verified && driver && !driver.vehicleSpec && driver.name === driver.mobile && mode !== "signup") {
     // This number chose (or defaulted to, via a resumed session) Login, but
     // genuinely has no registration on file — the details form must only
     // ever be reachable through Sign Up, so send them there instead of
@@ -2157,7 +2080,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     );
   }
 
-  if (verified && driver && !driver.vehicleSpec && !driver.address) {
+  if (verified && driver && !driver.vehicleSpec && driver.name === driver.mobile) {
     // STEP 2 — verified via Sign Up, and this number genuinely has no
     // details yet.
     return (
@@ -2173,25 +2096,6 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
           </GuidedStep>
-          <GuidedStep {...regStepProps(1)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : lang === "mr" ? "उदा: घर/दुकान क्र., गल्ली" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
-          </GuidedStep>
-          <div className="grid grid-cols-2 gap-3">
-            <GuidedStep {...regStepProps(2)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : lang === "mr" ? "उदा: पुणे" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
-            </GuidedStep>
-            <GuidedStep {...regStepProps(3)} lang={lang}>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
-              <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : lang === "mr" ? "उदा: महाराष्ट्र" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
-            </GuidedStep>
-          </div>
-          <GuidedStep {...regStepProps(4)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
-            <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : lang === "mr" ? "6 अंकी पिनकोड" : "6 अंकों का पिनकोड"} value={pincode}
-              onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-          </GuidedStep>
         </div>
         <div className="rounded-lg p-3 mt-3" style={{ background: C.safety }}>
           <label className="flex items-start gap-2 cursor-pointer">
@@ -2203,7 +2107,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
             </span>
           </label>
         </div>
-        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील सर्व माहिती भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "आगे बढ़ने के लिए ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
+        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above and accept the document responsibility clause to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "आगे बढ़ने के लिए ऊपर नाम भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
         <button onClick={completeDetails} disabled={!detailsValid} className={`w-full rounded-lg py-4 font-bold text-base mt-3 ${detailsValid ? "guided-submit-ready" : ""}`}
           style={{ background: detailsValid ? C.marigold : "#E0E0E0", color: detailsValid ? "#000000" : "#9AA3B0" }}>
           {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
@@ -2217,8 +2121,8 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
     // returning driver on a brand-new device/browser used to be forced to
     // re-type their whole profile just to log in; now Login goes straight
     // to OTP and Sign Up is clearly the "I'm new" path — either way lands
-    // on the same underlying check (does this number have an address on
-    // file yet?).
+    // on the same underlying check (does this number have a real name on
+    // file yet, or just its own mobile-number placeholder?).
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
         <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -2307,25 +2211,6 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
         </GuidedStep>
-        <GuidedStep {...regStepProps(1)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}</label>
-          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. House/Shop No., Street" : lang === "mr" ? "उदा: घर/दुकान क्र., गल्ली" : "जैसे: मकान/दुकान नं., गली"} value={address} onChange={(e) => setAddress(e.target.value)} />
-        </GuidedStep>
-        <div className="grid grid-cols-2 gap-3">
-          <GuidedStep {...regStepProps(2)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Pune" : lang === "mr" ? "उदा: पुणे" : "जैसे: पुणे"} value={city} onChange={(e) => setCity(e.target.value)} />
-          </GuidedStep>
-          <GuidedStep {...regStepProps(3)} lang={lang}>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
-            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Maharashtra" : lang === "mr" ? "उदा: महाराष्ट्र" : "जैसे: महाराष्ट्र"} value={state} onChange={(e) => setState(e.target.value)} />
-          </GuidedStep>
-        </div>
-        <GuidedStep {...regStepProps(4)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
-          <input className={fieldCls} style={{ ...fieldStyle, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit pincode" : lang === "mr" ? "6 अंकी पिनकोड" : "6 अंकों का पिनकोड"} value={pincode}
-            onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-        </GuidedStep>
       </div>
 
       <div className="rounded-lg p-3 mt-3" style={{ background: C.safety }}>
@@ -2349,7 +2234,7 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
                 <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
                   value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
               </div>
-              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above and accept the document responsibility clause first" : lang === "mr" ? "आधी वरील सर्व माहिती भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "पहले ऊपर सारी जानकारी भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
+              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above and accept the document responsibility clause first" : lang === "mr" ? "आधी वरील नाव भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "पहले ऊपर नाम भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={sendOtp} disabled={!detailsValid || mobile.length !== 10 || sending}
                 className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 && !sending ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 && !sending ? C.marigold : "#E0E0E0", color: detailsValid && mobile.length === 10 && !sending ? "#000000" : "#9AA3B0" }}>
@@ -5225,19 +5110,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
 // it's always exactly what the customer sees on their active ride page.
 function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments }) {
   const [name, setName] = useState(driver?.name || "");
-  const [email, setEmail] = useState(driver?.email || "");
-  const [address, setAddress] = useState(driver?.address || "");
-  const [area, setArea] = useState(driver?.area || "");
-  const [city, setCity] = useState(driver?.city || "");
-  const [state, setState] = useState(driver?.state || "");
-  const [pincode, setPincode] = useState(driver?.pincode || "");
   const [saved, setSaved] = useState(false);
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   const save = () => {
-    setDriver({ ...driver, name: name.trim(), email: email.trim() || null, address, area, city, state, pincode });
+    setDriver({ ...driver, name: name.trim() });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -5258,34 +5137,6 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : lang === "mr" ? "मोबाइल" : "मोबाइल"}</label>
           <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, background: C.bg, color: C.inkSoft }} value={driver?.mobile || ""} disabled />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : lang === "mr" ? "ईमेल (ऐच्छिक)" : "ईमेल (वैकल्पिक)"}</label>
-          <input type="email" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : lang === "mr" ? "उदा: ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}</label>
-          <input className={inputCls} style={inputStyle} value={address} onChange={(e) => setAddress(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : lang === "mr" ? "एरिया" : "एरिया"}</label>
-            <input className={inputCls} style={inputStyle} value={area} onChange={(e) => setArea(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
-            <input className={inputCls} style={inputStyle} value={city} onChange={(e) => setCity(e.target.value)} />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
-            <input className={inputCls} style={inputStyle} value={state} onChange={(e) => setState(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
-            <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-          </div>
         </div>
 
         {/* Every document submitted with KYC, visible right here — View/
