@@ -2400,6 +2400,15 @@ function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
     const next = typeof updater === "function" ? updater(portalDriver) : updater;
     if (firestoreReady && driverAuth.mobile) replaceDoc("drivers", driverAuth.mobile, next).catch((e) => console.error("[driver kyc portal save]", e));
   };
+  // Sends them to the main app's Driver login (pre-selecting the role so
+  // they land straight on it, not role-select) — dropping the ?driverKyc
+  // param entirely, since staying on it would just re-render this same
+  // "please log in" screen. They come back to the original link
+  // afterward to actually fill in the KYC form.
+  const goToDriverLogin = () => {
+    try { window.localStorage.setItem("sarthi_role", JSON.stringify("driver")); } catch { /* storage unavailable */ }
+    window.location.href = window.location.origin + window.location.pathname;
+  };
 
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
@@ -2429,9 +2438,12 @@ function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
             <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
               {lang === "en" ? "Please log in first" : lang === "mr" ? "कृपया आधी लॉगिन करा" : "कृपया पहले लॉगिन करें"}
             </h2>
-            <p className="text-xs" style={{ color: C.inkSoft }}>
-              {lang === "en" ? "Open the Apna Transport app, log in as a driver, then open this link again." : lang === "mr" ? "अपना ट्रान्सपोर्ट अ‍ॅप उघडा, ड्रायव्हर म्हणून लॉगिन करा, नंतर ही लिंक पुन्हा उघडा." : "अपना ट्रांसपोर्ट ऐप खोलें, ड्राइवर के तौर पर लॉगिन करें, फिर यह लिंक दोबारा खोलें।"}
+            <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "Log in as a driver, then come back and open this link again." : lang === "mr" ? "ड्रायव्हर म्हणून लॉगिन करा, नंतर परत येऊन ही लिंक पुन्हा उघडा." : "ड्राइवर के तौर पर लॉगिन करें, फिर वापस आकर यह लिंक दोबारा खोलें।"}
             </p>
+            <button onClick={goToDriverLogin} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
+              {lang === "en" ? "Log In" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें"}
+            </button>
           </div>
         ) : !portalDriver ? (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
