@@ -179,11 +179,15 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
   // Reselecting an already-set time shouldn't let Done through on the old
   // value alone — the period defaults to the right one for convenience
   // (so the relevant slots show immediately), but both it and a slot must
-  // be actively tapped again before Done unlocks.
-  const [periodPicked, setPeriodPicked] = useState(false);
+  // be actively tapped again before Done unlocks. That requirement only
+  // makes sense when there WAS a prior value to reconfirm — on a genuinely
+  // first-time pick there's nothing to accidentally confirm, so the
+  // period (already shown highlighted as the sensible default) counts as
+  // picked from the start; only the slot itself needs a tap.
+  const [periodPicked, setPeriodPicked] = useState(!value);
   const [slotPicked, setSlotPicked] = useState(false);
   useEffect(() => {
-    if (open) { setActivePeriod(defaultPeriod); setPending(""); setPeriodPicked(false); setSlotPicked(false); }
+    if (open) { setActivePeriod(defaultPeriod); setPending(""); setPeriodPicked(!value); setSlotPicked(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   if (!open) return null;
