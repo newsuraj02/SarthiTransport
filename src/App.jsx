@@ -6112,7 +6112,7 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                         </a>
                       </div>
                       {sentToday(d.mobile) && (
-                        <span className="text-[10px] font-semibold" style={{ color: C.success }}>
+                        <span className="text-[10px] font-semibold" style={{ color: C.navy }}>
                           ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
                         </span>
                       )}
