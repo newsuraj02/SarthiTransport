@@ -57,8 +57,21 @@ service cloud.firestore {
     }
 
     match /drivers/{mobile} {
-      allow read: if isSignedIn();
-      allow write: if isOwnPhone(mobile) || isAdmin();
+      // The standalone Driver KYC Portal (App.jsx: DriverKycPortal, linked
+      // from Admin's KYC desk) deliberately skips login/OTP — a driver
+      // opens their own personalized link (?driverKyc=1&mobile=...) and
+      // fills the form directly. Since there's no request.auth to check
+      // there, get/write for a single doc are allowed with no auth at all
+      // as long as that driver's KYC is still empty (vehicleSpec == null)
+      // -- once they've submitted once, this path closes and only the
+      // owning phone's real session (or admin) can touch it again. This
+      // trades a little security for zero friction: anyone who obtains
+      // that exact link before the driver uses it could submit or
+      // overwrite their still-empty KYC, so it must only ever be shared
+      // privately (WhatsApp/push to that driver), never posted publicly.
+      allow get: if isSignedIn() || resource.data.vehicleSpec == null;
+      allow list: if isSignedIn();
+      allow write: if isOwnPhone(mobile) || isAdmin() || resource.data.vehicleSpec == null;
     }
 
     match /customers/{mobile} {

@@ -2378,36 +2378,31 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
 }
 
 // =====================================================================
-// DRIVER KYC PORTAL — a standalone route (?driverKyc=1), reached only via
-// the "Send" button on Admin's KYC desk (AdminKyc), separate from the
-// normal role-select/app flow entirely. No OTP step here — a driver only
-// ever reaches this link already logged into the app on this device, so
-// identity comes straight from the same sarthi_driverAuth login state
-// the main app itself uses (see driverAuth in App()), not a fresh
-// sign-in. Reuses DriverOnboarding/DriverKyc for the actual
-// document-upload form (and, on the rare account that somehow still has
-// no personal details on file, that same step-1 form), wrapped with the
-// mandatory-KYC banner up top and its own messages for "please log in
-// first", "no such driver", and "KYC already done" instead of
-// DriverOnboarding's versions of those, which assume either a login
-// screen or a full driver dashboard is behind them.
+// DRIVER KYC PORTAL — a standalone route (?driverKyc=1&mobile=...),
+// reached only via the "Send" button/WhatsApp link on Admin's KYC desk
+// (AdminKyc), separate from the normal role-select/app flow entirely.
+// No login or OTP step at all — the link is personalized per driver (the
+// mobile is right there in the URL), and Firestore's rules allow reading
+// and writing that one driver's doc without any auth as long as their
+// KYC is still empty (see firestore.rules: drivers/{mobile} — closes
+// again the moment vehicleSpec is set, so a stale/forwarded link can't
+// be used to tamper with an already-submitted KYC). Fetches that single
+// doc directly (not the admin-only full driver list) so it works for a
+// genuinely unauthenticated visitor. Reuses DriverOnboarding/DriverKyc
+// for the actual document-upload form (and, on the rare account that
+// somehow still has no personal details on file, that same step-1 form).
 // =====================================================================
-function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
-  const [driverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
-  const portalDriver = drivers.find((d) => d.mobile === driverAuth.mobile) || null;
+function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
+  const mobile = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("mobile") : null;
+  const [portalDriver, setPortalDriverState] = useState(undefined); // undefined = still loading, null = not found
+  useEffect(() => {
+    if (!firestoreReady || !mobile) { setPortalDriverState(null); return; }
+    return subscribeDoc("drivers", mobile, setPortalDriverState);
+  }, [mobile]);
   const setPortalDriver = (updater) => {
     if (!portalDriver) return;
     const next = typeof updater === "function" ? updater(portalDriver) : updater;
-    if (firestoreReady && driverAuth.mobile) replaceDoc("drivers", driverAuth.mobile, next).catch((e) => console.error("[driver kyc portal save]", e));
-  };
-  // Sends them to the main app's Driver login (pre-selecting the role so
-  // they land straight on it, not role-select) — dropping the ?driverKyc
-  // param entirely, since staying on it would just re-render this same
-  // "please log in" screen. They come back to the original link
-  // afterward to actually fill in the KYC form.
-  const goToDriverLogin = () => {
-    try { window.localStorage.setItem("sarthi_role", JSON.stringify("driver")); } catch { /* storage unavailable */ }
-    window.location.href = window.location.origin + window.location.pathname;
+    if (firestoreReady && mobile) replaceDoc("drivers", mobile, next).catch((e) => console.error("[driver kyc portal save]", e));
   };
 
   return (
@@ -2430,22 +2425,7 @@ function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
               : "⚠️ नए लोड पाने के लिए अपनी KYC पूरी करना अनिवार्य है।"}
           </p>
         </div>
-        {!driverAuth.verified ? (
-          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
-              <XCircle size={26} color="#FFFFFF" />
-            </div>
-            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
-              {lang === "en" ? "Please log in first" : lang === "mr" ? "कृपया आधी लॉगिन करा" : "कृपया पहले लॉगिन करें"}
-            </h2>
-            <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
-              {lang === "en" ? "Log in as a driver, then come back and open this link again." : lang === "mr" ? "ड्रायव्हर म्हणून लॉगिन करा, नंतर परत येऊन ही लिंक पुन्हा उघडा." : "ड्राइवर के तौर पर लॉगिन करें, फिर वापस आकर यह लिंक दोबारा खोलें।"}
-            </p>
-            <button onClick={goToDriverLogin} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
-              {lang === "en" ? "Log In" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें"}
-            </button>
-          </div>
-        ) : !portalDriver ? (
+        {!mobile || portalDriver === null ? (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
             <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
               <XCircle size={26} color="#FFFFFF" />
@@ -2453,6 +2433,13 @@ function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
             <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
               {lang === "en" ? "No driver account found" : lang === "mr" ? "कोणतेही ड्रायव्हर खाते सापडले नाही" : "कोई ड्राइवर खाता नहीं मिला"}
             </h2>
+            <p className="text-xs" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "This link looks incomplete or incorrect." : lang === "mr" ? "ही लिंक अपूर्ण किंवा चुकीची वाटते." : "यह लिंक अधूरी या गलत लगती है।"}
+            </p>
+          </div>
+        ) : portalDriver === undefined ? (
+          <div className="flex-1 flex items-center justify-center px-8 text-center">
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : lang === "mr" ? "लोड होत आहे..." : "लोड हो रहा है..."}</p>
           </div>
         ) : portalDriver.vehicleSpec ? (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
@@ -2467,12 +2454,12 @@ function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
             </p>
           </div>
         ) : (
-          // driver is already known + logged in, just hasn't submitted
-          // KYC yet — verified is a constant true (no OTP screens ever
-          // render), forceMode="signup" routes straight to whichever
-          // form applies (personal details, if somehow still missing,
-          // then DriverKyc) without DriverOnboarding's own "not
-          // registered — sign up now" interstitial in between.
+          // driver is known (from the URL, no login needed) and just
+          // hasn't submitted KYC yet — verified is a constant true (no
+          // OTP screens ever render), forceMode="signup" routes straight
+          // to whichever form applies (personal details, if somehow
+          // still missing, then DriverKyc) without DriverOnboarding's own
+          // "not registered — sign up now" interstitial in between.
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver-kyc-portal"
             verified={true} forceMode="signup"
             onOtpVerified={() => {}} onLogout={() => {}}
@@ -5962,15 +5949,17 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
     Rejected: { label: lang === "en" ? "Blocked" : lang === "mr" ? "ब्लॉक्ड" : "ब्लॉक्ड", bg: C.safety },
   };
 
-  // Same link the standalone Driver KYC Portal route checks for (see
-  // driverKycPortal in App() and DriverKycPortal) — OTP-verify, then
-  // straight to the document form, no role-select/login maze.
-  const portalLink = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?driverKyc=1` : "";
+  // The push reminder can't carry a working link — sendAdminNotification
+  // broadcasts one shared message to the whole list, and the portal link
+  // must be personalized per driver (their mobile is right there in the
+  // URL — see DriverKycPortal — since that page skips login entirely).
+  // So push stays a plain nudge; the actual actionable, personalized
+  // link only goes out via each row's WhatsApp button below.
   const reminderMessage = lang === "en"
-    ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}`
+    ? "Your KYC is incomplete — completing it is mandatory to receive new loads. Please complete it as soon as possible."
     : lang === "mr"
-    ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}`
-    : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}`;
+    ? "तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया लवकरात लवकर पूर्ण करा."
+    : "आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया जल्द से जल्द पूरा करें।";
   const sendToIncomplete = async () => {
     if (sending || incomplete.length === 0) return;
     setSending(true);
@@ -5982,9 +5971,18 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   // Push relies on the driver already having granted notification
   // permission at some point — exactly the kind of thing a driver who
   // never finished KYC often hasn't done. WhatsApp needs none of that:
-  // it opens a chat straight to their number with the same message
-  // prefilled, admin just taps Send.
-  const whatsappLink = (mobile) => `https://wa.me/91${mobile}?text=${encodeURIComponent(reminderMessage)}`;
+  // it opens a chat straight to their number with a personalized link
+  // (?driverKyc=1&mobile=...) prefilled, admin just taps Send — no
+  // login/OTP step on the other end either, see DriverKycPortal.
+  const whatsappLink = (mobile) => {
+    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
+    const msg = lang === "en"
+      ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}`
+      : lang === "mr"
+      ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}`
+      : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}`;
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  };
 
   const docSection = (d) => (
     <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
@@ -7606,12 +7604,14 @@ export default function App() {
 
   const isDesktop = role === "admin" && adminAuth;
 
-  // Standalone Driver KYC portal (?driverKyc=1) — entirely separate from
-  // role-select/login, so it takes priority over every other gate below
-  // and doesn't touch role/lang-prompt/connectivity state at all. Needs
-  // only drivers/vehicleTypes, both already loading regardless of role.
+  // Standalone Driver KYC portal (?driverKyc=1&mobile=...) — entirely
+  // separate from role-select/login (no auth at all, see
+  // firestore.rules), so it takes priority over every other gate below
+  // and doesn't touch role/lang-prompt/connectivity state. Only needs
+  // vehicleTypes (public read, already loading regardless of role) — it
+  // fetches its one driver doc itself, see DriverKycPortal.
   if (driverKycPortal) {
-    return <DriverKycPortal lang={lang} drivers={drivers} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />;
+    return <DriverKycPortal lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />;
   }
 
   // Shown once, right after a brand-new Customer/Driver signup completes
