@@ -5945,12 +5945,18 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   const [expandedId, setExpandedId] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null); // { ok, sentCount? } | null
-  // Just a per-session reminder for admin's own benefit — WhatsApp opening
-  // with the message prefilled doesn't guarantee it was actually sent, so
-  // this isn't tracked anywhere durable, just "you already tapped this
-  // one" so admin doesn't lose track while working down a long list.
-  const [whatsappSentTo, setWhatsappSentTo] = useState(() => new Set());
-  const markWhatsappSent = (mobile) => setWhatsappSentTo((prev) => new Set(prev).add(mobile));
+  // Persisted (not just in-memory) because tapping WhatsApp on a phone
+  // switches away to the WhatsApp app — mobile browsers/TWAs routinely
+  // discard or reload a backgrounded tab like that, which would silently
+  // wipe a plain useState the moment admin switches back. Keyed by
+  // mobile -> the date it was tapped, so the tick clears itself the next
+  // day instead of accumulating forever (opening WhatsApp still doesn't
+  // guarantee the message was actually sent from there, just that admin
+  // already nudged this driver today).
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const [whatsappSentMap, setWhatsappSentMap] = usePersistedState("sarthi_kycWhatsappSent", {});
+  const markWhatsappSent = (mobile) => setWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStr() }));
+  const sentToday = (mobile) => whatsappSentMap[mobile] === todayStr();
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
     : lang === "mr"
@@ -6105,7 +6111,7 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                           <MessageCircle size={14} /> WhatsApp
                         </a>
                       </div>
-                      {whatsappSentTo.has(d.mobile) && (
+                      {sentToday(d.mobile) && (
                         <span className="text-[10px] font-semibold" style={{ color: C.success }}>
                           ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
                         </span>
