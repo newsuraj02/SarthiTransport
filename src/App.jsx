@@ -5945,6 +5945,12 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   const [expandedId, setExpandedId] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null); // { ok, sentCount? } | null
+  // Just a per-session reminder for admin's own benefit — WhatsApp opening
+  // with the message prefilled doesn't guarantee it was actually sent, so
+  // this isn't tracked anywhere durable, just "you already tapped this
+  // one" so admin doesn't lose track while working down a long list.
+  const [whatsappSentTo, setWhatsappSentTo] = useState(() => new Set());
+  const markWhatsappSent = (mobile) => setWhatsappSentTo((prev) => new Set(prev).add(mobile));
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
     : lang === "mr"
@@ -6088,15 +6094,22 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                       <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
                       <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button disabled title={lang === "en" ? "Approve unlocks once this driver submits KYC" : lang === "mr" ? "ड्रायव्हरने KYC जमा केल्यावरच अप्रूव्ह करता येईल" : "ड्राइवर के KYC जमा करने के बाद ही अप्रूव कर सकते हैं"}
-                        className="rounded-lg px-3 py-2 text-xs font-bold" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
-                        {lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}
-                      </button>
-                      <a href={whatsappLink(d.mobile)} target="_blank" rel="noreferrer"
-                        className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
-                        <MessageCircle size={14} /> WhatsApp
-                      </a>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <div className="flex gap-2">
+                        <button disabled title={lang === "en" ? "Approve unlocks once this driver submits KYC" : lang === "mr" ? "ड्रायव्हरने KYC जमा केल्यावरच अप्रूव्ह करता येईल" : "ड्राइवर के KYC जमा करने के बाद ही अप्रूव कर सकते हैं"}
+                          className="rounded-lg px-3 py-2 text-xs font-bold" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+                          {lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}
+                        </button>
+                        <a href={whatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(d.mobile)}
+                          className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
+                          <MessageCircle size={14} /> WhatsApp
+                        </a>
+                      </div>
+                      {whatsappSentTo.has(d.mobile) && (
+                        <span className="text-[10px] font-semibold" style={{ color: C.success }}>
+                          ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
