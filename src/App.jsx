@@ -5954,19 +5954,25 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   // driverKycPortal in App() and DriverKycPortal) — OTP-verify, then
   // straight to the document form, no role-select/login maze.
   const portalLink = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?driverKyc=1` : "";
+  const reminderMessage = lang === "en"
+    ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}`
+    : lang === "mr"
+    ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}`
+    : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}`;
   const sendToIncomplete = async () => {
     if (sending || incomplete.length === 0) return;
     setSending(true);
     setSendResult(null);
-    const message = lang === "en"
-      ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}`
-      : lang === "mr"
-      ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}`
-      : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}`;
-    const result = await sendAdminNotification(incomplete.map((d) => d.mobile), message, "driver");
+    const result = await sendAdminNotification(incomplete.map((d) => d.mobile), reminderMessage, "driver");
     setSending(false);
     setSendResult(result);
   };
+  // Push relies on the driver already having granted notification
+  // permission at some point — exactly the kind of thing a driver who
+  // never finished KYC often hasn't done. WhatsApp needs none of that:
+  // it opens a chat straight to their number with the same message
+  // prefilled, admin just taps Send.
+  const whatsappLink = (mobile) => `https://wa.me/91${mobile}?text=${encodeURIComponent(reminderMessage)}`;
 
   const docSection = (d) => (
     <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
@@ -6037,9 +6043,15 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
           ) : (
             <div className="space-y-1.5">
               {incomplete.map((d) => (
-                <div key={d.id} className="rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
-                  <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+                <div key={d.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                    <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+                  </div>
+                  <a href={whatsappLink(d.mobile)} target="_blank" rel="noreferrer"
+                    className="shrink-0 rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
+                    <MessageCircle size={14} /> WhatsApp
+                  </a>
                 </div>
               ))}
             </div>
