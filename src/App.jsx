@@ -2380,25 +2380,25 @@ function DriverOnboarding({ lang = "hi", authInstance, recaptchaContainerId, ver
 // =====================================================================
 // DRIVER KYC PORTAL — a standalone route (?driverKyc=1), reached only via
 // the "Send" button on Admin's KYC desk (AdminKyc), separate from the
-// normal role-select/app flow entirely. Wraps DriverOnboarding/DriverKyc
-// (reusing their OTP-verify + document-upload logic wholesale) with the
-// mandatory-KYC banner up top, forces the "Login" first screen since
-// every visitor here already has a driver account (no "new here?"
-// choice to ask), and swaps in its own messages for "KYC already done"
-// and "no such driver" instead of DriverOnboarding's versions of those,
-// which assume a full driver dashboard is waiting behind them.
+// normal role-select/app flow entirely. No OTP step here — a driver only
+// ever reaches this link already logged into the app on this device, so
+// identity comes straight from the same sarthi_driverAuth login state
+// the main app itself uses (see driverAuth in App()), not a fresh
+// sign-in. Reuses DriverOnboarding/DriverKyc for the actual
+// document-upload form (and, on the rare account that somehow still has
+// no personal details on file, that same step-1 form), wrapped with the
+// mandatory-KYC banner up top and its own messages for "please log in
+// first", "no such driver", and "KYC already done" instead of
+// DriverOnboarding's versions of those, which assume either a login
+// screen or a full driver dashboard is behind them.
 // =====================================================================
 function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
-  const [portalAuth, setPortalAuth] = useState({ verified: false, mobile: "" });
-  const portalDriver = drivers.find((d) => d.mobile === portalAuth.mobile) || null;
+  const [driverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
+  const portalDriver = drivers.find((d) => d.mobile === driverAuth.mobile) || null;
   const setPortalDriver = (updater) => {
     if (!portalDriver) return;
     const next = typeof updater === "function" ? updater(portalDriver) : updater;
-    if (firestoreReady && portalAuth.mobile) replaceDoc("drivers", portalAuth.mobile, next).catch((e) => console.error("[driver kyc portal save]", e));
-  };
-  const logoutPortal = () => {
-    signOut(driverFirebaseAuth).catch(() => { /* already signed out */ });
-    setPortalAuth({ verified: false, mobile: "" });
+    if (firestoreReady && driverAuth.mobile) replaceDoc("drivers", driverAuth.mobile, next).catch((e) => console.error("[driver kyc portal save]", e));
   };
 
   return (
@@ -2421,7 +2421,28 @@ function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
               : "⚠️ नए लोड पाने के लिए अपनी KYC पूरी करना अनिवार्य है।"}
           </p>
         </div>
-        {portalAuth.verified && portalDriver?.vehicleSpec ? (
+        {!driverAuth.verified ? (
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
+              <XCircle size={26} color="#FFFFFF" />
+            </div>
+            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
+              {lang === "en" ? "Please log in first" : lang === "mr" ? "कृपया आधी लॉगिन करा" : "कृपया पहले लॉगिन करें"}
+            </h2>
+            <p className="text-xs" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "Open the Apna Transport app, log in as a driver, then open this link again." : lang === "mr" ? "अपना ट्रान्सपोर्ट अ‍ॅप उघडा, ड्रायव्हर म्हणून लॉगिन करा, नंतर ही लिंक पुन्हा उघडा." : "अपना ट्रांसपोर्ट ऐप खोलें, ड्राइवर के तौर पर लॉगिन करें, फिर यह लिंक दोबारा खोलें।"}
+            </p>
+          </div>
+        ) : !portalDriver ? (
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
+              <XCircle size={26} color="#FFFFFF" />
+            </div>
+            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
+              {lang === "en" ? "No driver account found" : lang === "mr" ? "कोणतेही ड्रायव्हर खाते सापडले नाही" : "कोई ड्राइवर खाता नहीं मिला"}
+            </h2>
+          </div>
+        ) : portalDriver.vehicleSpec ? (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
             <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.success }}>
               <CheckCircle2 size={26} color="#FFFFFF" />
@@ -2433,23 +2454,16 @@ function DriverKycPortal({ lang, drivers, vehicleTypes, addVehicleType }) {
               {lang === "en" ? "Nothing more to do here — you can close this page." : lang === "mr" ? "इथे आणखी काही करायचे नाही — तुम्ही हे पेज बंद करू शकता." : "यहां और कुछ करने की जरूरत नहीं — आप यह पेज बंद कर सकते हैं।"}
             </p>
           </div>
-        ) : portalAuth.verified && !portalDriver ? (
-          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
-              <XCircle size={26} color="#FFFFFF" />
-            </div>
-            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
-              {lang === "en" ? "No driver account found" : lang === "mr" ? "कोणतेही ड्रायव्हर खाते सापडले नाही" : "कोई ड्राइवर खाता नहीं मिला"}
-            </h2>
-            <p className="text-xs" style={{ color: C.inkSoft }}>
-              {lang === "en" ? "This number doesn't have a driver account yet — please sign up in the Apna Transport app first." : lang === "mr" ? "या नंबरचे अजून कोणतेही ड्रायव्हर खाते नाही — कृपया आधी अपना ट्रान्सपोर्ट अ‍ॅपमध्ये साइन अप करा." : "इस नंबर से अभी तक कोई ड्राइवर खाता नहीं है — कृपया पहले अपना ट्रांसपोर्ट ऐप में साइन अप करें।"}
-            </p>
-          </div>
         ) : (
+          // driver is already known + logged in, just hasn't submitted
+          // KYC yet — verified is a constant true (no OTP screens ever
+          // render), forceMode="signup" routes straight to whichever
+          // form applies (personal details, if somehow still missing,
+          // then DriverKyc) without DriverOnboarding's own "not
+          // registered — sign up now" interstitial in between.
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth} recaptchaContainerId="recaptcha-driver-kyc-portal"
-            verified={portalAuth.verified} forceMode="login"
-            onOtpVerified={(mobile) => setPortalAuth({ verified: true, mobile })}
-            onLogout={logoutPortal}
+            verified={true} forceMode="signup"
+            onOtpVerified={() => {}} onLogout={() => {}}
             driver={portalDriver} setDriver={setPortalDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
         )}
       </div>
