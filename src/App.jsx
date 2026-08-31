@@ -3331,6 +3331,16 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   if (b.status === "Bidding") {
     const sortedBids = b.bids.filter((x) => !x.paused).sort((x, y) => x.amount - y.amount || (y.hours || 0) - (x.hours || 0));
     const selectedId = selectedBid;
+    // Once the customer taps a bid, it jumps to the top of the list — makes
+    // the screen visibly "settle" around their choice instead of leaving it
+    // wherever price-sorting happened to place it (which could be buried in
+    // the scrollable rest, far from the Book button that now appears right
+    // under it). The true lowest-price bid still keeps its "Lowest bid" tag
+    // even if it's no longer the one on top.
+    const displayBids = selectedId
+      ? [...sortedBids.filter((x) => x.id === selectedId), ...sortedBids.filter((x) => x.id !== selectedId)]
+      : sortedBids;
+    const lowestBidId = sortedBids[0]?.id;
     // Each bid comes from a driver who may have a different vehicle type,
     // so the vehicle shown per bid is that driver's own — never the load's
     // pre-suggested type, since the customer never confirmed one.
@@ -3411,10 +3421,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               </div>
             ) : (
               <div className="space-y-2">
-                {bidRow(sortedBids[0], true)}
-                {sortedBids.length > 1 && (
+                {bidRow(displayBids[0], displayBids[0].id === lowestBidId)}
+                {displayBids.length > 1 && (
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
-                    {sortedBids.slice(1).map((bid) => bidRow(bid, false))}
+                    {displayBids.slice(1).map((bid) => bidRow(bid, bid.id === lowestBidId))}
                   </div>
                 )}
               </div>
