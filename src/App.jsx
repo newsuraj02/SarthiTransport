@@ -6744,6 +6744,16 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   };
 
   const recent = [...expenses].sort((a, b) => (a.date < b.date ? 1 : -1));
+  // Expense History below shows every month ever recorded, but the total
+  // tile above only counts the current month — without some marker, the two
+  // numbers look inconsistent even though each is correct for what it says.
+  // A month divider (recent is already sorted newest-first, so same-month
+  // entries are always consecutive) makes the boundary visible instead.
+  const currentMonthKey = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+  const monthLabel = (key) => {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { month: "long", year: "numeric" });
+  };
 
   return (
     <div>
@@ -6776,25 +6786,40 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
           <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No expenses recorded yet." : lang === "mr" ? "अजून कोणताही खर्च नोंदवला गेला नाही." : "अभी तक कोई खर्च दर्ज नहीं हुआ।"}</p>
         ) : (
           <div className="space-y-2">
-            {recent.map((e) => {
-              const cat = categories.find((c) => c.hi === e.category || c.en === e.category);
-              return (
-                <div key={e.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{e.note || (cat ? (lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi) : e.category)}</div>
-                      <div className="text-[10px]" style={{ color: C.inkSoft }}>{e.date} · {cat ? `${cat.icon} ${lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi}` : e.category}</div>
+            {(() => {
+              let lastMonthKey = null;
+              return recent.map((e) => {
+                const monthKey = (e.date || "").slice(0, 7);
+                const showDivider = monthKey !== lastMonthKey;
+                lastMonthKey = monthKey;
+                const isCurrentMonth = monthKey === currentMonthKey;
+                const cat = categories.find((c) => c.hi === e.category || c.en === e.category);
+                return (
+                  <React.Fragment key={e.id}>
+                    {showDivider && (
+                      <div className="text-[11px] font-bold pt-1.5 pb-0.5" style={{ color: isCurrentMonth ? C.marigoldDeep : C.inkSoft }}>
+                        {monthLabel(monthKey)}
+                        {isCurrentMonth ? (lang === "en" ? " — counted in the total above" : lang === "mr" ? " — वरील एकूणमध्ये समाविष्ट" : " — ऊपर के कुल में शामिल") : ""}
+                      </div>
+                    )}
+                    <div className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{e.note || (cat ? (lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi) : e.category)}</div>
+                          <div className="text-[10px]" style={{ color: C.inkSoft }}>{e.date} · {cat ? `${cat.icon} ${lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi}` : e.category}</div>
+                        </div>
+                        <div className="text-sm font-bold shrink-0" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(e.amount)}</div>
+                      </div>
+                      {e.photoUrl && (
+                        <a href={e.photoUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold mt-1.5 inline-flex items-center gap-1" style={{ color: C.success }}>
+                          <CheckCircle2 size={11} /> {lang === "en" ? "Photo secured" : lang === "mr" ? "फोटो सुरक्षित" : "फोटो सुरक्षित"}
+                        </a>
+                      )}
                     </div>
-                    <div className="text-sm font-bold shrink-0" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(e.amount)}</div>
-                  </div>
-                  {e.photoUrl && (
-                    <a href={e.photoUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold mt-1.5 inline-flex items-center gap-1" style={{ color: C.success }}>
-                      <CheckCircle2 size={11} /> {lang === "en" ? "Photo secured" : lang === "mr" ? "फोटो सुरक्षित" : "फोटो सुरक्षित"}
-                    </a>
-                  )}
-                </div>
-              );
-            })}
+                  </React.Fragment>
+                );
+              });
+            })()}
           </div>
         )}
       </div>
