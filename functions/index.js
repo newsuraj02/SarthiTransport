@@ -264,30 +264,30 @@ exports.checkTrialExpirations = onSchedule({ schedule: "0 0 * * *", timeZone: "A
   await Promise.all(updates);
 });
 
-// Runs hourly. A customer's load that has sat in "Bidding" for 12+ hours
-// with zero driver bids gets auto-cancelled -- keeps Admin's "awaiting
-// bids" tile meaningful (a stale, unbid load isn't actually awaiting
-// anything) and frees the customer to re-post instead of it quietly
-// rotting forever. Soft-cancels via the same status flip a manual cancel
-// uses (not a delete), so it still shows up in Admin's Cancelled
-// tally/history if anyone needs to look into it later.
-const STALE_BID_HOURS = 12;
+// Runs hourly. A customer's load that has sat in "Bidding" for 6+ hours
+// gets deleted outright -- covers both cases: zero bids at all, or bids
+// came in but the customer never accepted one. Either way, 6 hours with
+// nothing resolved means it's dead weight, not something still "awaiting
+// bids" on Admin's tile. This is a hard delete (not the status-flip a
+// manual cancel uses) -- the doc is gone, nothing left in Admin's
+// Cancelled history for it, per explicit product decision. Frees the
+// customer to re-post instead of it quietly rotting forever.
+const STALE_BID_HOURS = 6;
 exports.expireStaleLoads = onSchedule({ schedule: "0 * * * *", timeZone: "Asia/Kolkata" }, async () => {
   const cutoff = Date.now() - STALE_BID_HOURS * 60 * 60 * 1000;
   const snap = await db.collection("bookings").where("status", "==", "Bidding").get();
-  const updates = [];
+  const deletions = [];
   snap.forEach((doc) => {
     const b = doc.data();
-    if ((b.bids || []).length > 0) return;
     if (!b.createdAt?.toMillis || b.createdAt.toMillis() > cutoff) return;
-    updates.push(
-      doc.ref.update({ status: "Cancelled" }).then(async () => {
+    deletions.push(
+      doc.ref.delete().then(async () => {
         const token = await getCustomerToken(b.customerMobile);
-        await sendPush(token, "Load cancelled", `No driver bid on your ${b.pickup} → ${b.drop} load within 12 hours, so it was auto-cancelled. Feel free to post it again.`);
+        await sendPush(token, "Load removed", `No driver was confirmed for your ${b.pickup} → ${b.drop} load within 6 hours, so it was removed. Feel free to post it again.`);
       })
     );
   });
-  await Promise.all(updates);
+  await Promise.all(deletions);
 });
 
 // Admin's "Send Notification" screen (AdminNotify) -- sends a real FCM push
