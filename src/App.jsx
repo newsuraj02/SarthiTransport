@@ -3339,7 +3339,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       const bidDriver = drivers.find((d) => d.name === bid.driverName);
       const bidVehicleType = VEHICLES.find((vt) => vt.key === bidDriver?.vehicleSpec?.type);
       return (
-        <div key={bid.id} onClick={() => setSelectedBid(bid.id)}
+        <React.Fragment key={bid.id}>
+        <div onClick={() => setSelectedBid(bid.id)}
           className="w-full text-left rounded-xl p-3 relative cursor-pointer"
           style={{ background: C.paper, border: `${isSelected ? 2.5 : 1.5}px solid ${isSelected ? C.marigoldDeep : isLowest ? C.success : C.marigoldDeep}` }}>
           {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : lang === "mr" ? "सर्वात कमी बोली" : "सबसे कम बोली"}</span>}
@@ -3377,6 +3378,20 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             </button>
           </div>
         </div>
+        {isSelected && (
+          <>
+            <button onClick={() => {
+              const err = acceptBid(b.id, bid.id);
+              if (err) setAcceptError(err);
+              else { setSelectedBid(null); setAcceptError(""); onBidAccepted?.(b); }
+            }}
+              className="w-full rounded-lg py-3.5 font-bold text-base mt-2 text-white" style={{ background: C.success }}>
+              {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"}
+            </button>
+            {acceptError && <div className="text-xs font-bold mt-1" style={{ color: C.safety }}>{acceptError}</div>}
+          </>
+        )}
+        </React.Fragment>
       );
     };
     return (
@@ -3405,17 +3420,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               </div>
             )}
 
-            {acceptError && <div className="text-xs font-bold mt-2" style={{ color: C.safety }}>{acceptError}</div>}
-            {selectedId && (
-              <button onClick={() => {
-                const err = acceptBid(b.id, selectedId);
-                if (err) setAcceptError(err);
-                else { setSelectedBid(null); setAcceptError(""); onBidAccepted?.(b); }
-              }}
-                className="w-full rounded-lg py-3.5 font-bold text-base mt-2 text-white" style={{ background: C.success }}>
-                {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"}
-              </button>
-            )}
             {sortedBids.length === 0 && (
               <div className="flex justify-end mt-2">
                 <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-sm font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel load" : lang === "mr" ? "लोड रद्द करा" : "लोड रद्द करें"}</button>
