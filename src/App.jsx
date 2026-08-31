@@ -6701,6 +6701,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   const [saveError, setSaveError] = useState("");
 
   const now = new Date();
+  const totalAllTime = expenses.reduce((s, e) => s + (e.amount || 0), 0);
   const totalThisMonth = expenses.filter((e) => {
     const d = e.date ? new Date(e.date) : null;
     return d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
@@ -6776,8 +6777,11 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
-        <StatTile label={lang === "en" ? "Total expenses (this month)" : lang === "mr" ? "एकूण खर्च (या महिन्यात)" : "कुल खर्च (इस महीने)"} value={fmt(totalThisMonth)} color={C.ink} />
-        <StatTile label={lang === "en" ? "Secured receipts" : lang === "mr" ? "सुरक्षित पावत्या" : "सुरक्षित रसीदें"} value={`${receiptsCount} ${lang === "en" ? "bills" : lang === "mr" ? "बिल" : "बिल"}`} color={C.marigoldDeep} />
+        <StatTile label={lang === "en" ? "Total expense (all time)" : lang === "mr" ? "एकूण खर्च (सर्व वेळ)" : "कुल खर्च (सभी समय)"} value={fmt(totalAllTime)} color={C.ink} />
+        <StatTile label={lang === "en" ? "Monthly expense" : lang === "mr" ? "मासिक खर्च" : "मासिक खर्च"} value={fmt(totalThisMonth)} color={C.marigoldDeep} />
+        <div className="col-span-2">
+          <StatTile label={lang === "en" ? "Bills" : lang === "mr" ? "बिले" : "बिल"} value={`${receiptsCount} ${lang === "en" ? "bills" : lang === "mr" ? "बिल" : "बिल"}`} color={C.success} />
+        </div>
       </div>
 
       <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
