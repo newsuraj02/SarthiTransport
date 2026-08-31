@@ -3356,7 +3356,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{vehicleLabel(bidVehicleType, lang) || bid.driverName}</div>
-              <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{bid.distanceKm} {lang === "en" ? "km away" : lang === "mr" ? "किमी दूर" : "किमी दूर"}</div>
+              {bid.distanceKm != null && <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{bid.distanceKm} {lang === "en" ? "km away" : lang === "mr" ? "किमी दूर" : "किमी दूर"}</div>}
               {bidVehicleType && <div className="text-[9px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{vehicleCapacity(bidVehicleType, lang)}</div>}
             </div>
             <div className="text-right shrink-0">
@@ -4068,12 +4068,22 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   const lowestOverall = allAmounts.length ? Math.min(...allAmounts) : null;
   const isMineHighest = myBid && allAmounts.length > 1 && myBid.amount === Math.max(...allAmounts) && myBid.amount !== lowestOverall;
 
+  // Real straight-line distance from this driver's last known position to
+  // the pickup point — was a random 1-6km placeholder before, which is why
+  // two equally-placed drivers could show different "X km away" numbers on
+  // the customer's bid list. null (not a fake number) when either location
+  // is missing (e.g. an Advance load's driver hasn't gone Online yet) so
+  // the customer's screen can just omit the line instead of showing junk.
+  const distanceKm = (driver.lastKnownLocation && load.pickupLat != null && load.pickupLng != null)
+    ? Math.round(haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng) * 10) / 10
+    : null;
+
   const submitBid = () => {
     if (!canSubmit || myBid || walletShortfall) return;
     const err = addBid(load.id, {
       driverName: driver.name, amount: Number(amount),
       hours: Number(allowedHours), extraHourRate: Number(extraHourRate),
-      rating: driver.rating || 4.6, distanceKm: 1 + Math.floor(Math.random() * 6),
+      rating: driver.rating || 4.6, distanceKm,
     });
     if (err) { setBidError(err); return; }
     setBidError("");
