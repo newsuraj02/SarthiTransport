@@ -10,7 +10,6 @@ const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
-const { getAuth } = require("firebase-admin/auth");
 
 initializeApp();
 const db = getFirestore();
@@ -412,109 +411,4 @@ exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [EXOTEL_SI
   });
 
   return { ok: true };
-});
-
-// ---------------- Custom OTP login (replaces Firebase Phone Auth) ----------------
-// A from-scratch phone-verification flow using Exotel's SMS API instead of
-// Firebase's own signInWithPhoneNumber -- built specifically to drop the
-// "I'm not a robot" reCAPTCHA challenge that flow requires, since that
-// decision is made by Google's servers and isn't configurable from app
-// code. Two callables: sendCustomOtp (generates + texts a code) and
-// verifyCustomOtp (checks it, then signs the user in for real).
-//
-// NOT WIRED UP YET -- nothing in src/App.jsx calls these two functions
-// yet (that frontend work is paused pending a decision on whether to keep
-// real phone verification at all -- see conversation history). Deployed or
-// not, they sit inert until something actually calls them. Before wiring
-// the frontend to use these for real, still need:
-//   1. Exotel's OTP SMS DLT template is registered and approved (India
-//      regulation -- without it, every send below fails outright), and
-//   2. EXOTEL_SMS_SENDER_ID is set via `firebase functions:secrets:set`
-//      to that approved DLT sender ID (a 6-char header, NOT a phone
-//      number -- different from EXOTEL_CALLER_ID used for masked calls),
-//      and
-//   3. This has been tested end-to-end on a real phone for both Customer
-//      and Driver, signup and login.
-// Deploying the functions themselves is harmless either way -- they sit
-// unused until the frontend flag calls them.
-const EXOTEL_SMS_SENDER_ID = defineSecret("EXOTEL_SMS_SENDER_ID");
-
-// Same account as the masked-call secrets above, since this is the same
-// Exotel account -- just a different product (SMS vs. Connect/voice).
-exports.sendCustomOtp = onCall({ region: "asia-south1", secrets: [EXOTEL_SID, EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_SMS_SENDER_ID] }, async (request) => {
-  const { mobile, role } = request.data || {};
-  if (!/^[0-9]{10}$/.test(mobile || "")) throw new HttpsError("invalid-argument", "A valid 10-digit mobile number is required.");
-  const toRole = role === "driver" ? "driver" : "customer";
-  const key = `${toRole}_${mobile}`;
-
-  // Rate limit: max 5 sends per mobile+role per rolling hour. This exists
-  // specifically to replace the abuse protection Google's reCAPTCHA gave
-  // for free -- without it, a script could hammer this endpoint with
-  // random numbers and run up the SMS bill with nothing to stop it.
-  const limitRef = db.collection("otpRateLimits").doc(key);
-  const now = Date.now();
-  const limitSnap = await limitRef.get();
-  const limitData = limitSnap.exists ? limitSnap.data() : null;
-  if (limitData && now - limitData.windowStart < 60 * 60 * 1000) {
-    if (limitData.count >= 5) throw new HttpsError("resource-exhausted", "Too many attempts — please wait a while before trying again.");
-    await limitRef.update({ count: limitData.count + 1 });
-  } else {
-    await limitRef.set({ windowStart: now, count: 1 });
-  }
-
-  const sid = EXOTEL_SID.value(), apiKey = EXOTEL_API_KEY.value(), apiToken = EXOTEL_API_TOKEN.value(), senderId = EXOTEL_SMS_SENDER_ID.value();
-  if (!sid || !apiKey || !apiToken || !senderId) return { ok: false, reason: "not_configured" };
-
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  // 5-minute expiry, attempts reset per new send so a stale wrong-guess
-  // count from an earlier code doesn't carry over.
-  await db.collection("otpCodes").doc(key).set({ code, expiresAt: now + 5 * 60 * 1000, attempts: 0 });
-
-  const basicAuth = Buffer.from(`${apiKey}:${apiToken}`).toString("base64");
-  const body = new URLSearchParams({
-    From: senderId, To: `+91${mobile}`,
-    Body: `${code} is your Apna Transport verification code. Valid for 5 minutes. Do not share this with anyone.`,
-  });
-  try {
-    const res = await fetch(`https://api.exotel.com/v1/Accounts/${sid}/Sms/send.json`, {
-      method: "POST",
-      headers: { Authorization: `Basic ${basicAuth}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      console.error("[customOtp] Exotel rejected the send:", data);
-      return { ok: false, reason: "sms_failed" };
-    }
-  } catch (e) {
-    console.error("[customOtp] Exotel SMS request failed:", e.message);
-    return { ok: false, reason: "sms_failed" };
-  }
-  return { ok: true };
-});
-
-exports.verifyCustomOtp = onCall({ region: "asia-south1" }, async (request) => {
-  const { mobile, code, role } = request.data || {};
-  if (!/^[0-9]{10}$/.test(mobile || "") || !code) throw new HttpsError("invalid-argument", "mobile and code are required.");
-  const toRole = role === "driver" ? "driver" : "customer";
-  const key = `${toRole}_${mobile}`;
-  const ref = db.collection("otpCodes").doc(key);
-  const snap = await ref.get();
-  if (!snap.exists) return { ok: false, reason: "not_found" };
-  const data = snap.data();
-  if (Date.now() > data.expiresAt) { await ref.delete(); return { ok: false, reason: "expired" }; }
-  if ((data.attempts || 0) >= 5) { await ref.delete(); return { ok: false, reason: "too_many_attempts" }; }
-  if (data.code !== String(code)) {
-    await ref.update({ attempts: (data.attempts || 0) + 1 });
-    return { ok: false, reason: "wrong_code" };
-  }
-  await ref.delete();
-  // Mint a custom token carrying the exact same phone_number claim shape
-  // real Firebase Phone Auth sets on request.auth.token -- firestore.rules'
-  // isOwnPhone() keeps working completely unchanged, no rules migration
-  // needed. uid is namespaced by role since this app already keeps
-  // customer/driver/admin as three separate named Firebase Auth apps.
-  const uid = `${toRole}_${mobile}`;
-  const token = await getAuth().createCustomToken(uid, { phone_number: `+91${mobile}` });
-  return { ok: true, token };
 });
