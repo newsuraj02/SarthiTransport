@@ -139,34 +139,19 @@ export async function sendAdminNotification(target, message, audience = "driver"
   }
 }
 
-// Forgot-PIN recovery (see functions/index.js) — texts a 6-digit code via
-// Exotel SMS to a mobile number that already has a PIN account. Always
-// resolves (never throws) with { ok, reason? }; reason "not_configured"
-// means Exotel's SMS secrets/DLT sender aren't set up on the backend yet,
-// "not_found" means this number+role has no PIN account to recover.
-export async function sendForgotPinOtp(mobile, role) {
+// Forgot-PIN recovery, final step (see functions/index.js). Must be called
+// while already signed in via a fresh real Firebase Phone Auth session
+// (CustomerOnboarding/DriverOnboarding's Forgot PIN flow does the
+// signInWithPhoneNumber + OTP confirm first) -- the function trusts that
+// session's phone_number claim as proof, no separate code passed here.
+// Sets newPin as that mobile+role's PIN account password (creating the
+// account if it never had one). Always resolves with { ok, reason? }.
+export async function resetPinAfterPhoneVerify(role, newPin) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
-    const call = httpsCallable(functions, "sendForgotPinOtp");
-    const result = await call({ mobile, role });
-    return result.data;
-  } catch (e) {
-    console.error("[forgotPin] send callable failed", e);
-    return { ok: false, reason: "error" };
-  }
-}
-
-// Checks the code from sendForgotPinOtp and sets newPin as that account's
-// password in one step — the caller still has to actually sign in with it
-// afterward (this doesn't return a session). Always resolves with
-// { ok, reason? }.
-export async function resetPinWithOtp(mobile, role, code, newPin) {
-  const functions = functionsByRole[activeRole];
-  if (!functions) return { ok: false, reason: "not_configured" };
-  try {
-    const call = httpsCallable(functions, "resetPinWithOtp");
-    const result = await call({ mobile, role, code, newPin });
+    const call = httpsCallable(functions, "resetPinAfterPhoneVerify");
+    const result = await call({ role, newPin });
     return result.data;
   } catch (e) {
     console.error("[forgotPin] reset callable failed", e);

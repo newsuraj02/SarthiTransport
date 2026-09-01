@@ -12,9 +12,9 @@ import {
 import { increment, arrayUnion, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
-import { signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
+import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall, sendAdminNotification, pinAuthEmail, sendForgotPinOtp, resetPinWithOtp } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall, sendAdminNotification, pinAuthEmail, resetPinAfterPhoneVerify } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Bright/high-visibility flat palette — legible in direct outdoor sunlight
@@ -1608,16 +1608,22 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
-  // Forgot-PIN — reachable only from Login's PIN screen. A separate small
-  // state group since it's a real SMS round-trip (see functions/index.js:
-  // sendForgotPinOtp/resetPinWithOtp), not just local UI.
+  // Forgot-PIN — reachable only from Login's PIN screen. Reuses Firebase's
+  // own Phone Auth (reCAPTCHA + real SMS OTP) as the recovery proof instead
+  // of a custom SMS path — it already works today with no DLT template to
+  // wait on, and showing the "I'm not a robot" check on this one rare
+  // recovery path costs far less than showing it on every login (which is
+  // the whole reason PIN login exists). "forgotStage" tracks its own
+  // 2-step flow: verify via real OTP, then set a new PIN.
   const [forgotOpen, setForgotOpen] = useState(false);
-  const [forgotCode, setForgotCode] = useState("");
+  const [forgotStage, setForgotStage] = useState("otp"); // "otp" | "newPin"
+  const [forgotOtp, setForgotOtp] = useState("");
   const [forgotNewPin, setForgotNewPin] = useState("");
   const [forgotNewPinConfirm, setForgotNewPinConfirm] = useState("");
   const [forgotSending, setForgotSending] = useState(false);
   const [forgotError, setForgotError] = useState("");
-  const [forgotDone, setForgotDone] = useState(false);
+  const forgotConfirmationRef = useRef(null);
+  const forgotRecaptchaRef = useRef(null);
 
   const otpInputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center placeholder:text-[#C7B8B3]";
   const otpInputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
@@ -1691,42 +1697,62 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
     setSending(false);
   };
 
-  const sendForgotCode = async () => {
-    if (mobile.length !== 10 || forgotSending) return;
-    setForgotSending(true);
-    setForgotError("");
-    const result = await sendForgotPinOtp(mobile, "customer");
-    setForgotSending(false);
-    if (!result.ok) {
-      setForgotError(
-        result.reason === "not_found"
-          ? (lang === "en" ? "No account found for this number." : lang === "mr" ? "या नंबरसाठी कोणतेही खाते सापडले नाही." : "इस नंबर के लिए कोई खाता नहीं मिला।")
-          : result.reason === "not_configured"
-          ? (lang === "en" ? "PIN recovery isn't set up yet — please contact support." : lang === "mr" ? "PIN रिकव्हरी अजून सुरू नाही — कृपया सपोर्टशी संपर्क करा." : "PIN रिकवरी अभी शुरू नहीं है — कृपया सपोर्ट से संपर्क करें।")
-          : (lang === "en" ? "Couldn't send the code — try again." : lang === "mr" ? "कोड पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "कोड नहीं भेज सका — फिर कोशिश करें।")
-      );
-      return;
+  const getForgotRecaptcha = () => {
+    if (!forgotRecaptchaRef.current) {
+      forgotRecaptchaRef.current = new RecaptchaVerifier(authInstance, "recaptcha-forgot-pin-customer", { size: "invisible" });
     }
-    setForgotOpen(true);
+    return forgotRecaptchaRef.current;
   };
 
-  const submitForgotReset = async () => {
-    if (forgotCode.length !== 6 || forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
+  const openForgotPin = async () => {
+    if (mobile.length !== 10 || forgotSending || !authInstance) return;
     setForgotSending(true);
     setForgotError("");
-    const result = await resetPinWithOtp(mobile, "customer", forgotCode, forgotNewPin);
+    try {
+      forgotConfirmationRef.current = await signInWithPhoneNumber(authInstance, "+91" + mobile, getForgotRecaptcha());
+      setForgotOtp("");
+      setForgotStage("otp");
+      setForgotOpen(true);
+    } catch (e) {
+      console.error(e);
+      try { forgotRecaptchaRef.current?.clear(); } catch { /* already gone */ }
+      forgotRecaptchaRef.current = null;
+      setForgotError(
+        e?.code === "auth/too-many-requests"
+          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : lang === "mr" ? "खूप जास्त प्रयत्न — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
+          : (lang === "en" ? "Couldn't send OTP — try again." : lang === "mr" ? "OTP पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "OTP नहीं भेज सका — फिर कोशिश करें।")
+      );
+    }
+    setForgotSending(false);
+  };
+
+  const verifyForgotOtp = async () => {
+    if (forgotOtp.length !== 6 || !forgotConfirmationRef.current || forgotSending) return;
+    setForgotSending(true);
+    setForgotError("");
+    try {
+      await forgotConfirmationRef.current.confirm(forgotOtp);
+      setForgotStage("newPin");
+    } catch (e) {
+      console.error(e);
+      setForgotError(lang === "en" ? "Incorrect OTP — try again." : lang === "mr" ? "चुकीचा OTP — पुन्हा प्रयत्न करा." : "गलत OTP — फिर कोशिश करें।");
+    }
+    setForgotSending(false);
+  };
+
+  const submitForgotNewPin = async () => {
+    if (forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
+    setForgotSending(true);
+    setForgotError("");
+    const result = await resetPinAfterPhoneVerify("customer", forgotNewPin);
     setForgotSending(false);
     if (!result.ok) {
-      setForgotError(
-        result.reason === "wrong_code" ? (lang === "en" ? "Incorrect code — try again." : lang === "mr" ? "चुकीचा कोड — पुन्हा प्रयत्न करा." : "गलत कोड — फिर कोशिश करें।")
-        : result.reason === "expired" ? (lang === "en" ? "Code expired — request a new one." : lang === "mr" ? "कोडची मुदत संपली — नवीन मागवा." : "कोड की समयसीमा समाप्त — नया मंगवाएं।")
-        : result.reason === "too_many_attempts" ? (lang === "en" ? "Too many wrong attempts — request a new code." : lang === "mr" ? "खूप चुकीचे प्रयत्न — नवीन कोड मागवा." : "बहुत गलत कोशिशें — नया कोड मंगवाएं।")
-        : (lang === "en" ? "Couldn't reset — try again." : lang === "mr" ? "रीसेट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "रीसेट नहीं हो सका — फिर कोशिश करें।")
-      );
+      setForgotError(lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
       return;
     }
-    setForgotDone(true);
-    setPin(""); setForgotCode(""); setForgotNewPin(""); setForgotNewPinConfirm("");
+    // Already phone-verified for real just above -- straight into the app,
+    // no separate re-login with the new PIN needed.
+    onOtpVerified(mobile);
   };
 
   const submitProfile = async () => {
@@ -1886,22 +1912,27 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
               </button>
             </div>
           ) : forgotOpen ? (
-            forgotDone ? (
-              <div className="space-y-3 text-center">
-                <CheckCircle2 size={32} color={C.success} className="mx-auto" />
-                <p className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "PIN reset! Please login with your new PIN." : lang === "mr" ? "PIN रीसेट झाला! कृपया नवीन PIN ने लॉगिन करा." : "PIN रीसेट हो गया! कृपया नए PIN से लॉगिन करें।"}</p>
-                <button onClick={() => { setForgotOpen(false); setForgotDone(false); }} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
-                  {lang === "en" ? "Back to Login" : lang === "mr" ? "लॉगिनवर परत जा" : "लॉगिन पर वापस जाएं"}
+            forgotStage === "otp" ? (
+              <div className="space-y-3">
+                <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to +91${mobile} to verify it's really you.` : lang === "mr" ? `तुम्हीच आहात याची खात्री करण्यासाठी +91${mobile} वर OTP पाठवला.` : `यह सच में आप हैं यह जांचने के लिए +91${mobile} पर OTP भेजा गया।`}</p>
+                <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                  <ShieldCheck size={16} color={C.inkSoft} />
+                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={forgotOtp}
+                    onChange={(e) => { setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                </div>
+                {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
+                <button onClick={verifyForgotOtp} disabled={forgotOtp.length !== 6 || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotOtp.length === 6 && !forgotSending ? C.marigold : "#E0E0E0", color: forgotOtp.length === 6 && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  {forgotSending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : lang === "mr" ? "व्हेरिफाय करा" : "वेरीफाई करें")}
                 </button>
+                <div className="flex items-center justify-between">
+                  <button onClick={() => { setForgotOpen(false); setForgotError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}</button>
+                  <button onClick={openForgotPin} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : lang === "mr" ? "OTP पुन्हा पाठवा" : "OTP दोबारा भेजें"}</button>
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `Code sent to +91${mobile}. Enter it below with your new PIN.` : lang === "mr" ? `+91${mobile} वर कोड पाठवला. खाली नवीन PIN सह टाका.` : `+91${mobile} पर कोड भेजा गया। नीचे नए PIN के साथ डालें।`}</p>
-                <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                  <ShieldCheck size={16} color={C.inkSoft} />
-                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotCode ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={forgotCode}
-                    onChange={(e) => { setForgotCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
-                </div>
+                <p className="text-[11px] font-semibold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 6-digit PIN" : lang === "mr" ? "नवीन 6-अंकी PIN" : "नया 6-अंकों का PIN"}
                   value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
@@ -1910,11 +1941,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
                   <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
                 )}
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
-                <button onClick={submitForgotReset} disabled={forgotCode.length !== 6 || forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
-                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotCode.length === 6 && forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotCode.length === 6 && forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
-                  {forgotSending ? (lang === "en" ? "Resetting..." : lang === "mr" ? "रीसेट होत आहे..." : "रीसेट हो रहा है...") : (lang === "en" ? "Reset PIN" : lang === "mr" ? "PIN रीसेट करा" : "PIN रीसेट करें")}
+                <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  {forgotSending ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें")}
                 </button>
-                <button onClick={() => { setForgotOpen(false); setForgotError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}</button>
               </div>
             )
           ) : (
@@ -1928,12 +1958,13 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
               </button>
               <div className="flex items-center justify-between">
                 <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
-                <button onClick={sendForgotCode} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{forgotSending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Forgot PIN?" : lang === "mr" ? "PIN विसरलात?" : "PIN भूल गए?")}</button>
+                <button onClick={openForgotPin} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{forgotSending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Forgot PIN?" : lang === "mr" ? "PIN विसरलात?" : "PIN भूल गए?")}</button>
               </div>
               {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
             </div>
           )}
         </div>
+        <div id="recaptcha-forgot-pin-customer" />
       </div>
     );
   }
@@ -2039,14 +2070,17 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   const [error, setError] = useState("");
 
   // Forgot-PIN — reachable only from Login's PIN screen. See
-  // CustomerOnboarding's identical block for the full explanation.
+  // CustomerOnboarding's identical block for the full explanation (reuses
+  // real Firebase Phone Auth as the recovery proof).
   const [forgotOpen, setForgotOpen] = useState(false);
-  const [forgotCode, setForgotCode] = useState("");
+  const [forgotStage, setForgotStage] = useState("otp"); // "otp" | "newPin"
+  const [forgotOtp, setForgotOtp] = useState("");
   const [forgotNewPin, setForgotNewPin] = useState("");
   const [forgotNewPinConfirm, setForgotNewPinConfirm] = useState("");
   const [forgotSending, setForgotSending] = useState(false);
   const [forgotError, setForgotError] = useState("");
-  const [forgotDone, setForgotDone] = useState(false);
+  const forgotConfirmationRef = useRef(null);
+  const forgotRecaptchaRef = useRef(null);
 
   const otpInputCls = "w-full rounded-lg py-3 px-3 text-sm outline-none text-center placeholder:text-[#C7B8B3]";
   const otpInputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
@@ -2133,42 +2167,62 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     setSending(false);
   };
 
-  const sendForgotCode = async () => {
-    if (mobile.length !== 10 || forgotSending) return;
-    setForgotSending(true);
-    setForgotError("");
-    const result = await sendForgotPinOtp(mobile, "driver");
-    setForgotSending(false);
-    if (!result.ok) {
-      setForgotError(
-        result.reason === "not_found"
-          ? (lang === "en" ? "No account found for this number." : lang === "mr" ? "या नंबरसाठी कोणतेही खाते सापडले नाही." : "इस नंबर के लिए कोई खाता नहीं मिला।")
-          : result.reason === "not_configured"
-          ? (lang === "en" ? "PIN recovery isn't set up yet — please contact support." : lang === "mr" ? "PIN रिकव्हरी अजून सुरू नाही — कृपया सपोर्टशी संपर्क करा." : "PIN रिकवरी अभी शुरू नहीं है — कृपया सपोर्ट से संपर्क करें।")
-          : (lang === "en" ? "Couldn't send the code — try again." : lang === "mr" ? "कोड पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "कोड नहीं भेज सका — फिर कोशिश करें।")
-      );
-      return;
+  const getForgotRecaptcha = () => {
+    if (!forgotRecaptchaRef.current) {
+      forgotRecaptchaRef.current = new RecaptchaVerifier(authInstance, "recaptcha-forgot-pin-driver", { size: "invisible" });
     }
-    setForgotOpen(true);
+    return forgotRecaptchaRef.current;
   };
 
-  const submitForgotReset = async () => {
-    if (forgotCode.length !== 6 || forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
+  const openForgotPin = async () => {
+    if (mobile.length !== 10 || forgotSending || !authInstance) return;
     setForgotSending(true);
     setForgotError("");
-    const result = await resetPinWithOtp(mobile, "driver", forgotCode, forgotNewPin);
+    try {
+      forgotConfirmationRef.current = await signInWithPhoneNumber(authInstance, "+91" + mobile, getForgotRecaptcha());
+      setForgotOtp("");
+      setForgotStage("otp");
+      setForgotOpen(true);
+    } catch (e) {
+      console.error(e);
+      try { forgotRecaptchaRef.current?.clear(); } catch { /* already gone */ }
+      forgotRecaptchaRef.current = null;
+      setForgotError(
+        e?.code === "auth/too-many-requests"
+          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : lang === "mr" ? "खूप जास्त प्रयत्न — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
+          : (lang === "en" ? "Couldn't send OTP — try again." : lang === "mr" ? "OTP पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "OTP नहीं भेज सका — फिर कोशिश करें।")
+      );
+    }
+    setForgotSending(false);
+  };
+
+  const verifyForgotOtp = async () => {
+    if (forgotOtp.length !== 6 || !forgotConfirmationRef.current || forgotSending) return;
+    setForgotSending(true);
+    setForgotError("");
+    try {
+      await forgotConfirmationRef.current.confirm(forgotOtp);
+      setForgotStage("newPin");
+    } catch (e) {
+      console.error(e);
+      setForgotError(lang === "en" ? "Incorrect OTP — try again." : lang === "mr" ? "चुकीचा OTP — पुन्हा प्रयत्न करा." : "गलत OTP — फिर कोशिश करें।");
+    }
+    setForgotSending(false);
+  };
+
+  const submitForgotNewPin = async () => {
+    if (forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
+    setForgotSending(true);
+    setForgotError("");
+    const result = await resetPinAfterPhoneVerify("driver", forgotNewPin);
     setForgotSending(false);
     if (!result.ok) {
-      setForgotError(
-        result.reason === "wrong_code" ? (lang === "en" ? "Incorrect code — try again." : lang === "mr" ? "चुकीचा कोड — पुन्हा प्रयत्न करा." : "गलत कोड — फिर कोशिश करें।")
-        : result.reason === "expired" ? (lang === "en" ? "Code expired — request a new one." : lang === "mr" ? "कोडची मुदत संपली — नवीन मागवा." : "कोड की समयसीमा समाप्त — नया मंगवाएं।")
-        : result.reason === "too_many_attempts" ? (lang === "en" ? "Too many wrong attempts — request a new code." : lang === "mr" ? "खूप चुकीचे प्रयत्न — नवीन कोड मागवा." : "बहुत गलत कोशिशें — नया कोड मंगवाएं।")
-        : (lang === "en" ? "Couldn't reset — try again." : lang === "mr" ? "रीसेट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "रीसेट नहीं हो सका — फिर कोशिश करें।")
-      );
+      setForgotError(lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
       return;
     }
-    setForgotDone(true);
-    setPin(""); setForgotCode(""); setForgotNewPin(""); setForgotNewPinConfirm("");
+    // Already phone-verified for real just above -- straight into the app,
+    // no separate re-login with the new PIN needed.
+    onOtpVerified(mobile);
   };
 
   // Fallback completion form (see the "still just a placeholder name"
@@ -2334,22 +2388,27 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
               </button>
             </div>
           ) : forgotOpen ? (
-            forgotDone ? (
-              <div className="space-y-3 text-center">
-                <CheckCircle2 size={32} color={C.success} className="mx-auto" />
-                <p className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "PIN reset! Please login with your new PIN." : lang === "mr" ? "PIN रीसेट झाला! कृपया नवीन PIN ने लॉगिन करा." : "PIN रीसेट हो गया! कृपया नए PIN से लॉगिन करें।"}</p>
-                <button onClick={() => { setForgotOpen(false); setForgotDone(false); }} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
-                  {lang === "en" ? "Back to Login" : lang === "mr" ? "लॉगिनवर परत जा" : "लॉगिन पर वापस जाएं"}
+            forgotStage === "otp" ? (
+              <div className="space-y-3">
+                <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to +91${mobile} to verify it's really you.` : lang === "mr" ? `तुम्हीच आहात याची खात्री करण्यासाठी +91${mobile} वर OTP पाठवला.` : `यह सच में आप हैं यह जांचने के लिए +91${mobile} पर OTP भेजा गया।`}</p>
+                <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                  <ShieldCheck size={16} color={C.inkSoft} />
+                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={forgotOtp}
+                    onChange={(e) => { setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                </div>
+                {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
+                <button onClick={verifyForgotOtp} disabled={forgotOtp.length !== 6 || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotOtp.length === 6 && !forgotSending ? C.marigold : "#E0E0E0", color: forgotOtp.length === 6 && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  {forgotSending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : lang === "mr" ? "व्हेरिफाय करा" : "वेरीफाई करें")}
                 </button>
+                <div className="flex items-center justify-between">
+                  <button onClick={() => { setForgotOpen(false); setForgotError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}</button>
+                  <button onClick={openForgotPin} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : lang === "mr" ? "OTP पुन्हा पाठवा" : "OTP दोबारा भेजें"}</button>
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `Code sent to +91${mobile}. Enter it below with your new PIN.` : lang === "mr" ? `+91${mobile} वर कोड पाठवला. खाली नवीन PIN सह टाका.` : `+91${mobile} पर कोड भेजा गया। नीचे नए PIN के साथ डालें।`}</p>
-                <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                  <ShieldCheck size={16} color={C.inkSoft} />
-                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotCode ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={forgotCode}
-                    onChange={(e) => { setForgotCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
-                </div>
+                <p className="text-[11px] font-semibold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 6-digit PIN" : lang === "mr" ? "नवीन 6-अंकी PIN" : "नया 6-अंकों का PIN"}
                   value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
@@ -2358,11 +2417,10 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
                   <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
                 )}
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
-                <button onClick={submitForgotReset} disabled={forgotCode.length !== 6 || forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
-                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotCode.length === 6 && forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotCode.length === 6 && forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
-                  {forgotSending ? (lang === "en" ? "Resetting..." : lang === "mr" ? "रीसेट होत आहे..." : "रीसेट हो रहा है...") : (lang === "en" ? "Reset PIN" : lang === "mr" ? "PIN रीसेट करा" : "PIN रीसेट करें")}
+                <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  {forgotSending ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें")}
                 </button>
-                <button onClick={() => { setForgotOpen(false); setForgotError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}</button>
               </div>
             )
           ) : (
@@ -2376,12 +2434,13 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
               </button>
               <div className="flex items-center justify-between">
                 <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
-                <button onClick={sendForgotCode} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{forgotSending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Forgot PIN?" : lang === "mr" ? "PIN विसरलात?" : "PIN भूल गए?")}</button>
+                <button onClick={openForgotPin} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{forgotSending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Forgot PIN?" : lang === "mr" ? "PIN विसरलात?" : "PIN भूल गए?")}</button>
               </div>
               {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
             </div>
           )}
         </div>
+        <div id="recaptcha-forgot-pin-driver" />
       </div>
     );
   }
