@@ -33,11 +33,25 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && request.auth.token.admin == true;
     }
-    // Firebase Phone Auth's token carries the verified number as
-    // "+91XXXXXXXXXX"; every customer/driver doc is keyed by the bare
-    // 10-digit number, matching what's passed to signInWithPhoneNumber.
+    // Two ways a session can prove it owns a given mobile number, checked
+    // as an OR so neither migration direction ever locks anyone out:
+    // (1) Firebase Phone Auth's token carries the verified number as
+    //     "+91XXXXXXXXXX" -- the original login method, still valid
+    //     forever for any session that's still signed in this way.
+    // (2) PIN-based login (App.jsx: CustomerOnboarding/DriverOnboarding)
+    //     signs in as a normal email/password account under a synthetic
+    //     "<mobile>@customer.apnatransport.local" or
+    //     "<mobile>@driver.apnatransport.local" email (see
+    //     functions/index.js: pinAuthEmail) -- checked for both roles here
+    //     since the app deliberately lets one phone number hold both a
+    //     customer and a driver account. Every customer/driver doc is
+    //     keyed by the bare 10-digit number either way.
     function isOwnPhone(mobile) {
-      return isSignedIn() && request.auth.token.phone_number == ('+91' + mobile);
+      return isSignedIn() && (
+        request.auth.token.phone_number == ('+91' + mobile) ||
+        request.auth.token.email == (mobile + '@customer.apnatransport.local') ||
+        request.auth.token.email == (mobile + '@driver.apnatransport.local')
+      );
     }
 
     match /vehicleTypes/{id} {

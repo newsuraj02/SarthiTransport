@@ -16,6 +16,19 @@ const firebaseConfig = {
 
 export const hasConfig = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 
+// PIN-based signup/login (CustomerOnboarding/DriverOnboarding in App.jsx)
+// signs a customer/driver in as a normal Firebase email/password account
+// under this synthetic, never-shown "email" built from their mobile number
+// — Firebase Auth requires *some* email/password identity, and this avoids
+// needing a real one. Namespaced by role so the same phone number can hold
+// both a customer and a driver account at once, same as it already could
+// under real Firebase Phone Auth (see the three-named-apps note below).
+// Mirrored server-side in functions/index.js as pinAuthEmail — keep both in
+// sync if this domain/shape ever changes.
+export function pinAuthEmail(mobile, role) {
+  return `${mobile}@${role === "driver" ? "driver" : "customer"}.apnatransport.local`;
+}
+
 // Three separate named Firebase Apps (not one shared default app) so a
 // customer session, a driver session, and an admin session can each hold
 // their own real, phone/email-verified Firebase Auth sign-in at the same
@@ -122,6 +135,41 @@ export async function sendAdminNotification(target, message, audience = "driver"
     return result.data;
   } catch (e) {
     console.error("[adminNotify] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
+// Forgot-PIN recovery (see functions/index.js) — texts a 6-digit code via
+// Exotel SMS to a mobile number that already has a PIN account. Always
+// resolves (never throws) with { ok, reason? }; reason "not_configured"
+// means Exotel's SMS secrets/DLT sender aren't set up on the backend yet,
+// "not_found" means this number+role has no PIN account to recover.
+export async function sendForgotPinOtp(mobile, role) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "sendForgotPinOtp");
+    const result = await call({ mobile, role });
+    return result.data;
+  } catch (e) {
+    console.error("[forgotPin] send callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
+// Checks the code from sendForgotPinOtp and sets newPin as that account's
+// password in one step — the caller still has to actually sign in with it
+// afterward (this doesn't return a session). Always resolves with
+// { ok, reason? }.
+export async function resetPinWithOtp(mobile, role, code, newPin) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "resetPinWithOtp");
+    const result = await call({ mobile, role, code, newPin });
+    return result.data;
+  } catch (e) {
+    console.error("[forgotPin] reset callable failed", e);
     return { ok: false, reason: "error" };
   }
 }

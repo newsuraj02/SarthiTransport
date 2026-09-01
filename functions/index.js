@@ -10,9 +10,35 @@ const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const { getAuth } = require("firebase-admin/auth");
 
 initializeApp();
 const db = getFirestore();
+
+// PIN-based login (src/App.jsx: CustomerOnboarding/DriverOnboarding) signs
+// each customer/driver in as a normal Firebase email/password account under
+// a synthetic, never-shown "email" built from their mobile number -- this
+// domain is that convention, shared between the client (which constructs
+// the same string to call signInWithEmailAndPassword) and this file (which
+// needs it to look accounts up for password-reset). Namespaced by role
+// (customer/driver) because the app deliberately lets the same phone number
+// hold both a customer and a driver account at once -- see firebaseClient.js.
+const PIN_AUTH_EMAIL_DOMAIN = "apnatransport.local";
+function pinAuthEmail(mobile, role) {
+  return `${mobile}@${role === "driver" ? "driver" : "customer"}.${PIN_AUTH_EMAIL_DOMAIN}`;
+}
+
+// A real Firebase Phone Auth session carries request.auth.token.phone_number
+// automatically. A PIN-based session doesn't -- its identity is the
+// synthetic email instead, so this parses the mobile number back out of it
+// to get the same "+91XXXXXXXXXX" shape every other server-side check
+// (initiateMaskedCall, isCustomer/isDriver comparisons) already expects.
+// Returns null for anything that matches neither shape.
+function callerPhoneFromAuth(token) {
+  if (token?.phone_number) return token.phone_number;
+  const match = (token?.email || "").match(/^(\d{10})@(?:customer|driver)\.apnatransport\.local$/);
+  return match ? `+91${match[1]}` : null;
+}
 
 async function sendPush(token, title, body) {
   if (!token) return;
@@ -362,10 +388,12 @@ const EXOTEL_CALLER_ID = defineSecret("EXOTEL_CALLER_ID");
 
 exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [EXOTEL_SID, EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_CALLER_ID] }, async (request) => {
   const { bookingId } = request.data || {};
-  // Firebase Phone Auth sets this claim automatically on sign-in (e.g.
-  // "+919876543210") -- used to verify the caller is actually a party to
-  // this booking, not just any signed-in user who knows the bookingId.
-  const callerPhone = request.auth?.token?.phone_number;
+  // Real Firebase Phone Auth sessions carry the verified number as
+  // request.auth.token.phone_number automatically (e.g. "+919876543210").
+  // PIN-based sessions (see callerPhoneFromAuth below) don't have that
+  // claim -- their identity comes from the synthetic email instead, so it
+  // has to be parsed back out to get the same "+91XXXXXXXXXX" shape.
+  const callerPhone = callerPhoneFromAuth(request.auth?.token);
   if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
   if (!bookingId) throw new HttpsError("invalid-argument", "bookingId is required.");
 
@@ -410,5 +438,112 @@ exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [EXOTEL_SI
     createdAt: FieldValue.serverTimestamp(),
   });
 
+  return { ok: true };
+});
+
+// ---------------- Forgot PIN (SMS recovery for PIN-based login) ----------------
+// Customer/Driver signup and normal login are pure client-side Firebase
+// email/password calls (see CustomerOnboarding/DriverOnboarding) -- no
+// server involvement, no SMS, no reCAPTCHA. The one place a PIN-based
+// account still needs a Cloud Function is recovering a forgotten PIN,
+// since resetting a password without knowing the old one requires Admin
+// SDK privileges a browser can't hold. Two calls: sendForgotPinOtp (texts
+// a code via Exotel) and resetPinWithOtp (checks it, then sets the new
+// PIN in one step -- no separate "verified" round-trip needed since there's
+// nothing else to do with a bare verification here).
+//
+// Needs the same EXOTEL_SID/API_KEY/API_TOKEN secrets as initiateMaskedCall
+// above (same Exotel account) plus EXOTEL_SMS_SENDER_ID -- the DLT-approved
+// SMS sender header (a short alphanumeric code, NOT a phone number, so
+// distinct from EXOTEL_CALLER_ID which is a real ExoPhone used for calls).
+// Until India's DLT template for this SMS is registered and approved,
+// sendForgotPinOtp returns reason: "not_configured" instead of throwing --
+// same graceful-degradation pattern as initiateMaskedCall.
+const EXOTEL_SMS_SENDER_ID = defineSecret("EXOTEL_SMS_SENDER_ID");
+
+exports.sendForgotPinOtp = onCall({ region: "asia-south1", secrets: [EXOTEL_SID, EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_SMS_SENDER_ID] }, async (request) => {
+  const { mobile, role } = request.data || {};
+  if (!/^[0-9]{10}$/.test(mobile || "")) throw new HttpsError("invalid-argument", "A valid 10-digit mobile number is required.");
+  const toRole = role === "driver" ? "driver" : "customer";
+  const key = `${toRole}_${mobile}`;
+
+  // Only makes sense for a number that already has a PIN account -- also
+  // doubles as a cheap existence check so this can't be used to fish for
+  // which numbers are registered (same error either way, see below).
+  try {
+    await getAuth().getUserByEmail(pinAuthEmail(mobile, toRole));
+  } catch {
+    return { ok: false, reason: "not_found" };
+  }
+
+  // Rate limit: max 5 sends per mobile+role per rolling hour -- this is a
+  // recovery flow, not the main login path, so real usage should be rare;
+  // this mainly guards against a script hammering the endpoint.
+  const limitRef = db.collection("otpRateLimits").doc(key);
+  const now = Date.now();
+  const limitSnap = await limitRef.get();
+  const limitData = limitSnap.exists ? limitSnap.data() : null;
+  if (limitData && now - limitData.windowStart < 60 * 60 * 1000) {
+    if (limitData.count >= 5) throw new HttpsError("resource-exhausted", "Too many attempts — please wait a while before trying again.");
+    await limitRef.update({ count: limitData.count + 1 });
+  } else {
+    await limitRef.set({ windowStart: now, count: 1 });
+  }
+
+  const sid = EXOTEL_SID.value(), apiKey = EXOTEL_API_KEY.value(), apiToken = EXOTEL_API_TOKEN.value(), senderId = EXOTEL_SMS_SENDER_ID.value();
+  if (!sid || !apiKey || !apiToken || !senderId) return { ok: false, reason: "not_configured" };
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  await db.collection("otpCodes").doc(key).set({ code, expiresAt: now + 5 * 60 * 1000, attempts: 0 });
+
+  const basicAuth = Buffer.from(`${apiKey}:${apiToken}`).toString("base64");
+  const body = new URLSearchParams({
+    From: senderId, To: `+91${mobile}`,
+    Body: `${code} is your Apna Transport PIN reset code. Valid for 5 minutes. Do not share this with anyone.`,
+  });
+  try {
+    const res = await fetch(`https://api.exotel.com/v1/Accounts/${sid}/Sms/send.json`, {
+      method: "POST",
+      headers: { Authorization: `Basic ${basicAuth}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error("[forgotPin] Exotel rejected the send:", data);
+      return { ok: false, reason: "sms_failed" };
+    }
+  } catch (e) {
+    console.error("[forgotPin] Exotel SMS request failed:", e.message);
+    return { ok: false, reason: "sms_failed" };
+  }
+  return { ok: true };
+});
+
+exports.resetPinWithOtp = onCall({ region: "asia-south1" }, async (request) => {
+  const { mobile, role, code, newPin } = request.data || {};
+  const toRole = role === "driver" ? "driver" : "customer";
+  if (!/^[0-9]{10}$/.test(mobile || "") || !code || !/^[0-9]{6}$/.test(newPin || "")) {
+    throw new HttpsError("invalid-argument", "mobile, code, and a 6-digit newPin are required.");
+  }
+  const key = `${toRole}_${mobile}`;
+  const ref = db.collection("otpCodes").doc(key);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, reason: "not_found" };
+  const data = snap.data();
+  if (Date.now() > data.expiresAt) { await ref.delete(); return { ok: false, reason: "expired" }; }
+  if ((data.attempts || 0) >= 5) { await ref.delete(); return { ok: false, reason: "too_many_attempts" }; }
+  if (data.code !== String(code)) {
+    await ref.update({ attempts: (data.attempts || 0) + 1 });
+    return { ok: false, reason: "wrong_code" };
+  }
+  await ref.delete();
+
+  try {
+    const user = await getAuth().getUserByEmail(pinAuthEmail(mobile, toRole));
+    await getAuth().updateUser(user.uid, { password: newPin });
+  } catch (e) {
+    console.error("[forgotPin] password reset failed:", e.message);
+    return { ok: false, reason: "reset_failed" };
+  }
   return { ok: true };
 });
