@@ -29,6 +29,20 @@ export function pinAuthEmail(mobile, role) {
   return `${mobile}@${role === "driver" ? "driver" : "customer"}.apnatransport.local`;
 }
 
+// The customer/driver-facing PIN is 4 digits, but Firebase Auth's
+// email/password sign-in rejects anything under 6 characters — so a fixed,
+// non-numeric prefix is added before ever handing it to Firebase, purely to
+// clear that length floor. This is NOT a security measure (the prefix is a
+// constant, known to anyone reading this file) — the PIN's own 4 digits are
+// still the entire secret. Used everywhere a raw PIN would otherwise be
+// passed to createUserWithEmailAndPassword/signInWithEmailAndPassword/
+// EmailAuthProvider.credential, and for what's sent as the new password to
+// the resetPinAfterPhoneVerify Cloud Function (which just stores whatever
+// string it receives, unaware this transform even happened).
+export function pinToPassword(pin) {
+  return `apna-pin-${pin}`;
+}
+
 // Three separate named Firebase Apps (not one shared default app) so a
 // customer session, a driver session, and an admin session can each hold
 // their own real, phone/email-verified Firebase Auth sign-in at the same

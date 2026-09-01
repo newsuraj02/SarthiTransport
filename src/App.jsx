@@ -14,7 +14,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall, sendAdminNotification, pinAuthEmail, resetPinAfterPhoneVerify } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Bright/high-visibility flat palette — legible in direct outdoor sunlight
@@ -1668,15 +1668,15 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   };
 
   const submitPin = async () => {
-    if (mobile.length !== 10 || pin.length !== 6 || !authInstance || sending) return;
+    if (mobile.length !== 10 || pin.length !== 4 || !authInstance || sending) return;
     if (mode === "signup" && (!detailsValid || pin !== pinConfirm)) return;
     setSending(true);
     setError("");
     try {
       if (mode === "signup") {
-        await createUserWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "customer"), pin);
+        await createUserWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "customer"), pinToPassword(pin));
       } else {
-        await signInWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "customer"), pin);
+        await signInWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "customer"), pinToPassword(pin));
       }
       onOtpVerified(mobile);
       // Sign Up already collected every field above — submit it straight
@@ -1741,10 +1741,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   };
 
   const submitForgotNewPin = async () => {
-    if (forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
+    if (forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
     setForgotSending(true);
     setForgotError("");
-    const result = await resetPinAfterPhoneVerify("customer", forgotNewPin);
+    const result = await resetPinAfterPhoneVerify("customer", pinToPassword(forgotNewPin));
     setForgotSending(false);
     if (!result.ok) {
       setForgotError(lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
@@ -1933,27 +1933,27 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
             ) : (
               <div className="space-y-3">
                 <p className="text-[11px] font-semibold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
-                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 6-digit PIN" : lang === "mr" ? "नवीन 6-अंकी PIN" : "नया 6-अंकों का PIN"}
-                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
+                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
-                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
                 {forgotNewPin && forgotNewPinConfirm && forgotNewPin !== forgotNewPinConfirm && (
                   <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
                 )}
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
-                <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
-                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
                   {forgotSending ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें")}
                 </button>
               </div>
             )
           ) : (
             <div className="space-y-3">
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "6-digit PIN" : lang === "mr" ? "6-अंकी PIN" : "6-अंकों का PIN"}
-                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-              <button onClick={submitPin} disabled={pin.length !== 6 || sending}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 6 && !sending ? C.marigold : "#E0E0E0", color: pin.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
+              <button onClick={submitPin} disabled={pin.length !== 4 || sending}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Logging in..." : lang === "mr" ? "लॉगिन होत आहे..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें")}
               </button>
               <div className="flex items-center justify-between">
@@ -2015,17 +2015,17 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 6-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 6-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 6-अंकों का PIN सेट करें।"}</p>
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "6-digit PIN" : lang === "mr" ? "6-अंकी PIN" : "6-अंकों का PIN"}
-                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 4-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 4-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 4-अंकों का PIN सेट करें।"}</p>
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
-                value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+                value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               {pin && pinConfirm && pin !== pinConfirm && (
                 <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
               )}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-              <button onClick={submitPin} disabled={pin.length !== 6 || pin !== pinConfirm || sending}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 6 && pin === pinConfirm && !sending ? C.marigold : "#E0E0E0", color: pin.length === 6 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
+              <button onClick={submitPin} disabled={pin.length !== 4 || pin !== pinConfirm || sending}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Creating account..." : lang === "mr" ? "खाते तयार होत आहे..." : "खाता बन रहा है...") : (lang === "en" ? "Create Account" : lang === "mr" ? "खाते तयार करा" : "खाता बनाएं")}
               </button>
               <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
@@ -2139,15 +2139,15 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   };
 
   const submitPin = async () => {
-    if (mobile.length !== 10 || pin.length !== 6 || !authInstance || sending) return;
+    if (mobile.length !== 10 || pin.length !== 4 || !authInstance || sending) return;
     if (mode === "signup" && (!detailsValid || pin !== pinConfirm)) return;
     setSending(true);
     setError("");
     try {
       if (mode === "signup") {
-        await createUserWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pin);
+        await createUserWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pinToPassword(pin));
       } else {
-        await signInWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pin);
+        await signInWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pinToPassword(pin));
       }
       onOtpVerified(mobile);
       // Sign Up's details attach to the driver doc automatically once it's
@@ -2211,10 +2211,10 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   };
 
   const submitForgotNewPin = async () => {
-    if (forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
+    if (forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
     setForgotSending(true);
     setForgotError("");
-    const result = await resetPinAfterPhoneVerify("driver", forgotNewPin);
+    const result = await resetPinAfterPhoneVerify("driver", pinToPassword(forgotNewPin));
     setForgotSending(false);
     if (!result.ok) {
       setForgotError(lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
@@ -2409,27 +2409,27 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
             ) : (
               <div className="space-y-3">
                 <p className="text-[11px] font-semibold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
-                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 6-digit PIN" : lang === "mr" ? "नवीन 6-अंकी PIN" : "नया 6-अंकों का PIN"}
-                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
+                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
                 <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
-                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
                 {forgotNewPin && forgotNewPinConfirm && forgotNewPin !== forgotNewPinConfirm && (
                   <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
                 )}
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
-                <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 6 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
-                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 6 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
                   {forgotSending ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें")}
                 </button>
               </div>
             )
           ) : (
             <div className="space-y-3">
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "6-digit PIN" : lang === "mr" ? "6-अंकी PIN" : "6-अंकों का PIN"}
-                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-              <button onClick={submitPin} disabled={pin.length !== 6 || sending}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 6 && !sending ? C.marigold : "#E0E0E0", color: pin.length === 6 && !sending ? "#000000" : "#9AA3B0" }}>
+              <button onClick={submitPin} disabled={pin.length !== 4 || sending}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Logging in..." : lang === "mr" ? "लॉगिन होत आहे..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें")}
               </button>
               <div className="flex items-center justify-between">
@@ -2495,17 +2495,17 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 6-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 6-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 6-अंकों का PIN सेट करें।"}</p>
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "6-digit PIN" : lang === "mr" ? "6-अंकी PIN" : "6-अंकों का PIN"}
-                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 4-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 4-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 4-अंकों का PIN सेट करें।"}</p>
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
-                value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+                value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               {pin && pinConfirm && pin !== pinConfirm && (
                 <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
               )}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-              <button onClick={submitPin} disabled={pin.length !== 6 || pin !== pinConfirm || sending}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 6 && pin === pinConfirm && !sending ? C.marigold : "#E0E0E0", color: pin.length === 6 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
+              <button onClick={submitPin} disabled={pin.length !== 4 || pin !== pinConfirm || sending}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Creating account..." : lang === "mr" ? "खाते तयार होत आहे..." : "खाता बन रहा है...") : (lang === "en" ? "Create Account" : lang === "mr" ? "खाते तयार करा" : "खाता बनाएं")}
               </button>
               <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
@@ -3931,11 +3931,11 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
   const [pinDone, setPinDone] = useState(false);
 
   const setUpPin = async () => {
-    if (newPin.length !== 6 || newPin !== newPinConfirm || pinSaving || !customerFirebaseAuth?.currentUser || !customerMobile) return;
+    if (newPin.length !== 4 || newPin !== newPinConfirm || pinSaving || !customerFirebaseAuth?.currentUser || !customerMobile) return;
     setPinSaving(true);
     setPinError("");
     try {
-      const credential = EmailAuthProvider.credential(pinAuthEmail(customerMobile, "customer"), newPin);
+      const credential = EmailAuthProvider.credential(pinAuthEmail(customerMobile, "customer"), pinToPassword(newPin));
       await linkWithCredential(customerFirebaseAuth.currentUser, credential);
       setPinDone(true);
       setNewPin(""); setNewPinConfirm(""); setPinPromptOpen(false);
@@ -4015,14 +4015,14 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
             </>
           ) : (
             <div className="space-y-2">
-              <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit PIN" : lang === "mr" ? "6-अंकी PIN" : "6-अंकों का PIN"}
-                value={newPin} onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setPinError(""); }} />
+              <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={newPin} onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
               <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
-                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6)); setPinError(""); }} />
+                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
               {newPin && newPinConfirm && newPin !== newPinConfirm && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>}
               {pinError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{pinError}</div>}
-              <button onClick={setUpPin} disabled={newPin.length !== 6 || newPin !== newPinConfirm || pinSaving}
-                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 6 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E0E0E0", color: newPin.length === 6 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
+              <button onClick={setUpPin} disabled={newPin.length !== 4 || newPin !== newPinConfirm || pinSaving}
+                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E0E0E0", color: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
                 {pinSaving ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save PIN" : lang === "mr" ? "PIN सेव्ह करा" : "PIN सेव करें")}
               </button>
             </div>
@@ -5517,11 +5517,11 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
   const [pinDone, setPinDone] = useState(false);
 
   const setUpPin = async () => {
-    if (newPin.length !== 6 || newPin !== newPinConfirm || pinSaving || !driverFirebaseAuth?.currentUser || !driver?.mobile) return;
+    if (newPin.length !== 4 || newPin !== newPinConfirm || pinSaving || !driverFirebaseAuth?.currentUser || !driver?.mobile) return;
     setPinSaving(true);
     setPinError("");
     try {
-      const credential = EmailAuthProvider.credential(pinAuthEmail(driver.mobile, "driver"), newPin);
+      const credential = EmailAuthProvider.credential(pinAuthEmail(driver.mobile, "driver"), pinToPassword(newPin));
       await linkWithCredential(driverFirebaseAuth.currentUser, credential);
       setPinDone(true);
       setNewPin(""); setNewPinConfirm(""); setPinPromptOpen(false);
@@ -5595,14 +5595,14 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
             </>
           ) : (
             <div className="space-y-2">
-              <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "6-digit PIN" : lang === "mr" ? "6-अंकी PIN" : "6-अंकों का PIN"}
-                value={newPin} onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setPinError(""); }} />
+              <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={newPin} onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
               <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
-                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6)); setPinError(""); }} />
+                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
               {newPin && newPinConfirm && newPin !== newPinConfirm && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>}
               {pinError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{pinError}</div>}
-              <button onClick={setUpPin} disabled={newPin.length !== 6 || newPin !== newPinConfirm || pinSaving}
-                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 6 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E0E0E0", color: newPin.length === 6 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
+              <button onClick={setUpPin} disabled={newPin.length !== 4 || newPin !== newPinConfirm || pinSaving}
+                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E0E0E0", color: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
                 {pinSaving ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save PIN" : lang === "mr" ? "PIN सेव्ह करा" : "PIN सेव करें")}
               </button>
             </div>

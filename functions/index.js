@@ -461,13 +461,21 @@ exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [EXOTEL_SI
 // no separate code-matching step needed here. Creates the PIN account if
 // this mobile+role never had one yet (covers "forgot a PIN I never
 // actually set"), otherwise resets the existing one's password.
+//
+// newPin here is NOT the raw 4-digit PIN the person typed -- the client
+// already ran it through pinToPassword (see firebaseClient.js) before this
+// call, the same transform used at signup/login, purely to clear Firebase
+// Auth's 6-character password minimum (the 4 digits are still the whole
+// secret; the added prefix is a public constant, not a security layer).
+// This function just stores whatever string it's given, unaware that
+// happened -- hence the length-only check below rather than a digit regex.
 exports.resetPinAfterPhoneVerify = onCall({ region: "asia-south1" }, async (request) => {
   const phone = request.auth?.token?.phone_number;
   if (!phone) throw new HttpsError("unauthenticated", "Phone verification required.");
   const mobile = phone.replace("+91", "");
   const { role, newPin } = request.data || {};
   const toRole = role === "driver" ? "driver" : "customer";
-  if (!/^[0-9]{6}$/.test(newPin || "")) throw new HttpsError("invalid-argument", "A 6-digit newPin is required.");
+  if (typeof newPin !== "string" || newPin.length < 6) throw new HttpsError("invalid-argument", "A valid newPin is required.");
 
   const email = pinAuthEmail(mobile, toRole);
   try {
