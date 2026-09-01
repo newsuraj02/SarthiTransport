@@ -621,6 +621,28 @@ function useRideNotifications(collectionName, docId, lang) {
   return { permission, enable, toast };
 }
 
+// Tracks which Admin Announcements this specific customer/driver hasn't
+// seen yet — "seen" persists locally (per role+mobile) as the newest
+// createdAt millis they've been shown, so it survives app restarts and
+// naturally covers every announcement sent before this device ever existed
+// (nothing to catch up on) as well as ones sent while it was closed. Pairs
+// with AnnouncementAlertBanner (auto-popup) and a hamburger-menu badge —
+// either one calling markSeen() clears both at once, since they're the same
+// underlying "have you seen the latest one" state.
+function useAnnouncementAlerts(adminNotifications, myMobile, toRole) {
+  const mine = myMobile
+    ? (adminNotifications || []).filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile || (Array.isArray(n.target) && n.target.includes(myMobile))))
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+    : [];
+  const [lastSeenAt, setLastSeenAt] = usePersistedState(`sarthi_announcementsLastSeen_${toRole}_${myMobile || "none"}`, 0);
+  const unread = mine.filter((n) => (n.createdAt?.toMillis?.() || 0) > lastSeenAt);
+  const markSeen = () => {
+    const newest = mine[0]?.createdAt?.toMillis?.() || Date.now();
+    if (newest > lastSeenAt) setLastSeenAt(newest);
+  };
+  return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen };
+}
+
 function NotificationBanner({ permission, onEnable, lang }) {
   if (permission === "granted" || permission === "unsupported") return null;
   if (permission === "denied") {
@@ -706,6 +728,31 @@ function FloatingHamburgerHint({ show, onOpenMenu, lang }) {
   );
 }
 
+// Auto-popup for a new, not-yet-seen Admin Announcement — shown on whatever
+// screen the customer/driver happens to open the app to, instead of relying
+// on them to notice the hamburger badge and go find it under Messages
+// themselves. Either button clears it (see useAnnouncementAlerts.markSeen):
+// "View" also opens the full inbox, "dismiss" just acknowledges it in place
+// since the message text is already fully readable right here.
+function AnnouncementAlertBanner({ announcement, onView, onDismiss, lang }) {
+  if (!announcement) return null;
+  return (
+    <div className="mx-5 mb-2 rounded-lg p-3 shadow-lg" style={{ background: C.navy, border: `1.5px solid ${C.marigold}` }}>
+      <div className="flex items-start gap-2">
+        <Bell size={16} color={C.marigold} className="shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-bold text-white mb-0.5">📢 {lang === "en" ? "New message from Admin" : lang === "mr" ? "अ‍ॅडमिनकडून नवीन संदेश" : "एडमिन से नया संदेश"}</div>
+          <div className="text-xs" style={{ color: "#FFFFFF" }}>{announcement.message}</div>
+        </div>
+        <button onClick={onDismiss} className="shrink-0" style={{ color: "#FFFFFF", opacity: 0.75 }}><X size={16} /></button>
+      </div>
+      <button onClick={onView} className="w-full mt-2 rounded-lg py-2 text-xs font-bold" style={{ background: C.marigold, color: "#000000" }}>
+        {lang === "en" ? "View" : lang === "mr" ? "पहा" : "देखें"}
+      </button>
+    </div>
+  );
+}
+
 function ForegroundToast({ toast }) {
   if (!toast) return null;
   return (
@@ -724,10 +771,14 @@ function ForegroundToast({ toast }) {
 // sendAdminNotification), filtered to whatever was sent to "all" of this
 // role or to this person specifically. Read-only; there's no reply/compose
 // here, only what Admin has sent out.
-function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang }) {
+function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang, onOpen }) {
   const mine = (adminNotifications || [])
     .filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile || (Array.isArray(n.target) && n.target.includes(myMobile))))
     .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  // Opening this screen is itself "seeing" every announcement in it, same
+  // as tapping the auto-popup banner's View button — clears the hamburger
+  // badge whichever way the customer/driver actually got here.
+  useEffect(() => { onOpen?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   return (
     <div className="px-5 py-5">
@@ -3830,6 +3881,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   // usually isn't also logged in as the driver who accepted their load).
   const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
   const rideNotifications = useRideNotifications("customers", customerMobile, lang);
+  const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer");
 
   // Real GPS live-tracking, mirroring the driver's own — shares the
   // customer's actual device location while a trip is Ongoing, so the
@@ -3884,7 +3936,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
           <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} lang={lang} onLogout={onLogout} />
         )}
         {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
-        {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={customerMobile} toRole="customer" lang={lang} />}
+        {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={customerMobile} toRole="customer" lang={lang} onOpen={announcementAlerts.markSeen} />}
       </div>
     );
   }
@@ -3912,6 +3964,11 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                   <Menu size={18} color="#fff" strokeWidth={2.5} />
                 </button>
                 <HamburgerHint show={showBookingHint} lang={lang} />
+                {announcementAlerts.unreadCount > 0 && (
+                  <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>
+                    {announcementAlerts.unreadCount}
+                  </span>
+                )}
               </div>
             ) : rideView === "advance" ? (
               <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -3950,6 +4007,9 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
         <ForegroundToast toast={rideNotifications.toast} />
+        <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
+          onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
+          onDismiss={announcementAlerts.markSeen} lang={lang} />
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -3984,6 +4044,9 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
               </button>
               <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "customer" && (n.target === "all" || n.target === customerMobile)).length})
+                {announcementAlerts.unreadCount > 0 && (
+                  <span className="rounded-full px-1.5 py-0.5 text-[10px] font-black text-white" style={{ background: C.safety }}>{announcementAlerts.unreadCount} {lang === "en" ? "new" : lang === "mr" ? "नवीन" : "नई"}</span>
+                )}
               </button>
               <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App" : lang === "mr" ? "अ‍ॅप शेअर करा" : "ऐप शेयर करें"}
@@ -5257,6 +5320,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   // stuck showing a trip that's days away, but still reachable here.
   const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
+  const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver");
 
   // Badge + "View your Booking here" callout, shown the moment one of this
   // driver's ADVANCE bids gets accepted (see HamburgerHint/
@@ -5309,7 +5373,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
         {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
         {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
-        {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} />}
+        {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} onOpen={announcementAlerts.markSeen} />}
       </div>
     );
   }
@@ -5332,6 +5396,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 <Menu size={18} color="#fff" strokeWidth={2.5} />
               </button>
               <HamburgerHint show={showBookingHint} lang={lang} />
+              {announcementAlerts.unreadCount > 0 && (
+                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>
+                  {announcementAlerts.unreadCount}
+                </span>
+              )}
             </div>
             <div className="flex-1 min-w-0 flex justify-center">
               {tab === "home" ? (
@@ -5363,6 +5432,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         )}
         {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />}
         <ForegroundToast toast={rideNotifications.toast} />
+        <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
+          onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
+          onDismiss={announcementAlerts.markSeen} lang={lang} />
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -5395,6 +5467,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
               </button>
               <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "driver" && (n.target === "all" || n.target === driver.mobile)).length})
+                {announcementAlerts.unreadCount > 0 && (
+                  <span className="rounded-full px-1.5 py-0.5 text-[10px] font-black text-white" style={{ background: C.safety }}>{announcementAlerts.unreadCount} {lang === "en" ? "new" : lang === "mr" ? "नवीन" : "नई"}</span>
+                )}
               </button>
               <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : lang === "mr" ? "सेटिंग्स (KYC व गाडी)" : "सेटिंग्स (KYC व गाड़ी)"}
