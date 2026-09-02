@@ -5724,7 +5724,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             </div>
             <div className="flex-1 min-w-0 flex justify-center">
               {tab === "home" ? (
-                <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Driver Dashboard" : lang === "mr" ? "ड्रायव्हर डॅशबोर्ड" : "ड्राइवर डैशबोर्ड"}</span>
+                <button onClick={() => setTab("wallet")} className="rounded-full px-4 py-2 text-base font-black text-white text-center flex items-center gap-1.5" style={{ background: "#0052CC" }}>
+                  <Wallet size={16} color="#fff" /> {lang === "en" ? "My Wallet" : lang === "mr" ? "माझे वॉलेट" : "मेरा वॉलेट"}
+                </button>
               ) : (
                 <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : lang === "mr" ? "कस्टमर रिक्वेस्ट" : "कस्टमर रिक्वेस्ट"}</span>
               )}
@@ -5763,15 +5765,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
                 {driver.mobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{driver.mobile}</div>}
               </div>
               <div className="p-2 space-y-2" style={{ borderBottom: `1px solid ${C.line}` }}>
-                <button onClick={() => { setTab("wallet"); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: C.marigold }}>
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
-                    <Wallet size={13} color={C.marigold} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-black" style={{ color: "#000000" }}>{lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"}</div>
-                    <div className="text-xs font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
-                  </div>
-                </button>
                 <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: C.navy }}>
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#000000" }}>
                     <Clock3 size={13} color="#FFFFFF" />
