@@ -3670,7 +3670,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                   <Truck size={18} color="#FFFFFF" className="truck-bounce" />
                   <div className="road-dash" style={{ width: 24, marginTop: 3 }} />
                 </div>
-                <span className="text-sm font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "In some time, you will see vehicles according to your requirement" : lang === "mr" ? "थोड्याच वेळात तुमच्या गरजेनुसार गाड्या दिसतील" : "कुछ ही समय में आपकी ज़रूरत के अनुसार गाड़ियां दिखेंगी"}</span>
+                <span className="text-sm font-black text-center" style={{ color: "#FFFFFF" }}>{lang === "en" ? "In some time, you will see vehicles according to your requirement" : lang === "mr" ? "थोड्याच वेळात तुमच्या गरजेनुसार गाड्या दिसतील" : "कुछ ही समय में आपकी ज़रूरत के अनुसार गाड़ियां दिखेंगी"}</span>
               </div>
             ) : (
               <div className="space-y-2">
