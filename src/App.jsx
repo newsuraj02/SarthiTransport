@@ -1579,6 +1579,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   const [name, setName] = usePersistedState("sarthi_customerReg_name", "");
   const [photo, setPhoto] = usePersistedPhoto("sarthi_customerReg_photo", null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
   // Sign Up's photo picker runs before OTP verifies, but Storage's security
   // rules require real auth to write — so the file just sits here (never
   // persisted; Files aren't JSON-serializable) and the actual upload
@@ -1836,7 +1837,13 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
 
         <div className="space-y-3">
           <div className="flex justify-center">
-            <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${verifiedMobile || mobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
+            <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => {
+              setPhotoUploading(true); setPhotoError(false);
+              uploadPhoto(f, `customers/${verifiedMobile || mobile}/profile.jpg`).then((p) => {
+                setPhotoUploading(false);
+                if (p) setPhoto(p); else setPhotoError(true);
+              });
+            }}>
               <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
                 {photoUploading
                   ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</p>
@@ -1844,6 +1851,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
               </div>
             </PhotoPicker>
           </div>
+          {photoError && (
+            <p className="text-[10px] font-semibold text-center" style={{ color: C.safety }}>{lang === "en" ? "Photo upload failed — please try another photo" : lang === "mr" ? "फोटो अपलोड झाला नाही — कृपया दुसरा फोटो वापरा" : "फोटो अपलोड नहीं हुई — कृपया दूसरी फोटो लें"}</p>
+          )}
           <GuidedStep {...regStepProps(0)} lang={lang}>
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
@@ -2683,9 +2693,18 @@ function resizeImageToCanvas(file, maxDim = 900) {
 // permanent download URL — so profile/KYC/vehicle photos live as small
 // links in Firestore instead of full images inline in every document. Falls
 // back to an inline base64 data URL if Storage isn't configured, so the app
-// still works before that one-time setup step is done.
+// still works before that one-time setup step is done. Returns null (never
+// throws) if the file itself can't be read/decoded — e.g. a corrupted photo
+// or a format the browser can't open — so callers can always clear their
+// "uploading" state and show an error instead of hanging forever.
 async function uploadPhoto(file, path, maxDim = 900, quality = 0.72) {
-  const canvas = await resizeImageToCanvas(file, maxDim);
+  let canvas;
+  try {
+    canvas = await resizeImageToCanvas(file, maxDim);
+  } catch (e) {
+    console.error("[photo decode]", e);
+    return null;
+  }
   const storage = getActiveStorage();
   if (storage) {
     try {
@@ -3899,6 +3918,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
   const [email, setEmail] = useState(customerProfile?.email || "");
   const [photo, setPhoto] = useState(customerProfile?.photo || null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
   const [address, setAddress] = useState(customerProfile?.address || "");
   const [area, setArea] = useState(customerProfile?.area || "");
   const [city, setCity] = useState(customerProfile?.city || "");
@@ -3950,7 +3970,13 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}</h2>
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
-          <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => { setPhotoUploading(true); uploadPhoto(f, `customers/${customerMobile}/profile.jpg`).then((p) => { setPhoto(p); setPhotoUploading(false); }); }}>
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => {
+            setPhotoUploading(true); setPhotoError(false);
+            uploadPhoto(f, `customers/${customerMobile}/profile.jpg`).then((p) => {
+              setPhotoUploading(false);
+              if (p) setPhoto(p); else setPhotoError(true);
+            });
+          }}>
             <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
               {photoUploading
                 ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</p>
@@ -3958,6 +3984,9 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
             </div>
           </PhotoPicker>
         </div>
+        {photoError && (
+          <p className="text-[10px] font-semibold text-center" style={{ color: C.safety }}>{lang === "en" ? "Photo upload failed — please try another photo" : lang === "mr" ? "फोटो अपलोड झाला नाही — कृपया दुसरा फोटो वापरा" : "फोटो अपलोड नहीं हुई — कृपया दूसरी फोटो लें"}</p>
+        )}
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
           <input className={inputCls} style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
@@ -5262,6 +5291,11 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const [uploadingKeys, setUploadingKeys] = useState({});
   const markUploading = (key, on) => setUploadingKeys((prev) => ({ ...prev, [key]: on }));
   const anyUploading = Object.values(uploadingKeys).some(Boolean);
+  // Set when a tile's photo failed to upload (e.g. a corrupted file the
+  // browser couldn't decode) — surfaced as inline text on that tile instead
+  // of leaving "Uploading..." stuck forever with no explanation.
+  const [uploadErrorKeys, setUploadErrorKeys] = useState({});
+  const markUploadError = (key, on) => setUploadErrorKeys((prev) => ({ ...prev, [key]: on }));
 
   const existingVehicleType = VEHICLES.find((v) => v.key === driver.vehicleSpec?.type);
   // The driver just types their vehicle's name — no dropdown of preset
@@ -5308,12 +5342,20 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const onVehiclePhoto = (setVal, key) => (f) => {
     if (!f) return;
     markUploading(key, true);
-    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); markUploading(key, false); });
+    markUploadError(key, false);
+    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => {
+      markUploading(key, false);
+      if (p) setVal(p); else markUploadError(key, true);
+    });
   };
   const onDoc = (setVal, key) => (f) => {
     if (!f) return;
     markUploading(key, true);
-    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => { setVal(p); markUploading(key, false); });
+    markUploadError(key, false);
+    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => {
+      markUploading(key, false);
+      if (p) setVal(p); else markUploadError(key, true);
+    });
   };
 
   const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
@@ -5392,7 +5434,11 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                     }
                   />
                 )}
-                <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>{val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}</span>
+                <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: uploadErrorKeys[key] ? C.safety : val ? C.success : C.inkSoft }}>
+                  {uploadErrorKeys[key]
+                    ? (lang === "en" ? "Upload failed — try another photo" : lang === "mr" ? "अपलोड झाले नाही — दुसरा फोटो वापरा" : "अपलोड नहीं हुआ — दूसरी फोटो लें")
+                    : val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}
+                </span>
               </div>
             </PhotoPicker>
           </GuidedStep>
@@ -5464,8 +5510,10 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                     />
                   )}
                 </div>
-                <div className="text-[9px] mt-0.5 text-center" style={{ color: val ? C.success : C.inkSoft }}>
-                  {val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
+                <div className="text-[9px] mt-0.5 text-center" style={{ color: uploadErrorKeys[key] ? C.safety : val ? C.success : C.inkSoft }}>
+                  {uploadErrorKeys[key]
+                    ? (lang === "en" ? "Upload failed — try another photo" : lang === "mr" ? "अपलोड झाले नाही — दुसरा फोटो वापरा" : "अपलोड नहीं हुआ — दूसरी फोटो लें")
+                    : val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
                 </div>
               </PhotoPicker>
             </GuidedStep>
