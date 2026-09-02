@@ -87,19 +87,3 @@ select {
 .toast-pop {
   animation: toastPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
-
-/* "Searching for a vehicle" indicator (Customer's Active Ride screen,
-   shown while a posted load has zero bids yet) — a static truck icon
-   over a continuously scrolling dashed road, reading as "on the way"
-   rather than a generic circular buffering spinner, since it's
-   actually trucks the customer is waiting on. */
-@keyframes roadDashScroll {
-  0%   { background-position: 0 0; }
-  100% { background-position: -16px 0; }
-}
-.road-dash {
-  height: 3px;
-  border-radius: 2px;
-  background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0.9) 0, rgba(255,255,255,0.9) 6px, transparent 6px, transparent 12px);
-  animation: roadDashScroll 0.5s linear infinite;
-}
