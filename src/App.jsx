@@ -13,7 +13,7 @@ import { increment, arrayUnion, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
-import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
@@ -2835,7 +2835,19 @@ function resizeImageToCanvas(file, maxDim = 900) {
 // throws) if the file itself can't be read/decoded — e.g. a corrupted photo
 // or a format the browser can't open — so callers can always clear their
 // "uploading" state and show an error instead of hanging forever.
-async function uploadPhoto(file, path, maxDim = 900, quality = 0.72) {
+//
+// Uses a resumable upload (uploadBytesResumable) rather than a one-shot
+// uploadBytes — on the flaky mobile connections drivers actually sign up
+// on, a resumable session survives brief drops instead of the whole
+// attempt dying on the first blip, and its state_changed events give
+// callers real bytes-transferred progress (via the optional onProgress
+// callback) instead of a static "Uploading..." with no sense of whether
+// it's actually moving. Still has a cap — 30s, well past what the ~50-150KB
+// blob these photos compress down to should ever need even on a slow
+// connection — so a genuinely dead connection still falls through to the
+// base64 fallback below instead of hanging forever; cancelling the task
+// makes its own 'error' branch fire rather than needing a separate race.
+async function uploadPhoto(file, path, maxDim = 900, quality = 0.72, onProgress = null) {
   let canvas;
   try {
     canvas = await resizeImageToCanvas(file, maxDim);
@@ -2848,13 +2860,16 @@ async function uploadPhoto(file, path, maxDim = 900, quality = 0.72) {
     try {
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
       const ref = storageRef(storage, path);
-      // Firebase's resumable upload retries transient network errors with
-      // backoff for a long time by default — on a flaky connection that can
-      // stall the whole form for a while before ever reaching the fallback
-      // below. Cap it so a bad connection fails over quickly instead.
-      const attempt = uploadBytes(ref, blob, { contentType: "image/jpeg" }).then(() => getDownloadURL(ref));
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Storage upload timed out")), 10000));
-      const url = await Promise.race([attempt, timeout]);
+      const url = await new Promise((resolve, reject) => {
+        const task = uploadBytesResumable(ref, blob, { contentType: "image/jpeg" });
+        const timeoutId = setTimeout(() => task.cancel(), 30000);
+        task.on(
+          "state_changed",
+          (snapshot) => onProgress?.(snapshot.totalBytes ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0),
+          (err) => { clearTimeout(timeoutId); reject(err); },
+          () => { clearTimeout(timeoutId); getDownloadURL(task.snapshot.ref).then(resolve, reject); }
+        );
+      });
       return { name: file.name, url };
     } catch (e) {
       console.error("[storage upload]", e);
@@ -5473,6 +5488,17 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // of leaving "Uploading..." stuck forever with no explanation.
   const [uploadErrorKeys, setUploadErrorKeys] = useState({});
   const markUploadError = (key, on) => setUploadErrorKeys((prev) => ({ ...prev, [key]: on }));
+  // Real bytes-transferred percentage per tile, fed by uploadPhoto's
+  // onProgress callback — replaces a static "Uploading..." with something
+  // that visibly moves, so a slow connection doesn't look identical to a
+  // stuck one.
+  const [uploadProgress, setUploadProgress] = useState({});
+  const markProgress = (key, pct) => setUploadProgress((prev) => ({ ...prev, [key]: pct }));
+  // The last File actually picked per tile — kept around purely so Retry
+  // can re-run the same upload without sending the driver back through the
+  // camera/library picker sheet for a failure that was probably just a
+  // network blip, not a bad photo.
+  const lastFilesRef = useRef({});
 
   const existingVehicleType = VEHICLES.find((v) => v.key === driver.vehicleSpec?.type);
   // The driver just types their vehicle's name — no dropdown of preset
@@ -5516,23 +5542,24 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     return key;
   };
 
-  const onVehiclePhoto = (setVal, key) => (f) => {
+  // Shared by all three KYC photo tiles (driver photo, DL, vehicle side) —
+  // onDoc/onVehiclePhoto used to be separate, identical copies of this same
+  // logic. Also used by retryUpload below, which re-invokes this with the
+  // same File instead of a fresh one from the picker.
+  const startPhotoUpload = (setVal, key) => (f) => {
     if (!f) return;
+    lastFilesRef.current[key] = f;
     markUploading(key, true);
     markUploadError(key, false);
-    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => {
+    markProgress(key, 0);
+    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`, 900, 0.72, (pct) => markProgress(key, pct)).then((p) => {
       markUploading(key, false);
       if (p) setVal(p); else markUploadError(key, true);
     });
   };
-  const onDoc = (setVal, key) => (f) => {
-    if (!f) return;
-    markUploading(key, true);
-    markUploadError(key, false);
-    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`).then((p) => {
-      markUploading(key, false);
-      if (p) setVal(p); else markUploadError(key, true);
-    });
+  const retryUpload = (setVal, key) => () => {
+    const f = lastFilesRef.current[key];
+    if (f) startPhotoUpload(setVal, key)(f);
   };
 
   const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
@@ -5597,11 +5624,11 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
         ].map(([key, label, val, setVal], i) => (
           <GuidedStep key={key} {...kycStepProps(i)} lang={lang}>
-            <PhotoPicker label={label} lang={lang} onSelect={onDoc(setVal, key)}>
+            <PhotoPicker label={label} lang={lang} onSelect={startPhotoUpload(setVal, key)}>
               <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
                 {uploadingKeys[key] ? (
                   <div className="p-2 flex flex-col items-center justify-center">
-                    <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</span>
+                    <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading" : lang === "mr" ? "अपलोड होत आहे" : "अपलोड हो रहा है"}{uploadProgress[key] ? ` ${uploadProgress[key]}%` : "..."}</span>
                   </div>
                 ) : (
                   <SafeImage
@@ -5616,11 +5643,18 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                     }
                   />
                 )}
-                <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: uploadErrorKeys[key] ? C.safety : val ? C.success : C.inkSoft }}>
-                  {uploadErrorKeys[key]
-                    ? (lang === "en" ? "Upload failed — try another photo" : lang === "mr" ? "अपलोड झाले नाही — दुसरा फोटो वापरा" : "अपलोड नहीं हुआ — दूसरी फोटो लें")
-                    : val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}
-                </span>
+                {uploadErrorKeys[key] ? (
+                  <div className="flex items-center gap-1.5 mt-0.5 pb-1">
+                    <span className="text-[9px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Upload failed" : lang === "mr" ? "अपलोड झाले नाही" : "अपलोड नहीं हुआ"}</span>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(setVal, key)(); }} className="text-[9px] font-bold underline" style={{ color: C.navy }}>
+                      {lang === "en" ? "Retry" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>
+                    {val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}
+                  </span>
+                )}
               </div>
             </PhotoPicker>
           </GuidedStep>
@@ -5675,10 +5709,10 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
             burden a new driver faces during signup. */}
         <div className="max-w-[180px] mb-2">
           <GuidedStep {...kycStepProps(4)} lang={lang}>
-            <PhotoPicker label={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"} lang={lang} onSelect={onVehiclePhoto(setVehiclePhotoSide, "vehicleSide")}>
+            <PhotoPicker label={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"} lang={lang} onSelect={startPhotoUpload(setVehiclePhotoSide, "vehicleSide")}>
               <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed ${C.marigoldDeep}`, background: C.paper, minHeight: 110 }}>
                 {uploadingKeys.vehicleSide ? (
-                  <div className="text-xs font-semibold py-6" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</div>
+                  <div className="text-xs font-semibold py-6" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading" : lang === "mr" ? "अपलोड होत आहे" : "अपलोड हो रहा है"}{uploadProgress.vehicleSide ? ` ${uploadProgress.vehicleSide}%` : "..."}</div>
                 ) : (
                   <SafeImage
                     src={vehiclePhotoSide?.url}
@@ -5693,11 +5727,18 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                   />
                 )}
               </div>
-              <div className="text-[9px] mt-0.5 text-center" style={{ color: uploadErrorKeys.vehicleSide ? C.safety : vehiclePhotoSide ? C.success : C.inkSoft }}>
-                {uploadErrorKeys.vehicleSide
-                  ? (lang === "en" ? "Upload failed — try another photo" : lang === "mr" ? "अपलोड झाले नाही — दुसरा फोटो वापरा" : "अपलोड नहीं हुआ — दूसरी फोटो लें")
-                  : vehiclePhotoSide ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
-              </div>
+              {uploadErrorKeys.vehicleSide ? (
+                <div className="flex items-center justify-center gap-1.5 mt-0.5">
+                  <span className="text-[9px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Upload failed" : lang === "mr" ? "अपलोड झाले नाही" : "अपलोड नहीं हुआ"}</span>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(setVehiclePhotoSide, "vehicleSide")(); }} className="text-[9px] font-bold underline" style={{ color: C.navy }}>
+                    {lang === "en" ? "Retry" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
+                  </button>
+                </div>
+              ) : (
+                <div className="text-[9px] mt-0.5 text-center" style={{ color: vehiclePhotoSide ? C.success : C.inkSoft }}>
+                  {vehiclePhotoSide ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
+                </div>
+              )}
             </PhotoPicker>
           </GuidedStep>
         </div>
