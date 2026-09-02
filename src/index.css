@@ -89,17 +89,10 @@ select {
 }
 
 /* "Searching for a vehicle" indicator (Customer's Active Ride screen,
-   shown while a posted load has zero bids yet) — a small truck icon
-   bouncing over a continuously scrolling dashed road, reading as "on
-   the way" rather than a generic circular buffering spinner, since
-   it's actually trucks the customer is waiting on. */
-@keyframes truckBounce {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-3px); }
-}
-.truck-bounce {
-  animation: truckBounce 0.6s ease-in-out infinite;
-}
+   shown while a posted load has zero bids yet) — a static truck icon
+   over a continuously scrolling dashed road, reading as "on the way"
+   rather than a generic circular buffering spinner, since it's
+   actually trucks the customer is waiting on. */
 @keyframes roadDashScroll {
   0%   { background-position: 0 0; }
   100% { background-position: -16px 0; }
