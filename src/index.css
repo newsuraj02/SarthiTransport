@@ -87,3 +87,27 @@ select {
 .toast-pop {
   animation: toastPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
+
+/* SuccessBurst's checkmark badge — a quick scale-in overshoot plus a single
+   expanding, fading ring (not a repeating pulse) for the "bid accepted /
+   booking confirmed" moment. */
+@keyframes successBurstRing {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 168, 84, 0.55); transform: scale(0.6); }
+  55%  { transform: scale(1.08); }
+  70%  { box-shadow: 0 0 0 18px rgba(0, 168, 84, 0); }
+  100% { box-shadow: 0 0 0 18px rgba(0, 168, 84, 0); transform: scale(1); }
+}
+.success-burst-ring {
+  animation: successBurstRing 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* App-wide tap feedback — every button presses down very slightly on tap
+   instead of giving no visual response at all. Pure CSS (no JS), so it
+   costs nothing on a slow phone. Disabled buttons are excluded so a
+   greyed-out button never looks tappable. */
+button:not(:disabled) {
+  transition: transform 0.08s ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.96);
+}

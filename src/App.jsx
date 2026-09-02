@@ -567,6 +567,111 @@ function usePersistedPhoto(key, initialValue) {
   return [value, setValue];
 }
 
+// Animates a displayed number smoothly toward `value` whenever it changes
+// (e.g. a wallet balance after a commission deduction or recharge), instead
+// of the digits snapping instantly — a single requestAnimationFrame loop,
+// cheap enough for a budget phone, that re-targets itself if `value` changes
+// again mid-animation instead of queuing/jumping.
+function useCountUp(value, duration = 700) {
+  const [display, setDisplay] = useState(value);
+  const displayRef = useRef(value);
+  const rafRef = useRef(null);
+  useEffect(() => {
+    if (value === displayRef.current) return;
+    const from = displayRef.current;
+    const to = value;
+    const start = performance.now();
+    cancelAnimationFrame(rafRef.current);
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const next = from + (to - from) * eased;
+      displayRef.current = next;
+      setDisplay(next);
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [value, duration]);
+  return display;
+}
+
+// Smoothly glides a lat/lng marker toward a new GPS fix instead of snapping
+// straight to it — live tracking otherwise looks choppy since real GPS
+// updates only land every few seconds. Re-targets mid-flight the same way
+// useCountUp does; returns `target` unchanged (no animation) whenever it's
+// null or this is the very first position received, so the marker still
+// appears immediately rather than gliding in from nowhere.
+function useSmoothPosition(target, duration = 1200) {
+  const [display, setDisplay] = useState(target);
+  const displayRef = useRef(target);
+  const rafRef = useRef(null);
+  useEffect(() => {
+    if (!target) { displayRef.current = null; setDisplay(null); return; }
+    const from = displayRef.current;
+    if (!from) { displayRef.current = target; setDisplay(target); return; }
+    if (from.lat === target.lat && from.lng === target.lng) return;
+    const start = performance.now();
+    cancelAnimationFrame(rafRef.current);
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const next = { lat: from.lat + (target.lat - from.lat) * eased, lng: from.lng + (target.lng - from.lng) * eased };
+      displayRef.current = next;
+      setDisplay(next);
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.lat, target?.lng, duration]);
+  return display;
+}
+
+// FLIP-animates a reordered list (First-Last-Invert-Play): whenever the
+// order of `itemIds` changes, each item that moved is nudged back to its
+// previous on-screen spot with a transform and then transitioned to 0, so
+// the reorder reads as a smooth slide instead of an instant snap. Items are
+// located by `data-flip-id` inside `containerRef` — no measuring library,
+// just getBoundingClientRect, and it does nothing at all unless the order
+// actually changed.
+function useFlipListAnimation(containerRef, itemIds) {
+  const prevRectsRef = useRef(new Map());
+  const idsKey = itemIds.join(",");
+  useEffect(() => {
+    const container = containerRef.current;
+    const prevRects = prevRectsRef.current;
+    if (container && prevRects.size > 0) {
+      itemIds.forEach((id) => {
+        const el = container.querySelector(`[data-flip-id="${id}"]`);
+        if (!el) return;
+        const prev = prevRects.get(id);
+        const next = el.getBoundingClientRect();
+        if (!prev) return;
+        const dy = prev.top - next.top;
+        if (Math.abs(dy) < 1) return;
+        el.style.transition = "none";
+        el.style.transform = `translateY(${dy}px)`;
+        // Force layout so the browser registers the starting transform
+        // before the transition below is applied, otherwise it never animates.
+        // eslint-disable-next-line no-unused-expressions
+        el.getBoundingClientRect();
+        el.style.transition = "transform 0.28s ease";
+        el.style.transform = "";
+      });
+    }
+    const newRects = new Map();
+    if (container) {
+      itemIds.forEach((id) => {
+        const el = container.querySelector(`[data-flip-id="${id}"]`);
+        if (el) newRects.set(id, el.getBoundingClientRect());
+      });
+    }
+    prevRectsRef.current = newRects;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
+}
+
 function playBeepTone() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -685,6 +790,31 @@ function LanguageSelect({ onSelect }) {
             <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{o.sub}</div>
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// One-shot celebratory overlay for the single most emotionally significant
+// moment in the app — a bid getting accepted (customer books a vehicle, or a
+// driver's quote wins the load). Self-dismissing (no button, nothing to
+// tap away), non-blocking (pointer-events: none, so it never delays the
+// customer/driver from acting on what's now on screen underneath it), and
+// pure CSS animation — no JS animation loop, just the toast-pop keyframe
+// already used elsewhere plus one extra pulse ring, so it costs nothing on
+// a slow phone. Callers own the `show` boolean and should clear it after
+// ~1.4s (matches the animation's own duration).
+function SuccessBurst({ show, text, lang }) {
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center" style={{ pointerEvents: "none" }}>
+      <div className="toast-pop flex flex-col items-center gap-2">
+        <div className="success-burst-ring rounded-full flex items-center justify-center" style={{ width: 84, height: 84, background: C.success }}>
+          <CheckCircle2 size={44} color="#FFFFFF" strokeWidth={2.5} />
+        </div>
+        {text && (
+          <div className="rounded-full px-4 py-1.5 shadow-lg text-sm font-black" style={{ background: C.ink, color: "#FFFFFF" }}>{text}</div>
+        )}
       </div>
     </div>
   );
@@ -918,9 +1048,17 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   const hasCoords = toPickup ? (pickupLat != null && pickupLng != null) : (pickupLat != null && pickupLng != null && dropLat != null && dropLng != null);
   const pickupPos = pickupLat != null && pickupLng != null ? { lat: pickupLat, lng: pickupLng } : null;
   const dropPos = dropLat != null && dropLng != null ? { lat: dropLat, lng: dropLng } : null;
-  const driverPos = driverLocation?.lat != null && driverLocation?.lng != null ? { lat: driverLocation.lat, lng: driverLocation.lng } : null;
-  const customerPos = customerLocation?.lat != null && customerLocation?.lng != null ? { lat: customerLocation.lat, lng: customerLocation.lng } : null;
-  const routeOrigin = toPickup ? driverPos : pickupPos;
+  // Raw GPS fixes — used for the actual route request/bounds-fitting below,
+  // which should only recompute on a genuine new fix, not on every
+  // in-between animation frame. The marker itself renders the smoothed
+  // (glided) version further down instead, via useSmoothPosition, so live
+  // tracking doesn't look like it's teleporting between pings every few
+  // seconds.
+  const rawDriverPos = driverLocation?.lat != null && driverLocation?.lng != null ? { lat: driverLocation.lat, lng: driverLocation.lng } : null;
+  const rawCustomerPos = customerLocation?.lat != null && customerLocation?.lng != null ? { lat: customerLocation.lat, lng: customerLocation.lng } : null;
+  const driverPos = useSmoothPosition(rawDriverPos);
+  const customerPos = useSmoothPosition(rawCustomerPos);
+  const routeOrigin = toPickup ? rawDriverPos : pickupPos;
   const routeDestination = toPickup ? pickupPos : dropPos;
   const roadPath = useDrivingRoute(routeOrigin, routeDestination, isLoaded, hasKey);
   const [mapInstance, setMapInstance] = useState(null);
@@ -3588,6 +3726,29 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const [showDocs, setShowDocs] = useState(false);
   const docsSent = !!b.documents?.file?.url;
 
+  // Computed unconditionally (not just inside the b.status === "Bidding"
+  // branch below) purely so useFlipListAnimation — a hook — can be called
+  // unconditionally too, with the right ordering, on every render.
+  const sortedBids = b.status === "Bidding" ? (b.bids || []).filter((x) => !x.paused).sort((x, y) => x.amount - y.amount || (y.hours || 0) - (x.hours || 0)) : [];
+  const selectedId = selectedBid;
+  // Once the customer taps a bid, it jumps to the top of the list — makes
+  // the screen visibly "settle" around their choice instead of leaving it
+  // wherever price-sorting happened to place it (which could be buried in
+  // the scrollable rest, far from the Book button that now appears right
+  // under it). The true lowest-price bid still keeps its "Lowest bid" tag
+  // even if it's no longer the one on top.
+  const displayBids = selectedId
+    ? [...sortedBids.filter((x) => x.id === selectedId), ...sortedBids.filter((x) => x.id !== selectedId)]
+    : sortedBids;
+  const lowestBidId = sortedBids[0]?.id;
+  // Animates the jump-to-top above as a smooth slide instead of an instant
+  // snap — see useFlipListAnimation. bidsListRef is attached to the shared
+  // wrapper around both the pinned top bid and the scrollable rest below,
+  // so the technique still works even though the moving card physically
+  // reparents between those two containers.
+  const bidsListRef = useRef(null);
+  useFlipListAnimation(bidsListRef, displayBids.map((x) => x.id));
+
   const shareTrip = () => {
     const text = lang === "en"
       ? `My goods are moving via Apna Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
@@ -3598,18 +3759,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   };
 
   if (b.status === "Bidding") {
-    const sortedBids = b.bids.filter((x) => !x.paused).sort((x, y) => x.amount - y.amount || (y.hours || 0) - (x.hours || 0));
-    const selectedId = selectedBid;
-    // Once the customer taps a bid, it jumps to the top of the list — makes
-    // the screen visibly "settle" around their choice instead of leaving it
-    // wherever price-sorting happened to place it (which could be buried in
-    // the scrollable rest, far from the Book button that now appears right
-    // under it). The true lowest-price bid still keeps its "Lowest bid" tag
-    // even if it's no longer the one on top.
-    const displayBids = selectedId
-      ? [...sortedBids.filter((x) => x.id === selectedId), ...sortedBids.filter((x) => x.id !== selectedId)]
-      : sortedBids;
-    const lowestBidId = sortedBids[0]?.id;
     // Each bid comes from a driver who may have a different vehicle type,
     // so the vehicle shown per bid is that driver's own — never the load's
     // pre-suggested type, since the customer never confirmed one.
@@ -3619,7 +3768,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       const bidVehicleType = VEHICLES.find((vt) => vt.key === bidDriver?.vehicleSpec?.type);
       return (
         <React.Fragment key={bid.id}>
-        <div onClick={() => setSelectedBid(bid.id)}
+        <div onClick={() => setSelectedBid(bid.id)} data-flip-id={bid.id}
           className="w-full text-left rounded-xl p-3 relative cursor-pointer"
           style={{ background: C.paper, border: `${isSelected ? 2.5 : 1.5}px solid ${isSelected ? C.marigoldDeep : isLowest ? C.success : C.marigoldDeep}` }}>
           {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : lang === "mr" ? "सर्वात कमी बोली" : "सबसे कम बोली"}</span>}
@@ -3688,7 +3837,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
                 <span className="text-sm font-black text-center" style={{ color: "#FFFFFF" }}>{lang === "en" ? "In some time, you will see vehicles according to your requirement" : lang === "mr" ? "थोड्याच वेळात तुमच्या गरजेनुसार गाड्या दिसतील" : "कुछ ही समय में आपकी ज़रूरत के अनुसार गाड़ियां दिखेंगी"}</span>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2" ref={bidsListRef}>
                 {bidRow(displayBids[0], displayBids[0].id === lowestBidId)}
                 {displayBids.length > 1 && (
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
@@ -4109,6 +4258,13 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
   // right after a bid is accepted (see the onBidAccepted callbacks below)
   // until the menu is actually opened — see HamburgerHint.
   const [showBookingHint, setShowBookingHint] = useState(false);
+  // The single most emotionally significant moment in the app — see
+  // SuccessBurst. Fires every time acceptBid succeeds, immediate or advance.
+  const [showAcceptedBurst, setShowAcceptedBurst] = useState(false);
+  const fireAcceptedBurst = () => {
+    setShowAcceptedBurst(true);
+    setTimeout(() => setShowAcceptedBurst(false), 1400);
+  };
   // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
   // so the header knows whether the "What do you need?" chooser is on
   // screen right now — that's the only place the hamburger menu shows.
@@ -4250,6 +4406,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
 
   return (
     <>
+      <SuccessBurst show={showAcceptedBurst} text={lang === "en" ? "Booked!" : lang === "mr" ? "बुक झाले!" : "बुक हो गया!"} lang={lang} />
       <FloatingHamburgerHint show={showBookingHint && !showHamburger} onOpenMenu={() => { setMenuOpen(true); setShowBookingHint(false); }} lang={lang} />
       <div className="flex-1 overflow-y-auto relative">
         {headerHasContent && (
@@ -4365,6 +4522,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
               onAddAnother={() => setAddingAnother(true)}
               onBidAccepted={(booking) => {
+                fireAcceptedBurst();
                 // An accepted bid on a future-dated load moves it straight out
                 // of the Current tab (see activeBooking/advanceBookings above) —
                 // jump straight to its Advance detail view instead of dropping
@@ -4385,7 +4543,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
             {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
               <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid}
                 driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
-                drivers={drivers} lang={lang} onBidAccepted={() => setShowBookingHint(true)} />
+                drivers={drivers} lang={lang} onBidAccepted={() => { fireAcceptedBurst(); setShowBookingHint(true); }} />
             ) : (
               <div className="px-5 py-5">
                 {advanceBookings.length === 0 ? (
@@ -4474,7 +4632,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   if (myBid) return null;
 
   return (
-    <div className="rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
+    <div className="toast-pop rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
       </div>
@@ -4927,6 +5085,11 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
   const myPendingBidIdsRef = useRef(null);
   const [bidRejectedToast, setBidRejectedToast] = useState(false);
   const [bidSentToast, setBidSentToast] = useState(false);
+  // The driver-side equivalent of CustomerApp's showAcceptedBurst — see
+  // SuccessBurst. Fires the moment one of this driver's pending bids
+  // resolves in their own favor (the load leaves Bidding with their name on
+  // it), same detection shape as lostOne just below.
+  const [bidWonBurst, setBidWonBurst] = useState(false);
   const bidStatusKey = bookings.map((b) => `${b.id}:${b.status}:${b.driverName || ""}`).join(",");
   useEffect(() => {
     const currentPending = new Set(bookings.filter((b) => b.status === "Bidding" && b.bids?.some((x) => x.driverName === driver.name)).map((b) => b.id));
@@ -4943,6 +5106,15 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
     if (lostOne) {
       setBidRejectedToast(true);
       setTimeout(() => setBidRejectedToast(false), 4000);
+    }
+    const wonOne = [...prevPending].some((id) => {
+      if (currentPending.has(id)) return false;
+      const b = bookings.find((x) => x.id === id);
+      return b && b.status !== "Bidding" && b.driverName === driver.name;
+    });
+    if (wonOne) {
+      setBidWonBurst(true);
+      setTimeout(() => setBidWonBurst(false), 1400);
     }
     const sentOne = [...currentPending].some((id) => !prevPending.has(id));
     if (sentOne) {
@@ -5019,6 +5191,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
 
   return (
     <div className={`px-5 pb-5 ${myTrip ? "pt-2" : "pt-5"}`}>
+      <SuccessBurst show={bidWonBurst} text={lang === "en" ? "You won the load!" : lang === "mr" ? "लोड मिळाला!" : "लोड मिल गया!"} lang={lang} />
       {myTrip && !myTrip.loadingStartedAt && (
         <div className="mb-4">
           <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
@@ -5119,6 +5292,10 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
 function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bonusPct, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  // Balance/bonus count smoothly toward their real value instead of
+  // snapping — see useCountUp.
+  const displayWallet = useCountUp(driver.wallet || 0);
+  const displayBonus = useCountUp(driver.bonus || 0);
   const inTrial = isInTrial(driver.createdAt);
   const myTrips = tripLog.filter((t) => t.driverName === driver.name && t.status !== "Cancelled");
   const myWithdrawals = (withdrawals || []).filter((w) => w.driverName === driver.name);
@@ -5159,7 +5336,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
       <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"}</h2>
       <div className="rounded-xl p-4 mb-3" style={{ background: C.navy }}>
         <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Wallet Balance" : lang === "mr" ? "वॉलेट बॅलन्स" : "वॉलेट बैलेंस"}</div>
-        <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(driver.wallet)}</div>
+        <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(displayWallet)}</div>
         {!inTrial && driver.wallet < minWallet && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : lang === "mr" ? `किमान ${fmt(minWallet)} बॅलन्स आवश्यक आहे — अ‍ॅप बंद होऊ शकते` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
         )}
@@ -5202,7 +5379,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
       <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
         <div className="flex items-center justify-between mb-1">
           <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Driver Bonus" : lang === "mr" ? "ड्रायव्हर बोनस" : "ड्राइवर बोनस"}</div>
-          <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(driver.bonus || 0)}</div>
+          <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(displayBonus)}</div>
         </div>
         <div className="text-[11px] font-semibold mb-2" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Withdraw anytime" : lang === "mr" ? "कधीही काढा" : "कभी भी निकालें"}</div>
         <button onClick={() => requestWithdrawal(driver.bonus || 0)} disabled={!driver.bonus}
