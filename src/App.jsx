@@ -6617,10 +6617,10 @@ function AdminKyc({ drivers, updateDriverKyc, vehicleTypes, addVehicleType, lang
           ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}`
           : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}`)
       : (lang === "en"
-          ? `If you're unable to fill the KYC form yourself, we can fill it in for you — just reply here with: Driver photo, Driving license, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height.`
+          ? `If you're unable to fill the KYC form yourself, we can fill it in for you — just reply here with: Driver photo, Driving license, Vehicle side photo, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height.`
           : lang === "mr"
-          ? `जर तुम्हाला KYC फॉर्म स्वतः भरता येत नसेल, तर आम्ही तो तुमच्या वतीने भरून देऊ — फक्त इथे पाठवा: ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची.`
-          : `अगर आप खुद KYC फॉर्म नहीं भर पा रहे हैं, तो हम आपकी ओर से भर देंगे — बस यहां भेजें: ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई।`);
+          ? `जर तुम्हाला KYC फॉर्म स्वतः भरता येत नसेल, तर आम्ही तो तुमच्या वतीने भरून देऊ — फक्त इथे पाठवा: ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडीचा साइडचा फोटो, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची.`
+          : `अगर आप खुद KYC फॉर्म नहीं भर पा रहे हैं, तो हम आपकी ओर से भर देंगे — बस यहां भेजें: ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी की साइड फोटो, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई।`);
     return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
   };
 
