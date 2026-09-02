@@ -5467,24 +5467,15 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
   );
 }
 
-function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, onFirstSubmit, persistScope = "" }) {
+function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, onFirstSubmit }) {
   const VEHICLES = vehicleTypes;
   // Persisted to localStorage so a refresh mid-fill (slow connection,
   // accidental reload) doesn't force re-uploading photos or retyping —
   // cleared once submit() actually attaches them to the driver doc. Falls
   // back to whatever's already saved on the driver (e.g. on KYC
   // resubmission after a rejection) only when there's no in-progress draft.
-  //
-  // persistScope defaults to "" for every driver-self-serve entry point
-  // (DriverApp, DriverOnboarding, DriverKycPortal) — each of those only
-  // ever has one driver's context per browser, so a plain constant key is
-  // fine. AdminKyc's "complete on behalf" flow passes the target driver's
-  // mobile here instead, since an admin can open this form for several
-  // different drivers in the same browser session — without a per-driver
-  // key, an unsubmitted draft for one driver would silently leak into the
-  // form the next time admin opens it for someone else.
-  const [dl, setDl] = usePersistedPhoto(`sarthi_driverKyc_dl${persistScope}`, null);
-  const [photo, setPhoto] = usePersistedPhoto(`sarthi_driverKyc_photo${persistScope}`, null);
+  const [dl, setDl] = usePersistedPhoto("sarthi_driverKyc_dl", null);
+  const [photo, setPhoto] = usePersistedPhoto("sarthi_driverKyc_photo", null);
   // Which photo tiles are mid-upload — a set, not a single value, so
   // uploading two photos at once (e.g. tapping Front then Side before the
   // first finishes) doesn't make one tile's "uploading" indicator vanish
@@ -5513,14 +5504,14 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // The driver just types their vehicle's name — no dropdown of preset
   // types to pick from. Resolved to a vehicleTypes entry (reusing a
   // matching one by name, or creating a new one) only at submit time.
-  const [vehicleTypeName, setVehicleTypeName] = usePersistedState(`sarthi_driverKyc_vehicleTypeName${persistScope}`, existingVehicleType ? vehicleLabel(existingVehicleType, lang) : "");
-  const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto(`sarthi_driverKyc_photoFront${persistScope}`, driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
-  const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto(`sarthi_driverKyc_photoSide${persistScope}`, driver.vehicleSpec?.photoSide || null);
-  const [capacityKg, setCapacityKg] = usePersistedState(`sarthi_driverKyc_capacityKg${persistScope}`, driver.vehicleSpec?.capacityKg || "");
-  const [length, setLength] = usePersistedState(`sarthi_driverKyc_length${persistScope}`, driver.vehicleSpec?.length || "");
-  const [width, setWidth] = usePersistedState(`sarthi_driverKyc_width${persistScope}`, driver.vehicleSpec?.width || "");
-  const [height, setHeight] = usePersistedState(`sarthi_driverKyc_height${persistScope}`, driver.vehicleSpec?.height || "");
-  const [vehicleNumber, setVehicleNumber] = usePersistedState(`sarthi_driverKyc_vehicleNumber${persistScope}`, driver.vehicleSpec?.vehicleNumber || "");
+  const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : "");
+  const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
+  const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
+  const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg || "");
+  const [length, setLength] = usePersistedState("sarthi_driverKyc_length", driver.vehicleSpec?.length || "");
+  const [width, setWidth] = usePersistedState("sarthi_driverKyc_width", driver.vehicleSpec?.width || "");
+  const [height, setHeight] = usePersistedState("sarthi_driverKyc_height", driver.vehicleSpec?.height || "");
+  const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "");
 
   // Auto-fills dimensions from VEHICLE_MODEL_SPECS the moment the typed
   // vehicle name matches a known model — but only into fields the driver
@@ -6517,7 +6508,7 @@ function KycDocThumb({ url, label, lang, fileName, height = "h-24" }) {
   );
 }
 
-function AdminKyc({ drivers, updateDriverKyc, vehicleTypes, addVehicleType, lang }) {
+function AdminKyc({ drivers, updateDriverKyc, lang }) {
   // "Incomplete" = still needs admin's attention — either never
   // submitted any KYC documents, or submitted and is sitting in Pending
   // review (the Approve button on that row only actually does anything
@@ -6529,11 +6520,6 @@ function AdminKyc({ drivers, updateDriverKyc, vehicleTypes, addVehicleType, lang
   const complete = drivers.filter((d) => d.vehicleSpec && d.kyc !== "Pending");
   const [view, setView] = useState("incomplete"); // 'incomplete' | 'complete'
   const [expandedId, setExpandedId] = useState(null);
-  // Which not-yet-submitted driver's "complete KYC on their behalf" form is
-  // open — admin fills in the same DriverKyc form the driver would, for a
-  // driver who can't/won't self-serve (no smartphone comfort, keeps
-  // dropping the WhatsApp link, etc). At most one open at a time.
-  const [completingId, setCompletingId] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null); // { ok, sentCount? } | null
   // Persisted (not just in-memory) because tapping WhatsApp on a phone
@@ -6554,17 +6540,6 @@ function AdminKyc({ drivers, updateDriverKyc, vehicleTypes, addVehicleType, lang
   const markWhatsappSent = (mobile) => setWhatsappSentMap((prev) => ({ ...prev, [mobile]: { count: (prev[mobile]?.count || 0) + 1, date: todayStr() } }));
   const sentToday = (mobile) => whatsappSentMap[mobile]?.date === todayStr();
   const nudgedBefore = (mobile) => (whatsappSentMap[mobile]?.count || 0) > 0;
-  // setDriver-compatible wrapper for DriverKyc's "complete on behalf" use
-  // below — writes the target driver's doc directly via admin's own
-  // (already-authenticated) session instead of going through a driver
-  // login DriverKyc would normally expect. Uses replaceDoc, same as the
-  // root App's own setDriver a real driver session uses — DriverKyc always
-  // calls this with a full next-driver object (built from a `...driver`
-  // spread), so this is the identical write a driver's own device would
-  // have made.
-  const setDriverForAdmin = (mobile) => (next) => {
-    replaceDoc("drivers", mobile, next).catch((e) => console.error("[admin kyc upload]", e));
-  };
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
     : lang === "mr"
@@ -6606,8 +6581,8 @@ function AdminKyc({ drivers, updateDriverKyc, vehicleTypes, addVehicleType, lang
   // see nudgedBefore/markWhatsappSent above. First time, it's just the
   // portal link, same as always. From the second time on, a driver who
   // still hasn't managed the form on their own is asked to instead just
-  // reply with the raw details/photos over WhatsApp chat, so admin can
-  // key them in directly via AdminKyc's "Upload" (complete-on-behalf) flow.
+  // reply with the raw details/photos over WhatsApp chat, so admin can key
+  // them into that driver's Firestore doc by hand.
   const whatsappLink = (mobile) => {
     const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
     const msg = !nudgedBefore(mobile)
@@ -6617,10 +6592,10 @@ function AdminKyc({ drivers, updateDriverKyc, vehicleTypes, addVehicleType, lang
           ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}`
           : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}`)
       : (lang === "en"
-          ? `If you're unable to fill the KYC form yourself, we can fill it in for you — just reply here with: Driver photo, Driving license, Vehicle side photo, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height.`
+          ? `If you're unable to fill the KYC form yourself, we can fill it in for you — just reply here with: Phone number, Driver photo, Driving license, Vehicle side photo, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height.`
           : lang === "mr"
-          ? `जर तुम्हाला KYC फॉर्म स्वतः भरता येत नसेल, तर आम्ही तो तुमच्या वतीने भरून देऊ — फक्त इथे पाठवा: ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडीचा साइडचा फोटो, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची.`
-          : `अगर आप खुद KYC फॉर्म नहीं भर पा रहे हैं, तो हम आपकी ओर से भर देंगे — बस यहां भेजें: ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी की साइड फोटो, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई।`);
+          ? `जर तुम्हाला KYC फॉर्म स्वतः भरता येत नसेल, तर आम्ही तो तुमच्या वतीने भरून देऊ — फक्त इथे पाठवा: फोन नंबर, ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडीचा साइडचा फोटो, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची.`
+          : `अगर आप खुद KYC फॉर्म नहीं भर पा रहे हैं, तो हम आपकी ओर से भर देंगे — बस यहां भेजें: फोन नंबर, ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी की साइड फोटो, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई।`);
     return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
   };
 
@@ -6714,51 +6689,30 @@ function AdminKyc({ drivers, updateDriverKyc, vehicleTypes, addVehicleType, lang
                   );
                 }
                 // Not submitted yet — Approve is shown but disabled since
-                // there's nothing to review; WhatsApp nudges the driver to
-                // self-serve, Upload lets admin fill the same form in on
-                // their behalf right here (for a driver who can't/won't).
-                const completing = completingId === d.id;
+                // there's nothing to review; WhatsApp is the live action.
                 return (
-                  <div key={d.id} className="rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                        <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="flex gap-2">
-                          <button disabled title={lang === "en" ? "Approve unlocks once this driver submits KYC" : lang === "mr" ? "ड्रायव्हरने KYC जमा केल्यावरच अप्रूव्ह करता येईल" : "ड्राइवर के KYC जमा करने के बाद ही अप्रूव कर सकते हैं"}
-                            className="rounded-lg px-3 py-2 text-xs font-bold" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
-                            {lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}
-                          </button>
-                          <a href={whatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(d.mobile)}
-                            className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
-                            <MessageCircle size={14} /> WhatsApp
-                          </a>
-                          <button onClick={() => setCompletingId(completing ? null : d.id)}
-                            className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: completing ? C.inkSoft : C.navy }}>
-                            <Upload size={14} /> {completing ? (lang === "en" ? "Close" : lang === "mr" ? "बंद करा" : "बंद करें") : (lang === "en" ? "Upload" : lang === "mr" ? "अपलोड करा" : "अपलोड करें")}
-                          </button>
-                        </div>
-                        {sentToday(d.mobile) && (
-                          <span className="text-[10px] font-semibold" style={{ color: C.navy }}>
-                            ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
-                          </span>
-                        )}
-                      </div>
+                  <div key={d.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                      <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
                     </div>
-                    {completing && (
-                      <div className="mt-2 pt-2 rounded-lg" style={{ borderTop: `1px solid ${C.line}` }}>
-                        <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5" style={{ background: C.metallicGold }}>
-                          <ShieldCheck size={13} color="#000000" />
-                          <span className="text-[10px] font-bold" style={{ color: "#000000" }}>
-                            {lang === "en" ? `Filling this in on behalf of ${d.name}.` : lang === "mr" ? `${d.name} च्या वतीने भरत आहात.` : `${d.name} की ओर से भर रहे हैं।`}
-                          </span>
-                        </div>
-                        <DriverKyc driver={d} setDriver={setDriverForAdmin(d.mobile)} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
-                          persistScope={`_admin_${d.mobile}`} onFirstSubmit={() => setCompletingId(null)} />
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <div className="flex gap-2">
+                        <button disabled title={lang === "en" ? "Approve unlocks once this driver submits KYC" : lang === "mr" ? "ड्रायव्हरने KYC जमा केल्यावरच अप्रूव्ह करता येईल" : "ड्राइवर के KYC जमा करने के बाद ही अप्रूव कर सकते हैं"}
+                          className="rounded-lg px-3 py-2 text-xs font-bold" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+                          {lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}
+                        </button>
+                        <a href={whatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(d.mobile)}
+                          className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
+                          <MessageCircle size={14} /> WhatsApp
+                        </a>
                       </div>
-                    )}
+                      {sentToday(d.mobile) && (
+                        <span className="text-[10px] font-semibold" style={{ color: C.navy }}>
+                          ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -7679,7 +7633,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
         ))}
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} />}
-      {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
+      {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
