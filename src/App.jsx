@@ -3895,7 +3895,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
 // Editable customer profile — photo, name, email, mobile (read-only, tied to
 // the verified login), and address, with a Save button that persists via
 // onUpdateProfile.
-function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, onLogout }) {
+function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, onChangeLang, onLogout }) {
   const [name, setName] = useState(customerProfile?.name || "");
   const [email, setEmail] = useState(customerProfile?.email || "");
   const [photo, setPhoto] = useState(customerProfile?.photo || null);
@@ -3966,6 +3966,14 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : lang === "mr" ? "मोबाइल" : "मोबाइल"}</label>
           <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, background: C.bg, color: C.inkSoft }} value={customerMobile || ""} disabled />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Language" : lang === "mr" ? "भाषा" : "भाषा"}</label>
+          <select className={inputCls} style={inputStyle} value={lang} onChange={(e) => onChangeLang?.(e.target.value)}>
+            <option value="en">English</option>
+            <option value="hi">हिंदी</option>
+            <option value="mr">मराठी</option>
+          </select>
         </div>
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : lang === "mr" ? "ईमेल (ऐच्छिक)" : "ईमेल (वैकल्पिक)"}</label>
@@ -4067,7 +4075,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -4193,7 +4201,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
         </div>
         {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} />}
         {settingsView === "profile" && (
-          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} lang={lang} onLogout={onLogout} />
+          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} />
         )}
         {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
         {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={customerMobile} toRole="customer" lang={lang} onOpen={announcementAlerts.markSeen} />}
@@ -5492,7 +5500,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
 // separately uploadable here — it's the KYC "Driver Photo" (see DriverKyc's
 // submit, which writes it to driver.photo directly), shown read-only so
 // it's always exactly what the customer sees on their active ride page.
-function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments }) {
+function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, onEditDocuments }) {
   const [name, setName] = useState(driver?.name || "");
   const [saved, setSaved] = useState(false);
 
@@ -5548,6 +5556,14 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
         <div>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : lang === "mr" ? "मोबाइल" : "मोबाइल"}</label>
           <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, background: C.bg, color: C.inkSoft }} value={driver?.mobile || ""} disabled />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Language" : lang === "mr" ? "भाषा" : "भाषा"}</label>
+          <select className={inputCls} style={inputStyle} value={lang} onChange={(e) => onChangeLang?.(e.target.value)}>
+            <option value="en">English</option>
+            <option value="hi">हिंदी</option>
+            <option value="mr">मराठी</option>
+          </select>
         </div>
 
         {/* Every document submitted with KYC, visible right here — View/
@@ -5617,7 +5633,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onLogout, onEditDocuments 
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
+function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
@@ -5689,7 +5705,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
         </div>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
         {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
-        {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
+        {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
         {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} onOpen={announcementAlerts.markSeen} />}
       </div>
     );
@@ -8071,7 +8087,7 @@ export default function App() {
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
-            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onLogout={logout}
+            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
             adminNotifications={adminNotifications} />
         )}
@@ -8121,7 +8137,7 @@ export default function App() {
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
-            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onLogout={logout}
+            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
             onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} />
         )}
