@@ -6525,21 +6525,15 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   // Persisted (not just in-memory) because tapping WhatsApp on a phone
   // switches away to the WhatsApp app — mobile browsers/TWAs routinely
   // discard or reload a backgrounded tab like that, which would silently
-  // wipe a plain useState the moment admin switches back. Keyed by mobile
-  // -> { count, date }: `date` is just today's date so the "✓ Message
-  // sent" tick clears itself the next day instead of accumulating forever
-  // (opening WhatsApp still doesn't guarantee the message was actually
-  // sent from there, just that admin already nudged this driver today);
-  // `count` never resets — it's what whatsappLink below uses to tell a
-  // first-ever nudge (still ask them to fill the form themselves) from
-  // any nudge after that (offer to fill it in on their behalf instead,
-  // since a driver who didn't manage it the first time around is unlikely
-  // to on a repeat ask).
+  // wipe a plain useState the moment admin switches back. Keyed by
+  // mobile -> the date it was tapped, so the tick clears itself the next
+  // day instead of accumulating forever (opening WhatsApp still doesn't
+  // guarantee the message was actually sent from there, just that admin
+  // already nudged this driver today).
   const todayStr = () => new Date().toISOString().slice(0, 10);
   const [whatsappSentMap, setWhatsappSentMap] = usePersistedState("sarthi_kycWhatsappSent", {});
-  const markWhatsappSent = (mobile) => setWhatsappSentMap((prev) => ({ ...prev, [mobile]: { count: (prev[mobile]?.count || 0) + 1, date: todayStr() } }));
-  const sentToday = (mobile) => whatsappSentMap[mobile]?.date === todayStr();
-  const nudgedBefore = (mobile) => (whatsappSentMap[mobile]?.count || 0) > 0;
+  const markWhatsappSent = (mobile) => setWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStr() }));
+  const sentToday = (mobile) => whatsappSentMap[mobile] === todayStr();
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
     : lang === "mr"
@@ -6577,25 +6571,18 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   // (?driverKyc=1&mobile=...) prefilled, admin just taps Send — no
   // login/OTP step on the other end either, see DriverKycPortal.
   //
-  // The message itself escalates on the SECOND (and every later) nudge —
-  // see nudgedBefore/markWhatsappSent above. First time, it's just the
-  // portal link, same as always. From the second time on, a driver who
-  // still hasn't managed the form on their own is asked to instead just
-  // reply with the raw details/photos over WhatsApp chat, so admin can key
-  // them into that driver's Firestore doc by hand.
+  // The message covers both paths at once: the self-serve portal link,
+  // plus a fallback asking the driver to just reply on this same WhatsApp
+  // number with the raw details/photos if they can't manage the form
+  // themselves, so admin can key them into that driver's Firestore doc
+  // by hand.
   const whatsappLink = (mobile) => {
     const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
-    const msg = !nudgedBefore(mobile)
-      ? (lang === "en"
-          ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}`
-          : lang === "mr"
-          ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}`
-          : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}`)
-      : (lang === "en"
-          ? `If you're unable to fill the KYC form yourself, we can fill it in for you — just reply here with: Phone number, Driver photo, Driving license, Vehicle side photo, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height.`
-          : lang === "mr"
-          ? `जर तुम्हाला KYC फॉर्म स्वतः भरता येत नसेल, तर आम्ही तो तुमच्या वतीने भरून देऊ — फक्त इथे पाठवा: फोन नंबर, ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडीचा साइडचा फोटो, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची.`
-          : `अगर आप खुद KYC फॉर्म नहीं भर पा रहे हैं, तो हम आपकी ओर से भर देंगे — बस यहां भेजें: फोन नंबर, ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी की साइड फोटो, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई।`);
+    const msg = lang === "en"
+      ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}\nIf you're unable to fill the form yourself, share it on this WhatsApp number instead — reply here with: Phone number, Driver photo, Driving license, Vehicle side photo, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height — and we'll complete it for you.`
+      : lang === "mr"
+      ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}\nजर तुम्हाला स्वतः फॉर्म भरता येत नसेल, तर त्याऐवजी याच व्हॉट्सअॅप नंबरवर पाठवा — इथे उत्तर द्या: फोन नंबर, ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडीचा साइडचा फोटो, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची — आम्ही तुमच्या वतीने पूर्ण करू.`
+      : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}\nअगर आप खुद फॉर्म नहीं भर पा रहे हैं, तो इसके बजाय इसी व्हाट्सएप नंबर पर भेजें — यहां जवाब दें: फोन नंबर, ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी की साइड फोटो, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई — और हम आपकी ओर से पूरा कर देंगे।`;
     return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
   };
 
