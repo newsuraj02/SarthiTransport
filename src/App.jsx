@@ -5535,10 +5535,15 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     });
   };
 
-  const canSubmit = !!(photo && dl && vehiclePhotoFront && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
+  const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
   // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
   // dimensions are optional (not part of canSubmit), so they're skipped.
-  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoFront, !!vehiclePhotoSide];
+  // Vehicle Front isn't required here either — see the photo tile below,
+  // same reasoning as DriverProfileEdit's document list already applied:
+  // the side profile is the only vehicle photo that matters to a customer
+  // browsing bids, so dropping Front halves the photo-upload burden on
+  // signup without losing anything a customer actually sees.
+  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoSide];
   const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
   // First-time submission within this driver's own 30-day trial (from
   // their own signup date) skips the admin approval wait entirely — a
@@ -5662,39 +5667,39 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tata 109" : lang === "mr" ? "उदा: Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
         </GuidedStep>
 
-        <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photos (Front & Side)" : lang === "mr" ? "गाडीचा फोटो (पुढून व बाजूने)" : "गाड़ी की फोटो (आगे व साइड)"}</label>
-        <div className="grid grid-cols-2 gap-2 mb-2">
-          {[
-            ["vehicleFront", lang === "en" ? "Front" : lang === "mr" ? "पुढून" : "आगे से", vehiclePhotoFront, setVehiclePhotoFront],
-            ["vehicleSide", lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से", vehiclePhotoSide, setVehiclePhotoSide],
-          ].map(([key, label, val, setVal], i) => (
-            <GuidedStep key={key} {...kycStepProps(4 + i)} lang={lang}>
-              <PhotoPicker label={label} lang={lang} onSelect={onVehiclePhoto(setVal, key)}>
-                <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed ${C.marigoldDeep}`, background: C.paper, minHeight: 110 }}>
-                  {uploadingKeys[key] ? (
-                    <div className="text-xs font-semibold py-6" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</div>
-                  ) : (
-                    <SafeImage
-                      src={val?.url}
-                      alt={label}
-                      className="w-full h-24 rounded-lg object-cover"
-                      fallback={
-                        <>
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: C.marigoldDeep }}><Camera size={18} color="#FFFFFF" /></div>
-                          <div className="text-[10px] font-semibold text-center" style={{ color: C.ink }}>{label}</div>
-                        </>
-                      }
-                    />
-                  )}
-                </div>
-                <div className="text-[9px] mt-0.5 text-center" style={{ color: uploadErrorKeys[key] ? C.safety : val ? C.success : C.inkSoft }}>
-                  {uploadErrorKeys[key]
-                    ? (lang === "en" ? "Upload failed — try another photo" : lang === "mr" ? "अपलोड झाले नाही — दुसरा फोटो वापरा" : "अपलोड नहीं हुआ — दूसरी फोटो लें")
-                    : val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
-                </div>
-              </PhotoPicker>
-            </GuidedStep>
-          ))}
+        <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo (Side)" : lang === "mr" ? "गाडीचा फोटो (बाजूने)" : "गाड़ी की फोटो (साइड से)"}</label>
+        {/* Front used to be required here too — dropped (see kycStepCompleted
+            above) since the side profile is the only vehicle photo a
+            customer ever sees on a bid card, same reasoning already applied
+            to DriverProfileEdit's own document list. Halves the photo-upload
+            burden a new driver faces during signup. */}
+        <div className="max-w-[180px] mb-2">
+          <GuidedStep {...kycStepProps(4)} lang={lang}>
+            <PhotoPicker label={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"} lang={lang} onSelect={onVehiclePhoto(setVehiclePhotoSide, "vehicleSide")}>
+              <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed ${C.marigoldDeep}`, background: C.paper, minHeight: 110 }}>
+                {uploadingKeys.vehicleSide ? (
+                  <div className="text-xs font-semibold py-6" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</div>
+                ) : (
+                  <SafeImage
+                    src={vehiclePhotoSide?.url}
+                    alt={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"}
+                    className="w-full h-24 rounded-lg object-cover"
+                    fallback={
+                      <>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: C.marigoldDeep }}><Camera size={18} color="#FFFFFF" /></div>
+                        <div className="text-[10px] font-semibold text-center" style={{ color: C.ink }}>{lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"}</div>
+                      </>
+                    }
+                  />
+                )}
+              </div>
+              <div className="text-[9px] mt-0.5 text-center" style={{ color: uploadErrorKeys.vehicleSide ? C.safety : vehiclePhotoSide ? C.success : C.inkSoft }}>
+                {uploadErrorKeys.vehicleSide
+                  ? (lang === "en" ? "Upload failed — try another photo" : lang === "mr" ? "अपलोड झाले नाही — दुसरा फोटो वापरा" : "अपलोड नहीं हुआ — दूसरी फोटो लें")
+                  : vehiclePhotoSide ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
+              </div>
+            </PhotoPicker>
+          </GuidedStep>
         </div>
         <div className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-[10px] font-semibold mb-1" style={{ color: C.ink }}>{lang === "en" ? "For a good photo:" : lang === "mr" ? "चांगल्या फोटोसाठी:" : "अच्छी फोटो के लिए:"}</div>
