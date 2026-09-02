@@ -3667,7 +3667,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             {sortedBids.length === 0 ? (
               <div className="rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: C.navy }}>
                 <Loader2 size={16} color="#FFFFFF" className="animate-spin" />
-                <span className="text-sm font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Waiting for driver bids..." : lang === "mr" ? "ड्रायव्हरांच्या बोलीची वाट पाहत आहे..." : "ड्राइवरों की बोली का इंतज़ार है..."}</span>
+                <span className="text-sm font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "In some time, you will see vehicles according to your requirement" : lang === "mr" ? "थोड्याच वेळात तुमच्या गरजेनुसार गाड्या दिसतील" : "कुछ ही समय में आपकी ज़रूरत के अनुसार गाड़ियां दिखेंगी"}</span>
               </div>
             ) : (
               <div className="space-y-2">
