@@ -3665,7 +3665,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             )}
 
             {sortedBids.length === 0 ? (
-              <div className="rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: C.navy }}>
+              <div className="guided-submit-ready shadow-lg rounded-lg py-3 my-1 flex items-center justify-center gap-2" style={{ background: C.navy }}>
                 <div className="flex flex-col items-center shrink-0" style={{ width: 24 }}>
                   <Truck size={18} color="#FFFFFF" className="truck-bounce" />
                   <div className="road-dash" style={{ width: 24, marginTop: 3 }} />
