@@ -4642,16 +4642,18 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
 // =====================================================================
 // DRIVER APP
 // =====================================================================
-function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWallet = 0, skipLoad }) {
+function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWallet = 0, skipLoad, skipMode = "skip" }) {
   const myBid = load.bids.find((b) => b.driverName === driver.name);
+  const isUnskip = skipMode === "unskip";
   const [amount, setAmount] = useState("");
   const [allowedHours, setAllowedHours] = useState("");
   const [extraHourRate, setExtraHourRate] = useState("");
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [bidError, setBidError] = useState("");
-  // Skipping a load hides it for good on this device (see DriverHome's
-  // persisted skip list) — irreversible from the UI, so it takes a second
-  // tap to confirm rather than firing on one stray touch.
+  // "Skip / view another" moves a load into DriverHome's Skipped view (not
+  // gone — reviewable and un-skippable there), so it takes a second tap to
+  // confirm rather than firing on one stray touch. "Unskip" (in the Skipped
+  // view) is non-destructive, so it fires on the first tap.
   const [confirmSkip, setConfirmSkip] = useState(false);
 
   const canSubmit = Number(amount) > 0 && Number(allowedHours) > 0 && Number(extraHourRate) > 0;
@@ -4713,12 +4715,15 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
         {skipLoad && (
           <button type="button"
             onClick={() => {
+              if (isUnskip) { skipLoad(load.id); return; }
               if (!confirmSkip) { setConfirmSkip(true); setTimeout(() => setConfirmSkip(false), 3000); return; }
               skipLoad(load.id);
             }}
             className="rounded-lg px-2.5 py-1 text-[11px] font-bold shrink-0 whitespace-nowrap"
             style={{ background: "#EDEDED", color: C.inkSoft, border: `1px solid ${C.line}` }}>
-            {confirmSkip
+            {isUnskip
+              ? (lang === "en" ? "Unskip" : lang === "mr" ? "पुन्हा जोडा" : "वापस लाएं")
+              : confirmSkip
               ? (lang === "en" ? "Tap again" : lang === "mr" ? "पुन्हा टॅप करा" : "फिर टैप करें")
               : (lang === "en" ? "Skip / view another" : lang === "mr" ? "वगळा / दुसरा पाहा" : "छोड़ें / दूसरा देखें")}
           </button>
@@ -5140,12 +5145,23 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
   // must both key off this instead of raw openLoads — otherwise bidding on
   // the only open load would leave a blank gap rather than either the empty
   // state or the next available load.
-  // Loads this driver has tapped "Skip this load" on — hidden for good on
-  // this device. Persisted per-driver so a skip survives a refresh; keyed
-  // by mobile so a shared device doesn't leak one driver's skips to another.
+  // Loads this driver has tapped "Skip / view another" on — pushed out of the
+  // main New Loads flow but NOT gone: they collect in a "Skipped" view the
+  // driver can open any time, and each can be un-skipped back into the main
+  // flow. Persisted per-driver (survives a refresh so the main queue stays
+  // clean), keyed by mobile so a shared device doesn't leak one driver's
+  // skips to another.
   const [skippedLoadIds, setSkippedLoadIds] = usePersistedState(`sarthi_driverSkippedLoads_${driver.mobile}`, []);
   const skipLoad = (id) => setSkippedLoadIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-  const visibleLoads = openLoads.filter((l) => !l.bids?.some((b) => b.driverName === driver.name) && !skippedLoadIds.includes(l.id));
+  const unskipLoad = (id) => setSkippedLoadIds((prev) => prev.filter((x) => x !== id));
+  const [showSkipped, setShowSkipped] = useState(false);
+
+  const biddableLoads = openLoads.filter((l) => !l.bids?.some((b) => b.driverName === driver.name));
+  const freshLoads = biddableLoads.filter((l) => !skippedLoadIds.includes(l.id));
+  const skippedOpenLoads = biddableLoads.filter((l) => skippedLoadIds.includes(l.id));
+  // Nothing left to review — drop back to the main flow automatically.
+  useEffect(() => { if (showSkipped && skippedOpenLoads.length === 0) setShowSkipped(false); }, [showSkipped, skippedOpenLoads.length]);
+  const visibleLoads = showSkipped ? skippedOpenLoads : freshLoads;
 
   // No search bar / route filter for drivers — every new matching load rings
   // (beep + toast) the moment it's posted, instead of drivers having to search.
@@ -5363,16 +5379,40 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
               </div>
               <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No new load right now" : lang === "mr" ? "अजून कोणताही नवीन लोड नाही" : "अभी कोई नया लोड नहीं है"}</p>
               <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — new loads will show here instantly." : lang === "mr" ? "ऑनलाइन रहा — नवीन लोड येताच इथे लगेच दिसेल." : "ऑनलाइन रहें — नया लोड आते ही यहां तुरंत दिखेगा।"}</p>
+              {skippedOpenLoads.length > 0 && (
+                <button type="button" onClick={() => setShowSkipped(true)} className="mt-5 rounded-lg px-3 py-2 text-xs font-bold underline" style={{ color: C.navy }}>
+                  {lang === "en" ? `Review ${skippedOpenLoads.length} skipped load${skippedOpenLoads.length > 1 ? "s" : ""}` : lang === "mr" ? `${skippedOpenLoads.length} वगळलेले लोड पाहा` : `${skippedOpenLoads.length} छोड़े गए लोड देखें`}
+                </button>
+              )}
             </div>
           ) : (
             <>
-              {/* One load at a time, newest first (bookings arrive createdAt-desc);
-                  the card's own "Skip / view another" button advances to the next. */}
+              {showSkipped && (
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? `Skipped loads (${skippedOpenLoads.length})` : lang === "mr" ? `वगळलेले लोड (${skippedOpenLoads.length})` : `छोड़े गए लोड (${skippedOpenLoads.length})`}</span>
+                  <button type="button" onClick={() => setShowSkipped(false)} className="rounded-lg px-2.5 py-1 text-[11px] font-bold" style={{ background: "#EDEDED", color: C.inkSoft, border: `1px solid ${C.line}` }}>
+                    {lang === "en" ? "Back to new loads" : lang === "mr" ? "नवीन लोडकडे परत" : "नए लोड पर वापस"}
+                  </button>
+                </div>
+              )}
+              {/* One load at a time, newest first (bookings arrive createdAt-desc).
+                  In the main flow the card's button skips (moves to Skipped); in
+                  the Skipped view the same button un-skips it back into the flow. */}
               <LoadAlertCard key={visibleLoads[0].id} load={visibleLoads[0]} driver={driver} addBid={addBid} lang={lang}
-                commissionPct={commissionPct} minWallet={minWallet} skipLoad={skipLoad} />
+                commissionPct={commissionPct} minWallet={minWallet}
+                skipLoad={showSkipped ? unskipLoad : skipLoad} skipMode={showSkipped ? "unskip" : "skip"} />
               {visibleLoads.length > 1 && (
                 <div className="text-center text-[11px] font-semibold -mt-1 mb-2" style={{ color: C.inkSoft }}>
-                  {lang === "en" ? `${visibleLoads.length - 1} more load${visibleLoads.length - 1 > 1 ? "s" : ""} waiting` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} लोड प्रतीक्षेत` : `${visibleLoads.length - 1} और लोड बाकी`}
+                  {showSkipped
+                    ? (lang === "en" ? `${visibleLoads.length - 1} more skipped` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} वगळलेले` : `${visibleLoads.length - 1} और छोड़े गए`)
+                    : (lang === "en" ? `${visibleLoads.length - 1} more load${visibleLoads.length - 1 > 1 ? "s" : ""} waiting` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} लोड प्रतीक्षेत` : `${visibleLoads.length - 1} और लोड बाकी`)}
+                </div>
+              )}
+              {!showSkipped && skippedOpenLoads.length > 0 && (
+                <div className="text-center mb-2">
+                  <button type="button" onClick={() => setShowSkipped(true)} className="text-[11px] font-bold underline" style={{ color: C.navy }}>
+                    {lang === "en" ? `Review ${skippedOpenLoads.length} skipped load${skippedOpenLoads.length > 1 ? "s" : ""}` : lang === "mr" ? `${skippedOpenLoads.length} वगळलेले लोड पाहा` : `${skippedOpenLoads.length} छोड़े गए लोड देखें`}
+                  </button>
                 </div>
               )}
             </>
