@@ -4650,11 +4650,6 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   const [extraHourRate, setExtraHourRate] = useState("");
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [bidError, setBidError] = useState("");
-  // "Skip / view another" moves a load into DriverHome's Skipped view (not
-  // gone — reviewable and un-skippable there), so it takes a second tap to
-  // confirm rather than firing on one stray touch. "Unskip" (in the Skipped
-  // view) is non-destructive, so it fires on the first tap.
-  const [confirmSkip, setConfirmSkip] = useState(false);
 
   const canSubmit = Number(amount) > 0 && Number(allowedHours) > 0 && Number(extraHourRate) > 0;
   const requiredForQuote = Number(amount || 0) * (commissionPct / 100);
@@ -4713,19 +4708,12 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
         {skipLoad && (
-          <button type="button"
-            onClick={() => {
-              if (isUnskip) { skipLoad(load.id); return; }
-              if (!confirmSkip) { setConfirmSkip(true); setTimeout(() => setConfirmSkip(false), 3000); return; }
-              skipLoad(load.id);
-            }}
-            className="rounded-lg px-2.5 py-1 text-[11px] font-bold shrink-0 whitespace-nowrap"
-            style={{ background: "#EDEDED", color: C.inkSoft, border: `1px solid ${C.line}` }}>
+          <button type="button" onClick={() => skipLoad(load.id)}
+            className="rounded-lg px-3 py-1.5 text-xs font-black shrink-0 whitespace-nowrap flex items-center gap-1 shadow-sm"
+            style={{ background: C.marigoldDeep, color: "#FFFFFF", border: `1.5px solid ${C.marigoldDeep}` }}>
             {isUnskip
               ? (lang === "en" ? "Unskip" : lang === "mr" ? "पुन्हा जोडा" : "वापस लाएं")
-              : confirmSkip
-              ? (lang === "en" ? "Tap again" : lang === "mr" ? "पुन्हा टॅप करा" : "फिर टैप करें")
-              : (lang === "en" ? "Skip / view another" : lang === "mr" ? "Skip / दुसरा पाहा" : "Skip / दूसरा देखें")}
+              : (lang === "en" ? "Skip / view another ›" : lang === "mr" ? "Skip / दुसरा पाहा ›" : "Skip / दूसरा देखें ›")}
           </button>
         )}
       </div>
@@ -5402,10 +5390,10 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
                 commissionPct={commissionPct} minWallet={minWallet}
                 skipLoad={showSkipped ? unskipLoad : skipLoad} skipMode={showSkipped ? "unskip" : "skip"} />
               {visibleLoads.length > 1 && (
-                <div className="text-center text-[11px] font-semibold -mt-1 mb-2" style={{ color: C.inkSoft }}>
+                <div className="text-center text-base font-black mb-2" style={{ color: C.navy }}>
                   {showSkipped
                     ? (lang === "en" ? `${visibleLoads.length - 1} more skipped` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} Skipped` : `${visibleLoads.length - 1} और Skipped`)
-                    : (lang === "en" ? `${visibleLoads.length - 1} more load${visibleLoads.length - 1 > 1 ? "s" : ""} waiting` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} लोड प्रतीक्षेत` : `${visibleLoads.length - 1} और लोड बाकी`)}
+                    : (lang === "en" ? `${visibleLoads.length - 1} other load${visibleLoads.length - 1 > 1 ? "s" : ""} available` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} लोड उपलब्ध` : `${visibleLoads.length - 1} और लोड उपलब्ध`)}
                 </div>
               )}
               {!showSkipped && skippedOpenLoads.length > 0 && (
