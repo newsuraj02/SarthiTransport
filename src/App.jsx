@@ -141,12 +141,15 @@ function lookupVehicleModelSpec(name) {
 // materials), so English falls back to the same string when no labelEn exists.
 const vehicleLabel = (v, lang) => (v ? (lang === "en" ? (v.labelEn || v.label) : v.label) : "");
 const vehicleCapacity = (v, lang) => (v ? (lang === "en" ? (v.capacityEn || v.capacity) : v.capacity) : "");
-// Fixed list — the only choices in the Material Type dropdown. "अन्य" (Others)
-// reveals a free-text box; whatever's typed there is stored straight onto the
-// load and is never added to any shared list, so one customer's entry can't
-// surface as a suggestion for anyone else.
-const MATERIALS = ["लोहा", "स्टील", "एमएस स्क्रैप", "बॉक्स / कार्टन", "सीमेंट / बालू", "अन्य"];
-const MATERIAL_LABELS_EN = { "लोहा": "Iron", "स्टील": "Steel", "एमएस स्क्रैप": "MS Scrap", "बॉक्स / कार्टन": "Box / Carton", "सीमेंट / बालू": "Cement / Sand", "अन्य": "Others" };
+// Fixed list — the only choices in the Material Type dropdown. The last
+// entry ("अन्य") isn't a material: picking it reveals a free-text box (see
+// CustomerBooking) and is labelled "Add Material". Whatever's typed there
+// is stored straight onto the load and is never added to any shared list,
+// so one customer's entry can't surface as a suggestion for anyone else.
+const MATERIALS = ["लोहा", "स्टील", "एमएस स्क्रैप", "प्लास्टिक", "बॉक्स / कार्टन", "सीमेंट / बालू", "अन्य"];
+const MATERIAL_LABELS_EN = { "लोहा": "Iron", "स्टील": "Steel", "एमएस स्क्रैप": "MS Scrap", "प्लास्टिक": "Plastic", "बॉक्स / कार्टन": "Box / Carton", "सीमेंट / बालू": "Cement / Sand" };
+// Label for the free-text "add your own" option, per language.
+const ADD_MATERIAL_LABEL = { en: "Add Material", hi: "मटेरियल जोड़ें", mr: "मटेरियल जोडा" };
 const materialLabel = (m, lang, customMap = {}) => {
   if (customMap[m]) return lang === "en" ? (customMap[m].en || customMap[m].hi) : (customMap[m].hi || customMap[m].en);
   return (lang === "en" && MATERIAL_LABELS_EN[m]) ? MATERIAL_LABELS_EN[m] : m;
@@ -3701,11 +3704,11 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
             <select className={inputCls} style={{ ...inputStyle, color: material ? inputStyle.color : "#9AA3B0" }} value={material}
               onChange={(e) => setMaterial(e.target.value)}>
               <option value="" disabled style={{ color: "#9AA3B0" }}>{lang === "en" ? "Select material" : lang === "mr" ? "मटेरियल निवडा" : "मटेरियल चुनें"}</option>
-              {MATERIALS.map((m) => <option key={m} value={m} style={{ color: C.ink }}>{materialLabel(m, lang)}</option>)}
+              {MATERIALS.map((m) => <option key={m} value={m} style={{ color: C.ink }}>{m === "अन्य" ? (ADD_MATERIAL_LABEL[lang] || ADD_MATERIAL_LABEL.hi) : materialLabel(m, lang)}</option>)}
             </select>
             {isOtherMaterial && (
               <input className={inputCls} style={{ ...inputStyle, marginTop: 6 }} autoFocus
-                placeholder={lang === "en" ? "Type material type" : lang === "mr" ? "मटेरियल टाइप करा" : "मटेरियल टाइप करें"}
+                placeholder={lang === "en" ? "Type the material" : lang === "mr" ? "मटेरियल टाइप करा" : "मटेरियल टाइप करें"}
                 value={materialOther} onChange={(e) => setMaterialOther(e.target.value)} />
             )}
           </GuidedStep>
