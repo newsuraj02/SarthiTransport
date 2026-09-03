@@ -4706,13 +4706,18 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
     <div className="toast-pop rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
-        {skipLoad && (
-          <button type="button" onClick={() => skipLoad(load.id)}
-            className="rounded-lg px-3 py-1.5 text-xs font-black shrink-0 whitespace-nowrap flex items-center gap-1 shadow-sm"
-            style={{ background: C.marigoldDeep, color: "#FFFFFF", border: `1.5px solid ${C.marigoldDeep}` }}>
-            {lang === "en" ? "Skip / view another ›" : lang === "mr" ? "Skip / दुसरा पाहा ›" : "Skip / दूसरा देखें ›"}
-          </button>
-        )}
+        {skipLoad && (() => {
+          // Match the RideTypeBanner colour for this load — green for an
+          // Immediate ride, marigold for an Advance ride.
+          const skipBg = load.scheduledFor ? C.marigoldDeep : C.success;
+          return (
+            <button type="button" onClick={() => skipLoad(load.id)}
+              className="rounded-lg px-3 py-1.5 text-xs font-black shrink-0 whitespace-nowrap flex items-center gap-1 shadow-sm"
+              style={{ background: skipBg, color: "#FFFFFF", border: `1.5px solid ${skipBg}` }}>
+              {lang === "en" ? "Skip / view another ›" : lang === "mr" ? "Skip / दुसरा पाहा ›" : "Skip / दूसरा देखें ›"}
+            </button>
+          );
+        })()}
       </div>
       <RideTypeBanner booking={load} lang={lang} />
       <div className="mb-2">
