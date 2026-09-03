@@ -4725,7 +4725,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
               ? (lang === "en" ? "Unskip" : lang === "mr" ? "पुन्हा जोडा" : "वापस लाएं")
               : confirmSkip
               ? (lang === "en" ? "Tap again" : lang === "mr" ? "पुन्हा टॅप करा" : "फिर टैप करें")
-              : (lang === "en" ? "Skip / view another" : lang === "mr" ? "वगळा / दुसरा पाहा" : "छोड़ें / दूसरा देखें")}
+              : (lang === "en" ? "Skip / view another" : lang === "mr" ? "Skip / दुसरा पाहा" : "Skip / दूसरा देखें")}
           </button>
         )}
       </div>
@@ -5381,7 +5381,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
               <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — new loads will show here instantly." : lang === "mr" ? "ऑनलाइन रहा — नवीन लोड येताच इथे लगेच दिसेल." : "ऑनलाइन रहें — नया लोड आते ही यहां तुरंत दिखेगा।"}</p>
               {skippedOpenLoads.length > 0 && (
                 <button type="button" onClick={() => setShowSkipped(true)} className="mt-5 rounded-lg px-3 py-2 text-xs font-bold underline" style={{ color: C.navy }}>
-                  {lang === "en" ? `Review ${skippedOpenLoads.length} skipped load${skippedOpenLoads.length > 1 ? "s" : ""}` : lang === "mr" ? `${skippedOpenLoads.length} वगळलेले लोड पाहा` : `${skippedOpenLoads.length} छोड़े गए लोड देखें`}
+                  {lang === "en" ? `Review ${skippedOpenLoads.length} skipped load${skippedOpenLoads.length > 1 ? "s" : ""}` : lang === "mr" ? `${skippedOpenLoads.length} Skipped लोड पाहा` : `${skippedOpenLoads.length} Skipped लोड देखें`}
                 </button>
               )}
             </div>
@@ -5389,7 +5389,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
             <>
               {showSkipped && (
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? `Skipped loads (${skippedOpenLoads.length})` : lang === "mr" ? `वगळलेले लोड (${skippedOpenLoads.length})` : `छोड़े गए लोड (${skippedOpenLoads.length})`}</span>
+                  <span className="text-xs font-black" style={{ color: C.navy }}>{lang === "en" ? `Skipped loads (${skippedOpenLoads.length})` : lang === "mr" ? `Skipped लोड (${skippedOpenLoads.length})` : `Skipped लोड (${skippedOpenLoads.length})`}</span>
                   <button type="button" onClick={() => setShowSkipped(false)} className="rounded-lg px-2.5 py-1 text-[11px] font-bold" style={{ background: "#EDEDED", color: C.inkSoft, border: `1px solid ${C.line}` }}>
                     {lang === "en" ? "Back to new loads" : lang === "mr" ? "नवीन लोडकडे परत" : "नए लोड पर वापस"}
                   </button>
@@ -5404,14 +5404,14 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
               {visibleLoads.length > 1 && (
                 <div className="text-center text-[11px] font-semibold -mt-1 mb-2" style={{ color: C.inkSoft }}>
                   {showSkipped
-                    ? (lang === "en" ? `${visibleLoads.length - 1} more skipped` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} वगळलेले` : `${visibleLoads.length - 1} और छोड़े गए`)
+                    ? (lang === "en" ? `${visibleLoads.length - 1} more skipped` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} Skipped` : `${visibleLoads.length - 1} और Skipped`)
                     : (lang === "en" ? `${visibleLoads.length - 1} more load${visibleLoads.length - 1 > 1 ? "s" : ""} waiting` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} लोड प्रतीक्षेत` : `${visibleLoads.length - 1} और लोड बाकी`)}
                 </div>
               )}
               {!showSkipped && skippedOpenLoads.length > 0 && (
                 <div className="text-center mb-2">
                   <button type="button" onClick={() => setShowSkipped(true)} className="text-[11px] font-bold underline" style={{ color: C.navy }}>
-                    {lang === "en" ? `Review ${skippedOpenLoads.length} skipped load${skippedOpenLoads.length > 1 ? "s" : ""}` : lang === "mr" ? `${skippedOpenLoads.length} वगळलेले लोड पाहा` : `${skippedOpenLoads.length} छोड़े गए लोड देखें`}
+                    {lang === "en" ? `Review ${skippedOpenLoads.length} skipped load${skippedOpenLoads.length > 1 ? "s" : ""}` : lang === "mr" ? `${skippedOpenLoads.length} Skipped लोड पाहा` : `${skippedOpenLoads.length} Skipped लोड देखें`}
                   </button>
                 </div>
               )}
