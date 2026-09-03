@@ -4784,17 +4784,19 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
             </div>
           </div>
 
-          <button type="button"
-            onClick={() => {
-              if (!confirmSkip) { setConfirmSkip(true); setTimeout(() => setConfirmSkip(false), 3000); return; }
-              skipLoad?.(load.id);
-            }}
-            className="w-full rounded-lg py-2.5 text-sm font-bold"
-            style={{ background: "#EDEDED", color: C.inkSoft, border: `1px solid ${C.line}` }}>
-            {confirmSkip
-              ? (lang === "en" ? "Tap again to skip this load" : lang === "mr" ? "हा लोड वगळण्यासाठी पुन्हा टॅप करा" : "इस लोड को छोड़ने के लिए फिर टैप करें")
-              : (lang === "en" ? "Skip this load" : lang === "mr" ? "हा लोड वगळा" : "इस लोड को छोड़ें")}
-          </button>
+          <div className="flex justify-center">
+            <button type="button"
+              onClick={() => {
+                if (!confirmSkip) { setConfirmSkip(true); setTimeout(() => setConfirmSkip(false), 3000); return; }
+                skipLoad?.(load.id);
+              }}
+              className="rounded-lg px-3 py-1 text-[11px] font-bold"
+              style={{ background: "#EDEDED", color: C.inkSoft, border: `1px solid ${C.line}` }}>
+              {confirmSkip
+                ? (lang === "en" ? "Tap again to skip" : lang === "mr" ? "वगळण्यासाठी पुन्हा टॅप करा" : "छोड़ने के लिए फिर टैप करें")
+                : (lang === "en" ? "Skip this load" : lang === "mr" ? "हा लोड वगळा" : "इस लोड को छोड़ें")}
+            </button>
+          </div>
     </div>
   );
 }
