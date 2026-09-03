@@ -2805,23 +2805,36 @@ function DriverKycPortalNameEdit({ driver, setDriver, lang, onDone }) {
 // decoded <canvas> — shared by uploadPhoto below.
 function resizeImageToCanvas(file, maxDim = 900) {
   return new Promise((resolve, reject) => {
+    // Hard timeout: on some Android WebViews an unsupported/oversized image
+    // (e.g. an iPhone HEIC, or a huge photo the decoder chokes on) fires
+    // neither img.onload nor img.onerror — without this the promise would
+    // hang forever, leaving the KYC tile stuck on "Uploading" and
+    // anyUploading permanently true so the driver can never submit.
+    const timeoutId = setTimeout(() => reject(new Error("image decode timed out")), 20000);
+    const finish = (fn) => (arg) => { clearTimeout(timeoutId); fn(arg); };
+    const ok = finish(resolve);
+    const fail = finish(reject);
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error);
+    reader.onerror = () => fail(reader.error || new Error("file read failed"));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error("image decode failed"));
+      img.onerror = () => fail(new Error("image decode failed"));
       img.onload = () => {
-        let { width, height } = img;
-        if (width > maxDim || height > maxDim) {
-          const scale = maxDim / Math.max(width, height);
-          width = Math.round(width * scale);
-          height = Math.round(height * scale);
+        try {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            const scale = maxDim / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          ok(canvas);
+        } catch (e) {
+          fail(e);
         }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-        resolve(canvas);
       };
       img.src = reader.result;
     };

@@ -1,8 +1,10 @@
 // Apna Transport — production Firebase Storage rules
 //
-// Paste this into Firebase Console → Storage → Rules, then Publish.
+// Paste this into Firebase Console → Storage → Rules, then Publish
+// (or `firebase deploy --only storage`).
 // Requires the same admin custom claim as firestore.rules (see
-// scripts/setupAdmin.js) and real Firebase Phone Auth for customers/drivers.
+// scripts/setupAdmin.js). Customers/drivers authenticate either via
+// Firebase Phone Auth or PIN email/password — see isOwnPhone below.
 //
 // Only the owning driver/customer and admin can read or write a person's
 // own KYC documents, vehicle photos, or profile photo — nobody else (not
@@ -19,8 +21,24 @@ service firebase.storage {
     function isAdmin() {
       return isSignedIn() && request.auth.token.admin == true;
     }
+    // Two ways a session can prove it owns a given mobile number, OR'd so
+    // neither auth method locks anyone out — must stay in sync with the
+    // identical function in firestore.rules:
+    //  (1) Firebase Phone Auth — token carries "+91XXXXXXXXXX".
+    //  (2) PIN login (App.jsx: CustomerOnboarding/DriverOnboarding) signs in
+    //      as an email/password account under a synthetic
+    //      "<mobile>@customer.apnatransport.local" / "<mobile>@driver.apnatransport.local"
+    //      email (firebaseClient.js: pinAuthEmail). These sessions have NO
+    //      phone_number claim — without branch (2), every KYC / profile /
+    //      vehicle photo upload was silently permission-denied and fell back
+    //      to bloated inline base64 (firestore.rules already has this branch;
+    //      this file was missed).
     function isOwnPhone(mobile) {
-      return isSignedIn() && request.auth.token.phone_number == ('+91' + mobile);
+      return isSignedIn() && (
+        request.auth.token.phone_number == ('+91' + mobile) ||
+        request.auth.token.email == (mobile + '@customer.apnatransport.local') ||
+        request.auth.token.email == (mobile + '@driver.apnatransport.local')
+      );
     }
 
     match /drivers/{mobile}/{fileName} {
