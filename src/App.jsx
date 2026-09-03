@@ -141,8 +141,12 @@ function lookupVehicleModelSpec(name) {
 // materials), so English falls back to the same string when no labelEn exists.
 const vehicleLabel = (v, lang) => (v ? (lang === "en" ? (v.labelEn || v.label) : v.label) : "");
 const vehicleCapacity = (v, lang) => (v ? (lang === "en" ? (v.capacityEn || v.capacity) : v.capacity) : "");
-const MATERIALS = ["लोहा", "प्लास्टिक", "बॉक्स / कार्टन", "सीमेंट / बालू", "अन्य"];
-const MATERIAL_LABELS_EN = { "लोहा": "Iron", "प्लास्टिक": "Plastic", "बॉक्स / कार्टन": "Box / Carton", "सीमेंट / बालू": "Cement / Sand", "अन्य": "Other" };
+// Fixed list — the only choices in the Material Type dropdown. "अन्य" (Others)
+// reveals a free-text box; whatever's typed there is stored straight onto the
+// load and is never added to any shared list, so one customer's entry can't
+// surface as a suggestion for anyone else.
+const MATERIALS = ["लोहा", "स्टील", "एमएस स्क्रैप", "बॉक्स / कार्टन", "सीमेंट / बालू", "अन्य"];
+const MATERIAL_LABELS_EN = { "लोहा": "Iron", "स्टील": "Steel", "एमएस स्क्रैप": "MS Scrap", "बॉक्स / कार्टन": "Box / Carton", "सीमेंट / बालू": "Cement / Sand", "अन्य": "Others" };
 const materialLabel = (m, lang, customMap = {}) => {
   if (customMap[m]) return lang === "en" ? (customMap[m].en || customMap[m].hi) : (customMap[m].hi || customMap[m].en);
   return (lang === "en" && MATERIAL_LABELS_EN[m]) ? MATERIAL_LABELS_EN[m] : m;
@@ -242,7 +246,6 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
 }
 const ALERT_TYPE_LABELS_EN = { "पुलिस सहायता": "Police Help", "इमरजेंसी कॉल": "Emergency Call", "व्हाट्सएप सपोर्ट": "WhatsApp Support", "शिकायत": "Complaint" };
 const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_EN[t]) ? ALERT_TYPE_LABELS_EN[t] : t;
-const ADD_MATERIAL = "__add_new__";
 
 const CITY_COLORS = ["#FF6600", "#00A854", "#0052CC", "#FF2A2A", "#FFCC00", "#00A854"];
 
@@ -3335,7 +3338,7 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMaterials, addCustomMaterial, onModeChange }) {
+function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeChange }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
   // Reports the current mode up to CustomerApp so it can tell whether the
@@ -3359,12 +3362,12 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const [dropSelected, setDropSelected] = useState(false);
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
   const [material, setMaterial] = useState("");
-  // The default list plus anything any customer has ever added — synced
-  // live via customMaterials, so a material someone else added shows up
-  // here too instead of staying stuck on just their own device.
-  const materialsList = [...MATERIALS, ...Object.keys(customMaterials || {}).filter((m) => !MATERIALS.includes(m))];
-  const [newMaterial, setNewMaterial] = useState("");
-  const [addingMaterial, setAddingMaterial] = useState(false);
+  // Shown only when "Others" is picked. Stored straight onto the load in
+  // post(), never into a shared collection — so it stays private to this
+  // customer and never becomes a suggestion for anyone else.
+  const [materialOther, setMaterialOther] = useState("");
+  const isOtherMaterial = material === "अन्य";
+  const resolvedMaterial = isOtherMaterial ? materialOther.trim() : material;
   const [weight, setWeight] = useState("");
   const [distance, setDistance] = useState(null);
   const [mapField, setMapField] = useState(null); // 'pickup' | 'drop' | null
@@ -3395,7 +3398,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
     ...(hasDateTimeStep ? [!!advanceDate && !!advanceTime] : []),
     pickupSelected || (!mapsReady && pickup.trim().length > 0),
     dropSelected || (!mapsReady && drop.trim().length > 0),
-    !!material,
+    !!material && (!isOtherMaterial || resolvedMaterial.length > 0),
     weight.trim().length > 0,
   ];
   // autoScroll:false — see useGuidedSteps; scrolling the page while the
@@ -3483,7 +3486,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
       : `इस वजन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`;
   })();
 
-  const canPost = pickup.trim() && drop.trim() && material.trim() && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime && !advanceNoticeError));
+  const canPost = pickup.trim() && drop.trim() && resolvedMaterial && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime && !advanceNoticeError));
 
   useEffect(() => {
     const w = Number(weight);
@@ -3496,7 +3499,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
   const post = () => {
     if (!canPost) return;
     createLoad({
-      pickup, drop, vehicle, material, weight, distance, scheduledFor: bookingMode === "advance" ? `${advanceDate} ${advanceTime}` : null,
+      pickup, drop, vehicle, material: resolvedMaterial, weight, distance, scheduledFor: bookingMode === "advance" ? `${advanceDate} ${advanceTime}` : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
@@ -3634,26 +3637,15 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, customMa
         <div className="grid grid-cols-2 gap-3 items-start">
           <GuidedStep {...stepProps(stepOffset + 2)} lang={lang}>
             <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : lang === "mr" ? "मटेरियल टाइप" : "मटेरियल टाइप"}</label>
-            {addingMaterial ? (
-              <div className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                <input className={inputCls} style={{ ...inputStyle, marginBottom: 6 }} placeholder={lang === "en" ? "e.g. Tiles" : lang === "mr" ? "उदा: टाइल्स" : "जैसे: टाइल्स"} value={newMaterial} onChange={(e) => setNewMaterial(e.target.value)} autoFocus />
-                <div className="flex items-center gap-2">
-                  <button onClick={() => { setAddingMaterial(false); setNewMaterial(""); }} className="flex-1 rounded-lg py-3.5 text-base font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}</button>
-                  <button onClick={() => {
-                    const name = newMaterial.trim();
-                    if (!name) return;
-                    addCustomMaterial(name, { hi: name, en: name });
-                    setMaterial(name); setNewMaterial(""); setAddingMaterial(false);
-                  }} className="flex-1 rounded-lg py-3.5 text-base font-bold text-white" style={{ background: C.marigoldDeep }}>{lang === "en" ? "Add" : lang === "mr" ? "जोडा" : "जोड़ें"}</button>
-                </div>
-              </div>
-            ) : (
-              <select className={inputCls} style={{ ...inputStyle, color: material ? inputStyle.color : "#9AA3B0" }} value={material}
-                onChange={(e) => { if (e.target.value === ADD_MATERIAL) setAddingMaterial(true); else setMaterial(e.target.value); }}>
-                <option value="" disabled style={{ color: "#9AA3B0" }}>{lang === "en" ? "Select material" : lang === "mr" ? "मटेरियल निवडा" : "मटेरियल चुनें"}</option>
-                {materialsList.map((m) => <option key={m} value={m} style={{ color: C.ink }}>{materialLabel(m, lang, customMaterials)}</option>)}
-                <option value={ADD_MATERIAL} style={{ color: C.ink }}>+ {lang === "en" ? "Add new material" : lang === "mr" ? "नवीन मटेरियल जोडा" : "नया मटेरियल जोड़ें"}</option>
-              </select>
+            <select className={inputCls} style={{ ...inputStyle, color: material ? inputStyle.color : "#9AA3B0" }} value={material}
+              onChange={(e) => setMaterial(e.target.value)}>
+              <option value="" disabled style={{ color: "#9AA3B0" }}>{lang === "en" ? "Select material" : lang === "mr" ? "मटेरियल निवडा" : "मटेरियल चुनें"}</option>
+              {MATERIALS.map((m) => <option key={m} value={m} style={{ color: C.ink }}>{materialLabel(m, lang)}</option>)}
+            </select>
+            {isOtherMaterial && (
+              <input className={inputCls} style={{ ...inputStyle, marginTop: 6 }} autoFocus
+                placeholder={lang === "en" ? "Type material type" : lang === "mr" ? "मटेरियल टाइप करा" : "मटेरियल टाइप करें"}
+                value={materialOther} onChange={(e) => setMaterialOther(e.target.value)} />
             )}
           </GuidedStep>
           <GuidedStep {...stepProps(stepOffset + 3)} lang={lang}>
@@ -4267,7 +4259,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMaterials, addCustomMaterial, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
+function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -4550,7 +4542,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, customMateri
                 }
               }} />
           ) : (
-            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
+            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang}
               onModeChange={setCustomerBookingMode} />
           )
         ) : (
@@ -7876,10 +7868,6 @@ export default function App() {
     window.location.reload();
   };
   const [showTerms, setShowTerms] = useState(false);
-  // Shared across every customer (like vehicleTypes) so a material one
-  // customer adds gets suggested to everyone else too, instead of staying
-  // stuck on just their own device.
-  const [customMaterials, setCustomMaterials] = useState({}); // { hiName: {hi, en} }
 
   // ---------------------------------------------------------------------
   // Shared pilot state — synced live across every tester's device via
@@ -7907,13 +7895,6 @@ export default function App() {
     seedIfEmpty("vehicleTypes", DEFAULT_VEHICLES, "key").catch((e) => console.error("[seed vehicleTypes]", e));
     return subscribeCollection("vehicleTypes", setVehicleTypesLocal, null);
   }, []);
-  useEffect(() => (firestoreReady
-    ? subscribeCollection("materials", (docs) => {
-        const map = {};
-        docs.forEach((d) => { if (d.hi) map[d.hi] = { hi: d.hi, en: d.en }; });
-        setCustomMaterials(map);
-      }, null)
-    : undefined), []);
   // These four collections require real authentication under the current
   // Firestore rules (isSignedIn()) — the dependency array must include every
   // auth transition, not just mount ([]) or role alone, otherwise a
@@ -8010,7 +7991,6 @@ export default function App() {
   }, [driver?.kyc]);
 
   const addVehicleType = (v) => createDoc("vehicleTypes", v.key, v).catch((e) => console.error(e));
-  const addCustomMaterial = (name, labels) => createDoc("materials", slugify(name), labels).catch((e) => console.error(e));
 
   // Admin-side manual registration — lets admin add a customer/driver
   // straight into the database without them going through OTP signup
@@ -8362,7 +8342,7 @@ export default function App() {
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
-          <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes} customMaterials={customMaterials} addCustomMaterial={addCustomMaterial}
+          <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
             adminNotifications={adminNotifications} />
