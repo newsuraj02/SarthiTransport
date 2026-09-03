@@ -4639,13 +4639,17 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
 // =====================================================================
 // DRIVER APP
 // =====================================================================
-function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWallet = 0 }) {
+function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWallet = 0, skipLoad }) {
   const myBid = load.bids.find((b) => b.driverName === driver.name);
   const [amount, setAmount] = useState("");
   const [allowedHours, setAllowedHours] = useState("");
   const [extraHourRate, setExtraHourRate] = useState("");
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [bidError, setBidError] = useState("");
+  // Skipping a load hides it for good on this device (see DriverHome's
+  // persisted skip list) — irreversible from the UI, so it takes a second
+  // tap to confirm rather than firing on one stray touch.
+  const [confirmSkip, setConfirmSkip] = useState(false);
 
   const canSubmit = Number(amount) > 0 && Number(allowedHours) > 0 && Number(extraHourRate) > 0;
   const requiredForQuote = Number(amount || 0) * (commissionPct / 100);
@@ -4750,15 +4754,6 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
               </div>
             </div>
           </div>
-          <div className="rounded-lg p-2.5 mb-2" style={{ background: C.marigoldDeep }}>
-            <div className="text-xs font-black mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Note" : lang === "mr" ? "नोंद" : "नोट"}</div>
-            <div className="text-[10px] font-bold" style={{ color: "#FFFFFF" }}>
-              {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : lang === "mr" ? "रस्त्यावरील टोल टॅक्स याच भाड्यातून ड्रायव्हरला द्यावा लागेल — ग्राहक वेगळा टोल देणार नाही." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
-            </div>
-            <div className="text-[10px] font-bold mt-1" style={{ color: "#000000" }}>
-              {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : lang === "mr" ? "पिकअप आणि ड्रॉपमधील प्रवासाचा वेळ लोडिंग/अनलोडिंग वेळेत मोजला जात नाही." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
-            </div>
-          </div>
           {!canSubmit && (amount || allowedHours || extraHourRate) && (
             <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>{lang === "en" ? "All three fields are required" : lang === "mr" ? "तिन्ही फील्ड भरणे आवश्यक आहे" : "तीनों फील्ड भरना ज़रूरी है"}</div>
           )}
@@ -4771,9 +4766,31 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
             <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bidError}</div>
           )}
 
-          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-xl py-4 text-lg font-black text-white flex items-center justify-center gap-1.5 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready shadow-lg" : (canSubmit && !walletShortfall) || justSubmitted ? "shadow-lg" : "shadow-sm"}`}
+          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-xl py-4 text-lg font-black text-white flex items-center justify-center gap-1.5 mb-2 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready shadow-lg" : (canSubmit && !walletShortfall) || justSubmitted ? "shadow-lg" : "shadow-sm"}`}
             style={{ background: (canSubmit && !walletShortfall) || justSubmitted ? C.metallicGreen : "#E0E0E0", color: (canSubmit && !walletShortfall) || justSubmitted ? "#fff" : "#9AA3B0" }}>
             {justSubmitted ? <><CheckCircle2 size={18} /> {lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : lang === "mr" ? "कोटेशन पाठवा" : "कोटेशन भेजें")}
+          </button>
+
+          <div className="rounded-lg p-2.5 mb-2" style={{ background: C.marigoldDeep }}>
+            <div className="text-xs font-black mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Note" : lang === "mr" ? "नोंद" : "नोट"}</div>
+            <div className="text-[10px] font-bold" style={{ color: "#FFFFFF" }}>
+              {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : lang === "mr" ? "रस्त्यावरील टोल टॅक्स याच भाड्यातून ड्रायव्हरला द्यावा लागेल — ग्राहक वेगळा टोल देणार नाही." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
+            </div>
+            <div className="text-[10px] font-bold mt-1" style={{ color: "#000000" }}>
+              {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : lang === "mr" ? "पिकअप आणि ड्रॉपमधील प्रवासाचा वेळ लोडिंग/अनलोडिंग वेळेत मोजला जात नाही." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
+            </div>
+          </div>
+
+          <button type="button"
+            onClick={() => {
+              if (!confirmSkip) { setConfirmSkip(true); setTimeout(() => setConfirmSkip(false), 3000); return; }
+              skipLoad?.(load.id);
+            }}
+            className="w-full rounded-lg py-2.5 text-sm font-bold"
+            style={{ background: "#EDEDED", color: C.inkSoft, border: `1px solid ${C.line}` }}>
+            {confirmSkip
+              ? (lang === "en" ? "Tap again to skip this load" : lang === "mr" ? "हा लोड वगळण्यासाठी पुन्हा टॅप करा" : "इस लोड को छोड़ने के लिए फिर टैप करें")
+              : (lang === "en" ? "Skip this load" : lang === "mr" ? "हा लोड वगळा" : "इस लोड को छोड़ें")}
           </button>
     </div>
   );
@@ -5119,7 +5136,12 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
   // must both key off this instead of raw openLoads — otherwise bidding on
   // the only open load would leave a blank gap rather than either the empty
   // state or the next available load.
-  const visibleLoads = openLoads.filter((l) => !l.bids?.some((b) => b.driverName === driver.name));
+  // Loads this driver has tapped "Skip this load" on — hidden for good on
+  // this device. Persisted per-driver so a skip survives a refresh; keyed
+  // by mobile so a shared device doesn't leak one driver's skips to another.
+  const [skippedLoadIds, setSkippedLoadIds] = usePersistedState(`sarthi_driverSkippedLoads_${driver.mobile}`, []);
+  const skipLoad = (id) => setSkippedLoadIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  const visibleLoads = openLoads.filter((l) => !l.bids?.some((b) => b.driverName === driver.name) && !skippedLoadIds.includes(l.id));
 
   // No search bar / route filter for drivers — every new matching load rings
   // (beep + toast) the moment it's posted, instead of drivers having to search.
@@ -5342,7 +5364,7 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
             <>
               {visibleLoads.map((load) => (
                 <LoadAlertCard key={load.id} load={load} driver={driver} addBid={addBid} lang={lang}
-                  commissionPct={commissionPct} minWallet={minWallet} />
+                  commissionPct={commissionPct} minWallet={minWallet} skipLoad={skipLoad} />
               ))}
             </>
           )}
