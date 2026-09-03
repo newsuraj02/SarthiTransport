@@ -4801,6 +4801,105 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   );
 }
 
+// Tinder-style stack for the driver's New Loads. Only loads[0] (the newest —
+// bookings arrive createdAt-desc) renders as a live, interactive LoadAlertCard;
+// the next two show as faint peeking stubs behind it purely for the "there's
+// a stack" cue. Dragging the top card left past a threshold flings it off and
+// skips it (same persisted skip list as the in-card button). A drag only
+// starts from the card body, never from an input/select/button, so quoting
+// still works normally; vertical scroll is left to the browser (touch-action).
+function LoadCardStack({ loads, ...cardProps }) {
+  const { lang } = cardProps;
+  const top = loads[0];
+  const behind = loads.slice(1, 3);
+
+  const [dragX, setDragX] = useState(0);
+  const [animating, setAnimating] = useState(false);
+  const [flungOut, setFlungOut] = useState(false);
+  const startRef = useRef(null);
+  const modeRef = useRef("idle"); // idle | pending | drag | locked
+
+  // New top card (previous one skipped, or a newer load arrived) — reset.
+  useEffect(() => {
+    setDragX(0); setAnimating(false); setFlungOut(false);
+    modeRef.current = "idle"; startRef.current = null;
+  }, [top?.id]);
+
+  if (!top) return null;
+
+  const SKIP_AT = 110;
+
+  const onPointerDown = (e) => {
+    if (e.target.closest("input, select, textarea, button, a")) { modeRef.current = "locked"; return; }
+    startRef.current = { x: e.clientX, y: e.clientY };
+    modeRef.current = "pending";
+    setAnimating(false);
+  };
+  const onPointerMove = (e) => {
+    if (!startRef.current || modeRef.current === "idle" || modeRef.current === "locked") return;
+    const dx = e.clientX - startRef.current.x;
+    const dy = e.clientY - startRef.current.y;
+    if (modeRef.current === "pending") {
+      if (Math.abs(dx) < 12 || Math.abs(dx) <= Math.abs(dy)) return; // tap / vertical scroll — leave it alone
+      modeRef.current = "drag";
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    }
+    if (modeRef.current === "drag") { e.preventDefault(); setDragX(dx); }
+  };
+  const endPointer = (e) => {
+    const wasDrag = modeRef.current === "drag";
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    modeRef.current = "idle";
+    startRef.current = null;
+    if (!wasDrag) return;
+    setAnimating(true);
+    if (dragX < -SKIP_AT) {
+      setFlungOut(true);
+      setTimeout(() => cardProps.skipLoad?.(top.id), 240);
+    } else {
+      setDragX(0);
+    }
+  };
+
+  const tx = flungOut ? -(typeof window !== "undefined" ? window.innerWidth : 500) * 1.2 : dragX;
+  const skipOpacity = Math.min(1, Math.max(0, -dragX / 90));
+
+  return (
+    <div className="relative select-none mb-3" style={{ touchAction: "pan-y" }}>
+      {behind.map((l, i) => (
+        <div key={l.id} className="absolute left-0 right-0 top-0 rounded-xl p-3 shadow-sm pointer-events-none"
+          style={{
+            background: C.paper, border: `2px solid ${C.line}`,
+            transform: `translateY(${(i + 1) * 10}px) scale(${1 - (i + 1) * 0.035})`,
+            zIndex: 0, opacity: 0.5 - i * 0.18,
+          }}>
+          <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
+          <div className="mt-1 text-[11px] font-bold truncate" style={{ color: C.ink }}>{l.pickup} → {l.drop}</div>
+        </div>
+      ))}
+
+      <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endPointer} onPointerCancel={endPointer}
+        style={{
+          position: "relative", zIndex: 1,
+          transform: `translateX(${tx}px) rotate(${tx * 0.04}deg)`,
+          transition: animating ? "transform .24s ease-out" : "none",
+        }}>
+        <div className="absolute top-4 right-4 z-10 px-3 py-1 rounded-lg text-sm font-black pointer-events-none"
+          style={{ background: C.safety, color: "#FFFFFF", border: "2px solid #FFFFFF", transform: "rotate(-12deg)", opacity: skipOpacity }}>
+          {lang === "en" ? "SKIP" : lang === "mr" ? "वगळा" : "छोड़ें"}
+        </div>
+        <LoadAlertCard key={top.id} load={top} {...cardProps} />
+      </div>
+
+      {loads.length > 1 && (
+        <div className="text-center text-[11px] font-semibold" style={{ color: C.inkSoft }}>
+          {lang === "en" ? `← Swipe left to skip  ·  ${loads.length} new loads` : lang === "mr" ? `← वगळण्यासाठी डावीकडे स्वाइप करा  ·  ${loads.length} नवीन लोड` : `← छोड़ने के लिए बाएं स्वाइप करें  ·  ${loads.length} नए लोड`}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function fmtHMS(ms) {
   const hh = Math.floor(ms / 3600000);
   const mm = Math.floor((ms % 3600000) / 60000);
@@ -5366,12 +5465,8 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
               <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — new loads will show here instantly." : lang === "mr" ? "ऑनलाइन रहा — नवीन लोड येताच इथे लगेच दिसेल." : "ऑनलाइन रहें — नया लोड आते ही यहां तुरंत दिखेगा।"}</p>
             </div>
           ) : (
-            <>
-              {visibleLoads.map((load) => (
-                <LoadAlertCard key={load.id} load={load} driver={driver} addBid={addBid} lang={lang}
-                  commissionPct={commissionPct} minWallet={minWallet} skipLoad={skipLoad} />
-              ))}
-            </>
+            <LoadCardStack loads={visibleLoads} driver={driver} addBid={addBid} lang={lang}
+              commissionPct={commissionPct} minWallet={minWallet} skipLoad={skipLoad} />
           )}
         </>
       ) : (
