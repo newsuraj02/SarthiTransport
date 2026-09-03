@@ -2801,24 +2801,33 @@ function DriverKycPortalNameEdit({ driver, setDriver, lang, onDone }) {
 // sheet asking Take Photo vs Choose from Library, instead of jumping
 // straight to the OS file picker. Each option triggers its own hidden file
 // input (one forces the camera via `capture`, the other doesn't).
+
+// Largest source file we'll even attempt to decode. Android camera photos
+// are ~2-6 MB; anything past this is an edited/downloaded/panorama file
+// that risks OOM-crashing the WebView on a low-RAM phone mid-decode, so we
+// reject it up front with a clear reason instead.
+const MAX_PHOTO_BYTES = 25 * 1024 * 1024;
+
 // Resizes/compresses an uploaded photo client-side and hands back the
-// decoded <canvas> — shared by uploadPhoto below.
+// decoded <canvas> — shared by uploadPhoto below. Rejects with an Error
+// whose .message is a stable code ("toobig" | "timeout" | "decode") so
+// callers can show the driver a reason they can act on.
 function resizeImageToCanvas(file, maxDim = 900) {
   return new Promise((resolve, reject) => {
-    // Hard timeout: on some Android WebViews an unsupported/oversized image
-    // (e.g. an iPhone HEIC, or a huge photo the decoder chokes on) fires
-    // neither img.onload nor img.onerror — without this the promise would
-    // hang forever, leaving the KYC tile stuck on "Uploading" and
-    // anyUploading permanently true so the driver can never submit.
-    const timeoutId = setTimeout(() => reject(new Error("image decode timed out")), 20000);
+    if (file && file.size > MAX_PHOTO_BYTES) { reject(new Error("toobig")); return; }
+    // Hard timeout: on some Android WebViews a huge photo the decoder
+    // chokes on fires neither img.onload nor img.onerror — without this the
+    // promise would hang forever, leaving the KYC tile stuck on "Uploading"
+    // and anyUploading permanently true so the driver can never submit.
+    const timeoutId = setTimeout(() => reject(new Error("timeout")), 20000);
     const finish = (fn) => (arg) => { clearTimeout(timeoutId); fn(arg); };
     const ok = finish(resolve);
-    const fail = finish(reject);
+    const fail = finish((e) => reject(e instanceof Error && ["toobig", "timeout", "decode"].includes(e.message) ? e : new Error("decode")));
     const reader = new FileReader();
-    reader.onerror = () => fail(reader.error || new Error("file read failed"));
+    reader.onerror = () => fail(new Error("decode"));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => fail(new Error("image decode failed"));
+      img.onerror = () => fail(new Error("decode"));
       img.onload = () => {
         try {
           let { width, height } = img;
@@ -2850,7 +2859,9 @@ function resizeImageToCanvas(file, maxDim = 900) {
 // still works before that one-time setup step is done. Returns null (never
 // throws) if the file itself can't be read/decoded — e.g. a corrupted photo
 // or a format the browser can't open — so callers can always clear their
-// "uploading" state and show an error instead of hanging forever.
+// "uploading" state and show an error instead of hanging forever. Before
+// returning null it calls onFail(reason) with a code ("toobig" | "timeout"
+// | "decode" | "upload") so callers can tell the driver what to fix.
 //
 // Uses a resumable upload (uploadBytesResumable) rather than a one-shot
 // uploadBytes — on the flaky mobile connections drivers actually sign up
@@ -2863,12 +2874,13 @@ function resizeImageToCanvas(file, maxDim = 900) {
 // connection — so a genuinely dead connection still falls through to the
 // base64 fallback below instead of hanging forever; cancelling the task
 // makes its own 'error' branch fire rather than needing a separate race.
-async function uploadPhoto(file, path, maxDim = 900, quality = 0.72, onProgress = null) {
+async function uploadPhoto(file, path, maxDim = 900, quality = 0.72, onProgress = null, onFail = null) {
   let canvas;
   try {
     canvas = await resizeImageToCanvas(file, maxDim);
   } catch (e) {
     console.error("[photo decode]", e);
+    onFail?.(["toobig", "timeout", "decode"].includes(e?.message) ? e.message : "decode");
     return null;
   }
   const storage = getActiveStorage();
@@ -2891,7 +2903,13 @@ async function uploadPhoto(file, path, maxDim = 900, quality = 0.72, onProgress 
       console.error("[storage upload]", e);
     }
   }
-  return { name: file.name, url: canvas.toDataURL("image/jpeg", quality) };
+  try {
+    return { name: file.name, url: canvas.toDataURL("image/jpeg", quality) };
+  } catch (e) {
+    console.error("[photo base64 fallback]", e);
+    onFail?.("upload");
+    return null;
+  }
 }
 
 // Higher-fidelity variant of uploadPhoto for scanned bill/invoice documents —
@@ -2899,6 +2917,36 @@ async function uploadPhoto(file, path, maxDim = 900, quality = 0.72, onProgress 
 // larger max dimension and higher JPEG quality than profile/KYC photos.
 async function uploadDocumentPhoto(file, path) {
   return uploadPhoto(file, path, 1600, 0.85);
+}
+
+// Turns an uploadPhoto onFail(reason) code into a short, action-oriented
+// line for a photo tile — tells the driver what actually went wrong and
+// what to do about it, instead of a bare "Upload failed".
+function uploadErrorInfo(reason, lang) {
+  const M = {
+    toobig: {
+      en: "Photo is too large. Take a fresh photo instead of an edited or downloaded one.",
+      hi: "फोटो बहुत बड़ी है। एडिट या डाउनलोड की हुई फोटो की जगह नई फोटो लें।",
+      mr: "फोटो खूप मोठा आहे. एडिट किंवा डाउनलोड केलेल्याऐवजी नवीन फोटो घ्या.",
+    },
+    timeout: {
+      en: "This photo is too heavy for your phone to process. Take a new photo.",
+      hi: "यह फोटो आपके फोन के लिए बहुत भारी है। नई फोटो लें।",
+      mr: "हा फोटो तुमच्या फोनसाठी खूप जड आहे. नवीन फोटो घ्या.",
+    },
+    decode: {
+      en: "Couldn't open this photo — it may be damaged or an unsupported type. Take a new photo.",
+      hi: "यह फोटो नहीं खुल पाई — यह खराब या असमर्थित हो सकती है। नई फोटो लें।",
+      mr: "हा फोटो उघडता आला नाही — तो खराब किंवा असमर्थित असू शकतो. नवीन फोटो घ्या.",
+    },
+    upload: {
+      en: "Upload failed — check your internet and retry.",
+      hi: "अपलोड नहीं हुआ — इंटरनेट जांचें और फिर कोशिश करें।",
+      mr: "अपलोड झाले नाही — इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.",
+    },
+  };
+  const m = M[reason] || M.upload;
+  return lang === "en" ? m.en : lang === "mr" ? m.mr : m.hi;
 }
 
 // Uploads a file (e.g. a PDF) to Storage as-is, no resizing — used for the
@@ -5491,8 +5539,12 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // Set when a tile's photo failed to upload (e.g. a corrupted file the
   // browser couldn't decode) — surfaced as inline text on that tile instead
   // of leaving "Uploading..." stuck forever with no explanation.
+  // Per-tile upload failure reason ("toobig" | "timeout" | "decode" |
+  // "upload"), or false when there's no error. Surfaced as an inline,
+  // action-oriented line on the tile (see uploadErrorInfo) instead of
+  // leaving "Uploading..." stuck forever with no explanation.
   const [uploadErrorKeys, setUploadErrorKeys] = useState({});
-  const markUploadError = (key, on) => setUploadErrorKeys((prev) => ({ ...prev, [key]: on }));
+  const markUploadError = (key, reason) => setUploadErrorKeys((prev) => ({ ...prev, [key]: reason || false }));
   // Real bytes-transferred percentage per tile, fed by uploadPhoto's
   // onProgress callback — replaces a static "Uploading..." with something
   // that visibly moves, so a slow connection doesn't look identical to a
@@ -5557,11 +5609,18 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     markUploading(key, true);
     markUploadError(key, false);
     markProgress(key, 0);
-    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`, 900, 0.72, (pct) => markProgress(key, pct)).then((p) => {
+    let failReason = null;
+    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`, 900, 0.72,
+      (pct) => markProgress(key, pct),
+      (reason) => { failReason = reason; },
+    ).then((p) => {
       markUploading(key, false);
-      if (p) setVal(p); else markUploadError(key, true);
+      if (p) setVal(p); else markUploadError(key, failReason || "upload");
     });
   };
+  // Re-send the exact same File — only offered for a "upload" (network)
+  // failure. A "toobig"/"timeout"/"decode" failure needs a different photo,
+  // so those tiles show "tap to take again" (reopens the picker) instead.
   const retryUpload = (setVal, key) => () => {
     const f = lastFilesRef.current[key];
     if (f) startPhotoUpload(setVal, key)(f);
@@ -5649,11 +5708,17 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                   />
                 )}
                 {uploadErrorKeys[key] ? (
-                  <div className="flex items-center gap-1.5 mt-0.5 pb-1">
-                    <span className="text-[9px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Upload failed" : lang === "mr" ? "अपलोड झाले नाही" : "अपलोड नहीं हुआ"}</span>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(setVal, key)(); }} className="text-[9px] font-bold underline" style={{ color: C.navy }}>
-                      {lang === "en" ? "Retry" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
-                    </button>
+                  <div className="mt-0.5 pb-1 px-1">
+                    <span className="block text-[9px] font-semibold leading-tight" style={{ color: C.safety }}>{uploadErrorInfo(uploadErrorKeys[key], lang)}</span>
+                    {uploadErrorKeys[key] === "upload" ? (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(setVal, key)(); }} className="text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
+                        {lang === "en" ? "Retry" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
+                      </button>
+                    ) : (
+                      <span className="block text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
+                        {lang === "en" ? "Tap to take again" : lang === "mr" ? "पुन्हा घेण्यासाठी टॅप करा" : "फिर से लेने के लिए टैप करें"}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>
@@ -5733,11 +5798,17 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                 )}
               </div>
               {uploadErrorKeys.vehicleSide ? (
-                <div className="flex items-center justify-center gap-1.5 mt-0.5">
-                  <span className="text-[9px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Upload failed" : lang === "mr" ? "अपलोड झाले नाही" : "अपलोड नहीं हुआ"}</span>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(setVehiclePhotoSide, "vehicleSide")(); }} className="text-[9px] font-bold underline" style={{ color: C.navy }}>
-                    {lang === "en" ? "Retry" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
-                  </button>
+                <div className="mt-0.5 px-1 text-center">
+                  <span className="block text-[9px] font-semibold leading-tight" style={{ color: C.safety }}>{uploadErrorInfo(uploadErrorKeys.vehicleSide, lang)}</span>
+                  {uploadErrorKeys.vehicleSide === "upload" ? (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(setVehiclePhotoSide, "vehicleSide")(); }} className="text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
+                      {lang === "en" ? "Retry" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
+                    </button>
+                  ) : (
+                    <span className="block text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
+                      {lang === "en" ? "Tap to take again" : lang === "mr" ? "पुन्हा घेण्यासाठी टॅप करा" : "फिर से लेने के लिए टैप करें"}
+                    </span>
+                  )}
                 </div>
               ) : (
                 <div className="text-[9px] mt-0.5 text-center" style={{ color: vehiclePhotoSide ? C.success : C.inkSoft }}>
