@@ -5835,15 +5835,40 @@ const RATE_FIELDS = [
 const rateSectionComplete = (sec) => !!sec && RATE_FIELDS.every((f) => Number(sec[f.key]) > 0);
 const rateCardComplete = (rc) => !!rc && rateSectionComplete(rc.heavy) && rateSectionComplete(rc.light);
 
-// Load weight at/above which a driver's Heavy rate applies (Light below it).
-const HEAVY_LOAD_KG = 1000;
+// Load class is by material, not weight. The four preset heavies match
+// exactly; a custom "Add Material" entry is scanned for dense / metal /
+// construction / bulk-goods keywords (English + common Hindi/Marathi terms)
+// and priced Heavy on a hit, Light otherwise.
+const HEAVY_MATERIALS = new Set(["लोहा", "स्टील", "एमएस स्क्रैप", "सीमेंट / बालू"]);
+const HEAVY_KEYWORDS = [
+  "iron", "steel", "scrap", "metal", "rod", "sariya", "tmt", "girder", "sheet",
+  "cement", "concrete", "sand", "brick", "block", "stone", "gitti", "gravel", "aggregate", "rubble",
+  "marble", "granite", "tile", "slab", "coal", "clinker", "ore", "mineral",
+  "machine", "machinery", "motor", "pump", "generator", "transformer", "battery", "engine",
+  "aluminium", "aluminum", "copper", "brass", "zinc", "bronze",
+  "wheat", "rice", "paddy", "grain", "flour", "atta", "fertilizer", "urea", "sugar", "salt", "potato", "onion", "cattle feed",
+  "drum", "barrel", "water tank",
+  "लोहा", "लोखंड", "स्टील", "इस्पात", "स्क्रैप", "भंगार", "कबाड", "कबाड़", "सरिया", "सळई",
+  "सीमेंट", "सिमेंट", "बालू", "रेत", "रेती", "ईंट", "वीट", "गिट्टी", "पत्थर", "दगड", "बजरी", "खडी", "खडी",
+  "संगमरमर", "टाइल", "कोयला", "कोळसा", "धातू", "धातु", "मशीन", "बॅटरी", "बैटरी", "लोखंडी",
+  "गेहू", "गेहूं", "चावल", "धान", "अनाज", "आटा", "खाद", "यूरिया", "चीनी", "साखर", "नमक", "मीठ", "आलू", "बटाटा", "प्याज", "कांदा",
+  "ड्रम", "बैरल", "टंकी",
+];
+function loadIsHeavy(load) {
+  const m = load.material;
+  if (!m) return false;
+  if (HEAVY_MATERIALS.has(m)) return true;
+  const s = String(m).toLowerCase();
+  return HEAVY_KEYWORDS.some((k) => s.includes(k));
+}
+
 // The auto-bid total = the driver's own rate for this load's distance band
 // and load class. 2–5 km / 5–10 km are flat fixed fares; 10 km and above is
 // per‑km × distance. null when it can't be priced (no distance, no matching
 // rate section) so callers just don't bid.
 function computeAutoBid(rateCard, load) {
   const km = Number(load.distance) || 0;
-  const sec = Number(load.weight) >= HEAVY_LOAD_KG ? rateCard?.heavy : rateCard?.light;
+  const sec = loadIsHeavy(load) ? rateCard?.heavy : rateCard?.light;
   if (km <= 0 || !sec) return null;
   if (km < 5) return Math.round(Number(sec.fare2to5) || 0);
   if (km < 10) return Math.round(Number(sec.fare5to10) || 0);
