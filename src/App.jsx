@@ -5270,13 +5270,23 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
                       <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
                       <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{materialLabel(load.material, lang)}</span>
                     </div>
-                    <div className="mt-2 pt-2 text-xs font-black" style={{ borderTop: `1px solid ${C.line}`, color: myBid ? C.success : C.inkSoft }}>
-                      {myBid
-                        ? (lang === "en" ? `Your bid: ${fmt(myBid.amount)} · waiting for customer` : lang === "mr" ? `तुमची बोली: ${fmt(myBid.amount)} · ग्राहकाची वाट` : `आपकी बोली: ${fmt(myBid.amount)} · ग्राहक की प्रतीक्षा`)
-                        : est
-                        ? (lang === "en" ? `Auto-bid: ${fmt(est)}` : lang === "mr" ? `ऑटो-बोली: ${fmt(est)}` : `ऑटो-बोली: ${fmt(est)}`)
-                        : (lang === "en" ? "Bidding automatically…" : lang === "mr" ? "आपोआप बोली लावली जात आहे…" : "अपने आप बोली लग रही है…")}
-                    </div>
+                    {myBid || est ? (
+                      <div className="mt-2 rounded-lg px-3 py-2 flex items-center justify-between"
+                        style={{ background: myBid ? "#E6F7EE" : C.metallicGold, border: `1.5px solid ${myBid ? C.success : C.marigoldDeep}` }}>
+                        <span className="text-[11px] font-bold" style={{ color: myBid ? C.success : "#000000" }}>
+                          {myBid
+                            ? (lang === "en" ? "Waiting for customer" : lang === "mr" ? "ग्राहकाची वाट" : "ग्राहक की प्रतीक्षा")
+                            : (lang === "en" ? "Auto-bid" : lang === "mr" ? "ऑटो-बोली" : "ऑटो-बोली")}
+                        </span>
+                        <span className="text-2xl font-black" style={{ color: myBid ? C.success : "#000000", fontFamily: monoFont }}>
+                          {fmt(myBid ? myBid.amount : est)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="mt-2 pt-2 text-xs font-black" style={{ borderTop: `1px solid ${C.line}`, color: C.inkSoft }}>
+                        {lang === "en" ? "Bidding automatically…" : lang === "mr" ? "आपोआप बोली लावली जात आहे…" : "अपने आप बोली लग रही है…"}
+                      </div>
+                    )}
                   </div>
                 );
               })}
