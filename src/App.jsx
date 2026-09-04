@@ -3852,13 +3852,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2 guided-submit-ready" style={{ background: C.navy }}>
             <Clock3 size={22} color="#FFFFFF" />
           </div>
-          <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for the driver to confirm" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
+          <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for Driver's Confirmation" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
           <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{vehicleLabel(pdVeh, lang) || b.pendingDriverName} · {fmt(b.fare)}</div>
-          <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{b.pickup} → {b.drop}</div>
-          <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="mt-4 text-sm font-semibold" style={{ color: C.safety }}>
-            {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
-          </button>
-          {cancelError && <div className="text-[11px] font-bold mt-1" style={{ color: C.safety }}>{cancelError}</div>}
         </div>
       </div>
     );
