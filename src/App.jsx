@@ -440,7 +440,14 @@ const LOADING_GEOFENCE_M = 100;
 // radius of the pickup point can see/bid on the load — keeps bids realistic
 // for jobs that need a truck right away. Advance bookings aren't restricted
 // since the driver has time to travel to the pickup point before the slot.
-const BID_RADIUS_KM = 100;
+// Auto-bid proximity: a Current (immediate) load only reaches drivers
+// within CURRENT_BID_RADIUS_KM of its pickup; an Advance load reaches a
+// wider ring since the driver has time to travel there.
+const CURRENT_BID_RADIUS_KM = 30;
+const ADVANCE_BID_RADIUS_KM = 50;
+// Vehicle-fit window: a driver auto-bids only when their vehicle's rated
+// capacity is between the load's weight and weight + this much headroom.
+const VEHICLE_HEADROOM_KG = 5000;
 
 // Roads aren't a straight line, so straight-line distance is scaled up by a
 // fixed factor as a stand-in for real road distance — typical for Indian
@@ -3830,6 +3837,33 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
+  if (b.status === "AwaitingDriver") {
+    const pd = drivers.find((d) => d.name === b.pendingDriverName);
+    const pdVeh = VEHICLES.find((vt) => vt.key === pd?.vehicleSpec?.type);
+    return (
+      <div className="px-5 py-5">
+        <div className="rounded-xl p-4 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+          {b.scheduledFor && (
+            <div className="rounded-lg p-2 mb-3 flex items-center justify-center gap-1.5 shadow-lg" style={{ background: C.metallicGold }}>
+              <Clock3 size={12} color={C.ink} />
+              <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
+            </div>
+          )}
+          <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2 guided-submit-ready" style={{ background: C.navy }}>
+            <Clock3 size={22} color="#FFFFFF" />
+          </div>
+          <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for the driver to confirm" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
+          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{vehicleLabel(pdVeh, lang) || b.pendingDriverName} · {fmt(b.fare)}</div>
+          <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{b.pickup} → {b.drop}</div>
+          <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="mt-4 text-sm font-semibold" style={{ color: C.safety }}>
+            {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+          </button>
+          {cancelError && <div className="text-[11px] font-bold mt-1" style={{ color: C.safety }}>{cancelError}</div>}
+        </div>
+      </div>
+    );
+  }
+
   if (b.status === "Bidding") {
     // Each bid comes from a driver who may have a different vehicle type,
     // so the vehicle shown per bid is that driver's own — never the load's
@@ -3901,6 +3935,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
               <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5 shadow-lg" style={{ background: C.metallicGold }}>
                 <Clock3 size={12} color={C.ink} />
                 <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
+              </div>
+            )}
+            {b.declinedBy?.length > 0 && (
+              <div className="rounded-lg p-2 mb-2 text-[11px] font-bold" style={{ background: "#FDECEC", color: C.safety }}>
+                {lang === "en" ? "The driver you picked couldn't take it — please choose another vehicle." : lang === "mr" ? "तुम्ही निवडलेला ड्रायव्हर घेऊ शकला नाही — कृपया दुसरी गाडी निवडा." : "आपने जो ड्राइवर चुना वह नहीं ले सका — कृपया दूसरी गाड़ी चुनें।"}
               </div>
             )}
 
@@ -4337,6 +4376,10 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
     setShowAcceptedBurst(true);
     setTimeout(() => setShowAcceptedBurst(false), 1400);
   };
+  // Fires when a driver actually confirms (AwaitingDriver -> Ongoing) one of
+  // this customer's bookings — the real "you're booked" moment.
+  const [showConfirmedBurst, setShowConfirmedBurst] = useState(false);
+  const awaitingIdsRef = useRef(null);
   // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
   // so the header knows whether the "What do you need?" chooser is on
   // screen right now — that's the only place the hamburger menu shows.
@@ -4357,6 +4400,17 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   // lands (myBookings.length changes).
   const [addingAnother, setAddingAnother] = useState(false);
   useEffect(() => { setAddingAnother(false); }, [myBookings.length]);
+  // Watch this customer's AwaitingDriver bookings — when one leaves that set
+  // by becoming Ongoing, the driver confirmed: celebrate.
+  const awaitingSig = myBookings.filter((b) => b.status === "AwaitingDriver").map((b) => b.id).join(",");
+  useEffect(() => {
+    const now = new Set(awaitingSig ? awaitingSig.split(",") : []);
+    if (awaitingIdsRef.current === null) { awaitingIdsRef.current = now; return; }
+    const confirmed = [...awaitingIdsRef.current].some((id) => !now.has(id) && myBookings.find((b) => b.id === id)?.status === "Ongoing");
+    if (confirmed) { setShowConfirmedBurst(true); setTimeout(() => setShowConfirmedBurst(false), 1400); }
+    awaitingIdsRef.current = now;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaitingSig]);
   // A booking scheduled for a future date shouldn't hog the home screen or
   // block posting today's ride — it stays reachable via the Current/Advance
   // toggle in the header instead (see rideView below).
@@ -4366,7 +4420,11 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   // one out to Advance Bookings.
   const advanceBookings = myBookings.filter((b) => b.status === "Ongoing" && isFutureAdvance(b.scheduledFor));
   const ongoingTrip = myBookings.find((b) => b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor));
-  const activeBooking = myBookings.find((b) => b.status === "Bidding" || (b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor)));
+  // "AwaitingDriver" = the customer picked a bid and is waiting for that
+  // driver to Accept/Reject. Keep it on the Current tab regardless of
+  // advance/current so the customer sees the "waiting" card; once the
+  // driver Accepts it flips to Ongoing and (if advance) moves to the menu.
+  const activeBooking = myBookings.find((b) => b.status === "Bidding" || b.status === "AwaitingDriver" || (b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor)));
 
   // Surfaces a fare-review summary the moment the driver ends the trip,
   // instead of silently dropping the customer back to the chooser the
@@ -4478,7 +4536,8 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
 
   return (
     <>
-      <SuccessBurst show={showAcceptedBurst} text={lang === "en" ? "Booked!" : lang === "mr" ? "बुक झाले!" : "बुक हो गया!"} lang={lang} />
+      <SuccessBurst show={showAcceptedBurst} text={lang === "en" ? "Request sent!" : lang === "mr" ? "विनंती पाठवली!" : "अनुरोध भेजा गया!"} lang={lang} />
+      <SuccessBurst show={showConfirmedBurst} text={lang === "en" ? "Driver confirmed!" : lang === "mr" ? "ड्रायव्हरने पुष्टी केली!" : "ड्राइवर ने पुष्टि की!"} lang={lang} />
       <FloatingHamburgerHint show={showBookingHint && !showHamburger} onOpenMenu={() => { setMenuOpen(true); setShowBookingHint(false); }} lang={lang} />
       <div className="flex-1 overflow-y-auto relative">
         {headerHasContent && (
@@ -4594,17 +4653,13 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
             <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
               onAddAnother={() => setAddingAnother(true)}
               onBidAccepted={(booking) => {
+                // The bid isn't booked yet — it's now "AwaitingDriver", shown
+                // as a "waiting to confirm" card right here on the Current tab
+                // (activeBooking includes AwaitingDriver). For an advance load,
+                // nudge the hamburger too so they know that's where it lands
+                // once the driver confirms.
                 fireAcceptedBurst();
-                // An accepted bid on a future-dated load moves it straight out
-                // of the Current tab (see activeBooking/advanceBookings above) —
-                // jump straight to its Advance detail view instead of dropping
-                // back to the "What do you need?" chooser. The hamburger
-                // hint is Advance-only (see task), so it only fires here.
-                if (isFutureAdvance(booking.scheduledFor)) {
-                  setShowBookingHint(true);
-                  setRideView("advance");
-                  setSelectedAdvanceId(booking.id);
-                }
+                if (isFutureAdvance(booking.scheduledFor)) setShowBookingHint(true);
               }} />
           ) : (
             <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang}
@@ -4928,7 +4983,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, bookings, completeBooking, startLoading, vehicleTypes, lang }) {
+function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, lang }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
@@ -5066,6 +5121,47 @@ function DriverHome({ driver, bookings, completeBooking, startLoading, vehicleTy
     return (
       <div className="px-5 pt-5 pb-5">
         <DriverTripSummary trip={completedTrip} lang={lang} onDone={() => setCompletedTrip(null)} />
+      </div>
+    );
+  }
+
+  // A customer accepted this driver's bid and is waiting for them to
+  // confirm — takes over the screen until Accept/Reject is tapped.
+  const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && b.pendingDriverName === driver.name);
+  if (awaitingBooking && !myTrip) {
+    const ab = awaitingBooking;
+    return (
+      <div className="px-5 pt-5 pb-5">
+        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.success }}>
+          <CheckCircle2 size={16} color="#FFFFFF" />
+          <span className="text-sm font-black text-white">{lang === "en" ? "A customer accepted your bid" : lang === "mr" ? "एका ग्राहकाने तुमची बोली स्वीकारली" : "एक ग्राहक ने आपकी बोली स्वीकार की"}</span>
+        </div>
+        <div className="rounded-xl p-3 shadow-sm mb-3" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
+          <RideTypeBanner booking={ab} lang={lang} />
+          <div className="mb-2">
+            <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{ab.pickup}</span></div>
+            <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{ab.drop}</span></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.distance} {lang === "en" ? "km" : "किमी"}</span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{materialLabel(ab.material, lang)}</span>
+          </div>
+          <div className="text-center rounded-lg py-2.5 mb-3" style={{ background: C.metallicGold }}>
+            <div className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Your fare" : lang === "mr" ? "तुमचे भाडे" : "आपका भाड़ा"}</div>
+            <div className="text-2xl font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(ab.fare)}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => driverRespondBooking?.(ab.id, false)}
+              className="rounded-lg py-3.5 text-base font-black" style={{ background: C.paper, border: `2px solid ${C.safety}`, color: C.safety }}>
+              {lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "अस्वीकार"}
+            </button>
+            <button type="button" onClick={() => driverRespondBooking?.(ab.id, true)}
+              className="rounded-lg py-3.5 text-base font-black text-white guided-submit-ready" style={{ background: C.metallicGreen }}>
+              {lang === "en" ? "Accept" : lang === "mr" ? "स्वीकारा" : "स्वीकार"}
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -5945,7 +6041,7 @@ function RateSetup({ driver, setDriver, lang }) {
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
+function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
@@ -5993,28 +6089,31 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   }, [assignedIdsKey]);
 
   // Auto-bidding. While this driver is online + approved + not blacklisted
-  // and has a rate card, their app places a bid on every open load it can
-  // serve — priced straight from their rate card (distance x rate, see
-  // computeAutoBid) — without any per-load input. addBid does the
-  // authoritative radius/conflict re-check and de-dupes by driver name;
-  // autoBidDoneRef stops us re-writing the same bid every snapshot.
+  // and has a rate card, their app places a bid on every open load that
+  // meets the eligibility rules below — priced straight from their rate
+  // card (see computeAutoBid), no per-load input. addBid does the same
+  // radius/capacity/conflict re-check authoritatively and de-dupes by
+  // driver name; autoBidDoneRef stops us re-writing the same bid every
+  // snapshot.
   const autoBidDoneRef = useRef(new Set());
   const bidsSig = bookings.map((b) => `${b.id}:${b.status}:${(b.bids || []).length}`).join(",");
   useEffect(() => {
     if (!driver.online || driver.kyc !== "Approved" || driver.blacklisted || !rateCardComplete(driver.rateCard)) return;
-    const dvDef = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
+    const dCapKg = Number(driver.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type)?.capacityKg || 0;
     const loc = driver.lastKnownLocation;
     bookings.forEach((b) => {
       if (b.status !== "Bidding") return;
       if (autoBidDoneRef.current.has(b.id)) return;
       if ((b.bids || []).some((x) => x.driverName === driver.name)) return;
-      // Vehicle fit — a bigger truck can carry a smaller load, not the reverse.
-      const loadVDef = vehicleTypes.find((v) => v.key === b.vehicle);
-      if (dvDef && loadVDef && loadVDef.capacityKg > dvDef.capacityKg) return;
-      if (dvDef && !loadVDef && b.vehicle !== driver.vehicleSpec?.type) return;
-      // Immediate loads: only within the bid radius of the pickup point.
-      if (!isFutureAdvance(b.scheduledFor) && b.pickupLat != null && b.pickupLng != null) {
-        if (!loc || haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) > BID_RADIUS_KM) return;
+      if (b.declinedBy?.includes(driver.name)) return; // already turned this one down
+      // Vehicle fit: rated capacity from the load's weight up to +5 tonnes
+      // (e.g. a 5 t load -> vehicles rated 5–10 t).
+      const loadKg = Number(b.weight) || 0;
+      if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return;
+      // Proximity: 30 km for a Current load, 50 km for an Advance one.
+      if (b.pickupLat != null && b.pickupLng != null) {
+        const maxKm = isFutureAdvance(b.scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+        if (!loc || haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) > maxKm) return;
       }
       if (findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor }, bookings, vehicleTypes, lang)) return;
       const amount = computeAutoBid(driver.rateCard, b);
@@ -6194,7 +6293,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} bookings={bookings} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
@@ -8158,29 +8257,36 @@ export default function App() {
     }).catch((e) => console.error(e));
   };
 
-  // A driver can't even place a bid — let alone have one accepted — on a
-  // load that would conflict with a commitment they already have (see
-  // findDriverLoadConflict). This is the authoritative check: DriverHome
-  // hides conflicting loads from the list as the first line of defense, but
-  // this is what actually stops the write if a stale/cached load slips
-  // through.
+  // Authoritative re-check of the auto-bid eligibility rules (proximity,
+  // vehicle-capacity window, commitment conflict) — this is what actually
+  // stops the write, not just the client-side effect that calls it.
   const addBid = (bookingId, bid) => {
     const b = bookings.find((x) => x.id === bookingId);
     if (!b) return null;
+    if (b.declinedBy?.includes(bid.driverName)) return "declined";
     const bidDriver = drivers.find((d) => d.name === bid.driverName);
-    // Authoritative re-check (not just the client-side openLoads filter) —
-    // current loads only accept bids from drivers within BID_RADIUS_KM of
-    // the pickup point; advance bookings are exempt.
-    if (!isFutureAdvance(b.scheduledFor) && b.pickupLat != null && b.pickupLng != null) {
+    // Proximity: 30 km for a Current load, 50 km for an Advance one.
+    if (b.pickupLat != null && b.pickupLng != null) {
       const loc = bidDriver?.lastKnownLocation;
       const distKm = loc ? haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) : null;
-      if (distKm == null || distKm > BID_RADIUS_KM) {
+      const maxKm = isFutureAdvance(b.scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+      if (distKm == null || distKm > maxKm) {
         return lang === "en"
-          ? `⚠️ You are outside the ${BID_RADIUS_KM}km bidding radius for this load's pickup point.`
+          ? `⚠️ You are outside the ${maxKm}km bidding radius for this load's pickup point.`
           : lang === "mr"
-          ? `⚠️ तुम्ही या लोडच्या पिकअप ठिकाणापासून ${BID_RADIUS_KM}km च्या बोली परिघाबाहेर आहात.`
-          : `⚠️ आप इस लोड के पिकअप स्थान से ${BID_RADIUS_KM}km के बोली दायरे से बाहर हैं।`;
+          ? `⚠️ तुम्ही या लोडच्या पिकअप ठिकाणापासून ${maxKm}km च्या बोली परिघाबाहेर आहात.`
+          : `⚠️ आप इस लोड के पिकअप स्थान से ${maxKm}km के बोली दायरे से बाहर हैं।`;
       }
+    }
+    // Vehicle-capacity window: load weight .. weight + 5 tonnes.
+    const loadKg = Number(b.weight) || 0;
+    const dCap = Number(bidDriver?.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === bidDriver?.vehicleSpec?.type)?.capacityKg || 0;
+    if (loadKg <= 0 || dCap < loadKg || dCap > loadKg + VEHICLE_HEADROOM_KG) {
+      return lang === "en"
+        ? "⚠️ This load is outside your vehicle's capacity range."
+        : lang === "mr"
+        ? "⚠️ हा लोड तुमच्या गाडीच्या क्षमतेच्या मर्यादेबाहेर आहे."
+        : "⚠️ यह लोड आपकी गाड़ी की क्षमता सीमा से बाहर है।";
     }
     const conflict = findDriverLoadConflict(bidDriver, { id: b.id, scheduledFor: b.scheduledFor, hours: bid.hours }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
@@ -8199,6 +8305,10 @@ export default function App() {
     });
   };
 
+  // Customer picks a bid — this doesn't book the trip yet. It moves the
+  // load to "AwaitingDriver" and waits for that driver to Accept/Reject
+  // (see driverRespondBooking). No commission cut / OTP / freeze until the
+  // driver confirms.
   const acceptBid = (bookingId, bidId) => {
     const b = bookings.find((x) => x.id === bookingId);
     const bid = b?.bids?.find((x) => x.id === bidId);
@@ -8206,38 +8316,63 @@ export default function App() {
     const bidDriver = drivers.find((d) => d.name === bid.driverName);
     const conflict = findDriverLoadConflict(bidDriver, { id: b.id, scheduledFor: b.scheduledFor, hours: bid.hours }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
+    patchDoc("bookings", bookingId, {
+      status: "AwaitingDriver", pendingDriverName: bid.driverName, pendingBidId: bidId,
+      fare: bid.amount, hours: bid.hours || 0, extraHourRate: bid.extraHourRate || 0, acceptedAt: serverTimestamp(),
+    }).catch((e) => console.error(e));
+    return null;
+  };
+
+  // Driver's response to a customer-accepted bid (runs on the pending
+  // driver's own device). accept -> Ongoing (+ OTP, commission cut, freeze
+  // their other bids); reject -> back to Bidding, their bid removed and
+  // their name added to declinedBy so auto-bid won't re-offer it.
+  const driverRespondBooking = (bookingId, accept) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b || b.status !== "AwaitingDriver" || b.pendingDriverName !== driver?.name) return null;
+    if (!accept) {
+      patchDoc("bookings", bookingId, {
+        status: "Bidding",
+        bids: (b.bids || []).filter((x) => x.driverName !== driver.name),
+        declinedBy: [...(b.declinedBy || []), driver.name],
+        pendingDriverName: null, pendingBidId: null, acceptedAt: null,
+      }).catch((e) => console.error(e));
+      return null;
+    }
+    const conflict = findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor, hours: b.hours }, bookings, vehicleTypes, lang);
+    if (conflict) {
+      // Can't take it after all — bounce it back to Bidding like a reject.
+      patchDoc("bookings", bookingId, {
+        status: "Bidding", bids: (b.bids || []).filter((x) => x.driverName !== driver.name),
+        declinedBy: [...(b.declinedBy || []), driver.name], pendingDriverName: null, pendingBidId: null, acceptedAt: null,
+      }).catch((e) => console.error(e));
+      return conflict;
+    }
     const otp = String(Math.floor(1000 + Math.random() * 9000));
     patchDoc("bookings", bookingId, {
-      status: "Ongoing", fare: bid.amount, driverName: bid.driverName, driverMobile: mobileForDriverName(bid.driverName),
-      hours: bid.hours, extraHourRate: bid.extraHourRate, progress: 0, otp, acceptedAt: serverTimestamp(),
+      status: "Ongoing", driverName: driver.name, driverMobile: driver.mobile || mobileForDriverName(driver.name),
+      progress: 0, otp, pendingDriverName: null, pendingBidId: null,
     }).catch((e) => console.error(e));
 
-    // Commission cut instantly on acceptance, only for the accepted
-    // driver's own device — any held credit from a past cancellation offsets
-    // this trip's commission first. 0% while this specific driver is still
-    // within their own 30-day trial (from their own signup date).
-    if (bid.driverName === driver?.name) {
-      const effCommissionPct = isInTrial(driver.createdAt) ? 0 : commissionPct;
-      const effBonusPct = isInTrial(driver.createdAt) ? 0 : bonusPct;
-      const commissionAmt = bid.amount * (effCommissionPct / 100);
-      const bonusAmt = bid.amount * (effBonusPct / 100);
-      const held = driver.heldCredit || 0;
-      const offset = Math.min(held, commissionAmt);
-      setDriver({
-        ...driver,
-        wallet: Math.max(0, driver.wallet - (commissionAmt - offset)),
-        bonus: (driver.bonus || 0) + bonusAmt,
-        heldCredit: Math.max(0, held - offset),
-      });
-    }
-
-    // Freeze: pause (not delete) this driver's pending quotes on every other
-    // open load — they're busy on this trip and stop appearing as "highest"
-    // etc. on the customer's screen. They come back (unfreeze) on trip end.
-    const others = bookings.filter((x) => x.id !== bookingId && x.status === "Bidding" && (x.bids || []).some((y) => y.driverName === bid.driverName));
-    others.forEach((x) => {
-      patchDoc("bookings", x.id, { bids: x.bids.map((y) => y.driverName === bid.driverName ? { ...y, paused: true } : y) }).catch((e) => console.error(e));
+    // Commission cut on confirm — held credit from a past cancellation
+    // offsets first; 0% while this driver is still inside their own trial.
+    const effCommissionPct = isInTrial(driver.createdAt) ? 0 : commissionPct;
+    const effBonusPct = isInTrial(driver.createdAt) ? 0 : bonusPct;
+    const commissionAmt = (b.fare || 0) * (effCommissionPct / 100);
+    const bonusAmt = (b.fare || 0) * (effBonusPct / 100);
+    const held = driver.heldCredit || 0;
+    const offset = Math.min(held, commissionAmt);
+    setDriver({
+      ...driver,
+      wallet: Math.max(0, driver.wallet - (commissionAmt - offset)),
+      bonus: (driver.bonus || 0) + bonusAmt,
+      heldCredit: Math.max(0, held - offset),
     });
+
+    // Freeze this driver's pending bids on every other open load — they're
+    // committed now. They come back (unfreeze) on trip end.
+    bookings.filter((x) => x.id !== bookingId && x.status === "Bidding" && (x.bids || []).some((y) => y.driverName === driver.name))
+      .forEach((x) => patchDoc("bookings", x.id, { bids: x.bids.map((y) => y.driverName === driver.name ? { ...y, paused: true } : y) }).catch((e) => console.error(e)));
     return null;
   };
 
@@ -8486,7 +8621,7 @@ export default function App() {
           </div>
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
-          <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading}
+          <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
