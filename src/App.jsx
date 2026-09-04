@@ -5835,6 +5835,21 @@ const RATE_FIELDS = [
 const rateSectionComplete = (sec) => !!sec && RATE_FIELDS.every((f) => Number(sec[f.key]) > 0);
 const rateCardComplete = (rc) => !!rc && rateSectionComplete(rc.heavy) && rateSectionComplete(rc.light);
 
+// Load weight at/above which a driver's Heavy rate applies (Light below it).
+const HEAVY_LOAD_KG = 1000;
+// The auto-bid total = the driver's own rate for this load's distance band
+// and load class. 2–5 km / 5–10 km are flat fixed fares; 10 km and above is
+// per‑km × distance. null when it can't be priced (no distance, no matching
+// rate section) so callers just don't bid.
+function computeAutoBid(rateCard, load) {
+  const km = Number(load.distance) || 0;
+  const sec = Number(load.weight) >= HEAVY_LOAD_KG ? rateCard?.heavy : rateCard?.light;
+  if (km <= 0 || !sec) return null;
+  if (km < 5) return Math.round(Number(sec.fare2to5) || 0);
+  if (km < 10) return Math.round(Number(sec.fare5to10) || 0);
+  return Math.round((Number(sec.perKm10plus) || 0) * km);
+}
+
 // First screen an approved driver sees. They price Heavy and Light loads
 // across three distance bands (per market rate); "Save and Go live" writes
 // rateCard onto the driver doc and flips them online. Gates the whole
@@ -5951,6 +5966,42 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
     if (hasNew) setShowBookingHint(true);
     prevAssignedIdsRef.current = currentIds;
   }, [assignedIdsKey]);
+
+  // Auto-bidding. While this driver is online + approved + not blacklisted
+  // and has a rate card, their app places a bid on every open load it can
+  // serve — priced straight from their rate card (distance x rate, see
+  // computeAutoBid) — without any per-load input. addBid does the
+  // authoritative radius/conflict re-check and de-dupes by driver name;
+  // autoBidDoneRef stops us re-writing the same bid every snapshot.
+  const autoBidDoneRef = useRef(new Set());
+  const bidsSig = bookings.map((b) => `${b.id}:${b.status}:${(b.bids || []).length}`).join(",");
+  useEffect(() => {
+    if (!driver.online || driver.kyc !== "Approved" || driver.blacklisted || !rateCardComplete(driver.rateCard)) return;
+    const dvDef = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
+    const loc = driver.lastKnownLocation;
+    bookings.forEach((b) => {
+      if (b.status !== "Bidding") return;
+      if (autoBidDoneRef.current.has(b.id)) return;
+      if ((b.bids || []).some((x) => x.driverName === driver.name)) return;
+      // Vehicle fit — a bigger truck can carry a smaller load, not the reverse.
+      const loadVDef = vehicleTypes.find((v) => v.key === b.vehicle);
+      if (dvDef && loadVDef && loadVDef.capacityKg > dvDef.capacityKg) return;
+      if (dvDef && !loadVDef && b.vehicle !== driver.vehicleSpec?.type) return;
+      // Immediate loads: only within the bid radius of the pickup point.
+      if (!isFutureAdvance(b.scheduledFor) && b.pickupLat != null && b.pickupLng != null) {
+        if (!loc || haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) > BID_RADIUS_KM) return;
+      }
+      if (findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor }, bookings, vehicleTypes, lang)) return;
+      const amount = computeAutoBid(driver.rateCard, b);
+      if (!amount || amount <= 0) return;
+      const distanceKm = loc && b.pickupLat != null
+        ? Math.round(haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) * 10) / 10
+        : null;
+      const err = addBid(b.id, { driverName: driver.name, amount, hours: 0, extraHourRate: 0, rating: driver.rating || 4.6, distanceKm, auto: true });
+      if (!err) autoBidDoneRef.current.add(b.id);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bidsSig, driver.online, driver.kyc, driver.blacklisted, driver.rateCard, driver.lastKnownLocation]);
 
   const shareApp = () => {
     // The link carries this driver's own mobile number as their referral
