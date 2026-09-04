@@ -5633,17 +5633,33 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   );
 }
 
-// Mirrors CustomerProfileEdit's layout/fields (name, disabled mobile, email,
-// address, area/city, state/pincode) so both roles' profile pages look and
-// behave the same — minus the customer-only referral section, plus a
-// Logout button at the bottom (moved out of the hamburger menu, see
-// DriverApp). Unlike the customer version, the profile photo itself isn't
-// separately uploadable here — it's the KYC "Driver Photo" (see DriverKyc's
-// submit, which writes it to driver.photo directly), shown read-only so
-// it's always exactly what the customer sees on their active ride page.
+// Driver's My Profile: name, disabled mobile, language, a read-only view of
+// the KYC documents (with a Change button into the KYC form), the editable
+// Rate Setup card, an optional set-a-PIN block, and Logout. No address
+// fields — the driver flow never collects an address. The profile photo
+// isn't separately uploadable here either: it's the KYC "Driver Photo"
+// (DriverKyc's submit writes it to driver.photo), shown read-only so it's
+// always exactly what the customer sees on their active ride page.
 function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, onEditDocuments }) {
   const [name, setName] = useState(driver?.name || "");
   const [saved, setSaved] = useState(false);
+
+  // Editable copy of the rate card first set in RateSetup (post-KYC gate).
+  const [rateSection, setRateSection] = useState("heavy"); // "heavy" | "light"
+  const [rHeavy, setRHeavy] = useState(driver.rateCard?.heavy || {});
+  const [rLight, setRLight] = useState(driver.rateCard?.light || {});
+  const rCur = rateSection === "heavy" ? rHeavy : rLight;
+  const rSet = rateSection === "heavy" ? setRHeavy : setRLight;
+  const setRateField = (k, v) => rSet((p) => ({ ...p, [k]: v.replace(/[^\d]/g, "") }));
+  const rateOk = rateSectionComplete(rHeavy) && rateSectionComplete(rLight);
+  const [ratesSaved, setRatesSaved] = useState(false);
+  const saveRates = () => {
+    if (!rateOk) return;
+    const clean = (s) => ({ fare2to5: Number(s.fare2to5), fare5to10: Number(s.fare5to10), perKm10plus: Number(s.perKm10plus) });
+    setDriver({ ...driver, rateCard: { heavy: clean(rHeavy), light: clean(rLight) } });
+    setRatesSaved(true);
+    setTimeout(() => setRatesSaved(false), 2000);
+  };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -5734,6 +5750,39 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
 
         <button onClick={save} className={`w-full rounded-lg py-3.5 font-bold text-base text-white ${saved ? "shadow-lg" : ""}`} style={{ background: saved ? C.metallicGreen : C.marigoldDeep }}>
           {saved ? (lang === "en" ? "Saved ✓" : lang === "mr" ? "सेव्ह झाले ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें")}
+        </button>
+      </div>
+
+      <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "My Rates" : lang === "mr" ? "माझे दर" : "मेरे रेट"}</h3>
+        <p className="text-[11px] font-semibold mt-0.5 mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Keep these in line with the current market rate. All fields are mandatory." : lang === "mr" ? "सध्याच्या बाजारभावानुसार ठेवा. सर्व फील्ड आवश्यक." : "मौजूदा बाज़ार भाव के अनुसार रखें। सभी फील्ड ज़रूरी।"}</p>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {[
+            ["heavy", lang === "en" ? "Heavy Load" : lang === "mr" ? "हेवी लोड" : "हेवी लोड", rateSectionComplete(rHeavy)],
+            ["light", lang === "en" ? "Light Load" : lang === "mr" ? "लाइट लोड" : "लाइट लोड", rateSectionComplete(rLight)],
+          ].map(([key, label, done]) => (
+            <button key={key} type="button" onClick={() => setRateSection(key)}
+              className="rounded-xl py-2.5 text-xs font-black flex items-center justify-center gap-1.5"
+              style={{ background: rateSection === key ? C.navy : C.paper, color: rateSection === key ? "#FFFFFF" : C.ink, border: `2px solid ${rateSection === key ? C.navy : C.line}` }}>
+              {done && <CheckCircle2 size={13} color={rateSection === key ? "#FFFFFF" : C.success} />}
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2.5">
+          {RATE_FIELDS.map((f) => (
+            <div key={f.key} className="flex items-center justify-between gap-3">
+              <span className="text-xs font-bold flex-1" style={{ color: C.ink }}>{f.label[lang] || f.label.hi}</span>
+              <input inputMode="numeric" value={rCur[f.key] || ""} onChange={(e) => setRateField(f.key, e.target.value)} placeholder="₹"
+                className="rounded-lg px-3 py-2 text-sm font-black text-center outline-none shrink-0"
+                style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.navy, fontFamily: monoFont, width: 108 }} />
+            </div>
+          ))}
+        </div>
+        <button onClick={saveRates} disabled={!rateOk}
+          className={`w-full rounded-lg py-3 font-bold text-sm mt-3 ${ratesSaved ? "shadow-lg" : ""}`}
+          style={{ background: ratesSaved ? C.metallicGreen : rateOk ? C.marigoldDeep : "#E0E0E0", color: rateOk || ratesSaved ? "#FFFFFF" : "#9AA3B0" }}>
+          {ratesSaved ? (lang === "en" ? "Saved ✓" : lang === "mr" ? "सेव्ह झाले ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Rates" : lang === "mr" ? "दर सेव्ह करा" : "रेट सेव करें")}
         </button>
       </div>
 
