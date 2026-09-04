@@ -5125,6 +5125,13 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
     );
   }
 
+  // Read-only overview of the open loads this driver's app is auto-bidding
+  // on (same eligibility as the auto-bid effect) — newest first, capped.
+  const nearbyLoads = bookings
+    .filter((b) => loadEligibleForDriver(driver, b, bookings, vehicleTypes, lang))
+    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+    .slice(0, 25);
+
   // A customer accepted this driver's bid and is waiting for them to
   // confirm — takes over the screen until Accept/Reject is tapped.
   const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && b.pendingDriverName === driver.name);
@@ -5230,14 +5237,52 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
           <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
         </div>
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
-        <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
-          <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
-          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: C.success }}>
-            <IndianRupee size={24} color="#FFFFFF" />
+        nearbyLoads.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
+            <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: C.success }}>
+              <IndianRupee size={24} color="#FFFFFF" />
+            </div>
+            <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "You're live" : lang === "mr" ? "तुम्ही लाइव्ह आहात" : "आप लाइव हैं"}</p>
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — a load will be sent to you here." : lang === "mr" ? "ऑनलाइन रहा — इथे तुम्हाला लोड पाठवला जाईल." : "ऑनलाइन रहें — यहां आपको लोड भेजा जाएगा।"}</p>
           </div>
-          <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "You're live" : lang === "mr" ? "तुम्ही लाइव्ह आहात" : "आप लाइव हैं"}</p>
-          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — a load will be sent to you here." : lang === "mr" ? "ऑनलाइन रहा — इथे तुम्हाला लोड पाठवला जाईल." : "ऑनलाइन रहें — यहां आपको लोड भेजा जाएगा।"}</p>
-        </div>
+        ) : (
+          <>
+            <div className="text-sm font-black" style={{ color: C.navy }}>{lang === "en" ? "Nearby loads" : lang === "mr" ? "जवळचे लोड" : "आसपास के लोड"} ({nearbyLoads.length})</div>
+            <p className="text-[11px] font-semibold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Overview only — your app is bidding on these automatically at your set rate." : lang === "mr" ? "फक्त माहितीसाठी — तुमचे अ‍ॅप तुमच्या दरानुसार आपोआप बोली लावत आहे." : "सिर्फ जानकारी के लिए — आपका ऐप आपकी दर पर अपने आप बोली लगा रहा है।"}</p>
+            <div className="space-y-3">
+              {nearbyLoads.map((load) => {
+                const myBid = (load.bids || []).find((x) => x.driverName === driver.name);
+                const est = computeAutoBid(driver.rateCard, load);
+                return (
+                  <div key={load.id} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
+                    <div className="flex items-center gap-1 mb-1.5">
+                      <Bell size={13} color={C.marigoldDeep} />
+                      <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
+                    </div>
+                    <RideTypeBanner booking={load} lang={lang} />
+                    <div className="mb-2">
+                      <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{load.pickup}</span></div>
+                      <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{load.drop}</span></div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{materialLabel(load.material, lang)}</span>
+                    </div>
+                    <div className="mt-2 pt-2 text-xs font-black" style={{ borderTop: `1px solid ${C.line}`, color: myBid ? C.success : C.inkSoft }}>
+                      {myBid
+                        ? (lang === "en" ? `Your bid: ${fmt(myBid.amount)} · waiting for customer` : lang === "mr" ? `तुमची बोली: ${fmt(myBid.amount)} · ग्राहकाची वाट` : `आपकी बोली: ${fmt(myBid.amount)} · ग्राहक की प्रतीक्षा`)
+                        : est
+                        ? (lang === "en" ? `Auto-bid: ${fmt(est)}` : lang === "mr" ? `ऑटो-बोली: ${fmt(est)}` : `ऑटो-बोली: ${fmt(est)}`)
+                        : (lang === "en" ? "Bidding automatically…" : lang === "mr" ? "आपोआप बोली लावली जात आहे…" : "अपने आप बोली लग रही है…")}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )
       ) : (
         <div className="text-center py-10">
           <Truck size={28} color={C.inkSoft} className="mx-auto mb-2" />
@@ -5971,6 +6016,24 @@ function computeAutoBid(rateCard, load) {
   return Math.round((Number(sec.perKm10plus) || 0) * km);
 }
 
+// Whether a load is one this driver's app would auto-bid on — shared by the
+// auto-bid effect and the read-only "nearby loads" overview on DriverHome.
+// (Doesn't check "already bid" / rate-card presence — callers handle those.)
+function loadEligibleForDriver(driver, load, bookings, vehicleTypes, lang) {
+  if (load.status !== "Bidding") return false;
+  if (load.declinedBy?.includes(driver.name)) return false;
+  const dCapKg = Number(driver.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type)?.capacityKg || 0;
+  const loadKg = Number(load.weight) || 0;
+  if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+  if (load.pickupLat != null && load.pickupLng != null) {
+    const loc = driver.lastKnownLocation;
+    const maxKm = isFutureAdvance(load.scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+    if (!loc || haversineKm(loc.lat, loc.lng, load.pickupLat, load.pickupLng) > maxKm) return false;
+  }
+  if (findDriverLoadConflict(driver, { id: load.id, scheduledFor: load.scheduledFor }, bookings, vehicleTypes, lang)) return false;
+  return true;
+}
+
 // First screen an approved driver sees. They price Heavy and Light loads
 // across three distance bands (per market rate); "Save and Go live" writes
 // rateCard onto the driver doc and flips them online. Gates the whole
@@ -6099,23 +6162,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
   const bidsSig = bookings.map((b) => `${b.id}:${b.status}:${(b.bids || []).length}`).join(",");
   useEffect(() => {
     if (!driver.online || driver.kyc !== "Approved" || driver.blacklisted || !rateCardComplete(driver.rateCard)) return;
-    const dCapKg = Number(driver.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type)?.capacityKg || 0;
     const loc = driver.lastKnownLocation;
     bookings.forEach((b) => {
-      if (b.status !== "Bidding") return;
       if (autoBidDoneRef.current.has(b.id)) return;
       if ((b.bids || []).some((x) => x.driverName === driver.name)) return;
-      if (b.declinedBy?.includes(driver.name)) return; // already turned this one down
-      // Vehicle fit: rated capacity from the load's weight up to +5 tonnes
-      // (e.g. a 5 t load -> vehicles rated 5–10 t).
-      const loadKg = Number(b.weight) || 0;
-      if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return;
-      // Proximity: 30 km for a Current load, 50 km for an Advance one.
-      if (b.pickupLat != null && b.pickupLng != null) {
-        const maxKm = isFutureAdvance(b.scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
-        if (!loc || haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) > maxKm) return;
-      }
-      if (findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor }, bookings, vehicleTypes, lang)) return;
+      if (!loadEligibleForDriver(driver, b, bookings, vehicleTypes, lang)) return;
       const amount = computeAutoBid(driver.rateCard, b);
       if (!amount || amount <= 0) return;
       const distanceKm = loc && b.pickupLat != null
