@@ -5248,8 +5248,7 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
           </div>
         ) : (
           <>
-            <div className="text-sm font-black" style={{ color: C.navy }}>{lang === "en" ? "Nearby loads" : lang === "mr" ? "जवळचे लोड" : "आसपास के लोड"} ({nearbyLoads.length})</div>
-            <p className="text-[11px] font-semibold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Overview only — your app is bidding on these automatically at your set rate." : lang === "mr" ? "फक्त माहितीसाठी — तुमचे अ‍ॅप तुमच्या दरानुसार आपोआप बोली लावत आहे." : "सिर्फ जानकारी के लिए — आपका ऐप आपकी दर पर अपने आप बोली लगा रहा है।"}</p>
+            <div className="text-sm font-black mb-3" style={{ color: C.navy }}>{lang === "en" ? "Nearby loads" : lang === "mr" ? "जवळचे लोड" : "आसपास के लोड"} ({nearbyLoads.length})</div>
             <div className="space-y-3">
               {nearbyLoads.map((load) => {
                 const myBid = (load.bids || []).find((x) => x.driverName === driver.name);
