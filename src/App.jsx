@@ -5846,8 +5846,15 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
       </div>
 
       <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "My Rates" : lang === "mr" ? "माझे दर" : "मेरे रेट"}</h3>
-        <p className="text-[11px] font-semibold mt-0.5 mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Keep these in line with the current market rate. All fields are mandatory." : lang === "mr" ? "सध्याच्या बाजारभावानुसार ठेवा. सर्व फील्ड आवश्यक." : "मौजूदा बाज़ार भाव के अनुसार रखें। सभी फील्ड ज़रूरी।"}</p>
+        <h3 className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "My Rates" : lang === "mr" ? "माझे दर" : "मेरे रेट"}</h3>
+        <div className="rounded-lg p-2.5 mb-3" style={{ background: C.metallicGold }}>
+          <div className="text-[11px] font-bold" style={{ color: "#000000" }}>
+            ⚠️ {lang === "en" ? "Note 1:" : lang === "mr" ? "नोंद 1:" : "नोट 1:"} {lang === "en" ? "According to market, you can change your rate." : lang === "mr" ? "बाजारभावानुसार तुम्ही तुमचा दर बदलू शकता." : "बाज़ार के अनुसार आप अपना दर बदल सकते हैं।"}
+          </div>
+          <div className="text-[11px] font-bold mt-1.5 pt-1.5" style={{ borderTop: `1px solid ${C.pimpri}` }}>
+            ⚠️ {lang === "en" ? "Note 2:" : lang === "mr" ? "नोंद 2:" : "नोट 2:"} {lang === "en" ? "Set rate according to current market rate. All fields are mandatory." : lang === "mr" ? "सध्याच्या बाजारभावानुसार दर सेट करा. सर्व फील्ड आवश्यक आहेत." : "मौजूदा बाज़ार भाव के अनुसार दर सेट करें। सभी फील्ड अनिवार्य हैं।"}
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-2 mb-3">
           {[
             ["heavy", lang === "en" ? "Heavy Load" : lang === "mr" ? "हेवी लोड" : "हेवी लोड", rateSectionComplete(rHeavy)],
