@@ -3603,7 +3603,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
   }
 
   return (
-    <div className="px-5 pt-3 pb-5">
+    <div className="px-5 pt-3 pb-5" style={{ "--guided-glow": bookingMode === "advance" ? "255, 102, 0" : "0, 168, 84" }}>
       <div className="flex items-center gap-2.5 mb-3">
         <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 p-3 rounded-full shadow-sm shrink-0" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
@@ -4704,7 +4704,7 @@ function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWalle
   if (myBid) return null;
 
   return (
-    <div className="toast-pop rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}` }}>
+    <div className="toast-pop rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}`, "--guided-glow": load.scheduledFor ? "255, 102, 0" : "0, 168, 84" }}>
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
         {skipLoad && (() => {
