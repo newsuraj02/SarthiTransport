@@ -4643,158 +4643,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
 // =====================================================================
 // DRIVER APP
 // =====================================================================
-function LoadAlertCard({ load, driver, addBid, lang, commissionPct = 0, minWallet = 0, skipLoad }) {
-  const myBid = load.bids.find((b) => b.driverName === driver.name);
-  const [amount, setAmount] = useState("");
-  const [allowedHours, setAllowedHours] = useState("");
-  const [extraHourRate, setExtraHourRate] = useState("");
-  const [justSubmitted, setJustSubmitted] = useState(false);
-  const [bidError, setBidError] = useState("");
-
-  const canSubmit = Number(amount) > 0 && Number(allowedHours) > 0 && Number(extraHourRate) > 0;
-  const requiredForQuote = Number(amount || 0) * (commissionPct / 100);
-  const walletShortfall = !isInTrial(driver.createdAt) && (driver.wallet - requiredForQuote) < minWallet;
-
-  // Guided-step highlighting for the 3 quote fields — see GuidedStep/useGuidedSteps.
-  // pinFocus is on here specifically because these fields flip "complete"
-  // on a truthy partial number (Number("5") > 0), which caused the
-  // mid-keystroke jump bug useGuidedSteps' pinFocus mode exists to fix.
-  // autoAdvanceMs is shorter here (2.5s vs. the sign-up forms' 5s) — a fare/
-  // hours/rate digit entry is quick to finish typing, so a driver bidding on
-  // a fresh load alert shouldn't have to wait as long between fields.
-  const stepCompleted = [Number(amount) > 0, Number(allowedHours) > 0, Number(extraHourRate) > 0];
-  const { activeStep, stepProps } = useGuidedSteps(stepCompleted, { pinFocus: true, autoAdvanceMs: 2500 });
-
-  const otherBids = load.bids.filter((b) => b.driverName !== driver.name);
-  const lowestOther = otherBids.length ? otherBids.reduce((min, b) => b.amount < min.amount ? b : min) : null;
-  const allAmounts = load.bids.map((b) => b.amount);
-  const lowestOverall = allAmounts.length ? Math.min(...allAmounts) : null;
-  const isMineHighest = myBid && allAmounts.length > 1 && myBid.amount === Math.max(...allAmounts) && myBid.amount !== lowestOverall;
-
-  // Real straight-line distance from this driver's last known position to
-  // the pickup point — was a random 1-6km placeholder before, which is why
-  // two equally-placed drivers could show different "X km away" numbers on
-  // the customer's bid list. null (not a fake number) when either location
-  // is missing (e.g. an Advance load's driver hasn't gone Online yet) so
-  // the customer's screen can just omit the line instead of showing junk.
-  const distanceKm = (driver.lastKnownLocation && load.pickupLat != null && load.pickupLng != null)
-    ? Math.round(haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng) * 10) / 10
-    : null;
-
-  const submitBid = () => {
-    if (!canSubmit || myBid || walletShortfall) return;
-    const err = addBid(load.id, {
-      driverName: driver.name, amount: Number(amount),
-      hours: Number(allowedHours), extraHourRate: Number(extraHourRate),
-      rating: driver.rating || 4.6, distanceKm,
-    });
-    if (err) { setBidError(err); return; }
-    setBidError("");
-    setJustSubmitted(true);
-    setTimeout(() => setJustSubmitted(false), 2500);
-  };
-
-  const inputCls = "w-full py-2 text-sm outline-none";
-  const boxStyle = { border: `1px solid ${C.line}`, background: C.paper };
-
-  // Once the bid lands, this card's job is done — it disappears from the
-  // New Loads list entirely (see DriverHome's bidSentToast for the
-  // confirmation the driver actually sees) instead of lingering as a
-  // permanent "waiting" box.
-  if (myBid) return null;
-
-  return (
-    <div className="toast-pop rounded-xl p-3 shadow-sm mb-3 transition-colors" style={{ background: C.paper, border: `2px solid ${justSubmitted ? C.success : C.marigoldDeep}`, "--guided-glow": load.scheduledFor ? "255, 102, 0" : "0, 168, 84" }}>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-bold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Bell size={13} /> {lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
-        {skipLoad && (() => {
-          // Match the RideTypeBanner colour for this load — green for an
-          // Immediate ride, marigold for an Advance ride.
-          const skipBg = load.scheduledFor ? C.marigoldDeep : C.success;
-          return (
-            <button type="button" onClick={() => skipLoad(load.id)}
-              className="rounded-lg px-3 py-1.5 text-xs font-black shrink-0 whitespace-nowrap flex items-center gap-1 shadow-sm"
-              style={{ background: skipBg, color: "#FFFFFF", border: `1.5px solid ${skipBg}` }}>
-              {lang === "en" ? "Skip / view another ›" : lang === "mr" ? "Skip / दुसरा पाहा ›" : "Skip / दूसरा देखें ›"}
-            </button>
-          );
-        })()}
-      </div>
-      <RideTypeBanner booking={load} lang={lang} />
-      <div className="mb-2">
-        <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{load.pickup}</span></div>
-        <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{load.drop}</span></div>
-      </div>
-
-      {isMineHighest && (
-        <div className="rounded-lg p-2 mb-2 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-          ⚠ {lang === "en" ? "Your quote is the highest" : lang === "mr" ? "तुमचे कोटेशन सर्वात जास्त आहे" : "आपका कोटेशन सबसे ज़्यादा है"} — {lowestOther ? (lang === "en" ? `${lowestOther.driverName}'s quote is ${fmt(lowestOther.amount)}` : lang === "mr" ? `${lowestOther.driverName} चे कोटेशन ${fmt(lowestOther.amount)} आहे` : `${lowestOther.driverName} का कोटेशन ${fmt(lowestOther.amount)} है`) : ""}
-        </div>
-      )}
-
-      <div className="rounded-lg p-3 mb-2 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.marigoldDeep}` }}>
-            <div className="text-sm font-extrabold mb-1.5" style={{ color: "#000000" }}>{lang === "en" ? "Enter your quote (all fields required)" : lang === "mr" ? "तुमचे कोटेशन भरा (सर्व फील्ड आवश्यक)" : "अपना कोटेशन भरें (सभी फील्ड ज़रूरी)"}</div>
-            <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.distance} {lang === "en" ? "km" : lang === "mr" ? "किमी" : "किमी"}</span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{load.weight}{lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}</span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy }}>{materialLabel(load.material, lang)}</span>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Fixed fare, no negotiation" : lang === "mr" ? "निश्चित भाडे, कोणतीही घासाघीस नाही" : "तय भाड़ा, कोई मोलभाव नहीं"}</span>
-            </div>
-            <div className="space-y-2">
-              <GuidedStep {...stepProps(0)} lang={lang}>
-                <div className="rounded-lg px-2 py-2.5 text-center" style={{ border: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
-                  <div className="text-sm font-black mb-1" style={{ color: "#000000", fontFamily: '"Arial Black", Arial, sans-serif', fontWeight: 900 }}>{lang === "en" ? "Fare ₹ *" : lang === "mr" ? "एकूण भाडे ₹ *" : "कुल भाड़ा ₹ *"}</div>
-                  <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus
-                    className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 26, fontWeight: 900 }} />
-                </div>
-              </GuidedStep>
-              <div className="grid grid-cols-2 gap-2">
-                <GuidedStep {...stepProps(1)} lang={lang}>
-                  <div className="rounded-lg px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ border: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
-                    <div className="text-sm font-black mb-1 break-words" style={{ color: "#000000", fontFamily: '"Arial Black", Arial, sans-serif', fontWeight: 900 }}>{lang === "en" ? "Loading/Unloading hrs *" : lang === "mr" ? "लोडिंग/अनलोडिंग तास *" : "लोडिंग/अनलोडिंग घंटे *"}</div>
-                    <input type="number" value={allowedHours} onChange={(e) => setAllowedHours(e.target.value)} placeholder="0"
-                      className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 18, fontWeight: 900 }} />
-                  </div>
-                </GuidedStep>
-                <GuidedStep {...stepProps(2)} lang={lang}>
-                  <div className="rounded-lg px-1.5 py-2 text-center h-full flex flex-col justify-center" style={{ border: `2px solid ${C.marigoldDeep}`, background: C.paper }}>
-                    <div className="text-sm font-black mb-1 break-words" style={{ color: "#000000", fontFamily: '"Arial Black", Arial, sans-serif', fontWeight: 900 }}>{lang === "en" ? "Waiting charges ₹/hr *" : lang === "mr" ? "वेटिंग चार्ज ₹/तास *" : "वेटिंग चार्ज ₹/घं *"}</div>
-                    <input type="number" value={extraHourRate} onChange={(e) => setExtraHourRate(e.target.value)} placeholder="0"
-                      className="w-full text-center outline-none bg-transparent" style={{ color: C.navy, fontFamily: monoFont, fontSize: 16, fontWeight: 900 }} />
-                  </div>
-                </GuidedStep>
-              </div>
-            </div>
-          </div>
-          {!canSubmit && (amount || allowedHours || extraHourRate) && (
-            <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>{lang === "en" ? "All three fields are required" : lang === "mr" ? "तिन्ही फील्ड भरणे आवश्यक आहे" : "तीनों फील्ड भरना ज़रूरी है"}</div>
-          )}
-          {canSubmit && walletShortfall && (
-            <div className="text-[10px] mb-2 font-semibold" style={{ color: C.safety }}>
-              {lang === "en" ? `Not enough wallet balance to cover ${commissionPct}% commission on this fare — recharge your wallet first.` : lang === "mr" ? `या भाड्यावर ${commissionPct}% कमिशनसाठी वॉलेटमध्ये पुरेसे बॅलन्स नाही — आधी वॉलेट रिचार्ज करा.` : `इस भाड़े पर ${commissionPct}% कमीशन के लिए वॉलेट में पर्याप्त बैलेंस नहीं है — पहले वॉलेट रीचार्ज करें।`}
-            </div>
-          )}
-          {bidError && (
-            <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bidError}</div>
-          )}
-
-          <button onClick={submitBid} disabled={!canSubmit || walletShortfall} className={`w-full rounded-xl py-4 text-lg font-black text-white flex items-center justify-center gap-1.5 mb-2 ${canSubmit && !walletShortfall && !justSubmitted ? "guided-submit-ready shadow-lg" : (canSubmit && !walletShortfall) || justSubmitted ? "shadow-lg" : "shadow-sm"}`}
-            style={{ background: (canSubmit && !walletShortfall) || justSubmitted ? C.metallicGreen : "#E0E0E0", color: (canSubmit && !walletShortfall) || justSubmitted ? "#fff" : "#9AA3B0" }}>
-            {justSubmitted ? <><CheckCircle2 size={18} /> {lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेज दिया"}</> : (lang === "en" ? "Send Quote" : lang === "mr" ? "कोटेशन पाठवा" : "कोटेशन भेजें")}
-          </button>
-
-          <div className="rounded-lg p-2.5 mb-2" style={{ background: C.marigoldDeep }}>
-            <div className="text-xs font-black mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Note" : lang === "mr" ? "नोंद" : "नोट"}</div>
-            <div className="text-[10px] font-bold" style={{ color: "#FFFFFF" }}>
-              {lang === "en" ? "Toll tax on the route must be paid by the driver from this fare — customer pays no separate toll." : lang === "mr" ? "रस्त्यावरील टोल टॅक्स याच भाड्यातून ड्रायव्हरला द्यावा लागेल — ग्राहक वेगळा टोल देणार नाही." : "रास्ते का टोल टैक्स इसी भाड़े में से ड्राइवर को देना होगा — ग्राहक अलग से टोल नहीं देगा।"}
-            </div>
-            <div className="text-[10px] font-bold mt-1" style={{ color: "#000000" }}>
-              {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : lang === "mr" ? "पिकअप आणि ड्रॉपमधील प्रवासाचा वेळ लोडिंग/अनलोडिंग वेळेत मोजला जात नाही." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
-            </div>
-          </div>
-    </div>
-  );
-}
 
 function fmtHMS(ms) {
   const hh = Math.floor(ms / 3600000);
@@ -5080,7 +4928,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, vehicleTypes, lang, commissionPct, minWallet }) {
+function DriverHome({ driver, bookings, completeBooking, startLoading, vehicleTypes, lang }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
@@ -5107,72 +4955,6 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
     const lockStart = scheduled.getTime() - lockHours * 60 * 60 * 1000;
     return Date.now() >= lockStart && Date.now() < scheduled.getTime();
   });
-
-  // A load never even shows up if it would conflict with a commitment this
-  // driver already has (current trip in progress, or an upcoming Advance
-  // booking plus its vehicle-tonnage buffer) — no bidding, no alert to work
-  // around, it's simply not in the list.
-  const openLoads = bookings.filter((b) => {
-    if (b.status !== "Bidding") return false;
-    // Current (immediate) loads only go to drivers within BID_RADIUS_KM of
-    // the pickup point — a driver with no location on file yet (hasn't gone
-    // Online long enough for a GPS fix) simply doesn't see these loads.
-    // Advance bookings are exempt since the driver has time to travel there.
-    if (!isFutureAdvance(b.scheduledFor) && b.pickupLat != null && b.pickupLng != null) {
-      if (!driver.lastKnownLocation) return false;
-      const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, b.pickupLat, b.pickupLng);
-      if (distKm > BID_RADIUS_KM) return false;
-    }
-    if (findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor }, bookings, vehicleTypes, lang)) return false;
-    if (!driverVehicleDef) return true;
-    const loadVehicleDef = vehicleTypes.find((v) => v.key === b.vehicle);
-    if (!loadVehicleDef) return b.vehicle === driver.vehicleSpec.type;
-    return loadVehicleDef.capacityKg <= driverVehicleDef.capacityKg;
-  });
-
-  // Loads still open for bidding that this driver hasn't already quoted on.
-  // LoadAlertCard renders nothing once this driver has a bid on a load (see
-  // its myBid check), so the "No new load" empty state and the list below
-  // must both key off this instead of raw openLoads — otherwise bidding on
-  // the only open load would leave a blank gap rather than either the empty
-  // state or the next available load.
-  // "Skip / view another" doesn't remove a load — it re-stacks it to the
-  // back of the queue, so the driver keeps cycling and comes round to it
-  // again. e.g. loads [1,2,3,4,5], skip 1 -> [2,3,4,5,1], then skip 2 ->
-  // [3,4,5,1,2]. Session-only (a refresh resets to newest-first); skipOrder
-  // holds skipped load ids in the order they were skipped.
-  const [skipOrder, setSkipOrder] = useState([]);
-  const skipLoad = (id) => setSkipOrder((prev) => [...prev.filter((x) => x !== id), id]);
-
-  const biddableLoads = openLoads.filter((l) => !l.bids?.some((b) => b.driverName === driver.name));
-  // Not-yet-skipped loads first (natural newest-first order); skipped ones
-  // trail behind in the order they were skipped.
-  const visibleLoads = [
-    ...biddableLoads.filter((l) => !skipOrder.includes(l.id)),
-    ...skipOrder.map((id) => biddableLoads.find((l) => l.id === id)).filter(Boolean),
-  ];
-
-  // No search bar / route filter for drivers — every new matching load rings
-  // (beep + toast) the moment it's posted, instead of drivers having to search.
-  const seenLoadIdsRef = useRef(null);
-  const [newLoadToast, setNewLoadToast] = useState(null);
-  const loadIdsKey = openLoads.map((l) => l.id).join(",");
-
-  useEffect(() => {
-    const currentIds = new Set(openLoads.map((l) => l.id));
-    if (seenLoadIdsRef.current === null) {
-      seenLoadIdsRef.current = currentIds;
-      return;
-    }
-    const freshLoads = openLoads.filter((l) => !seenLoadIdsRef.current.has(l.id));
-    if (freshLoads.length > 0 && driver.online && driver.kyc === "Approved" && !driver.blacklisted && !notificationsLocked) {
-      playBeepTone();
-      setNewLoadToast(freshLoads[0]);
-      setTimeout(() => setNewLoadToast((cur) => (cur?.id === freshLoads[0].id ? null : cur)), 4000);
-    }
-    seenLoadIdsRef.current = currentIds;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadIdsKey, notificationsLocked]);
 
   // Detects the moment a load this driver quoted on resolves against them —
   // by the time that happens the load has already left openLoads entirely
@@ -5304,13 +5086,6 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
         </div>
       )}
 
-      {newLoadToast && (
-        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.navy }}>
-          <Bell size={14} color={C.marigold} />
-          <span className="text-[11px] font-bold text-white">🔔 {lang === "en" ? "New load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}: {newLoadToast.pickup} → {newLoadToast.drop}</span>
-        </div>
-      )}
-
       {bidRejectedToast && (
         <div className="toast-pop rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.safety }}>
           <XCircle size={14} color="#FFFFFF" />
@@ -5359,30 +5134,14 @@ function DriverHome({ driver, bookings, addBid, completeBooking, startLoading, v
           <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
         </div>
       ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
-        <>
-          {visibleLoads.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
-              <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: C.marigoldDeep }}>
-                <IndianRupee size={24} color="#FFFFFF" />
-              </div>
-              <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No new load right now" : lang === "mr" ? "अजून कोणताही नवीन लोड नाही" : "अभी कोई नया लोड नहीं है"}</p>
-              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — new loads will show here instantly." : lang === "mr" ? "ऑनलाइन रहा — नवीन लोड येताच इथे लगेच दिसेल." : "ऑनलाइन रहें — नया लोड आते ही यहां तुरंत दिखेगा।"}</p>
-            </div>
-          ) : (
-            <>
-              {/* One load at a time. Skipping the top one re-stacks it to the
-                  back of visibleLoads (see skipOrder), so it comes round again. */}
-              <LoadAlertCard key={visibleLoads[0].id} load={visibleLoads[0]} driver={driver} addBid={addBid} lang={lang}
-                commissionPct={commissionPct} minWallet={minWallet} skipLoad={skipLoad} />
-              {visibleLoads.length > 1 && (
-                <div className="text-center text-base font-black mb-2" style={{ color: C.navy }}>
-                  {lang === "en" ? `${visibleLoads.length - 1} other load${visibleLoads.length - 1 > 1 ? "s" : ""} available` : lang === "mr" ? `आणखी ${visibleLoads.length - 1} लोड उपलब्ध` : `${visibleLoads.length - 1} और लोड उपलब्ध`}
-                </div>
-              )}
-            </>
-          )}
-        </>
+        <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
+          <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: C.success }}>
+            <IndianRupee size={24} color="#FFFFFF" />
+          </div>
+          <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "You're live" : lang === "mr" ? "तुम्ही लाइव्ह आहात" : "आप लाइव हैं"}</p>
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — a load will be sent to you here." : lang === "mr" ? "ऑनलाइन रहा — इथे तुम्हाला लोड पाठवला जाईल." : "ऑनलाइन रहें — यहां आपको लोड भेजा जाएगा।"}</p>
+        </div>
       ) : (
         <div className="text-center py-10">
           <Truck size={28} color={C.inkSoft} className="mx-auto mb-2" />
@@ -6015,6 +5774,88 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
   );
 }
 
+// The driver's own price list, filled once right after KYC approval (see
+// RateSetup / the gate in DriverApp) and used from then on to fare every
+// load automatically instead of the old per-load quote. Two load classes
+// (heavy / light) x three distance bands.
+const RATE_FIELDS = [
+  { key: "fare2to5", label: { en: "2–5 km fixed fare", hi: "2–5 किमी तय भाड़ा", mr: "2–5 किमी निश्चित भाडे" } },
+  { key: "fare5to10", label: { en: "5–10 km fixed fare", hi: "5–10 किमी तय भाड़ा", mr: "5–10 किमी निश्चित भाडे" } },
+  { key: "perKm10plus", label: { en: "10 km and above — per km rate", hi: "10 किमी और उससे ऊपर — प्रति किमी दर", mr: "10 किमी व त्यावरील — प्रति किमी दर" } },
+];
+const rateSectionComplete = (sec) => !!sec && RATE_FIELDS.every((f) => Number(sec[f.key]) > 0);
+const rateCardComplete = (rc) => !!rc && rateSectionComplete(rc.heavy) && rateSectionComplete(rc.light);
+
+// First screen an approved driver sees. They price Heavy and Light loads
+// across three distance bands (per market rate); "Save and Go live" writes
+// rateCard onto the driver doc and flips them online. Gates the whole
+// DriverApp until both sections are filled — existing drivers included,
+// since they have no rateCard yet. Per-field persisted so a mid-fill reload
+// doesn't wipe entries.
+function RateSetup({ driver, setDriver, lang }) {
+  const [section, setSection] = useState("heavy"); // "heavy" | "light"
+  const [heavy, setHeavy] = usePersistedState(`sarthi_rateSetup_heavy_${driver.mobile}`, driver.rateCard?.heavy || {});
+  const [light, setLight] = usePersistedState(`sarthi_rateSetup_light_${driver.mobile}`, driver.rateCard?.light || {});
+  const cur = section === "heavy" ? heavy : light;
+  const setCur = section === "heavy" ? setHeavy : setLight;
+  const setField = (k, v) => setCur((prev) => ({ ...prev, [k]: v.replace(/[^\d]/g, "") }));
+
+  const heavyDone = rateSectionComplete(heavy);
+  const lightDone = rateSectionComplete(light);
+  const canSave = heavyDone && lightDone;
+
+  const save = () => {
+    if (!canSave) return;
+    const clean = (s) => ({ fare2to5: Number(s.fare2to5), fare5to10: Number(s.fare5to10), perKm10plus: Number(s.perKm10plus) });
+    setDriver({ ...driver, rateCard: { heavy: clean(heavy), light: clean(light) }, online: true });
+    try {
+      window.localStorage.removeItem(`sarthi_rateSetup_heavy_${driver.mobile}`);
+      window.localStorage.removeItem(`sarthi_rateSetup_light_${driver.mobile}`);
+    } catch { /* ignore */ }
+  };
+
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.navy, fontFamily: monoFont, width: 116 };
+
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col px-5 pt-6 pb-6" style={{ "--guided-glow": "0, 82, 204" }}>
+      <h1 className="text-xl font-black text-center" style={{ color: C.navy }}>{lang === "en" ? "Rate Setup" : lang === "mr" ? "रेट सेटअप" : "रेट सेटअप"}</h1>
+      <p className="text-sm font-bold text-center mt-1" style={{ color: C.ink }}>{lang === "en" ? "Fill this form according to market rate" : lang === "mr" ? "बाजारभावानुसार हा फॉर्म भरा" : "बाज़ार भाव के अनुसार यह फॉर्म भरें"}</p>
+      <p className="text-xs font-bold text-center mt-1 mb-5" style={{ color: C.safety }}>{lang === "en" ? "All fields are mandatory" : lang === "mr" ? "सर्व फील्ड भरणे आवश्यक आहे" : "सभी फील्ड भरना अनिवार्य है"}</p>
+
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {[
+          ["heavy", lang === "en" ? "Heavy Load" : lang === "mr" ? "हेवी लोड" : "हेवी लोड", heavyDone],
+          ["light", lang === "en" ? "Light Load" : lang === "mr" ? "लाइट लोड" : "लाइट लोड", lightDone],
+        ].map(([key, label, done]) => (
+          <button key={key} type="button" onClick={() => setSection(key)}
+            className="rounded-xl py-3 text-sm font-black flex items-center justify-center gap-1.5"
+            style={{ background: section === key ? C.navy : C.paper, color: section === key ? "#FFFFFF" : C.ink, border: `2px solid ${section === key ? C.navy : C.line}` }}>
+            {done && <CheckCircle2 size={15} color={section === key ? "#FFFFFF" : C.success} />}
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-2xl p-3 space-y-3" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
+        {RATE_FIELDS.map((f) => (
+          <div key={f.key} className="flex items-center justify-between gap-3">
+            <span className="text-sm font-black flex-1" style={{ color: C.ink }}>{f.label[lang] || f.label.hi}</span>
+            <input inputMode="numeric" value={cur[f.key] || ""} onChange={(e) => setField(f.key, e.target.value)} placeholder="₹"
+              className="rounded-lg px-3 py-2.5 text-base font-black text-center outline-none shrink-0" style={inputStyle} />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex-1 min-h-[24px]" />
+      <button onClick={save} disabled={!canSave}
+        className={`w-full rounded-xl py-4 text-lg font-black mt-5 ${canSave ? "guided-submit-ready" : ""}`}
+        style={{ background: canSave ? C.metallicGreen : "#E0E0E0", color: canSave ? "#FFFFFF" : "#9AA3B0" }}>
+        {lang === "en" ? "Save and Go live" : lang === "mr" ? "सेव्ह करा आणि लाइव्ह व्हा" : "सेव करें और लाइव हों"}
+      </button>
+    </div>
+  );
+}
+
 function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -6094,6 +5935,15 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
   }
 
   const realHamburgerVisible = tab === "home" && rideView === "current" && !myTrip;
+
+  // Rate Setup gate — an approved driver can't reach the dashboard until
+  // they've filled their rate card. Existing drivers hit this too (no
+  // rateCard on file yet), except one already on an active trip — never
+  // trap them out of a run in progress. All hooks above run
+  // unconditionally, so this early return is safe.
+  if (!rateCardComplete(driver.rateCard) && !myTrip) {
+    return <RateSetup driver={driver} setDriver={setDriver} lang={lang} />;
+  }
 
   return (
     <>
@@ -6219,7 +6069,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, completeBooking, start
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} bookings={bookings} addBid={addBid} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} commissionPct={commissionPct} minWallet={minWallet} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} bookings={bookings} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
