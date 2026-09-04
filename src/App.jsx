@@ -4047,10 +4047,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
         {b.loadingStartedAt && (
           <div className="rounded-lg p-2.5" style={{ background: C.safety, color: "#FFFFFF" }}>
             <div className="text-[11px] font-bold">
-              ⚠️ {lang === "en" ? "Note 1:" : lang === "mr" ? "नोंद 1:" : "नोट 1:"} {lang === "en" ? "Travel time between pickup and drop is not counted in loading/unloading time." : lang === "mr" ? "पिकअप आणि ड्रॉपमधील प्रवासाचा वेळ लोडिंग/अनलोडिंग वेळेत मोजला जात नाही." : "पिकअप और ड्रॉप के बीच की यात्रा का समय लोडिंग/अनलोडिंग समय में नहीं गिना जाता।"}
-            </div>
-            <div className="text-[11px] font-bold mt-1.5 pt-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.35)" }}>
-              ⚠️ {lang === "en" ? "Note 2:" : lang === "mr" ? "नोंद 2:" : "नोट 2:"} {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : lang === "mr" ? "ही ट्रिप आता रद्द केली जाऊ शकत नाही — ही फक्त ड्रायव्हरने पूर्ण (End Trip) केल्यावरच संपेल." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
+              ⚠️ {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : lang === "mr" ? "ही ट्रिप आता रद्द केली जाऊ शकत नाही — ही फक्त ड्रायव्हरने पूर्ण (End Trip) केल्यावरच संपेल." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
             </div>
           </div>
         )}
@@ -4847,60 +4844,10 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
 
   return (
     <div className="mt-3 space-y-2.5">
-      <div className="grid grid-cols-2 gap-2.5">
-      {/* Whichever box is actually counting right now gets the same
-          guided-step glow every multi-field form on the app uses (see
-          .guided-step-active) — Loading/Unloading while active, Waiting
-          Time once overtime kicks in — so it's obvious at a glance which
-          clock matters at this moment. */}
-      <div className={`rounded-2xl p-3.5 shadow-lg ${!clock.isOvertime ? "guided-step-active" : ""}`} style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
-        {trip.hours ? (
-          <>
-            {clock.isOvertime ? (
-              <div className="text-base font-extrabold" style={{ color: C.safety, fontFamily: bodyFont }}>⏰ {lang === "en" ? "Time's Up" : lang === "mr" ? "वेळ संपली" : "समय खत्म"}</div>
-            ) : (
-              <>
-                <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading/Unloading time remaining" : lang === "mr" ? "उरलेला लोडिंग/अनलोडिंग वेळ" : "बचा हुआ लोडिंग/अनलोडिंग समय"}</div>
-                <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{clock.remainingStr}</div>
-              </>
-            )}
-            <div className="text-sm font-bold mt-1" style={{ color: clock.isOvertime ? C.safety : "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? `Loading/Unloading: ${trip.hours} hrs · elapsed ${clock.elapsedStr}` : lang === "mr" ? `लोडिंग/अनलोडिंग वेळ: ${trip.hours} तास · आतापर्यंत ${clock.elapsedStr}` : `लोडिंग/अनलोडिंग समय: ${trip.hours} घंटे · अब तक ${clock.elapsedStr}`}</div>
-          </>
-        ) : (
-          <>
-            <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading started" : lang === "mr" ? "लोडिंग सुरू होऊन" : "लोडिंग शुरू हुए"}</div>
-            <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{clock.elapsedStr}</div>
-            <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Driver had not set loading/unloading time" : lang === "mr" ? "ड्रायव्हरने लोडिंग/अनलोडिंग वेळ भरली नव्हती" : "ड्राइवर ने लोडिंग/अनलोडिंग समय नहीं भरा था"}</div>
-          </>
-        )}
-        {clock.isPaused && (
-          <div className="text-xs mt-1.5 font-bold" style={{ color: C.safety, fontFamily: bodyFont }}>⏸ {lang === "en" ? "Paused — travel time isn't counted" : lang === "mr" ? "थांबलेले — प्रवासाचा वेळ मोजला जात नाही" : "रुका हुआ — यात्रा का समय नहीं गिना जाता"}</div>
-        )}
-      </div>
-
-      {/* Blurred (the whole box, not just the number) until the
-          loading/unloading box to the left actually hits Time's Up —
-          reads as "not relevant yet" instead of a misleadingly sharp
-          00:00:00. Sharpens for good the instant overtime begins; the
-          loading/unloading box is never blurred, including once it's done. */}
-      <div className={`rounded-2xl p-3.5 shadow-lg transition-[filter] duration-300 ${clock.isOvertime ? "guided-step-active" : ""}`}
-        style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}`, filter: clock.isOvertime ? "none" : "blur(4px)" }}>
-        <div className="text-xs" style={{ color: C.inkSoft }}>🔔 {lang === "en" ? "Waiting time" : lang === "mr" ? "वेटिंग वेळ" : "वेटिंग समय"}</div>
-        <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{clock.isOvertime ? clock.waitingElapsedStr : "00:00:00"}</div>
-        {clock.isOvertime ? (
-          trip.extraHourRate ? (
-            <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>
-              {lang === "en" ? `Billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"} · Waiting charge so far: ${fmt(clock.extraCharge)}` : lang === "mr" ? `${clock.billableHours} तासांनुसार बिल · आतापर्यंत वेटिंग चार्ज: ${fmt(clock.extraCharge)}` : `${clock.billableHours} घंटे के हिसाब से बिल · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
-            </div>
-          ) : (
-            <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Running until you end the trip" : lang === "mr" ? "ट्रिप संपेपर्यंत सुरू आहे" : "ट्रिप खत्म करने तक चल रहा है"}</div>
-          )
-        ) : (
-          <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "Starts once loading/unloading time is over" : lang === "mr" ? "लोडिंग/अनलोडिंग वेळ संपल्यावर सुरू होईल" : "लोडिंग/अनलोडिंग समय खत्म होने पर शुरू होगा"}</div>
-        )}
-      </div>
-      </div>
-
+      {/* The Loading/Unloading + Waiting clocks are gone — auto-bids carry
+          no loading-hours/waiting-rate (both 0), so those boxes had nothing
+          real to show. clock.extraCharge is still computed (harmlessly 0)
+          and handed to completeBooking below. */}
       <button
         onClick={() => {
           completeBooking(trip.id, clock.extraCharge);
