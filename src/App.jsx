@@ -5275,7 +5275,7 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
                         style={{ background: myBid ? "#E6F7EE" : C.metallicGold, border: `1.5px solid ${myBid ? C.success : C.marigoldDeep}` }}>
                         <span className="text-[11px] font-bold" style={{ color: myBid ? C.success : "#000000" }}>
                           {myBid
-                            ? (lang === "en" ? "Waiting for customer" : lang === "mr" ? "ग्राहकाची वाट" : "ग्राहक की प्रतीक्षा")
+                            ? (lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा")
                             : (lang === "en" ? "Auto-bid" : lang === "mr" ? "ऑटो-बोली" : "ऑटो-बोली")}
                         </span>
                         <span className="text-2xl font-black" style={{ color: myBid ? C.success : "#000000", fontFamily: monoFont }}>
