@@ -844,9 +844,9 @@ function HamburgerHint({ show, lang }) {
   return (
     <>
       <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>1</span>
-      <div className="absolute top-11 left-0 z-40 rounded-lg px-3 py-2 shadow-lg text-xs font-bold whitespace-nowrap" style={{ background: C.ink, color: "#FFFFFF" }}>
+      <div className="absolute top-11 left-0 z-40 rounded-lg px-3 py-2 shadow-lg text-xs font-bold whitespace-nowrap" style={{ background: C.marigoldDeep, color: "#FFFFFF" }}>
         {lang === "en" ? "View your Advance Booking here" : lang === "mr" ? "तुमची अ‍ॅडव्हान्स बुकिंग इथे पहा" : "अपनी एडवांस बुकिंग यहां देखें"}
-        <div className="absolute -top-1 left-4 w-2 h-2 rotate-45" style={{ background: C.ink }} />
+        <div className="absolute -top-1 left-4 w-2 h-2 rotate-45" style={{ background: C.marigoldDeep }} />
       </div>
     </>
   );
@@ -3844,9 +3844,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="px-5 py-5">
         <div className="rounded-xl p-4 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
           {b.scheduledFor && (
-            <div className="rounded-lg p-2 mb-3 flex items-center justify-center gap-1.5 shadow-lg" style={{ background: C.metallicGold }}>
-              <Clock3 size={12} color={C.ink} />
-              <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
+            <div className="rounded-lg p-2 mb-3 flex items-center justify-center gap-1.5 shadow-lg" style={{ background: C.marigoldDeep }}>
+              <Clock3 size={12} color="#FFFFFF" />
+              <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
             </div>
           )}
           <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2 guided-submit-ready" style={{ background: C.navy }}>
@@ -3927,9 +3927,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
       <div className="px-5 py-5">
         <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
             {b.scheduledFor && (
-              <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5 shadow-lg" style={{ background: C.metallicGold }}>
-                <Clock3 size={12} color={C.ink} />
-                <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
+              <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5 shadow-lg" style={{ background: C.marigoldDeep }}>
+                <Clock3 size={12} color="#FFFFFF" />
+                <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
               </div>
             )}
             {b.declinedBy?.length > 0 && (
@@ -4564,6 +4564,18 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
               </div>
             ) : showHamburger ? (
               <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
+                {/* Replaces the old "Advance Booking/s" hamburger menu item —
+                    only shown when there's actually one to jump to. */}
+                {advanceBookings.length > 0 && (
+                  <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }}
+                    className="relative shrink-0 rounded-full pl-3 pr-2.5 py-2 flex items-center gap-1 shadow-sm" style={{ background: C.marigoldDeep }}>
+                    <Clock3 size={13} color="#FFFFFF" />
+                    <span className="text-xs font-black text-white">{lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}</span>
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shadow-sm" style={{ background: "#FFFFFF", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
+                      {advanceBookings.length}
+                    </span>
+                  </button>
+                )}
                 {activeBooking && (
                   <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : lang === "mr" ? "सध्याच्या राइडवर जा" : "मौजूदा राइड पर जाएं"}
                     className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -4604,12 +4616,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
                     <Truck size={13} color={C.success} />
                   </div>
                   <div className="flex-1 min-w-0 text-xs font-black text-white">{lang === "en" ? "Current Booking/s" : lang === "mr" ? "सध्याची बुकिंग पहा" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
-                </button>
-                <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: C.marigoldDeep }}>
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
-                    <Clock3 size={13} color={C.marigoldDeep} />
-                  </div>
-                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance Booking/s" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग पहा" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
                 </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
@@ -6210,6 +6216,18 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
+              {/* Replaces the old "Advance Booking/s" hamburger menu item —
+                  only shown when there's actually one to jump to. */}
+              {advanceBookings.length > 0 && (
+                <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); }}
+                  className="relative shrink-0 rounded-full pl-3 pr-2.5 py-2 flex items-center gap-1 shadow-sm" style={{ background: C.marigoldDeep }}>
+                  <Clock3 size={13} color="#FFFFFF" />
+                  <span className="text-xs font-black text-white">{lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}</span>
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shadow-sm" style={{ background: "#FFFFFF", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
+                    {advanceBookings.length}
+                  </span>
+                </button>
+              )}
               <div className="flex flex-col items-center leading-none" style={{ color: C.inkSoft }}>
                 <span className="text-[9px] font-bold">{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</span>
                 <span className="text-[9px] font-bold mt-0.5">{lang === "en" ? "Duty" : lang === "mr" ? "ड्युटी" : "ड्यूटी"}</span>
@@ -6241,14 +6259,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
               <div className="px-4 py-4" style={{ background: C.navy }}>
                 <div className="text-sm font-bold text-white">{driver.name}</div>
                 {driver.mobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{driver.mobile}</div>}
-              </div>
-              <div className="p-2 space-y-2" style={{ borderBottom: `1px solid ${C.line}` }}>
-                <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: C.marigoldDeep }}>
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
-                    <Clock3 size={13} color={C.marigoldDeep} />
-                  </div>
-                  <div className="flex-1 min-w-0 text-xs font-black" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance Booking/s" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग पहा" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
-                </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}
@@ -6318,7 +6328,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
                 </div>
                 <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
                   <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : lang === "mr" ? "भाडे आणि वेटिंग चार्ज नियम" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
-                  <div className="flex items-center gap-1.5 mt-1" style={{ color: "#000000" }}>
+                  <div className="flex items-center gap-1.5 mt-1" style={{ color: C.marigoldDeep }}>
                     <Clock3 size={13} />
                     <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Advance ride:" : lang === "mr" ? "अ‍ॅडव्हान्स राइड:" : "एडवांस राइड:"} {rideDateTimeLabel(ab)}</span>
                   </div>
