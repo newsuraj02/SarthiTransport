@@ -4146,22 +4146,19 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
 // onUpdateProfile.
 function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, onChangeLang, onLogout }) {
   const [name, setName] = useState(customerProfile?.name || "");
-  const [email, setEmail] = useState(customerProfile?.email || "");
   const [photo, setPhoto] = useState(customerProfile?.photo || null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState(false);
-  const [address, setAddress] = useState(customerProfile?.address || "");
-  const [area, setArea] = useState(customerProfile?.area || "");
-  const [city, setCity] = useState(customerProfile?.city || "");
-  const [state, setState] = useState(customerProfile?.state || "");
-  const [pincode, setPincode] = useState(customerProfile?.pincode || "");
   const [saved, setSaved] = useState(false);
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
+  // Kept to just name + photo (mobile is the login itself, never edited
+  // here) — email/address/area/city/state/pincode were dropped in the
+  // profile-simplification pass; the app never used them for anything.
   const save = () => {
-    onSave?.({ name: name.trim(), email: email.trim() || null, photo, address, area, city, state, pincode });
+    onSave?.({ name: name.trim(), photo });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -4233,34 +4230,6 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
             <option value="hi">हिंदी</option>
             <option value="mr">मराठी</option>
           </select>
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Email (optional)" : lang === "mr" ? "ईमेल (ऐच्छिक)" : "ईमेल (वैकल्पिक)"}</label>
-          <input type="email" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. ramesh@email.com" : lang === "mr" ? "उदा: ramesh@email.com" : "जैसे: ramesh@email.com"} value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}</label>
-          <input className={inputCls} style={inputStyle} value={address} onChange={(e) => setAddress(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Area" : lang === "mr" ? "एरिया" : "एरिया"}</label>
-            <input className={inputCls} style={inputStyle} value={area} onChange={(e) => setArea(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "City" : lang === "mr" ? "शहर" : "शहर"}</label>
-            <input className={inputCls} style={inputStyle} value={city} onChange={(e) => setCity(e.target.value)} />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "State" : lang === "mr" ? "राज्य" : "राज्य"}</label>
-            <input className={inputCls} style={inputStyle} value={state} onChange={(e) => setState(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Pincode" : lang === "mr" ? "पिनकोड" : "पिनकोड"}</label>
-            <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont }} value={pincode} onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-          </div>
         </div>
         <button onClick={save} disabled={photoUploading} className={`w-full rounded-lg py-3.5 font-bold text-base text-white ${saved ? "shadow-lg" : ""}`} style={{ background: photoUploading ? C.line : saved ? C.metallicGreen : C.marigoldDeep }}>
           {photoUploading ? (lang === "en" ? "Uploading photo..." : lang === "mr" ? "फोटो अपलोड होत आहे..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : lang === "mr" ? "सेव्ह झाले ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें")}
@@ -7138,7 +7107,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showCall, setShowCall] = useState(false);
   const [callQ, setCallQ] = useState("");
-  const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q) || (c.city || "").toLowerCase().includes(q.toLowerCase()));
+  const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q));
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
     : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
@@ -7178,7 +7147,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
           </div>
         );
       })()}
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, mobile or city..." : lang === "mr" ? "नाव, मोबाइल किंवा शहराने शोधा..." : "नाम, मोबाइल या शहर से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name or mobile..." : lang === "mr" ? "नाव किंवा मोबाइलने शोधा..." : "नाम या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : lang === "mr" ? "कोणताही कस्टमर सापडला नाही." : "कोई कस्टमर नहीं मिला।"}</p>}
         {filtered.map((c) => {
@@ -7191,7 +7160,6 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
                   <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{c.mobile}</div>
-                  <div className="text-[10px] font-bold mt-0.5 truncate" style={{ color: C.ink }}>{[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || (lang === "en" ? "No address on file" : lang === "mr" ? "पत्ता उपलब्ध नाही" : "पता उपलब्ध नहीं")}</div>
                 </div>
                 <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-sm font-semibold px-3.5 py-2.5 rounded-lg" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
                   {expanded ? (lang === "en" ? "Hide" : lang === "mr" ? "लपवा" : "छुपाएं") : (lang === "en" ? "View Details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें")}
@@ -7201,9 +7169,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
               {expanded && (
                 <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
                   <div className="text-[11px] mb-3" style={{ color: C.ink }}>
-                    <b>{lang === "en" ? "Contact number" : lang === "mr" ? "संपर्क नंबर" : "संपर्क नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{c.mobile}</span><br />
-                    {c.email && (<><b>{lang === "en" ? "Email" : lang === "mr" ? "ईमेल" : "ईमेल"}:</b> {c.email}<br /></>)}
-                    <b>{lang === "en" ? "Address" : lang === "mr" ? "पत्ता" : "पता"}:</b> {[c.address, c.area, c.city, c.state, c.pincode].filter(Boolean).join(", ") || "—"}
+                    <b>{lang === "en" ? "Contact number" : lang === "mr" ? "संपर्क नंबर" : "संपर्क नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{c.mobile}</span>
                   </div>
                   <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>
                     {lang === "en" ? `Ride history (${rides.length})` : lang === "mr" ? `राइड हिस्टरी (${rides.length})` : `राइड हिस्ट्री (${rides.length})`}

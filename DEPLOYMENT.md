@@ -129,6 +129,32 @@ The only push notification this app sends: a driver gets a loud, high-priority a
 
 That's it — no Firestore rules changes needed. Drivers see a "Turn on notifications for new load alerts" banner on their home screen; tapping it triggers the browser's own permission prompt. Until steps 1-4 are done, the banner still shows and the button still runs — it just won't have a working Cloud Function to actually deliver the push, so nothing arrives. No error, just silence, so it's safe to deploy this code before finishing the Console setup.
 
+## Cleaning up old profile fields on existing accounts
+
+The Customer profile screen and Driver KYC form were simplified to only
+collect what the app actually uses — customers: mobile + name (+ photo);
+drivers: photo/DL/vehicle side photo/vehicle number/capacity/model.
+Accounts created before that change may still have the old fields
+(email/address/area/city/state/pincode on customers, length/width/height
+and address/city/state/pincode on drivers) sitting unused in Firestore.
+`scripts/simplifyProfiles.js` clears just those specific fields — nothing
+else is touched (wallet, KYC status, rating, rate card, online status,
+etc. are all left exactly as they are):
+
+```bash
+cd scripts
+npm install
+
+# Dry run first — lists what would change, deletes nothing:
+node simplifyProfiles.js /path/to/serviceAccountKey.json --dry-run
+
+# For real — you'll be asked to type DELETE to confirm:
+node simplifyProfiles.js /path/to/serviceAccountKey.json
+```
+
+Safe to re-run any time — a document with none of these old fields left is
+just skipped.
+
 ## Wiping all driver/customer data (reset before/after a pilot)
 
 `scripts/wipeUserData.js` permanently deletes everything tied to drivers and
