@@ -4433,14 +4433,15 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
                     <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
                   </button>
                 )}
-                {/* Advance ride's trigger — mirrors the hamburger on the
-                    opposite corner of this same row, same blue, so the two
-                    read as a matched pair. Opens/closes the Date/Time panel
-                    on CustomerBooking's page (advanceOpen is lifted up to
-                    this component for exactly this reason). */}
-                <button onClick={() => setAdvanceOpen((v) => !v)} title={lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}
-                  className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
-                  <CalendarClock size={18} color="#fff" strokeWidth={2.5} />
+                {/* Advance ride's trigger — same blue as the hamburger on
+                    the opposite corner of this same row, so the two read as
+                    a matched pair. Opens/closes the Date/Time panel on
+                    CustomerBooking's page (advanceOpen is lifted up to this
+                    component for exactly this reason). */}
+                <button onClick={() => setAdvanceOpen((v) => !v)}
+                  className="rounded-full pl-3 pr-3.5 py-2 flex items-center gap-1.5 shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
+                  <CalendarClock size={16} color="#fff" strokeWidth={2.5} />
+                  <span className="text-xs font-black text-white whitespace-nowrap">{lang === "en" ? "Book Advance" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें"}</span>
                 </button>
               </div>
             ) : biddingHeader ? (
