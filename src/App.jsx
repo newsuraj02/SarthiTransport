@@ -14,7 +14,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Bright/high-visibility flat palette — legible in direct outdoor sunlight
@@ -700,6 +700,46 @@ function playBeepTone() {
   } catch { /* audio not available */ }
 }
 
+// Re-added for the driver "new load posted" alert only (see
+// functions/index.js: onNewLoadPosted/sendLoadAlert) — every other push
+// type stays removed. docId is where the FCM device token gets saved
+// ("drivers"/mobile) so that Cloud Function knows who to push to. Silently
+// re-issues a token on every load if permission was already granted in an
+// earlier session, so it stays fresh without asking again; `enable()` is
+// what the banner's button calls to trigger the actual browser permission
+// prompt on first use.
+function useRideNotifications(collectionName, docId, lang) {
+  const [permission, setPermission] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
+  const [toast, setToast] = useState(null);
+
+  const enable = async () => {
+    const result = await requestPushToken();
+    if (result.ok && docId) {
+      patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+      setPermission("granted");
+    } else {
+      setPermission(result.reason === "unsupported" ? "unsupported" : (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
+    }
+  };
+
+  useEffect(() => {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted" || !docId) return;
+    requestPushToken().then((result) => {
+      if (result.ok) patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+    });
+    let unsub;
+    listenForegroundPush((payload) => {
+      playBeepTone();
+      setToast(payload.notification || null);
+      setTimeout(() => setToast(null), 5000);
+    }).then((fn) => { unsub = fn; });
+    return () => unsub?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionName, docId]);
+
+  return { permission, enable, toast };
+}
+
 // Tracks which Admin Announcements this specific customer/driver hasn't
 // seen yet — "seen" persists locally (per role+mobile) as the newest
 // createdAt millis they've been shown, so it survives app restarts and
@@ -722,6 +762,37 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole) {
   return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen };
 }
 
+// Re-added for the driver "new load posted" push carve-out — see
+// useRideNotifications above. Shown on the Driver home screen only.
+function NotificationBanner({ permission, onEnable, lang }) {
+  if (permission === "granted" || permission === "unsupported") return null;
+  if (permission === "denied") {
+    return (
+      <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
+        {lang === "en" ? "Notifications are blocked in your browser settings — enable them there to get new load alerts." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये नोटिफिकेशन बंद आहेत — नवीन लोड अलर्टसाठी तिथे चालू करा." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — नए लोड अलर्ट के लिए वहां चालू करें।"}
+      </div>
+    );
+  }
+  return (
+    <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-3.5 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
+      <Bell size={14} color={C.marigoldDeep} />
+      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Turn on notifications for new load alerts" : lang === "mr" ? "नवीन लोड अलर्टसाठी नोटिफिकेशन चालू करा" : "नए लोड अलर्ट के लिए नोटिफिकेशन चालू करें"}</span>
+    </button>
+  );
+}
+
+function ForegroundToast({ toast }) {
+  if (!toast) return null;
+  return (
+    <div className="mx-5 mb-2 rounded-lg p-2.5 flex items-center gap-2" style={{ background: C.navy }}>
+      <Bell size={14} color={C.marigold} />
+      <div>
+        <div className="text-[11px] font-bold text-white">{toast.title}</div>
+        {toast.body && <div className="text-[10px]" style={{ color: "#FFFFFF" }}>{toast.body}</div>}
+      </div>
+    </div>
+  );
+}
 
 // Post-signup language picker — shown once, right after a brand-new
 // Customer/Driver signup completes (see the langPromptPending gate in
@@ -5273,22 +5344,18 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
   const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
   const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg || "");
-  const [length, setLength] = usePersistedState("sarthi_driverKyc_length", driver.vehicleSpec?.length || "");
-  const [width, setWidth] = usePersistedState("sarthi_driverKyc_width", driver.vehicleSpec?.width || "");
-  const [height, setHeight] = usePersistedState("sarthi_driverKyc_height", driver.vehicleSpec?.height || "");
   const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "");
 
-  // Auto-fills dimensions from VEHICLE_MODEL_SPECS the moment the typed
-  // vehicle name matches a known model — but only into fields the driver
-  // hasn't already touched, so it never clobbers a manual entry.
+  // Auto-fills capacity from VEHICLE_MODEL_SPECS the moment the typed
+  // vehicle name matches a known model — but only if the driver hasn't
+  // already touched it, so it never clobbers a manual entry. Length/width/
+  // height used to be collected too; dropped from the visible KYC form per
+  // the profile-simplification pass — capacity alone is what bidding needs.
   const matchedModelSpec = lookupVehicleModelSpec(vehicleTypeName);
   useEffect(() => {
     if (!matchedModelSpec) return;
-    if (capacityKg || length || width || height) return;
+    if (capacityKg) return;
     setCapacityKg(String(matchedModelSpec.capacityKg));
-    setLength(String(matchedModelSpec.length));
-    setWidth(String(matchedModelSpec.width));
-    setHeight(String(matchedModelSpec.height));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleTypeName]);
 
@@ -5300,10 +5367,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     const match = VEHICLES.find((v) => v.label.toLowerCase() === name.toLowerCase() || (v.labelEn || "").toLowerCase() === name.toLowerCase());
     if (match) return match.key;
     const key = slugify(name);
-    addVehicleType({
-      key, label: name, rate: 25, capacity: "", capacityKg: Number(capacityKg) || 0,
-      l: Number(length) || 0, w: Number(width) || 0, h: Number(height) || 0,
-    });
+    addVehicleType({ key, label: name, rate: 25, capacity: "", capacityKg: Number(capacityKg) || 0 });
     return key;
   };
 
@@ -5359,15 +5423,14 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       ...driver, kyc: isInTrial(driver.createdAt) && isFirstSubmission ? "Approved" : "Pending", photo, docs: { dl, photo },
       vehicleSpec: {
         type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
-        capacityKg: Number(capacityKg) || undefined, length: Number(length) || undefined,
-        width: Number(width) || undefined, height: Number(height) || undefined,
+        capacityKg: Number(capacityKg) || undefined,
         vehicleNumber: vehicleNumber.trim().toUpperCase(),
       },
     });
     // Submitted for real — clear the draft so a later resubmission (after a
     // rejection) starts from the driver's actual saved data, not this.
     setDl(null); setPhoto(null); setVehicleTypeName(""); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
-    setCapacityKg(""); setLength(""); setWidth(""); setHeight(""); setVehicleNumber("");
+    setCapacityKg(""); setVehicleNumber("");
     if (isFirstSubmission) onFirstSubmit?.();
   };
 
@@ -5445,29 +5508,14 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           onChange={(e) => setVehicleNumber(e.target.value)} />
       </GuidedStep>
 
-      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Dimensions" : lang === "mr" ? "गाडीचा साइझ" : "गाड़ी का साइज़"}</label>
+      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलोग्राम)" : "क्षमता (किलोग्राम)"}</label>
       {matchedModelSpec && (
         <p className="text-[10px] font-semibold mb-1.5" style={{ color: C.success }}>
-          {lang === "en" ? "Auto-filled for this vehicle model — edit any field if yours differs." : lang === "mr" ? "या गाडी मॉडेलनुसार आपोआप भरले गेले आहे — वेगळे असल्यास बदलू शकता." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
+          {lang === "en" ? "Auto-filled for this vehicle model — edit if yours differs." : lang === "mr" ? "या गाडी मॉडेलनुसार आपोआप भरले गेले आहे — वेगळे असल्यास बदलू शकता." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
         </p>
       )}
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <div>
-          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलोग्राम)" : "क्षमता (किलोग्राम)"}</label>
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</label>
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 7" : lang === "mr" ? "उदा: 7" : "जैसे: 7"} value={length} onChange={(e) => setLength(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</label>
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : lang === "mr" ? "उदा: 4.5" : "जैसे: 4.5"} value={width} onChange={(e) => setWidth(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</label>
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 4.5" : lang === "mr" ? "उदा: 4.5" : "जैसे: 4.5"} value={height} onChange={(e) => setHeight(e.target.value)} />
-        </div>
+      <div className="mb-4">
+        <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
       </div>
 
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Vehicle Details" : lang === "mr" ? "स्टेप 2 — गाडीची माहिती" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
@@ -5902,6 +5950,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
   // future date — kept out of myTrip (above) so today's home screen isn't
   // stuck showing a trip that's days away, but still reachable here.
   const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
+  const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver");
 
   // Badge + "View your Booking here" callout, shown the moment one of this
@@ -6062,6 +6111,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
             <X size={14} color="#000000" strokeWidth={3} />
           </button>
         )}
+        {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />}
+        <ForegroundToast toast={rideNotifications.toast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
           onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
           onDismiss={announcementAlerts.markSeen} lang={lang} />

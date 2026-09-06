@@ -110,6 +110,25 @@ After this, delete `VITE_ADMIN_EMAIL`/`VITE_ADMIN_PASSWORD` (and any `_2`/`_3`/`
 
 **What's still intentionally open, and why**: `vehicleTypes`, `materials`, and `settings` stay world-readable (no login needed) because the app loads them before anyone signs in, and none of it is sensitive — just vehicle names, material names, and commission percentages. `drivers`/`bookings`/`withdrawals`/`rechargeRequests` are readable by *any* signed-in user (not scoped to just the owner) because the app currently fetches whole collections and filters client-side rather than using scoped Firestore queries — e.g. a driver needs to see every open "Bidding" load, not just their own bookings. Writes to all of these ARE scoped to the owning phone number or admin. Tightening list-reads further would mean rewriting those subscriptions to use `where()` queries first — a real future improvement, not done here.
 
+## Push notifications (new load alerts for drivers)
+
+The only push notification this app sends: a driver gets a loud, high-priority alert the moment a matching new load is posted — even if the browser tab isn't open. Every other event (bid accepted, trip completed, new bid, etc.) is deliberately *not* pushed. One-time setup:
+
+1. **Enable Blaze**, if not already (Phone Auth above already required this): https://console.cloud.google.com/billing/linkedaccount?project=sarthi-transport-74865 — Cloud Functions (what actually sends the push) needs it.
+2. **Generate a Web Push key pair**: Firebase Console → your project → gear icon → **Project Settings** → **Cloud Messaging** tab → under "Web configuration", click **Generate key pair**. Copy the key into `VITE_FIREBASE_VAPID_KEY` in `.env.local`.
+3. **Install the Cloud Function's dependencies** (once, and again any time `functions/package.json` changes):
+   ```bash
+   cd functions
+   npm install
+   cd ..
+   ```
+4. **Deploy** — needs `functions` alongside `hosting`:
+   ```bash
+   firebase deploy --only functions,hosting
+   ```
+
+That's it — no Firestore rules changes needed. Drivers see a "Turn on notifications for new load alerts" banner on their home screen; tapping it triggers the browser's own permission prompt. Until steps 1-4 are done, the banner still shows and the button still runs — it just won't have a working Cloud Function to actually deliver the push, so nothing arrives. No error, just silence, so it's safe to deploy this code before finishing the Console setup.
+
 ## Wiping all driver/customer data (reset before/after a pilot)
 
 `scripts/wipeUserData.js` permanently deletes everything tied to drivers and
