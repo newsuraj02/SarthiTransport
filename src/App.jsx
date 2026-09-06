@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
-  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, Search, CalendarClock,
+  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -3486,10 +3486,13 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeChange, drivers }) {
   const VEHICLES = vehicleTypes;
-  const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
+  // Pickup/Drop/Weight are always right there on the main page (no
+  // separate "Where to?" tap-through screen) — 'now' IS the home screen.
+  // 'advance' is the only other mode, reached via the Advance book button.
+  const [bookingMode, setBookingMode] = useState("now"); // 'now' | 'advance'
   // Reports the current mode up to CustomerApp so it can tell whether the
-  // Home screen (map + "Where to?" + Advance book, mode === null) is on
-  // screen right now — that's the only place the hamburger menu should show.
+  // main booking page (not the Advance form) is on screen right now —
+  // that's the only place the hamburger menu should show.
   useEffect(() => { onModeChange?.(bookingMode); }, [bookingMode]);
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -3567,15 +3570,15 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
     return () => clearTimeout(t);
   }, [drop, dropCoords, mapsReady]);
 
-  // Customer's own live position for the Home screen's nearby-vehicles map
-  // only — watched (throttled to one write every 5s, same as the driver/
-  // trip GPS effects elsewhere) only while the Home screen (map + "Where
-  // to?" + Advance book) is actually on screen, so it doesn't run at all
-  // once the customer moves into the booking form.
+  // Customer's own live position for the nearby-vehicles map at the top of
+  // this page — watched (throttled to one write every 5s, same as the
+  // driver/trip GPS effects elsewhere) for as long as this booking screen
+  // is mounted (i.e. until there's an active booking and CustomerApp swaps
+  // this out for ActiveRide).
   const [customerLocation, setCustomerLocation] = useState(null);
   const lastHomeGpsRef = useRef(0);
   useEffect(() => {
-    if (bookingMode !== null || !navigator.geolocation) return;
+    if (!navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const now = Date.now();
@@ -3587,7 +3590,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [bookingMode]);
+  }, []);
 
   // Shows the straight-line estimate immediately (no blank/loading state),
   // then silently upgrades to the real routed distance from Google's
@@ -3671,49 +3674,39 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
-    setPickup(""); setDrop(""); setWeight(""); setBookingMode(null); setAdvanceDate(""); setAdvanceTime("");
+    setPickup(""); setDrop(""); setWeight(""); setBookingMode("now"); setAdvanceDate(""); setAdvanceTime("");
     setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
-  if (!bookingMode) {
-    return (
-      <div>
-        <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} />
-        <div className="px-5 pt-4 pb-8" style={{ marginTop: -22, position: "relative", zIndex: 1 }}>
-          <button onClick={() => setBookingMode("now")}
-            className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl shadow-lg mb-3 text-left" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
-            <Search size={20} color={C.marigoldDeep} className="shrink-0" />
-            <span className="text-base font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Where to?" : lang === "mr" ? "कुठे जायचं?" : "कहाँ जाना है?"}</span>
-          </button>
+  return (
+    <div className="pt-0 pb-5" style={{ "--guided-glow": bookingMode === "advance" ? "255, 102, 0" : "0, 168, 84" }}>
+      <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} />
+      <div className="px-5 pt-4">
+        <div className="flex items-center gap-2.5 mb-3">
+          {bookingMode === "advance" && (
+            <button onClick={() => setBookingMode("now")} className="flex items-center gap-1 p-3 rounded-full shadow-sm shrink-0" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} />
+            </button>
+          )}
+          <p className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "* All fields below are mandatory" : lang === "mr" ? "* खाली दिलेली सर्व माहिती भरणे अनिवार्य आहे" : "* नीचे दिए गए सभी विवरण भरना अनिवार्य है"}</p>
+        </div>
+        {bookingMode === "now" && (
           <button onClick={() => {
             // Pickup/Drop are shared state with "Book Now" -- if the customer
-            // typed something there before backing out to switch modes,
-            // starting Advance mode fresh (not silently carrying it over)
-            // avoids an address meant for a right-now trip ending up on a
-            // scheduled one by accident.
+            // typed something there before switching modes, starting Advance
+            // mode fresh (not silently carrying it over) avoids an address
+            // meant for a right-now trip ending up on a scheduled one by
+            // accident.
             setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
             setBookingMode("advance");
-          }} className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 shadow-lg" style={{ background: C.marigoldDeep }}>
-            <CalendarClock size={20} color="#FFFFFF" className="shrink-0" />
-            <span className="text-base font-black text-white">{lang === "en" ? "Advance book" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें"}</span>
+          }} className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 shadow-lg mb-3" style={{ background: C.marigoldDeep }}>
+            <CalendarClock size={18} color="#FFFFFF" className="shrink-0" />
+            <span className="text-sm font-black text-white">{lang === "en" ? "Advance book" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें"}</span>
           </button>
-          <p className="text-xs font-bold text-center mt-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Book anything from a mini truck to a full-size truck — all across India." : lang === "mr" ? "संपूर्ण भारतात लहान ते मोठी गाडी बुक करा." : "पूरे भारत में छोटी से लेकर बड़ी गाड़ी तक बुक करें।"}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="px-5 pt-3 pb-5" style={{ "--guided-glow": bookingMode === "advance" ? "255, 102, 0" : "0, 168, 84" }}>
-      <div className="flex items-center gap-2.5 mb-3">
-        <button onClick={() => setBookingMode(null)} className="flex items-center gap-1 p-3 rounded-full shadow-sm shrink-0" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} />
-        </button>
-        <p className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "* All fields below are mandatory" : lang === "mr" ? "* खाली दिलेली सर्व माहिती भरणे अनिवार्य आहे" : "* नीचे दिए गए सभी विवरण भरना अनिवार्य है"}</p>
-      </div>
+        )}
       <div className="space-y-3">
         {lastBooking && !pickup && !drop && (
           <button onClick={() => {
@@ -3852,6 +3845,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
           }}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -4427,9 +4421,10 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   // right after a bid is accepted (see the onBidAccepted callbacks below)
   // until the menu is actually opened — see HamburgerHint.
   const [showBookingHint, setShowBookingHint] = useState(false);
-  // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
-  // so the header knows whether the "What do you need?" chooser is on
-  // screen right now — that's the only place the hamburger menu shows.
+  // Tracks CustomerBooking's own bookingMode ('now' | 'advance', see
+  // onModeChange below) purely so the header knows whether the main
+  // Pickup/Drop/Weight page is on screen right now (vs. the separate
+  // Advance form) — that's the only place the hamburger menu shows.
   const [customerBookingMode, setCustomerBookingMode] = useState(null);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
@@ -4485,15 +4480,11 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   const headerRideBooking = rideView === "current"
     ? (activeBooking && !addingAnother ? activeBooking : null)
     : advanceBookings.find((ab) => ab.id === selectedAdvanceId) || null;
-  // The hamburger only shows on the "What do you need?" chooser screen —
+  // The hamburger only shows on CustomerBooking's main "now" page (map +
+  // Pickup/Drop/Weight), not while it's showing the separate Advance form —
   // i.e. the Current tab, no active/being-added ride, and CustomerBooking
-  // itself hasn't moved past its own mode chooser yet.
-  // True whenever the "What do you need?" chooser (hamburger + Customer
-  // Dashboard title) is what's actually on screen — either there's no active
-  // booking at all, or the customer tapped Back from an active ride to post
-  // another one (addingAnother) — as long as CustomerBooking hasn't moved
-  // past its own mode chooser yet.
-  const showHamburger = rideView === "current" && (!activeBooking || addingAnother) && customerBookingMode === null;
+  // isn't in its Advance mode.
+  const showHamburger = rideView === "current" && (!activeBooking || addingAnother) && customerBookingMode !== "advance";
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
