@@ -141,19 +141,6 @@ function lookupVehicleModelSpec(name) {
 // materials), so English falls back to the same string when no labelEn exists.
 const vehicleLabel = (v, lang) => (v ? (lang === "en" ? (v.labelEn || v.label) : v.label) : "");
 const vehicleCapacity = (v, lang) => (v ? (lang === "en" ? (v.capacityEn || v.capacity) : v.capacity) : "");
-// Fixed list — the only choices in the Material Type dropdown. The last
-// entry ("अन्य") isn't a material: picking it reveals a free-text box (see
-// CustomerBooking) and is labelled "Add Material". Whatever's typed there
-// is stored straight onto the load and is never added to any shared list,
-// so one customer's entry can't surface as a suggestion for anyone else.
-const MATERIALS = ["लोहा", "स्टील", "एमएस स्क्रैप", "प्लास्टिक", "बॉक्स / कार्टन", "सीमेंट / बालू", "अन्य"];
-const MATERIAL_LABELS_EN = { "लोहा": "Iron", "स्टील": "Steel", "एमएस स्क्रैप": "MS Scrap", "प्लास्टिक": "Plastic", "बॉक्स / कार्टन": "Box / Carton", "सीमेंट / बालू": "Cement / Sand" };
-// Label for the free-text "add your own" option, per language.
-const ADD_MATERIAL_LABEL = { en: "Add Material", hi: "मटेरियल जोड़ें", mr: "मटेरियल जोडा" };
-const materialLabel = (m, lang, customMap = {}) => {
-  if (customMap[m]) return lang === "en" ? (customMap[m].en || customMap[m].hi) : (customMap[m].hi || customMap[m].en);
-  return (lang === "en" && MATERIAL_LABELS_EN[m]) ? MATERIAL_LABELS_EN[m] : m;
-};
 
 // A curated slot picker (period -> a handful of round-hour times) instead of
 // a native <input type="time"> clock/dial, which testers found fiddly —
@@ -3236,7 +3223,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, placeholder, onMic, onMapPin, onUseCurrentLocation, locating, suggestions, onSuggestionTap, lang = "hi" }) {
+function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, placeholder, onUseCurrentLocation, locating, suggestions, onSuggestionTap, lang = "hi" }) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -3308,22 +3295,13 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
           </div>
         )}
       </div>
-      {/* Clear, labeled buttons below the field instead of small icons
-          crammed inside it — bigger touch targets and unambiguous at a
-          glance for a first-time user. */}
-      <div className="mt-2 space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={onMapPin} className="flex items-center justify-center gap-1.5 rounded-xl py-5 text-base font-bold" style={{ background: C.success, color: "#fff" }}>
-            <MapPin size={18} /> {lang === "en" ? "Choose from Map" : lang === "mr" ? "मॅपवरून निवडा" : "मैप से चुनें"}
-          </button>
-          <MicButton onResult={onMic} lang={lang} label={lang === "en" ? "Speak to Enter" : lang === "mr" ? "बोलून लिहा" : "बोलकर लिखें"} />
-        </div>
-        {onUseCurrentLocation && (
+      {onUseCurrentLocation && (
+        <div className="mt-2">
           <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-xl py-5 text-base font-bold" style={{ background: C.success, color: "#fff" }}>
             <Navigation size={16} /> {locating ? (lang === "en" ? "Locating..." : lang === "mr" ? "शोधत आहोत..." : "ढूंढ रहे हैं...") : (lang === "en" ? "Use My Current Location" : lang === "mr" ? "माझे सध्याचे लोकेशन वापरा" : "मेरी वर्तमान लोकेशन इस्तेमाल करें")}
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
           {suggestions.map((a) => (
@@ -3500,16 +3478,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
   const [pickupSelected, setPickupSelected] = useState(false);
   const [dropSelected, setDropSelected] = useState(false);
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
-  const [material, setMaterial] = useState("");
-  // Shown only when "Others" is picked. Stored straight onto the load in
-  // post(), never into a shared collection — so it stays private to this
-  // customer and never becomes a suggestion for anyone else.
-  const [materialOther, setMaterialOther] = useState("");
-  const isOtherMaterial = material === "अन्य";
-  const resolvedMaterial = isOtherMaterial ? materialOther.trim() : material;
   const [weight, setWeight] = useState("");
   const [distance, setDistance] = useState(null);
-  const [mapField, setMapField] = useState(null); // 'pickup' | 'drop' | null
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -3616,7 +3586,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
       : `इस वजन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`;
   })();
 
-  const canPostNow = !!(pickup.trim() && drop.trim() && resolvedMaterial && weight.trim());
+  const canPostNow = !!(pickup.trim() && drop.trim() && weight.trim());
   const canPostAdvance = canPostNow && !!advanceDate && !!advanceTime && !advanceNoticeError;
 
   useEffect(() => {
@@ -3625,7 +3595,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
     const smallFit = VEHICLES.filter((v) => v.capacityKg >= w).sort((a, b) => a.capacityKg - b.capacityKg)[0];
     if (smallFit) setVehicle(smallFit.key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weight, material]);
+  }, [weight]);
 
   const resetFields = () => {
     setPickup(""); setDrop(""); setWeight("");
@@ -3634,7 +3604,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
   const postNow = () => {
     if (!canPostNow) return;
     createLoad({
-      pickup, drop, vehicle, material: resolvedMaterial, weight, distance, scheduledFor: null,
+      pickup, drop, vehicle, weight, distance, scheduledFor: null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
@@ -3643,7 +3613,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
   const postAdvance = () => {
     if (!canPostAdvance) return;
     createLoad({
-      pickup, drop, vehicle, material: resolvedMaterial, weight, distance, scheduledFor: `${advanceDate} ${advanceTime}`,
+      pickup, drop, vehicle, weight, distance, scheduledFor: `${advanceDate} ${advanceTime}`,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
@@ -3666,8 +3636,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
           onPlaceSelected={onPickupPlaceSelected}
           mapsReady={mapsReady}
           placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
-          onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); setPickupSelected(false); }}
-          onMapPin={() => setMapField("pickup")}
           onUseCurrentLocation={useMyCurrentLocation}
           locating={locatingPickup}
           suggestions={suggestAreas(pickup)}
@@ -3682,8 +3650,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
           onPlaceSelected={onDropPlaceSelected}
           mapsReady={mapsReady}
           placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
-          onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); setDropSelected(false); }}
-          onMapPin={() => setMapField("drop")}
           suggestions={suggestAreas(drop)}
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
         />
@@ -3691,20 +3657,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
         <div>
           <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Weight (kg)" : lang === "mr" ? "वजन (किलोग्राम)" : "वजन (किलोग्राम)"}</label>
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : lang === "mr" ? "उदा: 300 किलो" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
-        </div>
-
-        <div>
-          <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : lang === "mr" ? "मटेरियल टाइप" : "मटेरियल टाइप"}</label>
-          <select className={inputCls} style={{ ...inputStyle, color: material ? inputStyle.color : "#9AA3B0" }} value={material}
-            onChange={(e) => setMaterial(e.target.value)}>
-            <option value="" disabled style={{ color: "#9AA3B0" }}>{lang === "en" ? "Select material" : lang === "mr" ? "मटेरियल निवडा" : "मटेरियल चुनें"}</option>
-            {MATERIALS.map((m) => <option key={m} value={m} style={{ color: C.ink }}>{m === "अन्य" ? (ADD_MATERIAL_LABEL[lang] || ADD_MATERIAL_LABEL.hi) : materialLabel(m, lang)}</option>)}
-          </select>
-          {isOtherMaterial && (
-            <input className={inputCls} style={{ ...inputStyle, marginTop: 6 }} autoFocus
-              placeholder={lang === "en" ? "Type the material" : lang === "mr" ? "मटेरियल टाइप करा" : "मटेरियल टाइप करें"}
-              value={materialOther} onChange={(e) => setMaterialOther(e.target.value)} />
-          )}
         </div>
 
         {distance !== null && (
@@ -3763,19 +3715,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
           </div>
         )}
       </div>
-
-      {mapField && (
-        <LocationPicker
-          lang={lang}
-          onClose={() => setMapField(null)}
-          onConfirm={(address, lat, lng) => {
-            const coords = lat != null && lng != null ? { lat, lng } : null;
-            if (mapField === "pickup") { setPickup(address); setPickupCoords(coords); setPickupSelected(coords != null); }
-            else { setDrop(address); setDropCoords(coords); setDropSelected(coords != null); }
-            setMapField(null);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -5003,7 +4942,6 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.distance} {lang === "en" ? "km" : "किमी"}</span>
             <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{materialLabel(ab.material, lang)}</span>
           </div>
           <div className="text-center rounded-lg py-2.5 mb-3" style={{ background: C.metallicGold }}>
             <div className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Your fare" : lang === "mr" ? "तुमचे भाडे" : "आपका भाड़ा"}</div>
@@ -5103,7 +5041,6 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
                       <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{materialLabel(load.material, lang)}</span>
                     </div>
                     {myBid || est ? (
                       <div className="mt-2 rounded-lg px-3 py-2 flex items-center justify-between"
@@ -5805,31 +5742,13 @@ const RATE_FIELDS = [
 const rateSectionComplete = (sec) => !!sec && RATE_FIELDS.every((f) => Number(sec[f.key]) > 0);
 const rateCardComplete = (rc) => !!rc && rateSectionComplete(rc.heavy) && rateSectionComplete(rc.light);
 
-// Load class is by material, not weight. The four preset heavies match
-// exactly; a custom "Add Material" entry is scanned for dense / metal /
-// construction / bulk-goods keywords (English + common Hindi/Marathi terms)
-// and priced Heavy on a hit, Light otherwise.
-const HEAVY_MATERIALS = new Set(["लोहा", "स्टील", "एमएस स्क्रैप", "सीमेंट / बालू"]);
-const HEAVY_KEYWORDS = [
-  "iron", "steel", "scrap", "metal", "rod", "sariya", "tmt", "girder", "sheet",
-  "cement", "concrete", "sand", "brick", "block", "stone", "gitti", "gravel", "aggregate", "rubble",
-  "marble", "granite", "tile", "slab", "coal", "clinker", "ore", "mineral",
-  "machine", "machinery", "motor", "pump", "generator", "transformer", "battery", "engine",
-  "aluminium", "aluminum", "copper", "brass", "zinc", "bronze",
-  "wheat", "rice", "paddy", "grain", "flour", "atta", "fertilizer", "urea", "sugar", "salt", "potato", "onion", "cattle feed",
-  "drum", "barrel", "water tank",
-  "लोहा", "लोखंड", "स्टील", "इस्पात", "स्क्रैप", "भंगार", "कबाड", "कबाड़", "सरिया", "सळई",
-  "सीमेंट", "सिमेंट", "बालू", "रेत", "रेती", "ईंट", "वीट", "गिट्टी", "पत्थर", "दगड", "बजरी", "खडी", "खडी",
-  "संगमरमर", "टाइल", "कोयला", "कोळसा", "धातू", "धातु", "मशीन", "बॅटरी", "बैटरी", "लोखंडी",
-  "गेहू", "गेहूं", "चावल", "धान", "अनाज", "आटा", "खाद", "यूरिया", "चीनी", "साखर", "नमक", "मीठ", "आलू", "बटाटा", "प्याज", "कांदा",
-  "ड्रम", "बैरल", "टंकी",
-];
+// Load class is by weight (Material Type was removed from the customer
+// booking form — it used to drive this instead, see git history). Anything
+// at or above HEAVY_WEIGHT_THRESHOLD_KG prices from the driver's Heavy rate
+// card section, everything under from Light.
+const HEAVY_WEIGHT_THRESHOLD_KG = 1000;
 function loadIsHeavy(load) {
-  const m = load.material;
-  if (!m) return false;
-  if (HEAVY_MATERIALS.has(m)) return true;
-  const s = String(m).toLowerCase();
-  return HEAVY_KEYWORDS.some((k) => s.includes(k));
+  return (Number(load.weight) || 0) >= HEAVY_WEIGHT_THRESHOLD_KG;
 }
 
 // The auto-bid total = the driver's own rate for this load's distance band
@@ -7220,7 +7139,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
                             </div>
                             <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
-                              {materialLabel(b.material, lang)} · {b.weight} {lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}
+                              {b.weight} {lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}
                             </div>
                             <div className="text-[10px] flex items-center justify-between mt-1">
                               <span style={{ color: C.inkSoft }}>{b.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${b.driverName}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(b)}</span>
@@ -8148,9 +8067,9 @@ export default function App() {
     patchDoc("rechargeRequests", id, { status: "Approved" }).catch((e) => console.error(e));
   };
 
-  const createLoad = ({ pickup, drop, vehicle, material, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng }) => {
+  const createLoad = ({ pickup, drop, vehicle, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng }) => {
     createDoc("bookings", genId(), {
-      pickup, drop, vehicle, material, weight, distance, status: "Bidding", bids: [], fare: null,
+      pickup, drop, vehicle, weight, distance, status: "Bidding", bids: [], fare: null,
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
       pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null, dropLat: dropLat ?? null, dropLng: dropLng ?? null,
       driverLocation: null,
