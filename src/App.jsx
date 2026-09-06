@@ -4404,15 +4404,22 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
                     <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
                   </button>
                 )}
-                {/* Advance ride's trigger — same blue as the hamburger on
-                    the opposite corner of this same row, so the two read as
-                    a matched pair. Opens/closes the Date/Time panel on
-                    CustomerBooking's page (advanceOpen is lifted up to this
-                    component for exactly this reason). */}
+                {/* Toggles between the two booking modes — shows what
+                    tapping it will switch TO, not the mode you're currently
+                    in: "Book Advance" (blue, matching the hamburger) while
+                    on the immediate-booking page, flipping to "Book
+                    Current" (green, matching Book Now) once the Advance
+                    Date/Time panel is open, so tapping it again switches
+                    straight back. */}
                 <button onClick={() => setAdvanceOpen((v) => !v)}
-                  className="rounded-full pl-3 pr-3.5 py-2 flex items-center gap-1.5 shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
-                  <CalendarClock size={16} color="#fff" strokeWidth={2.5} />
-                  <span className="text-xs font-black text-white whitespace-nowrap">{lang === "en" ? "Book Advance" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें"}</span>
+                  className="rounded-full pl-3 pr-3.5 py-2 flex items-center gap-1.5 shadow-sm shrink-0"
+                  style={{ background: advanceOpen ? C.success : "#0052CC", border: `1.5px solid ${advanceOpen ? C.success : "#0052CC"}` }}>
+                  {advanceOpen ? <Truck size={16} color="#fff" strokeWidth={2.5} /> : <CalendarClock size={16} color="#fff" strokeWidth={2.5} />}
+                  <span className="text-xs font-black text-white whitespace-nowrap">
+                    {advanceOpen
+                      ? (lang === "en" ? "Book Current" : lang === "mr" ? "करंट बुक करा" : "करंट बुक करें")
+                      : (lang === "en" ? "Book Advance" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें")}
+                  </span>
                 </button>
               </div>
             ) : biddingHeader ? (
