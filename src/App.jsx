@@ -3662,14 +3662,16 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
         />
 
-        <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
+        <div className="grid grid-cols-2 gap-3">
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
 
-        {pickup.trim() && drop.trim() && (
-          <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
-            <Navigation size={16} color={C.inkSoft} className="shrink-0" />
-            <span>{lang === "en" ? "Distance" : lang === "mr" ? "अंतर" : "दूरी"}: {distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}</span>
-          </div>
-        )}
+          {pickup.trim() && drop.trim() && (
+            <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
+              <Navigation size={16} color={C.inkSoft} className="shrink-0" />
+              <span className="truncate">{distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}</span>
+            </div>
+          )}
+        </div>
 
         <button onClick={post} disabled={!canPost} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
           style={{ background: canPost ? C.success : "#E0E0E0", color: canPost ? "#fff" : "#9AA3B0" }}>
