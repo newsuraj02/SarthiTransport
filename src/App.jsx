@@ -3535,7 +3535,7 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, requestDriverDirectly, vehicleTypes, lastBooking, lang, drivers, advanceOpen, setAdvanceOpen }) {
+function CustomerBooking({ requestDriverDirectly, vehicleTypes, lastBooking, lang, drivers, advanceOpen, setAdvanceOpen }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -3671,26 +3671,20 @@ function CustomerBooking({ createLoad, requestDriverDirectly, vehicleTypes, last
   const isScheduling = advanceOpen && !!advanceDate && !!advanceTime;
   const scheduledForValue = isScheduling ? `${advanceDate} ${advanceTime}` : null;
 
-  // Same eligibility rules the driver-side auto-bid effect uses (online,
-  // approved, not blacklisted, rate card set up, capacity fits the load,
-  // within the bid radius of Pickup) — shown with each driver's own
-  // computed fare (from their rate card, see computeAutoBid) so this is a
-  // real quoted price per driver, not a guess.
-  const eligibleDrivers = drivers
-    .filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted && rateCardComplete(d.rateCard))
-    .filter((d) => {
-      const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-      const loadKg = Number(weight) || 0;
-      if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
-      if (pickupCoords && d.lastKnownLocation) {
-        const maxKm = isScheduling ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
-        if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > maxKm) return false;
-      }
-      return true;
-    })
-    .map((d) => ({ driver: d, fare: computeAutoBid(d.rateCard, { distance, weight }) }))
-    .filter((x) => x.fare && x.fare > 0)
-    .sort((a, b) => a.fare - b.fare);
+  // Online, approved, not blacklisted, capacity fits the load, within the
+  // request radius of Pickup — no rate card / fare requirement (pricing is
+  // paused for now, see requestDriverDirectly).
+  const eligibleDrivers = drivers.filter((d) => {
+    if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+    const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+    const loadKg = Number(weight) || 0;
+    if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+    if (pickupCoords && d.lastKnownLocation) {
+      const maxKm = isScheduling ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+      if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > maxKm) return false;
+    }
+    return true;
+  });
 
   const requestDriver = (driverName) => {
     setRequestError("");
@@ -3701,22 +3695,6 @@ function CustomerBooking({ createLoad, requestDriverDirectly, vehicleTypes, last
       driverName,
     });
     if (err) { setRequestError(err); return; }
-    resetFields();
-    setChoosingVehicle(false);
-    if (isScheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
-  };
-
-  // Fallback: post an open load any eligible driver can bid on, instead of
-  // requesting one specific driver — picks the smallest vehicle type that
-  // still fits the weight, same as the old silent auto-select did.
-  const post = () => {
-    if (!canPost) return;
-    const smallFit = VEHICLES.filter((v) => v.capacityKg >= (Number(weight) || 0)).sort((a, b) => a.capacityKg - b.capacityKg)[0];
-    createLoad({
-      pickup, drop, vehicle: smallFit?.key || vehicle, weight, distance, scheduledFor: scheduledForValue,
-      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
-      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
-    });
     resetFields();
     setChoosingVehicle(false);
     if (isScheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
@@ -3815,7 +3793,7 @@ function CustomerBooking({ createLoad, requestDriverDirectly, vehicleTypes, last
                 <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
                   {lang === "en" ? "No online driver can carry this load right now." : lang === "mr" ? "सध्या हा लोड नेऊ शकेल असा कोणताही ऑनलाइन ड्रायव्हर नाही." : "अभी इस लोड को ले जा सकने वाला कोई ऑनलाइन ड्राइवर नहीं है।"}
                 </p>
-              ) : eligibleDrivers.map(({ driver: d, fare }) => (
+              ) : eligibleDrivers.map((d) => (
                 <button key={d.mobile || d.id} onClick={() => requestDriver(d.name)} className="w-full flex items-center gap-3 rounded-xl p-3 text-left" style={{ border: `1.5px solid ${C.line}` }}>
                   <SafeImage src={d.photo?.url} alt="" className="w-11 h-11 rounded-xl object-cover shrink-0" fallback={
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
@@ -3826,14 +3804,9 @@ function CustomerBooking({ createLoad, requestDriverDirectly, vehicleTypes, last
                     <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
                     <div className="text-xs truncate" style={{ color: C.inkSoft }}>{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
                   </div>
-                  <div className="text-sm font-black shrink-0" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(fare)}</div>
+                  <span className="text-xs font-black shrink-0" style={{ color: C.success }}>{lang === "en" ? "Request" : lang === "mr" ? "विनंती करा" : "अनुरोध करें"}</span>
                 </button>
               ))}
-            </div>
-            <div className="p-4 pt-0 shrink-0">
-              <button onClick={post} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.paper, color: C.ink, border: `1.5px solid ${C.line}` }}>
-                {lang === "en" ? "Post to all drivers instead" : lang === "mr" ? "त्याऐवजी सर्व ड्रायव्हरना पोस्ट करा" : "इसके बजाय सभी ड्राइवरों को पोस्ट करें"}
-              </button>
             </div>
           </div>
         </div>
@@ -3936,7 +3909,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             <Clock3 size={22} color="#FFFFFF" />
           </div>
           <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for Driver's Confirmation" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
-          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{vehicleLabel(pdVeh, lang) || b.pendingDriverName} · {fmt(b.fare)}</div>
+          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{vehicleLabel(pdVeh, lang) || b.pendingDriverName}{b.fare ? ` · ${fmt(b.fare)}` : ""}</div>
         </div>
       </div>
     );
@@ -4407,7 +4380,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, createLoad, requestDriverDirectly, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
+function CustomerApp({ bookings, requestDriverDirectly, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -4698,7 +4671,7 @@ function CustomerApp({ bookings, createLoad, requestDriverDirectly, drivers, veh
                 if (isFutureAdvance(booking.scheduledFor)) setShowBookingHint(true);
               }} />
           ) : (
-            <CustomerBooking createLoad={createLoad} requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} drivers={drivers}
+            <CustomerBooking requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} drivers={drivers}
               advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} />
           )
         ) : (
@@ -5170,44 +5143,23 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
           <>
             <div className="text-sm font-black mb-3" style={{ color: C.navy }}>{lang === "en" ? "Nearby loads" : lang === "mr" ? "जवळचे लोड" : "आसपास के लोड"} ({nearbyLoads.length})</div>
             <div className="space-y-3">
-              {nearbyLoads.map((load) => {
-                const myBid = (load.bids || []).find((x) => x.driverName === driver.name);
-                const est = computeAutoBid(driver.rateCard, load);
-                return (
-                  <div key={load.id} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
-                    <div className="flex items-center gap-1 mb-1.5">
-                      <Bell size={13} color={C.marigoldDeep} />
-                      <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
-                    </div>
-                    <RideTypeBanner booking={load} lang={lang} />
-                    <div className="mb-2">
-                      <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{load.pickup}</span></div>
-                      <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{load.drop}</span></div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
-                    </div>
-                    {myBid || est ? (
-                      <div className="mt-2 rounded-lg px-3 py-2 flex items-center justify-between"
-                        style={{ background: myBid ? "#E6F7EE" : C.metallicGold, border: `1.5px solid ${myBid ? C.success : C.marigoldDeep}` }}>
-                        <span className="text-2xl font-black" style={{ color: myBid ? C.success : "#000000" }}>
-                          {myBid
-                            ? (lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा")
-                            : (lang === "en" ? "Auto-bid" : lang === "mr" ? "ऑटो-बोली" : "ऑटो-बोली")}
-                        </span>
-                        <span className="text-2xl font-black" style={{ color: myBid ? C.success : "#000000", fontFamily: monoFont }}>
-                          {fmt(myBid ? myBid.amount : est)}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="mt-2 pt-2 text-xs font-black" style={{ borderTop: `1px solid ${C.line}`, color: C.inkSoft }}>
-                        {lang === "en" ? "Bidding automatically…" : lang === "mr" ? "आपोआप बोली लावली जात आहे…" : "अपने आप बोली लग रही है…"}
-                      </div>
-                    )}
+              {nearbyLoads.map((load) => (
+                <div key={load.id} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
+                  <div className="flex items-center gap-1 mb-1.5">
+                    <Bell size={13} color={C.marigoldDeep} />
+                    <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
                   </div>
-                );
-              })}
+                  <RideTypeBanner booking={load} lang={lang} />
+                  <div className="mb-2">
+                    <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{load.pickup}</span></div>
+                    <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{load.drop}</span></div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         )
@@ -5690,22 +5642,8 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
   const [name, setName] = useState(driver?.name || "");
   const [saved, setSaved] = useState(false);
 
-  // Editable copy of the rate card first set in RateSetup (post-KYC gate).
-  const [rateSection, setRateSection] = useState("heavy"); // "heavy" | "light"
-  const [rHeavy, setRHeavy] = useState(driver.rateCard?.heavy || {});
-  const [rLight, setRLight] = useState(driver.rateCard?.light || {});
-  const rCur = rateSection === "heavy" ? rHeavy : rLight;
-  const rSet = rateSection === "heavy" ? setRHeavy : setRLight;
-  const setRateField = (k, v) => rSet((p) => ({ ...p, [k]: v.replace(/[^\d]/g, "") }));
-  const rateOk = rateSectionComplete(rHeavy) && rateSectionComplete(rLight);
-  const [ratesSaved, setRatesSaved] = useState(false);
-  const saveRates = () => {
-    if (!rateOk) return;
-    const clean = (s) => ({ fare2to5: Number(s.fare2to5), fare5to10: Number(s.fare5to10), perKm10plus: Number(s.perKm10plus) });
-    setDriver({ ...driver, rateCard: { heavy: clean(rHeavy), light: clean(rLight) } });
-    setRatesSaved(true);
-    setTimeout(() => setRatesSaved(false), 2000);
-  };
+  // "My Rates" (rate card) editing removed here along with pricing —
+  // preserved on the backup-before-pricing-removal branch.
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -5799,46 +5737,6 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
         </button>
       </div>
 
-      <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <h3 className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "My Rates" : lang === "mr" ? "माझे दर" : "मेरे रेट"}</h3>
-        <div className="rounded-lg p-2.5 mb-3" style={{ background: C.metallicGold }}>
-          <div className="text-[11px] font-bold" style={{ color: "#000000" }}>
-            ⚠️ {lang === "en" ? "Note 1:" : lang === "mr" ? "नोंद 1:" : "नोट 1:"} {lang === "en" ? "According to market, you can change your rate." : lang === "mr" ? "बाजारभावानुसार तुम्ही तुमचा दर बदलू शकता." : "बाज़ार के अनुसार आप अपना दर बदल सकते हैं।"}
-          </div>
-          <div className="text-[11px] font-bold mt-1.5 pt-1.5" style={{ borderTop: `1px solid ${C.pimpri}` }}>
-            ⚠️ {lang === "en" ? "Note 2:" : lang === "mr" ? "नोंद 2:" : "नोट 2:"} {lang === "en" ? "Set rate according to current market rate. All fields are mandatory." : lang === "mr" ? "सध्याच्या बाजारभावानुसार दर सेट करा. सर्व फील्ड आवश्यक आहेत." : "मौजूदा बाज़ार भाव के अनुसार दर सेट करें। सभी फील्ड अनिवार्य हैं।"}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          {[
-            ["heavy", lang === "en" ? "Heavy Load" : lang === "mr" ? "हेवी लोड" : "हेवी लोड", rateSectionComplete(rHeavy)],
-            ["light", lang === "en" ? "Light Load" : lang === "mr" ? "लाइट लोड" : "लाइट लोड", rateSectionComplete(rLight)],
-          ].map(([key, label, done]) => (
-            <button key={key} type="button" onClick={() => setRateSection(key)}
-              className="rounded-xl py-2.5 text-xs font-black flex items-center justify-center gap-1.5"
-              style={{ background: rateSection === key ? C.navy : C.paper, color: rateSection === key ? "#FFFFFF" : C.ink, border: `2px solid ${rateSection === key ? C.navy : C.line}` }}>
-              {done && <CheckCircle2 size={13} color={rateSection === key ? "#FFFFFF" : C.success} />}
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="space-y-2.5">
-          {RATE_FIELDS.map((f) => (
-            <div key={f.key} className="flex items-center justify-between gap-3">
-              <span className="text-xs font-bold flex-1" style={{ color: C.ink }}>{f.label[lang] || f.label.hi}</span>
-              <input inputMode="numeric" value={rCur[f.key] || ""} onChange={(e) => setRateField(f.key, e.target.value)} placeholder="₹"
-                className="rounded-lg px-3 py-2 text-sm font-black text-center outline-none shrink-0"
-                style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.navy, fontFamily: monoFont, width: 108 }} />
-            </div>
-          ))}
-        </div>
-        <button onClick={saveRates} disabled={!rateOk}
-          className={`w-full rounded-lg py-3 font-bold text-sm mt-3 ${ratesSaved ? "shadow-lg" : ""}`}
-          style={{ background: ratesSaved ? C.metallicGreen : rateOk ? C.marigoldDeep : "#E0E0E0", color: rateOk || ratesSaved ? "#FFFFFF" : "#9AA3B0" }}>
-          {ratesSaved ? (lang === "en" ? "Saved ✓" : lang === "mr" ? "सेव्ह झाले ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Rates" : lang === "mr" ? "दर सेव्ह करा" : "रेट सेव करें")}
-        </button>
-      </div>
-
       {!hasPinAlready && (
         <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
           {pinDone ? (
@@ -5876,39 +5774,12 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
   );
 }
 
-// The driver's own price list, filled once right after KYC approval (see
-// RateSetup / the gate in DriverApp) and used from then on to fare every
-// load automatically instead of the old per-load quote. Two load classes
-// (heavy / light) x three distance bands.
-const RATE_FIELDS = [
-  { key: "fare2to5", label: { en: "2–5 km fixed fare", hi: "2–5 किमी तय भाड़ा", mr: "2–5 किमी निश्चित भाडे" } },
-  { key: "fare5to10", label: { en: "5–10 km fixed fare", hi: "5–10 किमी तय भाड़ा", mr: "5–10 किमी निश्चित भाडे" } },
-  { key: "perKm10plus", label: { en: "10 km and above — per km rate", hi: "10 किमी और उससे ऊपर — प्रति किमी दर", mr: "10 किमी व त्यावरील — प्रति किमी दर" } },
-];
-const rateSectionComplete = (sec) => !!sec && RATE_FIELDS.every((f) => Number(sec[f.key]) > 0);
-const rateCardComplete = (rc) => !!rc && rateSectionComplete(rc.heavy) && rateSectionComplete(rc.light);
-
-// Load class is by weight (Material Type was removed from the customer
-// booking form — it used to drive this instead, see git history). Anything
-// at or above HEAVY_WEIGHT_THRESHOLD_KG prices from the driver's Heavy rate
-// card section, everything under from Light.
-const HEAVY_WEIGHT_THRESHOLD_KG = 1000;
-function loadIsHeavy(load) {
-  return (Number(load.weight) || 0) >= HEAVY_WEIGHT_THRESHOLD_KG;
-}
-
-// The auto-bid total = the driver's own rate for this load's distance band
-// and load class. 2–5 km / 5–10 km are flat fixed fares; 10 km and above is
-// per‑km × distance. null when it can't be priced (no distance, no matching
-// rate section) so callers just don't bid.
-function computeAutoBid(rateCard, load) {
-  const km = Number(load.distance) || 0;
-  const sec = loadIsHeavy(load) ? rateCard?.heavy : rateCard?.light;
-  if (km <= 0 || !sec) return null;
-  if (km < 5) return Math.round(Number(sec.fare2to5) || 0);
-  if (km < 10) return Math.round(Number(sec.fare5to10) || 0);
-  return Math.round((Number(sec.perKm10plus) || 0) * km);
-}
+// Rate cards / auto-bid pricing (RATE_FIELDS, rateCardComplete,
+// computeAutoBid, loadIsHeavy) and the RateSetup screen are paused for
+// now — full code preserved on the backup-before-pricing-removal branch.
+// Booking is direct-request only in the meantime (see
+// requestDriverDirectly and CustomerBooking's driver picker) — no fare is
+// computed or shown anywhere in that flow.
 
 // Whether a load is one this driver's app would auto-bid on — shared by the
 // auto-bid effect and the read-only "nearby loads" overview on DriverHome.
@@ -5926,76 +5797,6 @@ function loadEligibleForDriver(driver, load, bookings, vehicleTypes, lang) {
   }
   if (findDriverLoadConflict(driver, { id: load.id, scheduledFor: load.scheduledFor }, bookings, vehicleTypes, lang)) return false;
   return true;
-}
-
-// First screen an approved driver sees. They price Heavy and Light loads
-// across three distance bands (per market rate); "Save and Go live" writes
-// rateCard onto the driver doc and flips them online. Gates the whole
-// DriverApp until both sections are filled — existing drivers included,
-// since they have no rateCard yet. Per-field persisted so a mid-fill reload
-// doesn't wipe entries.
-function RateSetup({ driver, setDriver, lang }) {
-  const [section, setSection] = useState("heavy"); // "heavy" | "light"
-  const [heavy, setHeavy] = usePersistedState(`sarthi_rateSetup_heavy_${driver.mobile}`, driver.rateCard?.heavy || {});
-  const [light, setLight] = usePersistedState(`sarthi_rateSetup_light_${driver.mobile}`, driver.rateCard?.light || {});
-  const cur = section === "heavy" ? heavy : light;
-  const setCur = section === "heavy" ? setHeavy : setLight;
-  const setField = (k, v) => setCur((prev) => ({ ...prev, [k]: v.replace(/[^\d]/g, "") }));
-
-  const heavyDone = rateSectionComplete(heavy);
-  const lightDone = rateSectionComplete(light);
-  const canSave = heavyDone && lightDone;
-
-  const save = () => {
-    if (!canSave) return;
-    const clean = (s) => ({ fare2to5: Number(s.fare2to5), fare5to10: Number(s.fare5to10), perKm10plus: Number(s.perKm10plus) });
-    setDriver({ ...driver, rateCard: { heavy: clean(heavy), light: clean(light) }, online: true });
-    try {
-      window.localStorage.removeItem(`sarthi_rateSetup_heavy_${driver.mobile}`);
-      window.localStorage.removeItem(`sarthi_rateSetup_light_${driver.mobile}`);
-    } catch { /* ignore */ }
-  };
-
-  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.navy, fontFamily: monoFont, width: 116 };
-
-  return (
-    <div className="flex-1 overflow-y-auto flex flex-col px-5 pt-6 pb-6" style={{ "--guided-glow": "0, 82, 204" }}>
-      <h1 className="text-xl font-black text-center" style={{ color: C.navy }}>{lang === "en" ? "Rate Setup" : lang === "mr" ? "रेट सेटअप" : "रेट सेटअप"}</h1>
-      <p className="text-sm font-bold text-center mt-1" style={{ color: C.ink }}>{lang === "en" ? "Fill this form according to market rate" : lang === "mr" ? "बाजारभावानुसार हा फॉर्म भरा" : "बाज़ार भाव के अनुसार यह फॉर्म भरें"}</p>
-      <p className="text-xs font-bold text-center mt-1 mb-5" style={{ color: C.safety }}>{lang === "en" ? "All fields are mandatory" : lang === "mr" ? "सर्व फील्ड भरणे आवश्यक आहे" : "सभी फील्ड भरना अनिवार्य है"}</p>
-
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {[
-          ["heavy", lang === "en" ? "Heavy Load" : lang === "mr" ? "हेवी लोड" : "हेवी लोड", heavyDone],
-          ["light", lang === "en" ? "Light Load" : lang === "mr" ? "लाइट लोड" : "लाइट लोड", lightDone],
-        ].map(([key, label, done]) => (
-          <button key={key} type="button" onClick={() => setSection(key)}
-            className="rounded-xl py-3 text-sm font-black flex items-center justify-center gap-1.5"
-            style={{ background: section === key ? C.navy : C.paper, color: section === key ? "#FFFFFF" : C.ink, border: `2px solid ${section === key ? C.navy : C.line}` }}>
-            {done && <CheckCircle2 size={15} color={section === key ? "#FFFFFF" : C.success} />}
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="rounded-2xl p-3 space-y-3" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
-        {RATE_FIELDS.map((f) => (
-          <div key={f.key} className="flex items-center justify-between gap-3">
-            <span className="text-sm font-black flex-1" style={{ color: C.ink }}>{f.label[lang] || f.label.hi}</span>
-            <input inputMode="numeric" value={cur[f.key] || ""} onChange={(e) => setField(f.key, e.target.value)} placeholder="₹"
-              className="rounded-lg px-3 py-2.5 text-base font-black text-center outline-none shrink-0" style={inputStyle} />
-          </div>
-        ))}
-      </div>
-
-      <div className="flex-1 min-h-[24px]" />
-      <button onClick={save} disabled={!canSave}
-        className={`w-full rounded-xl py-4 text-lg font-black mt-5 ${canSave ? "guided-submit-ready" : ""}`}
-        style={{ background: canSave ? C.metallicGreen : "#E0E0E0", color: canSave ? "#FFFFFF" : "#9AA3B0" }}>
-        {lang === "en" ? "Save and Go live" : lang === "mr" ? "सेव्ह करा आणि लाइव्ह व्हा" : "सेव करें और लाइव हों"}
-      </button>
-    </div>
-  );
 }
 
 function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
@@ -6045,32 +5846,11 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
     prevAssignedIdsRef.current = currentIds;
   }, [assignedIdsKey]);
 
-  // Auto-bidding. While this driver is online + approved + not blacklisted
-  // and has a rate card, their app places a bid on every open load that
-  // meets the eligibility rules below — priced straight from their rate
-  // card (see computeAutoBid), no per-load input. addBid does the same
-  // radius/capacity/conflict re-check authoritatively and de-dupes by
-  // driver name; autoBidDoneRef stops us re-writing the same bid every
-  // snapshot.
-  const autoBidDoneRef = useRef(new Set());
-  const bidsSig = bookings.map((b) => `${b.id}:${b.status}:${(b.bids || []).length}`).join(",");
-  useEffect(() => {
-    if (!driver.online || driver.kyc !== "Approved" || driver.blacklisted || !rateCardComplete(driver.rateCard)) return;
-    const loc = driver.lastKnownLocation;
-    bookings.forEach((b) => {
-      if (autoBidDoneRef.current.has(b.id)) return;
-      if ((b.bids || []).some((x) => x.driverName === driver.name)) return;
-      if (!loadEligibleForDriver(driver, b, bookings, vehicleTypes, lang)) return;
-      const amount = computeAutoBid(driver.rateCard, b);
-      if (!amount || amount <= 0) return;
-      const distanceKm = loc && b.pickupLat != null
-        ? Math.round(haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) * 10) / 10
-        : null;
-      const err = addBid(b.id, { driverName: driver.name, amount, hours: 0, extraHourRate: 0, rating: driver.rating || 4.6, distanceKm, auto: true });
-      if (!err) autoBidDoneRef.current.add(b.id);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bidsSig, driver.online, driver.kyc, driver.blacklisted, driver.rateCard, driver.lastKnownLocation]);
+  // Auto-bidding/pricing is paused for now (see requestDriverDirectly and
+  // CustomerBooking's driver picker — the customer requests a driver
+  // directly, no bid/fare involved) — removed from here along with Rate
+  // Setup. Full pre-removal code is preserved on the
+  // backup-before-pricing-removal branch for when this is reintroduced.
 
   const shareApp = () => {
     // The link carries this driver's own mobile number as their referral
@@ -6105,14 +5885,10 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
 
   const realHamburgerVisible = tab === "home" && rideView === "current" && !myTrip;
 
-  // Rate Setup gate — an approved driver can't reach the dashboard until
-  // they've filled their rate card. Existing drivers hit this too (no
-  // rateCard on file yet), except one already on an active trip — never
-  // trap them out of a run in progress. All hooks above run
-  // unconditionally, so this early return is safe.
-  if (!rateCardComplete(driver.rateCard) && !myTrip) {
-    return <RateSetup driver={driver} setDriver={setDriver} lang={lang} />;
-  }
+  // Rate Setup used to gate the dashboard here until a driver filled in
+  // their rate card — removed along with pricing (see
+  // backup-before-pricing-removal branch). A KYC-approved driver now goes
+  // straight to the dashboard.
 
   return (
     <>
@@ -6361,15 +6137,14 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // everywhere else trial/signup timing is used in the app.
   const newCustomersToday = (customers || []).filter(isToday);
   // isInTrial alone also matched drivers who just verified their phone
-  // and never went any further (no name, no KYC, no rate card) — cluttering
-  // this list with abandoned signups nobody can actually act on. Only
-  // count a driver as "in trial" here once they've completed every step
-  // that actually lets them take loads: basic details (name set, not just
-  // the placeholder-name-equals-mobile a fresh signup starts with), KYC
-  // approved, and rate setup (RateSetup only ever writes rateCard once
-  // both Heavy and Light sections are complete, so its mere presence is a
-  // reliable "done" signal).
-  const trialDrivers = drivers.filter((d) => isInTrial(d.createdAt) && d.name && d.name !== d.mobile && d.kyc === "Approved" && d.rateCard);
+  // and never went any further (no name, no KYC) — cluttering this list
+  // with abandoned signups nobody can actually act on. Only count a
+  // driver as "in trial" here once they've completed every step that
+  // actually lets them take loads: basic details (name set, not just the
+  // placeholder-name-equals-mobile a fresh signup starts with) and KYC
+  // approved. Rate setup used to be a third required step here too —
+  // dropped along with pricing (see backup-before-pricing-removal).
+  const trialDrivers = drivers.filter((d) => isInTrial(d.createdAt) && d.name && d.name !== d.mobile && d.kyc === "Approved");
 
   const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b));
   // Any not-yet-finished booking scheduled for a future date, regardless of
@@ -8226,10 +8001,11 @@ export default function App() {
   // the vehicle-picker list instead of posting an open "Bidding" load —
   // skips straight to "AwaitingDriver" targeting that driver, exactly
   // like acceptBid does once a customer picks a bid, just without an
-  // actual bid having been placed first. Priced the same way that
-  // driver's own auto-bid would be (their rate card, see computeAutoBid),
-  // since there's no negotiation step in this flow. Returns an error
-  // message string to show the customer, or null on success.
+  // actual bid having been placed first. Pricing is paused for now (see
+  // backup-before-pricing-removal) — fare is left null, to be agreed
+  // outside the app in the meantime, same as this app already never
+  // collects payment itself. Returns an error message string to show the
+  // customer, or null on success.
   const requestDriverDirectly = ({ pickup, drop, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, driverName }) => {
     const targetDriver = drivers.find((d) => d.name === driverName);
     if (!targetDriver) {
@@ -8238,12 +8014,8 @@ export default function App() {
     const bookingId = genId();
     const conflict = findDriverLoadConflict(targetDriver, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
-    const fare = computeAutoBid(targetDriver.rateCard, { distance, weight });
-    if (!fare || fare <= 0) {
-      return lang === "en" ? "This driver hasn't set up pricing for this kind of load yet." : lang === "mr" ? "या ड्रायव्हरने या प्रकारच्या लोडसाठी अजून दर सेट केलेले नाहीत." : "इस ड्राइवर ने इस तरह के लोड के लिए अभी तक दरें सेट नहीं की हैं।";
-    }
     createDoc("bookings", bookingId, {
-      pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare,
+      pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare: null,
       pendingDriverName: driverName, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
       pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null, dropLat: dropLat ?? null, dropLng: dropLng ?? null,
@@ -8552,7 +8324,7 @@ export default function App() {
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
-          <CustomerApp bookings={bookings} createLoad={createLoad} requestDriverDirectly={requestDriverDirectly} drivers={drivers} vehicleTypes={vehicleTypes}
+          <CustomerApp bookings={bookings} requestDriverDirectly={requestDriverDirectly} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
             adminNotifications={adminNotifications} />
