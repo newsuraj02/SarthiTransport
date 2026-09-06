@@ -3454,15 +3454,14 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers }) {
+function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers, advanceOpen, setAdvanceOpen }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
   const [showTimeModal, setShowTimeModal] = useState(false);
-  // The Advance date/time panel is a collapsed-by-default section at the
-  // bottom of this same page (see the Advance ride button below), not a
-  // separate screen/form — tapping it just expands this panel in place.
-  const [advanceOpen, setAdvanceOpen] = useState(false);
+  // Whether the Advance date/time panel is expanded — owned by CustomerApp
+  // (advanceOpen/setAdvanceOpen props) since its trigger button now lives
+  // in CustomerApp's header row, not on this page.
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null); // {lat,lng} | null
@@ -3630,12 +3629,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
           🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
         </button>
 
-        {!advanceOpen ? (
-          <button onClick={() => setAdvanceOpen(true)} className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 shadow-lg" style={{ background: C.marigoldDeep }}>
-            <CalendarClock size={18} color="#FFFFFF" className="shrink-0" />
-            <span className="text-sm font-black text-white">{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}</span>
-          </button>
-        ) : (
+        {advanceOpen && (
           <div className="rounded-2xl p-3" style={{ background: C.marigold }}>
             <label className="text-base font-extrabold mb-2 block text-center" style={{ color: C.ink }}>{lang === "en" ? "When do you need the vehicle?" : lang === "mr" ? "गाडी कधी हवी?" : "गाड़ी कब चाहिए?"}</label>
             <div className="grid grid-cols-3 gap-2 mb-2">
@@ -4249,6 +4243,11 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   // right after a bid is accepted (see the onBidAccepted callbacks below)
   // until the menu is actually opened — see HamburgerHint.
   const [showBookingHint, setShowBookingHint] = useState(false);
+  // Whether CustomerBooking's Advance-ride Date/Time panel is expanded —
+  // lifted up here (rather than owned inside CustomerBooking) so the
+  // trigger button can live in this header row instead of on the page
+  // itself.
+  const [advanceOpen, setAdvanceOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
   // Toggle between Current and Advance rides, shown as a bar in the header
@@ -4437,6 +4436,15 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
                     <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
                   </button>
                 )}
+                {/* Advance ride's trigger — mirrors the hamburger on the
+                    opposite corner of this same row, same blue, so the two
+                    read as a matched pair. Opens/closes the Date/Time panel
+                    on CustomerBooking's page (advanceOpen is lifted up to
+                    this component for exactly this reason). */}
+                <button onClick={() => setAdvanceOpen((v) => !v)} title={lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}
+                  className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
+                  <CalendarClock size={18} color="#fff" strokeWidth={2.5} />
+                </button>
               </div>
             ) : biddingHeader ? (
               <div className="flex-1 min-w-0">
@@ -4512,7 +4520,8 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
                 if (isFutureAdvance(booking.scheduledFor)) setShowBookingHint(true);
               }} />
           ) : (
-            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} drivers={drivers} />
+            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} drivers={drivers}
+              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} />
           )
         ) : (
           <div>
