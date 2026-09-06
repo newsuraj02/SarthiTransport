@@ -2796,14 +2796,6 @@ function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
       <div className="w-full max-w-sm min-h-screen flex flex-col" style={{ background: C.bg }}>
-        <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
-          <div className="flex items-center gap-2">
-            <Logo size={64} />
-            <div translate="no" className="text-white font-bold text-lg leading-none truncate">
-              {lang === "en" ? "Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्ट" : "अपना ट्रांसपोर्ट"}
-            </div>
-          </div>
-        </div>
         <div className="px-5 py-3" style={{ background: C.safety }}>
           <p className="text-xs font-bold text-center" style={{ color: "#FFFFFF" }}>
             {lang === "en"
@@ -8486,12 +8478,6 @@ export default function App() {
     return (
       <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
         <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
-          <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
-            <div className="flex items-center gap-2">
-              <Logo size={64} />
-              <div translate="no" className="text-white font-bold text-lg leading-none truncate">Apna Transport</div>
-            </div>
-          </div>
           <LanguageSelect onSelect={chooseLang} />
         </div>
       </div>
@@ -8521,20 +8507,11 @@ export default function App() {
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
-        <div className="px-5 pt-6 pb-4" style={{ background: C.navy }}>
-          <div className="flex items-center gap-2 mb-4">
-            <Logo size={64} />
-            <div className="flex-1 min-w-0">
-              <div translate="no" className="text-white font-bold text-lg leading-none truncate">{lang === "en" ? "Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्ट" : "अपना ट्रांसपोर्ट"}</div>
-              <div className="text-[11px] truncate" style={{ color: "#FFFFFF" }}>{lang === "en" ? "All India On-Demand Transport Bidding" : lang === "mr" ? "ऑल इंडिया ऑन-डिमांड ट्रान्सपोर्ट बिडिंग" : "ऑल इंडिया ऑन-डिमांड ट्रांसपोर्ट बिडिंग"}</div>
-            </div>
+        {role === "admin" && adminAuth && (
+          <div className="px-5 pt-3 text-[10px] text-center" style={{ color: C.inkSoft }}>
+            {lang === "en" ? "Overview & approvals — Customer/Driver registration is not available here" : lang === "mr" ? "ओव्हरव्ह्यू आणि अप्रूव्हल — इथे कस्टमर/ड्रायव्हर रजिस्ट्रेशन उपलब्ध नाही" : "ओवरव्यू और अप्रूवल — यहां कस्टमर/ड्राइवर रजिस्ट्रेशन उपलब्ध नहीं है"}
           </div>
-          {role === "admin" && adminAuth && (
-            <div className="mt-1.5 text-[10px] text-center" style={{ color: "#FFFFFF" }}>
-              {lang === "en" ? "Overview & approvals — Customer/Driver registration is not available here" : lang === "mr" ? "ओव्हरव्ह्यू आणि अप्रूव्हल — इथे कस्टमर/ड्रायव्हर रजिस्ट्रेशन उपलब्ध नाही" : "ओवरव्यू और अप्रूवल — यहां कस्टमर/ड्राइवर रजिस्ट्रेशन उपलब्ध नहीं है"}
-            </div>
-          )}
-        </div>
+        )}
 
         {role === null && (
           <RoleSelect lang={lang} onSelect={(r) => { setRole(r); setApp(r); }}
