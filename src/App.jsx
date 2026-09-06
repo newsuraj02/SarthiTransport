@@ -3596,7 +3596,9 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
                   the input's own text (now dark, like Pickup's typed text)
                   takes over. */}
               <div className="relative">
-                <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
+                <input type="date" value={advanceDate} min={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => { if (!e.target.value || e.target.value >= new Date().toISOString().slice(0, 10)) setAdvanceDate(e.target.value); }}
+                  className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
                 {!advanceDate && (
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#9CA3AF" }}>
                     {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
