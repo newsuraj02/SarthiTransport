@@ -3663,14 +3663,13 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
         />
 
         <div className="grid grid-cols-2 gap-3">
+          <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
+            <Navigation size={16} color={C.inkSoft} className="shrink-0" />
+            <span className="truncate">
+              {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
+            </span>
+          </div>
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
-
-          {pickup.trim() && drop.trim() && (
-            <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
-              <Navigation size={16} color={C.inkSoft} className="shrink-0" />
-              <span className="truncate">{distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}</span>
-            </div>
-          )}
         </div>
 
         <button onClick={post} disabled={!canPost} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
