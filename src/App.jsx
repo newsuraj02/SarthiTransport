@@ -467,7 +467,16 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 function estimateDistanceKm(pickupCoords, dropCoords) {
   if (pickupCoords?.lat == null || pickupCoords?.lng == null || dropCoords?.lat == null || dropCoords?.lng == null) return null;
   const straightLineKm = haversineKm(pickupCoords.lat, pickupCoords.lng, dropCoords.lat, dropCoords.lng);
-  return Math.max(1, Math.round(straightLineKm * ROAD_DISTANCE_FACTOR));
+  return Math.round(straightLineKm * ROAD_DISTANCE_FACTOR * 100) / 100;
+}
+
+// Exact figure, not a rounded-off approximation — meters below 1km (whole
+// number, since fractional meters aren't meaningful), km with one decimal
+// place above it.
+function formatDistanceExact(km, lang) {
+  if (km == null) return null;
+  if (km < 1) return `${Math.round(km * 1000)} ${lang === "en" ? "m" : "मीटर"}`;
+  return `${km.toFixed(1)} ${lang === "en" ? "km" : "किमी"}`;
 }
 
 // Resolves free-typed address text to coordinates via Google's Geocoder —
@@ -3540,7 +3549,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
     const requestId = ++distanceRequestRef.current;
     fetchRoadDistanceKm(pickupCoords, dropCoords)
       .then((km) => {
-        if (distanceRequestRef.current === requestId) setDistance(Math.max(1, Math.round(km)));
+        if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100);
       })
       .catch((e) => console.error("[distance matrix]", e));
   }, [pickupCoords, dropCoords, mapsReady]);
@@ -3658,7 +3667,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
         {pickup.trim() && drop.trim() && (
           <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
             <Navigation size={16} color={C.inkSoft} className="shrink-0" />
-            <span>{lang === "en" ? "Estimated distance" : lang === "mr" ? "अंदाजे अंतर" : "अनुमानित दूरी"}: {distance !== null ? `${distance} ${lang === "en" ? "km" : "किमी"}` : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}</span>
+            <span>{lang === "en" ? "Distance" : lang === "mr" ? "अंतर" : "दूरी"}: {distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}</span>
           </div>
         )}
 
