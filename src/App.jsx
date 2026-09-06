@@ -3653,12 +3653,12 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
         />
 
-        <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Weight (kg)" : lang === "mr" ? "वजन (किलोग्राम)" : "वजन (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
+        <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
 
-        {distance !== null && (
-          <div className="rounded-lg p-2.5 shadow-sm flex items-center gap-2" style={{ background: "#F5F3EE", border: `1px solid ${C.line}` }}>
-            <Navigation size={16} color="#000000" />
-            <span className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Estimated distance" : lang === "mr" ? "अंदाजे अंतर" : "अनुमानित दूरी"}: {distance} {lang === "en" ? "km" : lang === "mr" ? "किमी" : "किमी"}</span>
+        {pickup.trim() && drop.trim() && (
+          <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
+            <Navigation size={16} color={C.inkSoft} className="shrink-0" />
+            <span>{lang === "en" ? "Estimated distance" : lang === "mr" ? "अंदाजे अंतर" : "अनुमानित दूरी"}: {distance !== null ? `${distance} ${lang === "en" ? "km" : "किमी"}` : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}</span>
           </div>
         )}
 
