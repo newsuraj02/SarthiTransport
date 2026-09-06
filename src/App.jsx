@@ -3484,29 +3484,19 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeChange, drivers }) {
+function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers }) {
   const VEHICLES = vehicleTypes;
-  // Pickup/Drop/Weight are always right there on the main page (no
-  // separate "Where to?" tap-through screen) — 'now' IS the home screen.
-  // 'advance' is the only other mode, reached via the Advance book button.
-  const [bookingMode, setBookingMode] = useState("now"); // 'now' | 'advance'
-  // Reports the current mode up to CustomerApp so it can tell whether the
-  // main booking page (not the Advance form) is on screen right now —
-  // that's the only place the hamburger menu should show.
-  useEffect(() => { onModeChange?.(bookingMode); }, [bookingMode]);
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
   const [showTimeModal, setShowTimeModal] = useState(false);
+  // The Advance date/time panel is a collapsed-by-default section at the
+  // bottom of this same page (see the Advance ride button below), not a
+  // separate screen/form — tapping it just expands this panel in place.
+  const [advanceOpen, setAdvanceOpen] = useState(false);
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null); // {lat,lng} | null
   const [dropCoords, setDropCoords] = useState(null);
-  // Separate from pickupCoords/dropCoords on purpose: coords also get filled
-  // in silently by the debounced geocode below (for distance/booking data
-  // quality) whenever someone types a full address by hand and never taps a
-  // suggestion — that shouldn't count as "done" for the guided step, only an
-  // actual explicit action (tapping a suggestion, the map pin, current
-  // location, or Repeat Last Trip) does.
   const [pickupSelected, setPickupSelected] = useState(false);
   const [dropSelected, setDropSelected] = useState(false);
   const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
@@ -3522,37 +3512,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
   const [mapField, setMapField] = useState(null); // 'pickup' | 'drop' | null
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
-
-  // Guided-step highlighting for the booking fields — see GuidedStep/
-  // useGuidedSteps. Each step's own state decides completion (no cross-
-  // referencing another field's value), and useGuidedSteps only advances
-  // once the user actually leaves a field, not the instant it becomes
-  // non-empty mid-typing. The date/time step only exists in Advance mode,
-  // so the array (and the index every other field is wrapped at) shifts
-  // by one in that mode.
-  const hasDateTimeStep = bookingMode === "advance";
-  const stepOffset = hasDateTimeStep ? 1 : 0;
-  // Pickup/Drop have a live suggestion dropdown, so their step only counts
-  // as done once the user has actually taken an explicit action — tapped a
-  // suggestion, the map pin, current location, or Repeat Last Trip (see
-  // pickupSelected/dropSelected) — not just from typing, and not from the
-  // silent debounced-geocode fallback further down either (that only fills
-  // in coordinates for distance/booking data, it shouldn't auto-advance the
-  // step on its own whenever the user pauses mid-sentence while typing).
-  // Falls back to the old plain non-empty check if Maps never loaded, so a
-  // Maps outage can't strand the form on this step forever. Material is a
-  // <select> (no in-between typed state) and Weight is a plain number
-  // field, so both still just need a non-empty value, same as before.
-  const stepCompleted = [
-    ...(hasDateTimeStep ? [!!advanceDate && !!advanceTime] : []),
-    pickupSelected || (!mapsReady && pickup.trim().length > 0),
-    dropSelected || (!mapsReady && drop.trim().length > 0),
-    !!material && (!isOtherMaterial || resolvedMaterial.length > 0),
-    weight.trim().length > 0,
-  ];
-  // autoScroll:false — see useGuidedSteps; scrolling the page while the
-  // Pickup/Drop suggestion dropdown is open fights with browsing that list.
-  const { activeStep, stepProps } = useGuidedSteps(stepCompleted, { autoScroll: false });
 
   // If the customer typed Pickup/Drop by hand without tapping an
   // Autocomplete suggestion, pickupCoords/dropCoords stay null — geocode
@@ -3645,7 +3604,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
   // Minimum lead-time rule for Advance bookings, scaled by load weight —
   // heavier loads need more notice to actually line up a driver.
   const advanceNoticeError = (() => {
-    if (bookingMode !== "advance" || !advanceDate || !advanceTime || !weight.trim()) return "";
+    if (!advanceDate || !advanceTime || !weight.trim()) return "";
     const scheduled = parseScheduledFor(`${advanceDate} ${advanceTime}`);
     const minHours = minAdvanceNoticeHours(Number(weight) || 0);
     const hoursUntil = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
@@ -3657,7 +3616,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
       : `इस वजन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`;
   })();
 
-  const canPost = pickup.trim() && drop.trim() && resolvedMaterial && weight.trim() && (bookingMode === "now" || (advanceDate && advanceTime && !advanceNoticeError));
+  const canPostNow = !!(pickup.trim() && drop.trim() && resolvedMaterial && weight.trim());
+  const canPostAdvance = canPostNow && !!advanceDate && !!advanceTime && !advanceNoticeError;
 
   useEffect(() => {
     const w = Number(weight);
@@ -3667,153 +3627,84 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weight, material]);
 
-  const post = () => {
-    if (!canPost) return;
+  const resetFields = () => {
+    setPickup(""); setDrop(""); setWeight("");
+    setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
+  };
+  const postNow = () => {
+    if (!canPostNow) return;
     createLoad({
-      pickup, drop, vehicle, material: resolvedMaterial, weight, distance, scheduledFor: bookingMode === "advance" ? `${advanceDate} ${advanceTime}` : null,
+      pickup, drop, vehicle, material: resolvedMaterial, weight, distance, scheduledFor: null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
-    setPickup(""); setDrop(""); setWeight(""); setBookingMode("now"); setAdvanceDate(""); setAdvanceTime("");
-    setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
+    resetFields();
+  };
+  const postAdvance = () => {
+    if (!canPostAdvance) return;
+    createLoad({
+      pickup, drop, vehicle, material: resolvedMaterial, weight, distance, scheduledFor: `${advanceDate} ${advanceTime}`,
+      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+    });
+    resetFields();
+    setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false);
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   return (
-    <div className="pt-0 pb-5" style={{ "--guided-glow": bookingMode === "advance" ? "255, 102, 0" : "0, 168, 84" }}>
+    <div className="pt-0 pb-8">
       <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} />
-      <div className="px-5 pt-4">
-        <div className="flex items-center gap-2.5 mb-3">
-          {bookingMode === "advance" && (
-            <button onClick={() => setBookingMode("now")} className="flex items-center gap-1 p-3 rounded-full shadow-sm shrink-0" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-              <ChevronLeft size={18} strokeWidth={3} />
-            </button>
+      <div className="px-5 pt-4 space-y-4">
+        <LocationField
+          label={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}
+          lang={lang}
+          value={pickup}
+          onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupSelected(false); }}
+          onPlaceSelected={onPickupPlaceSelected}
+          mapsReady={mapsReady}
+          placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
+          onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); setPickupSelected(false); }}
+          onMapPin={() => setMapField("pickup")}
+          onUseCurrentLocation={useMyCurrentLocation}
+          locating={locatingPickup}
+          suggestions={suggestAreas(pickup)}
+          onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); setPickupSelected(false); }}
+        />
+
+        <LocationField
+          label={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}
+          lang={lang}
+          value={drop}
+          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropSelected(false); }}
+          onPlaceSelected={onDropPlaceSelected}
+          mapsReady={mapsReady}
+          placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
+          onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); setDropSelected(false); }}
+          onMapPin={() => setMapField("drop")}
+          suggestions={suggestAreas(drop)}
+          onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
+        />
+
+        <div>
+          <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Weight (kg)" : lang === "mr" ? "वजन (किलोग्राम)" : "वजन (किलोग्राम)"}</label>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : lang === "mr" ? "उदा: 300 किलो" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
+        </div>
+
+        <div>
+          <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : lang === "mr" ? "मटेरियल टाइप" : "मटेरियल टाइप"}</label>
+          <select className={inputCls} style={{ ...inputStyle, color: material ? inputStyle.color : "#9AA3B0" }} value={material}
+            onChange={(e) => setMaterial(e.target.value)}>
+            <option value="" disabled style={{ color: "#9AA3B0" }}>{lang === "en" ? "Select material" : lang === "mr" ? "मटेरियल निवडा" : "मटेरियल चुनें"}</option>
+            {MATERIALS.map((m) => <option key={m} value={m} style={{ color: C.ink }}>{m === "अन्य" ? (ADD_MATERIAL_LABEL[lang] || ADD_MATERIAL_LABEL.hi) : materialLabel(m, lang)}</option>)}
+          </select>
+          {isOtherMaterial && (
+            <input className={inputCls} style={{ ...inputStyle, marginTop: 6 }} autoFocus
+              placeholder={lang === "en" ? "Type the material" : lang === "mr" ? "मटेरियल टाइप करा" : "मटेरियल टाइप करें"}
+              value={materialOther} onChange={(e) => setMaterialOther(e.target.value)} />
           )}
-          <p className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "* All fields below are mandatory" : lang === "mr" ? "* खाली दिलेली सर्व माहिती भरणे अनिवार्य आहे" : "* नीचे दिए गए सभी विवरण भरना अनिवार्य है"}</p>
-        </div>
-        {bookingMode === "now" && (
-          <button onClick={() => {
-            // Pickup/Drop are shared state with "Book Now" -- if the customer
-            // typed something there before switching modes, starting Advance
-            // mode fresh (not silently carrying it over) avoids an address
-            // meant for a right-now trip ending up on a scheduled one by
-            // accident.
-            setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
-            setBookingMode("advance");
-          }} className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 shadow-lg mb-3" style={{ background: C.marigoldDeep }}>
-            <CalendarClock size={18} color="#FFFFFF" className="shrink-0" />
-            <span className="text-sm font-black text-white">{lang === "en" ? "Advance book" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें"}</span>
-          </button>
-        )}
-      <div className="space-y-3">
-        {lastBooking && !pickup && !drop && (
-          <button onClick={() => {
-            setPickup(lastBooking.pickup); setDrop(lastBooking.drop);
-            const hasPickupCoords = lastBooking.pickupLat != null && lastBooking.pickupLng != null;
-            const hasDropCoords = lastBooking.dropLat != null && lastBooking.dropLng != null;
-            setPickupCoords(hasPickupCoords ? { lat: lastBooking.pickupLat, lng: lastBooking.pickupLng } : null);
-            setDropCoords(hasDropCoords ? { lat: lastBooking.dropLat, lng: lastBooking.dropLng } : null);
-            setPickupSelected(hasPickupCoords);
-            setDropSelected(hasDropCoords);
-          }}
-            className="w-full flex items-center gap-3 rounded-2xl p-4 text-left" style={{ background: C.success }}>
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
-              <Package size={20} color={C.success} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Repeat last trip" : lang === "mr" ? "मागील ट्रिप पुन्हा करा" : "पिछली ट्रिप दोहराएं"}</div>
-              <div className="text-sm font-bold truncate" style={{ color: "#FFFFFF" }}>{lastBooking.pickup} → {lastBooking.drop}</div>
-            </div>
-            <span className="text-xs font-black shrink-0 rounded-xl px-3 py-2.5 text-center" style={{ background: "#00763C", color: "#FFFFFF" }}>{lang === "en" ? "Tap →" : lang === "mr" ? "टॅप करा →" : "टैप करें →"}</span>
-          </button>
-        )}
-        {bookingMode === "advance" && (
-          <GuidedStep {...stepProps(0)} lang={lang}>
-            {/* Yellow only while this step is the one being filled — once the
-                customer moves on, it settles back to a plain white card
-                instead of staying highlighted forever. */}
-            <div className="rounded-2xl p-3" style={{ background: stepProps(0).active ? C.marigold : C.paper }}>
-              <label className="text-base font-extrabold mb-2 block text-center" style={{ color: C.ink }}>{lang === "en" ? "When do you need the vehicle?" : lang === "mr" ? "गाडी कधी हवी?" : "गाड़ी कब चाहिए?"}</label>
-              <div className="grid grid-cols-3 gap-2 mb-2">
-                {[1, 2, 3].map((n) => {
-                  const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
-                  const iso = d.toISOString().slice(0, 10);
-                  const active = advanceDate === iso;
-                  return (
-                    <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
-                      className="rounded-xl py-4 text-base font-bold text-center"
-                      style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.ink, border: active ? "none" : `1.5px solid ${C.line}` }}>
-                      {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : lang === "mr" ? `${n} दिवसांनी` : `${n} दिन बाद`}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
-                <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-xl px-4 py-4 flex items-center justify-center" style={inputStyle}>
-                  <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
-                </button>
-              </div>
-            </div>
-            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
-          </GuidedStep>
-        )}
-        <div className="space-y-4">
-          <GuidedStep {...stepProps(stepOffset + 0)} lang={lang}>
-            <LocationField
-              label={lang === "en" ? "Choose Pickup location" : lang === "mr" ? "पिकअप ठिकाण निवडा" : "पिकअप स्थान चुनें"}
-              lang={lang}
-              value={pickup}
-              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupSelected(false); }}
-              onPlaceSelected={onPickupPlaceSelected}
-              mapsReady={mapsReady}
-              placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
-              onMic={(text) => { setPickup((p) => (p ? p + " " : "") + text); setPickupCoords(null); setPickupSelected(false); }}
-              onMapPin={() => setMapField("pickup")}
-              onUseCurrentLocation={useMyCurrentLocation}
-              locating={locatingPickup}
-              suggestions={suggestAreas(pickup)}
-              onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); setPickupSelected(false); }}
-            />
-          </GuidedStep>
-
-          <GuidedStep {...stepProps(stepOffset + 1)} lang={lang}>
-            <LocationField
-              label={lang === "en" ? "Choose Drop location" : lang === "mr" ? "ड्रॉप ठिकाण निवडा" : "ड्रॉप स्थान चुनें"}
-              lang={lang}
-              value={drop}
-              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropSelected(false); }}
-              onPlaceSelected={onDropPlaceSelected}
-              mapsReady={mapsReady}
-              placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
-              onMic={(text) => { setDrop((d) => (d ? d + " " : "") + text); setDropCoords(null); setDropSelected(false); }}
-              onMapPin={() => setMapField("drop")}
-              suggestions={suggestAreas(drop)}
-              onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
-            />
-          </GuidedStep>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 items-start">
-          <GuidedStep {...stepProps(stepOffset + 2)} lang={lang}>
-            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "Material Type" : lang === "mr" ? "मटेरियल टाइप" : "मटेरियल टाइप"}</label>
-            <select className={inputCls} style={{ ...inputStyle, color: material ? inputStyle.color : "#9AA3B0" }} value={material}
-              onChange={(e) => setMaterial(e.target.value)}>
-              <option value="" disabled style={{ color: "#9AA3B0" }}>{lang === "en" ? "Select material" : lang === "mr" ? "मटेरियल निवडा" : "मटेरियल चुनें"}</option>
-              {MATERIALS.map((m) => <option key={m} value={m} style={{ color: C.ink }}>{m === "अन्य" ? (ADD_MATERIAL_LABEL[lang] || ADD_MATERIAL_LABEL.hi) : materialLabel(m, lang)}</option>)}
-            </select>
-            {isOtherMaterial && (
-              <input className={inputCls} style={{ ...inputStyle, marginTop: 6 }} autoFocus
-                placeholder={lang === "en" ? "Type the material" : lang === "mr" ? "मटेरियल टाइप करा" : "मटेरियल टाइप करें"}
-                value={materialOther} onChange={(e) => setMaterialOther(e.target.value)} />
-            )}
-          </GuidedStep>
-          <GuidedStep {...stepProps(stepOffset + 3)} lang={lang}>
-            <label className="text-sm font-extrabold mb-1 block text-center" style={{ color: C.ink }}>{lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"}</label>
-            <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : lang === "mr" ? "उदा: 300 किलो" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
-          </GuidedStep>
         </div>
 
         {distance !== null && (
@@ -3823,14 +3714,54 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
           </div>
         )}
 
-        {advanceNoticeError && (
-          <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
-        )}
-
-        <button onClick={post} disabled={!canPost} className={`w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2 ${canPost ? "guided-submit-ready" : ""}`}
-          style={{ background: canPost ? C.success : "#E0E0E0", color: canPost ? "#fff" : "#9AA3B0" }}>
+        <button onClick={postNow} disabled={!canPostNow} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
+          style={{ background: canPostNow ? C.success : "#E0E0E0", color: canPostNow ? "#fff" : "#9AA3B0" }}>
           🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
         </button>
+
+        {!advanceOpen ? (
+          <button onClick={() => setAdvanceOpen(true)} className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 shadow-lg" style={{ background: C.marigoldDeep }}>
+            <CalendarClock size={18} color="#FFFFFF" className="shrink-0" />
+            <span className="text-sm font-black text-white">{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}</span>
+          </button>
+        ) : (
+          <div className="rounded-2xl p-3" style={{ background: C.marigold }}>
+            <label className="text-base font-extrabold mb-2 block text-center" style={{ color: C.ink }}>{lang === "en" ? "When do you need the vehicle?" : lang === "mr" ? "गाडी कधी हवी?" : "गाड़ी कब चाहिए?"}</label>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {[1, 2, 3].map((n) => {
+                const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+                const iso = d.toISOString().slice(0, 10);
+                const active = advanceDate === iso;
+                return (
+                  <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
+                    className="rounded-xl py-4 text-base font-bold text-center"
+                    style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.ink, border: active ? "none" : `1.5px solid ${C.line}` }}>
+                    {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : lang === "mr" ? `${n} दिवसांनी` : `${n} दिन बाद`}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
+              <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-xl px-4 py-4 flex items-center justify-center" style={inputStyle}>
+                <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
+              </button>
+            </div>
+            {advanceNoticeError && (
+              <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => { setAdvanceOpen(false); setAdvanceDate(""); setAdvanceTime(""); }} className="flex-1 rounded-xl py-3 font-bold text-sm" style={{ background: C.paper, color: C.ink, border: `1.5px solid ${C.line}` }}>
+                {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+              </button>
+              <button onClick={postAdvance} disabled={!canPostAdvance} className="flex-1 rounded-xl py-3 font-black text-sm text-white"
+                style={{ background: canPostAdvance ? C.marigoldDeep : "#E0E0E0", color: canPostAdvance ? "#fff" : "#9AA3B0" }}>
+                {lang === "en" ? "Confirm Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग कन्फर्म करा" : "एडवांस बुकिंग कन्फर्म करें"}
+              </button>
+            </div>
+            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
+          </div>
+        )}
       </div>
 
       {mapField && (
@@ -3845,7 +3776,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
           }}
         />
       )}
-      </div>
     </div>
   );
 }
@@ -4421,11 +4351,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   // right after a bid is accepted (see the onBidAccepted callbacks below)
   // until the menu is actually opened — see HamburgerHint.
   const [showBookingHint, setShowBookingHint] = useState(false);
-  // Tracks CustomerBooking's own bookingMode ('now' | 'advance', see
-  // onModeChange below) purely so the header knows whether the main
-  // Pickup/Drop/Weight page is on screen right now (vs. the separate
-  // Advance form) — that's the only place the hamburger menu shows.
-  const [customerBookingMode, setCustomerBookingMode] = useState(null);
   const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
   const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
   // Toggle between Current and Advance rides, shown as a bar in the header
@@ -4480,11 +4405,11 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   const headerRideBooking = rideView === "current"
     ? (activeBooking && !addingAnother ? activeBooking : null)
     : advanceBookings.find((ab) => ab.id === selectedAdvanceId) || null;
-  // The hamburger only shows on CustomerBooking's main "now" page (map +
-  // Pickup/Drop/Weight), not while it's showing the separate Advance form —
-  // i.e. the Current tab, no active/being-added ride, and CustomerBooking
-  // isn't in its Advance mode.
-  const showHamburger = rideView === "current" && (!activeBooking || addingAnother) && customerBookingMode !== "advance";
+  // The hamburger shows whenever the main booking page (map +
+  // Pickup/Drop/Weight, with the Advance ride panel just expanding in
+  // place on that same page) is what's on screen — i.e. the Current tab
+  // with no active/being-added ride.
+  const showHamburger = rideView === "current" && (!activeBooking || addingAnother);
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
@@ -4689,8 +4614,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
                 if (isFutureAdvance(booking.scheduledFor)) setShowBookingHint(true);
               }} />
           ) : (
-            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang}
-              onModeChange={setCustomerBookingMode} drivers={drivers} />
+            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} drivers={drivers} />
           )
         ) : (
           <div>
