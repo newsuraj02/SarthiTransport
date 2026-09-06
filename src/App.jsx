@@ -3660,20 +3660,32 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
     setPickup(""); setDrop(""); setWeight("");
     setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
   };
-  // A single submit action for both flows: if the Advance panel is open
-  // with a date and time actually chosen, this books a scheduled ride;
-  // otherwise it's an immediate one — no separate confirm step.
-  const post = () => {
+  // Book Now no longer posts straight away — it opens this list of vehicle
+  // types that can actually carry the entered weight (see VEHICLES.filter
+  // below), so the customer picks one explicitly instead of it being
+  // silently auto-selected. Tapping a vehicle in that list is what
+  // actually posts the load.
+  const [choosingVehicle, setChoosingVehicle] = useState(false);
+  // Takes an explicit vehicleKey (rather than reading the `vehicle` state
+  // closure) because the vehicle picker calls this in the same tap that
+  // also calls setVehicle — a state update isn't visible yet in that same
+  // synchronous call, so relying on `vehicle` here would still post
+  // whatever was auto-selected before the customer's actual tap.
+  const post = (vehicleKey) => {
     if (!canPost) return;
     const scheduling = advanceOpen && advanceDate && advanceTime;
     createLoad({
-      pickup, drop, vehicle, weight, distance, scheduledFor: scheduling ? `${advanceDate} ${advanceTime}` : null,
+      pickup, drop, vehicle: vehicleKey || vehicle, weight, distance, scheduledFor: scheduling ? `${advanceDate} ${advanceTime}` : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
     resetFields();
+    setChoosingVehicle(false);
     if (scheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
   };
+  // Smallest-capacity fit first (cheapest reasonable option up top), same
+  // ordering the old silent auto-select used.
+  const eligibleVehicles = VEHICLES.filter((v) => v.capacityKg >= (Number(weight) || 0)).sort((a, b) => a.capacityKg - b.capacityKg);
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -3747,11 +3759,45 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
         </div>
 
-        <button onClick={post} disabled={!canPost} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
+        <button onClick={() => setChoosingVehicle(true)} disabled={!canPost} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
           style={{ background: canPost ? C.success : "#E0E0E0", color: canPost ? "#fff" : "#9AA3B0" }}>
           🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
         </button>
       </div>
+
+      {choosingVehicle && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setChoosingVehicle(false)}>
+          <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[80vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
+              <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose a vehicle" : lang === "mr" ? "गाडी निवडा" : "गाड़ी चुनें"}</h3>
+              <button onClick={() => setChoosingVehicle(false)} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+            </div>
+            <div className="p-4 space-y-2 overflow-y-auto">
+              {eligibleVehicles.length === 0 ? (
+                <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
+                  {lang === "en" ? "No vehicle type can carry this weight." : lang === "mr" ? "इतक्या वजनासाठी कोणतीही गाडी उपलब्ध नाही." : "इतने वजन के लिए कोई गाड़ी उपलब्ध नहीं है।"}
+                </p>
+              ) : eligibleVehicles.map((v) => {
+                const onlineCount = drivers.filter((d) => d.online && d.vehicleSpec?.type === v.key).length;
+                return (
+                  <button key={v.key} onClick={() => post(v.key)} className="w-full flex items-center gap-3 rounded-xl p-3 text-left" style={{ border: `1.5px solid ${C.line}` }}>
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                      <Truck size={20} color={C.marigoldDeep} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{vehicleLabel(v, lang)}</div>
+                      <div className="text-xs" style={{ color: C.inkSoft }}>{vehicleCapacity(v, lang) || `${v.capacityKg} kg`}</div>
+                    </div>
+                    <div className="text-xs font-bold shrink-0" style={{ color: onlineCount > 0 ? C.success : C.inkSoft }}>
+                      {onlineCount} {lang === "en" ? "online" : lang === "mr" ? "ऑनलाइन" : "ऑनलाइन"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
