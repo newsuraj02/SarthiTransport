@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
-  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages,
+  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, Search, CalendarClock,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -1131,6 +1131,110 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
       <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFCC00", color: "#000000" }}>
         {lang === "en" ? "Tap to open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडण्यासाठी टॅप करा" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
+    </div>
+  );
+}
+
+// Live "browse" map on the Customer home screen — shows nearby ONLINE
+// drivers' real last-known GPS. No new tracking was needed for this: every
+// online driver already reports lastKnownLocation continuously (see
+// DriverApp's GPS effect), originally only for its own 100km bid-radius
+// check — this just reads that same, already-live field. A driver who
+// hasn't reported in NEARBY_DRIVER_STALE_MS is treated as gone (closed the
+// app, lost signal) rather than shown stuck in a stale spot.
+const NEARBY_DRIVER_STALE_MS = 5 * 60 * 1000;
+const NEARBY_DRIVER_RADIUS_KM = 25;
+const NEARBY_DRIVER_MAX = 20;
+
+function nearbyOnlineDrivers(drivers, customerLocation) {
+  const now = Date.now();
+  const fresh = (drivers || []).filter((d) => {
+    if (!d.online || d.blacklisted) return false;
+    const loc = d.lastKnownLocation;
+    if (!loc || loc.lat == null || loc.lng == null) return false;
+    return loc.updatedAt && now - loc.updatedAt < NEARBY_DRIVER_STALE_MS;
+  });
+  if (!customerLocation) return fresh.slice(0, NEARBY_DRIVER_MAX);
+  return fresh
+    .map((d) => ({ driver: d, km: haversineKm(customerLocation.lat, customerLocation.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) }))
+    .filter((x) => x.km <= NEARBY_DRIVER_RADIUS_KM)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, NEARBY_DRIVER_MAX)
+    .map((x) => x.driver);
+}
+
+// Pimpri-Chinchwad / Pune — same fallback default as MapPicker, used only
+// until the customer's own GPS fix comes in (or if it never does).
+const NEARBY_MAP_DEFAULT_CENTER = { lat: 18.6298, lng: 73.8131 };
+
+function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi" }) {
+  const { isLoaded, hasKey } = useGoogleMaps();
+  const nearby = nearbyOnlineDrivers(drivers, customerLocation);
+  const center = customerLocation || NEARBY_MAP_DEFAULT_CENTER;
+  const [mapInstance, setMapInstance] = useState(null);
+
+  useEffect(() => {
+    if (!mapInstance || !window.google?.maps) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    bounds.extend(center);
+    nearby.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
+    mapInstance.fitBounds(bounds, 48);
+    // Don't zoom in past a sane street-level view just because there are no
+    // (or one) nearby driver(s) to spread the bounds out.
+    const listener = window.google.maps.event.addListenerOnce(mapInstance, "bounds_changed", () => {
+      if (mapInstance.getZoom() > 15) mapInstance.setZoom(15);
+    });
+    return () => window.google.maps.event.removeListener(listener);
+  }, [mapInstance, center.lat, center.lng, nearby.length]);
+
+  if (!hasKey || !isLoaded) {
+    // Schematic fallback (no Maps key configured) — still plots each
+    // driver's REAL relative position around the customer, just without
+    // map tile imagery underneath.
+    const scale = 900; // px-per-degree, tuned for a city-block-ish spread
+    const toXY = (lat, lng) => ({ x: 50 + (lng - center.lng) * scale, y: 50 - (lat - center.lat) * scale });
+    return (
+      <div className="relative overflow-hidden" style={{ height, background: "#E5E5E5" }}>
+        <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+          {Array.from({ length: 8 }).map((_, i) => <line key={"h" + i} x1="0" y1={i * 14} x2="100" y2={i * 14} stroke="#D8D8D8" strokeWidth="0.4" />)}
+          {Array.from({ length: 8 }).map((_, i) => <line key={"v" + i} x1={i * 14} y1="0" x2={i * 14} y2="100" stroke="#D8D8D8" strokeWidth="0.4" />)}
+          <circle cx="50" cy="50" r="3" fill={C.success} stroke="#fff" strokeWidth="1" />
+          {nearby.map((d) => {
+            const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+            if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
+            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill={C.navy} stroke="#fff" strokeWidth="0.6" />;
+          })}
+        </svg>
+        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+          {lang === "en" ? `${nearby.length} vehicle${nearby.length === 1 ? "" : "s"} nearby` : lang === "mr" ? `जवळपास ${nearby.length} गाड्या` : `आस-पास ${nearby.length} गाड़ियां`}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ height }}>
+      <GoogleMap
+        mapContainerStyle={{ width: "100%", height: "100%" }}
+        onLoad={setMapInstance}
+        options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, clickableIcons: false, keyboardShortcuts: false, gestureHandling: "greedy" }}
+      >
+        <MarkerF
+          position={center}
+          icon={{ path: window.google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: C.success, fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 }}
+        />
+        {nearby.map((d) => (
+          <MarkerF
+            key={d.mobile || d.id}
+            position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }}
+            label={{ text: "🚚", fontSize: "13px" }}
+            icon={{
+              path: window.google.maps.SymbolPath.CIRCLE, scale: 13, fillColor: "#FFFFFF", fillOpacity: 1,
+              strokeColor: C.marigoldDeep, strokeWeight: 2, labelOrigin: new window.google.maps.Point(0, 0),
+            }}
+          />
+        ))}
+      </GoogleMap>
     </div>
   );
 }
@@ -3388,12 +3492,12 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeChange }) {
+function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeChange, drivers }) {
   const VEHICLES = vehicleTypes;
   const [bookingMode, setBookingMode] = useState(null); // null | 'now' | 'advance'
   // Reports the current mode up to CustomerApp so it can tell whether the
-  // "What do you need?" chooser (mode === null) is on screen right now —
-  // that's the only place the hamburger menu should show.
+  // Home screen (map + "Where to?" + Advance book, mode === null) is on
+  // screen right now — that's the only place the hamburger menu should show.
   useEffect(() => { onModeChange?.(bookingMode); }, [bookingMode]);
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -3470,6 +3574,28 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
     const t = setTimeout(() => { geocodeAddress(drop).then((loc) => { if (loc) setDropCoords(loc); }); }, 900);
     return () => clearTimeout(t);
   }, [drop, dropCoords, mapsReady]);
+
+  // Customer's own live position for the Home screen's nearby-vehicles map
+  // only — watched (throttled to one write every 5s, same as the driver/
+  // trip GPS effects elsewhere) only while the Home screen (map + "Where
+  // to?" + Advance book) is actually on screen, so it doesn't run at all
+  // once the customer moves into the booking form.
+  const [customerLocation, setCustomerLocation] = useState(null);
+  const lastHomeGpsRef = useRef(0);
+  useEffect(() => {
+    if (bookingMode !== null || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastHomeGpsRef.current < 5000) return;
+        lastHomeGpsRef.current = now;
+        setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [bookingMode]);
 
   // Shows the straight-line estimate immediately (no blank/loading state),
   // then silently upgrades to the real routed distance from Google's
@@ -3562,14 +3688,13 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
 
   if (!bookingMode) {
     return (
-      <div className="px-5 py-8 flex flex-col justify-center" style={{ minHeight: 420 }}>
-        <p className="text-base font-black text-center mb-8" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Book anything from a mini truck to a full-size truck — all across India." : lang === "mr" ? "संपूर्ण भारतात लहान ते मोठी गाडी बुक करा." : "पूरे भारत में छोटी से लेकर बड़ी गाड़ी तक बुक करें।"}</p>
-        <p className="text-sm font-extrabold text-center mb-5" style={{ color: C.ink }}>{lang === "en" ? "What do you need?" : lang === "mr" ? "तुम्हाला काय हवे आहे?" : "आपको क्या चाहिए?"}</p>
-        <div className="grid grid-cols-2 gap-3">
-          {/* App-wide convention: Immediate/Current ride = green, Advance ride = orange. */}
-          <button onClick={() => setBookingMode("now")} className="rounded-2xl p-7 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.success, minHeight: 160 }}>
-            <Truck size={30} color="#FFFFFF" />
-            <div className="text-base font-black text-white">⚡ {lang === "en" ? "Book a vehicle now" : lang === "mr" ? "आत्ता गाडी बुक करा" : "अभी गाड़ी बुक करें"}</div>
+      <div>
+        <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} />
+        <div className="px-5 pt-4 pb-8" style={{ marginTop: -22, position: "relative", zIndex: 1 }}>
+          <button onClick={() => setBookingMode("now")}
+            className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl shadow-lg mb-3 text-left" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
+            <Search size={20} color={C.marigoldDeep} className="shrink-0" />
+            <span className="text-base font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Where to?" : lang === "mr" ? "कुठे जायचं?" : "कहाँ जाना है?"}</span>
           </button>
           <button onClick={() => {
             // Pickup/Drop are shared state with "Book Now" -- if the customer
@@ -3579,10 +3704,11 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, onModeCh
             // scheduled one by accident.
             setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
             setBookingMode("advance");
-          }} className="rounded-2xl p-7 flex flex-col items-center justify-center gap-3 text-center" style={{ background: C.marigoldDeep, minHeight: 160 }}>
-            <Clock3 size={30} color="#fff" />
-            <div className="text-base font-black text-white">📅 {lang === "en" ? "Book ride in advance" : lang === "mr" ? "अ‍ॅडव्हान्स गाडी बुक करा" : "एडवांस गाड़ी बुक करें"}</div>
+          }} className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 shadow-lg" style={{ background: C.marigoldDeep }}>
+            <CalendarClock size={20} color="#FFFFFF" className="shrink-0" />
+            <span className="text-base font-black text-white">{lang === "en" ? "Advance book" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें"}</span>
           </button>
+          <p className="text-xs font-bold text-center mt-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Book anything from a mini truck to a full-size truck — all across India." : lang === "mr" ? "संपूर्ण भारतात लहान ते मोठी गाडी बुक करा." : "पूरे भारत में छोटी से लेकर बड़ी गाड़ी तक बुक करें।"}</p>
         </div>
       </div>
     );
@@ -4581,7 +4707,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
               }} />
           ) : (
             <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang}
-              onModeChange={setCustomerBookingMode} />
+              onModeChange={setCustomerBookingMode} drivers={drivers} />
           )
         ) : (
           <div>
