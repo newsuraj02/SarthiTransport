@@ -6412,7 +6412,7 @@ function StatTile({ label, value, color, onClick }) {
   return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${color}` }}>{content}</div>;
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionPct, minWallet, lang, onNavigate, onLogout }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionPct, minWallet, lang, onNavigate, onLogout, updateDriverKyc }) {
   const isToday = (b) => {
     const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
     if (!d) return false;
@@ -6426,19 +6426,14 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
   const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
   const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet);
-  // New signups today (drivers + customers) and drivers still inside their
-  // 30-day free trial — both derived live from createdAt, same source of
-  // truth as everywhere else trial/signup timing is used in the app.
-  const newDriversToday = drivers.filter(isToday);
+  // New customer signups today, and drivers still inside their 30-day free
+  // trial — both derived live from createdAt, same source of truth as
+  // everywhere else trial/signup timing is used in the app.
   const newCustomersToday = (customers || []).filter(isToday);
   const trialDrivers = drivers.filter((d) => isInTrial(d.createdAt));
 
   const todaysEarnings = (bookings || []).filter((b) => b.status === "Completed" && isToday(b)).reduce((s, b) => s + (b.fare || 0) * (commissionPct / 100), 0);
   const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b));
-  // Currently-open loads no driver has bid on yet — the core marketplace-
-  // health signal (not scoped to today, since a load that's sat with zero
-  // bids since yesterday is exactly the kind of thing admin needs to see).
-  const noBidsList = (bookings || []).filter((b) => b.status === "Bidding" && (!b.bids || b.bids.length === 0));
   // Any not-yet-finished booking scheduled for a future date, regardless of
   // whether it's still awaiting bids or already has a driver assigned.
   const advanceBookingsList = (bookings || []).filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed");
@@ -6447,6 +6442,11 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
   // its own Back button) showing the live record list behind that count —
   // a separate screen, not an inline panel on the dashboard itself.
   const [detailView, setDetailView] = useState(null);
+  // Which side of the merged New Registrations screen is showing — see
+  // detailView === "newRegistrations" below. Defaults to Driver since KYC
+  // approval (the thing that actually needs admin action) lives there;
+  // Customer is purely informational.
+  const [newRegTab, setNewRegTab] = useState("driver");
 
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
@@ -6517,33 +6517,6 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
         </div>
       ),
     },
-    noBids: {
-      title: lang === "en" ? "Loads with no bids yet" : lang === "mr" ? "बोली नसलेले लोड" : "बिना बोली वाले लोड",
-      emptyMsg: lang === "en" ? "Every open load has at least one bid." : lang === "mr" ? "प्रत्येक खुल्या लोडवर किमान एक बोली आली आहे." : "हर खुले लोड पर कम से कम एक बोली आ चुकी है।",
-      items: noBidsList,
-      renderItem: (b) => (
-        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.safety}` }}>
-          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.safety }}>{materialLabel(b.material, lang)} · {b.weight}{lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"} · {activityTime(b)}{b.scheduledFor ? ` · ${b.scheduledFor}` : ""}</div>
-        </div>
-      ),
-    },
-    newToday: {
-      title: lang === "en" ? "New registrations today" : lang === "mr" ? "आजचे नवीन रजिस्ट्रेशन" : "आज के नए रजिस्ट्रेशन",
-      emptyMsg: lang === "en" ? "No new signups today yet." : lang === "mr" ? "आज अद्याप कोणतेही नवीन साइनअप झाले नाही." : "आज तक कोई नया साइनअप नहीं हुआ।",
-      items: [...newDriversToday.map((d) => ({ ...d, _kind: "driver" })), ...newCustomersToday.map((c) => ({ ...c, _kind: "customer" }))],
-      renderItem: (p) => (
-        <div key={`${p._kind}-${p.id}`} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div>
-            <div className="text-xs font-bold" style={{ color: C.ink }}>{p.name}</div>
-            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{p.mobile}{p._kind === "driver" && p.vehicleSpec?.vehicleNumber ? ` · ${p.vehicleSpec.vehicleNumber}` : ""}</div>
-          </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: p._kind === "driver" ? C.marigoldDeep : C.navy }}>
-            {p._kind === "driver" ? (lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर") : (lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
-          </span>
-        </div>
-      ),
-    },
     trial: {
       title: lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर",
       emptyMsg: lang === "en" ? "No driver is currently in their free trial." : lang === "mr" ? "सध्या कोणताही ड्रायव्हर फ्री ट्रायलमध्ये नाही." : "फिलहाल कोई भी ड्राइवर फ्री ट्रायल में नहीं है।",
@@ -6561,6 +6534,50 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
       ),
     },
   };
+
+  // Merged "New Registrations" screen — replaces the old separate "Pending
+  // KYC approvals" tile/tab. Customer side is a plain informational list
+  // (a customer registration has no pending/incomplete state, so "today"
+  // is the only meaningful scope); Driver side embeds the full AdminKyc
+  // workflow as-is (Incomplete/Complete tabs, Approve/Block, WhatsApp
+  // nudge) — covering every driver still needing review, not just today's
+  // signups, since that's the whole point of consolidating KYC here.
+  if (detailView === "newRegistrations") {
+    return (
+      <div>
+        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"}</h2>
+        <div className="flex gap-2 mb-4">
+          <button onClick={() => setNewRegTab("customer")} className="flex-1 rounded-lg py-3 text-sm font-bold"
+            style={{ background: newRegTab === "customer" ? C.navy : C.paper, color: newRegTab === "customer" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "customer" ? C.navy : C.line}` }}>
+            {lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}
+          </button>
+          <button onClick={() => setNewRegTab("driver")} className="flex-1 rounded-lg py-3 text-sm font-bold"
+            style={{ background: newRegTab === "driver" ? C.navy : C.paper, color: newRegTab === "driver" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "driver" ? C.navy : C.line}` }}>
+            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{pendingApprovals > 0 ? ` (${pendingApprovals})` : ""}
+          </button>
+        </div>
+        {newRegTab === "customer" ? (
+          newCustomersToday.length === 0 ? (
+            <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No new customer signups today yet." : lang === "mr" ? "आज अद्याप कोणताही नवीन कस्टमर साइनअप झाला नाही." : "आज तक कोई नया कस्टमर साइनअप नहीं हुआ।"}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {newCustomersToday.map((c) => (
+                <div key={c.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />
+        )}
+      </div>
+    );
+  }
 
   if (detailView) {
     const page = detailPages[detailView];
@@ -6581,23 +6598,20 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
 
   return (
     <div>
-      {/* Most to least important: loads actively failing to get bids —
-          the core marketplace working or not, right now — comes first,
-          then other things admin must act on (KYC queue, at-risk wallets),
-          then today's health signals (cancellations, earnings, bookings,
-          capacity), then pipeline (advance bookings), then growth metrics
-          (signups, trial) last — those are useful context, not something
-          to act on today. */}
+      {/* Most to least important: New Registrations (drivers needing KYC
+          review, the thing admin must act on) comes first, then today's
+          health signals (at-risk wallets, cancellations, earnings,
+          bookings, capacity), then pipeline (advance bookings), then
+          growth metrics (trial) last — those are useful context, not
+          something to act on today. */}
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <StatTile label={lang === "en" ? "Loads with no bids yet" : lang === "mr" ? "बोली नसलेले लोड" : "बिना बोली वाले लोड"} value={noBidsList.length} color={noBidsList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("noBids")} />
-        <StatTile label={lang === "en" ? "Pending KYC approvals" : lang === "mr" ? "प्रलंबित KYC अप्रूव्हल" : "लंबित KYC अप्रूवल"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={onNavigate ? () => onNavigate("kyc") : undefined} />
+        <StatTile label={lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={() => setDetailView("newRegistrations")} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
         <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Today's earnings (commission)" : lang === "mr" ? "आजची कमाई (कमिशन)" : "आज की कमाई (कमीशन)"} value={fmt(todaysEarnings)} color={C.pimpri} onClick={onNavigate ? () => onNavigate("finance") : undefined} />
         <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
         <StatTile label={lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
         <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
-        <StatTile label={lang === "en" ? "New registrations today" : lang === "mr" ? "आजचे नवीन रजिस्ट्रेशन" : "आज के नए रजिस्ट्रेशन"} value={newDriversToday.length + newCustomersToday.length} color={C.pimpri} onClick={() => setDetailView("newToday")} />
         <StatTile label={lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
       </div>
 
@@ -7801,11 +7815,10 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
 
 function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications }) {
   const [tab, setTab] = useState("fleet");
-  // "kyc" is deliberately not in this list -- the KYC desk is reached only
-  // via the "Pending KYC approvals" tile on the Live Dashboard, not as a
-  // persistent top-level tab. The tab === "kyc" route below still exists,
-  // so that tile (and its onNavigate("kyc") call) keeps working exactly
-  // as before -- this only declutters the tab bar itself.
+  // "kyc" is deliberately not in this list -- KYC review now lives inside
+  // the Live Dashboard's "New Registrations" tile (see AdminFleet's
+  // detailView === "newRegistrations", Driver tab) instead of its own
+  // top-level tab or a separate "Pending KYC approvals" tile.
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren], ["callLogs", "कॉल लॉग्स", PhoneCall]];
   return (
     <div className="p-5">
@@ -7824,8 +7837,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} />}
-      {tab === "kyc" && <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
