@@ -3612,10 +3612,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
         />
 
-        <div>
-          <label className="text-sm font-extrabold mb-1 block" style={{ color: C.ink }}>{lang === "en" ? "Weight (kg)" : lang === "mr" ? "वजन (किलोग्राम)" : "वजन (किलोग्राम)"}</label>
-          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 300 kg" : lang === "mr" ? "उदा: 300 किलो" : "जैसे: 300 किग्रा"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
-        </div>
+        <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Weight (kg)" : lang === "mr" ? "वजन (किलोग्राम)" : "वजन (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
 
         {distance !== null && (
           <div className="rounded-lg p-2.5 shadow-sm flex items-center gap-2" style={{ background: "#F5F3EE", border: `1px solid ${C.line}` }}>
