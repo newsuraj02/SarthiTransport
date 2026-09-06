@@ -4,13 +4,12 @@ import App from "./App.jsx";
 import { GoogleMapsProvider } from "./googleMapsContext.jsx";
 import "./index.css";
 
-// Registers the service worker (also used for background push, see
-// firebaseClient.js) as soon as the app loads, not just once a user grants
-// notification permission — so the app-shell caching benefit applies to
-// every visitor from their first visit.
+// Registers the service worker as soon as the app loads, so the app-shell
+// caching benefit (instant repeat visits, works on a flaky/offline
+// connection) applies to every visitor from their first visit.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/firebase-messaging-sw.js").catch((e) => console.error("[sw] register failed", e));
+    navigator.serviceWorker.register("/service-worker.js").catch((e) => console.error("[sw] register failed", e));
   });
 }
 

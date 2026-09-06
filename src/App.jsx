@@ -14,7 +14,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
 
 // ---------------- design tokens ----------------
 // Bright/high-visibility flat palette — legible in direct outdoor sunlight
@@ -700,45 +700,6 @@ function playBeepTone() {
   } catch { /* audio not available */ }
 }
 
-// Wires up real push notifications for ride events (bid accepted, trip
-// completed, new bid) — collectionName/docId is where the FCM device token
-// gets saved ("customers"/mobile or "drivers"/mobile) so the Cloud Function
-// in functions/index.js knows who to push to. Silently re-issues a token on
-// every load if permission was already granted in an earlier session, so it
-// stays fresh without asking again; `enable()` is what the banner's button
-// calls to trigger the actual browser permission prompt on first use.
-function useRideNotifications(collectionName, docId, lang) {
-  const [permission, setPermission] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
-  const [toast, setToast] = useState(null);
-
-  const enable = async () => {
-    const result = await requestPushToken();
-    if (result.ok && docId) {
-      patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
-      setPermission("granted");
-    } else {
-      setPermission(result.reason === "unsupported" ? "unsupported" : (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
-    }
-  };
-
-  useEffect(() => {
-    if (typeof Notification === "undefined" || Notification.permission !== "granted" || !docId) return;
-    requestPushToken().then((result) => {
-      if (result.ok) patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
-    });
-    let unsub;
-    listenForegroundPush((payload) => {
-      playBeepTone();
-      setToast(payload.notification || null);
-      setTimeout(() => setToast(null), 5000);
-    }).then((fn) => { unsub = fn; });
-    return () => unsub?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionName, docId]);
-
-  return { permission, enable, toast };
-}
-
 // Tracks which Admin Announcements this specific customer/driver hasn't
 // seen yet — "seen" persists locally (per role+mobile) as the newest
 // createdAt millis they've been shown, so it survives app restarts and
@@ -761,22 +722,6 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole) {
   return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen };
 }
 
-function NotificationBanner({ permission, onEnable, lang }) {
-  if (permission === "granted" || permission === "unsupported") return null;
-  if (permission === "denied") {
-    return (
-      <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-        {lang === "en" ? "Notifications are blocked in your browser settings — enable them there to get ride updates." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये नोटिफिकेशन बंद आहेत — राइड अपडेट मिळवण्यासाठी तिथे चालू करा." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — राइड अपडेट पाने के लिए वहां चालू करें।"}
-      </div>
-    );
-  }
-  return (
-    <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-3.5 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
-      <Bell size={14} color={C.marigoldDeep} />
-      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Turn on notifications for ride updates" : lang === "mr" ? "राइड अपडेटसाठी नोटिफिकेशन चालू करा" : "राइड अपडेट के लिए नोटिफिकेशन चालू करें"}</span>
-    </button>
-  );
-}
 
 // Post-signup language picker — shown once, right after a brand-new
 // Customer/Driver signup completes (see the langPromptPending gate in
@@ -803,31 +748,6 @@ function LanguageSelect({ onSelect }) {
             <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{o.sub}</div>
           </button>
         ))}
-      </div>
-    </div>
-  );
-}
-
-// One-shot celebratory overlay for the single most emotionally significant
-// moment in the app — a bid getting accepted (customer books a vehicle, or a
-// driver's quote wins the load). Self-dismissing (no button, nothing to
-// tap away), non-blocking (pointer-events: none, so it never delays the
-// customer/driver from acting on what's now on screen underneath it), and
-// pure CSS animation — no JS animation loop, just the toast-pop keyframe
-// already used elsewhere plus one extra pulse ring, so it costs nothing on
-// a slow phone. Callers own the `show` boolean and should clear it after
-// ~1.4s (matches the animation's own duration).
-function SuccessBurst({ show, text, lang }) {
-  if (!show) return null;
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center" style={{ pointerEvents: "none" }}>
-      <div className="toast-pop flex flex-col items-center gap-2">
-        <div className="success-burst-ring rounded-full flex items-center justify-center" style={{ width: 84, height: 84, background: C.success }}>
-          <CheckCircle2 size={44} color="#FFFFFF" strokeWidth={2.5} />
-        </div>
-        {text && (
-          <div className="rounded-full px-4 py-1.5 shadow-lg text-sm font-black" style={{ background: C.ink, color: "#FFFFFF" }}>{text}</div>
-        )}
       </div>
     </div>
   );
@@ -896,18 +816,6 @@ function AnnouncementAlertBanner({ announcement, onView, onDismiss, lang }) {
   );
 }
 
-function ForegroundToast({ toast }) {
-  if (!toast) return null;
-  return (
-    <div className="mx-5 mb-2 rounded-lg p-2.5 flex items-center gap-2" style={{ background: C.navy }}>
-      <Bell size={14} color={C.marigold} />
-      <div>
-        <div className="text-[11px] font-bold text-white">{toast.title}</div>
-        {toast.body && <div className="text-[10px]" style={{ color: "#FFFFFF" }}>{toast.body}</div>}
-      </div>
-    </div>
-  );
-}
 
 // Driver/Customer "Admin Announcements" inbox (hamburger menu, both roles) —
 // past and present broadcasts sent from AdminNotify (functions/index.js:
@@ -4361,17 +4269,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   // right after a bid is accepted (see the onBidAccepted callbacks below)
   // until the menu is actually opened — see HamburgerHint.
   const [showBookingHint, setShowBookingHint] = useState(false);
-  // The single most emotionally significant moment in the app — see
-  // SuccessBurst. Fires every time acceptBid succeeds, immediate or advance.
-  const [showAcceptedBurst, setShowAcceptedBurst] = useState(false);
-  const fireAcceptedBurst = () => {
-    setShowAcceptedBurst(true);
-    setTimeout(() => setShowAcceptedBurst(false), 1400);
-  };
-  // Fires when a driver actually confirms (AwaitingDriver -> Ongoing) one of
-  // this customer's bookings — the real "you're booked" moment.
-  const [showConfirmedBurst, setShowConfirmedBurst] = useState(false);
-  const awaitingIdsRef = useRef(null);
   // Tracks CustomerBooking's own bookingMode (see onModeChange below) purely
   // so the header knows whether the "What do you need?" chooser is on
   // screen right now — that's the only place the hamburger menu shows.
@@ -4392,17 +4289,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   // lands (myBookings.length changes).
   const [addingAnother, setAddingAnother] = useState(false);
   useEffect(() => { setAddingAnother(false); }, [myBookings.length]);
-  // Watch this customer's AwaitingDriver bookings — when one leaves that set
-  // by becoming Ongoing, the driver confirmed: celebrate.
-  const awaitingSig = myBookings.filter((b) => b.status === "AwaitingDriver").map((b) => b.id).join(",");
-  useEffect(() => {
-    const now = new Set(awaitingSig ? awaitingSig.split(",") : []);
-    if (awaitingIdsRef.current === null) { awaitingIdsRef.current = now; return; }
-    const confirmed = [...awaitingIdsRef.current].some((id) => !now.has(id) && myBookings.find((b) => b.id === id)?.status === "Ongoing");
-    if (confirmed) { setShowConfirmedBurst(true); setTimeout(() => setShowConfirmedBurst(false), 1400); }
-    awaitingIdsRef.current = now;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awaitingSig]);
   // A booking scheduled for a future date shouldn't hog the home screen or
   // block posting today's ride — it stays reachable via the Current/Advance
   // toggle in the header instead (see rideView below).
@@ -4454,7 +4340,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
   const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
-  const rideNotifications = useRideNotifications("customers", customerMobile, lang);
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer");
 
   // Real GPS live-tracking, mirroring the driver's own — shares the
@@ -4528,8 +4413,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
 
   return (
     <>
-      <SuccessBurst show={showAcceptedBurst} text={lang === "en" ? "Request sent!" : lang === "mr" ? "विनंती पाठवली!" : "अनुरोध भेजा गया!"} lang={lang} />
-      <SuccessBurst show={showConfirmedBurst} text={lang === "en" ? "Driver confirmed!" : lang === "mr" ? "ड्रायव्हरने पुष्टी केली!" : "ड्राइवर ने पुष्टि की!"} lang={lang} />
       <FloatingHamburgerHint show={showBookingHint && !showHamburger} onOpenMenu={() => { setMenuOpen(true); setShowBookingHint(false); }} lang={lang} />
       <div className="flex-1 overflow-y-auto relative">
         {headerHasContent && (
@@ -4593,8 +4476,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
             {showHamburger ? null : <div className="w-9 h-9 shrink-0" />}
           </div>
         )}
-        <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />
-        <ForegroundToast toast={rideNotifications.toast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
           onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
           onDismiss={announcementAlerts.markSeen} lang={lang} />
@@ -4656,7 +4537,6 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
                 // (activeBooking includes AwaitingDriver). For an advance load,
                 // nudge the hamburger too so they know that's where it lands
                 // once the driver confirms.
-                fireAcceptedBurst();
                 if (isFutureAdvance(booking.scheduledFor)) setShowBookingHint(true);
               }} />
           ) : (
@@ -4668,7 +4548,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
             {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
               <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid}
                 driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
-                drivers={drivers} lang={lang} onBidAccepted={() => { fireAcceptedBurst(); setShowBookingHint(true); }} />
+                drivers={drivers} lang={lang} onBidAccepted={() => setShowBookingHint(true)} />
             ) : (
               <div className="px-5 py-5">
                 {advanceBookings.length === 0 ? (
@@ -4959,56 +4839,6 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
     return Date.now() >= lockStart && Date.now() < scheduled.getTime();
   });
 
-  // Detects the moment a load this driver quoted on resolves against them —
-  // by the time that happens the load has already left openLoads entirely
-  // (it's no longer status "Bidding"), so this watches the full bookings
-  // list rather than openLoads to still catch it and surface a note. Also
-  // catches the opposite transition (a bid this driver just placed landing
-  // in Firestore) to confirm it with a brief toast instead of a permanent
-  // box taking over the card.
-  const myPendingBidIdsRef = useRef(null);
-  const [bidRejectedToast, setBidRejectedToast] = useState(false);
-  const [bidSentToast, setBidSentToast] = useState(false);
-  // The driver-side equivalent of CustomerApp's showAcceptedBurst — see
-  // SuccessBurst. Fires the moment one of this driver's pending bids
-  // resolves in their own favor (the load leaves Bidding with their name on
-  // it), same detection shape as lostOne just below.
-  const [bidWonBurst, setBidWonBurst] = useState(false);
-  const bidStatusKey = bookings.map((b) => `${b.id}:${b.status}:${b.driverName || ""}`).join(",");
-  useEffect(() => {
-    const currentPending = new Set(bookings.filter((b) => b.status === "Bidding" && b.bids?.some((x) => x.driverName === driver.name)).map((b) => b.id));
-    if (myPendingBidIdsRef.current === null) {
-      myPendingBidIdsRef.current = currentPending;
-      return;
-    }
-    const prevPending = myPendingBidIdsRef.current;
-    const lostOne = [...prevPending].some((id) => {
-      if (currentPending.has(id)) return false;
-      const b = bookings.find((x) => x.id === id);
-      return b && b.status !== "Bidding" && b.driverName !== driver.name;
-    });
-    if (lostOne) {
-      setBidRejectedToast(true);
-      setTimeout(() => setBidRejectedToast(false), 4000);
-    }
-    const wonOne = [...prevPending].some((id) => {
-      if (currentPending.has(id)) return false;
-      const b = bookings.find((x) => x.id === id);
-      return b && b.status !== "Bidding" && b.driverName === driver.name;
-    });
-    if (wonOne) {
-      setBidWonBurst(true);
-      setTimeout(() => setBidWonBurst(false), 1400);
-    }
-    const sentOne = [...currentPending].some((id) => !prevPending.has(id));
-    if (sentOne) {
-      setBidSentToast(true);
-      setTimeout(() => setBidSentToast(false), 2500);
-    }
-    myPendingBidIdsRef.current = currentPending;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bidStatusKey]);
-
   // Real GPS live-tracking: while this driver has an active trip, share their
   // actual device location so the customer (and admin fleet map) see it live.
   // Also runs whenever the driver is simply Online (not on a trip) so
@@ -5123,24 +4953,9 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
 
   return (
     <div className={`px-5 pb-5 ${myTrip ? "pt-2" : "pt-5"}`}>
-      <SuccessBurst show={bidWonBurst} text={lang === "en" ? "You won the load!" : lang === "mr" ? "लोड मिळाला!" : "लोड मिल गया!"} lang={lang} />
       {myTrip && !myTrip.loadingStartedAt && (
         <div className="mb-4">
           <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
-        </div>
-      )}
-
-      {bidSentToast && (
-        <div className="toast-pop rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.success }}>
-          <CheckCircle2 size={16} color="#fff" />
-          <span className="text-[11px] font-bold text-white">{lang === "en" ? "Bid sent, waiting for customer's response." : lang === "mr" ? "बोली पाठवली, ग्राहकाच्या उत्तराची वाट पाहत आहे." : "बोली भेज दी, ग्राहक के जवाब का इंतज़ार है।"}</span>
-        </div>
-      )}
-
-      {bidRejectedToast && (
-        <div className="toast-pop rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.safety }}>
-          <XCircle size={14} color="#FFFFFF" />
-          <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Customer chose someone else for one of your quotes." : lang === "mr" ? "तुमच्या एका कोटेशनसाठी ग्राहकाने दुसऱ्याला निवडले." : "आपके किसी कोटेशन के लिए ग्राहक ने किसी और को चुन लिया।"}</span>
         </div>
       )}
 
@@ -6087,7 +5902,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
   // future date — kept out of myTrip (above) so today's home screen isn't
   // stuck showing a trip that's days away, but still reachable here.
   const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
-  const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver");
 
   // Badge + "View your Booking here" callout, shown the moment one of this
@@ -6248,8 +6062,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
             <X size={14} color="#000000" strokeWidth={3} />
           </button>
         )}
-        {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />}
-        <ForegroundToast toast={rideNotifications.toast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
           onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
           onDismiss={announcementAlerts.markSeen} lang={lang} />

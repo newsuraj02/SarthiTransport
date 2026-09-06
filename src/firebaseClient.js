@@ -2,7 +2,6 @@ import { initializeApp } from "firebase/app";
 import { initializeFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
-import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 const firebaseConfig = {
@@ -134,12 +133,13 @@ export async function initiateMaskedCall(bookingId) {
   }
 }
 
-// Sends a real FCM push (see functions/index.js: sendAdminNotification) to
-// one driver/customer (target = their mobile/doc id), a specific list of
-// them (target = an array of mobiles, e.g. Admin's KYC desk "Send to all
-// incomplete" button), or every driver/customer (target = "all" or
+// Logs an in-app announcement (see functions/index.js: sendAdminNotification)
+// for one driver/customer (target = their mobile/doc id), a specific list
+// of them (target = an array of mobiles, e.g. Admin's KYC desk "Send to
+// all incomplete" button), or every driver/customer (target = "all" or
 // omitted), depending on audience ("driver", the default, or "customer").
-// Always resolves (never throws) with { ok, reason? }.
+// Purely in-app now — no push is sent. Always resolves (never throws)
+// with { ok, reason? }.
 export async function sendAdminNotification(target, message, audience = "driver") {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
@@ -171,53 +171,4 @@ export async function resetPinAfterPhoneVerify(role, newPin) {
     console.error("[forgotPin] reset callable failed", e);
     return { ok: false, reason: "error" };
   }
-}
-
-// Push notifications don't touch Firestore/Storage security rules, so the
-// messaging instance can live on any one app — reuses the customer app
-// rather than creating a fourth.
-let messagingInstance = null;
-async function getMessagingIfSupported() {
-  if (!hasConfig) return null;
-  if (messagingInstance) return messagingInstance;
-  try {
-    if (!(await isSupported())) return null;
-    messagingInstance = getMessaging(customerApp);
-    return messagingInstance;
-  } catch (e) {
-    console.error("[messaging] unsupported", e);
-    return null;
-  }
-}
-
-// Asks the browser for notification permission, registers the FCM service
-// worker, and returns a device token to save on the customer/driver's own
-// Firestore doc — a Cloud Function reads that token to push real
-// notifications for ride events (see functions/index.js).
-export async function requestPushToken() {
-  const messaging = await getMessagingIfSupported();
-  if (!messaging) return { ok: false, reason: "unsupported" };
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return { ok: false, reason: permission };
-  try {
-    const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
-    const token = await getToken(messaging, {
-      vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
-      serviceWorkerRegistration: registration,
-    });
-    return token ? { ok: true, token } : { ok: false, reason: "no-token" };
-  } catch (e) {
-    console.error("[messaging] token error", e);
-    return { ok: false, reason: "error" };
-  }
-}
-
-// Shows an in-app toast for pushes that arrive while the tab is already
-// open — browsers only auto-display a system notification for background
-// tabs, so foreground messages need to be handled manually. Returns an
-// unsubscribe function, or null if messaging isn't available.
-export async function listenForegroundPush(onMessageReceived) {
-  const messaging = await getMessagingIfSupported();
-  if (!messaging) return null;
-  return onMessage(messaging, onMessageReceived);
 }
