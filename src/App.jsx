@@ -3588,9 +3588,23 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
         {advanceOpen && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
+              {/* A native date input can't take a real placeholder — this
+                  overlay label (matching Pickup/Drop's grey placeholder
+                  colour, #9CA3AF — Tailwind's default) sits on top and lets
+                  clicks pass through (pointer-events-none) to still open
+                  the native picker; it disappears once a date is chosen and
+                  the input's own text (now dark, like Pickup's typed text)
+                  takes over. */}
+              <div className="relative">
+                <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
+                {!advanceDate && (
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#9CA3AF" }}>
+                    {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
+                  </span>
+                )}
+              </div>
               <button type="button" onClick={() => setShowTimeModal(true)} className={`${inputCls} flex items-center justify-center`} style={inputStyle}>
-                <span className="truncate">{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
+                <span className="truncate" style={{ color: advanceTime ? C.ink : "#9CA3AF" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
               </button>
             </div>
             {advanceNoticeError && (
