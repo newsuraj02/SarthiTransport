@@ -1178,6 +1178,39 @@ function nearbyOnlineDrivers(drivers, customerLocation) {
 // until the customer's own GPS fix comes in (or if it never does).
 const NEARBY_MAP_DEFAULT_CENTER = { lat: 18.6298, lng: 73.8131 };
 
+// Classic map-pin drop for the customer's own location — a teardrop shape
+// anchored at its bottom point (so it visually "sits on" the exact spot),
+// instead of a plain centered dot.
+function customerPinIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">` +
+    `<path d="M15 0C6.7 0 0 6.7 0 15c0 11.25 15 25 15 25s15-13.75 15-25C30 6.7 23.3 0 15 0z" fill="${C.success}" stroke="#fff" stroke-width="1.5"/>` +
+    `<circle cx="15" cy="15" r="6" fill="#fff"/></svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(30, 40),
+    anchor: new window.google.maps.Point(15, 40),
+  };
+}
+
+// A small truck/tempo silhouette in a white badge, in place of a plain dot
+// or emoji, for each nearby online driver — closer to how ride-hailing
+// apps show an actual vehicle shape on the map.
+function driverTruckIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">` +
+    `<circle cx="17" cy="17" r="16" fill="#fff" stroke="${C.marigoldDeep}" stroke-width="2"/>` +
+    `<g transform="translate(6,11)">` +
+    `<rect x="0" y="0" width="14" height="8" rx="1.2" fill="${C.navy}"/>` +
+    `<path d="M14 2h5.5L22 6v2H14z" fill="${C.navy}"/>` +
+    `<circle cx="4.5" cy="9" r="2.1" fill="${C.navy}"/>` +
+    `<circle cx="17.5" cy="9" r="2.1" fill="${C.navy}"/>` +
+    `</g></svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(34, 34),
+    anchor: new window.google.maps.Point(17, 17),
+  };
+}
+
 function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const nearby = nearbyOnlineDrivers(drivers, customerLocation);
@@ -1230,19 +1263,12 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
         onLoad={setMapInstance}
         options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, clickableIcons: false, keyboardShortcuts: false, gestureHandling: "greedy" }}
       >
-        <MarkerF
-          position={center}
-          icon={{ path: window.google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: C.success, fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 }}
-        />
+        <MarkerF position={center} icon={customerPinIcon()} />
         {nearby.map((d) => (
           <MarkerF
             key={d.mobile || d.id}
             position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }}
-            label={{ text: "🚚", fontSize: "13px" }}
-            icon={{
-              path: window.google.maps.SymbolPath.CIRCLE, scale: 13, fillColor: "#FFFFFF", fillOpacity: 1,
-              strokeColor: C.marigoldDeep, strokeWeight: 2, labelOrigin: new window.google.maps.Point(0, 0),
-            }}
+            icon={driverTruckIcon()}
           />
         ))}
       </GoogleMap>
