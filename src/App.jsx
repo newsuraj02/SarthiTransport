@@ -166,7 +166,17 @@ function formatTimeSlot(hhmm, lang) {
   const period = TIME_PERIODS.find((p) => p.slots.includes(hhmm)) || TIME_PERIODS[0];
   return `${periodLabel(period, lang)} ${formatSlotShort(hhmm, lang)}`;
 }
-function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
+function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
+  // Mirrors the date picker's own past-date block: if the chosen date is
+  // today, any slot whose hour has already passed (or is the current hour)
+  // is disabled — same "no past" rule, just applied at the hour level too.
+  const isToday = selectedDate === new Date().toISOString().slice(0, 10);
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const isPastSlot = (hhmm) => {
+    if (!isToday) return false;
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + m <= nowMinutes;
+  };
   const defaultPeriod = (TIME_PERIODS.find((p) => p.slots.includes(value)) || TIME_PERIODS[0]).key;
   const [activePeriod, setActivePeriod] = useState(defaultPeriod);
   const [pending, setPending] = useState(value || "");
@@ -216,10 +226,15 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang }) {
           <div className="grid grid-cols-2 gap-2 mb-5">
             {period.slots.map((s) => {
               const active = pending === s;
+              const past = isPastSlot(s);
               return (
-                <button key={s} type="button" onClick={() => { setPending(s); setSlotPicked(true); }}
+                <button key={s} type="button" disabled={past} onClick={() => { setPending(s); setSlotPicked(true); }}
                   className="rounded-lg py-3.5 text-base font-bold text-left px-4"
-                  style={{ background: active ? C.marigoldDeep : C.paper, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.ink }}>
+                  style={{
+                    background: past ? "#F0F0F0" : active ? C.marigoldDeep : C.paper,
+                    border: `1.5px solid ${past ? "#E0E0E0" : active ? C.marigoldDeep : C.line}`,
+                    color: past ? "#B0B0B0" : active ? "#FFFFFF" : C.ink,
+                  }}>
                   {period.icon} {formatSlotShort(s, lang)}
                 </button>
               );
@@ -3612,7 +3627,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
             {advanceNoticeError && (
               <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
             )}
-            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
+            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
           </div>
         )}
 
