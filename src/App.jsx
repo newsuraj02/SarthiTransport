@@ -497,6 +497,26 @@ function geocodeAddress(text) {
   });
 }
 
+// The reverse of geocodeAddress — turns a tapped lat/lng (e.g. a point
+// picked on the live nearby-vehicles map) back into a readable address.
+// Falls back to free OSM reverse-geocoding if Google Maps isn't loaded.
+async function reverseGeocode(lat, lng) {
+  if (window.google?.maps?.Geocoder) {
+    return new Promise((resolve) => {
+      new window.google.maps.Geocoder().geocode({ location: { lat, lng } }, (results, status) => {
+        resolve(status === "OK" && results?.[0] ? stripPlusCode(results[0].formatted_address) : null);
+      });
+    });
+  }
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`, { headers: { Accept: "application/json" } });
+    const data = await res.json();
+    return stripPlusCode(data?.display_name) || null;
+  } catch {
+    return null;
+  }
+}
+
 // Google's Geocoder/Places can return a Plus Code (e.g. "JQ38+PRM, Wakad,
 // Pimpri-Chinchwad") as part of an address for areas without a formal
 // street address — not something a customer/driver can read as a place
@@ -1211,11 +1231,19 @@ function driverTruckIcon() {
   };
 }
 
-function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi" }) {
+function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const nearby = nearbyOnlineDrivers(drivers, customerLocation);
   const center = customerLocation || NEARBY_MAP_DEFAULT_CENTER;
   const [mapInstance, setMapInstance] = useState(null);
+
+  const openInGoogleMaps = () => window.open(`https://www.google.com/maps/search/?api=1&query=${center.lat},${center.lng}`, "_blank");
+  const OpenInMapsButton = () => (
+    <button type="button" onClick={openInGoogleMaps}
+      className="absolute bottom-2 right-2 text-xs font-black px-2.5 py-1.5 rounded-full shadow-lg" style={{ background: "#FFCC00", color: "#000000" }}>
+      {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
+    </button>
+  );
 
   useEffect(() => {
     if (!mapInstance || !window.google?.maps) return;
@@ -1252,15 +1280,17 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
         <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
           {lang === "en" ? `${nearby.length} vehicle${nearby.length === 1 ? "" : "s"} nearby` : lang === "mr" ? `जवळपास ${nearby.length} गाड्या` : `आस-पास ${nearby.length} गाड़ियां`}
         </div>
+        <OpenInMapsButton />
       </div>
     );
   }
 
   return (
-    <div style={{ height }}>
+    <div className="relative" style={{ height }}>
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
         onLoad={setMapInstance}
+        onClick={(e) => onMapClick?.(e.latLng.lat(), e.latLng.lng())}
         options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, clickableIcons: false, keyboardShortcuts: false, gestureHandling: "greedy" }}
       >
         <MarkerF position={center} icon={customerPinIcon()} />
@@ -1272,6 +1302,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           />
         ))}
       </GoogleMap>
+      <OpenInMapsButton />
     </div>
   );
 }
@@ -3273,7 +3304,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions, onSuggestionTap, lang = "hi" }) {
+function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions, onSuggestionTap, onFocus, onBlur, lang = "hi" }) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -3317,8 +3348,8 @@ function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholde
       <div className="relative w-full">
         <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
           onChange={(e) => { onChange(e); setDropdownOpen(true); }}
-          onFocus={() => setDropdownOpen(true)}
-          onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); }} />
+          onFocus={() => { setDropdownOpen(true); onFocus?.(); }}
+          onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
         {value && (
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
             className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
@@ -3524,6 +3555,22 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
+  // Which field (Pickup or Drop) the cursor was last in — tapping a point
+  // on the live map fills THAT field with the tapped location, same as if
+  // it had been typed. Deliberately sticky (only ever set on focus, never
+  // cleared on blur): tapping the map blurs whatever input was focused
+  // before the map's own click event fires, so a "currently focused"
+  // version would already be null by the time this runs. Falls back to
+  // whichever of the two is still empty if neither was ever focused.
+  const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | null
+  const onMapClick = async (lat, lng) => {
+    const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
+    if (!field) return;
+    const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setPickupSelected(true); }
+    else { setDrop(name); setDropCoords({ lat, lng }); setDropSelected(true); }
+  };
+
   // If the customer typed Pickup/Drop by hand without tapping an
   // Autocomplete suggestion, pickupCoords/dropCoords stay null — geocode
   // the typed text after a short pause so the distance estimate (and the
@@ -3633,7 +3680,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
 
   return (
     <div className="pt-0 pb-8">
-      <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} />
+      <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} />
       <div className="px-5 pt-4 space-y-4">
         {advanceOpen && (
           <div className="space-y-3">
@@ -3675,6 +3722,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
           placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
           suggestions={suggestAreas(pickup)}
           onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); setPickupSelected(false); }}
+          onFocus={() => setActiveField("pickup")}
         />
 
         <LocationField
@@ -3686,6 +3734,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
           placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
           suggestions={suggestAreas(drop)}
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
+          onFocus={() => setActiveField("drop")}
         />
 
         <div className="grid grid-cols-2 gap-3">
