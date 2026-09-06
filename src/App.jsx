@@ -3535,7 +3535,7 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers, advanceOpen, setAdvanceOpen }) {
+function CustomerBooking({ createLoad, requestDriverDirectly, vehicleTypes, lastBooking, lang, drivers, advanceOpen, setAdvanceOpen }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -3660,32 +3660,67 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
     setPickup(""); setDrop(""); setWeight("");
     setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
   };
-  // Book Now no longer posts straight away — it opens this list of vehicle
-  // types that can actually carry the entered weight (see VEHICLES.filter
-  // below), so the customer picks one explicitly instead of it being
-  // silently auto-selected. Tapping a vehicle in that list is what
-  // actually posts the load.
+  // Book Now no longer posts straight away — it opens a list of actual
+  // KYC-approved, online drivers who can carry this weight, so the
+  // customer can request one directly (see requestDriver below) instead
+  // of just posting a type and waiting for bids to trickle in. "Post to
+  // all drivers" (post(), below) stays as a fallback for when no one
+  // suitable is listed, or the customer would rather not pick one driver.
   const [choosingVehicle, setChoosingVehicle] = useState(false);
-  // Takes an explicit vehicleKey (rather than reading the `vehicle` state
-  // closure) because the vehicle picker calls this in the same tap that
-  // also calls setVehicle — a state update isn't visible yet in that same
-  // synchronous call, so relying on `vehicle` here would still post
-  // whatever was auto-selected before the customer's actual tap.
-  const post = (vehicleKey) => {
+  const [requestError, setRequestError] = useState("");
+  const isScheduling = advanceOpen && !!advanceDate && !!advanceTime;
+  const scheduledForValue = isScheduling ? `${advanceDate} ${advanceTime}` : null;
+
+  // Same eligibility rules the driver-side auto-bid effect uses (online,
+  // approved, not blacklisted, rate card set up, capacity fits the load,
+  // within the bid radius of Pickup) — shown with each driver's own
+  // computed fare (from their rate card, see computeAutoBid) so this is a
+  // real quoted price per driver, not a guess.
+  const eligibleDrivers = drivers
+    .filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted && rateCardComplete(d.rateCard))
+    .filter((d) => {
+      const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+      const loadKg = Number(weight) || 0;
+      if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+      if (pickupCoords && d.lastKnownLocation) {
+        const maxKm = isScheduling ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+        if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > maxKm) return false;
+      }
+      return true;
+    })
+    .map((d) => ({ driver: d, fare: computeAutoBid(d.rateCard, { distance, weight }) }))
+    .filter((x) => x.fare && x.fare > 0)
+    .sort((a, b) => a.fare - b.fare);
+
+  const requestDriver = (driverName) => {
+    setRequestError("");
+    const err = requestDriverDirectly({
+      pickup, drop, weight, distance, scheduledFor: scheduledForValue,
+      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+      driverName,
+    });
+    if (err) { setRequestError(err); return; }
+    resetFields();
+    setChoosingVehicle(false);
+    if (isScheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
+  };
+
+  // Fallback: post an open load any eligible driver can bid on, instead of
+  // requesting one specific driver — picks the smallest vehicle type that
+  // still fits the weight, same as the old silent auto-select did.
+  const post = () => {
     if (!canPost) return;
-    const scheduling = advanceOpen && advanceDate && advanceTime;
+    const smallFit = VEHICLES.filter((v) => v.capacityKg >= (Number(weight) || 0)).sort((a, b) => a.capacityKg - b.capacityKg)[0];
     createLoad({
-      pickup, drop, vehicle: vehicleKey || vehicle, weight, distance, scheduledFor: scheduling ? `${advanceDate} ${advanceTime}` : null,
+      pickup, drop, vehicle: smallFit?.key || vehicle, weight, distance, scheduledFor: scheduledForValue,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
     resetFields();
     setChoosingVehicle(false);
-    if (scheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
+    if (isScheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
   };
-  // Smallest-capacity fit first (cheapest reasonable option up top), same
-  // ordering the old silent auto-select used.
-  const eligibleVehicles = VEHICLES.filter((v) => v.capacityKg >= (Number(weight) || 0)).sort((a, b) => a.capacityKg - b.capacityKg);
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -3769,31 +3804,36 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setChoosingVehicle(false)}>
           <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[80vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
-              <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose a vehicle" : lang === "mr" ? "गाडी निवडा" : "गाड़ी चुनें"}</h3>
+              <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose a driver" : lang === "mr" ? "ड्रायव्हर निवडा" : "ड्राइवर चुनें"}</h3>
               <button onClick={() => setChoosingVehicle(false)} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
             </div>
             <div className="p-4 space-y-2 overflow-y-auto">
-              {eligibleVehicles.length === 0 ? (
+              {requestError && (
+                <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{requestError}</div>
+              )}
+              {eligibleDrivers.length === 0 ? (
                 <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
-                  {lang === "en" ? "No vehicle type can carry this weight." : lang === "mr" ? "इतक्या वजनासाठी कोणतीही गाडी उपलब्ध नाही." : "इतने वजन के लिए कोई गाड़ी उपलब्ध नहीं है।"}
+                  {lang === "en" ? "No online driver can carry this load right now." : lang === "mr" ? "सध्या हा लोड नेऊ शकेल असा कोणताही ऑनलाइन ड्रायव्हर नाही." : "अभी इस लोड को ले जा सकने वाला कोई ऑनलाइन ड्राइवर नहीं है।"}
                 </p>
-              ) : eligibleVehicles.map((v) => {
-                const onlineCount = drivers.filter((d) => d.online && d.vehicleSpec?.type === v.key).length;
-                return (
-                  <button key={v.key} onClick={() => post(v.key)} className="w-full flex items-center gap-3 rounded-xl p-3 text-left" style={{ border: `1.5px solid ${C.line}` }}>
+              ) : eligibleDrivers.map(({ driver: d, fare }) => (
+                <button key={d.mobile || d.id} onClick={() => requestDriver(d.name)} className="w-full flex items-center gap-3 rounded-xl p-3 text-left" style={{ border: `1.5px solid ${C.line}` }}>
+                  <SafeImage src={d.photo?.url} alt="" className="w-11 h-11 rounded-xl object-cover shrink-0" fallback={
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
                       <Truck size={20} color={C.marigoldDeep} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{vehicleLabel(v, lang)}</div>
-                      <div className="text-xs" style={{ color: C.inkSoft }}>{vehicleCapacity(v, lang) || `${v.capacityKg} kg`}</div>
-                    </div>
-                    <div className="text-xs font-bold shrink-0" style={{ color: onlineCount > 0 ? C.success : C.inkSoft }}>
-                      {onlineCount} {lang === "en" ? "online" : lang === "mr" ? "ऑनलाइन" : "ऑनलाइन"}
-                    </div>
-                  </button>
-                );
-              })}
+                  } />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
+                    <div className="text-xs truncate" style={{ color: C.inkSoft }}>{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
+                  </div>
+                  <div className="text-sm font-black shrink-0" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(fare)}</div>
+                </button>
+              ))}
+            </div>
+            <div className="p-4 pt-0 shrink-0">
+              <button onClick={post} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: C.paper, color: C.ink, border: `1.5px solid ${C.line}` }}>
+                {lang === "en" ? "Post to all drivers instead" : lang === "mr" ? "त्याऐवजी सर्व ड्रायव्हरना पोस्ट करा" : "इसके बजाय सभी ड्राइवरों को पोस्ट करें"}
+              </button>
             </div>
           </div>
         </div>
@@ -4367,7 +4407,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
+function CustomerApp({ bookings, createLoad, requestDriverDirectly, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -4658,7 +4698,7 @@ function CustomerApp({ bookings, createLoad, drivers, vehicleTypes, cancelBookin
                 if (isFutureAdvance(booking.scheduledFor)) setShowBookingHint(true);
               }} />
           ) : (
-            <CustomerBooking createLoad={createLoad} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} drivers={drivers}
+            <CustomerBooking createLoad={createLoad} requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} drivers={drivers}
               advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} />
           )
         ) : (
@@ -8182,6 +8222,36 @@ export default function App() {
     }).catch((e) => console.error(e));
   };
 
+  // Direct-request booking: the customer picks one specific driver from
+  // the vehicle-picker list instead of posting an open "Bidding" load —
+  // skips straight to "AwaitingDriver" targeting that driver, exactly
+  // like acceptBid does once a customer picks a bid, just without an
+  // actual bid having been placed first. Priced the same way that
+  // driver's own auto-bid would be (their rate card, see computeAutoBid),
+  // since there's no negotiation step in this flow. Returns an error
+  // message string to show the customer, or null on success.
+  const requestDriverDirectly = ({ pickup, drop, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, driverName }) => {
+    const targetDriver = drivers.find((d) => d.name === driverName);
+    if (!targetDriver) {
+      return lang === "en" ? "That driver is no longer available." : lang === "mr" ? "तो ड्रायव्हर आता उपलब्ध नाही." : "वह ड्राइवर अब उपलब्ध नहीं है।";
+    }
+    const bookingId = genId();
+    const conflict = findDriverLoadConflict(targetDriver, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
+    if (conflict) return conflict;
+    const fare = computeAutoBid(targetDriver.rateCard, { distance, weight });
+    if (!fare || fare <= 0) {
+      return lang === "en" ? "This driver hasn't set up pricing for this kind of load yet." : lang === "mr" ? "या ड्रायव्हरने या प्रकारच्या लोडसाठी अजून दर सेट केलेले नाहीत." : "इस ड्राइवर ने इस तरह के लोड के लिए अभी तक दरें सेट नहीं की हैं।";
+    }
+    createDoc("bookings", bookingId, {
+      pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare,
+      pendingDriverName: driverName, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
+      driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
+      pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null, dropLat: dropLat ?? null, dropLng: dropLng ?? null,
+      driverLocation: null,
+    }).catch((e) => console.error(e));
+    return null;
+  };
+
   // Authoritative re-check of the auto-bid eligibility rules (proximity,
   // vehicle-capacity window, commitment conflict) — this is what actually
   // stops the write, not just the client-side effect that calls it.
@@ -8482,7 +8552,7 @@ export default function App() {
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
-          <CustomerApp bookings={bookings} createLoad={createLoad} drivers={drivers} vehicleTypes={vehicleTypes}
+          <CustomerApp bookings={bookings} createLoad={createLoad} requestDriverDirectly={requestDriverDirectly} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
             adminNotifications={adminNotifications} />
