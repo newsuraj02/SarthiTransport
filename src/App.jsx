@@ -3549,7 +3549,7 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
   })();
 
   const canPostNow = !!(pickup.trim() && drop.trim() && weight.trim());
-  const canPostAdvance = canPostNow && !!advanceDate && !!advanceTime && !advanceNoticeError;
+  const canPost = canPostNow && !advanceNoticeError;
 
   useEffect(() => {
     const w = Number(weight);
@@ -3563,24 +3563,19 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
     setPickup(""); setDrop(""); setWeight("");
     setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
   };
-  const postNow = () => {
-    if (!canPostNow) return;
+  // A single submit action for both flows: if the Advance panel is open
+  // with a date and time actually chosen, this books a scheduled ride;
+  // otherwise it's an immediate one — no separate confirm step.
+  const post = () => {
+    if (!canPost) return;
+    const scheduling = advanceOpen && advanceDate && advanceTime;
     createLoad({
-      pickup, drop, vehicle, weight, distance, scheduledFor: null,
+      pickup, drop, vehicle, weight, distance, scheduledFor: scheduling ? `${advanceDate} ${advanceTime}` : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
     resetFields();
-  };
-  const postAdvance = () => {
-    if (!canPostAdvance) return;
-    createLoad({
-      pickup, drop, vehicle, weight, distance, scheduledFor: `${advanceDate} ${advanceTime}`,
-      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
-      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
-    });
-    resetFields();
-    setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false);
+    if (scheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
@@ -3592,20 +3587,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
       <div className="px-5 pt-4 space-y-4">
         {advanceOpen && (
           <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3].map((n) => {
-                const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
-                const iso = d.toISOString().slice(0, 10);
-                const active = advanceDate === iso;
-                return (
-                  <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
-                    className="rounded-lg py-2.5 text-sm font-bold text-center"
-                    style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.ink, border: active ? "none" : `1px solid ${C.line}` }}>
-                    {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : lang === "mr" ? `${n} दिवसांनी` : `${n} दिन बाद`}
-                  </button>
-                );
-              })}
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
               <button type="button" onClick={() => setShowTimeModal(true)} className={`${inputCls} flex items-center justify-center`} style={inputStyle}>
@@ -3615,15 +3596,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
             {advanceNoticeError && (
               <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
             )}
-            <div className="flex gap-2">
-              <button onClick={() => { setAdvanceOpen(false); setAdvanceDate(""); setAdvanceTime(""); }} className="flex-1 rounded-lg py-2.5 font-bold text-sm" style={{ background: C.paper, color: C.ink, border: `1px solid ${C.line}` }}>
-                {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
-              </button>
-              <button onClick={postAdvance} disabled={!canPostAdvance} className="flex-1 rounded-lg py-2.5 font-black text-sm text-white"
-                style={{ background: canPostAdvance ? C.marigoldDeep : "#E0E0E0", color: canPostAdvance ? "#fff" : "#9AA3B0" }}>
-                {lang === "en" ? "Confirm Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग कन्फर्म करा" : "एडवांस बुकिंग कन्फर्म करें"}
-              </button>
-            </div>
             <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
           </div>
         )}
@@ -3659,8 +3631,8 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
           </div>
         )}
 
-        <button onClick={postNow} disabled={!canPostNow} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
-          style={{ background: canPostNow ? C.success : "#E0E0E0", color: canPostNow ? "#fff" : "#9AA3B0" }}>
+        <button onClick={post} disabled={!canPost} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
+          style={{ background: canPost ? C.success : "#E0E0E0", color: canPost ? "#fff" : "#9AA3B0" }}>
           🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
         </button>
       </div>
