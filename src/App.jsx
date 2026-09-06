@@ -3590,6 +3590,44 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
     <div className="pt-0 pb-8">
       <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} />
       <div className="px-5 pt-4 space-y-4">
+        {advanceOpen && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              {[1, 2, 3].map((n) => {
+                const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+                const iso = d.toISOString().slice(0, 10);
+                const active = advanceDate === iso;
+                return (
+                  <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
+                    className="rounded-lg py-2.5 text-sm font-bold text-center"
+                    style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.ink, border: active ? "none" : `1px solid ${C.line}` }}>
+                    {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : lang === "mr" ? `${n} दिवसांनी` : `${n} दिन बाद`}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
+              <button type="button" onClick={() => setShowTimeModal(true)} className={`${inputCls} flex items-center justify-center`} style={inputStyle}>
+                <span className="truncate">{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
+              </button>
+            </div>
+            {advanceNoticeError && (
+              <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => { setAdvanceOpen(false); setAdvanceDate(""); setAdvanceTime(""); }} className="flex-1 rounded-lg py-2.5 font-bold text-sm" style={{ background: C.paper, color: C.ink, border: `1px solid ${C.line}` }}>
+                {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+              </button>
+              <button onClick={postAdvance} disabled={!canPostAdvance} className="flex-1 rounded-lg py-2.5 font-black text-sm text-white"
+                style={{ background: canPostAdvance ? C.marigoldDeep : "#E0E0E0", color: canPostAdvance ? "#fff" : "#9AA3B0" }}>
+                {lang === "en" ? "Confirm Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग कन्फर्म करा" : "एडवांस बुकिंग कन्फर्म करें"}
+              </button>
+            </div>
+            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
+          </div>
+        )}
+
         <LocationField
           lang={lang}
           value={pickup}
@@ -3625,45 +3663,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers,
           style={{ background: canPostNow ? C.success : "#E0E0E0", color: canPostNow ? "#fff" : "#9AA3B0" }}>
           🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
         </button>
-
-        {advanceOpen && (
-          <div className="rounded-2xl p-3" style={{ background: C.marigold }}>
-            <label className="text-base font-extrabold mb-2 block text-center" style={{ color: C.ink }}>{lang === "en" ? "When do you need the vehicle?" : lang === "mr" ? "गाडी कधी हवी?" : "गाड़ी कब चाहिए?"}</label>
-            <div className="grid grid-cols-3 gap-2 mb-2">
-              {[1, 2, 3].map((n) => {
-                const d = new Date(Date.now() + n * 24 * 60 * 60 * 1000);
-                const iso = d.toISOString().slice(0, 10);
-                const active = advanceDate === iso;
-                return (
-                  <button key={n} type="button" onClick={() => setAdvanceDate(iso)}
-                    className="rounded-xl py-4 text-base font-bold text-center"
-                    style={{ background: active ? C.marigoldDeep : C.paper, color: active ? "#fff" : C.ink, border: active ? "none" : `1.5px solid ${C.line}` }}>
-                    {lang === "en" ? `+${n} day${n > 1 ? "s" : ""}` : lang === "mr" ? `${n} दिवसांनी` : `${n} दिन बाद`}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} className={inputCls} style={inputStyle} />
-              <button type="button" onClick={() => setShowTimeModal(true)} className="rounded-xl px-4 py-4 flex items-center justify-center" style={inputStyle}>
-                <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Select Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
-              </button>
-            </div>
-            {advanceNoticeError && (
-              <div className="rounded-lg p-2.5 mb-2 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
-            )}
-            <div className="flex gap-2">
-              <button onClick={() => { setAdvanceOpen(false); setAdvanceDate(""); setAdvanceTime(""); }} className="flex-1 rounded-xl py-3 font-bold text-sm" style={{ background: C.paper, color: C.ink, border: `1.5px solid ${C.line}` }}>
-                {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
-              </button>
-              <button onClick={postAdvance} disabled={!canPostAdvance} className="flex-1 rounded-xl py-3 font-black text-sm text-white"
-                style={{ background: canPostAdvance ? C.marigoldDeep : "#E0E0E0", color: canPostAdvance ? "#fff" : "#9AA3B0" }}>
-                {lang === "en" ? "Confirm Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग कन्फर्म करा" : "एडवांस बुकिंग कन्फर्म करें"}
-              </button>
-            </div>
-            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} />
-          </div>
-        )}
       </div>
     </div>
   );
