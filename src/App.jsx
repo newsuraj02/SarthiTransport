@@ -6430,7 +6430,16 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, commissionP
   // trial — both derived live from createdAt, same source of truth as
   // everywhere else trial/signup timing is used in the app.
   const newCustomersToday = (customers || []).filter(isToday);
-  const trialDrivers = drivers.filter((d) => isInTrial(d.createdAt));
+  // isInTrial alone also matched drivers who just verified their phone
+  // and never went any further (no name, no KYC, no rate card) — cluttering
+  // this list with abandoned signups nobody can actually act on. Only
+  // count a driver as "in trial" here once they've completed every step
+  // that actually lets them take loads: basic details (name set, not just
+  // the placeholder-name-equals-mobile a fresh signup starts with), KYC
+  // approved, and rate setup (RateSetup only ever writes rateCard once
+  // both Heavy and Light sections are complete, so its mere presence is a
+  // reliable "done" signal).
+  const trialDrivers = drivers.filter((d) => isInTrial(d.createdAt) && d.name && d.name !== d.mobile && d.kyc === "Approved" && d.rateCard);
 
   const todaysEarnings = (bookings || []).filter((b) => b.status === "Completed" && isToday(b)).reduce((s, b) => s + (b.fare || 0) * (commissionPct / 100), 0);
   const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b));
