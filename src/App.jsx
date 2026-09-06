@@ -3223,7 +3223,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, placeholder, onUseCurrentLocation, locating, suggestions, onSuggestionTap, lang = "hi" }) {
+function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions, onSuggestionTap, lang = "hi" }) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -3264,7 +3264,6 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
 
   return (
     <div>
-      <label className="text-lg font-extrabold mb-2 block text-center" style={{ color: C.ink }}>{label}</label>
       <div className="relative w-full">
         <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
           onChange={(e) => { onChange(e); setDropdownOpen(true); }}
@@ -3295,13 +3294,6 @@ function LocationField({ label, value, onChange, onPlaceSelected, mapsReady, pla
           </div>
         )}
       </div>
-      {onUseCurrentLocation && (
-        <div className="mt-2">
-          <button type="button" onClick={onUseCurrentLocation} disabled={locating} className="w-full flex items-center justify-center gap-1.5 rounded-xl py-5 text-base font-bold" style={{ background: C.success, color: "#fff" }}>
-            <Navigation size={16} /> {locating ? (lang === "en" ? "Locating..." : lang === "mr" ? "शोधत आहोत..." : "ढूंढ रहे हैं...") : (lang === "en" ? "Use My Current Location" : lang === "mr" ? "माझे सध्याचे लोकेशन वापरा" : "मेरी वर्तमान लोकेशन इस्तेमाल करें")}
-          </button>
-        </div>
-      )}
       {suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
           {suggestions.map((a) => (
@@ -3542,35 +3534,6 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
   const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupSelected(true); };
   const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropSelected(true); };
 
-  const [locatingPickup, setLocatingPickup] = useState(false);
-  const useMyCurrentLocation = () => {
-    if (!navigator.geolocation || locatingPickup) return;
-    setLocatingPickup(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setPickupCoords({ lat: latitude, lng: longitude });
-        setPickupSelected(true);
-        if (mapsReady && window.google) {
-          new window.google.maps.Geocoder().geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
-            setPickup(status === "OK" && results?.[0] ? stripPlusCode(results[0].formatted_address) : `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
-            setLocatingPickup(false);
-          });
-        } else {
-          try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`, { headers: { Accept: "application/json" } });
-            const data = await res.json();
-            setPickup(stripPlusCode(data?.display_name) || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
-          } catch {
-            setPickup(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
-          }
-          setLocatingPickup(false);
-        }
-      },
-      () => setLocatingPickup(false)
-    );
-  };
-
   // Minimum lead-time rule for Advance bookings, scaled by load weight —
   // heavier loads need more notice to actually line up a driver.
   const advanceNoticeError = (() => {
@@ -3629,21 +3592,17 @@ function CustomerBooking({ createLoad, vehicleTypes, lastBooking, lang, drivers 
       <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} />
       <div className="px-5 pt-4 space-y-4">
         <LocationField
-          label={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}
           lang={lang}
           value={pickup}
           onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupSelected(false); }}
           onPlaceSelected={onPickupPlaceSelected}
           mapsReady={mapsReady}
           placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
-          onUseCurrentLocation={useMyCurrentLocation}
-          locating={locatingPickup}
           suggestions={suggestAreas(pickup)}
           onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); setPickupSelected(false); }}
         />
 
         <LocationField
-          label={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}
           lang={lang}
           value={drop}
           onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropSelected(false); }}
