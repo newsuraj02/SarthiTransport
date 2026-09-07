@@ -5796,7 +5796,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : "");
   const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
   const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
-  const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg || "");
+  // vehicleSpec.capacityKg is stored as a number (see resolveVehicleTypeKey
+  // below) -- String(...) here so this always starts as a string, since
+  // canSubmit/kycStepCompleted below call .trim() on it. Skipping this cast
+  // crashed the whole KYC screen (capacityKg.trim is not a function) for
+  // any driver whose vehicleSpec already had a numeric capacityKg set --
+  // e.g. reopening "Settings (KYC & Vehicle)" after a first submission.
+  const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg != null ? String(driver.vehicleSpec.capacityKg) : "");
   const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "");
 
   // Auto-fills capacity from VEHICLE_MODEL_SPECS the moment the typed
