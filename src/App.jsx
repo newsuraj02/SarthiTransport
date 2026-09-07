@@ -3853,7 +3853,7 @@ function RideTypeBanner({ booking, lang }) {
 
 // Shows a single active (Bidding or Ongoing) booking — the customer's main
 // page focuses on this one card instead of a separate "My Rides" tab.
-function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driverVehicle, drivers, lang, onAddAnother, onBidAccepted }) {
+function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassignAwaitingDriver, driverVehicle, drivers, lang, onAddAnother, onBidAccepted }) {
   const VEHICLES = vehicleTypes;
   const [selectedBid, setSelectedBid] = useState(null);
   const [acceptError, setAcceptError] = useState("");
@@ -3884,6 +3884,33 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
   const bidsListRef = useRef(null);
   useFlipListAnimation(bidsListRef, displayBids.map((x) => x.id));
 
+  // 1-minute countdown while waiting on a directly-requested driver (see
+  // the AwaitingDriver branch below, where it's shown inside the clock
+  // icon) — once it hits 0, reassignAwaitingDriver retargets the booking
+  // at the next eligible driver with a similar-capacity vehicle and this
+  // restarts. Computed unconditionally, same reasoning as sortedBids
+  // above, so this hook is always called in the same order regardless of
+  // which branch below actually renders.
+  const isAwaiting = b.status === "AwaitingDriver";
+  const [secondsLeft, setSecondsLeft] = useState(60);
+  const reassignedForRef = useRef(null);
+  useEffect(() => {
+    if (!isAwaiting) return;
+    const startMs = b.acceptedAt?.toMillis ? b.acceptedAt.toMillis() : Date.now();
+    const tick = () => {
+      const left = Math.max(0, 60 - Math.floor((Date.now() - startMs) / 1000));
+      setSecondsLeft(left);
+      if (left === 0 && reassignedForRef.current !== b.pendingDriverName) {
+        reassignedForRef.current = b.pendingDriverName;
+        reassignAwaitingDriver?.(b.id);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAwaiting, b.id, b.pendingDriverName, b.acceptedAt]);
+
   const shareTrip = () => {
     const text = lang === "en"
       ? `My goods are moving via Apna Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
@@ -3906,7 +3933,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
             </div>
           )}
           <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2 guided-submit-ready" style={{ background: C.navy }}>
-            <Clock3 size={22} color="#FFFFFF" />
+            <span className="text-base font-black" style={{ color: "#FFFFFF" }}>{secondsLeft}</span>
           </div>
           <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for Driver's Confirmation" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
           <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{vehicleLabel(pdVeh, lang) || b.pendingDriverName}{b.fare ? ` · ${fmt(b.fare)}` : ""}</div>
@@ -4383,7 +4410,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, requestDriverDirectly, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
+function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -4663,7 +4690,7 @@ function CustomerApp({ bookings, requestDriverDirectly, drivers, vehicleTypes, c
         )}
         {rideView === "current" ? (
           activeBooking && !addingAnother ? (
-            <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
+            <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} reassignAwaitingDriver={reassignAwaitingDriver} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
               onAddAnother={() => setAddingAnother(true)}
               onBidAccepted={(booking) => {
                 // The bid isn't booked yet — it's now "AwaitingDriver", shown
@@ -4680,7 +4707,7 @@ function CustomerApp({ bookings, requestDriverDirectly, drivers, vehicleTypes, c
         ) : (
           <div>
             {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
-              <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid}
+              <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} reassignAwaitingDriver={reassignAwaitingDriver}
                 driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
                 drivers={drivers} lang={lang} onBidAccepted={() => setShowBookingHint(true)} />
             ) : (
@@ -8027,6 +8054,50 @@ export default function App() {
     return null;
   };
 
+  // Shared by the 1-minute auto-reassign timeout (see ActiveRide/
+  // reassignAwaitingDriver below) and a driver's manual Reject or
+  // can't-take-it-after-all (see driverRespondBooking) — retargets a
+  // booking at the next eligible driver with a similar-capacity vehicle
+  // instead of leaving it in a dead "Bidding" state that nothing browses
+  // anymore now that pricing/auto-bid is paused. `declinedBy` is every
+  // driver to exclude (already tried + the one just being dropped).
+  // Restarts the 60-second clock on success; falls back to "Bidding"
+  // (pendingDriverName cleared) if literally no one else is eligible —
+  // the customer can still Cancel from there.
+  const retargetToNextDriver = (b, declinedBy) => {
+    const loadKg = Number(b.weight) || 0;
+    const next = drivers.find((d) => {
+      if (declinedBy.includes(d.name)) return false;
+      if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+      const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+      if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+      if (b.pickupLat != null && d.lastKnownLocation) {
+        const maxKm = isFutureAdvance(b.scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+        if (haversineKm(d.lastKnownLocation.lat, d.lastKnownLocation.lng, b.pickupLat, b.pickupLng) > maxKm) return false;
+      }
+      if (findDriverLoadConflict(d, { id: b.id, scheduledFor: b.scheduledFor }, bookings, vehicleTypes, lang)) return false;
+      return true;
+    });
+    if (!next) {
+      patchDoc("bookings", b.id, { status: "Bidding", pendingDriverName: null, pendingBidId: null, acceptedAt: null, declinedBy }).catch((e) => console.error(e));
+      return;
+    }
+    patchDoc("bookings", b.id, {
+      status: "AwaitingDriver", pendingDriverName: next.name, pendingBidId: genId("B"),
+      vehicle: next.vehicleSpec?.type || b.vehicle, declinedBy, acceptedAt: serverTimestamp(),
+    }).catch((e) => console.error(e));
+  };
+
+  // Called by ActiveRide's 1-minute countdown (see the AwaitingDriver
+  // branch) when a directly-requested driver hasn't responded in time.
+  // Does nothing if the booking has since moved on (driver already
+  // responded, customer cancelled).
+  const reassignAwaitingDriver = (bookingId) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b || b.status !== "AwaitingDriver") return;
+    retargetToNextDriver(b, [...(b.declinedBy || []), b.pendingDriverName].filter(Boolean));
+  };
+
   // Authoritative re-check of the auto-bid eligibility rules (proximity,
   // vehicle-capacity window, commitment conflict) — this is what actually
   // stops the write, not just the client-side effect that calls it.
@@ -8095,27 +8166,20 @@ export default function App() {
 
   // Driver's response to a customer-accepted bid (runs on the pending
   // driver's own device). accept -> Ongoing (+ OTP, commission cut, freeze
-  // their other bids); reject -> back to Bidding, their bid removed and
-  // their name added to declinedBy so auto-bid won't re-offer it.
+  // their other bids); reject -> retargeted straight at the next eligible
+  // driver (see retargetToNextDriver), not left in "Bidding" for no one
+  // to ever pick up now that pricing/auto-bid is paused.
   const driverRespondBooking = (bookingId, accept) => {
     const b = bookings.find((x) => x.id === bookingId);
     if (!b || b.status !== "AwaitingDriver" || b.pendingDriverName !== driver?.name) return null;
     if (!accept) {
-      patchDoc("bookings", bookingId, {
-        status: "Bidding",
-        bids: (b.bids || []).filter((x) => x.driverName !== driver.name),
-        declinedBy: [...(b.declinedBy || []), driver.name],
-        pendingDriverName: null, pendingBidId: null, acceptedAt: null,
-      }).catch((e) => console.error(e));
+      retargetToNextDriver(b, [...(b.declinedBy || []), driver.name]);
       return null;
     }
     const conflict = findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor, hours: b.hours }, bookings, vehicleTypes, lang);
     if (conflict) {
-      // Can't take it after all — bounce it back to Bidding like a reject.
-      patchDoc("bookings", bookingId, {
-        status: "Bidding", bids: (b.bids || []).filter((x) => x.driverName !== driver.name),
-        declinedBy: [...(b.declinedBy || []), driver.name], pendingDriverName: null, pendingBidId: null, acceptedAt: null,
-      }).catch((e) => console.error(e));
+      // Can't take it after all — retarget it like a reject.
+      retargetToNextDriver(b, [...(b.declinedBy || []), driver.name]);
       return conflict;
     }
     const otp = String(Math.floor(1000 + Math.random() * 9000));
@@ -8327,7 +8391,7 @@ export default function App() {
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
-          <CustomerApp bookings={bookings} requestDriverDirectly={requestDriverDirectly} drivers={drivers} vehicleTypes={vehicleTypes}
+          <CustomerApp bookings={bookings} requestDriverDirectly={requestDriverDirectly} reassignAwaitingDriver={reassignAwaitingDriver} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
             adminNotifications={adminNotifications} />
