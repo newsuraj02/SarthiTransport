@@ -3700,7 +3700,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions, onSuggestionTap, onFocus, onBlur, lang = "hi" }) {
+function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions, onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi" }) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -3734,10 +3734,20 @@ function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholde
       onPlaceSelected({ name: stripPlusCode(r.formatted_address || p.description), lat: loc.lat(), lng: loc.lng() });
     });
   };
+  const selectRecent = (r) => {
+    setDropdownOpen(false);
+    onPlaceSelected({ name: r.name, lat: r.lat, lng: r.lng });
+  };
 
   const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16 };
   const showDropdown = dropdownOpen && predictions.length > 0;
+  // Shown instead of the live-predictions dropdown, only while the field is
+  // focused and still empty — the moment there's real input, predictions
+  // (once they arrive) take over instead. Mirrors the common ride-hailing-
+  // app pattern of surfacing recent addresses before the customer types
+  // anything, rather than only ever showing them once they start searching.
+  const showRecents = dropdownOpen && !value.trim() && (recentItems?.length > 0);
 
   return (
     <div>
@@ -3768,6 +3778,17 @@ function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholde
                 </button>
               );
             })}
+          </div>
+        )}
+        {showRecents && (
+          <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+            {recentItems.map((r, i) => (
+              <button key={i} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectRecent(r)}
+                className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
+                <Clock3 size={14} color={C.inkSoft} className="mt-0.5 shrink-0" />
+                <span className="text-xs font-bold leading-snug" style={{ color: C.ink }}>{r.name}</span>
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -3931,7 +3952,7 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestDriverDirectly, vehicleTypes, lastBooking, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission }) {
+function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -4146,6 +4167,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, lastBooking, lan
           suggestions={suggestAreas(pickup)}
           onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); setPickupSelected(false); }}
           onFocus={() => setActiveField("pickup")}
+          recentItems={recentPickups}
         />
 
         <LocationField
@@ -4829,6 +4851,22 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
   // load to bid on) — a customer must only ever see their own, so every
   // lookup below filters to this customer's mobile number first.
   const myBookings = bookings.filter((b) => b.customerMobile === customerMobile);
+  // Last 3 distinct pickup addresses this customer has actually used
+  // before, coordinates included (from that booking's own pickupLat/Lng —
+  // no re-geocoding needed) — shown as a quick "recent" list the moment
+  // they tap into the Pickup field, before typing anything, mirroring the
+  // common ride-hailing-app pattern. myBookings is already newest-first
+  // (see subscribeCollection's default createdAt-desc ordering), so the
+  // first occurrence of a given address is always its most recent use.
+  const recentPickups = [];
+  const seenPickupNames = new Set();
+  for (const b of myBookings) {
+    const name = b.pickup?.trim();
+    if (!name || seenPickupNames.has(name) || b.pickupLat == null || b.pickupLng == null) continue;
+    seenPickupNames.add(name);
+    recentPickups.push({ name, lat: b.pickupLat, lng: b.pickupLng });
+    if (recentPickups.length >= 3) break;
+  }
   // Posting a new ride while another one is already active/advance-booked —
   // see the "Back" button on ActiveRide below, which flips this back on to
   // return to the booking form. Cleared the moment a new booking actually
@@ -5119,7 +5157,7 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
                 if (isFutureAdvance(booking.scheduledFor)) setShowBookingHint(true);
               }} />
           ) : (
-            <CustomerBooking requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} drivers={drivers}
+            <CustomerBooking requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
               advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} locationPermission={locationPermission} />
           )
         ) : (
