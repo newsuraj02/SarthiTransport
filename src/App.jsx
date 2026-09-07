@@ -5470,21 +5470,6 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
         className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
         {lang === "en" ? "End Trip" : lang === "mr" ? "एंड ट्रिप" : "एंड ट्रिप"}
       </button>
-
-      {/* Fills what used to be dead space below End Trip with something
-          actually useful — a live-ticking trip clock (updates every second,
-          same source useTripClock already drives the overtime alarm with),
-          plus the same overtime banner the customer already sees on their
-          own screen (see the identical usage at line ~4657) so the driver
-          gets the exact same visual heads-up, not just the one-time beep. */}
-      <div className="rounded-2xl p-3.5 shadow-sm text-center" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="flex items-center justify-center gap-1.5 text-xs font-bold" style={{ color: C.inkSoft }}>
-          <Clock3 size={13} />
-          {lang === "en" ? "Trip duration" : lang === "mr" ? "ट्रिप कालावधी" : "ट्रिप की अवधि"}
-        </div>
-        <div className="text-2xl font-black mt-0.5" style={{ color: C.navy, fontFamily: monoFont }}>{clock.elapsedStr}</div>
-      </div>
-      <TripOvertimeBanner booking={trip} lang={lang} />
     </div>
   );
 }
@@ -5722,14 +5707,15 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
   // wrapping div + height:100%/flex-grow indirection) — that percentage-
   // height chain was found to silently collapse to zero on some devices,
   // leaving the whole map invisible and untappable. A plain vh value has
-  // no such ambiguity, at the cost of no longer perfectly filling every
-  // last bit of empty space below a short screen (an earlier attempt at
-  // that is what broke this) — reliably visible beats pixel-perfect fill.
+  // no such ambiguity. Sized generously (55vh, well past the old 35vh) so
+  // the map itself — not an added info card below it — is what uses up the
+  // space this short screen (OTP box + one Pickup line, nothing else until
+  // loading starts) would otherwise leave empty.
   if (myTrip) {
     return (
       <div className="pb-5">
         <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
-          driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="40vh" lang={lang}
+          driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="55vh" lang={lang}
           mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
         <div className="px-5 pt-2">
           {!myTrip.loadingStartedAt && (
