@@ -3897,7 +3897,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
     const pd = drivers.find((d) => d.name === b.pendingDriverName);
     const pdVeh = VEHICLES.find((vt) => vt.key === pd?.vehicleSpec?.type);
     return (
-      <div className="px-5 py-5">
+      <div className="min-h-full flex flex-col justify-between px-5 py-5">
         <div className="rounded-xl p-4 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
           {b.scheduledFor && (
             <div className="rounded-lg p-2 mb-3 flex items-center justify-center gap-1.5 shadow-lg" style={{ background: C.marigoldDeep }}>
@@ -3911,7 +3911,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for Driver's Confirmation" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
           <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{vehicleLabel(pdVeh, lang) || b.pendingDriverName}{b.fare ? ` · ${fmt(b.fare)}` : ""}</div>
         </div>
-        <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white mt-4" style={{ background: C.safety }}>
+        <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: C.safety }}>
           {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
         </button>
       </div>
