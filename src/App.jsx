@@ -732,6 +732,30 @@ function playBeepTone() {
   } catch { /* audio not available */ }
 }
 
+// Speaks a short phrase aloud via the device's own text-to-speech engine
+// (Web Speech API — Chrome on Android bridges this to the system TTS
+// engine, e.g. Google Text-to-Speech). Used for the driver's repeating
+// "New Trip Alert" while the Accept/Reject screen is up — a spoken
+// announcement is much harder to miss than a plain beep. cancel() first so
+// a fast-repeating interval never queues up overlapping utterances that
+// pile up and lag behind. This only ever plays while the app is actually
+// open and this screen is visible — a background push notification (see
+// functions/index.js) has no way to trigger speech synthesis while the
+// app is closed; that's a hard browser limitation, not something this
+// function can work around. Silently no-ops if the browser/WebView has no
+// speech synthesis support, or no installed voice for the given language.
+function speakAlert(text, lang = "hi") {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
+    utterance.rate = 1;
+    utterance.volume = 1;
+    window.speechSynthesis.speak(utterance);
+  } catch { /* speech synthesis not available */ }
+}
+
 // Re-added for the driver "new load posted" alert only (see
 // functions/index.js: onNewLoadPosted/sendLoadAlert) — every other push
 // type stays removed. docId is where the FCM device token gets saved
@@ -5537,17 +5561,20 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
   // purely so the ringtone effect right after it — a hook — can be called
   // unconditionally too, same reasoning as myTripRef above.
   const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && b.pendingDriverName === driver.name);
-  // Ringtone-style repeating alarm while this screen is up — the
+  // Ringtone-style repeating spoken alarm while this screen is up — the
   // background push (see functions/index.js: onDirectRequestAssigned) is
   // what actually reaches the driver if the app is closed; this is the
-  // foreground counterpart so it still feels like an alarm, not a single
-  // beep, while they're actually looking at the Accept/Reject screen.
+  // foreground counterpart, an actual spoken "New Trip Alert" (see
+  // speakAlert) every 2.5s rather than a plain beep, since a real
+  // announcement is much harder to miss/ignore while they're actually
+  // looking at the Accept/Reject screen.
   useEffect(() => {
     if (!awaitingBooking) return;
-    playBeepTone();
-    const id = setInterval(playBeepTone, 4000);
-    return () => clearInterval(id);
-  }, [awaitingBooking?.id]);
+    const alertText = lang === "en" ? "New Trip Alert" : lang === "mr" ? "नवीन ट्रिप अलर्ट" : "नई ट्रिप अलर्ट";
+    speakAlert(alertText, lang);
+    const id = setInterval(() => speakAlert(alertText, lang), 2500);
+    return () => { clearInterval(id); window.speechSynthesis?.cancel(); };
+  }, [awaitingBooking?.id, lang]);
 
   if (completedTrip) {
     return (
