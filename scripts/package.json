@@ -1,0 +1,8 @@
+{
+  "name": "sarthi-transport-scripts",
+  "private": true,
+  "description": "One-off admin scripts, run manually from your own machine — not part of the deployed app.",
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
+  }
+}

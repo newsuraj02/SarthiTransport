@@ -17,7 +17,7 @@ A few people can try both roles from the same device — the app remembers each 
 ## Driver script
 
 1. Open the link → **ड्राइवर**.
-2. Enter your real mobile number → OTP screen → enter `1234` (demo OTP, works for everyone).
+2. Enter your real mobile number → wait for the SMS → enter the 6-digit OTP you receive.
 3. Fill the KYC form: **your real name**, a vehicle type, a vehicle number (anything, e.g. `MH14AB1234`). Document photo uploads are optional for this pilot — you can skip them and still submit.
 4. You'll land on a "KYC pending" screen. **Ping the admin** — they need to approve you from their KYC desk before you can see loads. This should happen within a minute or two if the admin is watching.
 5. Once approved, reload the page. You'll see your home screen with an online/offline toggle.
@@ -32,7 +32,7 @@ A few people can try both roles from the same device — the app remembers each 
 ## Customer script
 
 1. Open the link → **कस्टमर**.
-2. Mobile number → OTP `1234` → fill your name/address once (remembered after that).
+2. Mobile number → wait for the SMS → enter the 6-digit OTP → fill your name/address once (remembered after that — you stay logged in on this device until you log out).
 3. Tap "तुरंत गाड़ी चाहिए" (need a vehicle now), fill pickup/drop/material/weight, post it.
 4. Go to "मेरी राइड्स" (My Rides) and wait — quotes from online drivers should start appearing within a few seconds, cheapest first.
 5. Accept a quote. You'll get a 4-digit OTP — read it out to the driver when they arrive.
@@ -59,7 +59,7 @@ A few people can try both roles from the same device — the app remembers each 
 
 ## Known limitations for this pilot (not bugs)
 
-- The map location-picker and the sample vehicle photo won't load if your network blocks OpenStreetMap — this doesn't affect anything else.
-- No real SMS is sent — OTP is always `1234` for every phone number.
+- The map location-picker and the sample vehicle photo won't load if your network blocks OpenStreetMap/Google Maps — this doesn't affect anything else.
+- Login OTP is a real SMS now (Firebase Phone Authentication) — make sure you enter a mobile number you actually have access to.
 - The 60-day free-trial clock started the first time anyone opened the deployed app, and is shared by everyone (see admin settings for days left).
 - Payments, KYC document storage, and the ₹200 referral reward are all simulated — nothing real is charged or paid out.
