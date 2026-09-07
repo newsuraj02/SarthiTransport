@@ -1231,19 +1231,22 @@ function driverTruckIcon() {
   };
 }
 
-function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick }) {
+function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick, showOpenInMaps = true }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const nearby = nearbyOnlineDrivers(drivers, customerLocation);
   const center = customerLocation || NEARBY_MAP_DEFAULT_CENTER;
   const [mapInstance, setMapInstance] = useState(null);
 
   const openInGoogleMaps = () => window.open(`https://www.google.com/maps/search/?api=1&query=${center.lat},${center.lng}`, "_blank");
-  const OpenInMapsButton = () => (
+  // Until Pickup and Drop are both filled in, there's no fixed route yet to
+  // hand off to Google Maps — the customer just tracks nearby vehicles live
+  // right here on the in-app map, so the button stays hidden until then.
+  const OpenInMapsButton = () => showOpenInMaps ? (
     <button type="button" onClick={openInGoogleMaps}
       className="absolute bottom-2 right-2 text-xs font-black px-2.5 py-1.5 rounded-full shadow-lg" style={{ background: "#FFCC00", color: "#000000" }}>
       {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
     </button>
-  );
+  ) : null;
 
   useEffect(() => {
     if (!mapInstance || !window.google?.maps) return;
@@ -3705,7 +3708,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, lastBooking, lan
 
   return (
     <div className="pt-0 pb-8">
-      <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} />
+      <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} showOpenInMaps={!!(pickup.trim() && drop.trim())} />
       <div className="px-5 pt-4 space-y-4">
         {advanceOpen && (
           <div className="space-y-3">
@@ -3936,7 +3939,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
             <span className="text-base font-black" style={{ color: "#FFFFFF" }}>{secondsLeft}</span>
           </div>
           <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for Driver's Confirmation" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
-          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{vehicleLabel(pdVeh, lang) || b.pendingDriverName}{b.fare ? ` · ${fmt(b.fare)}` : ""}</div>
+          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{pdVeh ? `${vehicleLabel(pdVeh, lang)} · ${b.pendingDriverName}` : b.pendingDriverName}{b.fare ? ` · ${fmt(b.fare)}` : ""}</div>
         </div>
         <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: "#8B0000" }}>
           {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
