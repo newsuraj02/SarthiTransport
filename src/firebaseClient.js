@@ -4,6 +4,7 @@ import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { Capacitor } from "@capacitor/core";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,6 +16,17 @@ const firebaseConfig = {
 };
 
 export const hasConfig = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
+
+// True only inside the installed native app (Capacitor's Android WebView
+// wrapper — see capacitor.config.ts) — false for every plain browser tab,
+// including one opened from inside that same WebView via an external
+// link. Evaluated once at module load: Capacitor's platform detection
+// itself is synchronous (based on whether window.Capacitor was injected
+// by the native runtime before any page JS ran), so this never needs to
+// be awaited. Exported so App.jsx's push-notification hook and its
+// native-settings-bridge link (see isRunningInOwnTwa there) can branch on
+// it without importing @capacitor/core a second time.
+export const isNativeApp = Capacitor.isNativePlatform();
 
 // PIN-based signup/login (CustomerOnboarding/DriverOnboarding in App.jsx)
 // signs a customer/driver in as a normal Firebase email/password account
@@ -204,12 +216,117 @@ async function getMessagingIfSupported() {
   }
 }
 
+// ---- Native (Capacitor Android) push, alongside the web-Push-API flow
+// below ----
+//
+// Inside the installed app, FCM registration goes through the OS/Play
+// Services directly via @capacitor/push-notifications rather than the
+// browser's Web Push + VAPID + service-worker path (getToken/onMessage
+// below) — that's still exactly what a plain browser tab uses, untouched.
+// Both ultimately hand back a plain FCM device token that
+// functions/index.js's sendLoadAlert/sendDirectRequestAlert already send
+// to via admin.messaging().send({ token, ... }) — same Firebase project,
+// same send call, either kind of token works, so no backend changes were
+// needed for this.
+//
+// Requires android/app/google-services.json to exist (see that file's
+// absence noted in DEPLOYMENT.md) — without it, Capacitor's own
+// build.gradle template silently skips applying the google-services
+// plugin and native push registration below will fail with reason
+// "unsupported"/"error", same as this app already handles an
+// unconfigured/unsupported web-push environment.
+//
+// Dynamically imported (never bundled/evaluated in a plain browser tab,
+// isNativeApp false) so a bug or version mismatch in the native-only
+// plugin can never break the web build.
+let pushNotificationsPluginPromise = null;
+function getNativePushNotifications() {
+  if (!isNativeApp) return Promise.resolve(null);
+  if (!pushNotificationsPluginPromise) {
+    pushNotificationsPluginPromise = import("@capacitor/push-notifications")
+      .then((m) => m.PushNotifications)
+      .catch((e) => {
+        console.error("[nativePush] plugin unavailable", e);
+        return null;
+      });
+  }
+  return pushNotificationsPluginPromise;
+}
+
+// Capacitor's PermissionState ("granted"/"denied"/"prompt"/
+// "prompt-with-rationale") collapses onto the same 3-state shape the rest
+// of this app already reads off the browser's Notification.permission
+// ("granted"/"denied"/"default") — so callers (useRideNotifications /
+// NotificationBanner in src/App.jsx) don't need a separate native branch
+// just to render the right banner.
+function toWebPermissionShape(state) {
+  return state === "granted" || state === "denied" ? state : "default";
+}
+
+// Native equivalent of the browser's `Notification.permission` read —
+// unlike that, this is inherently async (goes through the native bridge),
+// so callers that need a synchronous initial value (useRideNotifications'
+// useState initializer) should keep reading Notification.permission
+// directly on web and only call this for the native branch.
+export async function checkPushPermission() {
+  if (!isNativeApp) return typeof Notification !== "undefined" ? Notification.permission : "unsupported";
+  const PushNotifications = await getNativePushNotifications();
+  if (!PushNotifications) return "unsupported";
+  try {
+    const status = await PushNotifications.checkPermissions();
+    return toWebPermissionShape(status.receive);
+  } catch (e) {
+    console.error("[nativePush] checkPermissions failed", e);
+    return "unsupported";
+  }
+}
+
+async function requestNativePushToken() {
+  const PushNotifications = await getNativePushNotifications();
+  if (!PushNotifications) return { ok: false, reason: "unsupported" };
+  try {
+    let state = (await PushNotifications.checkPermissions()).receive;
+    if (state === "prompt" || state === "prompt-with-rationale") {
+      state = (await PushNotifications.requestPermissions()).receive;
+    }
+    if (state !== "granted") return { ok: false, reason: toWebPermissionShape(state) };
+  } catch (e) {
+    console.error("[nativePush] permission check failed", e);
+    return { ok: false, reason: "error" };
+  }
+  // register() itself resolves before the token is known — the actual
+  // token (or failure) arrives asynchronously through these two events,
+  // same as the plugin's own docs describe, so wrap that in a Promise
+  // rather than awaiting register() directly.
+  return new Promise((resolve) => {
+    let settled = false;
+    let regHandle, errHandle;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      regHandle?.then((h) => h.remove());
+      errHandle?.then((h) => h.remove());
+      resolve(result);
+    };
+    regHandle = PushNotifications.addListener("registration", (token) => finish({ ok: true, token: token.value }));
+    errHandle = PushNotifications.addListener("registrationError", (err) => {
+      console.error("[nativePush] registration error", err);
+      finish({ ok: false, reason: "error" });
+    });
+    PushNotifications.register();
+  });
+}
+
 // Asks the browser for notification permission, registers the service
 // worker (see public/service-worker.js — the same one used for app-shell
 // caching also handles FCM background messages), and returns a device
 // token to save on the driver's own Firestore doc — onNewLoadPosted reads
-// that token to push new-load alerts.
+// that token to push new-load alerts. Inside the native app, does the
+// equivalent through @capacitor/push-notifications instead (see above) —
+// same return shape either way, so callers never need to know which one
+// ran.
 export async function requestPushToken() {
+  if (isNativeApp) return requestNativePushToken();
   const messaging = await getMessagingIfSupported();
   if (!messaging) return { ok: false, reason: "unsupported" };
   const permission = await Notification.requestPermission();
@@ -227,11 +344,23 @@ export async function requestPushToken() {
   }
 }
 
-// Shows an in-app toast for pushes that arrive while the tab is already
-// open — browsers only auto-display a system notification for background
-// tabs, so foreground messages need to be handled manually. Returns an
-// unsubscribe function, or null if messaging isn't available.
+// Shows an in-app toast for pushes that arrive while the tab/app is
+// already open — foreground messages don't auto-display a system
+// notification, so they need to be handled manually either way. Returns
+// an unsubscribe function, or null if messaging isn't available.
 export async function listenForegroundPush(onMessageReceived) {
+  if (isNativeApp) {
+    const PushNotifications = await getNativePushNotifications();
+    if (!PushNotifications) return null;
+    const handle = await PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      // Reshaped to match the web SDK's onMessage payload shape
+      // (payload.notification.{title,body}) — see ForegroundToast/
+      // useRideNotifications in src/App.jsx, which read that shape
+      // regardless of which push path produced it.
+      onMessageReceived({ notification: { title: notification.title, body: notification.body }, data: notification.data });
+    });
+    return () => handle.remove();
+  }
   const messaging = await getMessagingIfSupported();
   if (!messaging) return null;
   return onMessage(messaging, onMessageReceived);
