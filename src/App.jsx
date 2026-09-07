@@ -5724,7 +5724,14 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
 
             <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
               {!myTrip.loadingStartedAt && (
-                <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
+                <div style={{ color: C.ink }}>
+                  <span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span>
+                  {myTrip.distance != null && (
+                    <div className="mt-1.5">
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(myTrip.distance, lang)}</span>
+                    </div>
+                  )}
+                </div>
               )}
               {myTrip.loadingStartedAt && (
                 <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
