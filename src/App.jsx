@@ -1404,6 +1404,11 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   const [mapInstance, setMapInstance] = useState(null);
   useEffect(() => {
     if (!mapInstance || !window.google?.maps) return;
+    // Guards against a known Google Maps JS quirk: if the container's real
+    // size wasn't settled at the exact moment the map first painted (e.g. a
+    // layout reflow landing a beat later), the map can get stuck rendering
+    // at a stale/zero size until something explicitly tells it to remeasure.
+    window.google.maps.event.trigger(mapInstance, "resize");
     const bounds = new window.google.maps.LatLngBounds();
     if (roadPath?.length) {
       roadPath.forEach((p) => bounds.extend(p));
@@ -4558,12 +4563,15 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
     <div className="pt-0 pb-5">
       {/* Live map placed at the very top, edge-to-edge — matches the exact
           position/pattern NearbyVehiclesMap uses on CustomerBooking's main
-          page, instead of being tucked mid-page inside a padded card. */}
-      <div style={{ height: "35vh" }}>
-        <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
-          driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="100%" lang={lang}
-          mode={b.loadingStartedAt ? "route" : "toPickup"} />
-      </div>
+          page, instead of being tucked mid-page inside a padded card. A
+          fixed vh height is passed straight to LiveTrackingMap itself (no
+          wrapping div + height:100% indirection) — that percentage-height
+          chain was found to silently collapse to zero on some devices,
+          leaving the whole map invisible and untappable; a plain vh value
+          has no such ambiguity. */}
+      <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
+        driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="35vh" lang={lang}
+        mode={b.loadingStartedAt ? "route" : "toPickup"} />
     <div className="px-5 pt-3">
       <div className="rounded-2xl py-3.5 px-2 mb-2.5 shadow-sm flex items-center justify-between gap-1" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {onAddAnother ? (
@@ -5688,19 +5696,19 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
   // position/pattern NearbyVehiclesMap uses on CustomerBooking's main page —
   // only while there's an active trip; the "waiting for a load" states below
   // keep their normal padded layout since there's no map to show there.
-  // The map is a flex-grow child (not a fixed 35vh) so it stretches to fill
-  // whatever vertical space this short screen (OTP box + one Pickup line,
-  // nothing else until loading starts) leaves empty, instead of leaving a
-  // blank gap below the content — it only shrinks back to its 35vh floor
-  // once the content below actually needs more room than that leaves.
+  // A fixed vh height is passed straight to LiveTrackingMap itself (no
+  // wrapping div + height:100%/flex-grow indirection) — that percentage-
+  // height chain was found to silently collapse to zero on some devices,
+  // leaving the whole map invisible and untappable. A plain vh value has
+  // no such ambiguity, at the cost of no longer perfectly filling every
+  // last bit of empty space below a short screen (an earlier attempt at
+  // that is what broke this) — reliably visible beats pixel-perfect fill.
   if (myTrip) {
     return (
-      <div className="pb-5 flex flex-col" style={{ minHeight: "100%" }}>
-        <div className="flex-1" style={{ minHeight: "35vh" }}>
-          <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
-            driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="100%" lang={lang}
-            mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
-        </div>
+      <div className="pb-5">
+        <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
+          driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="40vh" lang={lang}
+          mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
         <div className="px-5 pt-2">
           {!myTrip.loadingStartedAt && (
             <div className="mb-4">
