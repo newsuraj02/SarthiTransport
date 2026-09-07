@@ -6574,6 +6574,16 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // trial — both derived live from createdAt, same source of truth as
   // everywhere else trial/signup timing is used in the app.
   const newCustomersToday = (customers || []).filter(isToday);
+  // Today's new driver signups — separate from pendingApprovals below.
+  // pendingApprovals only counts drivers still sitting in "Pending" KYC,
+  // but a driver signing up inside their own 30-day trial gets
+  // auto-approved instantly (see DriverKyc's submit()), skipping "Pending"
+  // entirely — so during this pilot, the "New Registrations" tile could
+  // read 0 even with a steady stream of real signups, since none of them
+  // ever paused in Pending long enough to be counted. This tracks actual
+  // signup volume instead, same createdAt-based approach as
+  // newCustomersToday above.
+  const newDriversToday = drivers.filter(isToday);
   // isInTrial alone also matched drivers who just verified their phone
   // and never went any further (no name, no KYC) — cluttering this list
   // with abandoned signups nobody can actually act on. Only count a
@@ -6703,7 +6713,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <div className="flex gap-2 mb-4">
           <button onClick={() => setNewRegTab("customer")} className="flex-1 rounded-lg py-3 text-sm font-bold"
             style={{ background: newRegTab === "customer" ? C.navy : C.paper, color: newRegTab === "customer" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "customer" ? C.navy : C.line}` }}>
-            {lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}
+            {lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}{newCustomersToday.length > 0 ? ` (${newCustomersToday.length})` : ""}
           </button>
           <button onClick={() => setNewRegTab("driver")} className="flex-1 rounded-lg py-3 text-sm font-bold"
             style={{ background: newRegTab === "driver" ? C.navy : C.paper, color: newRegTab === "driver" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "driver" ? C.navy : C.line}` }}>
@@ -6749,14 +6759,17 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
 
   return (
     <div>
-      {/* Most to least important: New Registrations (drivers needing KYC
-          review, the thing admin must act on) comes first, then today's
-          health signals (at-risk wallets, cancellations, earnings,
+      {/* Most to least important: New Registrations (today's total
+          Customer+Driver signups — see newCustomersToday/newDriversToday
+          above for why this isn't just pendingApprovals) comes first, then
+          today's health signals (at-risk wallets, cancellations, earnings,
           bookings, capacity), then pipeline (advance bookings), then
           growth metrics (trial) last — those are useful context, not
-          something to act on today. */}
+          something to act on today. Still flags red via pendingApprovals
+          when there's an actual KYC backlog to act on, independent of how
+          many signups happened today. */}
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <StatTile label={lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"} value={pendingApprovals} color={pendingApprovals > 0 ? C.safety : C.success} onClick={() => setDetailView("newRegistrations")} />
+        <StatTile label={lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"} value={newCustomersToday.length + newDriversToday.length} color={pendingApprovals > 0 ? C.safety : C.success} onClick={() => setDetailView("newRegistrations")} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
         <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
