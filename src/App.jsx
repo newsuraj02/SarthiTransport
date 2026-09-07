@@ -3911,7 +3911,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, driver
           <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for Driver's Confirmation" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
           <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{vehicleLabel(pdVeh, lang) || b.pendingDriverName}{b.fare ? ` · ${fmt(b.fare)}` : ""}</div>
         </div>
-        <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: C.safety }}>
+        <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: "#8B0000" }}>
           {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
         </button>
       </div>
