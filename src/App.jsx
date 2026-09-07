@@ -732,27 +732,58 @@ function playBeepTone() {
   } catch { /* audio not available */ }
 }
 
-// Speaks a short phrase aloud via the device's own text-to-speech engine
-// (Web Speech API — Chrome on Android bridges this to the system TTS
-// engine, e.g. Google Text-to-Speech). Used for the driver's repeating
-// "New Trip Alert" while the Accept/Reject screen is up — a spoken
-// announcement is much harder to miss than a plain beep. cancel() first so
-// a fast-repeating interval never queues up overlapping utterances that
-// pile up and lag behind. This only ever plays while the app is actually
-// open and this screen is visible — a background push notification (see
-// functions/index.js) has no way to trigger speech synthesis while the
-// app is closed; that's a hard browser limitation, not something this
-// function can work around. Silently no-ops if the browser/WebView has no
-// speech synthesis support, or no installed voice for the given language.
+// Localized text for the driver's spoken trip-alert announcement — one
+// shared place instead of duplicating the same ternary at every call site.
+function tripAlertText(lang) {
+  return lang === "en" ? "New Trip Alert" : lang === "mr" ? "नवीन ट्रिप अलर्ट" : "नई ट्रिप आया";
+}
+
+// A short, clean "ding" — single sine tone with a fast exponential decay —
+// played right before the spoken announcement below for a crisper, more
+// attention-grabbing lead-in than starting cold with a voice. Deliberately
+// a different shape from playBeepTone's flat double-beep (used elsewhere
+// for plain pushes/toasts), so this alert has its own distinct identity.
+function playChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.value = 1200;
+    gain.gain.setValueAtTime(0.22, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.18);
+  } catch { /* audio not available */ }
+}
+
+// Plays playChime() then speaks a short phrase aloud via the device's own
+// text-to-speech engine (Web Speech API — Chrome on Android bridges this
+// to the system TTS engine, e.g. Google Text-to-Speech). Used for the
+// driver's repeating "New Trip Alert" while the Accept/Reject screen is
+// up, and for new-load foreground pushes — a spoken announcement is much
+// harder to miss than a plain beep. cancel() first so a fast-repeating
+// interval never queues up overlapping utterances that pile up and lag
+// behind. This only ever plays while the app is actually open and
+// running — a background push notification (see functions/index.js) has
+// no way to trigger audio or speech synthesis while the app is closed,
+// backgrounded out of Recents, or the device is asleep; that's a hard
+// browser/OS limitation on what any web page's JavaScript can do once
+// it's not actually running, not something this function can work around.
+// Silently no-ops if the browser/WebView has no speech synthesis support,
+// or no installed voice for the given language.
 function speakAlert(text, lang = "hi") {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   try {
+    playChime();
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
-    utterance.rate = 1;
+    utterance.rate = 1.05;
+    utterance.pitch = 1;
     utterance.volume = 1;
-    window.speechSynthesis.speak(utterance);
+    setTimeout(() => window.speechSynthesis.speak(utterance), 220);
   } catch { /* speech synthesis not available */ }
 }
 
@@ -816,7 +847,7 @@ function useRideNotifications(collectionName, docId, lang) {
         // (direct-request toast, customer booking-update toast) keeps the
         // existing beep.
         if (payload.data?.type === "new_load") {
-          speakAlert(lang === "en" ? "New Trip Alert" : lang === "mr" ? "नवीन ट्रिप अलर्ट" : "नई ट्रिप अलर्ट", lang);
+          speakAlert(tripAlertText(lang), lang);
         } else {
           playBeepTone();
         }
@@ -5580,7 +5611,7 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
   // looking at the Accept/Reject screen.
   useEffect(() => {
     if (!awaitingBooking) return;
-    const alertText = lang === "en" ? "New Trip Alert" : lang === "mr" ? "नवीन ट्रिप अलर्ट" : "नई ट्रिप अलर्ट";
+    const alertText = tripAlertText(lang);
     speakAlert(alertText, lang);
     const id = setInterval(() => speakAlert(alertText, lang), 2500);
     return () => { clearInterval(id); window.speechSynthesis?.cancel(); };
