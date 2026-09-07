@@ -829,6 +829,44 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole) {
   return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen };
 }
 
+// The actual Android package this site is published under as a Trusted Web
+// Activity (see manifest.json's related_applications and
+// public/.well-known/assetlinks.json) — needed to target the *right* app's
+// settings page below, since the deep link has to name a package.
+const TWA_PACKAGE_ID = "com.apnatransport.app";
+
+function isAndroidDevice() {
+  return /Android/i.test(navigator.userAgent || "");
+}
+// Chrome sets document.referrer to "android-app://<package>" specifically
+// when a page is opened from inside that installed Trusted Web Activity —
+// the standard, documented way for a page to tell "am I running inside my
+// own installed app" apart from an ordinary browser tab on the same URL.
+function isRunningInOwnTwa() {
+  return typeof document !== "undefined" && document.referrer.startsWith(`android-app://${TWA_PACKAGE_ID}`);
+}
+
+// Deep-links straight to the exact Android settings screen for a permission
+// instead of just telling the driver/customer to go find it themselves.
+// Uses Chrome's "intent://" URL scheme (Intent.parseUri under the hood) —
+// there's no equivalent on iOS or desktop, so callers must gate this behind
+// isAndroidDevice() and fall back to plain instructional text otherwise.
+// Targets this site's own installed TWA package when running inside it;
+// falls back to Chrome's own package when it's just a browser tab, since
+// that's genuinely which app is holding the permission in that case.
+function openAndroidNotificationSettings() {
+  const pkg = isRunningInOwnTwa() ? TWA_PACKAGE_ID : "com.android.chrome";
+  window.location.href = `intent:#Intent;action=android.settings.APP_NOTIFICATION_SETTINGS;S.android.provider.extra.APP_PACKAGE=${pkg};end`;
+}
+// No dedicated "location settings for this one app" action exists on
+// Android the way APP_NOTIFICATION_SETTINGS does — this instead opens that
+// app's main App Info page (Settings → Apps → <app>), which has
+// Permissions → Location one tap away.
+function openAndroidAppInfoSettings() {
+  const pkg = isRunningInOwnTwa() ? TWA_PACKAGE_ID : "com.android.chrome";
+  window.location.href = `intent://${pkg}#Intent;scheme=package;action=android.settings.APPLICATION_DETAILS_SETTINGS;end`;
+}
+
 // Re-added for the driver "new load posted" push carve-out — see
 // useRideNotifications above. Also used on the Customer side now (see
 // context="customer") so they're told when their driver accepts/starts the
@@ -839,6 +877,14 @@ function NotificationBanner({ permission, onEnable, lang, context = "driver" }) 
     const msg = context === "customer"
       ? (lang === "en" ? "Notifications are turned off for Apna Transport — turn them on in your phone's Settings to know the moment your driver accepts or starts the trip." : lang === "mr" ? "Apna Transport साठी नोटिफिकेशन बंद आहेत — तुमच्या फोनच्या Settings मध्ये ती चालू करा, जेणेकरून ड्रायव्हरने स्वीकारल्यावर किंवा राइड सुरू केल्यावर लगेच कळेल." : "Apna Transport के लिए नोटिफिकेशन बंद हैं — अपने फोन की Settings में उन्हें चालू करें, ताकि ड्राइवर के स्वीकार करने या राइड शुरू करने पर तुरंत पता चले।")
       : (lang === "en" ? "Notifications are turned off for Apna Transport — turn them on in your phone's Settings to get new load alerts." : lang === "mr" ? "Apna Transport साठी नोटिफिकेशन बंद आहेत — नवीन लोड अलर्टसाठी तुमच्या फोनच्या Settings मध्ये ती चालू करा." : "Apna Transport के लिए नोटिफिकेशन बंद हैं — नए लोड अलर्ट के लिए अपने फोन की Settings में उन्हें चालू करें।");
+    const tapHint = lang === "en" ? " Tap to open Settings." : lang === "mr" ? " Settings उघडण्यासाठी टॅप करा." : " Settings खोलने के लिए टैप करें।";
+    if (isAndroidDevice()) {
+      return (
+        <button onClick={openAndroidNotificationSettings} className="w-[calc(100%-2.5rem)] mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
+          {msg}{tapHint}
+        </button>
+      );
+    }
     return (
       <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
         {msg}
@@ -865,6 +911,14 @@ function LocationBanner({ permission, onEnable, lang, context = "customer" }) {
     const msg = context === "driver"
       ? (lang === "en" ? "Location is turned off for Apna Transport — turn it on in your phone's Settings so customers can find you and send you loads." : lang === "mr" ? "Apna Transport साठी लोकेशन बंद आहे — कस्टमरना तुम्ही सापडण्यासाठी आणि लोड मिळण्यासाठी ते तुमच्या फोनच्या Settings मध्ये चालू करा." : "Apna Transport के लिए लोकेशन बंद है — कस्टमर आपको ढूंढ सकें और लोड मिल सके, इसके लिए इसे अपने फोन की Settings में चालू करें।")
       : (lang === "en" ? "Location is turned off for Apna Transport — turn it on in your phone's Settings to see nearby vehicles and get matched with a driver." : lang === "mr" ? "Apna Transport साठी लोकेशन बंद आहे — जवळपासच्या गाड्या पाहण्यासाठी व ड्रायव्हर मिळण्यासाठी ते तुमच्या फोनच्या Settings मध्ये चालू करा." : "Apna Transport के लिए लोकेशन बंद है — पास की गाड़ियां देखने और ड्राइवर मिलने के लिए इसे अपने फोन की Settings में चालू करें।");
+    const tapHint = lang === "en" ? " Tap to open Settings." : lang === "mr" ? " Settings उघडण्यासाठी टॅप करा." : " Settings खोलने के लिए टैप करें।";
+    if (isAndroidDevice()) {
+      return (
+        <button onClick={openAndroidAppInfoSettings} className="w-[calc(100%-2.5rem)] mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
+          {msg}{tapHint}
+        </button>
+      );
+    }
     return (
       <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
         {msg}
