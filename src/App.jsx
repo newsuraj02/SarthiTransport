@@ -1880,9 +1880,9 @@ function BackgroundAlertsGuide({ lang }) {
       </div>
 
       <div className="rounded-lg p-3 mb-4" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
-        <div className="text-xs font-bold mb-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 0 — install it as a real app" : lang === "mr" ? "स्टेप 0 — खरे अ‍ॅप म्हणून इन्स्टॉल करा" : "स्टेप 0 — इसे असली ऐप की तरह इंस्टॉल करें"}</div>
+        <div className="text-xs font-bold mb-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 1 — install it as a real app (do this first)" : lang === "mr" ? "स्टेप 1 — आधी खरे अ‍ॅप म्हणून इन्स्टॉल करा" : "स्टेप 1 — पहले इसे असली ऐप की तरह इंस्टॉल करें"}</div>
         <p className="text-xs font-semibold" style={{ color: C.ink }}>
-          {lang === "en" ? "If you're opening Apna Transport from a browser bookmark instead of an icon on your home screen, do this first: open your browser's menu → \"Add to Home Screen\" / \"Install app\". A browser tab gets suspended far more aggressively than an installed app." : lang === "mr" ? "जर तुम्ही Apna Transport ब्राउझर बुकमार्कवरून उघडत असाल (होम स्क्रीनवरील आयकॉनऐवजी), तर आधी हे करा: ब्राउझरच्या मेनूमध्ये जा → \"Add to Home Screen\" / \"Install app\". ब्राउझर टॅब इन्स्टॉल केलेल्या अ‍ॅपपेक्षा जास्त पटकन बंद केला जातो." : "अगर आप Apna Transport को होम स्क्रीन के आइकन की बजाय ब्राउज़र बुकमार्क से खोलते हैं, तो पहले यह करें: ब्राउज़र के मेनू में जाएं → \"Add to Home Screen\" / \"Install app\"। ब्राउज़र टैब को इंस्टॉल किए हुए ऐप से कहीं ज़्यादा जल्दी बंद कर दिया जाता है।"}
+          {lang === "en" ? "If you're opening Apna Transport from a browser bookmark instead of an icon on your home screen, do this first: open your browser's menu → \"Add to Home Screen\" / \"Install app\". Without this, your phone won't even show a separate \"Apna Transport\" entry in the settings below — everything falls under \"Chrome\" instead, so the steps below have nothing to point you at." : lang === "mr" ? "जर तुम्ही Apna Transport ब्राउझर बुकमार्कवरून उघडत असाल (होम स्क्रीनवरील आयकॉनऐवजी), तर आधी हे करा: ब्राउझरच्या मेनूमध्ये जा → \"Add to Home Screen\" / \"Install app\". हे न केल्यास, खालील सेटिंग्जमध्ये तुमच्या फोनवर \"Apna Transport\" असे वेगळे नावच दिसणार नाही — सर्व काही \"Chrome\" च्या नावाखाली येईल, त्यामुळे खालील स्टेप्स करण्यासाठी काहीच सापडणार नाही." : "अगर आप Apna Transport को होम स्क्रीन के आइकन की बजाय ब्राउज़र बुकमार्क से खोलते हैं, तो पहले यह करें: ब्राउज़र के मेनू में जाएं → \"Add to Home Screen\" / \"Install app\"। ऐसा न करने पर, नीचे की सेटिंग्स में आपके फोन पर \"Apna Transport\" नाम से अलग एंट्री दिखेगी ही नहीं — सब कुछ \"Chrome\" के नाम से आएगा, इसलिए नीचे दिए स्टेप्स के लिए कुछ मिलेगा ही नहीं।"}
         </p>
       </div>
 
@@ -1902,7 +1902,7 @@ function BackgroundAlertsGuide({ lang }) {
       <div className="space-y-3">
         {active.steps.map((step, i) => (
           <div key={i} className="flex items-start gap-3 rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-black text-white" style={{ background: C.navy }}>{i + 1}</div>
+            <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-black text-white" style={{ background: C.navy }}>{i + 2}</div>
             <span className="text-xs font-semibold" style={{ color: C.ink }}>{step[lang] || step.en}</span>
           </div>
         ))}
