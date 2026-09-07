@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "673069213756",
+    "project_id": "sarthi-transport-74865",
+    "storage_bucket": "sarthi-transport-74865.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:673069213756:android:4023bd6fa29d1c0cd5bb39",
+        "android_client_info": {
+          "package_name": "com.apnatransport.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCoRoEicNqMpmqG8G5HNVCGGv-kaXoLBV8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
