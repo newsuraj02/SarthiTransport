@@ -5432,12 +5432,6 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
   const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg || "");
   const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "");
-  // Capacity is optional (not part of canSubmit) — so it can't gate the
-  // steps after it the same way a required field does. It still gets its
-  // turn in the guided highlight order (right after Vehicle Number,
-  // matching the form's own layout) by counting as "done" once the driver
-  // has visited and left it, filled in or not.
-  const [capacityTouched, setCapacityTouched] = useState(false);
 
   // Auto-fills capacity from VEHICLE_MODEL_SPECS the moment the typed
   // vehicle name matches a known model — but only if the driver hasn't
@@ -5491,16 +5485,14 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     if (f) startPhotoUpload(setVal, key)(f);
   };
 
-  const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
-  // Guided-step highlighting for the KYC fields — see GuidedStep. Capacity
-  // (kg) is optional (not part of canSubmit) but still gets a step in the
-  // sequence, in form order, via capacityTouched above — see that comment.
-  // Vehicle Front isn't required here either — see the photo tile below,
-  // same reasoning as DriverProfileEdit's document list already applied:
-  // the side profile is the only vehicle photo that matters to a customer
-  // browsing bids, so dropping Front halves the photo-upload burden on
-  // signup without losing anything a customer actually sees.
-  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!capacityKg.trim() || capacityTouched, !!vehicleTypeName.trim(), !!vehiclePhotoSide];
+  const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && capacityKg.trim() && vehicleTypeName.trim() && !anyUploading);
+  // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
+  // Front isn't required here — see the photo tile below, same reasoning as
+  // DriverProfileEdit's document list already applied: the side profile is
+  // the only vehicle photo that matters to a customer browsing bids, so
+  // dropping Front halves the photo-upload burden on signup without losing
+  // anything a customer actually sees.
+  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!capacityKg.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoSide];
   const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
   // First-time submission within this driver's own 30-day trial (from
   // their own signup date) skips the admin approval wait entirely — a
@@ -5524,7 +5516,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     // Submitted for real — clear the draft so a later resubmission (after a
     // rejection) starts from the driver's actual saved data, not this.
     setDl(null); setPhoto(null); setVehicleTypeName(""); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
-    setCapacityKg(""); setVehicleNumber(""); setCapacityTouched(false);
+    setCapacityKg(""); setVehicleNumber("");
     if (isFirstSubmission) onFirstSubmit?.();
   };
 
@@ -5610,7 +5602,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           </p>
         )}
         <div className="mb-4">
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} onBlur={() => setCapacityTouched(true)} />
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
         </div>
       </GuidedStep>
 
