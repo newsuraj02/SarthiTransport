@@ -5857,14 +5857,24 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     if (f) startPhotoUpload(setVal, key)(f);
   };
 
-  const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && capacityKg.trim() && vehicleTypeName.trim() && !anyUploading);
+  // Defensive re-coercion, not just at capacityKg's usePersistedState
+  // default above: a device that already has an OLDER saved draft for
+  // "sarthi_driverKyc_capacityKg" -- e.g. saved back when nothing called
+  // .trim() on it yet, if vehicleSpec.capacityKg (a number) was its
+  // starting value at the time -- has that raw number sitting in
+  // localStorage, and a saved draft always wins over the initial-value
+  // default on every future load. String(...) at the actual point of use
+  // means it can't crash regardless of what's already stored on a given
+  // device.
+  const capacityKgStr = String(capacityKg ?? "");
+  const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && capacityKgStr.trim() && vehicleTypeName.trim() && !anyUploading);
   // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
   // Front isn't required here — see the photo tile below, same reasoning as
   // DriverProfileEdit's document list already applied: the side profile is
   // the only vehicle photo that matters to a customer browsing bids, so
   // dropping Front halves the photo-upload burden on signup without losing
   // anything a customer actually sees.
-  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!capacityKg.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoSide];
+  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!capacityKgStr.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoSide];
   const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
   // First-time submission within this driver's own 30-day trial (from
   // their own signup date) skips the admin approval wait entirely — a
@@ -5974,7 +5984,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           </p>
         )}
         <div className="mb-4">
-          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKgStr} onChange={(e) => setCapacityKg(e.target.value)} />
         </div>
       </GuidedStep>
 
