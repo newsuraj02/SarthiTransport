@@ -4618,8 +4618,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
           <div style={{ color: C.ink }}>
             <span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span>
             {b.distance != null && (
-              <div className="mt-1.5">
-                <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(b.distance, lang)}</span>
+              <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(b.distance, lang)}</span>
+                <span className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Discuss fare on call with Driver" : lang === "mr" ? "ड्रायव्हरसोबत कॉलवर भाडे ठरवा" : "ड्राइवर के साथ कॉल पर भाड़ा तय करें"}</span>
               </div>
             )}
           </div>
@@ -5734,8 +5735,9 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
                 <div style={{ color: C.ink }}>
                   <span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span>
                   {myTrip.distance != null && (
-                    <div className="mt-1.5">
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(myTrip.distance, lang)}</span>
+                    <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(myTrip.distance, lang)}</span>
+                      <span className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Discuss fare on call with Customer" : lang === "mr" ? "ग्राहकासोबत कॉलवर भाडे ठरवा" : "ग्राहक के साथ कॉल पर भाड़ा तय करें"}</span>
                     </div>
                   )}
                 </div>
