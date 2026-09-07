@@ -80,6 +80,19 @@ jobs:
           TARGET_DIR: project
         run: node generate-project.js
 
+      - name: Add SettingsBridgeActivity (native deep link to Notification/Location settings)
+        # Chrome blocks web content from firing "android.settings.*"
+        # intents directly (confirmed on a real device — see
+        # src/App.jsx's androidSettingsBridgeUrl comment). This patches in
+        # a small native Activity, regenerated fresh here every build
+        # since twa/project itself isn't committed, that opens those
+        # settings screens from trusted app code instead, which has no
+        # such restriction. See twa/patch-project.js.
+        working-directory: twa
+        env:
+          TARGET_DIR: project
+        run: node patch-project.js
+
       - name: Enable resource shrinking (Bubblewrap's template enables minifyEnabled but not shrinkResources)
         run: |
           sed -i 's/minifyEnabled true/minifyEnabled true\n            shrinkResources true/' twa/project/app/build.gradle
