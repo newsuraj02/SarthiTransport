@@ -5680,10 +5680,15 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
   // position/pattern NearbyVehiclesMap uses on CustomerBooking's main page —
   // only while there's an active trip; the "waiting for a load" states below
   // keep their normal padded layout since there's no map to show there.
+  // The map is a flex-grow child (not a fixed 35vh) so it stretches to fill
+  // whatever vertical space this short screen (OTP box + one Pickup line,
+  // nothing else until loading starts) leaves empty, instead of leaving a
+  // blank gap below the content — it only shrinks back to its 35vh floor
+  // once the content below actually needs more room than that leaves.
   if (myTrip) {
     return (
-      <div className="pt-0 pb-5">
-        <div style={{ height: "35vh" }}>
+      <div className="pb-5 flex flex-col" style={{ minHeight: "100dvh" }}>
+        <div className="flex-1" style={{ minHeight: "35vh" }}>
           <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
             driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="100%" lang={lang}
             mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
