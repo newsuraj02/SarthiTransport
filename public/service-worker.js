@@ -57,7 +57,7 @@ self.addEventListener("notificationclick", (event) => {
 // simple: only same-origin GET requests (the built JS/CSS/HTML/icons) are
 // ever cached — Firestore, Storage, and Google Maps calls always go straight
 // to the network, since that data has to be live.
-const CACHE_NAME = "apna-transport-v2";
+const CACHE_NAME = "apna-transport-v3";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -71,16 +71,39 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Fetches + caches one request, used both for the first attempt and the
+// one retry below.
+function fetchAndCache(request) {
+  return fetch(request).then((response) => {
+    const copy = response.clone();
+    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+    return response;
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
   event.respondWith(
-    fetch(request)
-      .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        return response;
+    fetchAndCache(request)
+      // A single dropped packet on flaky mobile data is common and often
+      // succeeds a moment later -- worth one retry before giving up,
+      // rather than immediately falling back to (often nonexistent) cache.
+      .catch(() => fetchAndCache(request))
+      .catch(async () => {
+        // Genuinely offline (or the retry failed too). Only fall back to
+        // cache if something is ACTUALLY cached for this exact request --
+        // resolving to `undefined` here (the old behavior) is invalid for
+        // respondWith() and silently breaks whatever requested this. That
+        // was a real bug: a brand-new content-hashed JS/CSS file right
+        // after a fresh deploy was never cached under the old name, so one
+        // network blip on it (e.g. during the language-picker's full-page
+        // reload right after signup) meant no network AND no cache --
+        // exactly how a reload turned into a permanent blank white screen
+        // instead of a normal, retryable load failure.
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        throw new Error(`[sw] unavailable offline and not cached: ${request.url}`);
       })
-      .catch(() => caches.match(request))
   );
 });
