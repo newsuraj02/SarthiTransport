@@ -895,52 +895,52 @@ function ForegroundToast({ toast }) {
   );
 }
 
-// Shown once per role+phone (see permsPrimed in the root App below), right
-// before the Customer/Driver home screen first renders — for a brand-new
-// signup and for an existing user who hasn't seen this yet, since the
-// permission system itself is new. Requests Location and Notifications
-// back-to-back, never simultaneously (see useLocationPermission.enable's
-// comment on why) — those are the only two permissions a web app can
-// actually prime ahead of time with a real, queryable "granted/denied"
-// state. Camera has no such durable grant for the <input type="file"
-// capture> flow this app uses (tapping it just opens the OS camera/gallery
-// app directly), so it's only explained here, not requested — the OS asks
-// for it naturally the first time a photo is actually picked.
+// Shown once per device (see permsPrimedGlobal in the root App below), as
+// the very first screen — before role selection, before login, for a
+// brand-new install AND an existing/returning user who hasn't seen this
+// yet, since the permission system itself is new. Deliberately role-
+// agnostic (nobody has picked Customer/Driver yet at this point) — generic
+// copy that covers both. Requests Location and Notifications back-to-back,
+// never simultaneously (see useLocationPermission.enable's comment on why)
+// — those are the only two permissions a web app can actually prime ahead
+// of time with a real, queryable "granted/denied" state. Camera has no such
+// durable grant for the <input type="file" capture> flow this app uses
+// (tapping it just opens the OS camera/gallery app directly), so it's only
+// explained here, not requested — the OS asks for it naturally the first
+// time a photo is actually picked, later, whichever role signs in.
+//
+// Notification permission is requested directly via requestPushToken()
+// here rather than through useRideNotifications, since there's no
+// logged-in customer/driver doc yet to save the resulting token onto —
+// once the person actually signs in, CustomerApp's/DriverHome's own
+// useRideNotifications effect re-issues and saves a token automatically
+// the moment it sees permission already "granted" (no second prompt).
 //
 // This can't truly force a grant — a user can always decline the native
 // browser dialog, and nothing server-side can detect or block that.
 // Declining just leaves the persistent LocationBanner/NotificationBanner
-// (shown on the relevant screens afterward) nagging until it's fixed in
-// browser settings, same as any other denial elsewhere in the app.
-function PermissionsGate({ role, docId, lang, onDone }) {
+// (shown on the relevant screens afterward, once a role is picked) nagging
+// until it's fixed in browser settings, same as any other denial elsewhere
+// in the app.
+function PermissionsGate({ lang, onDone }) {
   const location = useLocationPermission();
-  const notifications = useRideNotifications(role === "driver" ? "drivers" : "customers", docId, lang);
   const [asking, setAsking] = useState(false);
 
   const start = async () => {
     setAsking(true);
     if (location.permission !== "granted") await location.enable();
-    if (typeof Notification !== "undefined" && Notification.permission === "default") await notifications.enable();
+    if (typeof Notification !== "undefined" && Notification.permission === "default") await requestPushToken();
     onDone();
   };
 
-  const copy = role === "driver"
-    ? {
-        title: lang === "en" ? "Before you go online" : lang === "mr" ? "ऑनलाइन जाण्याआधी" : "ऑनलाइन जाने से पहले",
-        items: [
-          [MapPin, lang === "en" ? "Location — so customers within 30–50 km can find you and send you loads." : lang === "mr" ? "लोकेशन — जेणेकरून 30–50 किमी अंतरावरील कस्टमर तुम्हाला शोधू शकतील आणि लोड पाठवू शकतील." : "लोकेशन — ताकि 30–50 किमी के भीतर के कस्टमर आपको ढूंढ सकें और लोड भेज सकें।"],
-          [Bell, lang === "en" ? "Notifications — so a new load or direct request reaches you instantly, even with the app closed." : lang === "mr" ? "नोटिफिकेशन — जेणेकरून नवीन लोड किंवा थेट विनंती अ‍ॅप बंद असतानाही लगेच पोहोचेल." : "नोटिफिकेशन — ताकि नया लोड या सीधा अनुरोध ऐप बंद होने पर भी तुरंत पहुंचे।"],
-          [Camera, lang === "en" ? "Camera/Photos — asked for separately whenever you update your KYC documents, vehicle photo, or profile picture." : lang === "mr" ? "कॅमेरा/फोटो — KYC कागदपत्रे, गाडीचा फोटो किंवा प्रोफाइल फोटो बदलताना यासाठी वेगळे विचारले जाईल." : "कैमरा/फोटो — KYC दस्तावेज़, गाड़ी की फोटो या प्रोफाइल फोटो बदलते समय इसके लिए अलग से पूछा जाएगा।"],
-        ],
-      }
-    : {
-        title: lang === "en" ? "Before you start" : lang === "mr" ? "सुरू करण्याआधी" : "शुरू करने से पहले",
-        items: [
-          [MapPin, lang === "en" ? "Location — to detect your pickup point and show nearby available vehicles." : lang === "mr" ? "लोकेशन — तुमचे पिकअप ठिकाण ओळखण्यासाठी व जवळपासच्या गाड्या दाखवण्यासाठी." : "लोकेशन — आपकी पिकअप जगह पहचानने और पास की उपलब्ध गाड़ियां दिखाने के लिए।"],
-          [Bell, lang === "en" ? "Notifications — so you know the instant your driver accepts or starts the trip, even if you're not in the app." : lang === "mr" ? "नोटिफिकेशन — जेणेकरून ड्रायव्हरने स्वीकारल्यावर किंवा राइड सुरू केल्यावर लगेच कळेल, अ‍ॅपमध्ये नसतानाही." : "नोटिफिकेशन — ताकि ड्राइवर के स्वीकार करने या राइड शुरू करने पर तुरंत पता चले, भले ही आप ऐप में न हों।"],
-          [Camera, lang === "en" ? "Camera/Photos — asked for separately if you ever upload an invoice or e-way bill photo." : lang === "mr" ? "कॅमेरा/फोटो — इनव्हॉइस किंवा ई-वे बिलचा फोटो अपलोड करताना यासाठी वेगळे विचारले जाईल." : "कैमरा/फोटो — इनवॉइस या ई-वे बिल की फोटो अपलोड करते समय इसके लिए अलग से पूछा जाएगा।"],
-        ],
-      };
+  const copy = {
+    title: lang === "en" ? "Before you start" : lang === "mr" ? "सुरू करण्याआधी" : "शुरू करने से पहले",
+    items: [
+      [MapPin, lang === "en" ? "Location — to show you nearby vehicles as a customer, or share your live location with customers as a driver." : lang === "mr" ? "लोकेशन — कस्टमर म्हणून जवळपासच्या गाड्या दाखवण्यासाठी, किंवा ड्रायव्हर म्हणून कस्टमरना तुमचे लोकेशन दाखवण्यासाठी." : "लोकेशन — कस्टमर के तौर पर पास की गाड़ियां दिखाने के लिए, या ड्राइवर के तौर पर कस्टमर को अपनी लोकेशन दिखाने के लिए।"],
+      [Bell, lang === "en" ? "Notifications — so you don't miss new load alerts, direct requests, or booking status updates, even with the app closed." : lang === "mr" ? "नोटिफिकेशन — जेणेकरून नवीन लोड अलर्ट, थेट विनंती किंवा बुकिंग अपडेट्स चुकणार नाहीत, अ‍ॅप बंद असतानाही." : "नोटिफिकेशन — ताकि नए लोड अलर्ट, सीधा अनुरोध या बुकिंग अपडेट न छूटें, ऐप बंद होने पर भी।"],
+      [Camera, lang === "en" ? "Camera/Photos — asked for separately when you upload KYC documents, vehicle/profile photos, or an invoice." : lang === "mr" ? "कॅमेरा/फोटो — KYC कागदपत्रे, गाडी/प्रोफाइल फोटो किंवा इनव्हॉइस अपलोड करताना यासाठी वेगळे विचारले जाईल." : "कैमरा/फोटो — KYC दस्तावेज़, गाड़ी/प्रोफाइल फोटो या इनवॉइस अपलोड करते समय इसके लिए अलग से पूछा जाएगा।"],
+    ],
+  };
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 text-center">
@@ -8002,14 +8002,12 @@ export default function App() {
   // returning/login user never has this flag set, so they never see it.
   const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
   const [langPromptPending, setLangPromptPending] = usePersistedState("sarthi_langPromptPending", false);
-  // Whether this phone number + role has already been through
-  // PermissionsGate — persisted so it's asked once, not on every login, but
-  // scoped per mobile+role (not globally) so a second customer/driver
-  // signing in on the same shared device still gets asked themselves.
-  // Existing users see this the same as brand-new signups, since the
-  // permission system itself is new to all of them.
-  const [permsPrimedCustomer, setPermsPrimedCustomer] = usePersistedState(`sarthi_permsPrimed_customer_${customerAuth.mobile || "none"}`, false);
-  const [permsPrimedDriver, setPermsPrimedDriver] = usePersistedState(`sarthi_permsPrimed_driver_${driverAuth.mobile || "none"}`, false);
+  // Whether this device has already been through PermissionsGate — global
+  // (not per-role/mobile) since it now runs before role selection or login
+  // even happens, as the very first screen the app shows. Persisted so it's
+  // asked once per device, not on every open; existing users get it the
+  // same as brand-new installs, since the permission system itself is new.
+  const [permsPrimedGlobal, setPermsPrimedGlobal] = usePersistedState("sarthi_permsPrimedGlobal", false);
   // Google Places Autocomplete's suggestion language is fixed when its
   // script loads (see googleMapsContext.jsx) and can't be hot-swapped — so
   // picking a language reloads the page. localStorage is written directly
@@ -8545,6 +8543,20 @@ export default function App() {
     );
   }
 
+  // The very first screen on this device — before role selection, before
+  // any login form — for a brand-new install and an existing/returning
+  // user alike (permsPrimedGlobal is a fresh flag, so nobody has it set
+  // yet). See PermissionsGate for why it's role-agnostic at this point.
+  if (!permsPrimedGlobal) {
+    return (
+      <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+        <div className="w-full max-w-sm min-h-screen flex flex-col" style={{ background: C.bg }}>
+          <PermissionsGate lang={lang} onDone={() => setPermsPrimedGlobal(true)} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
@@ -8582,10 +8594,7 @@ export default function App() {
               setLangPromptPending(true);
             }} />
         )}
-        {role === "customer" && customerAuth.verified && customerChecked && customer && !permsPrimedCustomer && (
-          <PermissionsGate role="customer" docId={customerAuth.mobile} lang={lang} onDone={() => setPermsPrimedCustomer(true)} />
-        )}
-        {role === "customer" && customerAuth.verified && customerChecked && customer && permsPrimedCustomer && (
+        {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} requestDriverDirectly={requestDriverDirectly} reassignAwaitingDriver={reassignAwaitingDriver} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
@@ -8634,10 +8643,7 @@ export default function App() {
             )}
           </div>
         )}
-        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && !permsPrimedDriver && (
-          <PermissionsGate role="driver" docId={driver.mobile} lang={lang} onDone={() => setPermsPrimedDriver(true)} />
-        )}
-        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && permsPrimedDriver && (
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onChangeLang={chooseLang} onLogout={logout}
