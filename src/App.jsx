@@ -5695,7 +5695,7 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
   // once the content below actually needs more room than that leaves.
   if (myTrip) {
     return (
-      <div className="pb-5 flex flex-col" style={{ minHeight: "100dvh" }}>
+      <div className="pb-5 flex flex-col" style={{ minHeight: "100%" }}>
         <div className="flex-1" style={{ minHeight: "35vh" }}>
           <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
             driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="100%" lang={lang}
