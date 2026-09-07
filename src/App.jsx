@@ -5001,6 +5001,16 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
                   </div>
                   <div className="flex-1 min-w-0 text-xs font-black text-white">{lang === "en" ? "Current Booking/s" : lang === "mr" ? "सध्याची बुकिंग पहा" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
                 </button>
+                {/* Same blue (#0052CC) the old hamburger "Advance Booking/s"
+                    item used before it was replaced by the header pill (see
+                    the "Advance" badge above) — restored here alongside it,
+                    not instead of it. */}
+                <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: "#0052CC" }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+                    <Clock3 size={13} color="#0052CC" />
+                  </div>
+                  <div className="flex-1 min-w-0 text-xs font-black text-white">{lang === "en" ? "View Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग पहा" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}
@@ -6375,6 +6385,21 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
               <div className="px-4 py-4" style={{ background: C.navy }}>
                 <div className="text-sm font-bold text-white">{driver.name}</div>
                 {driver.mobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{driver.mobile}</div>}
+              </div>
+              <div className="p-2" style={{ borderBottom: `1px solid ${C.line}` }}>
+                {/* Same blue (#0052CC) the old hamburger "Advance Booking/s"
+                    item used before it was replaced by the header pill (see
+                    the "Advance" badge above) — restored here alongside it,
+                    not instead of it. No "Current Booking" entry here —
+                    unlike the customer, a driver's active trip goes
+                    straight to the loading/OTP screen, so there's no
+                    separate booking list worth a menu shortcut. */}
+                <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: "#0052CC" }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+                    <Clock3 size={13} color="#0052CC" />
+                  </div>
+                  <div className="flex-1 min-w-0 text-xs font-black text-white">{lang === "en" ? "View Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग पहा" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                </button>
               </div>
               <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}
