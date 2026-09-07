@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
-  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock,
+  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -1769,6 +1769,147 @@ function StarRating({ value, onRate }) {
 
 const ADMIN_PHONE = "+917972399892";
 const ADMIN_WHATSAPP = "917972399892";
+
+// Best-effort phone-brand sniff from the User-Agent string, purely to
+// preselect the right tab in BackgroundAlertsGuide below — Android OEMs
+// don't expose a real "what brand am I" API to the web, so this can guess
+// wrong (spoofed/unusual UA strings, rebadged devices); the guide always
+// lets the driver pick a different brand by hand regardless.
+function detectPhoneBrand() {
+  const ua = navigator.userAgent || "";
+  if (/iPhone|iPad|iPod/i.test(ua)) return "ios";
+  if (/POCO|Redmi|MI \d|XIAOMI/i.test(ua)) return "xiaomi";
+  if (/\bvivo\b|iQOO/i.test(ua)) return "vivo";
+  if (/\bOPPO\b|CPH\d/i.test(ua)) return "oppo";
+  if (/RMX\d|realme/i.test(ua)) return "realme";
+  if (/SM-|Samsung/i.test(ua)) return "samsung";
+  if (/OnePlus/i.test(ua)) return "oneplus";
+  return "other";
+}
+
+// Per-brand steps for the two Android settings (battery optimization +
+// autostart/background-activity manager) that OEMs hide behind their own,
+// non-standard menus — the actual, common reason a driver whose phone is
+// already "trusting" Porter still doesn't get Apna Transport's alerts with
+// the app closed. Nothing here is something the app can flip itself (no
+// web API reaches into Android's settings) — this is purely a step-by-step
+// guide the driver has to walk through by hand, once, on their own phone.
+const BATTERY_GUIDE_BRANDS = [
+  {
+    key: "xiaomi", label: "Xiaomi / Redmi / POCO",
+    steps: [
+      { en: "Settings → Apps → Manage apps → Apna Transport → Battery saver → set to \"No restrictions\".", mr: "Settings → Apps → Manage apps → Apna Transport → Battery saver → \"No restrictions\" निवडा.", hi: "Settings → Apps → Manage apps → Apna Transport → Battery saver → \"No restrictions\" चुनें।" },
+      { en: "Settings → Apps → Permissions → Autostart → turn ON for Apna Transport.", mr: "Settings → Apps → Permissions → Autostart → Apna Transport साठी चालू करा.", hi: "Settings → Apps → Permissions → Autostart → Apna Transport के लिए ऑन करें।" },
+      { en: "Recent apps screen → find Apna Transport's card → tap the lock icon so MIUI doesn't close it.", mr: "Recent apps स्क्रीनवर Apna Transport चे कार्ड शोधा → लॉक आयकॉनवर टॅप करा, जेणेकरून MIUI ते बंद करणार नाही.", hi: "Recent apps स्क्रीन में Apna Transport का कार्ड ढूंढें → लॉक आइकन पर टैप करें ताकि MIUI इसे बंद न करे।" },
+    ],
+  },
+  {
+    key: "vivo", label: "Vivo / iQOO",
+    steps: [
+      { en: "Settings → Battery → Background power consumption management → find Apna Transport → set to \"Allow\".", mr: "Settings → Battery → Background power consumption management → Apna Transport शोधा → \"Allow\" करा.", hi: "Settings → Battery → Background power consumption management → Apna Transport ढूंढें → \"Allow\" करें।" },
+      { en: "Settings → Apps → Autostart (or More Settings → Permission Manager → Autostart) → turn ON for Apna Transport.", mr: "Settings → Apps → Autostart (किंवा More Settings → Permission Manager → Autostart) → Apna Transport साठी चालू करा.", hi: "Settings → Apps → Autostart (या More Settings → Permission Manager → Autostart) → Apna Transport के लिए ऑन करें।" },
+      { en: "Recent apps screen → tap the lock icon on Apna Transport's card.", mr: "Recent apps स्क्रीनवर Apna Transport च्या कार्डवरील लॉक आयकॉनवर टॅप करा.", hi: "Recent apps स्क्रीन में Apna Transport के कार्ड पर लॉक आइकन पर टैप करें।" },
+    ],
+  },
+  {
+    key: "oppo", label: "Oppo",
+    steps: [
+      { en: "Settings → Battery → Apna Transport → choose \"Allow background activity\" / \"Don't optimize\".", mr: "Settings → Battery → Apna Transport → \"Allow background activity\" / \"Don't optimize\" निवडा.", hi: "Settings → Battery → Apna Transport → \"Allow background activity\" / \"Don't optimize\" चुनें।" },
+      { en: "Settings → App Management → Startup Manager (or Privacy Permissions → Startup Manager) → turn ON Apna Transport.", mr: "Settings → App Management → Startup Manager (किंवा Privacy Permissions → Startup Manager) → Apna Transport चालू करा.", hi: "Settings → App Management → Startup Manager (या Privacy Permissions → Startup Manager) → Apna Transport ऑन करें।" },
+      { en: "Recent apps screen → tap the lock icon on Apna Transport's card.", mr: "Recent apps स्क्रीनवर Apna Transport च्या कार्डवरील लॉक आयकॉनवर टॅप करा.", hi: "Recent apps स्क्रीन में Apna Transport के कार्ड पर लॉक आइकन पर टैप करें।" },
+    ],
+  },
+  {
+    key: "realme", label: "Realme",
+    steps: [
+      { en: "Settings → Battery → Apna Transport → choose \"Allow background activity\" / \"Don't optimize\".", mr: "Settings → Battery → Apna Transport → \"Allow background activity\" / \"Don't optimize\" निवडा.", hi: "Settings → Battery → Apna Transport → \"Allow background activity\" / \"Don't optimize\" चुनें।" },
+      { en: "Settings → App Management → Startup Manager → turn ON Apna Transport.", mr: "Settings → App Management → Startup Manager → Apna Transport चालू करा.", hi: "Settings → App Management → Startup Manager → Apna Transport ऑन करें।" },
+      { en: "Recent apps screen → tap the lock icon on Apna Transport's card.", mr: "Recent apps स्क्रीनवर Apna Transport च्या कार्डवरील लॉक आयकॉनवर टॅप करा.", hi: "Recent apps स्क्रीन में Apna Transport के कार्ड पर लॉक आइकन पर टैप करें।" },
+    ],
+  },
+  {
+    key: "samsung", label: "Samsung",
+    steps: [
+      { en: "Settings → Apps → Apna Transport → Battery → set to \"Unrestricted\".", mr: "Settings → Apps → Apna Transport → Battery → \"Unrestricted\" करा.", hi: "Settings → Apps → Apna Transport → Battery → \"Unrestricted\" करें।" },
+      { en: "Settings → Battery and device care → Background usage limits → make sure Apna Transport is NOT in \"Sleeping apps\" or \"Deep sleeping apps\" — remove it from there if it is.", mr: "Settings → Battery and device care → Background usage limits → Apna Transport \"Sleeping apps\" किंवा \"Deep sleeping apps\" मध्ये नाही याची खात्री करा — असल्यास तिथून काढा.", hi: "Settings → Battery and device care → Background usage limits → देखें कि Apna Transport \"Sleeping apps\" या \"Deep sleeping apps\" में तो नहीं है — अगर है तो वहां से हटाएं।" },
+    ],
+  },
+  {
+    key: "oneplus", label: "OnePlus",
+    steps: [
+      { en: "Settings → Battery → Battery optimization → find Apna Transport → \"Don't optimize\".", mr: "Settings → Battery → Battery optimization → Apna Transport शोधा → \"Don't optimize\" निवडा.", hi: "Settings → Battery → Battery optimization → Apna Transport ढूंढें → \"Don't optimize\" चुनें।" },
+      { en: "Settings → Apps → Special app access → Auto-launch → turn ON for Apna Transport.", mr: "Settings → Apps → Special app access → Auto-launch → Apna Transport साठी चालू करा.", hi: "Settings → Apps → Special app access → Auto-launch → Apna Transport के लिए ऑन करें।" },
+    ],
+  },
+  {
+    key: "other", label: "Other Android",
+    steps: [
+      { en: "Settings → Apps → Apna Transport → Battery → set to \"Unrestricted\" / \"Don't optimize\".", mr: "Settings → Apps → Apna Transport → Battery → \"Unrestricted\" / \"Don't optimize\" करा.", hi: "Settings → Apps → Apna Transport → Battery → \"Unrestricted\" / \"Don't optimize\" करें।" },
+      { en: "Settings → Apps → Apna Transport → Mobile data & Wi-Fi → make sure background data isn't restricted.", mr: "Settings → Apps → Apna Transport → Mobile data & Wi-Fi → बॅकग्राउंड डेटा बंद नाही याची खात्री करा.", hi: "Settings → Apps → Apna Transport → Mobile data & Wi-Fi → देखें कि बैकग्राउंड डेटा बंद तो नहीं है।" },
+    ],
+  },
+  {
+    key: "ios", label: "iPhone",
+    steps: [
+      { en: "iPhones don't have a battery/autostart manager like Android — the only thing that matters is adding Apna Transport to your Home Screen (below). Without that, notifications don't work at all on iPhone.", mr: "iPhone मध्ये Android सारखे बॅटरी/ऑटोस्टार्ट मॅनेजर नसते — फक्त खाली दिलेल्याप्रमाणे Apna Transport Home Screen वर अ‍ॅड करणे महत्त्वाचे आहे. तसे न केल्यास iPhone वर नोटिफिकेशन अजिबात काम करणार नाहीत.", hi: "iPhone में Android जैसा बैटरी/ऑटोस्टार्ट मैनेजर नहीं होता — बस नीचे बताए अनुसार Apna Transport को Home Screen पर जोड़ना ज़रूरी है। ऐसा न करने पर iPhone पर नोटिफिकेशन बिल्कुल काम नहीं करेंगे।" },
+      { en: "Settings → Apna Transport (under installed apps) → make sure Background App Refresh is ON.", mr: "Settings → Apna Transport (installed apps मध्ये) → Background App Refresh चालू असल्याची खात्री करा.", hi: "Settings → Apna Transport (installed apps में) → Background App Refresh ऑन है यह पक्का करें।" },
+    ],
+  },
+];
+
+// Menu item (both roles' hamburger menus) linking here — see the exact
+// per-brand steps above. Purely instructional: nothing on this screen
+// changes an Android setting itself, since no web page can reach into the
+// phone's settings — the driver has to do each step by hand, once, on
+// their own phone. Explains, up front, why this is needed at all (a real,
+// frequent driver complaint: Porter already works in the background on
+// their phone because they whitelisted it at some point; every new app,
+// Apna Transport included, starts from zero on these OEM-specific toggles
+// — it is never a case of one app "blocking" another).
+function BackgroundAlertsGuide({ lang }) {
+  const [brand, setBrand] = useState(() => detectPhoneBrand());
+  const active = BATTERY_GUIDE_BRANDS.find((b) => b.key === brand) || BATTERY_GUIDE_BRANDS[BATTERY_GUIDE_BRANDS.length - 1];
+
+  return (
+    <div className="px-5 py-5">
+      <div className="rounded-xl p-4 mb-4" style={{ background: C.metallicGold }}>
+        <h2 className="text-base font-bold mb-1" style={{ color: "#000000" }}>{lang === "en" ? "Fix background alerts" : lang === "mr" ? "बॅकग्राउंड अलर्ट सुरळीत करा" : "बैकग्राउंड अलर्ट ठीक करें"}</h2>
+        <p className="text-xs font-semibold" style={{ color: "#000000" }}>
+          {lang === "en" ? "If you're not getting new-load alerts with the app closed, it's almost always your phone's own battery/autostart settings — not something Apna Transport or any other app is blocking. Every app (including Porter) has to be individually allowed here; it's never exclusive to one app." : lang === "mr" ? "अ‍ॅप बंद असताना नवीन लोड अलर्ट येत नसतील, तर हे जवळजवळ नेहमीच तुमच्या फोनच्या बॅटरी/ऑटोस्टार्ट सेटिंग्जमुळे असते — Apna Transport किंवा दुसरे कोणतेही अ‍ॅप हे ब्लॉक करत नाही. इथे प्रत्येक अ‍ॅपला (Porter सह) वेगवेगळी परवानगी द्यावी लागते; ती कधीच एकाच अ‍ॅपसाठी खास राखीव नसते." : "अगर ऐप बंद होने पर नए लोड अलर्ट नहीं आ रहे, तो लगभग हमेशा यह आपके फोन की अपनी बैटरी/ऑटोस्टार्ट सेटिंग्स की वजह से होता है — Apna Transport या कोई और ऐप इसे ब्लॉक नहीं कर रहा। यहां हर ऐप को (Porter सहित) अलग से इजाज़त देनी पड़ती है; यह कभी किसी एक ऐप के लिए खास नहीं होता।"}
+        </p>
+      </div>
+
+      <div className="rounded-lg p-3 mb-4" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <div className="text-xs font-bold mb-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 0 — install it as a real app" : lang === "mr" ? "स्टेप 0 — खरे अ‍ॅप म्हणून इन्स्टॉल करा" : "स्टेप 0 — इसे असली ऐप की तरह इंस्टॉल करें"}</div>
+        <p className="text-xs font-semibold" style={{ color: C.ink }}>
+          {lang === "en" ? "If you're opening Apna Transport from a browser bookmark instead of an icon on your home screen, do this first: open your browser's menu → \"Add to Home Screen\" / \"Install app\". A browser tab gets suspended far more aggressively than an installed app." : lang === "mr" ? "जर तुम्ही Apna Transport ब्राउझर बुकमार्कवरून उघडत असाल (होम स्क्रीनवरील आयकॉनऐवजी), तर आधी हे करा: ब्राउझरच्या मेनूमध्ये जा → \"Add to Home Screen\" / \"Install app\". ब्राउझर टॅब इन्स्टॉल केलेल्या अ‍ॅपपेक्षा जास्त पटकन बंद केला जातो." : "अगर आप Apna Transport को होम स्क्रीन के आइकन की बजाय ब्राउज़र बुकमार्क से खोलते हैं, तो पहले यह करें: ब्राउज़र के मेनू में जाएं → \"Add to Home Screen\" / \"Install app\"। ब्राउज़र टैब को इंस्टॉल किए हुए ऐप से कहीं ज़्यादा जल्दी बंद कर दिया जाता है।"}
+        </p>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
+        {BATTERY_GUIDE_BRANDS.map((b) => (
+          <button key={b.key} onClick={() => setBrand(b.key)}
+            className="shrink-0 px-3.5 py-2 rounded-full text-xs font-bold whitespace-nowrap"
+            style={{ background: brand === b.key ? C.marigoldDeep : C.paper, color: brand === b.key ? "#FFFFFF" : C.ink, border: `1.5px solid ${C.marigoldDeep}` }}>
+            {b.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] font-semibold mb-3" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "Guessed from your phone — tap a different brand above if this isn't yours." : lang === "mr" ? "तुमच्या फोनवरून अंदाज घेतला आहे — हा तुमचा ब्रँड नसल्यास वरून दुसरा निवडा." : "आपके फोन से अंदाज़ा लगाया गया है — अगर यह आपका ब्रांड नहीं है तो ऊपर से दूसरा चुनें।"}
+      </p>
+
+      <div className="space-y-3">
+        {active.steps.map((step, i) => (
+          <div key={i} className="flex items-start gap-3 rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-black text-white" style={{ background: C.navy }}>{i + 1}</div>
+            <span className="text-xs font-semibold" style={{ color: C.ink }}>{step[lang] || step.en}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
   const [complaint, setComplaint] = useState("");
@@ -6092,6 +6233,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
         {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
         {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
         {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} onOpen={announcementAlerts.markSeen} />}
+        {settingsView === "batteryGuide" && <BackgroundAlertsGuide lang={lang} />}
       </div>
     );
   }
@@ -6221,6 +6363,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
               </div>
               <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : lang === "mr" ? "संपर्क व हेल्पलाइन" : "संपर्क व हेल्पलाइन"}
+              </button>
+              <button onClick={() => { setSettingsView("batteryGuide"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Smartphone size={16} color={C.marigoldDeep} /> {lang === "en" ? "Fix Background Alerts" : lang === "mr" ? "बॅकग्राउंड अलर्ट सुरळीत करा" : "बैकग्राउंड अलर्ट ठीक करें"}
               </button>
               <button onClick={() => { onOpenTerms(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : lang === "mr" ? "नियम व अटी" : "नियम व शर्तें"}
