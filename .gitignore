@@ -9,3 +9,5 @@ serviceAccountKey*.json
 twa/project
 twa/*.keystore
 twa/*.jks
+android/*.keystore
+android/*.jks

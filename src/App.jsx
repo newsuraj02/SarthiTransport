@@ -14,7 +14,8 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
+import { registerPlugin } from "@capacitor/core";
 
 // ---------------- design tokens ----------------
 // Bright/high-visibility flat palette — legible in direct outdoor sunlight
@@ -740,31 +741,58 @@ function playBeepTone() {
 // what the banner's button calls to trigger the actual browser permission
 // prompt on first use.
 function useRideNotifications(collectionName, docId, lang) {
-  const [permission, setPermission] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
+  // Web tab: Notification.permission is read synchronously so the very
+  // first render already shows the right banner (unchanged from before).
+  // Native app: there's no synchronous equivalent (checkPushPermission
+  // goes through the Capacitor bridge), so it starts at "default" and the
+  // effect below corrects it moments later — isNativeApp false (a plain
+  // browser tab, which is the only case that shipped before this
+  // migration) never takes this branch, so that behaviour is untouched.
+  const [permission, setPermission] = useState(() => {
+    if (isNativeApp) return "default";
+    return typeof Notification !== "undefined" ? Notification.permission : "unsupported";
+  });
   const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (!isNativeApp) return;
+    let cancelled = false;
+    checkPushPermission().then((p) => { if (!cancelled) setPermission(p); });
+    return () => { cancelled = true; };
+  }, []);
 
   const enable = async () => {
     const result = await requestPushToken();
     if (result.ok && docId) {
       patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
       setPermission("granted");
+    } else if (isNativeApp) {
+      setPermission(result.reason === "unsupported" ? "unsupported" : await checkPushPermission());
     } else {
       setPermission(result.reason === "unsupported" ? "unsupported" : (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
     }
   };
 
   useEffect(() => {
-    if (typeof Notification === "undefined" || Notification.permission !== "granted" || !docId) return;
-    requestPushToken().then((result) => {
-      if (result.ok) patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
-    });
+    if (!docId) return;
+    let cancelled = false;
     let unsub;
-    listenForegroundPush((payload) => {
-      playBeepTone();
-      setToast(payload.notification || null);
-      setTimeout(() => setToast(null), 5000);
-    }).then((fn) => { unsub = fn; });
-    return () => unsub?.();
+    (async () => {
+      const granted = isNativeApp
+        ? (await checkPushPermission()) === "granted"
+        : (typeof Notification !== "undefined" && Notification.permission === "granted");
+      if (!granted || cancelled) return;
+      const result = await requestPushToken();
+      if (result.ok) patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+      const fn = await listenForegroundPush((payload) => {
+        playBeepTone();
+        setToast(payload.notification || null);
+        setTimeout(() => setToast(null), 5000);
+      });
+      if (cancelled) { fn?.(); return; }
+      unsub = fn;
+    })();
+    return () => { cancelled = true; unsub?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionName, docId]);
 
@@ -851,6 +879,30 @@ function androidSettingsBridgeUrl(target) {
   return `intent:#Intent;package=${TWA_PACKAGE_ID};action=${TWA_PACKAGE_ID}.OPEN_SETTINGS;S.target=${target};end`;
 }
 
+// Capacitor's Android app (android/ — the wrapper this app is migrating
+// to; see capacitor.config.ts) carries its own SettingsBridgeActivity,
+// ported 1:1 from the TWA's (see android/app/.../SettingsBridgeActivity.java
+// and its AndroidManifest.xml entry) — same custom OPEN_SETTINGS action,
+// same "target" extra. It's reached differently, though: Capacitor's
+// WebView (com.getcapacitor.Bridge), unlike Chrome/Custom Tabs (what the
+// TWA actually runs on), has no special handling for "intent:" scheme
+// links — an <a href={androidSettingsBridgeUrl(...)}> just silently fails
+// there too, the same failure this whole mechanism exists to route around.
+// So the web side instead calls a tiny custom native plugin
+// (android/app/.../SettingsBridgePlugin.java) directly through Capacitor's
+// JS bridge, which itself fires the same OPEN_SETTINGS intent natively.
+// document.referrer is not a reliable native/web signal inside a
+// Capacitor WebView (it isn't launched via an android-app:// referrer the
+// way a Custom Tab is), so this app is detected via Capacitor's own
+// isNativePlatform() (see isNativeApp in ./firebaseClient) instead.
+const SettingsBridgeNative = registerPlugin("SettingsBridge");
+function isRunningInCapacitorApp() {
+  return isNativeApp;
+}
+function openNativeSettingsBridge(target) {
+  SettingsBridgeNative.open({ target }).catch((e) => console.error("[settingsBridge]", e));
+}
+
 // Re-added for the driver "new load posted" push carve-out — see
 // useRideNotifications above. Also used on the Customer side now (see
 // context="customer") so they're told when their driver accepts/starts the
@@ -867,6 +919,13 @@ function NotificationBanner({ permission, onEnable, lang, context = "driver" }) 
         <a href={androidSettingsBridgeUrl("notifications")} className="block mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
           {msg}{tapHint}
         </a>
+      );
+    }
+    if (isRunningInCapacitorApp()) {
+      return (
+        <button onClick={() => openNativeSettingsBridge("notifications")} className="block w-full mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
+          {msg}{tapHint}
+        </button>
       );
     }
     return (
@@ -901,6 +960,13 @@ function LocationBanner({ permission, onEnable, lang, context = "customer" }) {
         <a href={androidSettingsBridgeUrl("location")} className="block mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
           {msg}{tapHint}
         </a>
+      );
+    }
+    if (isRunningInCapacitorApp()) {
+      return (
+        <button onClick={() => openNativeSettingsBridge("location")} className="block w-full mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
+          {msg}{tapHint}
+        </button>
       );
     }
     return (
