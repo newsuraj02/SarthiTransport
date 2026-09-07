@@ -1304,6 +1304,7 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
     ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pickup)}&destination=${encodeURIComponent(drop || pickup)}&travelmode=driving`
     : null;
   return (
+    <div>
     <div className="relative rounded-lg overflow-hidden" style={{ height, background: "#E5E5E5", border: `1px solid ${C.line}` }}>
       <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
         {Array.from({ length: 6 }).map((_, i) => (
@@ -1327,10 +1328,16 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
           🏁 {lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}
         </div>
       )}
-      {mapsUrl && <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="absolute inset-0" aria-label="Open in Google Maps" />}
-      <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFCC00", color: "#000000" }}>
-        {lang === "en" ? "Tap to open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडण्यासाठी टॅप करा" : "गूगल मैप्स में खोलने के लिए टैप करें"}
-      </div>
+    </div>
+    {/* Below the box, not overlapping it — same reasoning as the real
+        LiveTrackingMap's button below (see its comment): keeps behavior
+        consistent regardless of which one happens to be rendering. */}
+    {mapsUrl && (
+      <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+        className="flex items-center justify-center gap-1.5 text-xs font-black py-2 mt-1.5 rounded-lg shadow-sm" style={{ background: "#FFCC00", color: "#000000" }}>
+        {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
+      </a>
+    )}
     </div>
   );
 }
@@ -1456,6 +1463,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
     return <MockMap pickup={pickup} drop={toPickup ? null : drop} progress={toPickup ? undefined : progress} zoneColor={zoneColor} height={height} lang={lang} />;
   }
   return (
+    <div>
     <div className="relative rounded-lg overflow-hidden" style={{ height, border: `1px solid ${C.line}` }}>
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
@@ -1497,12 +1505,19 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
           />
         )}
       </GoogleMap>
-      {mapsUrl && (
-        <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-          className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg" style={{ background: "#FFCC00", color: "#000000" }}>
-          {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
-        </a>
-      )}
+    </div>
+    {/* Sits in normal flow right below the map now, not overlapping it —
+        with gestureHandling: "greedy" enabled above (see options), Google's
+        own map div can swallow touches meant for anything absolutely
+        positioned on top of it, which is exactly what made this button
+        visible but unresponsive. Placing it outside the map's box entirely
+        removes any doubt about who receives the tap. */}
+    {mapsUrl && (
+      <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+        className="flex items-center justify-center gap-1.5 text-xs font-black py-2 mt-1.5 rounded-lg shadow-sm" style={{ background: "#FFCC00", color: "#000000" }}>
+        {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
+      </a>
+    )}
     </div>
   );
 }
