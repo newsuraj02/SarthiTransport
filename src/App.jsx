@@ -837,8 +837,8 @@ function NotificationBanner({ permission, onEnable, lang, context = "driver" }) 
   if (permission === "granted" || permission === "unsupported") return null;
   if (permission === "denied") {
     const msg = context === "customer"
-      ? (lang === "en" ? "Notifications are blocked in your browser settings — enable them there to know the moment your driver accepts or starts the trip." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये नोटिफिकेशन बंद आहेत — ड्रायव्हरने स्वीकारल्यावर किंवा राइड सुरू केल्यावर कळण्यासाठी तिथे चालू करा." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — ड्राइवर के स्वीकार करने या राइड शुरू करने पर पता चलने के लिए वहां चालू करें।")
-      : (lang === "en" ? "Notifications are blocked in your browser settings — enable them there to get new load alerts." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये नोटिफिकेशन बंद आहेत — नवीन लोड अलर्टसाठी तिथे चालू करा." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — नए लोड अलर्ट के लिए वहां चालू करें।");
+      ? (lang === "en" ? "Notifications are turned off for Apna Transport — turn them on in your phone's Settings to know the moment your driver accepts or starts the trip." : lang === "mr" ? "Apna Transport साठी नोटिफिकेशन बंद आहेत — तुमच्या फोनच्या Settings मध्ये ती चालू करा, जेणेकरून ड्रायव्हरने स्वीकारल्यावर किंवा राइड सुरू केल्यावर लगेच कळेल." : "Apna Transport के लिए नोटिफिकेशन बंद हैं — अपने फोन की Settings में उन्हें चालू करें, ताकि ड्राइवर के स्वीकार करने या राइड शुरू करने पर तुरंत पता चले।")
+      : (lang === "en" ? "Notifications are turned off for Apna Transport — turn them on in your phone's Settings to get new load alerts." : lang === "mr" ? "Apna Transport साठी नोटिफिकेशन बंद आहेत — नवीन लोड अलर्टसाठी तुमच्या फोनच्या Settings मध्ये ती चालू करा." : "Apna Transport के लिए नोटिफिकेशन बंद हैं — नए लोड अलर्ट के लिए अपने फोन की Settings में उन्हें चालू करें।");
     return (
       <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
         {msg}
@@ -863,8 +863,8 @@ function LocationBanner({ permission, onEnable, lang, context = "customer" }) {
   if (permission === "granted" || permission === "unsupported") return null;
   if (permission === "denied") {
     const msg = context === "driver"
-      ? (lang === "en" ? "Location is blocked in your browser settings — enable it so customers can find you and send you loads." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये लोकेशन बंद आहे — कस्टमरना तुम्ही सापडण्यासाठी आणि लोड मिळण्यासाठी ते चालू करा." : "आपके ब्राउज़र में लोकेशन बंद है — कस्टमर आपको ढूंढ सकें और लोड मिल सके, इसके लिए इसे चालू करें।")
-      : (lang === "en" ? "Location is blocked in your browser settings — enable it to see nearby vehicles and get matched with a driver." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये लोकेशन बंद आहे — जवळपासच्या गाड्या पाहण्यासाठी व ड्रायव्हर मिळण्यासाठी ते चालू करा." : "आपके ब्राउज़र में लोकेशन बंद है — पास की गाड़ियां देखने और ड्राइवर मिलने के लिए इसे चालू करें।");
+      ? (lang === "en" ? "Location is turned off for Apna Transport — turn it on in your phone's Settings so customers can find you and send you loads." : lang === "mr" ? "Apna Transport साठी लोकेशन बंद आहे — कस्टमरना तुम्ही सापडण्यासाठी आणि लोड मिळण्यासाठी ते तुमच्या फोनच्या Settings मध्ये चालू करा." : "Apna Transport के लिए लोकेशन बंद है — कस्टमर आपको ढूंढ सकें और लोड मिल सके, इसके लिए इसे अपने फोन की Settings में चालू करें।")
+      : (lang === "en" ? "Location is turned off for Apna Transport — turn it on in your phone's Settings to see nearby vehicles and get matched with a driver." : lang === "mr" ? "Apna Transport साठी लोकेशन बंद आहे — जवळपासच्या गाड्या पाहण्यासाठी व ड्रायव्हर मिळण्यासाठी ते तुमच्या फोनच्या Settings मध्ये चालू करा." : "Apna Transport के लिए लोकेशन बंद है — पास की गाड़ियां देखने और ड्राइवर मिलने के लिए इसे अपने फोन की Settings में चालू करें।");
     return (
       <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
         {msg}
@@ -967,7 +967,7 @@ function PermissionsGate({ lang, onDone }) {
           : (lang === "en" ? "Allow & Continue" : lang === "mr" ? "परवानगी द्या आणि पुढे जा" : "अनुमति दें और आगे बढ़ें")}
       </button>
       <p className="text-[10px] font-semibold mt-3" style={{ color: C.inkSoft }}>
-        {lang === "en" ? "You can change these anytime in your browser's site settings." : lang === "mr" ? "तुम्ही या कधीही तुमच्या ब्राउझरच्या साइट सेटिंग्जमध्ये बदलू शकता." : "आप इन्हें कभी भी अपने ब्राउज़र की साइट सेटिंग्स में बदल सकते हैं।"}
+        {lang === "en" ? "You can change these anytime in your phone's Settings." : lang === "mr" ? "तुम्ही या कधीही तुमच्या फोनच्या Settings मध्ये बदलू शकता." : "आप इन्हें कभी भी अपने फोन की Settings में बदल सकते हैं।"}
       </p>
     </div>
   );
