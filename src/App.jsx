@@ -5056,6 +5056,24 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
     return () => navigator.geolocation.clearWatch(watchId);
   }, [myTrip?.id, driver.online, driver.mobile]);
 
+  // A customer has directly requested this driver and is waiting for
+  // Accept/Reject — takes over the screen until they respond. Computed
+  // unconditionally (not just after the completedTrip early return below)
+  // purely so the ringtone effect right after it — a hook — can be called
+  // unconditionally too, same reasoning as myTripRef above.
+  const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && b.pendingDriverName === driver.name);
+  // Ringtone-style repeating alarm while this screen is up — the
+  // background push (see functions/index.js: onDirectRequestAssigned) is
+  // what actually reaches the driver if the app is closed; this is the
+  // foreground counterpart so it still feels like an alarm, not a single
+  // beep, while they're actually looking at the Accept/Reject screen.
+  useEffect(() => {
+    if (!awaitingBooking) return;
+    playBeepTone();
+    const id = setInterval(playBeepTone, 4000);
+    return () => clearInterval(id);
+  }, [awaitingBooking?.id]);
+
   if (completedTrip) {
     return (
       <div className="px-5 pt-5 pb-5">
@@ -5071,16 +5089,13 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
     .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
     .slice(0, 25);
 
-  // A customer accepted this driver's bid and is waiting for them to
-  // confirm — takes over the screen until Accept/Reject is tapped.
-  const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && b.pendingDriverName === driver.name);
   if (awaitingBooking && !myTrip) {
     const ab = awaitingBooking;
     return (
       <div className="px-5 pt-5 pb-5">
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.success }}>
           <CheckCircle2 size={16} color="#FFFFFF" />
-          <span className="text-sm font-black text-white">{lang === "en" ? "A customer accepted your bid" : lang === "mr" ? "एका ग्राहकाने तुमची बोली स्वीकारली" : "एक ग्राहक ने आपकी बोली स्वीकार की"}</span>
+          <span className="text-sm font-black text-white">{lang === "en" ? "A customer has requested you directly" : lang === "mr" ? "एका ग्राहकाने तुम्हाला थेट विनंती केली आहे" : "एक ग्राहक ने आपसे सीधे अनुरोध किया है"}</span>
         </div>
         <div className="rounded-xl p-3 shadow-sm mb-3" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
           <RideTypeBanner booking={ab} lang={lang} />
@@ -5092,10 +5107,12 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
             <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.distance} {lang === "en" ? "km" : "किमी"}</span>
             <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
           </div>
-          <div className="text-center rounded-lg py-2.5 mb-3" style={{ background: C.metallicGold }}>
-            <div className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Your fare" : lang === "mr" ? "तुमचे भाडे" : "आपका भाड़ा"}</div>
-            <div className="text-2xl font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(ab.fare)}</div>
-          </div>
+          {ab.fare != null && (
+            <div className="text-center rounded-lg py-2.5 mb-3" style={{ background: C.metallicGold }}>
+              <div className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Your fare" : lang === "mr" ? "तुमचे भाडे" : "आपका भाड़ा"}</div>
+              <div className="text-2xl font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(ab.fare)}</div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => driverRespondBooking?.(ab.id, false)}
               className="rounded-lg py-3.5 text-base font-black" style={{ background: C.paper, border: `2px solid ${C.safety}`, color: C.safety }}>

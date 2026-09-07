@@ -1,4 +1,4 @@
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
@@ -181,6 +181,64 @@ exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event
   });
 
   await Promise.all(sends);
+});
+
+// A loud, high-priority alert to one specific driver — reused for both a
+// fresh direct request and the 1-minute auto-reassign/manual-reject
+// retarget moving the same booking to the next driver (see
+// retargetToNextDriver in src/App.jsx). Reuses the exact same channel/
+// pattern as sendLoadAlert above (already proven to reach a closed app)
+// rather than a new, unregistered notification channel.
+async function sendDirectRequestAlert(token, load, bookingId) {
+  if (!token) return;
+  try {
+    await getMessaging().send({
+      token,
+      notification: {
+        title: "🚨 आपके लिए सीधी बुकिंग रिक्वेस्ट!",
+        body: `📍 लोडिंग: ${load.pickup}\n🏁 अनलोडिंग: ${load.drop}${load.weight ? `\n⚖️ ${load.weight}kg` : ""}\n⏱️ 60 सेकंड में जवाब दें`,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "new_load_alerts",
+          priority: "max",
+          visibility: "public",
+          defaultSound: true,
+          defaultVibrateTimings: false,
+          vibrateTimingsMillis: [0, 500, 200, 500, 200, 500, 200, 500],
+        },
+      },
+      webpush: {
+        headers: { Urgency: "high" },
+        notification: { requireInteraction: true, vibrate: [500, 200, 500, 200, 500, 200, 500], tag: "direct-request", renotify: true },
+        fcmOptions: { link: "/?open=driver" },
+      },
+      data: { type: "direct_request", bookingId },
+    });
+  } catch (e) {
+    console.error("[push] direct-request alert send failed:", e.message);
+  }
+}
+
+// Fires whenever a booking becomes (or stays, but with a different driver)
+// "AwaitingDriver" — a fresh direct request from CustomerBooking's driver
+// picker, or a retarget after the previous driver timed out/rejected.
+// Reaches the newly-targeted driver even if their app is fully closed,
+// same as onNewLoadPosted above. Only fires on a real change of who's
+// pending, not on unrelated field updates to the same booking (e.g. the
+// customer's live GPS ticking during a still-Bidding wait elsewhere).
+exports.onDirectRequestAssigned = onDocumentWritten("bookings/{bookingId}", async (event) => {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  if (!after || after.status !== "AwaitingDriver" || !after.pendingDriverName) return;
+  if (before?.status === "AwaitingDriver" && before?.pendingDriverName === after.pendingDriverName) return;
+
+  const snap = await db.collection("drivers").where("name", "==", after.pendingDriverName).limit(1).get();
+  const driver = snap.docs[0]?.data();
+  if (!driver?.fcmToken) return;
+
+  await sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId);
 });
 
 // Runs hourly. A customer's load that has sat in "Bidding" for 6+ hours
