@@ -5432,6 +5432,12 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
   const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg || "");
   const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "");
+  // Capacity is optional (not part of canSubmit) — so it can't gate the
+  // steps after it the same way a required field does. It still gets its
+  // turn in the guided highlight order (right after Vehicle Number,
+  // matching the form's own layout) by counting as "done" once the driver
+  // has visited and left it, filled in or not.
+  const [capacityTouched, setCapacityTouched] = useState(false);
 
   // Auto-fills capacity from VEHICLE_MODEL_SPECS the moment the typed
   // vehicle name matches a known model — but only if the driver hasn't
@@ -5486,14 +5492,15 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   };
 
   const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && vehicleTypeName.trim() && !anyUploading);
-  // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
-  // dimensions are optional (not part of canSubmit), so they're skipped.
+  // Guided-step highlighting for the KYC fields — see GuidedStep. Capacity
+  // (kg) is optional (not part of canSubmit) but still gets a step in the
+  // sequence, in form order, via capacityTouched above — see that comment.
   // Vehicle Front isn't required here either — see the photo tile below,
   // same reasoning as DriverProfileEdit's document list already applied:
   // the side profile is the only vehicle photo that matters to a customer
   // browsing bids, so dropping Front halves the photo-upload burden on
   // signup without losing anything a customer actually sees.
-  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoSide];
+  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!capacityKg.trim() || capacityTouched, !!vehicleTypeName.trim(), !!vehiclePhotoSide];
   const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
   // First-time submission within this driver's own 30-day trial (from
   // their own signup date) skips the admin approval wait entirely — a
@@ -5517,7 +5524,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     // Submitted for real — clear the draft so a later resubmission (after a
     // rejection) starts from the driver's actual saved data, not this.
     setDl(null); setPhoto(null); setVehicleTypeName(""); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
-    setCapacityKg(""); setVehicleNumber("");
+    setCapacityKg(""); setVehicleNumber(""); setCapacityTouched(false);
     if (isFirstSubmission) onFirstSubmit?.();
   };
 
@@ -5595,21 +5602,23 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
           onChange={(e) => setVehicleNumber(e.target.value)} />
       </GuidedStep>
 
-      <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलोग्राम)" : "क्षमता (किलोग्राम)"}</label>
-      {matchedModelSpec && (
-        <p className="text-[10px] font-semibold mb-1.5" style={{ color: C.success }}>
-          {lang === "en" ? "Auto-filled for this vehicle model — edit if yours differs." : lang === "mr" ? "या गाडी मॉडेलनुसार आपोआप भरले गेले आहे — वेगळे असल्यास बदलू शकता." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
-        </p>
-      )}
-      <div className="mb-4">
-        <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
-      </div>
+      <GuidedStep {...kycStepProps(3)} lang={lang}>
+        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलोग्राम)" : "क्षमता (किलोग्राम)"}</label>
+        {matchedModelSpec && (
+          <p className="text-[10px] font-semibold mb-1.5" style={{ color: C.success }}>
+            {lang === "en" ? "Auto-filled for this vehicle model — edit if yours differs." : lang === "mr" ? "या गाडी मॉडेलनुसार आपोआप भरले गेले आहे — वेगळे असल्यास बदलू शकता." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
+          </p>
+        )}
+        <div className="mb-4">
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} onBlur={() => setCapacityTouched(true)} />
+        </div>
+      </GuidedStep>
 
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Vehicle Details" : lang === "mr" ? "स्टेप 2 — गाडीची माहिती" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
       <div className="rounded-xl p-3 mb-4 shadow-lg" style={{ border: `2px solid ${C.marigoldDeep}`, background: C.metallicGold }}>
         <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#000000" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : lang === "mr" ? "स्पष्ट भरा — कस्टमरला हीच दिसेल" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
 
-        <GuidedStep {...kycStepProps(3)} lang={lang}>
+        <GuidedStep {...kycStepProps(4)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : lang === "mr" ? "गाडीचे नाव" : "गाड़ी का नाम"}</label>
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tata 109" : lang === "mr" ? "उदा: Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
         </GuidedStep>
@@ -5621,7 +5630,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
             to DriverProfileEdit's own document list. Halves the photo-upload
             burden a new driver faces during signup. */}
         <div className="max-w-[180px] mb-2">
-          <GuidedStep {...kycStepProps(4)} lang={lang}>
+          <GuidedStep {...kycStepProps(5)} lang={lang}>
             <PhotoPicker label={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"} lang={lang} onSelect={startPhotoUpload(setVehiclePhotoSide, "vehicleSide")}>
               <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed ${C.marigoldDeep}`, background: C.paper, minHeight: 110 }}>
                 {uploadingKeys.vehicleSide ? (
