@@ -1426,8 +1426,17 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   // Capacitor doesn't enable by default, so it silently does nothing there;
   // a real anchor click is what Capacitor's WebView actually hands off to
   // the system browser/Maps app for any URL outside the app's own origin.
-  const mapsUrl = routeOrigin && routeDestination
-    ? `https://www.google.com/maps/dir/?api=1&origin=${routeOrigin.lat},${routeOrigin.lng}&destination=${routeDestination.lat},${routeDestination.lng}&travelmode=driving`
+  // Before OTP entry (toPickup mode), routeOrigin is the driver's own live
+  // GPS — until their first fix comes in (just opened the app, weak signal,
+  // permission prompt not yet answered), there's no origin yet even though
+  // routeDestination (Pickup, or Drop once loading's started) is always
+  // known. Tapping needs to work through the whole trip regardless — Before
+  // OTP, During OTP, After OTP, until End Trip — so this falls back to just
+  // opening that destination point alone instead of going dead.
+  const mapsUrl = routeDestination
+    ? routeOrigin
+      ? `https://www.google.com/maps/dir/?api=1&origin=${routeOrigin.lat},${routeOrigin.lng}&destination=${routeDestination.lat},${routeDestination.lng}&travelmode=driving`
+      : `https://www.google.com/maps/search/?api=1&query=${routeDestination.lat},${routeDestination.lng}`
     : null;
 
   if (!hasKey || !isLoaded || !hasCoords) {
