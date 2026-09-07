@@ -82,6 +82,20 @@ select {
   animation: guidedButtonPulse 1.6s ease-in-out infinite;
 }
 
+/* One-shot bounce for a just-tapped driver card in CustomerBooking's
+   "Choose a driver" sheet — plays once (not infinite, unlike the guided
+   animations above) since it's confirming a tap that already happened,
+   not still asking for attention. */
+@keyframes driverSelectBounce {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.035); }
+  60%  { transform: scale(0.985); }
+  100% { transform: scale(1); }
+}
+.driver-selected-bounce {
+  animation: driverSelectBounce 0.4s ease-out;
+}
+
 /* App-wide tap feedback — every button presses down very slightly on tap
    instead of giving no visual response at all. Pure CSS (no JS), so it
    costs nothing on a slow phone. Disabled buttons are excluded so a

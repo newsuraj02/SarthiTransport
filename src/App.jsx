@@ -4086,6 +4086,12 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
   // suitable is listed, or the customer would rather not pick one driver.
   const [choosingVehicle, setChoosingVehicle] = useState(false);
   const [requestError, setRequestError] = useState("");
+  // Which driver's card is tapped/highlighted in the picker sheet — a
+  // separate step from actually requesting them (see requestDriver below),
+  // so the customer gets a chance to see the green highlight + "Book Now"
+  // button before the request actually fires, instead of it firing the
+  // instant they tap the card.
+  const [selectedDriverName, setSelectedDriverName] = useState(null);
   const isScheduling = advanceOpen && !!advanceDate && !!advanceTime;
   const scheduledForValue = isScheduling ? `${advanceDate} ${advanceTime}` : null;
 
@@ -4115,6 +4121,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
     if (err) { setRequestError(err); return; }
     resetFields();
     setChoosingVehicle(false);
+    setSelectedDriverName(null);
     if (isScheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
   };
 
@@ -4199,11 +4206,11 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
       </div>
 
       {choosingVehicle && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setChoosingVehicle(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => { setChoosingVehicle(false); setSelectedDriverName(null); }}>
           <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[80vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
               <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose a driver" : lang === "mr" ? "ड्रायव्हर निवडा" : "ड्राइवर चुनें"}</h3>
-              <button onClick={() => setChoosingVehicle(false)} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+              <button onClick={() => { setChoosingVehicle(false); setSelectedDriverName(null); }} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
             </div>
             <div className="p-4 space-y-2 overflow-y-auto">
               {requestError && (
@@ -4213,20 +4220,31 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                 <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
                   {lang === "en" ? "No online driver can carry this load right now." : lang === "mr" ? "सध्या हा लोड नेऊ शकेल असा कोणताही ऑनलाइन ड्रायव्हर नाही." : "अभी इस लोड को ले जा सकने वाला कोई ऑनलाइन ड्राइवर नहीं है।"}
                 </p>
-              ) : eligibleDrivers.map((d) => (
-                <button key={d.mobile || d.id} onClick={() => requestDriver(d.name)} className="w-full flex items-center gap-3 rounded-xl p-3 text-left" style={{ border: `1.5px solid ${C.line}` }}>
-                  <SafeImage src={d.photo?.url} alt="" className="w-11 h-11 rounded-xl object-cover shrink-0" fallback={
-                    <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                      <Truck size={20} color={C.marigoldDeep} />
-                    </div>
-                  } />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
-                    <div className="text-xs truncate" style={{ color: C.inkSoft }}>{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
+              ) : eligibleDrivers.map((d) => {
+                const isSelected = selectedDriverName === d.name;
+                return (
+                  <div key={d.mobile || d.id}>
+                    <button onClick={() => setSelectedDriverName(d.name)}
+                      className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
+                      style={{ border: `2px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.08)" : "transparent" }}>
+                      <SafeImage src={d.vehicleSpec?.photoSide?.url} alt="" className="w-11 h-11 rounded-xl object-cover shrink-0" fallback={
+                        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                          <Truck size={20} color={C.marigoldDeep} />
+                        </div>
+                      } />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
+                        <div className="text-xs truncate" style={{ color: C.inkSoft }}>{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
+                      </div>
+                    </button>
+                    {isSelected && (
+                      <button onClick={() => requestDriver(d.name)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg" style={{ background: C.success }}>
+                        {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
+                      </button>
+                    )}
                   </div>
-                  <span className="text-xs font-black shrink-0" style={{ color: C.success }}>{lang === "en" ? "Request" : lang === "mr" ? "विनंती करा" : "अनुरोध करें"}</span>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
