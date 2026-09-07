@@ -4226,7 +4226,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                   <div key={d.mobile || d.id}>
                     <button onClick={() => setSelectedDriverName(d.name)}
                       className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
-                      style={{ border: `2px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.08)" : "transparent" }}>
+                      style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : "transparent" }}>
                       <SafeImage src={d.vehicleSpec?.photoSide?.url} alt="" className="w-11 h-11 rounded-xl object-cover shrink-0" fallback={
                         <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
                           <Truck size={20} color={C.marigoldDeep} />
