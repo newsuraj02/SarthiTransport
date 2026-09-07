@@ -4555,7 +4555,16 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
 
   const v = VEHICLES.find((x) => x.key === b.vehicle);
   return (
-    <div className="px-5 pt-3 pb-5">
+    <div className="pt-0 pb-5">
+      {/* Live map placed at the very top, edge-to-edge — matches the exact
+          position/pattern NearbyVehiclesMap uses on CustomerBooking's main
+          page, instead of being tucked mid-page inside a padded card. */}
+      <div style={{ height: "35vh" }}>
+        <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
+          driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="100%" lang={lang}
+          mode={b.loadingStartedAt ? "route" : "toPickup"} />
+      </div>
+    <div className="px-5 pt-3">
       <div className="rounded-2xl py-3.5 px-2 mb-2.5 shadow-sm flex items-center justify-between gap-1" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {onAddAnother ? (
           <button onClick={onAddAnother} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -4611,11 +4620,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
         {b.loadingStartedAt && (
           <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
         )}
-        <div className="mt-3" style={{ height: "35vh" }}>
-          <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
-            driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="100%" lang={lang}
-            mode={b.loadingStartedAt ? "route" : "toPickup"} />
-        </div>
       </div>
 
       {b.loadingStartedAt && (
@@ -4648,6 +4652,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
         {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
       </div>
       {showDocs && <BillDocumentsModal booking={b} onClose={() => setShowDocs(false)} lang={lang} />}
+    </div>
     </div>
   );
 }
@@ -5671,14 +5676,65 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
     );
   }
 
-  return (
-    <div className={`px-5 pb-5 ${myTrip ? "pt-2" : "pt-5"}`}>
-      {myTrip && !myTrip.loadingStartedAt && (
-        <div className="mb-4">
-          <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
+  // Live map placed at the very top, edge-to-edge — matches the exact
+  // position/pattern NearbyVehiclesMap uses on CustomerBooking's main page —
+  // only while there's an active trip; the "waiting for a load" states below
+  // keep their normal padded layout since there's no map to show there.
+  if (myTrip) {
+    return (
+      <div className="pt-0 pb-5">
+        <div style={{ height: "35vh" }}>
+          <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
+            driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="100%" lang={lang}
+            mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
         </div>
-      )}
+        <div className="px-5 pt-2">
+          {!myTrip.loadingStartedAt && (
+            <div className="mb-4">
+              <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
+            </div>
+          )}
 
+          {notificationsLocked && (
+            <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
+              <Clock3 size={14} color="#000000" />
+              <span className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : lang === "mr" ? "तुमची अ‍ॅडव्हान्स बुकिंग लवकरच आहे — तोपर्यंत करंट (तात्काळ) लोड दिसणार नाहीत." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
+            </div>
+          )}
+
+          {driver.blacklisted && (
+            <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: C.safety }}>
+              <XCircle size={15} color="#FFFFFF" />
+              <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Your account has been blocked by admin — loads won't show." : lang === "mr" ? "तुमचे खाते अ‍ॅडमिनने ब्लॉक केले आहे — लोड दिसणार नाहीत." : "आपका खाता एडमिन द्वारा ब्लॉक किया गया है — लोड नहीं दिखेंगे।"}</span>
+            </div>
+          )}
+
+          <div>
+            {myTrip.customerMobile && (
+              <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
+                label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
+                className="w-full flex items-center justify-center gap-2 px-3.5 py-3.5 mb-2.5 rounded-2xl text-base font-black shadow-sm"
+                style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
+            )}
+
+            <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              {!myTrip.loadingStartedAt && (
+                <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
+              )}
+              {myTrip.loadingStartedAt && (
+                <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
+              )}
+            </div>
+
+            <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 pt-5 pb-5">
       {notificationsLocked && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
           <Clock3 size={14} color="#000000" />
@@ -5693,33 +5749,7 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
         </div>
       )}
 
-      {myTrip ? (
-        <div>
-
-          {myTrip.customerMobile && (
-            <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
-              label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
-              className="w-full flex items-center justify-center gap-2 px-3.5 py-3.5 mb-2.5 rounded-2xl text-base font-black shadow-sm"
-              style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
-          )}
-
-          <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            {!myTrip.loadingStartedAt && (
-              <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span></div>
-            )}
-            {myTrip.loadingStartedAt && (
-              <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
-            )}
-            <div className="mt-3" style={{ height: "35vh" }}>
-              <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
-                driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="100%" lang={lang}
-                mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
-            </div>
-          </div>
-
-          <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
-        </div>
-      ) : driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
+      {driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
         nearbyLoads.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
             <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
