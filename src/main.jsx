@@ -24,10 +24,10 @@ if ("serviceWorker" in navigator) {
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null, copied: false };
   }
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
   componentDidCatch(error, info) {
     console.error("[ErrorBoundary]", error, info);
@@ -39,15 +39,31 @@ class ErrorBoundary extends React.Component {
       window.location.reload();
     }
   };
+  handleCopy = () => {
+    const details = `${this.state.error?.message || this.state.error}\n\n${this.state.error?.stack || ""}`;
+    navigator.clipboard?.writeText(details).then(() => this.setState({ copied: true })).catch(() => {});
+  };
   render() {
     if (this.state.hasError) {
+      // Shown directly on screen (not just console.error above) since
+      // whoever hits this in the field almost never has devtools/adb
+      // handy — this turns "please reproduce it again with a laptop
+      // plugged in" into "screenshot this" or "tap Copy and paste it back".
+      const details = `${this.state.error?.message || this.state.error}\n\n${this.state.error?.stack || ""}`;
       return (
         <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, textAlign: "center", fontFamily: "system-ui, sans-serif", background: "#FAFAF7" }}>
           <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: "#2A211C" }}>कुछ गड़बड़ हो गई / Something went wrong</p>
           <p style={{ fontSize: 13, color: "#6B6058", marginBottom: 20 }}>कृपया दोबारा कोशिश करें / Please try again</p>
-          <button onClick={this.handleReload} style={{ background: "#0B3D91", color: "#fff", border: "none", borderRadius: 12, padding: "14px 28px", fontSize: 15, fontWeight: 700 }}>
+          <button onClick={this.handleReload} style={{ background: "#0B3D91", color: "#fff", border: "none", borderRadius: 12, padding: "14px 28px", fontSize: 15, fontWeight: 700, marginBottom: 20 }}>
             फिर से लोड करें / Reload
           </button>
+          <div style={{ width: "100%", maxWidth: 480, textAlign: "left", background: "#F0EEE9", border: "1px solid #DDD8CF", borderRadius: 10, padding: 12 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: "#6B6058", marginBottom: 6 }}>Technical details (for support):</p>
+            <pre style={{ fontSize: 10, color: "#2A211C", whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 220, overflowY: "auto", margin: 0 }}>{details}</pre>
+            <button onClick={this.handleCopy} style={{ marginTop: 10, background: "#fff", color: "#0B3D91", border: "1px solid #0B3D91", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700 }}>
+              {this.state.copied ? "Copied ✓" : "Copy error details"}
+            </button>
+          </div>
         </div>
       );
     }
