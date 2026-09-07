@@ -1399,6 +1399,13 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   const routeDestination = toPickup ? pickupPos : dropPos;
   const roadPath = useDrivingRoute(routeOrigin, routeDestination, isLoaded, hasKey);
   const [mapInstance, setMapInstance] = useState(null);
+  // Auto-frames the route once per "leg" of the trip (once for the rough
+  // straight line, again once the real road-following path loads), then
+  // stops — the map is pan/zoomable now (see options below), so re-fitting
+  // on every single GPS ping would fight anyone who's manually zoomed in or
+  // panned around. A genuinely new leg (toPickup -> route, once the OTP is
+  // entered) still gets its own fresh auto-frame.
+  const fittedKeyRef = useRef(null);
   useEffect(() => {
     if (!mapInstance || !window.google?.maps) return;
     // Guards against a known Google Maps JS quirk: if the container's real
@@ -1406,6 +1413,8 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
     // layout reflow landing a beat later), the map can get stuck rendering
     // at a stale/zero size until something explicitly tells it to remeasure.
     window.google.maps.event.trigger(mapInstance, "resize");
+    const fitKey = `${mode}:${roadPath?.length ? "route" : "straight"}`;
+    if (fittedKeyRef.current === fitKey) return;
     const bounds = new window.google.maps.LatLngBounds();
     if (roadPath?.length) {
       roadPath.forEach((p) => bounds.extend(p));
@@ -1414,18 +1423,22 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
       if (routeDestination) bounds.extend(routeDestination);
     }
     if (!toPickup && customerPos) bounds.extend(customerPos);
-    if (!bounds.isEmpty()) mapInstance.fitBounds(bounds, 28);
-  }, [mapInstance, roadPath, routeOrigin?.lat, routeOrigin?.lng, routeDestination?.lat, routeDestination?.lng]);
+    if (!bounds.isEmpty()) {
+      mapInstance.fitBounds(bounds, 28);
+      fittedKeyRef.current = fitKey;
+    }
+  }, [mapInstance, roadPath, routeOrigin?.lat, routeOrigin?.lng, routeDestination?.lat, routeDestination?.lng, mode]);
 
-  // The embedded map is a preview, not something meant to be panned/zoomed
-  // in place — tapping it hands off straight to the real Google Maps app/
-  // site instead. Gestures are disabled on the GoogleMap itself (so it never
-  // pans/zooms in place), and a transparent overlay is a genuine <a> link
-  // (not a div + onClick calling window.open) — inside the installed
-  // Capacitor app, window.open() from JS needs native "new window" support
-  // Capacitor doesn't enable by default, so it silently does nothing there;
-  // a real anchor click is what Capacitor's WebView actually hands off to
-  // the system browser/Maps app for any URL outside the app's own origin.
+  // The embedded map is now pan/zoomable in place (gestureHandling: "greedy"
+  // + a real zoom control below) instead of being a tap-anywhere preview —
+  // a full-cover overlay would block those gestures entirely, so "open in
+  // real Google Maps" moved to its own small corner button instead. It's a
+  // genuine <a> link (not a button + onClick calling window.open) — inside
+  // the installed Capacitor app, window.open() from JS needs native "new
+  // window" support Capacitor doesn't enable by default, so it silently
+  // does nothing there; a real anchor click is what Capacitor's WebView
+  // actually hands off to the system browser/Maps app for any URL outside
+  // the app's own origin.
   // Before OTP entry (toPickup mode), routeOrigin is the driver's own live
   // GPS — until their first fix comes in (just opened the app, weak signal,
   // permission prompt not yet answered), there's no origin yet even though
@@ -1447,7 +1460,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
         onLoad={setMapInstance}
-        options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, gestureHandling: "none", disableDefaultUI: true, disableDoubleClickZoom: true, clickableIcons: false, keyboardShortcuts: false }}
+        options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: true, gestureHandling: "greedy", disableDefaultUI: true, clickableIcons: false, keyboardShortcuts: false }}
       >
         <MarkerF position={pickupPos} label={{ text: "P", color: "#fff", fontSize: "10px", fontWeight: "bold" }} />
         {!toPickup && dropPos && <MarkerF position={dropPos} label={{ text: "D", color: "#fff", fontSize: "10px", fontWeight: "bold" }} />}
@@ -1484,10 +1497,12 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
           />
         )}
       </GoogleMap>
-      {mapsUrl && <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="absolute inset-0" aria-label="Open in Google Maps" />}
-      <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFCC00", color: "#000000" }}>
-        {lang === "en" ? "Tap to open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडण्यासाठी टॅप करा" : "गूगल मैप्स में खोलने के लिए टैप करें"}
-      </div>
+      {mapsUrl && (
+        <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+          className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg" style={{ background: "#FFCC00", color: "#000000" }}>
+          {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
+        </a>
+      )}
     </div>
   );
 }
