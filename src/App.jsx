@@ -1298,14 +1298,11 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
   const tx = p2 ? p1.x + (p2.x - p1.x) * (progress ?? 0) / 100 : p1.x;
   const ty = p2 ? p1.y + (p2.y - p1.y) * (progress ?? 0) / 100 : p1.y;
   // No real coordinates here (mock fallback), so hand off to Google Maps
-  // using the address text instead — same "any gesture opens Maps" rule as
-  // the real LiveTrackingMap.
-  const openExternalMaps = () => {
-    if (!pickup) return;
-    const origin = encodeURIComponent(pickup);
-    const destination = encodeURIComponent(drop || pickup);
-    window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`, "_blank");
-  };
+  // using the address text instead — same real-<a>-link handoff as the real
+  // LiveTrackingMap (see its mapsUrl comment for why it's not window.open()).
+  const mapsUrl = pickup
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pickup)}&destination=${encodeURIComponent(drop || pickup)}&travelmode=driving`
+    : null;
   return (
     <div className="relative rounded-lg overflow-hidden" style={{ height, background: "#E5E5E5", border: `1px solid ${C.line}` }}>
       <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -1330,7 +1327,7 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
           🏁 {lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}
         </div>
       )}
-      <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
+      {mapsUrl && <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="absolute inset-0" aria-label="Open in Google Maps" />}
       <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFCC00", color: "#000000" }}>
         {lang === "en" ? "Tap to open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडण्यासाठी टॅप करा" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
@@ -1423,17 +1420,15 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   // The embedded map is a preview, not something meant to be panned/zoomed
   // in place — tapping it hands off straight to the real Google Maps app/
   // site instead. Gestures are disabled on the GoogleMap itself (so it never
-  // pans/zooms in place), and a transparent overlay listens for onClick —
-  // deliberately not onPointerDown/onTouchStart, which also fire the instant
-  // a finger lands mid-scroll (e.g. scrolling the page starting from a touch
-  // over the map), causing Maps to open on what was actually just a scroll.
-  // onClick only fires for a genuine tap, not a drag/scroll passing through.
-  const openExternalMaps = () => {
-    if (!routeOrigin || !routeDestination) return;
-    const origin = `${routeOrigin.lat},${routeOrigin.lng}`;
-    const destination = `${routeDestination.lat},${routeDestination.lng}`;
-    window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`, "_blank");
-  };
+  // pans/zooms in place), and a transparent overlay is a genuine <a> link
+  // (not a div + onClick calling window.open) — inside the installed
+  // Capacitor app, window.open() from JS needs native "new window" support
+  // Capacitor doesn't enable by default, so it silently does nothing there;
+  // a real anchor click is what Capacitor's WebView actually hands off to
+  // the system browser/Maps app for any URL outside the app's own origin.
+  const mapsUrl = routeOrigin && routeDestination
+    ? `https://www.google.com/maps/dir/?api=1&origin=${routeOrigin.lat},${routeOrigin.lng}&destination=${routeDestination.lat},${routeDestination.lng}&travelmode=driving`
+    : null;
 
   if (!hasKey || !isLoaded || !hasCoords) {
     return <MockMap pickup={pickup} drop={toPickup ? null : drop} progress={toPickup ? undefined : progress} zoneColor={zoneColor} height={height} lang={lang} />;
@@ -1480,7 +1475,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
           />
         )}
       </GoogleMap>
-      <div onClick={openExternalMaps} className="absolute inset-0 cursor-pointer" role="button" aria-label="Open in Google Maps" />
+      {mapsUrl && <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="absolute inset-0" aria-label="Open in Google Maps" />}
       <div className="absolute bottom-1.5 right-2 text-xs font-black px-2.5 py-1 rounded-full shadow-lg pointer-events-none" style={{ background: "#FFCC00", color: "#000000" }}>
         {lang === "en" ? "Tap to open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडण्यासाठी टॅप करा" : "गूगल मैप्स में खोलने के लिए टैप करें"}
       </div>
@@ -1559,15 +1554,18 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
   const center = customerLocation || NEARBY_MAP_DEFAULT_CENTER;
   const [mapInstance, setMapInstance] = useState(null);
 
-  const openInGoogleMaps = () => window.open(`https://www.google.com/maps/search/?api=1&query=${center.lat},${center.lng}`, "_blank");
+  const googleMapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${center.lat},${center.lng}`;
   // Until Pickup and Drop are both filled in, there's no fixed route yet to
   // hand off to Google Maps — the customer just tracks nearby vehicles live
   // right here on the in-app map, so the button stays hidden until then.
+  // A real <a> link, not a button + window.open() — see LiveTrackingMap's
+  // mapsUrl comment for why: Capacitor's WebView hands off genuine link
+  // clicks to the system browser by default, but not JS window.open() calls.
   const OpenInMapsButton = () => showOpenInMaps ? (
-    <button type="button" onClick={openInGoogleMaps}
+    <a href={googleMapsSearchUrl} target="_blank" rel="noopener noreferrer"
       className="absolute bottom-2 right-2 text-xs font-black px-2.5 py-1.5 rounded-full shadow-lg" style={{ background: "#FFCC00", color: "#000000" }}>
       {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
-    </button>
+    </a>
   ) : null;
 
   useEffect(() => {
