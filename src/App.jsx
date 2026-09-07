@@ -5470,6 +5470,21 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
         className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
         {lang === "en" ? "End Trip" : lang === "mr" ? "एंड ट्रिप" : "एंड ट्रिप"}
       </button>
+
+      {/* Fills what used to be dead space below End Trip with something
+          actually useful — a live-ticking trip clock (updates every second,
+          same source useTripClock already drives the overtime alarm with),
+          plus the same overtime banner the customer already sees on their
+          own screen (see the identical usage at line ~4657) so the driver
+          gets the exact same visual heads-up, not just the one-time beep. */}
+      <div className="rounded-2xl p-3.5 shadow-sm text-center" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex items-center justify-center gap-1.5 text-xs font-bold" style={{ color: C.inkSoft }}>
+          <Clock3 size={13} />
+          {lang === "en" ? "Trip duration" : lang === "mr" ? "ट्रिप कालावधी" : "ट्रिप की अवधि"}
+        </div>
+        <div className="text-2xl font-black mt-0.5" style={{ color: C.navy, fontFamily: monoFont }}>{clock.elapsedStr}</div>
+      </div>
+      <TripOvertimeBanner booking={trip} lang={lang} />
     </div>
   );
 }
