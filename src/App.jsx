@@ -846,25 +846,35 @@ function isRunningInOwnTwa() {
   return typeof document !== "undefined" && document.referrer.startsWith(`android-app://${TWA_PACKAGE_ID}`);
 }
 
-// Deep-links straight to the exact Android settings screen for a permission
+// Deep-link URLs to the exact Android settings screen for a permission,
 // instead of just telling the driver/customer to go find it themselves.
 // Uses Chrome's "intent://" URL scheme (Intent.parseUri under the hood) —
-// there's no equivalent on iOS or desktop, so callers must gate this behind
-// isAndroidDevice() and fall back to plain instructional text otherwise.
-// Targets this site's own installed TWA package when running inside it;
-// falls back to Chrome's own package when it's just a browser tab, since
-// that's genuinely which app is holding the permission in that case.
-function openAndroidNotificationSettings() {
+// meant to be used as a real <a href>, not a script-triggered
+// window.location.href assignment; Chrome's own intent-URL interceptor is
+// documented and tested against genuine link navigation, and a real <a>
+// tag is what every verified-working example of this technique uses.
+// There's no equivalent on iOS or desktop, so callers must gate this
+// behind isAndroidDevice() and fall back to plain instructional text
+// otherwise. Targets this site's own installed TWA package when running
+// inside it; falls back to Chrome's own package when it's just a browser
+// tab, since that's genuinely which app is holding the permission there.
+function androidNotificationSettingsUrl() {
   const pkg = isRunningInOwnTwa() ? TWA_PACKAGE_ID : "com.android.chrome";
-  window.location.href = `intent:#Intent;action=android.settings.APP_NOTIFICATION_SETTINGS;S.android.provider.extra.APP_PACKAGE=${pkg};end`;
+  return `intent://#Intent;action=android.settings.APP_NOTIFICATION_SETTINGS;S.android.provider.extra.APP_PACKAGE=${pkg};end`;
 }
 // No dedicated "location settings for this one app" action exists on
 // Android the way APP_NOTIFICATION_SETTINGS does — this instead opens that
 // app's main App Info page (Settings → Apps → <app>), which has
-// Permissions → Location one tap away.
-function openAndroidAppInfoSettings() {
+// Permissions → Location one tap away. ACTION_APPLICATION_DETAILS_SETTINGS
+// needs the package as the Intent's Data (a "package:<name>" URI), not an
+// extra — deliberately no "//" between "intent:" and the package name
+// here, since that's what reconstructs into the opaque "package:<name>"
+// form Settings expects (a "package://<name>" with the slashes would
+// reconstruct into a hierarchical URI instead, which Settings can't read
+// the package name back out of).
+function androidAppInfoSettingsUrl() {
   const pkg = isRunningInOwnTwa() ? TWA_PACKAGE_ID : "com.android.chrome";
-  window.location.href = `intent://${pkg}#Intent;scheme=package;action=android.settings.APPLICATION_DETAILS_SETTINGS;end`;
+  return `intent:${pkg}#Intent;scheme=package;action=android.settings.APPLICATION_DETAILS_SETTINGS;end`;
 }
 
 // Re-added for the driver "new load posted" push carve-out — see
@@ -880,9 +890,9 @@ function NotificationBanner({ permission, onEnable, lang, context = "driver" }) 
     const tapHint = lang === "en" ? " Tap to open Settings." : lang === "mr" ? " Settings उघडण्यासाठी टॅप करा." : " Settings खोलने के लिए टैप करें।";
     if (isAndroidDevice()) {
       return (
-        <button onClick={openAndroidNotificationSettings} className="w-[calc(100%-2.5rem)] mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
+        <a href={androidNotificationSettingsUrl()} className="block mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
           {msg}{tapHint}
-        </button>
+        </a>
       );
     }
     return (
@@ -914,9 +924,9 @@ function LocationBanner({ permission, onEnable, lang, context = "customer" }) {
     const tapHint = lang === "en" ? " Tap to open Settings." : lang === "mr" ? " Settings उघडण्यासाठी टॅप करा." : " Settings खोलने के लिए टैप करें।";
     if (isAndroidDevice()) {
       return (
-        <button onClick={openAndroidAppInfoSettings} className="w-[calc(100%-2.5rem)] mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
+        <a href={androidAppInfoSettingsUrl()} className="block mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
           {msg}{tapHint}
-        </button>
+        </a>
       );
     }
     return (
