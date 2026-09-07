@@ -771,6 +771,42 @@ function useRideNotifications(collectionName, docId, lang) {
   return { permission, enable, toast };
 }
 
+// Tracks whether the browser's location permission is granted/denied/not
+// yet asked, mirroring useRideNotifications' priming pattern above — a
+// bare getCurrentPosition/watchPosition call otherwise fails completely
+// silently on denial, leaving the map or GPS matching just quietly broken
+// with nothing on screen to explain why. The Permissions API (where
+// supported) gives a live read without ever triggering the OS prompt
+// itself; browsers without it (notably Safari) stay "prompt" until the
+// first real geolocation call resolves or is denied — every watchPosition/
+// getCurrentPosition call site reports back through markGranted/markDenied
+// so this stays accurate even there.
+function useLocationPermission() {
+  const [permission, setPermission] = useState(() => (navigator.geolocation ? "prompt" : "unsupported"));
+  useEffect(() => {
+    if (!navigator.geolocation || !navigator.permissions?.query) return;
+    let status;
+    navigator.permissions.query({ name: "geolocation" }).then((s) => {
+      status = s;
+      setPermission(s.state);
+      s.onchange = () => setPermission(s.state);
+    }).catch(() => {});
+    return () => { if (status) status.onchange = null; };
+  }, []);
+  const markDenied = () => setPermission("denied");
+  const markGranted = () => setPermission("granted");
+  // Returns a Promise (resolving either way, never rejecting) so callers
+  // that need to request Location and Notifications one after another (see
+  // PermissionsGate) can await this before firing the next native prompt —
+  // browsers only ever show one permission dialog at a time, so firing both
+  // at once just silently drops one of them.
+  const enable = () => new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(); return; }
+    navigator.geolocation.getCurrentPosition(() => { markGranted(); resolve(); }, () => { markDenied(); resolve(); });
+  });
+  return { permission, enable, markDenied, markGranted };
+}
+
 // Tracks which Admin Announcements this specific customer/driver hasn't
 // seen yet — "seen" persists locally (per role+mobile) as the newest
 // createdAt millis they've been shown, so it survives app restarts and
@@ -794,20 +830,54 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole) {
 }
 
 // Re-added for the driver "new load posted" push carve-out — see
-// useRideNotifications above. Shown on the Driver home screen only.
-function NotificationBanner({ permission, onEnable, lang }) {
+// useRideNotifications above. Also used on the Customer side now (see
+// context="customer") so they're told when their driver accepts/starts the
+// trip even while the app is backgrounded.
+function NotificationBanner({ permission, onEnable, lang, context = "driver" }) {
   if (permission === "granted" || permission === "unsupported") return null;
   if (permission === "denied") {
+    const msg = context === "customer"
+      ? (lang === "en" ? "Notifications are blocked in your browser settings — enable them there to know the moment your driver accepts or starts the trip." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये नोटिफिकेशन बंद आहेत — ड्रायव्हरने स्वीकारल्यावर किंवा राइड सुरू केल्यावर कळण्यासाठी तिथे चालू करा." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — ड्राइवर के स्वीकार करने या राइड शुरू करने पर पता चलने के लिए वहां चालू करें।")
+      : (lang === "en" ? "Notifications are blocked in your browser settings — enable them there to get new load alerts." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये नोटिफिकेशन बंद आहेत — नवीन लोड अलर्टसाठी तिथे चालू करा." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — नए लोड अलर्ट के लिए वहां चालू करें।");
     return (
       <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-        {lang === "en" ? "Notifications are blocked in your browser settings — enable them there to get new load alerts." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये नोटिफिकेशन बंद आहेत — नवीन लोड अलर्टसाठी तिथे चालू करा." : "आपके ब्राउज़र में नोटिफिकेशन बंद हैं — नए लोड अलर्ट के लिए वहां चालू करें।"}
+        {msg}
       </div>
     );
   }
+  const prompt = context === "customer"
+    ? (lang === "en" ? "Turn on notifications for booking updates" : lang === "mr" ? "बुकिंग अपडेट्ससाठी नोटिफिकेशन चालू करा" : "बुकिंग अपडेट के लिए नोटिफिकेशन चालू करें")
+    : (lang === "en" ? "Turn on notifications for new load alerts" : lang === "mr" ? "नवीन लोड अलर्टसाठी नोटिफिकेशन चालू करा" : "नए लोड अलर्ट के लिए नोटिफिकेशन चालू करें");
   return (
     <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-3.5 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
       <Bell size={14} color={C.marigoldDeep} />
-      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Turn on notifications for new load alerts" : lang === "mr" ? "नवीन लोड अलर्टसाठी नोटिफिकेशन चालू करा" : "नए लोड अलर्ट के लिए नोटिफिकेशन चालू करें"}</span>
+      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{prompt}</span>
+    </button>
+  );
+}
+
+// Location's equivalent of NotificationBanner above — a bare
+// getCurrentPosition/watchPosition denial otherwise leaves the map/GPS
+// matching silently broken with nothing on screen explaining why.
+function LocationBanner({ permission, onEnable, lang, context = "customer" }) {
+  if (permission === "granted" || permission === "unsupported") return null;
+  if (permission === "denied") {
+    const msg = context === "driver"
+      ? (lang === "en" ? "Location is blocked in your browser settings — enable it so customers can find you and send you loads." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये लोकेशन बंद आहे — कस्टमरना तुम्ही सापडण्यासाठी आणि लोड मिळण्यासाठी ते चालू करा." : "आपके ब्राउज़र में लोकेशन बंद है — कस्टमर आपको ढूंढ सकें और लोड मिल सके, इसके लिए इसे चालू करें।")
+      : (lang === "en" ? "Location is blocked in your browser settings — enable it to see nearby vehicles and get matched with a driver." : lang === "mr" ? "तुमच्या ब्राउझरमध्ये लोकेशन बंद आहे — जवळपासच्या गाड्या पाहण्यासाठी व ड्रायव्हर मिळण्यासाठी ते चालू करा." : "आपके ब्राउज़र में लोकेशन बंद है — पास की गाड़ियां देखने और ड्राइवर मिलने के लिए इसे चालू करें।");
+    return (
+      <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
+        {msg}
+      </div>
+    );
+  }
+  const prompt = context === "driver"
+    ? (lang === "en" ? "Turn on location so customers can find you" : lang === "mr" ? "कस्टमरना सापडण्यासाठी लोकेशन चालू करा" : "कस्टमर को दिखने के लिए लोकेशन चालू करें")
+    : (lang === "en" ? "Turn on location to see nearby vehicles" : lang === "mr" ? "जवळपासच्या गाड्या पाहण्यासाठी लोकेशन चालू करा" : "पास की गाड़ियां देखने के लिए लोकेशन चालू करें");
+  return (
+    <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-3.5 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
+      <MapPin size={14} color={C.marigoldDeep} />
+      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{prompt}</span>
     </button>
   );
 }
@@ -821,6 +891,84 @@ function ForegroundToast({ toast }) {
         <div className="text-[11px] font-bold text-white">{toast.title}</div>
         {toast.body && <div className="text-[10px]" style={{ color: "#FFFFFF" }}>{toast.body}</div>}
       </div>
+    </div>
+  );
+}
+
+// Shown once per role+phone (see permsPrimed in the root App below), right
+// before the Customer/Driver home screen first renders — for a brand-new
+// signup and for an existing user who hasn't seen this yet, since the
+// permission system itself is new. Requests Location and Notifications
+// back-to-back, never simultaneously (see useLocationPermission.enable's
+// comment on why) — those are the only two permissions a web app can
+// actually prime ahead of time with a real, queryable "granted/denied"
+// state. Camera has no such durable grant for the <input type="file"
+// capture> flow this app uses (tapping it just opens the OS camera/gallery
+// app directly), so it's only explained here, not requested — the OS asks
+// for it naturally the first time a photo is actually picked.
+//
+// This can't truly force a grant — a user can always decline the native
+// browser dialog, and nothing server-side can detect or block that.
+// Declining just leaves the persistent LocationBanner/NotificationBanner
+// (shown on the relevant screens afterward) nagging until it's fixed in
+// browser settings, same as any other denial elsewhere in the app.
+function PermissionsGate({ role, docId, lang, onDone }) {
+  const location = useLocationPermission();
+  const notifications = useRideNotifications(role === "driver" ? "drivers" : "customers", docId, lang);
+  const [asking, setAsking] = useState(false);
+
+  const start = async () => {
+    setAsking(true);
+    if (location.permission !== "granted") await location.enable();
+    if (typeof Notification !== "undefined" && Notification.permission === "default") await notifications.enable();
+    onDone();
+  };
+
+  const copy = role === "driver"
+    ? {
+        title: lang === "en" ? "Before you go online" : lang === "mr" ? "ऑनलाइन जाण्याआधी" : "ऑनलाइन जाने से पहले",
+        items: [
+          [MapPin, lang === "en" ? "Location — so customers within 30–50 km can find you and send you loads." : lang === "mr" ? "लोकेशन — जेणेकरून 30–50 किमी अंतरावरील कस्टमर तुम्हाला शोधू शकतील आणि लोड पाठवू शकतील." : "लोकेशन — ताकि 30–50 किमी के भीतर के कस्टमर आपको ढूंढ सकें और लोड भेज सकें।"],
+          [Bell, lang === "en" ? "Notifications — so a new load or direct request reaches you instantly, even with the app closed." : lang === "mr" ? "नोटिफिकेशन — जेणेकरून नवीन लोड किंवा थेट विनंती अ‍ॅप बंद असतानाही लगेच पोहोचेल." : "नोटिफिकेशन — ताकि नया लोड या सीधा अनुरोध ऐप बंद होने पर भी तुरंत पहुंचे।"],
+          [Camera, lang === "en" ? "Camera/Photos — asked for separately whenever you update your KYC documents, vehicle photo, or profile picture." : lang === "mr" ? "कॅमेरा/फोटो — KYC कागदपत्रे, गाडीचा फोटो किंवा प्रोफाइल फोटो बदलताना यासाठी वेगळे विचारले जाईल." : "कैमरा/फोटो — KYC दस्तावेज़, गाड़ी की फोटो या प्रोफाइल फोटो बदलते समय इसके लिए अलग से पूछा जाएगा।"],
+        ],
+      }
+    : {
+        title: lang === "en" ? "Before you start" : lang === "mr" ? "सुरू करण्याआधी" : "शुरू करने से पहले",
+        items: [
+          [MapPin, lang === "en" ? "Location — to detect your pickup point and show nearby available vehicles." : lang === "mr" ? "लोकेशन — तुमचे पिकअप ठिकाण ओळखण्यासाठी व जवळपासच्या गाड्या दाखवण्यासाठी." : "लोकेशन — आपकी पिकअप जगह पहचानने और पास की उपलब्ध गाड़ियां दिखाने के लिए।"],
+          [Bell, lang === "en" ? "Notifications — so you know the instant your driver accepts or starts the trip, even if you're not in the app." : lang === "mr" ? "नोटिफिकेशन — जेणेकरून ड्रायव्हरने स्वीकारल्यावर किंवा राइड सुरू केल्यावर लगेच कळेल, अ‍ॅपमध्ये नसतानाही." : "नोटिफिकेशन — ताकि ड्राइवर के स्वीकार करने या राइड शुरू करने पर तुरंत पता चले, भले ही आप ऐप में न हों।"],
+          [Camera, lang === "en" ? "Camera/Photos — asked for separately if you ever upload an invoice or e-way bill photo." : lang === "mr" ? "कॅमेरा/फोटो — इनव्हॉइस किंवा ई-वे बिलचा फोटो अपलोड करताना यासाठी वेगळे विचारले जाईल." : "कैमरा/फोटो — इनवॉइस या ई-वे बिल की फोटो अपलोड करते समय इसके लिए अलग से पूछा जाएगा।"],
+        ],
+      };
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 text-center">
+      <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.navy }}>
+        <ShieldCheck size={26} color="#FFFFFF" />
+      </div>
+      <h2 className="text-lg font-black mb-1" style={{ color: C.ink }}>{copy.title}</h2>
+      <p className="text-xs font-semibold mb-5" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "Apna Transport needs a few permissions to work properly:" : lang === "mr" ? "अपना ट्रान्सपोर्ट व्यवस्थित चालण्यासाठी काही परवानग्या आवश्यक आहेत:" : "अपना ट्रांसपोर्ट को ठीक से काम करने के लिए कुछ अनुमतियां चाहिए:"}
+      </p>
+      <div className="w-full space-y-3 mb-6">
+        {copy.items.map(([Icon, text], i) => (
+          <div key={i} className="flex items-start gap-3 text-left rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+              <Icon size={15} color={C.marigoldDeep} />
+            </div>
+            <span className="text-xs font-semibold" style={{ color: C.ink }}>{text}</span>
+          </div>
+        ))}
+      </div>
+      <button onClick={start} disabled={asking} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: asking ? "#9AA3B0" : C.marigoldDeep }}>
+        {asking
+          ? (lang === "en" ? "Requesting..." : lang === "mr" ? "विनंती करत आहे..." : "अनुरोध किया जा रहा है...")
+          : (lang === "en" ? "Allow & Continue" : lang === "mr" ? "परवानगी द्या आणि पुढे जा" : "अनुमति दें और आगे बढ़ें")}
+      </button>
+      <p className="text-[10px] font-semibold mt-3" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "You can change these anytime in your browser's site settings." : lang === "mr" ? "तुम्ही या कधीही तुमच्या ब्राउझरच्या साइट सेटिंग्जमध्ये बदलू शकता." : "आप इन्हें कभी भी अपने ब्राउज़र की साइट सेटिंग्स में बदल सकते हैं।"}
+      </p>
     </div>
   );
 }
@@ -3538,7 +3686,7 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestDriverDirectly, vehicleTypes, lastBooking, lang, drivers, advanceOpen, setAdvanceOpen }) {
+function CustomerBooking({ requestDriverDirectly, vehicleTypes, lastBooking, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -3601,12 +3749,13 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, lastBooking, lan
     if (!navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
+        locationPermission?.markGranted();
         const now = Date.now();
         if (now - lastHomeGpsRef.current < 5000) return;
         lastHomeGpsRef.current = now;
         setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
-      () => {},
+      (err) => { if (err.code === err.PERMISSION_DENIED) locationPermission?.markDenied(); },
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
@@ -3708,6 +3857,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, lastBooking, lan
 
   return (
     <div className="pt-0 pb-8">
+      {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
       <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} showOpenInMaps={!!(pickup.trim() && drop.trim())} />
       <div className="px-5 pt-4 space-y-4">
         {advanceOpen && (
@@ -4488,6 +4638,12 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
   // usually isn't also logged in as the driver who accepted their load).
   const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer");
+  // Lifted up here (rather than owned inside CustomerBooking) so the same
+  // permission state/banner carries across from the booking-entry screen
+  // into the Ongoing-trip GPS sharing below, instead of resetting the
+  // moment CustomerBooking unmounts for ActiveRide.
+  const locationPermission = useLocationPermission();
+  const rideNotifications = useRideNotifications("customers", customerMobile, lang);
 
   // Real GPS live-tracking, mirroring the driver's own — shares the
   // customer's actual device location while a trip is Ongoing, so the
@@ -4497,16 +4653,18 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
     if (!ongoingTrip || !navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
+        locationPermission.markGranted();
         const now = Date.now();
         if (now - lastCustomerGpsWriteRef.current < 5000) return;
         lastCustomerGpsWriteRef.current = now;
         const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
         patchDoc("bookings", ongoingTrip.id, { customerLocation: location }).catch((e) => console.error(e));
       },
-      (err) => console.error("GPS tracking error", err),
+      (err) => { console.error("GPS tracking error", err); if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied(); },
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ongoingTrip?.id]);
 
   const shareApp = () => {
@@ -4640,6 +4798,8 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
             {showHamburger ? null : <div className="w-9 h-9 shrink-0" />}
           </div>
         )}
+        <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="customer" />
+        <ForegroundToast toast={rideNotifications.toast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
           onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
           onDismiss={announcementAlerts.markSeen} lang={lang} />
@@ -4705,7 +4865,7 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
               }} />
           ) : (
             <CustomerBooking requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} lastBooking={myBookings[0]} lang={lang} drivers={drivers}
-              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} />
+              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} locationPermission={locationPermission} />
           )
         ) : (
           <div>
@@ -5019,6 +5179,7 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
     if ((!myTrip && !driver.online) || !navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
+        locationPermission.markGranted();
         const now = Date.now();
         if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
         lastGpsWriteRef.current = now;
@@ -5053,7 +5214,7 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
           }
         }
       },
-      (err) => console.error("GPS tracking error", err),
+      (err) => { console.error("GPS tracking error", err); if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied(); },
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
@@ -5870,6 +6031,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
   // stuck showing a trip that's days away, but still reachable here.
   const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
+  const locationPermission = useLocationPermission();
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver");
 
   // Badge + "View your Booking here" callout, shown the moment one of this
@@ -6005,7 +6167,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
             <X size={14} color="#000000" strokeWidth={3} />
           </button>
         )}
-        {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} />}
+        {tab === "home" && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="driver" />}
+        {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="driver" />}
         <ForegroundToast toast={rideNotifications.toast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
           onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
@@ -7839,6 +8002,14 @@ export default function App() {
   // returning/login user never has this flag set, so they never see it.
   const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
   const [langPromptPending, setLangPromptPending] = usePersistedState("sarthi_langPromptPending", false);
+  // Whether this phone number + role has already been through
+  // PermissionsGate — persisted so it's asked once, not on every login, but
+  // scoped per mobile+role (not globally) so a second customer/driver
+  // signing in on the same shared device still gets asked themselves.
+  // Existing users see this the same as brand-new signups, since the
+  // permission system itself is new to all of them.
+  const [permsPrimedCustomer, setPermsPrimedCustomer] = usePersistedState(`sarthi_permsPrimed_customer_${customerAuth.mobile || "none"}`, false);
+  const [permsPrimedDriver, setPermsPrimedDriver] = usePersistedState(`sarthi_permsPrimed_driver_${driverAuth.mobile || "none"}`, false);
   // Google Places Autocomplete's suggestion language is fixed when its
   // script loads (see googleMapsContext.jsx) and can't be hot-swapped — so
   // picking a language reloads the page. localStorage is written directly
@@ -8411,7 +8582,10 @@ export default function App() {
               setLangPromptPending(true);
             }} />
         )}
-        {role === "customer" && customerAuth.verified && customerChecked && customer && (
+        {role === "customer" && customerAuth.verified && customerChecked && customer && !permsPrimedCustomer && (
+          <PermissionsGate role="customer" docId={customerAuth.mobile} lang={lang} onDone={() => setPermsPrimedCustomer(true)} />
+        )}
+        {role === "customer" && customerAuth.verified && customerChecked && customer && permsPrimedCustomer && (
           <CustomerApp bookings={bookings} requestDriverDirectly={requestDriverDirectly} reassignAwaitingDriver={reassignAwaitingDriver} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
@@ -8460,7 +8634,10 @@ export default function App() {
             )}
           </div>
         )}
-        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && !permsPrimedDriver && (
+          <PermissionsGate role="driver" docId={driver.mobile} lang={lang} onDone={() => setPermsPrimedDriver(true)} />
+        )}
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && permsPrimedDriver && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onChangeLang={chooseLang} onLogout={logout}

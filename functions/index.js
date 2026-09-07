@@ -241,6 +241,54 @@ exports.onDirectRequestAssigned = onDocumentWritten("bookings/{bookingId}", asyn
   await sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId);
 });
 
+// Customer-side equivalent of sendDirectRequestAlert/sendLoadAlert above —
+// reaches the customer even with the app fully closed, for the two moments
+// they most need to know without having it open: their driver accepting
+// (status -> Ongoing) and the trip finishing (status -> Completed). Reuses
+// the same "new_load_alerts" channel already proven to reach a closed app,
+// rather than registering a new, unproven one.
+async function sendCustomerBookingAlert(token, booking, bookingId, kind) {
+  if (!token) return;
+  try {
+    await getMessaging().send({
+      token,
+      notification: kind === "accepted"
+        ? { title: "✅ ड्राइवर मिल गया!", body: `${booking.driverName || "ड्राइवर"} आपकी बुकिंग स्वीकार कर चुके हैं और रास्ते में हैं।` }
+        : { title: "🏁 डिलीवरी पूरी हुई", body: `आपकी बुकिंग (${booking.pickup} → ${booking.drop}) पूरी हो गई है।` },
+      android: {
+        priority: "high",
+        notification: { channelId: "new_load_alerts", priority: "max", visibility: "public", defaultSound: true, defaultVibrateTimings: true },
+      },
+      webpush: {
+        headers: { Urgency: "high" },
+        notification: { tag: `booking-${kind}`, renotify: true },
+        fcmOptions: { link: "/?open=customer" },
+      },
+      data: { type: `booking_${kind}`, bookingId },
+    });
+  } catch (e) {
+    console.error(`[push] customer ${kind} alert send failed:`, e.message);
+  }
+}
+
+// Fires on the two booking-status transitions a customer needs to know
+// about without having the app open — see sendCustomerBookingAlert above.
+exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", async (event) => {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  if (!after || !after.customerMobile) return;
+
+  const becameOngoing = after.status === "Ongoing" && before?.status !== "Ongoing";
+  const becameCompleted = after.status === "Completed" && before?.status !== "Completed";
+  if (!becameOngoing && !becameCompleted) return;
+
+  const customerSnap = await db.collection("customers").doc(after.customerMobile).get();
+  const token = customerSnap.data()?.fcmToken;
+  if (!token) return;
+
+  await sendCustomerBookingAlert(token, after, event.params.bookingId, becameOngoing ? "accepted" : "completed");
+});
+
 // Runs hourly. A customer's load that has sat in "Bidding" for 6+ hours
 // gets deleted outright -- covers both cases: zero bids at all, or bids
 // came in but the customer never accepted one. Either way, 6 hours with
