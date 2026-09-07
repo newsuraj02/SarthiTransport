@@ -809,7 +809,17 @@ function useRideNotifications(collectionName, docId, lang) {
       const result = await requestPushToken();
       if (result.ok) patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
       const fn = await listenForegroundPush((payload) => {
-        playBeepTone();
+        // A new-load alert gets an actual spoken "New Trip Alert" instead
+        // of a beep — same reasoning as the direct-request Accept/Reject
+        // screen's repeating speakAlert, easier to notice/harder to
+        // ignore than a plain tone. Every other foreground push type
+        // (direct-request toast, customer booking-update toast) keeps the
+        // existing beep.
+        if (payload.data?.type === "new_load") {
+          speakAlert(lang === "en" ? "New Trip Alert" : lang === "mr" ? "नवीन ट्रिप अलर्ट" : "नई ट्रिप अलर्ट", lang);
+        } else {
+          playBeepTone();
+        }
         setToast(payload.notification || null);
         setTimeout(() => setToast(null), 5000);
       });
