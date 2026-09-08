@@ -3646,11 +3646,11 @@ async function uploadRawFile(file, path) {
 // Renders an <img>, falling back to `fallback` if there's no src yet or the
 // image fails to load (e.g. a stale blob: URL from an older upload that no
 // longer resolves on this device) — avoids the browser's broken-image glyph.
-function SafeImage({ src, alt = "", className, fallback = null }) {
+function SafeImage({ src, alt = "", className, style, fallback = null }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => { setFailed(false); }, [src]);
   if (!src || failed) return fallback;
-  return <img src={src} alt={alt} className={className} onError={() => setFailed(true)} />;
+  return <img src={src} alt={alt} className={className} style={style} onError={() => setFailed(true)} />;
 }
 
 function PhotoPicker({ label, lang = "hi", onSelect, children }) {
@@ -4370,8 +4370,8 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                     <button onClick={() => setSelectedDriverName(d.name)}
                       className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
                       style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : "transparent" }}>
-                      <SafeImage src={d.vehicleSpec?.photoSide?.url} alt="" className="w-28 h-20 rounded-xl object-cover shrink-0" fallback={
-                        <div className="w-28 h-20 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                      <SafeImage src={d.vehicleSpec?.photoSide?.url} alt="" className="w-32 h-16 rounded-xl object-contain shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
+                        <div className="w-32 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
                           <Truck size={32} color={C.marigoldDeep} />
                         </div>
                       } />
