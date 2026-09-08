@@ -3658,6 +3658,18 @@ async function uploadPhoto(file, path, maxDim = 900, quality = 0.72, onProgress 
 // (never throws) on any decode failure — callers should treat that as
 // "skip the check", not as a rejection; uploadPhoto's own resize will
 // surface the real error to the driver if the file is genuinely bad.
+// Bounds how long startPhotoUpload waits on classifyKycPhoto before giving
+// up and falling through to the normal upload — Firebase callable functions
+// don't time out client-side for ~70s by default, which on weak wifi would
+// otherwise leave a KYC photo tile stuck on "Uploading..." for over a
+// minute (on top of uploadPhoto's own 30s) before anything happens. The
+// slow call itself isn't cancelled (callable functions can't be aborted
+// from here), it just stops being waited on -- resolving late and getting
+// ignored is harmless since nothing still reads its result.
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(fallback), ms))]);
+}
+
 async function fileToClassifyPayload(file) {
   try {
     const canvas = await resizeImageToCanvas(file, 700);
@@ -6317,7 +6329,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     if (docType) {
       const payload = await fileToClassifyPayload(f);
       if (payload) {
-        const verdict = await classifyKycPhoto(payload.base64, payload.mimeType, docType);
+        const verdict = await withTimeout(classifyKycPhoto(payload.base64, payload.mimeType, docType), 8000, { ok: false, reason: "timeout" });
         if (verdict.ok && verdict.isMatch === false) {
           markUploading(key, false);
           markUploadError(key, key === "vehicleSide" ? "not_side_view" : "not_license");
