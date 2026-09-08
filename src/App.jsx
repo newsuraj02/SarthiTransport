@@ -463,6 +463,37 @@ const VEHICLE_HEADROOM_KG = 5000;
 // real routed distance from Google's Distance Matrix API.
 const ROAD_DISTANCE_FACTOR = 1.35;
 
+// Fixed, calculated fare — replaces the old "discuss on call" model with an
+// upfront price shown before booking, same idea as Porter's per-vehicle
+// pricing. Keyed by CAPACITY, not by vehicle-type identity: vehicle "types"
+// here aren't a fixed catalog (a driver just types their vehicle's name
+// during KYC — see resolveVehicleTypeKey in DriverKyc — and a new
+// vehicleTypes doc gets created on the fly if it doesn't match one that
+// already exists), so there's no small stable set of types to hang a rate
+// table off. capacityKg is the one thing every driver reliably has, so a
+// band lookup by capacity applies uniformly regardless of what a driver
+// happened to type their vehicle in as.
+// Ordered ascending by capacity; the last entry (maxKg: Infinity) is the
+// catch-all for anything bigger than 7 tonnes (19ft, 6-wheeler, 10-wheeler...).
+const FARE_TIERS = [
+  { maxKg: 750, baseFare: 180, perKmRate: 18 },
+  { maxKg: 850, baseFare: 190, perKmRate: 19 },
+  { maxKg: 1500, baseFare: 280, perKmRate: 22 },
+  { maxKg: 2500, baseFare: 450, perKmRate: 26 },
+  { maxKg: 5000, baseFare: 700, perKmRate: 30 },
+  { maxKg: 7000, baseFare: 1100, perKmRate: 38 },
+  { maxKg: Infinity, baseFare: 1400, perKmRate: 45 },
+];
+
+// distanceKm may be null (coords never resolved — canPost doesn't require a
+// resolved distance, see CustomerBooking) — falls back to just the base
+// fare rather than blocking the booking over it.
+function calculateFare(capacityKg, distanceKm) {
+  const tier = FARE_TIERS.find((t) => (capacityKg || 0) <= t.maxKg) || FARE_TIERS[FARE_TIERS.length - 1];
+  const distancePart = distanceKm != null ? distanceKm * tier.perKmRate : 0;
+  return Math.round(tier.baseFare + distancePart);
+}
+
 // Straight-line estimate scaled up for roads — requires real GPS
 // coordinates for both ends. Returns null (not a guess) when either
 // coordinate is missing, since a distance that isn't actually derived from
@@ -4365,6 +4396,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                 </p>
               ) : eligibleDrivers.map((d) => {
                 const isSelected = selectedDriverName === d.name;
+                const driverFare = calculateFare(d.vehicleSpec?.capacityKg, distance);
                 return (
                   <div key={d.mobile || d.id}>
                     <button onClick={() => setSelectedDriverName(d.name)}
@@ -4379,10 +4411,11 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                         <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
                         <div className="text-xs truncate" style={{ color: C.inkSoft }}>{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
                       </div>
+                      <div className="text-base font-black shrink-0" style={{ color: C.navy }}>{fmt(driverFare)}</div>
                     </button>
                     {isSelected && (
-                      <button onClick={() => requestDriver(d.name)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg" style={{ background: C.success }}>
-                        {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
+                      <button onClick={() => requestDriver(d.name)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5" style={{ background: C.success }}>
+                        {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"} · {fmt(driverFare)}
                       </button>
                     )}
                   </div>
@@ -4699,9 +4732,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
           <div style={{ color: C.ink }}>
             <span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span>
             {b.distance != null && (
-              <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+              <div className="mt-1.5">
                 <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(b.distance, lang)}</span>
-                <span className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Discuss fare on call with Driver" : lang === "mr" ? "ड्रायव्हरसोबत कॉलवर भाडे ठरवा" : "ड्राइवर के साथ कॉल पर भाड़ा तय करें"}</span>
               </div>
             )}
           </div>
@@ -5877,9 +5909,8 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
                 <div style={{ color: C.ink }}>
                   <span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span>
                   {myTrip.distance != null && (
-                    <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                    <div className="mt-1.5">
                       <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(myTrip.distance, lang)}</span>
-                      <span className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Discuss fare on call with Customer" : lang === "mr" ? "ग्राहकासोबत कॉलवर भाडे ठरवा" : "ग्राहक के साथ कॉल पर भाड़ा तय करें"}</span>
                     </div>
                   )}
                 </div>
@@ -8100,10 +8131,15 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
 }
 
 function AdminFinance({ tripLog, commissionPct, lang }) {
-  const totalCommission = tripLog.filter((t) => t.status !== "Cancelled").reduce((s, t) => s + t.fare * (commissionPct / 100), 0);
+  // Commission is deliberately held at 0 here too (see driverRespondBooking)
+  // — fare is a real, fixed, calculated number again, but this report
+  // shouldn't show non-zero "would-be" commission while actual wallet
+  // deductions are still intentionally off; would be misleading otherwise.
+  const activeCommissionPct = 0;
+  const totalCommission = tripLog.filter((t) => t.status !== "Cancelled").reduce((s, t) => s + t.fare * (activeCommissionPct / 100), 0);
   const downloadReport = () => {
     const header = "Driver,Route,Fare,Commission,Status\n";
-    const rows = tripLog.map((t) => `${t.driverName},"${t.pickup} to ${t.drop}",${t.fare},${t.status === "Cancelled" ? 0 : Math.round(t.fare * (commissionPct / 100))},${t.status}`).join("\n");
+    const rows = tripLog.map((t) => `${t.driverName},"${t.pickup} to ${t.drop}",${t.fare},${t.status === "Cancelled" ? 0 : Math.round(t.fare * (activeCommissionPct / 100))},${t.status}`).join("\n");
     const blob = new Blob([header + rows], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -8120,7 +8156,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
         </button>
       </div>
       <div className="rounded-lg p-3 mb-3" style={{ background: C.success }}>
-        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Total commission so far (${commissionPct}%)` : lang === "mr" ? `आजपर्यंतचे एकूण कमिशन (${commissionPct}%)` : `आज का कुल कमीशन (${commissionPct}%)`}</div>
+        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Total commission so far (${activeCommissionPct}%)` : lang === "mr" ? `आजपर्यंतचे एकूण कमिशन (${activeCommissionPct}%)` : `आज का कुल कमीशन (${activeCommissionPct}%)`}</div>
         <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(totalCommission)}</div>
       </div>
       {tripLog.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid has been accepted yet." : lang === "mr" ? "आज अजून कोणतीही बिड अ‍ॅक्सेप्ट झाली नाही." : "आज अभी तक कोई बिड एक्सेप्ट नहीं हुई।"}</p> : (
@@ -8138,7 +8174,7 @@ function AdminFinance({ tripLog, commissionPct, lang }) {
                 <td className="py-1.5" style={{ color: C.inkSoft }}>{t.pickup} → {t.drop}</td>
                 <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: C.ink }}>{fmt(t.fare)}</td>
                 <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: t.status === "Cancelled" ? C.safety : C.success }}>
-                  {t.status === "Cancelled" ? (lang === "en" ? "Cancelled (refunded)" : lang === "mr" ? "रद्द (परत)" : "रद्द (वापस)") : fmt(t.fare * (commissionPct / 100))}
+                  {t.status === "Cancelled" ? (lang === "en" ? "Cancelled (refunded)" : lang === "mr" ? "रद्द (परत)" : "रद्द (वापस)") : fmt(t.fare * (activeCommissionPct / 100))}
                 </td>
               </tr>
             ))}
@@ -8900,10 +8936,11 @@ export default function App() {
   // the vehicle-picker list instead of posting an open "Bidding" load —
   // skips straight to "AwaitingDriver" targeting that driver, exactly
   // like acceptBid does once a customer picks a bid, just without an
-  // actual bid having been placed first. Pricing is paused for now (see
-  // backup-before-pricing-removal) — fare is left null, to be agreed
-  // outside the app in the meantime, same as this app already never
-  // collects payment itself. Returns an error message string to show the
+  // actual bid having been placed first. Fare is now a fixed, calculated
+  // number (see calculateFare/FARE_TIERS) shown to the customer before they
+  // book, replacing the old "discuss on call" model — driver commission on
+  // accept is deliberately still held at 0 despite fare being real again
+  // (see driverRespondBooking). Returns an error message string to show the
   // customer, or null on success.
   const requestDriverDirectly = ({ pickup, drop, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, driverName }) => {
     const targetDriver = drivers.find((d) => d.name === driverName);
@@ -8913,8 +8950,9 @@ export default function App() {
     const bookingId = genId();
     const conflict = findDriverLoadConflict(targetDriver, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
+    const fare = calculateFare(targetDriver.vehicleSpec?.capacityKg, distance);
     createDoc("bookings", bookingId, {
-      pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare: null,
+      pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: driverName, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
       // Stamped once at booking time (same pattern as driverName/customerMobile
@@ -9064,8 +9102,13 @@ export default function App() {
 
     // Commission cut on confirm — held credit from a past cancellation
     // offsets first; 0% while this driver is still inside their own trial.
-    const effCommissionPct = isInTrial(driver.createdAt) ? 0 : commissionPct;
-    const effBonusPct = isInTrial(driver.createdAt) ? 0 : bonusPct;
+    // Deliberately held at 0 regardless of commissionPct/bonusPct: fare is a
+    // real, fixed, calculated number again (see calculateFare/FARE_TIERS),
+    // but reactivating actual wallet deductions is a separate business
+    // decision that hasn't been made yet — don't let fare-is-real-now
+    // silently reactivate commission as a side effect.
+    const effCommissionPct = 0;
+    const effBonusPct = 0;
     const commissionAmt = (b.fare || 0) * (effCommissionPct / 100);
     const bonusAmt = (b.fare || 0) * (effBonusPct / 100);
     const held = driver.heldCredit || 0;
