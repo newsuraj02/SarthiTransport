@@ -493,8 +493,22 @@ function formatDistanceExact(km, lang) {
 function geocodeAddress(text) {
   return new Promise((resolve) => {
     if (!window.google?.maps?.Geocoder || !text?.trim()) { resolve(null); return; }
+    // Biases (doesn't hard-restrict) results toward the app's actual
+    // service area — Pimpri-Chinchwad/Pune, same default center used
+    // elsewhere (e.g. NEARBY_MAP_DEFAULT_CENTER) — without this, a short
+    // locality name typed by hand (no Autocomplete tap) can match a
+    // same-named place in a totally different Indian state/city instead of
+    // the nearby one actually meant, since componentRestrictions only
+    // narrows to "country: in" and India has many repeated locality names.
+    // That's a real bug reported here: "Vitthal Nagar" resolved ~390km
+    // away instead of the Pimpri-Chinchwad one, inflating a real ~4km trip
+    // into a bogus ~395km distance estimate.
+    const bias = new window.google.maps.LatLngBounds(
+      { lat: 18.6298 - 0.9, lng: 73.8131 - 0.9 },
+      { lat: 18.6298 + 0.9, lng: 73.8131 + 0.9 }
+    );
     new window.google.maps.Geocoder().geocode(
-      { address: text, componentRestrictions: { country: "in" } },
+      { address: text, componentRestrictions: { country: "in" }, bounds: bias },
       (results, status) => {
         const loc = status === "OK" && results?.[0]?.geometry?.location;
         resolve(loc ? { lat: loc.lat(), lng: loc.lng() } : null);
@@ -3825,8 +3839,17 @@ function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholde
       return;
     }
     debounceRef.current = setTimeout(() => {
+      // location+radius below is a soft bias (ranks nearby matches higher),
+      // not a hard filter — componentRestrictions alone only narrows to
+      // "country: in", and India has many same-named localities in
+      // different states/cities. Without this, typing a short local name
+      // (e.g. "Vitthal Nagar") could surface an unrelated same-named place
+      // hundreds of km away above the actual nearby one, and picking it
+      // would silently save the wrong coordinates — a real bug reported
+      // here: a genuine ~4km trip came out as a ~395km distance estimate
+      // because the picked suggestion resolved to a distant namesake.
       new window.google.maps.places.AutocompleteService().getPlacePredictions(
-        { input: value, componentRestrictions: { country: "in" } },
+        { input: value, componentRestrictions: { country: "in" }, location: new window.google.maps.LatLng(18.6298, 73.8131), radius: 60000 },
         (preds, status) => setPredictions(status === "OK" && preds ? preds : [])
       );
     }, 300);
