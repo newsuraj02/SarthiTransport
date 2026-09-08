@@ -6272,14 +6272,22 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // means it can't crash regardless of what's already stored on a given
   // device.
   const capacityKgStr = String(capacityKg ?? "");
-  const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && capacityKgStr.trim() && vehicleTypeName.trim() && !anyUploading);
+  // A non-empty string alone isn't enough — "0" (or "abc", or "-5") passes
+  // .trim() truthy but Number(capacityKg) || undefined at submit time below
+  // then silently discards it as undefined, so KYC "succeeds" with no
+  // capacity ever actually saved. Found via Admin Settings' fare-tier
+  // breakdown turning up drivers with no capacity set despite this field
+  // supposedly being required. Requiring a real positive number here closes
+  // that gap for every future submission.
+  const capacityKgValid = Number(capacityKgStr.trim()) > 0;
+  const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && capacityKgValid && vehicleTypeName.trim() && !anyUploading);
   // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
   // Front isn't required here — see the photo tile below, same reasoning as
   // DriverProfileEdit's document list already applied: the side profile is
   // the only vehicle photo that matters to a customer browsing bids, so
   // dropping Front halves the photo-upload burden on signup without losing
   // anything a customer actually sees.
-  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), !!capacityKgStr.trim(), !!vehicleTypeName.trim(), !!vehiclePhotoSide];
+  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), capacityKgValid, !!vehicleTypeName.trim(), !!vehiclePhotoSide];
   const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
   // First-time submission within this driver's own 30-day trial (from
   // their own signup date) skips the admin approval wait entirely — a
@@ -6296,7 +6304,11 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       ...driver, kyc: isInTrial(driver.createdAt) && isFirstSubmission ? "Approved" : "Pending", photo, docs: { dl, photo },
       vehicleSpec: {
         type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
-        capacityKg: Number(capacityKg) || undefined,
+        // canSubmit already guarantees Number(capacityKg) > 0 by this point
+        // — || null here is just defense in depth, and null (an explicit
+        // "not set") is the correct fallback shape, not undefined (which
+        // silently vanishes from what gets saved).
+        capacityKg: Number(capacityKg) || null,
         vehicleNumber: vehicleNumber.trim().toUpperCase(),
       },
     });
