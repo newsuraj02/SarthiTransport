@@ -476,11 +476,17 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 // Ordered ascending by capacity; the last entry (maxKg: Infinity) is the
 // catch-all for anything bigger than 7 tonnes (19ft, 6-wheeler, 10-wheeler...).
 //
-// Deliberately undercuts Porter, consistently, so this app reads as the
-// cheaper option at every weight rather than only some: baseFare is ~10%
-// below Porter's own base fare for the closest matching vehicle at that
-// capacity, perKmRate is ~₹3 below Porter's per-km rate. Porter's own
-// reference points (their site, city listings, Sep 2026):
+// Mixed pricing policy, split by whether Porter's own numbers here are
+// real or guessed:
+//  - Small categories (0-500 / 500-750 / 750-1000 / 1000-1500kg), where
+//    Porter publishes an actual per-km rate for the closest matching
+//    vehicle: perKmRate is set to Porter's rate + ₹1 — priced slightly
+//    ABOVE Porter on purpose in this range. baseFare is left as-is.
+//  - Larger categories (1500kg+), where Porter's per-km rate is either
+//    from a comparable operator (1,500-2,500kg) or extrapolated with no
+//    source at all (above 2,500kg): kept at the earlier ~10%-below-Porter
+//    pricing rather than anchoring a markup to numbers this shaky.
+// Porter's own reference points (their site, city listings, Sep 2026):
 //   0-500kg    -> 3-wheeler/Tempo  (base ~₹170,  ~₹16/km)
 //   500-750kg  -> Tata Ace         (base ~₹223,  ~₹19/km)
 //   750-1000kg -> Pickup 8ft       (base ~₹315,  ~₹20/km)
@@ -495,10 +501,10 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 // sourced figure — least confident of the eight, revisit if better data
 // on Porter's larger-vehicle pricing turns up.
 const FARE_TIERS = [
-  { maxKg: 500, baseFare: 150, perKmRate: 13 },
-  { maxKg: 750, baseFare: 200, perKmRate: 16 },
-  { maxKg: 1000, baseFare: 280, perKmRate: 17 },
-  { maxKg: 1500, baseFare: 300, perKmRate: 19 },
+  { maxKg: 500, baseFare: 150, perKmRate: 17 },
+  { maxKg: 750, baseFare: 200, perKmRate: 20 },
+  { maxKg: 1000, baseFare: 280, perKmRate: 21 },
+  { maxKg: 1500, baseFare: 300, perKmRate: 23 },
   { maxKg: 2500, baseFare: 620, perKmRate: 39 },
   { maxKg: 5000, baseFare: 1010, perKmRate: 66 },
   { maxKg: 7000, baseFare: 1510, perKmRate: 94 },
