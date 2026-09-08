@@ -478,7 +478,7 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 const FARE_TIERS = [
   { maxKg: 500, baseFare: 150, perKmRate: 15 },
   { maxKg: 750, baseFare: 180, perKmRate: 18 },
-  { maxKg: 850, baseFare: 190, perKmRate: 19 },
+  { maxKg: 1000, baseFare: 210, perKmRate: 19 },
   { maxKg: 1500, baseFare: 280, perKmRate: 22 },
   { maxKg: 2500, baseFare: 450, perKmRate: 26 },
   { maxKg: 5000, baseFare: 700, perKmRate: 30 },
