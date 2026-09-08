@@ -475,15 +475,34 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 // happened to type their vehicle in as.
 // Ordered ascending by capacity; the last entry (maxKg: Infinity) is the
 // catch-all for anything bigger than 7 tonnes (19ft, 6-wheeler, 10-wheeler...).
+//
+// Deliberately undercuts Porter, consistently, so this app reads as the
+// cheaper option at every weight rather than only some: baseFare is ~10%
+// below Porter's own base fare for the closest matching vehicle at that
+// capacity, perKmRate is ~₹3 below Porter's per-km rate. Porter's own
+// reference points (their site, city listings, Sep 2026):
+//   0-500kg    -> 3-wheeler/Tempo  (base ~₹170,  ~₹16/km)
+//   500-750kg  -> Tata Ace         (base ~₹223,  ~₹19/km)
+//   750-1000kg -> Pickup 8ft       (base ~₹315,  ~₹20/km)
+//   1000-1500kg-> Pickup 8ft/Dost+ (base ~₹330,  ~₹22/km)
+//   1500-2500kg-> Tata 407         (base ~₹682,  ~₹42/km — per-km from a
+//                                   comparable operator; Porter doesn't
+//                                   publish its own 407 per-km rate)
+// Above 2500kg Porter publishes almost nothing beyond a 14ft Canter base
+// fare (~₹1,120 at 3,500kg) — no per-km, and nothing at all for 17ft/19ft.
+// Those three tiers (2,500-5,000 / 5,000-7,000 / 7,000+) are extrapolated
+// by continuing Porter's own step-up pattern between tiers rather than a
+// sourced figure — least confident of the eight, revisit if better data
+// on Porter's larger-vehicle pricing turns up.
 const FARE_TIERS = [
-  { maxKg: 500, baseFare: 150, perKmRate: 15 },
-  { maxKg: 750, baseFare: 180, perKmRate: 18 },
-  { maxKg: 1000, baseFare: 210, perKmRate: 19 },
-  { maxKg: 1500, baseFare: 280, perKmRate: 22 },
-  { maxKg: 2500, baseFare: 450, perKmRate: 26 },
-  { maxKg: 5000, baseFare: 700, perKmRate: 30 },
-  { maxKg: 7000, baseFare: 1100, perKmRate: 38 },
-  { maxKg: Infinity, baseFare: 1400, perKmRate: 45 },
+  { maxKg: 500, baseFare: 150, perKmRate: 13 },
+  { maxKg: 750, baseFare: 200, perKmRate: 16 },
+  { maxKg: 1000, baseFare: 280, perKmRate: 17 },
+  { maxKg: 1500, baseFare: 300, perKmRate: 19 },
+  { maxKg: 2500, baseFare: 620, perKmRate: 39 },
+  { maxKg: 5000, baseFare: 1010, perKmRate: 66 },
+  { maxKg: 7000, baseFare: 1510, perKmRate: 94 },
+  { maxKg: Infinity, baseFare: 2050, perKmRate: 123 },
 ];
 
 // distanceKm may be null (coords never resolved — canPost doesn't require a
