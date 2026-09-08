@@ -25,7 +25,7 @@
         </activity>
 
         <!-- See SettingsBridgeActivity.java and twa/patch-project.js (the
-             TWA build's equivalent) -- opens this app's own Notification
+             TWA build's equivalent) — opens this app's own Notification
              or Location settings screen directly, reached from the web
              side via a custom app-specific intent action that Chrome/the
              WebView won't block, unlike a system "android.settings.*" one. -->
