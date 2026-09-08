@@ -3869,9 +3869,17 @@ function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholde
       onPlaceSelected({ name: stripPlusCode(r.formatted_address || p.description), lat: loc.lat(), lng: loc.lng() });
     });
   };
-  const selectRecent = (r) => {
+  const selectRecent = async (r) => {
     setDropdownOpen(false);
-    onPlaceSelected({ name: r.name, lat: r.lat, lng: r.lng });
+    // Re-resolves through the now-bias-corrected geocodeAddress instead of
+    // trusting r.lat/r.lng verbatim — those were saved on a past booking,
+    // so if that booking's own address was ever mis-geocoded (the exact
+    // "resolved to a same-named place hundreds of km away" bug just fixed
+    // there), picking it as a "recent" would otherwise keep replaying that
+    // same wrong location indefinitely. Falls back to the stored value
+    // only if this lookup itself fails (e.g. offline).
+    const coords = await geocodeAddress(r.name);
+    onPlaceSelected({ name: r.name, lat: coords?.lat ?? r.lat, lng: coords?.lng ?? r.lng });
   };
 
   const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
