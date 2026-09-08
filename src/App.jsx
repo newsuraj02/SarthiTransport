@@ -16,15 +16,11 @@ import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPa
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
 import { registerPlugin } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
 
-// Stamped at build time (see vite.config.js's `define`) — a build timestamp,
-// not a human-picked version number, so every single deploy gets a distinct
-// value with no manual bumping to remember. Used by the force-update gate in
-// App() to detect a session that's still running an older bundle than
-// what's actually live. typeof-guarded so it degrades to "dev" rather than
-// throwing if something (a test runner, an unbuilt dev tool) evaluates this
-// file without Vite's define substitution having run.
-const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+// Fallback Play Store link for the force-update screen — used whenever
+// admin hasn't set a custom settings.updateUrl (see AdminSettings).
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.apnatransport.app";
 
 // ---------------- design tokens ----------------
 // Bright/high-visibility flat palette — legible in direct outdoor sunlight
@@ -7983,24 +7979,26 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
   );
 }
 
-function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, lang }) {
+function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, lang }) {
   // Commission/bonus/min-wallet are edited as a draft and only written to
   // Firestore on Save, instead of firing a write on every keystroke. Stays
   // in sync with the live values as long as there's no unsaved edit, so an
   // external change (e.g. trial mode toggling commission to 0) still shows
   // up immediately.
-  const [draft, setDraft] = useState({ commissionPct, bonusPct, minWallet });
+  const [draft, setDraft] = useState({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
-    if (!dirty) setDraft({ commissionPct, bonusPct, minWallet });
+    if (!dirty) setDraft({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commissionPct, bonusPct, minWallet, dirty]);
+  }, [commissionPct, bonusPct, minWallet, latestVersionCode, updateUrl, dirty]);
   const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
   const saveSettings = () => {
     setCommissionPct(draft.commissionPct);
     setBonusPct(draft.bonusPct);
     setMinWallet(draft.minWallet);
+    setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
+    setUpdateUrl(draft.updateUrl.trim());
     setDirty(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -8047,6 +8045,20 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
             className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
         </div>
       </div>
+
+      <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Force Update (Play Store)" : lang === "mr" ? "फोर्स अपडेट (Play Store)" : "फोर्स अपडेट (Play Store)"}</div>
+        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Set this to the versionCode of whatever you just published to the Production track — anyone on an older install gets blocked until they update. Leave blank to turn this off." : lang === "mr" ? "तुम्ही नुकतीच Production track वर पब्लिश केलेल्या versionCode इथे टाका — जुन्या व्हर्जनवरील सर्वांना अपडेट होईपर्यंत ब्लॉक केले जाईल. बंद करण्यासाठी रिकामे ठेवा." : "आपने अभी-अभी Production track पर publish किया हुआ versionCode यहां डालें — पुराने वर्शन वाले सभी को अपडेट होने तक ब्लॉक कर दिया जाएगा। बंद करने के लिए खाली छोड़ें।"}</div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Required versionCode" : lang === "mr" ? "आवश्यक versionCode" : "आवश्यक versionCode"}</div>
+          <input type="number" placeholder={lang === "en" ? "Off" : lang === "mr" ? "बंद" : "बंद"} value={draft.latestVersionCode} onChange={(e) => updateDraft({ latestVersionCode: e.target.value })}
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+        </div>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Play Store link (optional)" : lang === "mr" ? "Play Store लिंक (ऐच्छिक)" : "Play Store लिंक (वैकल्पिक)"}</div>
+        <input type="text" placeholder={PLAY_STORE_URL} value={draft.updateUrl} onChange={(e) => updateDraft({ updateUrl: e.target.value })}
+          className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
+      </div>
+
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
       <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-3.5 font-bold text-base"
         style={{ background: dirty ? "#0052CC" : "#E0E0E0", color: dirty ? "#fff" : "#9AA3B0" }}>
@@ -8329,7 +8341,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review now lives inside
   // the Live Dashboard's "New Registrations" tile (see AdminFleet's
@@ -8357,7 +8369,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
-      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} lang={lang} />}
+      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
@@ -8504,50 +8516,6 @@ export default function App() {
     };
   }, []);
 
-  // Force-update gate — a session left open across a deploy keeps running
-  // its already-loaded (now stale) JS bundle indefinitely; nothing about
-  // opening/foregrounding the app on its own makes it fetch a fresh one.
-  // version.json is a tiny static file re-emitted with every build (see
-  // vite.config.js) — fetched here with cache: "no-store" so neither the
-  // browser's HTTP cache nor the service worker's cache-on-success behavior
-  // (see public/service-worker.js) can serve a stale copy of THIS one file,
-  // regardless of what it's doing for everything else. A mismatch against
-  // APP_VERSION (the value baked into the bundle actually running right
-  // now) means a newer build than this one is live.
-  const [needsUpdate, setNeedsUpdate] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      if (!navigator.onLine) return;
-      try {
-        const res = await fetch(`/version.json?_=${Date.now()}`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && data?.version && data.version !== APP_VERSION) setNeedsUpdate(true);
-      } catch {
-        // Offline or a transient blip — the connectivity check above already
-        // owns telling the user they're offline; nothing to do here.
-      }
-    };
-    check();
-    const interval = setInterval(check, 5 * 60 * 1000);
-    const onVisible = () => { if (document.visibilityState === "visible") check(); };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("online", check);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("online", check);
-    };
-  }, []);
-  const handleUpdateNow = () => {
-    if ("caches" in window) {
-      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => window.location.reload());
-    } else {
-      window.location.reload();
-    }
-  };
   const [adminAuth, setAdminAuth] = useState(false);
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
   // The customer's profile is looked up live from Firestore by their
@@ -8681,6 +8649,14 @@ export default function App() {
   const setCommissionPct = (v) => patchDoc("settings", "main", { commissionPct: typeof v === "function" ? v(commissionPct) : v }).catch((e) => console.error(e));
   const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
   const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
+  // Bumped by hand in Admin Settings each time a new Production release
+  // actually goes out on the Play Console — there's no client-reachable API
+  // that tells the app "what's live in Production" on its own, so this
+  // number IS that source of truth as far as the app is concerned. Left
+  // unset (undefined), the force-update check below has nothing to compare
+  // against and simply never blocks — see the version-check effect.
+  const setLatestVersionCode = (v) => patchDoc("settings", "main", { latestVersionCode: typeof v === "function" ? v(settings.latestVersionCode) : v }).catch((e) => console.error(e));
+  const setUpdateUrl = (v) => patchDoc("settings", "main", { updateUrl: typeof v === "function" ? v(settings.updateUrl) : v }).catch((e) => console.error(e));
 
   useEffect(() => {
     if (!firestoreReady) return;
@@ -8755,6 +8731,40 @@ export default function App() {
       .catch((e) => console.error("[settings init]", e));
     return unsub;
   }, []);
+
+  // Force-update gate — only meaningful on the installed native app (a
+  // browser tab has no "Play Store version" to fall behind). Compares this
+  // install's own versionCode (baked into the .aab at build time — see
+  // android/app/build.gradle) against settings.latestVersionCode, which
+  // admin bumps by hand in Admin Settings each time a new Production
+  // release actually goes out. Checked once on launch and again whenever
+  // the app returns to the foreground, so someone who installs the update
+  // and comes back doesn't stay stuck if they happened to background the
+  // app instead of fully closing it.
+  const [nativeVersionState, setNativeVersionState] = useState({ checked: false, outdated: false });
+  useEffect(() => {
+    if (!isNativeApp) { setNativeVersionState({ checked: true, outdated: false }); return; }
+    let cancelled = false;
+    const check = async () => {
+      const latest = Number(settings.latestVersionCode);
+      if (!latest) { if (!cancelled) setNativeVersionState({ checked: true, outdated: false }); return; }
+      try {
+        const info = await CapacitorApp.getInfo();
+        const mine = Number(info.build);
+        if (!cancelled) setNativeVersionState({ checked: true, outdated: Number.isFinite(mine) && mine < latest });
+      } catch (e) {
+        console.error("[native version check]", e);
+        if (!cancelled) setNativeVersionState({ checked: true, outdated: false });
+      }
+    };
+    check();
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [settings.latestVersionCode]);
 
   // My own driver profile — created on first driver login (keyed by mobile
   // number so every tester gets their own real identity), then kept live.
@@ -9153,11 +9163,13 @@ export default function App() {
   }
 
   // Blocks absolutely everything else — even the language prompt below —
-  // the moment a newer build is confirmed live (see the version-check effect
-  // above). No skip/dismiss option: an outdated bundle may be missing a bug
-  // fix or a change other screens now depend on, so this is deliberately a
-  // hard stop, not a dismissible banner.
-  if (needsUpdate) {
+  // the moment this installed app's own native version is confirmed older
+  // than what's been published on the Play Console Production track (see
+  // the version-check effect near the settings subscription). Web/browser
+  // visitors never hit this (nativeVersionState.outdated can't go true off
+  // this device) — there's no such thing as a "stale native app" for a tab.
+  // No skip/dismiss option: deliberately a hard stop, not a banner.
+  if (nativeVersionState.outdated) {
     return (
       <div className="min-h-screen flex justify-center items-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
         <div className="w-full max-w-sm min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: C.bg }}>
@@ -9166,11 +9178,12 @@ export default function App() {
           </div>
           <p className="text-lg font-black mb-2" style={{ color: C.ink }}>{lang === "en" ? "Update Required" : lang === "mr" ? "अपडेट आवश्यक आहे" : "अपडेट आवश्यक है"}</p>
           <p className="text-sm font-semibold mb-6" style={{ color: C.inkSoft }}>
-            {lang === "en" ? "A new version of Apna Transport is available. Please update to continue." : lang === "mr" ? "अपना ट्रान्सपोर्टची नवीन आवृत्ती उपलब्ध आहे. सुरू ठेवण्यासाठी कृपया अपडेट करा." : "अपना ट्रांसपोर्ट का नया वर्शन उपलब्ध है। जारी रखने के लिए कृपया अपडेट करें।"}
+            {lang === "en" ? "A new version of Apna Transport is available on the Play Store. Please update to continue." : lang === "mr" ? "Play Store वर अपना ट्रान्सपोर्टची नवीन आवृत्ती उपलब्ध आहे. सुरू ठेवण्यासाठी कृपया अपडेट करा." : "Play Store पर अपना ट्रांसपोर्ट का नया वर्शन उपलब्ध है। जारी रखने के लिए कृपया अपडेट करें।"}
           </p>
-          <button onClick={handleUpdateNow} className="w-full rounded-xl py-4 text-base font-black text-white shadow-lg" style={{ background: C.navy }}>
+          <a href={settings.updateUrl || PLAY_STORE_URL} target="_blank" rel="noopener noreferrer"
+            className="w-full flex items-center justify-center rounded-xl py-4 text-base font-black text-white shadow-lg" style={{ background: C.navy }}>
             {lang === "en" ? "Update Now" : lang === "mr" ? "आता अपडेट करा" : "अभी अपडेट करें"}
-          </button>
+          </a>
         </div>
       </div>
     );
@@ -9321,7 +9334,7 @@ export default function App() {
           <div className="flex-1 overflow-y-auto">
             <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
-              bonusPct={bonusPct} setBonusPct={setBonusPct} lang={lang} onLogout={logout}
+              bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl} lang={lang} onLogout={logout}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
               expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications} />

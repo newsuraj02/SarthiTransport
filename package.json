@@ -10,6 +10,7 @@
     "cap:sync": "cap sync android"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.1",
     "@capacitor/push-notifications": "^8.1.2",
     "@react-google-maps/api": "^2.20.8",
