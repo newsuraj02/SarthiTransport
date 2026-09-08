@@ -488,8 +488,14 @@ const FARE_TIERS = [
 // distanceKm may be null (coords never resolved — canPost doesn't require a
 // resolved distance, see CustomerBooking) — falls back to just the base
 // fare rather than blocking the booking over it.
+// Shared by calculateFare and AdminSettings' "drivers per tier" breakdown
+// (see FareTierBreakdown) so the two never drift apart.
+function findFareTier(capacityKg) {
+  return FARE_TIERS.find((t) => (capacityKg || 0) <= t.maxKg) || FARE_TIERS[FARE_TIERS.length - 1];
+}
+
 function calculateFare(capacityKg, distanceKm) {
-  const tier = FARE_TIERS.find((t) => (capacityKg || 0) <= t.maxKg) || FARE_TIERS[FARE_TIERS.length - 1];
+  const tier = findFareTier(capacityKg);
   const distancePart = distanceKm != null ? distanceKm * tier.perKmRate : 0;
   return Math.round(tier.baseFare + distancePart);
 }
@@ -8041,7 +8047,53 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
   );
 }
 
-function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, lang }) {
+// Shows how many of the real, currently-registered drivers land in each
+// FARE_TIERS band — built so the tier thresholds/rates (picked without
+// looking at any real fleet data) can actually be checked against the
+// fleet they're pricing, instead of trusting them blind. Counts every
+// driver with a capacityKg set, regardless of KYC/online status, since
+// the point is fleet composition, not who's currently biddable.
+function FareTierBreakdown({ drivers, lang }) {
+  const counts = FARE_TIERS.map(() => 0);
+  let noCapacity = 0;
+  (drivers || []).forEach((d) => {
+    const cap = d.vehicleSpec?.capacityKg;
+    if (!cap) { noCapacity++; return; }
+    counts[FARE_TIERS.indexOf(findFareTier(cap))]++;
+  });
+  const kg = (n) => n.toLocaleString("en-IN");
+  const tierLabel = (i) => {
+    const min = i === 0 ? 0 : FARE_TIERS[i - 1].maxKg;
+    const max = FARE_TIERS[i].maxKg;
+    return max === Infinity
+      ? (lang === "en" ? `Above ${kg(min)} kg` : lang === "mr" ? `${kg(min)} किग्रा पेक्षा जास्त` : `${kg(min)} किग्रा से ऊपर`)
+      : `${kg(min)}–${kg(max)} kg`;
+  };
+  return (
+    <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+      <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Drivers per Fare Tier" : lang === "mr" ? "प्रत्येक भाडे स्तरातील ड्रायव्हर" : "प्रत्येक भाड़ा स्तर में ड्राइवर"}</div>
+      <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "How your real fleet (by registered vehicle capacity) actually falls into the 7 fare tiers below — check this before trusting the rates." : lang === "mr" ? "तुमचा खरा ताफा (नोंदणीकृत वाहन क्षमतेनुसार) खालील 7 भाडे स्तरांमध्ये कसा विभागला जातो — दर विश्वास ठेवण्यापूर्वी हे तपासा." : "आपका असली बेड़ा (पंजीकृत वाहन क्षमता के अनुसार) नीचे दिए गए 7 भाड़ा स्तरों में कैसे बंटता है — दरों पर भरोसा करने से पहले इसे जांच लें।"}</div>
+      <div className="space-y-1.5">
+        {FARE_TIERS.map((t, i) => (
+          <div key={i} className="flex items-center justify-between text-xs">
+            <div style={{ color: C.ink }}>
+              <span className="font-bold">{tierLabel(i)}</span>
+              <span style={{ color: C.inkSoft }}> · {fmt(t.baseFare)} + {fmt(t.perKmRate)}/km</span>
+            </div>
+            <span className="font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: counts[i] > 0 ? C.success : C.line, color: counts[i] > 0 ? "#FFFFFF" : C.inkSoft }}>{counts[i]}</span>
+          </div>
+        ))}
+      </div>
+      {noCapacity > 0 && (
+        <div className="text-[11px] font-bold mt-2.5" style={{ color: C.safety }}>
+          {lang === "en" ? `${noCapacity} driver${noCapacity === 1 ? "" : "s"} have no vehicle capacity set — excluded above.` : lang === "mr" ? `${noCapacity} ड्रायव्हरांची वाहन क्षमता सेट केलेली नाही — वरील यादीत नाहीत.` : `${noCapacity} ड्राइवरों की वाहन क्षमता सेट नहीं है — ऊपर की सूची में शामिल नहीं।`}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, drivers, lang }) {
   // Commission/bonus/min-wallet are edited as a draft and only written to
   // Firestore on Save, instead of firing a write on every keystroke. Stays
   // in sync with the live values as long as there's no unsaved edit, so an
@@ -8120,6 +8172,8 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
         <input type="text" placeholder={PLAY_STORE_URL} value={draft.updateUrl} onChange={(e) => updateDraft({ updateUrl: e.target.value })}
           className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
       </div>
+
+      <FareTierBreakdown drivers={drivers} lang={lang} />
 
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
       <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-3.5 font-bold text-base"
@@ -8436,7 +8490,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
-      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} lang={lang} />}
+      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} drivers={drivers} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
