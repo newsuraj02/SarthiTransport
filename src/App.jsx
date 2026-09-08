@@ -7368,8 +7368,6 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   const missingCapacity = drivers.filter((d) => d.vehicleSpec && !d.vehicleSpec.capacityKg);
   const [view, setView] = useState("incomplete"); // 'incomplete' | 'complete' | 'capacity'
   const [expandedId, setExpandedId] = useState(null);
-  const [sending, setSending] = useState(false);
-  const [sendResult, setSendResult] = useState(null); // { ok, sentCount? } | null
   const [sendingCapacity, setSendingCapacity] = useState(false);
   const [sendResultCapacity, setSendResultCapacity] = useState(null);
   // Persisted (not just in-memory) because tapping WhatsApp on a phone
@@ -7395,37 +7393,23 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
     Rejected: { label: lang === "en" ? "Blocked" : lang === "mr" ? "ब्लॉक्ड" : "ब्लॉक्ड", bg: C.safety },
   };
 
-  // The push reminder can't carry a working link — sendAdminNotification
-  // broadcasts one shared message to the whole list, and the portal link
-  // must be personalized per driver (their mobile is right there in the
-  // URL — see DriverKycPortal — since that page skips login entirely).
-  // So push stays a plain nudge; the actual actionable, personalized
-  // link only goes out via each row's WhatsApp button below.
-  const reminderMessage = lang === "en"
-    ? "Your KYC is incomplete — completing it is mandatory to receive new loads. Please complete it as soon as possible."
-    : lang === "mr"
-    ? "तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया लवकरात लवकर पूर्ण करा."
-    : "आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया जल्द से जल्द पूरा करें।";
-  const sendToIncomplete = async () => {
-    if (sending || notSubmitted.length === 0) return;
-    setSending(true);
-    setSendResult(null);
-    const result = await sendAdminNotification(notSubmitted.map((d) => d.mobile), reminderMessage, "driver");
-    setSending(false);
-    setSendResult(result);
-  };
-  // Push relies on the driver already having granted notification
-  // permission at some point — exactly the kind of thing a driver who
-  // never finished KYC often hasn't done. WhatsApp needs none of that:
-  // it opens a chat straight to their number with a personalized link
-  // (?driverKyc=1&mobile=...) prefilled, admin just taps Send — no
-  // login/OTP step on the other end either, see DriverKycPortal.
-  //
-  // The message covers both paths at once: the self-serve portal link,
-  // plus a fallback asking the driver to just reply on this same WhatsApp
-  // number with the raw details/photos if they can't manage the form
-  // themselves, so admin can key them into that driver's Firestore doc
-  // by hand.
+  // "Send KYC reminder to all" used to fire a single sendAdminNotification
+  // push broadcast — but push relies on the driver already having granted
+  // notification permission at some point, exactly the kind of thing a
+  // driver who never finished KYC usually hasn't done, so in practice it
+  // reached almost no one and admin never saw an actual WhatsApp go out.
+  // WhatsApp needs none of that: it opens a chat straight to the driver's
+  // number with a personalized link (?driverKyc=1&mobile=...) prefilled.
+  // A browser can't fire off many wa.me opens at once from one tap (each
+  // is a real navigation, and popup blockers kill anything beyond the
+  // first), so this button instead walks admin through the not-yet-
+  // reminded drivers one at a time: tap it, WhatsApp opens for the next
+  // driver in line and that driver drops off the list (via sentToday
+  // below), tap again for the one after — same real <a> mechanism as each
+  // row's own WhatsApp button, just queued instead of one-by-one hunting
+  // through the list.
+  const notSubmittedUnsent = notSubmitted.filter((d) => !sentToday(d.mobile));
+  const nextToRemind = notSubmittedUnsent[0] || null;
   const whatsappLink = (mobile) => {
     const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
     const msg = lang === "en"
@@ -7520,19 +7504,16 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
           <p className="text-[11px] mb-3" style={{ color: C.inkSoft }}>
             {lang === "en" ? "Some haven't submitted KYC yet; others are submitted and waiting on your approval." : lang === "mr" ? "काहींनी अजून KYC जमा केलेली नाही; इतरांनी जमा केली आहे आणि तुमच्या अप्रूव्हलची वाट पाहत आहेत." : "कुछ ने अभी तक KYC जमा नहीं की; बाकी जमा हो चुकी है और आपके अप्रूवल का इंतज़ार कर रही है।"}
           </p>
-          <button onClick={sendToIncomplete} disabled={notSubmitted.length === 0 || sending}
-            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5"
-            style={{ background: notSubmitted.length && !sending ? C.marigold : "#E0E0E0", color: notSubmitted.length && !sending ? "#000000" : "#9AA3B0" }}>
-            <Bell size={14} />
-            {sending
-              ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...")
-              : (lang === "en" ? `Send KYC reminder to all (${notSubmitted.length})` : lang === "mr" ? `सर्वांना KYC रिमाइंडर पाठवा (${notSubmitted.length})` : `सभी को KYC रिमाइंडर भेजें (${notSubmitted.length})`)}
-          </button>
-          {sendResult && (
-            <div className="text-[11px] font-semibold mb-3" style={{ color: sendResult.ok ? C.success : C.safety }}>
-              {sendResult.ok
-                ? (lang === "en" ? `Sent — delivered to ${sendResult.sentCount || 0} device(s).` : lang === "mr" ? `पाठवले — ${sendResult.sentCount || 0} डिव्हाइसवर पोहोचले.` : `भेज दिया — ${sendResult.sentCount || 0} डिवाइस पर पहुंचा।`)
-                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।")}
+          {notSubmitted.length === 0 ? null : nextToRemind ? (
+            <a href={whatsappLink(nextToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(nextToRemind.mobile)}
+              className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.success }}>
+              <MessageCircle size={14} />
+              {lang === "en" ? `Send next KYC reminder on WhatsApp (${notSubmittedUnsent.length} left)` : lang === "mr" ? `पुढचा KYC रिमाइंडर WhatsApp वर पाठवा (${notSubmittedUnsent.length} बाकी)` : `अगला KYC रिमाइंडर WhatsApp पर भेजें (${notSubmittedUnsent.length} बाकी)`}
+            </a>
+          ) : (
+            <div className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+              <CheckCircle2 size={14} />
+              {lang === "en" ? "Everyone reminded today" : lang === "mr" ? "आज सर्वांना आठवण दिली" : "आज सभी को याद दिलाया गया"}
             </div>
           )}
           {incomplete.length === 0 ? (
