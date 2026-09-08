@@ -389,7 +389,16 @@ exports.classifyKycPhoto = onCall({ region: "asia-south1", secrets: [GEMINI_API_
   if (!apiKey) return { ok: false, reason: "not_configured" };
 
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    // "-latest" alias rather than a pinned version — gemini-2.0-flash
+    // (originally used here) has since been deprecated/removed from the
+    // API entirely, confirmed by testing the actual configured key
+    // against the live models list. A pinned version number will hit the
+    // same dead end again eventually; the -latest alias for the cheapest
+    // flash tier keeps resolving to whatever's current without needing a
+    // manual bump each time Google rotates model versions. This is a
+    // simple binary classification task, not something that needs a
+    // bigger/pricier model.
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
