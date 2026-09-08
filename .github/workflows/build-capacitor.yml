@@ -46,7 +46,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # @capacitor/cli 8.5.1 hard-requires Node >=22 at runtime (`npx cap
+          # sync` fails fast with "[fatal] The Capacitor CLI requires NodeJS
+          # >=22.0.0") even though `npm install` itself only warns about it —
+          # this was still on 20 from before that requirement landed.
+          node-version: "22"
 
       - name: Install dependencies (web app + @capacitor/cli, @capacitor/android)
         run: npm install
