@@ -476,6 +476,7 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 // Ordered ascending by capacity; the last entry (maxKg: Infinity) is the
 // catch-all for anything bigger than 7 tonnes (19ft, 6-wheeler, 10-wheeler...).
 const FARE_TIERS = [
+  { maxKg: 500, baseFare: 150, perKmRate: 15 },
   { maxKg: 750, baseFare: 180, perKmRate: 18 },
   { maxKg: 850, baseFare: 190, perKmRate: 19 },
   { maxKg: 1500, baseFare: 280, perKmRate: 22 },
@@ -8072,7 +8073,7 @@ function FareTierBreakdown({ drivers, lang }) {
   return (
     <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
       <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Drivers per Fare Tier" : lang === "mr" ? "प्रत्येक भाडे स्तरातील ड्रायव्हर" : "प्रत्येक भाड़ा स्तर में ड्राइवर"}</div>
-      <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "How your real fleet (by registered vehicle capacity) actually falls into the 7 fare tiers below — check this before trusting the rates." : lang === "mr" ? "तुमचा खरा ताफा (नोंदणीकृत वाहन क्षमतेनुसार) खालील 7 भाडे स्तरांमध्ये कसा विभागला जातो — दर विश्वास ठेवण्यापूर्वी हे तपासा." : "आपका असली बेड़ा (पंजीकृत वाहन क्षमता के अनुसार) नीचे दिए गए 7 भाड़ा स्तरों में कैसे बंटता है — दरों पर भरोसा करने से पहले इसे जांच लें।"}</div>
+      <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? `How your real fleet (by registered vehicle capacity) actually falls into the ${FARE_TIERS.length} fare tiers below — check this before trusting the rates.` : lang === "mr" ? `तुमचा खरा ताफा (नोंदणीकृत वाहन क्षमतेनुसार) खालील ${FARE_TIERS.length} भाडे स्तरांमध्ये कसा विभागला जातो — दर विश्वास ठेवण्यापूर्वी हे तपासा.` : `आपका असली बेड़ा (पंजीकृत वाहन क्षमता के अनुसार) नीचे दिए गए ${FARE_TIERS.length} भाड़ा स्तरों में कैसे बंटता है — दरों पर भरोसा करने से पहले इसे जांच लें।`}</div>
       <div className="space-y-1.5">
         {FARE_TIERS.map((t, i) => (
           <div key={i} className="flex items-center justify-between text-xs">
