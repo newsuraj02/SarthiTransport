@@ -476,18 +476,18 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 // Ordered ascending by capacity; the last entry (maxKg: Infinity) is the
 // catch-all for anything bigger than 7 tonnes (19ft, 6-wheeler, 10-wheeler...).
 //
-// Mixed pricing policy, split by whether Porter's own numbers here are
-// real or guessed:
-//  - Small categories (0-500 / 500-750 / 750-1000 / 1000-1500kg), where
-//    Porter publishes an actual base fare and per-km rate for the closest
-//    matching vehicle: both baseFare and perKmRate are set to Porter's
-//    own number + ₹1 — priced slightly ABOVE Porter on purpose in this
-//    range.
-//  - Larger categories (1500kg+), where Porter's per-km rate is either
-//    from a comparable operator (1,500-2,500kg) or extrapolated with no
-//    source at all (above 2,500kg): kept at the earlier ~10%-below-Porter
-//    pricing rather than anchoring a markup to numbers this shaky.
-// Porter's own reference points (their site, city listings, Sep 2026):
+// Every tier is priced at Porter's own number + ₹1, on both baseFare and
+// perKmRate — deliberately just ABOVE Porter rather than undercutting it.
+// Porter's own reference points (their site, city listings, Sep 2026) —
+// solid for the four small tiers (an actual published base fare and
+// per-km rate for the closest matching vehicle), thinner above 1,500kg
+// (1,500-2,500kg's per-km is from a comparable operator, not Porter's own
+// figure) and thinnest of all above 2,500kg, where Porter publishes only
+// a single base fare (14ft Canter) and nothing else — the per-km and the
+// three largest base fares are extrapolated by continuing Porter's own
+// step-up pattern between tiers, not sourced. Revisit those three
+// (2,500-5,000 / 5,000-7,000 / 7,000+) if better data on Porter's
+// larger-vehicle pricing turns up:
 //   0-500kg    -> 3-wheeler/Tempo  (base ~₹170,  ~₹16/km)
 //   500-750kg  -> Tata Ace         (base ~₹223,  ~₹19/km)
 //   750-1000kg -> Pickup 8ft       (base ~₹315,  ~₹20/km)
@@ -495,21 +495,18 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 //   1500-2500kg-> Tata 407         (base ~₹682,  ~₹42/km — per-km from a
 //                                   comparable operator; Porter doesn't
 //                                   publish its own 407 per-km rate)
-// Above 2500kg Porter publishes almost nothing beyond a 14ft Canter base
-// fare (~₹1,120 at 3,500kg) — no per-km, and nothing at all for 17ft/19ft.
-// Those three tiers (2,500-5,000 / 5,000-7,000 / 7,000+) are extrapolated
-// by continuing Porter's own step-up pattern between tiers rather than a
-// sourced figure — least confident of the eight, revisit if better data
-// on Porter's larger-vehicle pricing turns up.
+//   2500-5000kg-> Canter 14ft      (base ~₹1,120, ~₹69/km — per-km extrapolated)
+//   5000-7000kg-> larger Canter    (base ~₹1,680, ~₹97/km — both extrapolated)
+//   7000kg+    -> largest trucks   (base ~₹2,280, ~₹126/km — both extrapolated)
 const FARE_TIERS = [
   { maxKg: 500, baseFare: 171, perKmRate: 17 },
   { maxKg: 750, baseFare: 224, perKmRate: 20 },
   { maxKg: 1000, baseFare: 316, perKmRate: 21 },
   { maxKg: 1500, baseFare: 331, perKmRate: 23 },
-  { maxKg: 2500, baseFare: 620, perKmRate: 39 },
-  { maxKg: 5000, baseFare: 1010, perKmRate: 66 },
-  { maxKg: 7000, baseFare: 1510, perKmRate: 94 },
-  { maxKg: Infinity, baseFare: 2050, perKmRate: 123 },
+  { maxKg: 2500, baseFare: 683, perKmRate: 43 },
+  { maxKg: 5000, baseFare: 1121, perKmRate: 70 },
+  { maxKg: 7000, baseFare: 1681, perKmRate: 98 },
+  { maxKg: Infinity, baseFare: 2281, perKmRate: 127 },
 ];
 
 // distanceKm may be null (coords never resolved — canPost doesn't require a
