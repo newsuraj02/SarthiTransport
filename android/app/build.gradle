@@ -47,6 +47,15 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Packages a native-debug-symbols.zip into the .aab so Play
+            // Console can symbolicate crashes/ANRs in the small amount of
+            // native (.so) code bundled by AndroidX/Capacitor dependencies
+            // (Play Console flagged this as missing on versionCode 12's
+            // upload) — pure metadata for crash reporting, doesn't change
+            // anything about how the app runs.
+            ndk {
+                debugSymbolLevel 'SYMBOL_TABLE'
+            }
             if (releaseKeystorePath) {
                 signingConfig signingConfigs.release
             }
