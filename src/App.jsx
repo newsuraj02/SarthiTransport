@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
-  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone,
+  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone, Weight,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -3449,7 +3449,7 @@ function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
           <div className="flex-1 flex items-center justify-center px-8 text-center">
             <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : lang === "mr" ? "लोड होत आहे..." : "लोड हो रहा है..."}</p>
           </div>
-        ) : portalDriver.vehicleSpec ? (
+        ) : portalDriver.vehicleSpec?.capacityKg ? (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
             <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.success }}>
               <CheckCircle2 size={26} color="#FFFFFF" />
@@ -7333,10 +7333,22 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   const notSubmitted = drivers.filter((d) => !d.vehicleSpec);
   const incomplete = drivers.filter((d) => !d.vehicleSpec || d.kyc === "Pending");
   const complete = drivers.filter((d) => d.vehicleSpec && d.kyc !== "Pending");
-  const [view, setView] = useState("incomplete"); // 'incomplete' | 'complete'
+  // A separate, disjoint concern from notSubmitted/incomplete above: these
+  // drivers DID submit KYC (photos, license, vehicle number all on file)
+  // but a since-fixed validation gap (typing "0" for capacity used to pass
+  // the form's own check yet get discarded as undefined on save) left
+  // vehicleSpec.capacityKg empty — which quietly excludes them from the
+  // fixed-fare tiers below (findFareTier/calculateFare need a real
+  // capacityKg), so they show no fare and can't be booked against by
+  // weight. Fixing the validation gap stops new occurrences; this list is
+  // the backlog of drivers already caught by the old bug.
+  const missingCapacity = drivers.filter((d) => d.vehicleSpec && !d.vehicleSpec.capacityKg);
+  const [view, setView] = useState("incomplete"); // 'incomplete' | 'complete' | 'capacity'
   const [expandedId, setExpandedId] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState(null); // { ok, sentCount? } | null
+  const [sendingCapacity, setSendingCapacity] = useState(false);
+  const [sendResultCapacity, setSendResultCapacity] = useState(null);
   // Persisted (not just in-memory) because tapping WhatsApp on a phone
   // switches away to the WhatsApp app — mobile browsers/TWAs routinely
   // discard or reload a backgrounded tab like that, which would silently
@@ -7401,6 +7413,35 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
     return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
   };
 
+  // Capacity-only nudge — unlike reminderMessage/whatsappLink above, these
+  // drivers already have every other document on file, so the message (and
+  // the portal link's DriverKycPortal gate, changed to key off
+  // vehicleSpec.capacityKg instead of vehicleSpec presence) sends them
+  // straight to the KYC form pre-filled with what they already submitted,
+  // just missing capacity.
+  const capacityMessage = lang === "en"
+    ? "Your vehicle's carrying capacity is missing from your KYC — please add it so you can be matched and paid the right fare for loads. It only takes a moment."
+    : lang === "mr"
+    ? "तुमच्या KYC मध्ये गाडीची क्षमता (कॅपॅसिटी) नमूद केलेली नाही — योग्य लोड आणि योग्य भाडे मिळण्यासाठी कृपया ती भरा. यासाठी फक्त एक क्षण लागेल."
+    : "आपकी KYC में गाड़ी की क्षमता (कैपेसिटी) दर्ज नहीं है — सही लोड और सही भाड़ा पाने के लिए कृपया इसे भरें। इसमें बस एक पल लगेगा।";
+  const sendToMissingCapacity = async () => {
+    if (sendingCapacity || missingCapacity.length === 0) return;
+    setSendingCapacity(true);
+    setSendResultCapacity(null);
+    const result = await sendAdminNotification(missingCapacity.map((d) => d.mobile), capacityMessage, "driver");
+    setSendingCapacity(false);
+    setSendResultCapacity(result);
+  };
+  const capacityWhatsappLink = (mobile) => {
+    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
+    const msg = lang === "en"
+      ? `Your vehicle's carrying capacity is missing from your KYC — please add it here so you can be matched and paid the right fare for loads: ${portalLink}\nYour photo, license and vehicle details are already saved — you'll just need to fill in the capacity.`
+      : lang === "mr"
+      ? `तुमच्या KYC मध्ये गाडीची क्षमता (कॅपॅसिटी) नमूद केलेली नाही — योग्य लोड आणि भाडे मिळण्यासाठी कृपया इथे भरा: ${portalLink}\nतुमचा फोटो, लायसन्स आणि गाडीची माहिती आधीच सेव्ह आहे — फक्त क्षमता भरायची आहे.`
+      : `आपकी KYC में गाड़ी की क्षमता (कैपेसिटी) दर्ज नहीं है — सही लोड और भाड़ा पाने के लिए कृपया यहां भरें: ${portalLink}\nआपका फोटो, लाइसेंस और गाड़ी की जानकारी पहले से सेव है — बस क्षमता भरनी है।`;
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  };
+
   const docSection = (d) => (
     <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
       <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
@@ -7444,6 +7485,12 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
           <Users size={14} /> {lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी"} ({complete.length})
         </button>
       </div>
+      {missingCapacity.length > 0 && (
+        <button onClick={() => setView("capacity")} className="w-full rounded-lg py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 mb-4"
+          style={{ background: view === "capacity" ? C.navy : C.paper, color: view === "capacity" ? "#fff" : C.safety, border: `1.5px solid ${view === "capacity" ? C.navy : C.safety}` }}>
+          <Weight size={13} /> {lang === "en" ? `Missing vehicle capacity (${missingCapacity.length})` : lang === "mr" ? `गाडीची क्षमता नमूद नाही (${missingCapacity.length})` : `गाड़ी की क्षमता दर्ज नहीं (${missingCapacity.length})`}
+        </button>
+      )}
 
       {view === "incomplete" ? (
         <div>
@@ -7518,6 +7565,52 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      ) : view === "capacity" ? (
+        <div>
+          <p className="text-[11px] mb-3" style={{ color: C.inkSoft }}>
+            {lang === "en" ? "These drivers already submitted KYC (photo, license, vehicle number) but their vehicle capacity is missing — without it, they get no fare shown and can't be matched to loads by weight." : lang === "mr" ? "या ड्रायव्हरांनी KYC (फोटो, लायसन्स, गाडी नंबर) आधीच जमा केली आहे, पण त्यांची गाडीची क्षमता नमूद नाही — त्याशिवाय त्यांना भाडे दिसत नाही आणि वजनानुसार लोड जुळत नाही." : "इन ड्राइवरों ने KYC (फोटो, लाइसेंस, गाड़ी नंबर) पहले ही जमा कर दी है, लेकिन उनकी गाड़ी की क्षमता दर्ज नहीं है — इसके बिना उन्हें भाड़ा नहीं दिखता और वजन के हिसाब से लोड नहीं मिल पाते।"}
+          </p>
+          <button onClick={sendToMissingCapacity} disabled={missingCapacity.length === 0 || sendingCapacity}
+            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5"
+            style={{ background: missingCapacity.length && !sendingCapacity ? C.marigold : "#E0E0E0", color: missingCapacity.length && !sendingCapacity ? "#000000" : "#9AA3B0" }}>
+            <Bell size={14} />
+            {sendingCapacity
+              ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...")
+              : (lang === "en" ? `Send capacity reminder to all (${missingCapacity.length})` : lang === "mr" ? `सर्वांना क्षमता रिमाइंडर पाठवा (${missingCapacity.length})` : `सभी को क्षमता रिमाइंडर भेजें (${missingCapacity.length})`)}
+          </button>
+          {sendResultCapacity && (
+            <div className="text-[11px] font-semibold mb-3" style={{ color: sendResultCapacity.ok ? C.success : C.safety }}>
+              {sendResultCapacity.ok
+                ? (lang === "en" ? `Sent — delivered to ${sendResultCapacity.sentCount || 0} device(s).` : lang === "mr" ? `पाठवले — ${sendResultCapacity.sentCount || 0} डिव्हाइसवर पोहोचले.` : `भेज दिया — ${sendResultCapacity.sentCount || 0} डिवाइस पर पहुंचा।`)
+                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।")}
+            </div>
+          )}
+          {missingCapacity.length === 0 ? (
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver's vehicle capacity is on file." : lang === "mr" ? "सर्व ड्रायव्हरांची गाडी क्षमता नोंदवलेली आहे." : "सभी ड्राइवरों की गाड़ी क्षमता दर्ज है।"}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {missingCapacity.map((d) => (
+                <div key={d.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                    <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <a href={capacityWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(d.mobile)}
+                      className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
+                      <MessageCircle size={14} /> WhatsApp
+                    </a>
+                    {sentToday(d.mobile) && (
+                      <span className="text-[10px] font-semibold" style={{ color: C.navy }}>
+                        ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
