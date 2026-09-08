@@ -4952,10 +4952,38 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   return (
     <div>
-      <div className="rounded-2xl p-4 mb-3 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
-        <CheckCircle2 size={32} color={C.success} className="mx-auto mb-1.5" />
-        <div className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : lang === "mr" ? "ट्रिप पूर्ण झाली" : "ट्रिप पूरी हुई"}</div>
-        {completedLabel && <div className="text-xs font-bold mt-0.5" style={{ color: C.inkSoft }}>{completedLabel}</div>}
+      <div className="rounded-2xl p-4 mb-2.5 shadow-sm text-center" style={{ background: C.navy }}>
+        <div className="text-xl font-black" style={{ color: "#FFFFFF" }}>Apna Transport</div>
+        <div className="text-[11px] font-bold mt-0.5" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Trip Invoice" : lang === "mr" ? "ट्रिप इनव्हॉइस" : "ट्रिप इनवॉइस"}</div>
+      </div>
+
+      <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "LR No." : "LR नंबर"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink, fontFamily: monoFont }}>{trip.id}</div>
+        </div>
+        <div className="w-px" style={{ background: C.line }} />
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Date" : lang === "mr" ? "दिनांक" : "तारीख़"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{completedLabel || "—"}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.driverName || "—"}</div>
+        </div>
+        <div className="w-px" style={{ background: C.line }} />
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : lang === "mr" ? "ग्राहक" : "ग्राहक"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.customerName || "—"}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
+        <CheckCircle2 size={20} color={C.success} className="shrink-0" />
+        <div className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : lang === "mr" ? "ट्रिप पूर्ण झाली" : "ट्रिप पूरी हुई"}</div>
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
