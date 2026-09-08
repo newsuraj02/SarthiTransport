@@ -1,13 +1,17 @@
 ext {
-    // Matches the previous (TWA) release's floor — see the "TWA: raise
-    // minSdkVersion to 23" commit, chosen there because androidbrowserhelper
-    // required it, not because anything needs exactly 23. Capacitor's
-    // template default of 24 dropped ~1,008 previously-supported devices
-    // (Play Console flagged this on versionCode 12's upload) for no reason
-    // specific to this app — every Capacitor plugin here reads this same
-    // value rather than hardcoding its own floor, so lowering it here is
-    // enough.
-    minSdkVersion = 23
+    // Tried lowering this to 23 to match the previous TWA release (see the
+    // "TWA: raise minSdkVersion to 23" commit) and avoid the ~1,008-device
+    // regression Play Console flagged on versionCode 12's upload — but
+    // org.apache.cordova:framework:14.0.1 (pulled in via cordovaAndroidVersion
+    // below, required by Capacitor 8.x's plugin architecture even though
+    // this app uses no actual Cordova plugins) hard-declares minSdkVersion
+    // 24 in its own manifest, and the manifest merger refuses to let the
+    // app go lower than a dependency's declared floor. The only ways round
+    // that are downgrading Cordova (risks breaking plugin compatibility) or
+    // tools:overrideLibrary (Gradle's own suggestion, but it says outright
+    // "may lead to runtime failures") — neither is worth it just to match
+    // an old TWA build's number. Staying at Capacitor's real floor of 24.
+    minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36
     androidxActivityVersion = '1.11.0'
