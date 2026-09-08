@@ -2,7 +2,12 @@
 <html lang="hi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <!-- viewport-fit=cover is required for the env(safe-area-inset-*) CSS
+         variables (see index.css) to report real, non-zero values at all —
+         without it, Android 15+ edge-to-edge (targetSdk 36 draws behind the
+         status/nav bars by default now) would let content sit underneath
+         the system bars with nothing pushing it clear. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />

@@ -6,6 +6,20 @@ html, body, #root {
   height: 100%;
 }
 
+/* Android 15+ (targetSdk 36 — see android/variables.gradle) draws the app
+   edge-to-edge behind the status/navigation bars by default now, instead of
+   reserving space for them the way earlier Android versions did. Without
+   this, real content (buttons, headers) could end up sitting underneath —
+   and in some cases untappable behind — the system bars. env(safe-area-
+   inset-*) reports the real bar heights on a device that has them (falls
+   back to 0 everywhere else, including plain desktop/mobile browsers, so
+   this is harmless there) — needs viewport-fit=cover in index.html's
+   viewport meta tag to report anything other than 0 at all. */
+#root {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 /* App-wide legibility boost — every text size and weight utility class
    used across the app is bumped one notch, so this applies everywhere at
    once instead of hand-editing hundreds of individual elements. Relative
