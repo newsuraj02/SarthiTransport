@@ -17,6 +17,15 @@ import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } 
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
 import { registerPlugin } from "@capacitor/core";
 
+// Stamped at build time (see vite.config.js's `define`) — a build timestamp,
+// not a human-picked version number, so every single deploy gets a distinct
+// value with no manual bumping to remember. Used by the force-update gate in
+// App() to detect a session that's still running an older bundle than
+// what's actually live. typeof-guarded so it degrades to "dev" rather than
+// throwing if something (a test runner, an unbuilt dev tool) evaluates this
+// file without Vite's define substitution having run.
+const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+
 // ---------------- design tokens ----------------
 // Bright/high-visibility flat palette — legible in direct outdoor sunlight
 // for drivers and customers using this on the road. Solid fills only, no
@@ -8494,6 +8503,51 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
+
+  // Force-update gate — a session left open across a deploy keeps running
+  // its already-loaded (now stale) JS bundle indefinitely; nothing about
+  // opening/foregrounding the app on its own makes it fetch a fresh one.
+  // version.json is a tiny static file re-emitted with every build (see
+  // vite.config.js) — fetched here with cache: "no-store" so neither the
+  // browser's HTTP cache nor the service worker's cache-on-success behavior
+  // (see public/service-worker.js) can serve a stale copy of THIS one file,
+  // regardless of what it's doing for everything else. A mismatch against
+  // APP_VERSION (the value baked into the bundle actually running right
+  // now) means a newer build than this one is live.
+  const [needsUpdate, setNeedsUpdate] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const res = await fetch(`/version.json?_=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.version && data.version !== APP_VERSION) setNeedsUpdate(true);
+      } catch {
+        // Offline or a transient blip — the connectivity check above already
+        // owns telling the user they're offline; nothing to do here.
+      }
+    };
+    check();
+    const interval = setInterval(check, 5 * 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", check);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", check);
+    };
+  }, []);
+  const handleUpdateNow = () => {
+    if ("caches" in window) {
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => window.location.reload());
+    } else {
+      window.location.reload();
+    }
+  };
   const [adminAuth, setAdminAuth] = useState(false);
   const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
   // The customer's profile is looked up live from Firestore by their
@@ -9096,6 +9150,30 @@ export default function App() {
   // fetches its one driver doc itself, see DriverKycPortal.
   if (driverKycPortal) {
     return <DriverKycPortal lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />;
+  }
+
+  // Blocks absolutely everything else — even the language prompt below —
+  // the moment a newer build is confirmed live (see the version-check effect
+  // above). No skip/dismiss option: an outdated bundle may be missing a bug
+  // fix or a change other screens now depend on, so this is deliberately a
+  // hard stop, not a dismissible banner.
+  if (needsUpdate) {
+    return (
+      <div className="min-h-screen flex justify-center items-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+        <div className="w-full max-w-sm min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: C.bg }}>
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 shadow-sm" style={{ background: C.navy }}>
+            <Download size={28} color="#FFFFFF" />
+          </div>
+          <p className="text-lg font-black mb-2" style={{ color: C.ink }}>{lang === "en" ? "Update Required" : lang === "mr" ? "अपडेट आवश्यक आहे" : "अपडेट आवश्यक है"}</p>
+          <p className="text-sm font-semibold mb-6" style={{ color: C.inkSoft }}>
+            {lang === "en" ? "A new version of Apna Transport is available. Please update to continue." : lang === "mr" ? "अपना ट्रान्सपोर्टची नवीन आवृत्ती उपलब्ध आहे. सुरू ठेवण्यासाठी कृपया अपडेट करा." : "अपना ट्रांसपोर्ट का नया वर्शन उपलब्ध है। जारी रखने के लिए कृपया अपडेट करें।"}
+          </p>
+          <button onClick={handleUpdateNow} className="w-full rounded-xl py-4 text-base font-black text-white shadow-lg" style={{ background: C.navy }}>
+            {lang === "en" ? "Update Now" : lang === "mr" ? "आता अपडेट करा" : "अभी अपडेट करें"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Shown once, right after a brand-new Customer/Driver signup completes
