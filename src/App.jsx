@@ -14,7 +14,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto } from "./firebaseClient";
 import { registerPlugin } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -3648,6 +3648,27 @@ async function uploadPhoto(file, path, maxDim = 900, quality = 0.72, onProgress 
   }
 }
 
+// Resizes a photo down to a small base64 JPEG for classifyKycPhoto — kept
+// separate from uploadPhoto's own resize (rather than sharing one canvas)
+// so a classification failure can return early before Storage is ever
+// touched, and a config/network hiccup here just falls through to a normal
+// uploadPhoto call instead of blocking it. Smaller than uploadPhoto's own
+// 900px/0.72 (the model only needs to recognize a viewing angle, not read
+// fine print) to keep the callable function's payload light. Returns null
+// (never throws) on any decode failure — callers should treat that as
+// "skip the check", not as a rejection; uploadPhoto's own resize will
+// surface the real error to the driver if the file is genuinely bad.
+async function fileToClassifyPayload(file) {
+  try {
+    const canvas = await resizeImageToCanvas(file, 700);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+    return { base64: dataUrl.split(",")[1], mimeType: "image/jpeg" };
+  } catch (e) {
+    console.error("[classify photo resize]", e);
+    return null;
+  }
+}
+
 // Higher-fidelity variant of uploadPhoto for scanned bill/invoice documents —
 // the text needs to stay legible at a police/RTO checkpoint, so this uses a
 // larger max dimension and higher JPEG quality than profile/KYC photos.
@@ -3679,6 +3700,18 @@ function uploadErrorInfo(reason, lang) {
       en: "Upload failed — check your internet and retry.",
       hi: "अपलोड नहीं हुआ — इंटरनेट जांचें और फिर कोशिश करें।",
       mr: "अपलोड झाले नाही — इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.",
+    },
+    // AI-checked at upload time (see classifyKycPhoto) — this photo decoded
+    // and uploaded fine, it just doesn't show what this tile needs.
+    not_side_view: {
+      en: "This doesn't look like a side view of the vehicle. Take a photo from directly beside it, showing its full length.",
+      hi: "यह गाड़ी की साइड वाली फोटो नहीं लग रही। गाड़ी के ठीक बगल से खड़े होकर, पूरी लंबाई दिखाते हुए फोटो लें।",
+      mr: "हा गाडीचा साइड फोटो वाटत नाही. गाडीच्या अगदी बाजूला उभे राहून, संपूर्ण लांबी दाखवत फोटो घ्या.",
+    },
+    not_license: {
+      en: "This doesn't look like a driving license. Take a clear photo of the license card itself.",
+      hi: "यह ड्राइविंग लाइसेंस नहीं लग रहा। लाइसेंस कार्ड की साफ फोटो लें।",
+      mr: "हा ड्रायव्हिंग लायसन्स वाटत नाही. लायसन्स कार्डचा स्पष्ट फोटो घ्या.",
     },
   };
   const m = M[reason] || M.upload;
@@ -6262,12 +6295,37 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // onDoc/onVehiclePhoto used to be separate, identical copies of this same
   // logic. Also used by retryUpload below, which re-invokes this with the
   // same File instead of a fresh one from the picker.
-  const startPhotoUpload = (setVal, key) => (f) => {
+  // vehicleSide/dl only — spot-checking submitted KYC turned up drivers
+  // uploading a front or diagonal shot for the vehicle "Side" tile, so
+  // those two get an AI check (see classifyKycPhoto) before ever reaching
+  // Storage: a rejection here stops before uploadPhoto runs, so a bad
+  // photo never overwrites whatever good one was already saved at that
+  // driver's fixed vehicleSide.jpg/dl.jpg path. Fails open, not closed —
+  // classifyKycPhoto/fileToClassifyPayload returning nothing usable (no
+  // Gemini key configured yet, a network hiccup, a decode issue) just
+  // falls through to the normal upload below rather than blocking KYC
+  // over an unrelated problem.
+  const KYC_CLASSIFY_DOCTYPE = { vehicleSide: "vehicleSide", dl: "drivingLicense" };
+  const startPhotoUpload = (setVal, key) => async (f) => {
     if (!f) return;
     lastFilesRef.current[key] = f;
     markUploading(key, true);
     markUploadError(key, false);
     markProgress(key, 0);
+
+    const docType = KYC_CLASSIFY_DOCTYPE[key];
+    if (docType) {
+      const payload = await fileToClassifyPayload(f);
+      if (payload) {
+        const verdict = await classifyKycPhoto(payload.base64, payload.mimeType, docType);
+        if (verdict.ok && verdict.isMatch === false) {
+          markUploading(key, false);
+          markUploadError(key, key === "vehicleSide" ? "not_side_view" : "not_license");
+          return;
+        }
+      }
+    }
+
     let failReason = null;
     uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`, 900, 0.72,
       (pct) => markProgress(key, pct),

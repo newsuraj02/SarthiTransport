@@ -354,6 +354,61 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
   return { ok: true, sentCount: recipientCount };
 });
 
+// ---------------- KYC photo classification (Gemini) ----------------
+// Catches drivers uploading a front or diagonal shot for the vehicle's
+// "Side" photo tile (found by spot-checking submitted KYC), and the same
+// idea extended to the Driving License tile (catching a blank/random/wrong
+// photo, not government validity -- that's a separate, much bigger
+// integration this doesn't attempt). Runs at upload time in DriverKyc, on
+// the resized image the client already has in memory -- classification
+// happens BEFORE that file goes anywhere near Storage, so a rejected photo
+// never overwrites whatever good photo was there before at that driver's
+// fixed vehicleSide.jpg/dl.jpg path.
+//
+// Secret (set via `firebase functions:secrets:set GEMINI_API_KEY`, never
+// hardcoded or committed): a Gemini API key from Google AI Studio
+// (aistudio.google.com/apikey). Until it's set, this returns reason:
+// "not_configured" instead of throwing -- the client treats that as
+// "skip the check, upload normally" so KYC keeps working exactly as before
+// while the key is still being set up, rather than blocking every driver.
+const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
+const KYC_PHOTO_PROMPTS = {
+  vehicleSide: 'You are reviewing a photo uploaded as the "side profile" photo of a commercial vehicle (truck/tempo/pickup/van) during a driver\'s KYC on an Indian goods-transport app. A correct photo shows the vehicle\'s full side profile -- a straight-on lengthwise view where you can see the whole length of the vehicle from the side, not the front, not the rear, and not a diagonal/three-quarter angle. Reply with ONLY strict JSON, no markdown: {"isMatch": true|false, "reason": "one short sentence in English"}. isMatch is true ONLY for a genuine straight side-profile shot of a vehicle. isMatch is false for a front view, rear view, diagonal/angled view, an interior shot, something that isn\'t a vehicle at all, or a photo too unclear to judge.',
+  drivingLicense: 'You are reviewing a photo uploaded as an Indian driving license document during a commercial driver\'s KYC. Reply with ONLY strict JSON, no markdown: {"isMatch": true|false, "reason": "one short sentence in English"}. isMatch is true ONLY if this photo genuinely shows a driving license card/document (front or back side is fine). isMatch is false if it\'s blank, a random unrelated photo, just a person\'s face with no document, a different kind of document, or too unclear to judge.',
+};
+
+exports.classifyKycPhoto = onCall({ region: "asia-south1", secrets: [GEMINI_API_KEY] }, async (request) => {
+  const callerPhone = callerPhoneFromAuth(request.auth?.token);
+  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
+  const { imageBase64, mimeType, docType } = request.data || {};
+  const prompt = KYC_PHOTO_PROMPTS[docType];
+  if (!prompt) throw new HttpsError("invalid-argument", "docType must be vehicleSide or drivingLicense.");
+  if (!imageBase64) throw new HttpsError("invalid-argument", "imageBase64 is required.");
+
+  const apiKey = GEMINI_API_KEY.value();
+  if (!apiKey) return { ok: false, reason: "not_configured" };
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType || "image/jpeg", data: imageBase64 } }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0 },
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { console.error("[classifyKycPhoto] Gemini rejected the request:", data); return { ok: false, reason: "api_error" }; }
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const parsed = text ? JSON.parse(text) : null;
+    if (!parsed || typeof parsed.isMatch !== "boolean") return { ok: false, reason: "api_error" };
+    return { ok: true, isMatch: parsed.isMatch, reason: parsed.reason || "" };
+  } catch (e) {
+    console.error("[classifyKycPhoto] failed:", e.message);
+    return { ok: false, reason: "api_error" };
+  }
+});
+
 // ---------------- Number masking (Exotel) ----------------
 // Bridges a call between a booking's customer and driver through Exotel's
 // Connect API instead of exposing either side's real number to the other:

@@ -176,6 +176,28 @@ export async function sendAdminNotification(target, message, audience = "driver"
   }
 }
 
+// Checks a KYC photo actually shows what its tile claims before it's
+// uploaded (see functions/index.js: classifyKycPhoto and DriverKyc's
+// startPhotoUpload) -- docType is "vehicleSide" (rejects front/diagonal
+// shots) or "drivingLicense" (rejects a blank/unrelated photo). imageBase64
+// is the already-resized photo (no data: prefix), mimeType e.g.
+// "image/jpeg". Always resolves (never throws) with { ok, isMatch?,
+// reason? } -- ok:false (not_configured/error) means the check couldn't
+// run at all, which callers should treat as "skip it, upload normally"
+// rather than blocking KYC over an unrelated outage.
+export async function classifyKycPhoto(imageBase64, mimeType, docType) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "classifyKycPhoto");
+    const result = await call({ imageBase64, mimeType, docType });
+    return result.data;
+  } catch (e) {
+    console.error("[classifyKycPhoto] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
 // Forgot-PIN recovery, final step (see functions/index.js). Must be called
 // while already signed in via a fresh real Firebase Phone Auth session
 // (CustomerOnboarding/DriverOnboarding's Forgot PIN flow does the
