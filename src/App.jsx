@@ -1371,6 +1371,21 @@ const trialDaysLeft = (createdAt) => {
   return Math.max(0, Math.ceil((TRIAL_DAYS * DAY_MS - elapsedMs) / DAY_MS) - 1);
 };
 
+// There's no direct signal telling the backend a driver actually uninstalled
+// the app -- this infers it from inactivity instead, for AdminFleet's
+// Off Duty/App Uninstalled split (see lastActiveAt, bumped once per app open
+// in DriverApp below). Falls back to createdAt when lastActiveAt hasn't been
+// recorded yet (a driver who signed up before this field existed, or simply
+// hasn't reopened the app since it shipped) so the entire existing fleet
+// doesn't get mislabeled "uninstalled" the moment this ships -- only once a
+// driver, tracked or not, genuinely goes quiet for UNINSTALL_INACTIVE_DAYS.
+const UNINSTALL_INACTIVE_DAYS = 14;
+const isLikelyUninstalled = (driver) => {
+  const ts = driver.lastActiveAt?.toMillis ? driver.lastActiveAt : driver.createdAt;
+  if (!ts?.toMillis) return false;
+  return (Date.now() - ts.toMillis()) >= UNINSTALL_INACTIVE_DAYS * DAY_MS;
+};
+
 // ---------------- shared: mock map ----------------
 function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" }) {
   const p1 = hashPos(pickup || "pickup");
@@ -6756,6 +6771,15 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
   // automatically; 'advance' is the driver's own accepted advance bookings,
   // reached via the "View Advance Ride/s" box below.
   const [rideView, setRideView] = useState("current");
+  // Bumped once per mount (i.e. once per real app open, not on every
+  // re-render) -- the only signal AdminFleet's Off Duty/App Uninstalled
+  // split (see isLikelyUninstalled) has for "this driver actually opened
+  // the app recently," since there's no way to detect a real uninstall
+  // directly.
+  useEffect(() => {
+    patchDoc("drivers", driver.mobile, { lastActiveAt: serverTimestamp() }).catch((e) => console.error("[driver lastActiveAt]", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // Jobs this driver is already assigned to but that are scheduled for a
   // future date — kept out of myTrip (above) so today's home screen isn't
@@ -7094,6 +7118,13 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // other trip-based tiles below.
   const bookedTodayList = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t));
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
+  // Everyone else approved-but-not-online, split by isLikelyUninstalled
+  // (see its own comment) so admin can tell "toggled off, still around" from
+  // "gone quiet long enough to probably not have the app anymore" instead of
+  // one undifferentiated "not online" bucket.
+  const notReadyApprovedDrivers = drivers.filter((d) => !d.online && d.kyc === "Approved" && !d.blacklisted);
+  const offDutyDrivers = notReadyApprovedDrivers.filter((d) => !isLikelyUninstalled(d));
+  const uninstalledDrivers = notReadyApprovedDrivers.filter((d) => isLikelyUninstalled(d));
   const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
   const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet);
   // New customer signups today, and drivers still inside their 30-day free
@@ -7156,6 +7187,31 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+          <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+        </div>
+      ),
+    },
+    offDuty: {
+      title: lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी",
+      emptyMsg: lang === "en" ? "No approved driver is currently off duty." : lang === "mr" ? "सध्या कोणताही अप्रूव्ह्ड ड्रायव्हर ऑफ ड्युटीवर नाही." : "फिलहाल कोई अप्रूव्ड ड्राइवर ऑफ ड्यूटी पर नहीं है।",
+      items: offDutyDrivers,
+      renderItem: (d) => (
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+          <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+        </div>
+      ),
+    },
+    uninstalled: {
+      title: lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)",
+      emptyMsg: lang === "en" ? "No approved driver has gone quiet this long." : lang === "mr" ? "कोणताही अप्रूव्ह्ड ड्रायव्हर इतका काळ गप्प नाही." : "कोई भी अप्रूव्ड ड्राइवर इतने दिन से खामोश नहीं है।",
+      items: uninstalledDrivers,
+      renderItem: (d) => (
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+          </div>
           <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
         </div>
       ),
@@ -7300,6 +7356,8 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
         <StatTile label={lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
+        <StatTile label={lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी"} value={offDutyDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("offDuty")} />
+        <StatTile label={lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)"} value={uninstalledDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
         <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
         <StatTile label={lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
       </div>
