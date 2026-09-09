@@ -9,12 +9,12 @@ import {
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
 } from "./firestoreStore";
-import { increment, arrayUnion, serverTimestamp } from "firebase/firestore";
+import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral } from "./firebaseClient";
 import { registerPlugin } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -6763,8 +6763,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
     // The link carries this driver's own mobile number as their referral
     // code either way, but the ₹200 only ever pays out for a driver-to-driver
     // referral — a customer who signs up via this link is still tracked as
-    // referred by this driver, just without a payout (see creditReferralOnce
-    // in the root App). The reward itself isn't mentioned in the message text.
+    // referred by this driver, just without a payout (see creditDriverReferral
+    // in functions/index.js). The reward itself isn't mentioned in the message text.
     const link = `https://sarthi-transport-74865.web.app?ref=${driver.mobile}`;
     const msg = lang === "en"
       ? `Join Apna Transport — book trucks/tempos or sign up as a driver-partner using my link: ${link}`
@@ -9389,36 +9389,22 @@ export default function App() {
     return null;
   };
   const rateBooking = (id, rating) => patchDoc("bookings", id, { rating }).catch((e) => console.error(e));
-  // Credits ₹200 straight into the referring driver's wallet the moment a
-  // referred driver (signed up via that driver's share link) completes
-  // their first successful trip — checked/flagged via referralCredited so
-  // it only ever fires once per referred driver, no matter how many trips
-  // they complete after that. Driver-to-driver only: a customer signed up
-  // via a driver's link is still tracked as a referral (see referredBy on
-  // the customer doc) but never triggers a payout — only called for
-  // drivers below. A referredBy mobile that isn't a driver (e.g. stale
-  // data) is simply ignored.
-  const creditReferralOnce = async (mobile, collectionName) => {
-    const entity = await getDocOnce(collectionName, mobile);
-    if (!entity?.referredBy || entity.referralCredited) return;
-    await patchDoc(collectionName, mobile, { referralCredited: true }).catch((e) => console.error("[referral]", e));
-    const referringDriver = drivers.find((d) => d.mobile === entity.referredBy);
-    if (!referringDriver) return;
-    await patchDoc("drivers", entity.referredBy, {
-      wallet: increment(200),
-      referralEntries: arrayUnion({ amount: 200, fromMobile: mobile, creditedAt: Date.now() }),
-    }).catch((e) => console.error("[referral]", e));
-  };
   const completeBooking = (id, extraCharge = 0) => {
     const b = bookings.find((x) => x.id === id);
     if (!b) return;
     if (b.driverName) unfreezeDriverName(b.driverName);
     patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge, completedAt: Date.now() }).catch((e) => console.error(e));
     if (b.driverName === driver?.name) setDriver({ ...driver, online: true });
-    if (firestoreReady) {
-      const bookingDriver = drivers.find((d) => d.name === b.driverName);
-      if (bookingDriver?.mobile) creditReferralOnce(bookingDriver.mobile, "drivers");
-    }
+    // Referral payout (₹200 to whichever driver referred this one, the
+    // first time they complete a real trip — see shareApp) moved into a
+    // Cloud Function: this session can only ever be the *referred*
+    // driver's own, and the payout writes to the *referring* driver's
+    // wallet, a cross-driver write firestore.rules correctly refuses from
+    // here (see functions/index.js: creditDriverReferral). Fire-and-forget
+    // — it already resolves { ok: false, ... } silently on every
+    // not-eligible-yet case (not referred, already credited, etc.), so
+    // there's nothing here worth awaiting or surfacing to the driver.
+    if (b.driverName === driver?.name) creditDriverReferral().catch((e) => console.error("[referral]", e));
   };
   const startLoading = (id, adjustMs = 0) => {
     const b = bookings.find((x) => x.id === id);

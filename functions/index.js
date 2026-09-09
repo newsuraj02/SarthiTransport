@@ -424,6 +424,60 @@ exports.classifyKycPhoto = onCall({ region: "asia-south1", secrets: [GEMINI_API_
   }
 });
 
+// ---------------- Driver referral payout ----------------
+// Credits ₹200 into a referring driver's wallet the first time the driver
+// they referred (signed up via that driver's ?ref= share link — see
+// shareApp in src/App.jsx) completes a real trip. This used to run as a
+// plain client-side function (App.jsx: creditReferralOnce) that wrote
+// straight to the *referring* driver's wallet from the *referred* driver's
+// own signed-in session — silently blocked by firestore.rules even before
+// the security pass that tightened drivers/{mobile}'s update rule (an
+// update touching another driver's doc could never satisfy isOwnPhone for
+// that doc), so the payout never actually landed. Moving it here lets the
+// Admin SDK make the cross-driver write, while still deriving *which*
+// driver is claiming the referral from their own auth token rather than a
+// client-supplied mobile -- so nobody can call this to credit an arbitrary
+// referral chain of their choosing.
+//
+// The client no longer has a "this driver just finished a trip" moment to
+// hand over as proof, so this re-derives it server-side: the caller must
+// own at least one Completed booking under their own driver name. Driver
+// name (not mobile) is what bookings are stamped with — see
+// driverRespondBooking in App.jsx.
+exports.creditDriverReferral = onCall({ region: "asia-south1" }, async (request) => {
+  const callerPhone = callerPhoneFromAuth(request.auth?.token);
+  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
+  const mobile = callerPhone.replace("+91", "");
+
+  const driverSnap = await db.collection("drivers").doc(mobile).get();
+  if (!driverSnap.exists) return { ok: false, reason: "not_found" };
+  const driverData = driverSnap.data();
+  if (!driverData.referredBy || driverData.referralCredited) return { ok: false, reason: "not_eligible" };
+
+  const referrerRef = db.collection("drivers").doc(driverData.referredBy);
+  const referrerSnap = await referrerRef.get();
+  if (!referrerSnap.exists) return { ok: false, reason: "referrer_not_found" };
+
+  const completedTrip = await db.collection("bookings")
+    .where("driverName", "==", driverData.name)
+    .where("status", "==", "Completed")
+    .limit(1)
+    .get();
+  if (completedTrip.empty) return { ok: false, reason: "no_completed_trip" };
+
+  // Marked credited first, before the payout write — if the function
+  // retries or is called again, the guard above already stops a second
+  // payout, but flipping this first (rather than after the wallet credit)
+  // means a crash between the two writes fails closed (no payout re-tried
+  // forever) rather than open (a duplicate payout on retry).
+  await driverSnap.ref.update({ referralCredited: true });
+  await referrerRef.update({
+    wallet: FieldValue.increment(200),
+    referralEntries: FieldValue.arrayUnion({ amount: 200, fromMobile: mobile, creditedAt: Date.now() }),
+  });
+  return { ok: true };
+});
+
 // ---------------- Number masking (Exotel) ----------------
 // Bridges a call between a booking's customer and driver through Exotel's
 // Connect API instead of exposing either side's real number to the other:

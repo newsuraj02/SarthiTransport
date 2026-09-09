@@ -198,6 +198,28 @@ export async function classifyKycPhoto(imageBase64, mimeType, docType) {
   }
 }
 
+// Pays a referring driver's ₹200 once the driver they referred completes a
+// real trip (see functions/index.js: creditDriverReferral). Called by the
+// referred driver's own session right after their own completeBooking
+// (App.jsx) — the function derives which driver is claiming the referral
+// from this session's own auth token, not any argument passed here.
+// Always resolves (never throws) with { ok, reason? } — every reason
+// (not_configured/not_found/not_eligible/no_completed_trip/error) just
+// means "no payout happened this time," nothing for the caller to surface
+// to the driver.
+export async function creditDriverReferral() {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "creditDriverReferral");
+    const result = await call({});
+    return result.data;
+  } catch (e) {
+    console.error("[creditDriverReferral] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
 // Forgot-PIN recovery, final step (see functions/index.js). Must be called
 // while already signed in via a fresh real Firebase Phone Auth session
 // (CustomerOnboarding/DriverOnboarding's Forgot PIN flow does the

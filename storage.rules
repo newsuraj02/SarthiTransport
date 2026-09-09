@@ -53,13 +53,26 @@ service firebase.storage {
 
     // Bill & E-Way Bill documents (Original/Duplicate/E-Way Bill scans, plus
     // the merged PDF a Cloud Function writes with the Admin SDK, which
-    // always bypasses these rules regardless). Left signed-in-gated rather
-    // than owner-scoped, matching the same trade-off already made for the
-    // bookings collection itself in firestore.rules (`allow update: if
-    // isSignedIn()`) — a customer uploads here, a driver reads here, and
-    // there's no single "owning phone" for a two-sided booking doc.
+    // always bypasses these rules regardless). Used to be signed-in-gated
+    // only, matching the old (now-tightened) firestore.rules trade-off on
+    // the bookings collection itself — any signed-in stranger, not just
+    // this booking's own customer/driver, could read or overwrite these.
+    // Storage rules have no direct view of a Firestore document's fields,
+    // but the firestore.get()/firestore.exists() cross-service functions
+    // let a rule reach into Firestore to read one -- used here to pull the
+    // booking's customerMobile/driverMobile and check the caller against
+    // them the same way firestore.rules' own bookings/{id} update rule
+    // does. A booking that doesn't exist (bad bookingId) denies rather
+    // than erroring, since firestore.get() itself throws for a missing doc.
+    function bookingDoc(bookingId) {
+      return firestore.get(/databases/(default)/documents/bookings/$(bookingId)).data;
+    }
     match /bookings/{bookingId}/documents/{fileName} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isAdmin()
+        || (firestore.exists(/databases/(default)/documents/bookings/$(bookingId)) && (
+          isOwnPhone(bookingDoc(bookingId).customerMobile) ||
+          (bookingDoc(bookingId).driverMobile != null && isOwnPhone(bookingDoc(bookingId).driverMobile))
+        ));
     }
   }
 }
