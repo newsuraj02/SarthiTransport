@@ -1,4 +1,4 @@
-package com.apnatransport.app;
+package com.apnatransport.admin;
 
 import android.content.Intent;
 import com.getcapacitor.Plugin;

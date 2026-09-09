@@ -33,7 +33,7 @@
             android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
-                <action android:name="com.apnatransport.app.OPEN_SETTINGS" />
+                <action android:name="com.apnatransport.admin.OPEN_SETTINGS" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
