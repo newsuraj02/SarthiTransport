@@ -54,6 +54,25 @@ service cloud.firestore {
       );
     }
 
+    // Fields a driver's own authenticated session must never be able to
+    // change on their OWN existing doc -- without this, isOwnPhone(mobile)
+    // alone let a driver self-approve KYC, un-blacklist themselves, credit
+    // their own wallet/bonus/heldCredit, or roll createdAt forward to stay
+    // in the 30-day free trial (isInTrial reads it) forever. Checked only
+    // on the authenticated-update path in drivers/{mobile} below -- NOT on
+    // the one-time unauthenticated first-submission path
+    // (resource.data.vehicleSpec == null), where DriverKyc's submit()
+    // legitimately sets kyc for the very first time as part of onboarding;
+    // that path can only ever fire once, before vehicleSpec exists at all.
+    function driverProtectedFieldsUnchanged() {
+      return request.resource.data.kyc == resource.data.kyc &&
+        request.resource.data.blacklisted == resource.data.blacklisted &&
+        request.resource.data.wallet == resource.data.wallet &&
+        request.resource.data.heldCredit == resource.data.heldCredit &&
+        request.resource.data.bonus == resource.data.bonus &&
+        request.resource.data.createdAt == resource.data.createdAt;
+    }
+
     match /vehicleTypes/{id} {
       allow read: if true;
       allow write: if isSignedIn();
@@ -85,7 +104,15 @@ service cloud.firestore {
       // privately (WhatsApp/push to that driver), never posted publicly.
       allow get: if isSignedIn() || resource.data.vehicleSpec == null;
       allow list: if isSignedIn();
-      allow write: if isOwnPhone(mobile) || isAdmin() || resource.data.vehicleSpec == null;
+      allow create: if isOwnPhone(mobile) || isAdmin();
+      // The KYC-portal branch (vehicleSpec == null) stays unconditional --
+      // it's the one legitimate place kyc/wallet/etc. get set for the
+      // first time. Everywhere else, a driver's own session can change
+      // anything on their doc EXCEPT the protected fields above.
+      allow update: if isAdmin()
+        || resource.data.vehicleSpec == null
+        || (isOwnPhone(mobile) && driverProtectedFieldsUnchanged());
+      allow delete: if isOwnPhone(mobile) || isAdmin();
     }
 
     match /customers/{mobile} {
@@ -97,7 +124,21 @@ service cloud.firestore {
     match /bookings/{id} {
       allow read: if isSignedIn();
       allow create: if isOwnPhone(request.resource.data.customerMobile);
-      allow update: if isSignedIn();
+      // driverMobile is only ever set once (driverRespondBooking, the
+      // moment a direct request OR an accepted bid actually gets accepted
+      // by that driver -- see App.jsx) -- before that, a booking is still
+      // Bidding/AwaitingDriver and driverMobile doesn't exist on the doc
+      // yet. Before assignment, any signed-in driver still needs write
+      // access (bidding/accepting) -- that pool is already visible to
+      // every eligible driver by design, a smaller/accepted exposure.
+      // Once assigned, only that specific driver, the booking's own
+      // customer, or admin may touch it -- closes off any other signed-in
+      // stranger rewriting someone else's fare/status/OTP/location on an
+      // active or completed trip.
+      allow update: if isAdmin()
+        || isOwnPhone(resource.data.customerMobile)
+        || (resource.data.get('driverMobile', null) == null && isSignedIn())
+        || (resource.data.get('driverMobile', null) != null && isOwnPhone(resource.data.driverMobile));
       allow delete: if isAdmin();
     }
 
