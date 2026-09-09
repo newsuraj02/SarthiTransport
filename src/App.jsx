@@ -970,7 +970,7 @@ function useLocationPermission() {
   const markGranted = () => setPermission("granted");
   // Returns a Promise (resolving either way, never rejecting) so callers
   // that need to request Location and Notifications one after another (see
-  // PermissionsGate) can await this before firing the next native prompt —
+  // usePrimePermissionsOnce) can await this before firing the next native prompt —
   // browsers only ever show one permission dialog at a time, so firing both
   // at once just silently drops one of them.
   const enable = () => new Promise((resolve) => {
@@ -1055,13 +1055,14 @@ function openNativeSettingsBridge(target) {
 // Both of these used to render a persistent in-app nag (a tappable
 // "Turn on notifications/location" button, or — once actually denied — a
 // banner linking to phone Settings) on every relevant screen. Removed per
-// explicit request: the one-time native OS prompt from PermissionsGate
-// (asked once, up front, before role selection) is the only ask now.
-// Still called from every existing site with the same props, so this is
-// the only change needed — no call sites to touch. Tradeoff: a denial at
-// that one prompt now fails silently again (map/GPS matching or push
-// alerts just don't work, nothing on screen explains why), same as
-// before PermissionsGate/these banners existed at all.
+// explicit request: the one-time native OS prompt from
+// usePrimePermissionsOnce (fired silently, up front, before role
+// selection) is the only ask now. Still called from every existing site
+// with the same props, so this is the only change needed — no call sites
+// to touch. Tradeoff: a denial at that one prompt now fails silently
+// again (map/GPS matching or push alerts just don't work, nothing on
+// screen explains why), same as before this priming/these banners
+// existed at all.
 function NotificationBanner() {
   return null;
 }
@@ -1087,15 +1088,22 @@ function ForegroundToast({ toast }) {
 // the very first screen — before role selection, before login, for a
 // brand-new install AND an existing/returning user who hasn't seen this
 // yet, since the permission system itself is new. Deliberately role-
-// agnostic (nobody has picked Customer/Driver yet at this point) — generic
-// copy that covers both. Requests Location and Notifications back-to-back,
-// never simultaneously (see useLocationPermission.enable's comment on why)
-// — those are the only two permissions a web app can actually prime ahead
-// of time with a real, queryable "granted/denied" state. Camera has no such
-// durable grant for the <input type="file" capture> flow this app uses
-// (tapping it just opens the OS camera/gallery app directly), so it's only
-// explained here, not requested — the OS asks for it naturally the first
-// time a photo is actually picked, later, whichever role signs in.
+// agnostic (nobody has picked Customer/Driver yet at this point) — fires
+// Location then Notifications back-to-back, never simultaneously (browsers
+// only ever show one native permission dialog at a time; firing both at
+// once just silently drops one of them). Deliberately NOT a screen of its
+// own anymore — it used to render a full explanatory "Before you start"
+// page with its own "Allow & Continue" button in front of these, which was
+// really just a second, custom-drawn prompt sitting in front of the real
+// OS one. Removed per explicit request: this now runs silently the moment
+// the app first loads, so the only thing anyone ever sees is the real
+// native Allow/Block dialog, stacked directly on top of whatever screen
+// (role selection) is already showing underneath. Camera has no
+// equivalent here — there's no durable grant to prime for the
+// <input type="file" capture> flow this app uses (tapping it just opens
+// the OS camera/gallery app directly), so the OS asks for it naturally,
+// and only the first time a photo is actually picked, later, whichever
+// role signs in.
 //
 // Notification permission is requested directly via requestPushToken()
 // here rather than through useRideNotifications, since there's no
@@ -1105,60 +1113,21 @@ function ForegroundToast({ toast }) {
 // the moment it sees permission already "granted" (no second prompt).
 //
 // This can't truly force a grant — a user can always decline the native
-// browser dialog, and nothing server-side can detect or block that.
-// Declining just leaves the persistent LocationBanner/NotificationBanner
-// (shown on the relevant screens afterward, once a role is picked) nagging
-// until it's fixed in browser settings, same as any other denial elsewhere
-// in the app.
-function PermissionsGate({ lang, onDone }) {
+// dialog, and nothing server-side can detect or block that. Declining
+// just leaves location/GPS matching or push alerts silently not working,
+// same as before this priming existed at all; fixing it afterward means
+// going into the phone's own Settings, same as any other app.
+function usePrimePermissionsOnce(permsPrimedGlobal, setPermsPrimedGlobal) {
   const location = useLocationPermission();
-  const [asking, setAsking] = useState(false);
-
-  const start = async () => {
-    setAsking(true);
-    if (location.permission !== "granted") await location.enable();
-    if (typeof Notification !== "undefined" && Notification.permission === "default") await requestPushToken();
-    onDone();
-  };
-
-  const copy = {
-    title: lang === "en" ? "Before you start" : lang === "mr" ? "सुरू करण्याआधी" : "शुरू करने से पहले",
-    items: [
-      [MapPin, lang === "en" ? "Location — to show you nearby vehicles as a customer, or share your live location with customers as a driver." : lang === "mr" ? "लोकेशन — कस्टमर म्हणून जवळपासच्या गाड्या दाखवण्यासाठी, किंवा ड्रायव्हर म्हणून कस्टमरना तुमचे लोकेशन दाखवण्यासाठी." : "लोकेशन — कस्टमर के तौर पर पास की गाड़ियां दिखाने के लिए, या ड्राइवर के तौर पर कस्टमर को अपनी लोकेशन दिखाने के लिए।"],
-      [Bell, lang === "en" ? "Notifications — so you don't miss new load alerts, direct requests, or booking status updates, even with the app closed." : lang === "mr" ? "नोटिफिकेशन — जेणेकरून नवीन लोड अलर्ट, थेट विनंती किंवा बुकिंग अपडेट्स चुकणार नाहीत, अ‍ॅप बंद असतानाही." : "नोटिफिकेशन — ताकि नए लोड अलर्ट, सीधा अनुरोध या बुकिंग अपडेट न छूटें, ऐप बंद होने पर भी।"],
-      [Camera, lang === "en" ? "Camera/Photos — asked for separately when you upload KYC documents, vehicle/profile photos, or an invoice." : lang === "mr" ? "कॅमेरा/फोटो — KYC कागदपत्रे, गाडी/प्रोफाइल फोटो किंवा इनव्हॉइस अपलोड करताना यासाठी वेगळे विचारले जाईल." : "कैमरा/फोटो — KYC दस्तावेज़, गाड़ी/प्रोफाइल फोटो या इनवॉइस अपलोड करते समय इसके लिए अलग से पूछा जाएगा।"],
-    ],
-  };
-
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 text-center">
-      <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.navy }}>
-        <ShieldCheck size={26} color="#FFFFFF" />
-      </div>
-      <h2 className="text-lg font-black mb-1" style={{ color: C.ink }}>{copy.title}</h2>
-      <p className="text-xs font-semibold mb-5" style={{ color: C.inkSoft }}>
-        {lang === "en" ? "Apna Transport needs a few permissions to work properly:" : lang === "mr" ? "अपना ट्रान्सपोर्ट व्यवस्थित चालण्यासाठी काही परवानग्या आवश्यक आहेत:" : "अपना ट्रांसपोर्ट को ठीक से काम करने के लिए कुछ अनुमतियां चाहिए:"}
-      </p>
-      <div className="w-full space-y-3 mb-6">
-        {copy.items.map(([Icon, text], i) => (
-          <div key={i} className="flex items-start gap-3 text-left rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-              <Icon size={15} color={C.marigoldDeep} />
-            </div>
-            <span className="text-xs font-semibold" style={{ color: C.ink }}>{text}</span>
-          </div>
-        ))}
-      </div>
-      <button onClick={start} disabled={asking} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: asking ? "#9AA3B0" : C.marigoldDeep }}>
-        {asking
-          ? (lang === "en" ? "Requesting..." : lang === "mr" ? "विनंती करत आहे..." : "अनुरोध किया जा रहा है...")
-          : (lang === "en" ? "Allow & Continue" : lang === "mr" ? "परवानगी द्या आणि पुढे जा" : "अनुमति दें और आगे बढ़ें")}
-      </button>
-      <p className="text-[10px] font-semibold mt-3" style={{ color: C.inkSoft }}>
-        {lang === "en" ? "You can change these anytime in your phone's Settings." : lang === "mr" ? "तुम्ही या कधीही तुमच्या फोनच्या Settings मध्ये बदलू शकता." : "आप इन्हें कभी भी अपने फोन की Settings में बदल सकते हैं।"}
-      </p>
-    </div>
-  );
+  useEffect(() => {
+    if (permsPrimedGlobal) return;
+    (async () => {
+      if (location.permission !== "granted") await location.enable();
+      if (typeof Notification !== "undefined" && Notification.permission === "default") await requestPushToken();
+      setPermsPrimedGlobal(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }
 
 // Post-signup language picker — shown once, right after a brand-new
@@ -8906,12 +8875,14 @@ export default function App() {
   // returning/login user never has this flag set, so they never see it.
   const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
   const [langPromptPending, setLangPromptPending] = usePersistedState("sarthi_langPromptPending", false);
-  // Whether this device has already been through PermissionsGate — global
-  // (not per-role/mobile) since it now runs before role selection or login
-  // even happens, as the very first screen the app shows. Persisted so it's
-  // asked once per device, not on every open; existing users get it the
-  // same as brand-new installs, since the permission system itself is new.
+  // Whether this device has already fired the one-time Location +
+  // Notifications priming (see usePrimePermissionsOnce) — global (not
+  // per-role/mobile) since it fires before role selection or login even
+  // happens, the moment the app first loads. Persisted so it's asked once
+  // per device, not on every open; existing users get it the same as
+  // brand-new installs, since the permission system itself is new.
   const [permsPrimedGlobal, setPermsPrimedGlobal] = usePersistedState("sarthi_permsPrimedGlobal", false);
+  usePrimePermissionsOnce(permsPrimedGlobal, setPermsPrimedGlobal);
   // Google Places Autocomplete's suggestion language is fixed when its
   // script loads (see googleMapsContext.jsx) and can't be hot-swapped — so
   // picking a language reloads the page. localStorage is written directly
@@ -9509,20 +9480,6 @@ export default function App() {
               <p className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Please turn on your mobile data or Wi-Fi to continue." : lang === "mr" ? "सुरू ठेवण्यासाठी कृपया तुमचा मोबाइल डेटा किंवा वाय-फाय चालू करा." : "जारी रखने के लिए कृपया अपना मोबाइल डेटा या वाई-फाई चालू करें।"}</p>
             </>
           ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  // The very first screen on this device — before role selection, before
-  // any login form — for a brand-new install and an existing/returning
-  // user alike (permsPrimedGlobal is a fresh flag, so nobody has it set
-  // yet). See PermissionsGate for why it's role-agnostic at this point.
-  if (!permsPrimedGlobal) {
-    return (
-      <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
-        <div className="w-full max-w-sm min-h-screen flex flex-col" style={{ background: C.bg }}>
-          <PermissionsGate lang={lang} onDone={() => setPermsPrimedGlobal(true)} />
         </div>
       </div>
     );
