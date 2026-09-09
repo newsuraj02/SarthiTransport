@@ -284,6 +284,44 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   { key: "other", icon: "📦", hi: "अन्य खर्चे", en: "Other Expenses", mr: "इतर खर्च" },
 ];
 
+// One-time seed for the Admin "Bug Tracker" (see AdminBugTracker/AdminFleet)
+// — the findings from the first full code-audit pass, so the tracker opens
+// with real content instead of an empty list. seedIfEmpty only ever writes
+// these once (checked against the first item's doc existing); every bug
+// admin adds afterward, and every status change (Open/Fixed) on these or
+// later ones, lives only in Firestore from that point on — this constant is
+// never re-read once the collection exists.
+const BUG_TRACKER_SEED = [
+  {
+    id: "commission-fields-misleading",
+    title: "Driver Wallet/History showed commission deductions that never actually happened",
+    severity: "high",
+    status: "fixed",
+    area: "Driver Wallet, Trip History, trip cancellation",
+    description: "driverRespondBooking and AdminFinance were already hardcoded to 0% commission (a deliberate pause — fare is real again, but wallet deductions are not), but DriverWallet's transaction history, DriverHistory's fare display, and cancelBooking's held-credit/bonus-reversal math still computed against the live, admin-editable commissionPct/bonusPct Settings value. A completed trip showed a fabricated \"Commission −₹X\" line in the driver's wallet history and history list, and cancelling an Ongoing trip would hold heldCredit against a commission that was never actually deducted. Harmless while commissionPct is 0 (today's default), but the moment admin raised it in Settings for any reason, every driver would see deductions on screen that never touched their real balance. Fixed by hardcoding all three to 0, matching driverRespondBooking/AdminFinance.",
+    foundAt: "2026-09-09",
+    fixedAt: "2026-09-09",
+  },
+  {
+    id: "otp-readable-by-any-driver",
+    title: "Pickup OTP is readable by any signed-in user, not just the two parties to that booking",
+    severity: "medium",
+    status: "open",
+    area: "Bookings / firestore.rules",
+    description: "The 4-digit pickup OTP (proves a driver is physically at the pickup point before loading starts) is stored in plain text on the booking document. firestore.rules intentionally allows `allow read: if isSignedIn()` on bookings/{id} — any signed-in driver or customer, not just this booking's own two parties — because the app fetches whole collections and filters client-side (e.g. a driver needs every open \"Bidding\" load, not just their own). That means any other signed-in driver could in principle read a booking's otp field directly from Firestore without ever visiting the pickup, defeating the point of the check. Fixing this properly needs either scoping bookings reads down (a bigger rewrite of the broad-read/client-filter pattern used throughout this app) or moving OTP verification into a Cloud Function that returns only pass/fail, never the code itself. Flagging for a deliberate decision rather than fixing silently, since it changes a load-bearing data-access pattern used everywhere.",
+    foundAt: "2026-09-09",
+  },
+  {
+    id: "wallet-full-doc-overwrite-race",
+    title: "Driver wallet/profile updates overwrite the whole document, which can race with a concurrent write",
+    severity: "medium",
+    status: "open",
+    area: "Driver wallet / referrals / withdrawals (architecture)",
+    description: "setDriver (used by withdrawals, referral display, KYC, and more) calls replaceDoc — a full setDoc overwrite of the driver's entire profile from whatever copy is in the client's memory at that moment — rather than a targeted patchDoc+increment on just the changed field. If two writes land close together (e.g. admin approves a wallet recharge at the same moment the driver's own device fires an update built from a slightly stale in-memory copy), the second full-document write has no idea about the first change and can silently overwrite it. The trip-timer's pausedMs field already uses the safer increment()-based patchDoc pattern; wallet/bonus/heldCredit are the fields with real financial stakes and would benefit from the same treatment, but it's a broader refactor touching every setDriver call site, not attempted in this pass to avoid destabilizing many already-working flows.",
+    foundAt: "2026-09-09",
+  },
+];
+
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
 function hashPos(str) {
   let h = 0;
@@ -5985,7 +6023,7 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
   );
 }
 
-function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bonusPct, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
+function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   // Balance/bonus count smoothly toward their real value instead of
@@ -5993,24 +6031,23 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
   const displayWallet = useCountUp(driver.wallet || 0);
   const displayBonus = useCountUp(driver.bonus || 0);
   const inTrial = isInTrial(driver.createdAt);
-  const myTrips = tripLog.filter((t) => t.driverName === driver.name && t.status !== "Cancelled");
   const myWithdrawals = (withdrawals || []).filter((w) => w.driverName === driver.name);
   const myRecharges = (rechargeRequests || []).filter((r) => r.driverName === driver.name);
 
-  // The wallet balance moves for three reasons: a commission cut the instant
-  // a bid is accepted, an approved recharge landing, or a referral reward —
-  // so that's the complete ledger, merged and sorted newest-first by
-  // createdAt. Referral entries store a plain millis number (Date.now())
+  // The wallet balance moves for two reasons right now: an approved
+  // recharge landing, or a referral reward — commission is deliberately
+  // held at 0 (see driverRespondBooking/AdminFinance), so a completed trip
+  // itself never touches the wallet and doesn't belong in this ledger; a
+  // "Commission — X → Y" debit line computed off commissionPct used to show
+  // up here for every trip even though nothing was ever actually deducted,
+  // which would only get more misleading the moment admin sets that
+  // percentage above 0 in Settings without also reactivating the real
+  // deduction. Referral entries store a plain millis number (Date.now())
   // rather than a Firestore Timestamp, hence txMillis/txTime below handling
   // both shapes.
   const referralEntries = driver.referralEntries || [];
   const txMillis = (createdAt) => createdAt?.toMillis?.() || (typeof createdAt === "number" ? createdAt : 0);
   const walletTransactions = [
-    ...myTrips.map((t) => ({
-      id: t.id, type: "debit", createdAt: t.createdAt,
-      label: lang === "en" ? `Commission — ${t.pickup} → ${t.drop}` : lang === "mr" ? `कमिशन — ${t.pickup} → ${t.drop}` : `कमीशन — ${t.pickup} → ${t.drop}`,
-      amount: t.fare * (commissionPct / 100),
-    })),
     ...myRecharges.filter((r) => r.status === "Approved").map((r) => ({
       id: r.id, type: "credit", createdAt: r.createdAt,
       label: lang === "en" ? "Wallet recharge" : lang === "mr" ? "वॉलेट रिचार्ज" : "वॉलेट रीचार्ज",
@@ -6105,7 +6142,7 @@ function DriverWallet({ driver, setDriver, tripLog, commissionPct, minWallet, bo
   );
 }
 
-function DriverHistory({ tripLog, driver, commissionPct, lang }) {
+function DriverHistory({ tripLog, driver, lang }) {
   const myTrips = tripLog.filter((t) => t.driverName === driver.name);
   const [docsTrip, setDocsTrip] = useState(null);
   return (
@@ -6123,14 +6160,18 @@ function DriverHistory({ tripLog, driver, commissionPct, lang }) {
             <div className="flex items-center justify-between">
               <div className="text-xs font-semibold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
               <div className="text-sm font-bold" style={{ color: t.status === "Cancelled" ? C.safety : C.success, fontFamily: monoFont }}>
-                {t.status === "Cancelled" ? (lang === "en" ? "Cancelled" : lang === "mr" ? "रद्द" : "रद्द") : fmt(t.fare * (1 - commissionPct / 100))}
+                {t.status === "Cancelled" ? (lang === "en" ? "Cancelled" : lang === "mr" ? "रद्द" : "रद्द") : fmt(t.fare)}
               </div>
             </div>
+            {/* No commission line here — commission is deliberately held at
+                0 right now (see driverRespondBooking/AdminFinance), so a
+                trip's full fare is exactly what the driver actually keeps;
+                a "commission −₹X" figure computed off admin's live
+                commissionPct setting would show a deduction that never
+                actually happened to the wallet. */}
             <div className="flex items-center justify-between mt-1">
               <div className="text-[10px]" style={{ color: C.inkSoft }}>
-                {t.status === "Cancelled"
-                  ? (lang === "en" ? `Fare ${fmt(t.fare)} · commission ${fmt(t.fare * (commissionPct / 100))} refunded to wallet` : lang === "mr" ? `भाडे ${fmt(t.fare)} · कमिशन ${fmt(t.fare * (commissionPct / 100))} वॉलेटमध्ये परत जमा` : `भाड़ा ${fmt(t.fare)} · कमीशन ${fmt(t.fare * (commissionPct / 100))} वापस वॉलेट में जमा`)
-                  : (lang === "en" ? `Fare ${fmt(t.fare)} · commission − ${fmt(t.fare * (commissionPct / 100))}` : lang === "mr" ? `भाडे ${fmt(t.fare)} · कमिशन − ${fmt(t.fare * (commissionPct / 100))}` : `भाड़ा ${fmt(t.fare)} · कमीशन − ${fmt(t.fare * (commissionPct / 100))}`)}
+                {lang === "en" ? `Fare ${fmt(t.fare)}` : lang === "mr" ? `भाडे ${fmt(t.fare)}` : `भाड़ा ${fmt(t.fare)}`}
               </div>
               {t.status === "Cancelled" ? null : t.rating ? <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{stars(t.rating)}</div> : <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status === "Ongoing" ? (lang === "en" ? "In progress" : lang === "mr" ? "चालू" : "चालू") : (lang === "en" ? "Rating pending" : lang === "mr" ? "रेटिंग बाकी" : "रेटिंग बाकी")}</div>}
             </div>
@@ -6665,7 +6706,7 @@ function loadEligibleForDriver(driver, load, bookings, vehicleTypes, lang) {
   return true;
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, commissionPct, minWallet, bonusPct, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
+function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
@@ -6983,8 +7024,8 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
             </button>
           </div>
         )}
-        {tab === "wallet" && <DriverWallet driver={driver} setDriver={setDriver} tripLog={tripLog} commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge} />}
-        {tab === "history" && <DriverHistory tripLog={tripLog} driver={driver} commissionPct={commissionPct} lang={lang} />}
+        {tab === "wallet" && <DriverWallet driver={driver} setDriver={setDriver} minWallet={minWallet} lang={lang} withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge} />}
+        {tab === "history" && <DriverHistory tripLog={tripLog} driver={driver} lang={lang} />}
       </div>
     </>
   );
@@ -7014,7 +7055,7 @@ function StatTile({ label, value, color, onClick }) {
   return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${color}` }}>{content}</div>;
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, bugs, setBugStatus, addBug }) {
   const isToday = (b) => {
     const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
     if (!d) return false;
@@ -7230,6 +7271,17 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
     );
   }
 
+  if (detailView === "bugs") {
+    return (
+      <div>
+        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />
+      </div>
+    );
+  }
+
   if (detailView) {
     const page = detailPages[detailView];
     return (
@@ -7247,8 +7299,31 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
     );
   }
 
+  const openBugs = (bugs || []).filter((b) => b.status !== "fixed");
+  const criticalOpenBugs = openBugs.filter((b) => b.severity === "critical" || b.severity === "high");
+
   return (
     <div>
+      {/* Bug Tracker card — sits above everything else on this page per
+          explicit request: a running internal log of real defects found
+          during code review, not something a driver/customer ever reports
+          through here. See AdminBugTracker below. */}
+      <button onClick={() => setDetailView("bugs")} className="w-full rounded-xl p-4 mb-5 shadow-sm text-left" style={{ background: criticalOpenBugs.length > 0 ? C.safety : C.paper, border: `1.5px solid ${criticalOpenBugs.length > 0 ? C.safety : C.line}` }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: criticalOpenBugs.length > 0 ? "#FFFFFF" : C.ink }}>
+            <ClipboardList size={16} /> {lang === "en" ? "Bug Tracker" : lang === "mr" ? "बग ट्रॅकर" : "बग ट्रैकर"}
+          </div>
+          <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: criticalOpenBugs.length > 0 ? "#FFFFFF" : (openBugs.length > 0 ? C.marigoldDeep : C.success), color: criticalOpenBugs.length > 0 ? C.safety : "#FFFFFF" }}>
+            {openBugs.length}
+          </span>
+        </div>
+        <p className="text-[11px] font-semibold mt-1" style={{ color: criticalOpenBugs.length > 0 ? "#FFFFFF" : C.inkSoft }}>
+          {openBugs.length === 0
+            ? (lang === "en" ? "No open bugs from the last audit." : lang === "mr" ? "शेवटच्या ऑडिटमध्ये कोणतीही बग उघडी नाही." : "पिछले ऑडिट से कोई बग खुला नहीं है।")
+            : (lang === "en" ? `${openBugs.length} open (${criticalOpenBugs.length} high/critical) — tap to view` : lang === "mr" ? `${openBugs.length} उघड्या (${criticalOpenBugs.length} हाय/क्रिटिकल) — पाहण्यासाठी टॅप करा` : `${openBugs.length} खुले (${criticalOpenBugs.length} हाई/क्रिटिकल) — देखने के लिए टैप करें`)}
+        </p>
+      </button>
+
       {/* Most to least important: New Registrations (today's total
           Customer+Driver signups — see newCustomersToday/newDriversToday
           above for why this isn't just pendingApprovals) comes first, then
@@ -7325,6 +7400,92 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
       <button onClick={onLogout} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold flex items-center justify-center gap-1.5" style={{ color: "#FFFFFF", background: C.safety }}>
         <XCircle size={14} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
       </button>
+    </div>
+  );
+}
+
+const BUG_SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+const BUG_SEVERITY_COLOR = { critical: C.safety, high: C.safety, medium: C.marigoldDeep, low: C.inkSoft };
+const BUG_SEVERITY_LABEL = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
+
+// Admin's internal Bug Tracker (see AdminFleet's summary card at the top of
+// the Live Dashboard) — a running log of real defects found during code
+// review, seeded once with the first audit's findings (BUG_TRACKER_SEED)
+// and added to over time via the form below. Nothing here is customer/
+// driver-facing; SOS/complaint reports (AdminAlerts) are a separate,
+// unrelated inbox.
+function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState({ title: "", description: "", area: "", severity: "medium" });
+  const sorted = [...(bugs || [])].sort((a, b) => {
+    if ((a.status === "fixed") !== (b.status === "fixed")) return a.status === "fixed" ? 1 : -1;
+    return (BUG_SEVERITY_ORDER[a.severity] ?? 9) - (BUG_SEVERITY_ORDER[b.severity] ?? 9);
+  });
+  const submit = () => {
+    if (!draft.title.trim()) return;
+    addBug({ title: draft.title.trim(), description: draft.description.trim(), area: draft.area.trim(), severity: draft.severity });
+    setDraft({ title: "", description: "", area: "", severity: "medium" });
+    setShowForm(false);
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Bug Tracker" : lang === "mr" ? "बग ट्रॅकर" : "बग ट्रैकर"}</h2>
+        <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1 text-xs font-bold px-3 py-2 rounded-lg" style={{ background: C.marigoldDeep, color: "#FFFFFF" }}>
+          <Plus size={13} /> {lang === "en" ? "Log a bug" : lang === "mr" ? "बग नोंदवा" : "बग दर्ज करें"}
+        </button>
+      </div>
+      {showForm && (
+        <div className="rounded-xl p-3 mb-4 space-y-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder={lang === "en" ? "Title" : lang === "mr" ? "शीर्षक" : "शीर्षक"}
+            className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+          <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} rows={3} placeholder={lang === "en" ? "What's broken, and how it fails" : lang === "mr" ? "काय बिघडले आहे, आणि ते कसे फेल होते" : "क्या टूटा है, और यह कैसे फेल होता है"}
+            className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+          <input value={draft.area} onChange={(e) => setDraft({ ...draft, area: e.target.value })} placeholder={lang === "en" ? "Area (e.g. Driver KYC)" : lang === "mr" ? "क्षेत्र (उदा. ड्रायव्हर KYC)" : "क्षेत्र (जैसे ड्राइवर KYC)"}
+            className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+          <div className="flex gap-1.5">
+            {Object.keys(BUG_SEVERITY_LABEL).map((s) => (
+              <button key={s} onClick={() => setDraft({ ...draft, severity: s })} className="flex-1 rounded-lg py-2 text-[11px] font-bold"
+                style={{ background: draft.severity === s ? BUG_SEVERITY_COLOR[s] : C.bg, color: draft.severity === s ? "#FFFFFF" : C.inkSoft, border: `1.5px solid ${BUG_SEVERITY_COLOR[s]}` }}>
+                {BUG_SEVERITY_LABEL[s]}
+              </button>
+            ))}
+          </div>
+          <button onClick={submit} disabled={!draft.title.trim()} className="w-full rounded-lg py-2.5 text-sm font-bold"
+            style={{ background: draft.title.trim() ? C.metallicGreen : "#E0E0E0", color: draft.title.trim() ? "#fff" : "#9AA3B0" }}>
+            {lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें"}
+          </button>
+        </div>
+      )}
+      {sorted.length === 0 ? (
+        <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No bugs logged yet." : lang === "mr" ? "अजून कोणतीही बग नोंदवलेली नाही." : "अभी तक कोई बग दर्ज नहीं हुई।"}</p>
+      ) : (
+        <div className="space-y-2">
+          {sorted.map((b) => {
+            const fixed = b.status === "fixed";
+            return (
+              <div key={b.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${fixed ? C.line : BUG_SEVERITY_COLOR[b.severity] || C.line}`, opacity: fixed ? 0.7 : 1 }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{b.title}</div>
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: fixed ? C.success : (BUG_SEVERITY_COLOR[b.severity] || C.inkSoft), color: "#FFFFFF" }}>
+                    {fixed ? (lang === "en" ? "FIXED" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड") : (BUG_SEVERITY_LABEL[b.severity] || b.severity || "").toUpperCase()}
+                  </span>
+                </div>
+                {b.area && <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{b.area}</div>}
+                {b.description && <p className="text-[11px] mt-1.5" style={{ color: C.inkSoft }}>{b.description}</p>}
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[10px]" style={{ color: C.inkSoft }}>
+                    {lang === "en" ? "Found" : lang === "mr" ? "सापडले" : "मिला"} {b.foundAt || "—"}{fixed && b.fixedAt ? ` · ${lang === "en" ? "Fixed" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड"} ${typeof b.fixedAt === "number" ? new Date(b.fixedAt).toISOString().slice(0, 10) : b.fixedAt}` : ""}
+                  </span>
+                  <button onClick={() => setBugStatus(b.id, fixed ? "open" : "fixed")} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: fixed ? C.paper : C.metallicGreen, color: fixed ? C.inkSoft : "#FFFFFF", border: fixed ? `1px solid ${C.line}` : "none" }}>
+                    {fixed ? (lang === "en" ? "Reopen" : lang === "mr" ? "पुन्हा उघडा" : "फिर से खोलें") : (lang === "en" ? "Mark Fixed" : lang === "mr" ? "फिक्स्ड करा" : "फिक्स्ड करें")}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -8608,7 +8769,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review now lives inside
   // the Live Dashboard's "New Registrations" tile (see AdminFleet's
@@ -8632,7 +8793,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
@@ -8982,6 +9143,18 @@ export default function App() {
   // Business expenses — admin-only, same pattern as alerts.
   const [expenses, setExpenses] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("expenses", setExpenses) : undefined), authDeps);
+  // Admin's internal Bug Tracker (see AdminBugTracker/AdminFleet) — admin-only,
+  // same pattern as expenses/alerts. Seeded once from BUG_TRACKER_SEED so it
+  // opens with the first audit's real findings instead of empty; every
+  // status change and every bug added afterward lives only in Firestore.
+  const [bugs, setBugs] = useState([]);
+  useEffect(() => {
+    if (!(firestoreReady && role === "admin" && adminAuth)) return undefined;
+    seedIfEmpty("bugs", BUG_TRACKER_SEED, "id").catch((e) => console.error("[seed bugs]", e));
+    return subscribeCollection("bugs", setBugs, null);
+  }, authDeps);
+  const setBugStatus = (id, status) => patchDoc("bugs", id, { status, ...(status === "fixed" ? { fixedAt: Date.now() } : {}) }).catch((e) => console.error(e));
+  const addBug = (fields) => createDoc("bugs", genId("BUG"), { ...fields, status: "open", foundAt: new Date().toISOString().slice(0, 10) }).catch((e) => console.error(e));
   const [expenseCategories, setExpenseCategories] = useState({}); // { hiName: {key, hi, en, icon} }
   useEffect(() => (firestoreReady && role === "admin" && adminAuth
     ? subscribeCollection("expenseCategories", (docs) => {
@@ -9347,10 +9520,14 @@ export default function App() {
       // New cancellation rule: the cut commission/advance is held by admin,
       // not refunded instantly — it auto-adjusts against the driver's next
       // accepted trip so the driver isn't out of pocket. Matches whatever
-      // rate actually applied when the commission was cut (0% if this
-      // driver was in their own trial at the time).
-      const effCommissionPct = isInTrial(driver.createdAt) ? 0 : commissionPct;
-      const effBonusPct = isInTrial(driver.createdAt) ? 0 : bonusPct;
+      // rate actually applied when the commission was cut — hardcoded to 0
+      // here too (see driverRespondBooking/AdminFinance) rather than
+      // isInTrial(...) ? 0 : commissionPct, which used to let this hold
+      // real money against a commission that driverRespondBooking never
+      // actually deducted in the first place (commission is globally off
+      // right now, trial or not).
+      const effCommissionPct = 0;
+      const effBonusPct = 0;
       const held = b.fare * (effCommissionPct / 100);
       const bonusReverse = b.fare * (effBonusPct / 100);
       setDriver({ ...driver, heldCredit: (driver.heldCredit || 0) + held, bonus: Math.max(0, (driver.bonus || 0) - bonusReverse) });
@@ -9574,7 +9751,7 @@ export default function App() {
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
-            commissionPct={commissionPct} minWallet={minWallet} bonusPct={bonusPct} lang={lang} onChangeLang={chooseLang} onLogout={logout}
+            minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
             onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} />
         )}
@@ -9585,7 +9762,8 @@ export default function App() {
               bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl} lang={lang} onLogout={logout}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
-              expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications} />
+              expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications}
+              bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} />
           </div>
         )}
       </div>

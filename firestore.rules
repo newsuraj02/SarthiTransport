@@ -191,5 +191,12 @@ service cloud.firestore {
     match /expenseCategories/{id} {
       allow read, write: if isAdmin();
     }
+
+    // Admin's internal Bug Tracker (see AdminBugTracker in App.jsx) —
+    // admin-only, same as expenses above. Never read or written by a
+    // customer/driver session.
+    match /bugs/{id} {
+      allow read, write: if isAdmin();
+    }
   }
 }
