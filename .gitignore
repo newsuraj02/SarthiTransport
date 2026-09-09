@@ -11,3 +11,5 @@ twa/*.keystore
 twa/*.jks
 android/*.keystore
 android/*.jks
+android-admin/*.keystore
+android-admin/*.jks

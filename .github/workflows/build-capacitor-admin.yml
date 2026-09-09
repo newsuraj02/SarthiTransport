@@ -1,0 +1,102 @@
+name: Build Admin package (Capacitor)
+
+# Manually-triggered only. Builds and signs the .aab/.apk for the
+# separate Admin-only native wrapper (android-admin/) — same live site as
+# the main Customer/Driver app, but a different applicationId
+# (com.apnatransport.admin, not .app) and a URL that carries ?admin=1 so
+# the app opens straight to Admin Login instead of role-select (see
+# capacitor.admin.config.ts, and src/App.jsx: RoleSelect's adminEntry
+# logic — the Admin option is otherwise invisible without that query
+# param, which the shared android/ app's fixed URL never carries). This
+# installs as a completely separate app, side by side with the real one,
+# on the same device.
+#
+# Otherwise a straight copy of build-capacitor.yml's steps — see that
+# file's own comments for why each one exists. The one real difference:
+# `npx cap sync` always reads plain capacitor.config.ts from the repo
+# root, so this workflow copies capacitor.admin.config.ts over it first
+# (this checkout is thrown away after the job, so the real
+# capacitor.config.ts in the repo is never actually touched).
+on:
+  workflow_dispatch:
+    inputs:
+      app_version_code:
+        description: "New versionCode for the Admin app. Independent of the main app's versionCode — these are two separate app identities, tracked separately."
+        required: true
+      app_version_name:
+        description: "Version name shown in-app (e.g. 1.0.0). Defaults to the version code if left blank."
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies (web app + @capacitor/cli, @capacitor/android)
+        run: npm install
+
+      - name: Build the web app
+        # Only needed so `cap sync` below has a dist/ to copy — never
+        # actually served, same as the main app's build (server.url wins).
+        run: npm run build
+
+      - name: Point Capacitor at the Admin config
+        # cap sync only ever reads ./capacitor.config.ts — swapping in the
+        # Admin variant here (android.path: "android-admin", the ?admin=1
+        # URL, the .admin appId) is what makes the sync below land in
+        # android-admin/ instead of android/.
+        run: cp capacitor.admin.config.ts capacitor.config.ts
+
+      - name: Sync web build + native plugins into the Admin Android project
+        run: npx cap sync android
+
+      - name: Decode signing keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" \
+            | grep -v '^-----' \
+            | tr -d ' \t\r\n' \
+            | base64 -d -i > "$GITHUB_WORKSPACE/android-admin/release.keystore"
+          test -s "$GITHUB_WORKSPACE/android-admin/release.keystore" || { echo "::error::Decoded keystore is empty — ANDROID_KEYSTORE_BASE64 secret is not valid base64 of a keystore file."; exit 1; }
+
+      - name: Verify keystore + alias + password (fails fast with a clear error instead of deep into the build)
+        env:
+          JKS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          JKS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          "$JAVA_HOME/bin/keytool" -list -keystore "$GITHUB_WORKSPACE/android-admin/release.keystore" \
+            -alias "$JKS_ALIAS" -storepass "$JKS_PASS" > /dev/null
+
+      - name: Build + sign .apk and .aab
+        # Reuses the same signing secrets as the main app's build — fine
+        # since applicationId differs, so this is a wholly separate app
+        # identity, not an update to the existing Play Store listing.
+        working-directory: android-admin
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android-admin/release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease bundleRelease \
+            -PappVersionCode="${{ inputs.app_version_code }}" \
+            -PappVersionName="${{ inputs.app_version_name || inputs.app_version_code }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apna-transport-admin-release-${{ inputs.app_version_code }}
+          path: |
+            android-admin/app/build/outputs/apk/release/app-release.apk
+            android-admin/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 14
