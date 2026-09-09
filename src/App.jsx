@@ -1052,83 +1052,22 @@ function openNativeSettingsBridge(target) {
 // useRideNotifications above. Also used on the Customer side now (see
 // context="customer") so they're told when their driver accepts/starts the
 // trip even while the app is backgrounded.
-function NotificationBanner({ permission, onEnable, lang, context = "driver" }) {
-  if (permission === "granted" || permission === "unsupported") return null;
-  if (permission === "denied") {
-    const msg = context === "customer"
-      ? (lang === "en" ? "Notifications are turned off for Apna Transport — turn them on in your phone's Settings to know the moment your driver accepts or starts the trip." : lang === "mr" ? "Apna Transport साठी नोटिफिकेशन बंद आहेत — तुमच्या फोनच्या Settings मध्ये ती चालू करा, जेणेकरून ड्रायव्हरने स्वीकारल्यावर किंवा राइड सुरू केल्यावर लगेच कळेल." : "Apna Transport के लिए नोटिफिकेशन बंद हैं — अपने फोन की Settings में उन्हें चालू करें, ताकि ड्राइवर के स्वीकार करने या राइड शुरू करने पर तुरंत पता चले।")
-      : (lang === "en" ? "Notifications are turned off for Apna Transport — turn them on in your phone's Settings to get new load alerts." : lang === "mr" ? "Apna Transport साठी नोटिफिकेशन बंद आहेत — नवीन लोड अलर्टसाठी तुमच्या फोनच्या Settings मध्ये ती चालू करा." : "Apna Transport के लिए नोटिफिकेशन बंद हैं — नए लोड अलर्ट के लिए अपने फोन की Settings में उन्हें चालू करें।");
-    const tapHint = lang === "en" ? " Tap to open Settings." : lang === "mr" ? " Settings उघडण्यासाठी टॅप करा." : " Settings खोलने के लिए टैप करें।";
-    if (isRunningInOwnTwa()) {
-      return (
-        <a href={androidSettingsBridgeUrl("notifications")} className="block mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-          {msg}{tapHint}
-        </a>
-      );
-    }
-    if (isRunningInCapacitorApp()) {
-      return (
-        <button onClick={() => openNativeSettingsBridge("notifications")} className="block w-full mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-          {msg}{tapHint}
-        </button>
-      );
-    }
-    return (
-      <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-        {msg}
-      </div>
-    );
-  }
-  const prompt = context === "customer"
-    ? (lang === "en" ? "Turn on notifications for booking updates" : lang === "mr" ? "बुकिंग अपडेट्ससाठी नोटिफिकेशन चालू करा" : "बुकिंग अपडेट के लिए नोटिफिकेशन चालू करें")
-    : (lang === "en" ? "Turn on notifications for new load alerts" : lang === "mr" ? "नवीन लोड अलर्टसाठी नोटिफिकेशन चालू करा" : "नए लोड अलर्ट के लिए नोटिफिकेशन चालू करें");
-  return (
-    <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-3.5 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
-      <Bell size={14} color={C.marigoldDeep} />
-      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{prompt}</span>
-    </button>
-  );
+// Both of these used to render a persistent in-app nag (a tappable
+// "Turn on notifications/location" button, or — once actually denied — a
+// banner linking to phone Settings) on every relevant screen. Removed per
+// explicit request: the one-time native OS prompt from PermissionsGate
+// (asked once, up front, before role selection) is the only ask now.
+// Still called from every existing site with the same props, so this is
+// the only change needed — no call sites to touch. Tradeoff: a denial at
+// that one prompt now fails silently again (map/GPS matching or push
+// alerts just don't work, nothing on screen explains why), same as
+// before PermissionsGate/these banners existed at all.
+function NotificationBanner() {
+  return null;
 }
 
-// Location's equivalent of NotificationBanner above — a bare
-// getCurrentPosition/watchPosition denial otherwise leaves the map/GPS
-// matching silently broken with nothing on screen explaining why.
-function LocationBanner({ permission, onEnable, lang, context = "customer" }) {
-  if (permission === "granted" || permission === "unsupported") return null;
-  if (permission === "denied") {
-    const msg = context === "driver"
-      ? (lang === "en" ? "Location is turned off for Apna Transport — turn it on in your phone's Settings so customers can find you and send you loads." : lang === "mr" ? "Apna Transport साठी लोकेशन बंद आहे — कस्टमरना तुम्ही सापडण्यासाठी आणि लोड मिळण्यासाठी ते तुमच्या फोनच्या Settings मध्ये चालू करा." : "Apna Transport के लिए लोकेशन बंद है — कस्टमर आपको ढूंढ सकें और लोड मिल सके, इसके लिए इसे अपने फोन की Settings में चालू करें।")
-      : (lang === "en" ? "Location is turned off for Apna Transport — turn it on in your phone's Settings to see nearby vehicles and get matched with a driver." : lang === "mr" ? "Apna Transport साठी लोकेशन बंद आहे — जवळपासच्या गाड्या पाहण्यासाठी व ड्रायव्हर मिळण्यासाठी ते तुमच्या फोनच्या Settings मध्ये चालू करा." : "Apna Transport के लिए लोकेशन बंद है — पास की गाड़ियां देखने और ड्राइवर मिलने के लिए इसे अपने फोन की Settings में चालू करें।");
-    const tapHint = lang === "en" ? " Tap to open Settings." : lang === "mr" ? " Settings उघडण्यासाठी टॅप करा." : " Settings खोलने के लिए टैप करें।";
-    if (isRunningInOwnTwa()) {
-      return (
-        <a href={androidSettingsBridgeUrl("location")} className="block mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-          {msg}{tapHint}
-        </a>
-      );
-    }
-    if (isRunningInCapacitorApp()) {
-      return (
-        <button onClick={() => openNativeSettingsBridge("location")} className="block w-full mx-5 mb-2 rounded-lg p-2.5 text-left text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-          {msg}{tapHint}
-        </button>
-      );
-    }
-    return (
-      <div className="mx-5 mb-2 rounded-lg p-2.5 text-[11px] font-semibold" style={{ background: C.safety, color: "#FFFFFF" }}>
-        {msg}
-      </div>
-    );
-  }
-  const prompt = context === "driver"
-    ? (lang === "en" ? "Turn on location so customers can find you" : lang === "mr" ? "कस्टमरना सापडण्यासाठी लोकेशन चालू करा" : "कस्टमर को दिखने के लिए लोकेशन चालू करें")
-    : (lang === "en" ? "Turn on location to see nearby vehicles" : lang === "mr" ? "जवळपासच्या गाड्या पाहण्यासाठी लोकेशन चालू करा" : "पास की गाड़ियां देखने के लिए लोकेशन चालू करें");
-  return (
-    <button onClick={onEnable} className="mx-5 mb-2 rounded-lg p-3.5 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
-      <MapPin size={14} color={C.marigoldDeep} />
-      <span className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{prompt}</span>
-    </button>
-  );
+function LocationBanner() {
+  return null;
 }
 
 function ForegroundToast({ toast }) {
