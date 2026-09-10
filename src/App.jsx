@@ -320,6 +320,16 @@ const BUG_TRACKER_SEED = [
     description: "setDriver (used by withdrawals, referral display, KYC, and more) calls replaceDoc — a full setDoc overwrite of the driver's entire profile from whatever copy is in the client's memory at that moment — rather than a targeted patchDoc+increment on just the changed field. If two writes land close together (e.g. admin approves a wallet recharge at the same moment the driver's own device fires an update built from a slightly stale in-memory copy), the second full-document write has no idea about the first change and can silently overwrite it. The trip-timer's pausedMs field already uses the safer increment()-based patchDoc pattern; wallet/bonus/heldCredit are the fields with real financial stakes and would benefit from the same treatment, but it's a broader refactor touching every setDriver call site, not attempted in this pass to avoid destabilizing many already-working flows.",
     foundAt: "2026-09-09",
   },
+  {
+    id: "admin-block-button-mobile-id-mismatch",
+    title: "Admin's Block/Unblock button silently did nothing for a driver record missing its own mobile field",
+    severity: "medium",
+    status: "fixed",
+    area: "Admin — All Drivers",
+    description: "AdminDriverList's Block/Unblock button called toggleBlacklist(d.id), but toggleBlacklist looked the driver up by matching x.mobile === mobile internally. For any driver record with no mobile field of its own (the file's own AdminDriverList comment already acknowledges old hand-seeded \"demo driver\" records with missing data) the lookup would fail and the function would return early with nothing shown — the button just did nothing, no error, no feedback. The Delete button right next to it already defensively called deleteDriver(d.mobile || d.id); Block/Unblock didn't. Fixed both the button (now passes d.mobile || d.id) and toggleBlacklist itself (now also matches by doc id) so it's correct either way.",
+    foundAt: "2026-09-10",
+    fixedAt: "2026-09-10",
+  },
 ];
 
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -8131,7 +8141,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
                     </>
                   ) : (
                     <>
-                      <button onClick={() => toggleBlacklist(d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#FFFFFF", background: d.blacklisted ? C.success : C.safety }}>
+                      <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#FFFFFF", background: d.blacklisted ? C.success : C.safety }}>
                         {d.blacklisted ? (lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें") : (lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें")}
                       </button>
                       <button onClick={() => setConfirmDeleteId(d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
@@ -9565,7 +9575,11 @@ export default function App() {
   };
   const updateDriverKyc = (mobile, status) => patchDoc("drivers", mobile, { kyc: status }).catch((e) => console.error(e));
   const toggleBlacklist = (mobile) => {
-    const d = drivers.find((x) => x.mobile === mobile);
+    // Falls back to matching by doc id too — a driver record with no
+    // mobile field of its own (seen on old hand-seeded "demo driver"
+    // records, see AdminDriverList) would otherwise never be found here,
+    // silently no-op'ing the Block/Unblock button with no error shown.
+    const d = drivers.find((x) => x.mobile === mobile || x.id === mobile);
     if (!d) return;
     patchDoc("drivers", mobile, { blacklisted: !d.blacklisted, online: d.blacklisted ? d.online : false }).catch((e) => console.error(e));
   };
