@@ -7156,8 +7156,12 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
         {/* Kept outside the scrollable area above (shrink-0, not part of the
             flex-1 scroll region) so Save always stays on screen no matter
             how much content — the guidance note, the route suggestion, the
-            saved-routes list — pushes above it. */}
-        <div className="p-4 pt-3 shrink-0" style={{ borderTop: `1px solid ${C.line}`, background: C.paper }}>
+            saved-routes list — pushes above it. Bottom padding adds the
+            device's safe-area-inset-bottom on top of the usual 16px so this
+            sheet, which touches the true bottom edge of the screen (see the
+            "items-end" wrapper below), clears the on-screen Android
+            nav bar on edge-to-edge devices instead of sitting under it. */}
+        <div className="px-4 pt-3 shrink-0" style={{ borderTop: `1px solid ${C.line}`, background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>
           <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
             style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
             {saving ? "…" : (lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें")}
