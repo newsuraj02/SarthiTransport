@@ -805,7 +805,7 @@ function usePullToRefresh() {
 function PullToRefreshIndicator({ pull, refreshing }) {
   if (!refreshing && pull <= 0) return null;
   return (
-    <div className="fixed top-3 left-0 right-0 flex justify-center z-50 pointer-events-none">
+    <div className="fixed left-0 right-0 flex justify-center z-50 pointer-events-none" style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
       <div className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
         style={{ background: C.marigoldDeep, opacity: refreshing ? 1 : Math.min(1, pull + 0.25), transform: `scale(${refreshing ? 1 : 0.6 + pull * 0.4})` }}>
         <Loader2 size={18} color="#fff" className={refreshing ? "animate-spin" : ""} style={refreshing ? undefined : { transform: `rotate(${pull * 360}deg)` }} />
@@ -9960,8 +9960,8 @@ export default function App() {
           every Android WebView version and can silently do nothing on some
           devices with no way to tell why. A plain tap always works. */}
       <button onClick={pullToRefresh.refresh} disabled={pullToRefresh.refreshing}
-        className="fixed top-3 right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
-        style={{ background: C.marigoldDeep }}>
+        className="fixed right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+        style={{ background: C.marigoldDeep, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
         <RefreshCw size={16} color="#fff" className={pullToRefresh.refreshing ? "animate-spin" : ""} />
       </button>
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
