@@ -717,6 +717,93 @@ function fetchRoadDistanceKm(pickupCoords, dropCoords) {
   });
 }
 
+// A real "pull down to refresh" gesture, the easier alternative to
+// force-closing and reopening the app to pick up a newly-deployed version
+// (see firebase.json's no-cache headers on index.html — that fix makes a
+// plain reload actually get the latest build; this just makes triggering
+// that reload a familiar one-handed gesture instead of a phone-level
+// switch-apps-and-swipe-away action). Deliberately a full
+// window.location.reload() rather than re-fetching individual pieces of
+// app state — every screen's data is already live via Firestore listeners
+// regardless, so the only thing that can ever actually be "stale" is the
+// app shell itself, and a real reload is the only way to guarantee a fresh
+// one.
+//
+// Only arms once the touch actually starts from the very top of whichever
+// scrollable panel it's inside (walking up from the touch target to the
+// nearest `overflow-y/auto/scroll` ancestor and checking its scrollTop) —
+// this app nests each screen's own scroll container rather than scrolling
+// the page itself, so a plain `window.scrollY === 0` check would never
+// fire at all.
+const PULL_TO_REFRESH_THRESHOLD = 80;
+function usePullToRefresh() {
+  const [pull, setPull] = useState(0); // 0..1 progress toward the trigger
+  const [refreshing, setRefreshing] = useState(false);
+  const startYRef = useRef(null);
+
+  useEffect(() => {
+    const nearestScrollableIsAtTop = (el) => {
+      let node = el;
+      while (node && node !== document.body && node !== document.documentElement) {
+        if (/(auto|scroll)/.test(window.getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight) {
+          return node.scrollTop <= 0;
+        }
+        node = node.parentElement;
+      }
+      return true; // no scrollable ancestor at all -- nothing to be "not at the top" of
+    };
+
+    const onTouchStart = (e) => {
+      if (refreshing || e.touches.length !== 1) { startYRef.current = null; return; }
+      startYRef.current = nearestScrollableIsAtTop(e.target) ? e.touches[0].clientY : null;
+    };
+    const onTouchMove = (e) => {
+      if (startYRef.current == null || refreshing) return;
+      const dy = e.touches[0].clientY - startYRef.current;
+      if (dy <= 0) { setPull(0); return; }
+      // Claims the gesture (blocks the page's own scroll/bounce) only once
+      // it's unambiguously a downward pull, so a normal tap or upward
+      // scroll from the top is never hijacked.
+      if (dy > 4 && e.cancelable) e.preventDefault();
+      setPull(Math.min(1, dy / PULL_TO_REFRESH_THRESHOLD));
+    };
+    const onTouchEnd = () => {
+      if (startYRef.current == null) return;
+      startYRef.current = null;
+      setPull((p) => {
+        if (p >= 1) { setRefreshing(true); window.location.reload(); }
+        return 0;
+      });
+    };
+
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [refreshing]);
+
+  return { pull, refreshing };
+}
+
+// Small floating spinner that grows/rotates with the pull, then spins in
+// place once the reload has actually been triggered — the only visual
+// feedback for usePullToRefresh above.
+function PullToRefreshIndicator({ pull, refreshing }) {
+  if (!refreshing && pull <= 0) return null;
+  return (
+    <div className="fixed top-3 left-0 right-0 flex justify-center z-50 pointer-events-none">
+      <div className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+        style={{ background: C.marigoldDeep, opacity: refreshing ? 1 : Math.min(1, pull + 0.25), transform: `scale(${refreshing ? 1 : 0.6 + pull * 0.4})` }}>
+        <Loader2 size={18} color="#fff" className={refreshing ? "animate-spin" : ""} style={refreshing ? undefined : { transform: `rotate(${pull * 360}deg)` }} />
+      </div>
+    </div>
+  );
+}
+
 // Persists a piece of state to localStorage under `key`, so the app
 // remembers role choice, bookings, wallet balances etc. across reloads.
 function usePersistedState(key, initialValue) {
@@ -9782,6 +9869,7 @@ export default function App() {
   }, [bookings, driver]);
 
   const isDesktop = role === "admin" && adminAuth;
+  const pullToRefresh = usePullToRefresh();
 
   // Standalone Driver KYC portal (?driverKyc=1&mobile=...) — entirely
   // separate from role-select/login (no auth at all, see
@@ -9856,6 +9944,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+      <PullToRefreshIndicator pull={pullToRefresh.pull} refreshing={pullToRefresh.refreshing} />
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
         {role === "admin" && adminAuth && (
           <div className="px-5 pt-3 text-[10px] text-center" style={{ color: C.inkSoft }}>
