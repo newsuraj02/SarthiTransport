@@ -761,10 +761,13 @@ function usePullToRefresh() {
       if (startYRef.current == null || refreshing) return;
       const dy = e.touches[0].clientY - startYRef.current;
       if (dy <= 0) { setPull(0); return; }
-      // Claims the gesture (blocks the page's own scroll/bounce) only once
-      // it's unambiguously a downward pull, so a normal tap or upward
-      // scroll from the top is never hijacked.
-      if (dy > 4 && e.cancelable) e.preventDefault();
+      // Must claim the gesture (block the phone's own scroll/bounce) on
+      // this very first downward move, not a few pixels in — once the
+      // phone's own scroll has already taken over a touch sequence,
+      // calling preventDefault() on a later touchmove in that same
+      // sequence is too late to hand control back, so the pull would
+      // silently do nothing (page just scrolls/bounces normally instead).
+      if (e.cancelable) e.preventDefault();
       setPull(Math.min(1, dy / PULL_TO_REFRESH_THRESHOLD));
     };
     const onTouchEnd = () => {
