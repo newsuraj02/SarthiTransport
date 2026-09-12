@@ -576,7 +576,16 @@ const DEFAULT_FARE_TIERS = [
 // Shared by calculateFare and AdminSettings' "drivers per tier" breakdown
 // (see FareTierBreakdown) so the two never drift apart.
 function findFareTier(capacityKg, tiers = DEFAULT_FARE_TIERS) {
-  return tiers.find((t) => (capacityKg || 0) <= t.maxKg) || tiers[tiers.length - 1];
+  // Falls back to the code default for anything that isn't a real,
+  // non-empty tier list — not just when the argument is missing (the
+  // default parameter above only covers that one case). Since fareTiers
+  // now comes from a Firestore doc an admin edits by hand, an empty array
+  // or a corrupted value is a real possibility, not just a theoretical
+  // one — without this, `tiers[tiers.length - 1]` would be undefined and
+  // calculateFare's `tier.baseFare` would throw, crashing the booking
+  // screen for every customer and driver at once.
+  const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
+  return list.find((t) => (capacityKg || 0) <= t.maxKg) || list[list.length - 1];
 }
 
 function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS) {
@@ -8546,7 +8555,15 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
     setMinWallet(draft.minWallet);
     setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
     setUpdateUrl(draft.updateUrl.trim());
-    setFareTiers(draft.fareTiers);
+    // Sorted by maxKg before saving, regardless of what order the rows
+    // were edited in — findFareTier picks the FIRST tier whose maxKg the
+    // capacity fits under, so an accidentally out-of-order table (e.g. a
+    // middle tier's boundary raised past the next tier's) would silently
+    // match the wrong tier for some drivers without this. Sorting here
+    // makes an inconsistent table impossible to save in the first place,
+    // rather than trusting whoever edits this to always type values in
+    // order.
+    setFareTiers([...draft.fareTiers].sort((a, b) => a.maxKg - b.maxKg));
     setDirty(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
