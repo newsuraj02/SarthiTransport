@@ -7502,7 +7502,7 @@ function StatTile({ label, value, color, onClick }) {
   return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${color}` }}>{content}</div>;
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, bugs, setBugStatus, addBug }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, bugs, setBugStatus, addBug, routeFares }) {
   const isToday = (b) => {
     const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
     if (!d) return false;
@@ -7729,6 +7729,17 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
     );
   }
 
+  if (detailView === "routeFares") {
+    return (
+      <div>
+        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <AdminRouteFares routeFares={routeFares} lang={lang} />
+      </div>
+    );
+  }
+
   if (detailView) {
     const page = detailPages[detailView];
     return (
@@ -7790,6 +7801,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <StatTile label={lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)"} value={uninstalledDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
         <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
         <StatTile label={lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
+        <StatTile label={lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"} value={(routeFares || []).length} color={C.pimpri} onClick={() => setDetailView("routeFares")} />
       </div>
 
       <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -7927,6 +7939,100 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
                   <button onClick={() => setBugStatus(b.id, fixed ? "open" : "fixed")} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: fixed ? C.paper : C.metallicGreen, color: fixed ? C.inkSoft : "#FFFFFF", border: fixed ? `1px solid ${C.line}` : "none" }}>
                     {fixed ? (lang === "en" ? "Reopen" : lang === "mr" ? "पुन्हा उघडा" : "फिर से खोलें") : (lang === "en" ? "Mark Fixed" : lang === "mr" ? "फिक्स्ड करा" : "फिक्स्ड करें")}
                   </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Every driver-submitted "Set Fare" entry (see SetFareForm), grouped by
+// route so Admin can see at a glance what the whole fleet is charging for
+// each pickup/drop pair — and the only place any of these numbers can be
+// edited or removed by someone other than the driver who submitted them.
+function AdminRouteFares({ routeFares, lang }) {
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState({ tier1to5Fare: "", totalFare: "" });
+  const [saving, setSaving] = useState(false);
+
+  const groups = {};
+  (routeFares || []).forEach((r) => {
+    const key = `${r.pickupKey || ""}→${r.dropKey || ""}`;
+    if (!groups[key]) groups[key] = { pickupName: r.pickupName, dropName: r.dropName, entries: [] };
+    groups[key].entries.push(r);
+  });
+  const groupList = Object.values(groups).sort((a, b) => b.entries.length - a.entries.length);
+
+  const startEdit = (r) => { setEditingId(r.id); setDraft({ tier1to5Fare: String(r.tier1to5Fare ?? ""), totalFare: String(r.totalFare ?? "") }); };
+  const cancelEdit = () => setEditingId(null);
+  const saveEdit = async (id) => {
+    setSaving(true);
+    try {
+      await patchDoc("routeFares", id, { tier1to5Fare: Number(draft.tier1to5Fare) || 0, totalFare: Number(draft.totalFare) || 0 });
+      setEditingId(null);
+    } catch (e) { console.error(e); }
+    setSaving(false);
+  };
+  const deleteEntry = (id) => removeDoc("routeFares", id).catch((e) => console.error(e));
+
+  return (
+    <div>
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"}</h2>
+      {groupList.length === 0 ? (
+        <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver has set a route fare yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरने रूट भाडे सेट केलेले नाही." : "अभी तक किसी ड्राइवर ने रूट किराया सेट नहीं किया।"}</p>
+      ) : (
+        <div className="space-y-3">
+          {groupList.map((g, gi) => {
+            const avgTotal = Math.round(g.entries.reduce((s, r) => s + (Number(r.totalFare) || 0), 0) / g.entries.length);
+            return (
+              <div key={gi} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{g.pickupName} → {g.dropName}</div>
+                  <div className="text-xs font-black shrink-0" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Avg" : lang === "mr" ? "सरासरी" : "औसत"}: {fmt(avgTotal)}</div>
+                </div>
+                <div className="space-y-1.5">
+                  {g.entries.map((r) => (
+                    <div key={r.id} className="rounded-lg p-2.5 flex items-center gap-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{r.driverMobile}</div>
+                        {editingId === r.id ? (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <input type="number" inputMode="numeric" value={draft.tier1to5Fare} onChange={(e) => setDraft((d) => ({ ...d, tier1to5Fare: e.target.value }))}
+                              className="w-20 rounded p-1.5 text-xs font-bold outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "1-5km" : "1-5किमी"} />
+                            <input type="number" inputMode="numeric" value={draft.totalFare} onChange={(e) => setDraft((d) => ({ ...d, totalFare: e.target.value }))}
+                              className="w-20 rounded p-1.5 text-xs font-bold outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "Total" : "कुल"} />
+                          </div>
+                        ) : (
+                          <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
+                            {lang === "en" ? "1-5km" : "1-5किमी"}: {fmt(r.tier1to5Fare)} · {lang === "en" ? "Total" : lang === "mr" ? "एकूण" : "कुल"}: {fmt(r.totalFare)}
+                            {r.estimatedKm != null && <> · {formatDistanceExact(r.estimatedKm, lang)}</>}
+                          </div>
+                        )}
+                      </div>
+                      {editingId === r.id ? (
+                        <>
+                          <button onClick={() => saveEdit(r.id)} disabled={saving} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                            <CheckCircle2 size={13} color="#fff" />
+                          </button>
+                          <button onClick={cancelEdit} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.inkSoft }}>
+                            <X size={13} color="#fff" strokeWidth={3} />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => startEdit(r)} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.navy }}>
+                            <Settings2 size={12} color="#fff" />
+                          </button>
+                          <button onClick={() => deleteEntry(r.id)} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.safety }}>
+                            <X size={13} color="#fff" strokeWidth={3} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -9273,7 +9379,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, setFareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, setFareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug, routeFares }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review now lives inside
   // the Live Dashboard's "New Registrations" tile (see AdminFleet's
@@ -9297,7 +9403,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
@@ -10299,7 +10405,7 @@ export default function App() {
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
               expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications}
-              bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} />
+              bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} />
           </div>
         )}
       </div>
