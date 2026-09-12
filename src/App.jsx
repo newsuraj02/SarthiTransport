@@ -1762,6 +1762,27 @@ function nearbyOnlineDrivers(drivers, customerLocation) {
     .map((x) => x.driver);
 }
 
+// Same shape as nearbyOnlineDrivers, but for drivers who are currently off
+// duty — shown on the same map (in a muted icon, see driverTruckIconInactive)
+// so a customer can see the full fleet near them, not just who's bookable
+// right now. No staleness cutoff here: an offline driver's location simply
+// stops updating the moment they go off duty, so "old" is expected and
+// still meaningful — it's their last known parking spot, not a bug.
+function nearbyOfflineDrivers(drivers, customerLocation) {
+  const withLocation = (drivers || []).filter((d) => {
+    if (d.online || d.blacklisted) return false;
+    const loc = d.lastKnownLocation;
+    return loc && loc.lat != null && loc.lng != null;
+  });
+  if (!customerLocation) return withLocation.slice(0, NEARBY_DRIVER_MAX);
+  return withLocation
+    .map((d) => ({ driver: d, km: haversineKm(customerLocation.lat, customerLocation.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) }))
+    .filter((x) => x.km <= NEARBY_DRIVER_RADIUS_KM)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, NEARBY_DRIVER_MAX)
+    .map((x) => x.driver);
+}
+
 // Pimpri-Chinchwad / Pune — same fallback default as MapPicker, used only
 // until the customer's own GPS fix comes in (or if it never does).
 const NEARBY_MAP_DEFAULT_CENTER = { lat: 18.6298, lng: 73.8131 };
@@ -1799,9 +1820,28 @@ function driverTruckIcon() {
   };
 }
 
+// Same silhouette as driverTruckIcon, greyed out — an off-duty driver
+// plotted at their last known spot, visually distinct from a bookable one.
+function driverTruckIconInactive() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">` +
+    `<circle cx="17" cy="17" r="16" fill="#fff" stroke="#9AA3B0" stroke-width="2"/>` +
+    `<g transform="translate(6,11)">` +
+    `<rect x="0" y="0" width="14" height="8" rx="1.2" fill="#9AA3B0"/>` +
+    `<path d="M14 2h5.5L22 6v2H14z" fill="#9AA3B0"/>` +
+    `<circle cx="4.5" cy="9" r="2.1" fill="#9AA3B0"/>` +
+    `<circle cx="17.5" cy="9" r="2.1" fill="#9AA3B0"/>` +
+    `</g></svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(34, 34),
+    anchor: new window.google.maps.Point(17, 17),
+  };
+}
+
 function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick, showOpenInMaps = true }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const nearby = nearbyOnlineDrivers(drivers, customerLocation);
+  const nearbyInactive = nearbyOfflineDrivers(drivers, customerLocation);
   const center = customerLocation || NEARBY_MAP_DEFAULT_CENTER;
   const [mapInstance, setMapInstance] = useState(null);
 
@@ -1824,6 +1864,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
     const bounds = new window.google.maps.LatLngBounds();
     bounds.extend(center);
     nearby.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
+    nearbyInactive.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
     mapInstance.fitBounds(bounds, 48);
     // Don't zoom in past a sane street-level view just because there are no
     // (or one) nearby driver(s) to spread the bounds out.
@@ -1831,7 +1872,13 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
       if (mapInstance.getZoom() > 15) mapInstance.setZoom(15);
     });
     return () => window.google.maps.event.removeListener(listener);
-  }, [mapInstance, center.lat, center.lng, nearby.length]);
+  }, [mapInstance, center.lat, center.lng, nearby.length, nearbyInactive.length]);
+
+  const countLabel = lang === "en"
+    ? `${nearby.length} active${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} inactive` : ""} nearby`
+    : lang === "mr"
+    ? `जवळपास ${nearby.length} सक्रिय${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} निष्क्रिय` : ""} गाड्या`
+    : `आस-पास ${nearby.length} सक्रिय${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} निष्क्रिय` : ""} गाड़ियां`;
 
   if (!hasKey || !isLoaded) {
     // Schematic fallback (no Maps key configured) — still plots each
@@ -1845,6 +1892,11 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           {Array.from({ length: 8 }).map((_, i) => <line key={"h" + i} x1="0" y1={i * 14} x2="100" y2={i * 14} stroke="#D8D8D8" strokeWidth="0.4" />)}
           {Array.from({ length: 8 }).map((_, i) => <line key={"v" + i} x1={i * 14} y1="0" x2={i * 14} y2="100" stroke="#D8D8D8" strokeWidth="0.4" />)}
           <circle cx="50" cy="50" r="3" fill={C.success} stroke="#fff" strokeWidth="1" />
+          {nearbyInactive.map((d) => {
+            const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+            if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
+            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill="#9AA3B0" stroke="#fff" strokeWidth="0.6" />;
+          })}
           {nearby.map((d) => {
             const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
             if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
@@ -1852,7 +1904,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           })}
         </svg>
         <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
-          {lang === "en" ? `${nearby.length} vehicle${nearby.length === 1 ? "" : "s"} nearby` : lang === "mr" ? `जवळपास ${nearby.length} गाड्या` : `आस-पास ${nearby.length} गाड़ियां`}
+          {countLabel}
         </div>
         <OpenInMapsButton />
       </div>
@@ -1868,6 +1920,13 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
         options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, clickableIcons: false, keyboardShortcuts: false, gestureHandling: "greedy" }}
       >
         <MarkerF position={center} icon={customerPinIcon()} />
+        {nearbyInactive.map((d) => (
+          <MarkerF
+            key={d.mobile || d.id}
+            position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }}
+            icon={driverTruckIconInactive()}
+          />
+        ))}
         {nearby.map((d) => (
           <MarkerF
             key={d.mobile || d.id}
@@ -1876,6 +1935,9 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           />
         ))}
       </GoogleMap>
+      <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+        {countLabel}
+      </div>
       <OpenInMapsButton />
     </div>
   );
