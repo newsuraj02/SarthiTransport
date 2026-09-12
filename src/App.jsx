@@ -6977,7 +6977,6 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropCoords, setDropCoords] = useState(null);
   const [distance, setDistance] = useState(null);
-  const [tier1to5Fare, setTier1to5Fare] = useState("");
   const [totalFare, setTotalFare] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -7010,21 +7009,29 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
 
   const myRoutes = (routeFares || []).filter((r) => r.driverMobile === driver.mobile);
 
+  // 1-5 km Fixed Fare is no longer a separate input -- it's always exactly
+  // 25% of Total Fare, the one number a driver actually types in.
+  const tier1to5Fare = totalFare !== "" ? Math.round((Number(totalFare) || 0) * 0.25) : 0;
+  // What's left of the total, spread over the km beyond the first 5, gives
+  // a real ₹/km rate for this specific route -- not used to price anything
+  // yet, but stored (see save() below) so it's there to use later (e.g. to
+  // estimate a fare for a nearby distance on the same route).
+  const perKmRate = distance != null && distance > 5 && totalFare !== "" ? Math.round((Number(totalFare) - tier1to5Fare) / (distance - 5)) : null;
+
   // Once another driver has already quoted this same route, surface their
   // number (or the average across everyone who has) right here so this
-  // driver isn't guessing — a tap fills both fare fields with it, but
-  // typing over it afterward is always still allowed.
+  // driver isn't guessing — a tap fills Total Fare with it, but typing
+  // over it afterward is always still allowed.
   const routeSuggestion = (() => {
     const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
     if (!p || !d) return null;
     const others = (routeFares || []).filter((r) => r.driverMobile !== driver.mobile && routeTextsMatch(r.pickupKey, p) && routeTextsMatch(r.dropKey, d));
     if (others.length === 0) return null;
-    const avg = (field) => Math.round(others.reduce((sum, r) => sum + (Number(r[field]) || 0), 0) / others.length);
-    return { totalFare: avg("totalFare"), tier1to5Fare: avg("tier1to5Fare"), count: others.length };
+    const avgTotal = Math.round(others.reduce((sum, r) => sum + (Number(r.totalFare) || 0), 0) / others.length);
+    return { totalFare: avgTotal, count: others.length };
   })();
   const useSuggestion = () => {
     if (!routeSuggestion) return;
-    setTier1to5Fare(String(routeSuggestion.tier1to5Fare));
     setTotalFare(String(routeSuggestion.totalFare));
     setSavedFlash(false);
   };
@@ -7036,7 +7043,6 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
   const editRoute = (r) => {
     setPickup(r.pickupName || ""); setDrop(r.dropName || "");
     setPickupCoords(null); setDropCoords(null);
-    setTier1to5Fare(r.tier1to5Fare != null ? String(r.tier1to5Fare) : "");
     setTotalFare(r.totalFare != null ? String(r.totalFare) : "");
     setSavedFlash(false);
   };
@@ -7051,11 +7057,12 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
         pickupName: pickup.trim(), dropName: drop.trim(),
         pickupKey: normalizeRouteText(pickup), dropKey: normalizeRouteText(drop),
         estimatedKm: distance,
-        tier1to5Fare: Number(tier1to5Fare) || 0,
+        tier1to5Fare,
         totalFare: Number(totalFare) || 0,
+        perKmRate,
       });
       setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
-      setTier1to5Fare(""); setTotalFare("");
+      setTotalFare("");
       setSavedFlash(true);
     } catch (e) { console.error(e); }
     setSaving(false);
@@ -7111,19 +7118,25 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
           </div>
 
           <div>
-            <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "1–5 km Fixed Fare" : lang === "mr" ? "1–5 किमी फिक्स्ड भाडे" : "1–5 किमी फिक्स्ड किराया"}</div>
-            <input type="number" inputMode="numeric" value={tier1to5Fare}
-              onChange={(e) => { setTier1to5Fare(e.target.value); setSavedFlash(false); }}
-              className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} placeholder="₹" />
-          </div>
-
-          <div>
             <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Total Fare" : lang === "mr" ? "एकूण भाडे" : "कुल किराया"}</div>
             <input type="number" inputMode="numeric" value={totalFare}
               onChange={(e) => { setTotalFare(e.target.value); setSavedFlash(false); }}
               className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
               placeholder={lang === "en" ? "Fill total fare" : lang === "mr" ? "एकूण भाडे भरा" : "कुल किराया भरें"} />
           </div>
+
+          {totalFare !== "" && (
+            <div className="rounded-lg p-2.5 text-[11px] font-semibold space-y-0.5" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.inkSoft }}>
+              <div>
+                {lang === "en" ? "1–5 km Fixed Fare (25% of total, auto)" : lang === "mr" ? "1–5 किमी फिक्स्ड भाडे (एकूणच्या 25%, आपोआप)" : "1–5 किमी फिक्स्ड किराया (कुल का 25%, स्वतः)"}: <b style={{ color: C.ink }}>{fmt(tier1to5Fare)}</b>
+              </div>
+              {perKmRate != null && (
+                <div>
+                  {lang === "en" ? "Rate beyond 5 km" : lang === "mr" ? "5 किमी नंतरचा दर" : "5 किमी के बाद दर"}: <b style={{ color: C.ink }}>{fmt(perKmRate)}/km</b>
+                </div>
+              )}
+            </div>
+          )}
 
           <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
             style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
@@ -7949,7 +7962,8 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
 // edited or removed by someone other than the driver who submitted them.
 function AdminRouteFares({ routeFares, lang }) {
   const [editingId, setEditingId] = useState(null);
-  const [draft, setDraft] = useState({ tier1to5Fare: "", totalFare: "" });
+  const [editingEstimatedKm, setEditingEstimatedKm] = useState(null);
+  const [draftTotalFare, setDraftTotalFare] = useState("");
   const [saving, setSaving] = useState(false);
 
   const groups = {};
@@ -7960,12 +7974,19 @@ function AdminRouteFares({ routeFares, lang }) {
   });
   const groupList = Object.values(groups).sort((a, b) => b.entries.length - a.entries.length);
 
-  const startEdit = (r) => { setEditingId(r.id); setDraft({ tier1to5Fare: String(r.tier1to5Fare ?? ""), totalFare: String(r.totalFare ?? "") }); };
+  // Same 25%-of-total rule SetFareForm applies — kept in sync here so an
+  // admin edit can't leave a driver's entry with a 1-5 km fare that no
+  // longer matches its total.
+  const draftTier1to5Fare = draftTotalFare !== "" ? Math.round((Number(draftTotalFare) || 0) * 0.25) : 0;
+  const draftPerKmRate = editingEstimatedKm != null && editingEstimatedKm > 5 && draftTotalFare !== ""
+    ? Math.round((Number(draftTotalFare) - draftTier1to5Fare) / (editingEstimatedKm - 5)) : null;
+
+  const startEdit = (r) => { setEditingId(r.id); setEditingEstimatedKm(r.estimatedKm ?? null); setDraftTotalFare(String(r.totalFare ?? "")); };
   const cancelEdit = () => setEditingId(null);
   const saveEdit = async (id) => {
     setSaving(true);
     try {
-      await patchDoc("routeFares", id, { tier1to5Fare: Number(draft.tier1to5Fare) || 0, totalFare: Number(draft.totalFare) || 0 });
+      await patchDoc("routeFares", id, { tier1to5Fare: draftTier1to5Fare, totalFare: Number(draftTotalFare) || 0, perKmRate: draftPerKmRate });
       setEditingId(null);
     } catch (e) { console.error(e); }
     setSaving(false);
@@ -7996,16 +8017,19 @@ function AdminRouteFares({ routeFares, lang }) {
                       <div className="flex-1 min-w-0">
                         <div className="text-[11px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{r.driverMobile}</div>
                         {editingId === r.id ? (
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <input type="number" inputMode="numeric" value={draft.tier1to5Fare} onChange={(e) => setDraft((d) => ({ ...d, tier1to5Fare: e.target.value }))}
-                              className="w-20 rounded p-1.5 text-xs font-bold outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "1-5km" : "1-5किमी"} />
-                            <input type="number" inputMode="numeric" value={draft.totalFare} onChange={(e) => setDraft((d) => ({ ...d, totalFare: e.target.value }))}
-                              className="w-20 rounded p-1.5 text-xs font-bold outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "Total" : "कुल"} />
+                          <div className="mt-1">
+                            <input type="number" inputMode="numeric" value={draftTotalFare} onChange={(e) => setDraftTotalFare(e.target.value)}
+                              className="w-24 rounded p-1.5 text-xs font-bold outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "Total" : "कुल"} />
+                            <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>
+                              {lang === "en" ? "1-5km (25%, auto)" : "1-5किमी (25%, स्वतः)"}: {fmt(draftTier1to5Fare)}
+                              {draftPerKmRate != null && <> · {fmt(draftPerKmRate)}/km</>}
+                            </div>
                           </div>
                         ) : (
                           <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
                             {lang === "en" ? "1-5km" : "1-5किमी"}: {fmt(r.tier1to5Fare)} · {lang === "en" ? "Total" : lang === "mr" ? "एकूण" : "कुल"}: {fmt(r.totalFare)}
                             {r.estimatedKm != null && <> · {formatDistanceExact(r.estimatedKm, lang)}</>}
+                            {r.perKmRate != null && <> · {fmt(r.perKmRate)}/km</>}
                           </div>
                         )}
                       </div>
