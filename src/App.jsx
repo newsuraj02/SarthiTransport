@@ -5997,7 +5997,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 
   return (
     <div className="px-5 pt-5 pb-5">
-      <DriverFareCalculator driver={driver} fareTiers={fareTiers} lang={lang} compact />
+      <DriverFareCalculator driver={driver} fareTiers={fareTiers} lang={lang} />
 
       {notificationsLocked && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
@@ -6767,13 +6767,10 @@ function loadEligibleForDriver(driver, load, bookings, vehicleTypes, lang) {
 // and the same address-resolution pattern CustomerBooking already uses
 // (LocationField's autocomplete, falling back to geocoding whatever text
 // is typed by hand after a short pause), so a driver's quote here always
-// matches what the app itself would actually charge for that trip.
-// `compact` renders this as a card meant to sit inline on the driver's own
-// home dashboard (see DriverHome) instead of a full standalone page reached
-// through the hamburger menu — same logic and same live rates either way,
-// just without the page heading/description and the "Done" button a
-// permanently-visible card has no use for.
-function DriverFareCalculator({ driver, fareTiers, lang, onClose, compact = false }) {
+// matches what the app itself would actually charge for that trip. Renders
+// as a card meant to sit inline on the driver's own home dashboard (see
+// DriverHome) — the only place this is used.
+function DriverFareCalculator({ driver, fareTiers, lang }) {
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null);
@@ -6810,22 +6807,14 @@ function DriverFareCalculator({ driver, fareTiers, lang, onClose, compact = fals
   const tier = capacityKg ? findFareTier(capacityKg, fareTiers) : null;
   const fare = capacityKg ? calculateFare(capacityKg, distance, fareTiers) : null;
 
-  const body = (
-    <>
-      {!compact && (
-        <>
-          <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Get Estimate" : lang === "mr" ? "अंदाज पहा" : "अनुमान देखें"}</h2>
-          <p className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Quote a fare for any trip before agreeing with a customer — uses the exact same rates the app itself charges." : lang === "mr" ? "कस्टमरशी बोलण्याआधी कोणत्याही ट्रिपचे भाडे इथे पहा — अ‍ॅप स्वतः वापरतो तेच दर वापरले जातात." : "कस्टमर से बात करने से पहले किसी भी ट्रिप का भाड़ा यहां देखें — ऐप खुद जो दरें लगाता है वही इस्तेमाल होती हैं।"}</p>
-        </>
-      )}
-      {compact && (
-        <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
-          <IndianRupee size={16} color={C.marigoldDeep} /> {lang === "en" ? "Get Estimate" : lang === "mr" ? "अंदाज पहा" : "अनुमान देखें"}
-        </div>
-      )}
+  return (
+    <div className="rounded-xl p-4 mb-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
+        <IndianRupee size={16} color={C.marigoldDeep} /> {lang === "en" ? "Get Estimate" : lang === "mr" ? "अंदाज पहा" : "अनुमान देखें"}
+      </div>
 
       {!capacityKg ? (
-        <div className="rounded-lg p-3 mb-4 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>
+        <div className="rounded-lg p-3 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>
           {lang === "en" ? "Your vehicle's capacity isn't set yet — complete KYC first." : lang === "mr" ? "तुमच्या गाडीची क्षमता अजून सेट केलेली नाही — आधी KYC पूर्ण करा." : "आपकी गाड़ी की क्षमता अभी सेट नहीं है — पहले KYC पूरा करें।"}
         </div>
       ) : (
@@ -6857,23 +6846,8 @@ function DriverFareCalculator({ driver, fareTiers, lang, onClose, compact = fals
           </div>
         </>
       )}
-
-      {!compact && (
-        <button onClick={onClose} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-          {lang === "en" ? "Done" : lang === "mr" ? "झाले" : "हो गया"}
-        </button>
-      )}
-    </>
+    </div>
   );
-
-  if (compact) {
-    return (
-      <div className="rounded-xl p-4 mb-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        {body}
-      </div>
-    );
-  }
-  return <div className="px-5 py-5">{body}</div>;
 }
 
 function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, fareTiers }) {
@@ -6967,7 +6941,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
         {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
         {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} onOpen={announcementAlerts.markSeen} />}
         {settingsView === "batteryGuide" && <BackgroundAlertsGuide lang={lang} />}
-        {settingsView === "fareCalculator" && <DriverFareCalculator driver={driver} fareTiers={fareTiers} lang={lang} onClose={() => setSettingsView(null)} />}
       </div>
     );
   }
@@ -7066,9 +7039,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
               </button>
               <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : lang === "mr" ? "सेटिंग्स (KYC व गाडी)" : "सेटिंग्स (KYC व गाड़ी)"}
-              </button>
-              <button onClick={() => { setSettingsView("fareCalculator"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <IndianRupee size={16} color={C.marigoldDeep} /> {lang === "en" ? "Get Estimate" : lang === "mr" ? "अंदाज पहा" : "अनुमान देखें"}
               </button>
               <div style={{ borderBottom: `1px solid ${C.line}` }}>
                 <button
