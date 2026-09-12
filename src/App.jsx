@@ -5765,7 +5765,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, lang }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, lang, fareTiers, onOpenWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
@@ -5997,6 +5997,8 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
 
   return (
     <div className="px-5 pt-5 pb-5">
+      <DriverFareCalculator driver={driver} fareTiers={fareTiers} lang={lang} compact />
+
       {notificationsLocked && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
           <Clock3 size={14} color="#000000" />
@@ -6051,6 +6053,27 @@ function DriverHome({ driver, bookings, driverRespondBooking, completeBooking, s
           <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : lang === "mr" ? "लोड मिळवण्यासाठी ड्युटी ऑन करा" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
         </div>
       )}
+
+      {/* My Wallet + Driver Duty switch — moved down here from the header
+          row above DriverHome (see DriverApp) so the Get Estimate card can
+          take that top spot instead. */}
+      <div className="flex items-center gap-2.5 mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+        <button onClick={() => onOpenWallet?.()} className="flex-1 rounded-full px-4 py-3 text-base font-black text-white text-center flex items-center justify-center gap-1.5" style={{ background: "#0052CC" }}>
+          <Wallet size={16} color="#fff" /> {lang === "en" ? "My Wallet" : lang === "mr" ? "माझे वॉलेट" : "मेरा वॉलेट"}
+        </button>
+        <div className="flex items-center gap-1.5 shrink-0 rounded-full px-2.5 py-1.5" style={{ background: C.marigoldDeep }}>
+          <div className="flex flex-col items-center leading-none" style={{ color: "#FFFFFF" }}>
+            <span className="text-[9px] font-bold">{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</span>
+            <span className="text-[9px] font-bold mt-0.5">{lang === "en" ? "Duty" : lang === "mr" ? "ड्युटी" : "ड्यूटी"}</span>
+          </div>
+          <button onClick={() => setDriver({ ...driver, online: !driver.online })} className="shrink-0 flex items-center">
+            <span className="w-14 h-8 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
+              <span className="absolute inset-0 flex items-center text-[10px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 8 : 0, paddingRight: driver.online ? 0 : 8 }}>{driver.online ? "On" : "Off"}</span>
+              <span className="w-6 h-6 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 31 : 4 }} />
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -6745,7 +6768,12 @@ function loadEligibleForDriver(driver, load, bookings, vehicleTypes, lang) {
 // (LocationField's autocomplete, falling back to geocoding whatever text
 // is typed by hand after a short pause), so a driver's quote here always
 // matches what the app itself would actually charge for that trip.
-function DriverFareCalculator({ driver, fareTiers, lang, onClose }) {
+// `compact` renders this as a card meant to sit inline on the driver's own
+// home dashboard (see DriverHome) instead of a full standalone page reached
+// through the hamburger menu — same logic and same live rates either way,
+// just without the page heading/description and the "Done" button a
+// permanently-visible card has no use for.
+function DriverFareCalculator({ driver, fareTiers, lang, onClose, compact = false }) {
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null);
@@ -6782,10 +6810,19 @@ function DriverFareCalculator({ driver, fareTiers, lang, onClose }) {
   const tier = capacityKg ? findFareTier(capacityKg, fareTiers) : null;
   const fare = capacityKg ? calculateFare(capacityKg, distance, fareTiers) : null;
 
-  return (
-    <div className="px-5 py-5">
-      <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Fare Calculator" : lang === "mr" ? "भाडे कॅल्क्युलेटर" : "भाड़ा कैलकुलेटर"}</h2>
-      <p className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Quote a fare for any trip before agreeing with a customer — uses the exact same rates the app itself charges." : lang === "mr" ? "कस्टमरशी बोलण्याआधी कोणत्याही ट्रिपचे भाडे इथे पहा — अ‍ॅप स्वतः वापरतो तेच दर वापरले जातात." : "कस्टमर से बात करने से पहले किसी भी ट्रिप का भाड़ा यहां देखें — ऐप खुद जो दरें लगाता है वही इस्तेमाल होती हैं।"}</p>
+  const body = (
+    <>
+      {!compact && (
+        <>
+          <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Get Estimate" : lang === "mr" ? "अंदाज पहा" : "अनुमान देखें"}</h2>
+          <p className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Quote a fare for any trip before agreeing with a customer — uses the exact same rates the app itself charges." : lang === "mr" ? "कस्टमरशी बोलण्याआधी कोणत्याही ट्रिपचे भाडे इथे पहा — अ‍ॅप स्वतः वापरतो तेच दर वापरले जातात." : "कस्टमर से बात करने से पहले किसी भी ट्रिप का भाड़ा यहां देखें — ऐप खुद जो दरें लगाता है वही इस्तेमाल होती हैं।"}</p>
+        </>
+      )}
+      {compact && (
+        <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
+          <IndianRupee size={16} color={C.marigoldDeep} /> {lang === "en" ? "Get Estimate" : lang === "mr" ? "अंदाज पहा" : "अनुमान देखें"}
+        </div>
+      )}
 
       {!capacityKg ? (
         <div className="rounded-lg p-3 mb-4 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>
@@ -6821,11 +6858,22 @@ function DriverFareCalculator({ driver, fareTiers, lang, onClose }) {
         </>
       )}
 
-      <button onClick={onClose} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-        {lang === "en" ? "Done" : lang === "mr" ? "झाले" : "हो गया"}
-      </button>
-    </div>
+      {!compact && (
+        <button onClick={onClose} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
+          {lang === "en" ? "Done" : lang === "mr" ? "झाले" : "हो गया"}
+        </button>
+      )}
+    </>
   );
+
+  if (compact) {
+    return (
+      <div className="rounded-xl p-4 mb-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        {body}
+      </div>
+    );
+  }
+  return <div className="px-5 py-5">{body}</div>;
 }
 
 function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, fareTiers }) {
@@ -6935,11 +6983,14 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
     <>
       <FloatingHamburgerHint show={showBookingHint && !realHamburgerVisible} onOpenMenu={() => { setMenuOpen(true); setShareNoteOpen(false); setShowBookingHint(false); }} lang={lang} />
       <div className="flex-1 overflow-y-auto relative">
-        {/* This whole row (menu, language toggle, arrow, online/offline) is
-            for the idle main dashboard only -- Wallet, My Trips, and the
-            Advance Ride/s view (all reached via the hamburger menu, and all
-            with their own Back control) don't need it, same as an active
-            trip doesn't. */}
+        {/* This whole row (menu, advance badge) is for the idle main
+            dashboard only -- Wallet, My Trips, and the Advance Ride/s view
+            (all reached via the hamburger menu, and all with their own Back
+            control) don't need it, same as an active trip doesn't. My
+            Wallet and the Driver Duty switch used to live here too — moved
+            down to the bottom of DriverHome's own idle screen instead (see
+            DriverHome), alongside the new Get Estimate card that now takes
+            this top spot. */}
         {realHamburgerVisible && (
           <div className="flex items-center justify-between gap-2 px-5 pt-3">
             <div className="relative shrink-0">
@@ -6953,40 +7004,18 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
                 </span>
               )}
             </div>
-            <div className="flex-1 min-w-0 flex justify-center">
-              {tab === "home" ? (
-                <button onClick={() => setTab("wallet")} className="rounded-full px-4 py-2 text-base font-black text-white text-center flex items-center gap-1.5" style={{ background: "#0052CC" }}>
-                  <Wallet size={16} color="#fff" /> {lang === "en" ? "My Wallet" : lang === "mr" ? "माझे वॉलेट" : "मेरा वॉलेट"}
-                </button>
-              ) : (
-                <span className="rounded-full px-4 py-2 text-base font-black text-white text-center" style={{ background: "#0052CC" }}>{lang === "en" ? "Customer Requests" : lang === "mr" ? "कस्टमर रिक्वेस्ट" : "कस्टमर रिक्वेस्ट"}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {/* Replaces the old "Advance Booking/s" hamburger menu item —
-                  only shown when there's actually one to jump to. */}
-              {advanceBookings.length > 0 && (
-                <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); }}
-                  className="relative shrink-0 rounded-full pl-3 pr-2.5 py-2 flex items-center gap-1 shadow-sm" style={{ background: C.marigoldDeep }}>
-                  <Clock3 size={13} color="#FFFFFF" />
-                  <span className="text-xs font-black text-white">{lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}</span>
-                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shadow-sm" style={{ background: "#FFFFFF", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
-                    {advanceBookings.length}
-                  </span>
-                </button>
-              )}
-              <div className="flex flex-col items-center leading-none" style={{ color: C.inkSoft }}>
-                <span className="text-[9px] font-bold">{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</span>
-                <span className="text-[9px] font-bold mt-0.5">{lang === "en" ? "Duty" : lang === "mr" ? "ड्युटी" : "ड्यूटी"}</span>
-              </div>
-              <button onClick={() => setDriver({ ...driver, online: !driver.online })}
-                className="shrink-0 flex items-center rounded-full p-2" style={{ background: C.marigoldDeep }}>
-                <span className="w-14 h-8 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
-                  <span className="absolute inset-0 flex items-center text-[10px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 8 : 0, paddingRight: driver.online ? 0 : 8 }}>{driver.online ? "On" : "Off"}</span>
-                  <span className="w-6 h-6 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 31 : 4 }} />
+            {/* Replaces the old "Advance Booking/s" hamburger menu item —
+                only shown when there's actually one to jump to. */}
+            {advanceBookings.length > 0 && (
+              <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); }}
+                className="relative shrink-0 rounded-full pl-3 pr-2.5 py-2 flex items-center gap-1 shadow-sm" style={{ background: C.marigoldDeep }}>
+                <Clock3 size={13} color="#FFFFFF" />
+                <span className="text-xs font-black text-white">{lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}</span>
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shadow-sm" style={{ background: "#FFFFFF", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
+                  {advanceBookings.length}
                 </span>
               </button>
-            </div>
+            )}
           </div>
         )}
         {!driver.trialNoteSeen && (
@@ -7039,7 +7068,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : lang === "mr" ? "सेटिंग्स (KYC व गाडी)" : "सेटिंग्स (KYC व गाड़ी)"}
               </button>
               <button onClick={() => { setSettingsView("fareCalculator"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <IndianRupee size={16} color={C.marigoldDeep} /> {lang === "en" ? "Fare Calculator" : lang === "mr" ? "भाडे कॅल्क्युलेटर" : "भाड़ा कैलकुलेटर"}
+                <IndianRupee size={16} color={C.marigoldDeep} /> {lang === "en" ? "Get Estimate" : lang === "mr" ? "अंदाज पहा" : "अनुमान देखें"}
               </button>
               <div style={{ borderBottom: `1px solid ${C.line}` }}>
                 <button
@@ -7081,7 +7110,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} fareTiers={fareTiers} onOpenWallet={() => setTab("wallet")} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
