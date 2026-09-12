@@ -7061,7 +7061,8 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
             <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Total Fare" : lang === "mr" ? "एकूण भाडे" : "कुल किराया"}</div>
             <input type="number" inputMode="numeric" value={totalFare}
               onChange={(e) => { setTotalFare(e.target.value); setSavedFlash(false); }}
-              className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} placeholder="₹" />
+              className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
+              placeholder={lang === "en" ? "Fill total fare" : lang === "mr" ? "एकूण भाडे भरा" : "कुल किराया भरें"} />
           </div>
 
           <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
