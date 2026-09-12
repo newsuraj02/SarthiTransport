@@ -4182,7 +4182,7 @@ function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholde
     onPlaceSelected({ name: r.name, lat: coords?.lat ?? r.lat, lng: coords?.lng ?? r.lng });
   };
 
-  const inputCls = "w-full rounded-lg py-5 text-sm font-bold outline-none";
+  const inputCls = "w-full rounded-lg py-5 text-xs font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16 };
   const showDropdown = dropdownOpen && predictions.length > 0;
   // Shown instead of the live-predictions dropdown, only while the field is
