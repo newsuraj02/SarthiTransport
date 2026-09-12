@@ -3,7 +3,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2,
+  ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone, Weight,
 } from "lucide-react";
 import {
@@ -740,6 +740,13 @@ function usePullToRefresh() {
   const [pull, setPull] = useState(0); // 0..1 progress toward the trigger
   const [refreshing, setRefreshing] = useState(false);
   const startYRef = useRef(null);
+  // Manual trigger for a plain always-visible refresh button — added
+  // alongside the gesture (not instead of it) since the gesture depends on
+  // touch-event edge-case behavior that isn't consistent across every
+  // Android WebView version and can silently fail on some devices with no
+  // way for a driver/customer to notice or work around it. Shares the same
+  // refreshing state/spinner so both paths look identical.
+  const refresh = () => { setRefreshing(true); window.location.reload(); };
 
   useEffect(() => {
     const nearestScrollableIsAtTop = (el) => {
@@ -789,7 +796,7 @@ function usePullToRefresh() {
     };
   }, [refreshing]);
 
-  return { pull, refreshing };
+  return { pull, refreshing, refresh };
 }
 
 // Small floating spinner that grows/rotates with the pull, then spins in
@@ -9948,6 +9955,15 @@ export default function App() {
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
       <PullToRefreshIndicator pull={pullToRefresh.pull} refreshing={pullToRefresh.refreshing} />
+      {/* Guaranteed fallback for the pull gesture above — that one depends
+          on touch-event edge-case behavior that isn't consistent across
+          every Android WebView version and can silently do nothing on some
+          devices with no way to tell why. A plain tap always works. */}
+      <button onClick={pullToRefresh.refresh} disabled={pullToRefresh.refreshing}
+        className="fixed top-3 right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+        style={{ background: C.marigoldDeep }}>
+        <RefreshCw size={16} color="#fff" className={pullToRefresh.refreshing ? "animate-spin" : ""} />
+      </button>
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
         {role === "admin" && adminAuth && (
           <div className="px-5 pt-3 text-[10px] text-center" style={{ color: C.inkSoft }}>
