@@ -546,7 +546,14 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 //   2500-5000kg-> Canter 14ft      (base ~₹1,120, ~₹69/km — per-km extrapolated)
 //   5000-7000kg-> larger Canter    (base ~₹1,680, ~₹97/km — both extrapolated)
 //   7000kg+    -> largest trucks   (base ~₹2,280, ~₹126/km — both extrapolated)
-const FARE_TIERS = [
+// The catch-all last tier used to carry maxKg: Infinity, but Firestore
+// can't store that value (now that these tiers are admin-editable and live
+// in the settings doc — see fareTiers/setFareTiers in the root component) —
+// a plain large number works exactly the same way here since findFareTier
+// already falls back to the last tier for anything past every threshold
+// regardless of what that threshold actually is.
+const FARE_TIER_MAX_KG_UNCAPPED = 999999;
+const DEFAULT_FARE_TIERS = [
   { maxKg: 500, baseFare: 171, perKmRate: 17 },
   { maxKg: 750, baseFare: 224, perKmRate: 20 },
   { maxKg: 1000, baseFare: 316, perKmRate: 21 },
@@ -554,20 +561,26 @@ const FARE_TIERS = [
   { maxKg: 2500, baseFare: 683, perKmRate: 43 },
   { maxKg: 5000, baseFare: 1121, perKmRate: 70 },
   { maxKg: 7000, baseFare: 1681, perKmRate: 98 },
-  { maxKg: Infinity, baseFare: 2281, perKmRate: 127 },
+  { maxKg: FARE_TIER_MAX_KG_UNCAPPED, baseFare: 2281, perKmRate: 127 },
 ];
 
 // distanceKm may be null (coords never resolved — canPost doesn't require a
 // resolved distance, see CustomerBooking) — falls back to just the base
-// fare rather than blocking the booking over it.
+// fare rather than blocking the booking over it. `tiers` is the live,
+// admin-editable table (settings.fareTiers, see the root component) —
+// every caller passes it through explicitly rather than reading a fixed
+// constant, so an admin edit in Settings takes effect everywhere at once
+// without needing a code deploy. Defaults to DEFAULT_FARE_TIERS only for
+// the rare caller that genuinely has no live value yet (e.g. before the
+// settings doc's first load).
 // Shared by calculateFare and AdminSettings' "drivers per tier" breakdown
 // (see FareTierBreakdown) so the two never drift apart.
-function findFareTier(capacityKg) {
-  return FARE_TIERS.find((t) => (capacityKg || 0) <= t.maxKg) || FARE_TIERS[FARE_TIERS.length - 1];
+function findFareTier(capacityKg, tiers = DEFAULT_FARE_TIERS) {
+  return tiers.find((t) => (capacityKg || 0) <= t.maxKg) || tiers[tiers.length - 1];
 }
 
-function calculateFare(capacityKg, distanceKm) {
-  const tier = findFareTier(capacityKg);
+function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS) {
+  const tier = findFareTier(capacityKg, tiers);
   const distancePart = distanceKm != null ? distanceKm * tier.perKmRate : 0;
   return Math.round(tier.baseFare + distancePart);
 }
@@ -4172,7 +4185,7 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission }) {
+function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission, fareTiers }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -4442,7 +4455,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                 </p>
               ) : eligibleDrivers.map((d) => {
                 const isSelected = selectedDriverName === d.name;
-                const driverFare = calculateFare(d.vehicleSpec?.capacityKg, distance);
+                const driverFare = calculateFare(d.vehicleSpec?.capacityKg, distance, fareTiers);
                 return (
                   <div key={d.mobile || d.id}>
                     <button onClick={() => setSelectedDriverName(d.name)}
@@ -5113,7 +5126,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications }) {
+function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications, fareTiers }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -5441,7 +5454,7 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
               }} />
           ) : (
             <CustomerBooking requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
-              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} locationPermission={locationPermission} />
+              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} locationPermission={locationPermission} fareTiers={fareTiers} />
           )
         ) : (
           <div>
@@ -6716,7 +6729,97 @@ function loadEligibleForDriver(driver, load, bookings, vehicleTypes, lang) {
   return true;
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications }) {
+// Lets a driver quote a fare for a hypothetical trip before agreeing to
+// anything with a customer over the phone/in person — reuses the exact
+// same fare engine (calculateFare + the live, admin-editable fareTiers)
+// and the same address-resolution pattern CustomerBooking already uses
+// (LocationField's autocomplete, falling back to geocoding whatever text
+// is typed by hand after a short pause), so a driver's quote here always
+// matches what the app itself would actually charge for that trip.
+function DriverFareCalculator({ driver, fareTiers, lang, onClose }) {
+  const [pickup, setPickup] = useState("");
+  const [drop, setDrop] = useState("");
+  const [pickupCoords, setPickupCoords] = useState(null);
+  const [dropCoords, setDropCoords] = useState(null);
+  const [distance, setDistance] = useState(null);
+  const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
+  const mapsReady = mapsHasKey && mapsLoaded;
+
+  useEffect(() => {
+    if (!mapsReady || pickupCoords || !pickup.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(pickup).then((loc) => { if (loc) setPickupCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [pickup, pickupCoords, mapsReady]);
+  useEffect(() => {
+    if (!mapsReady || dropCoords || !drop.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(drop).then((loc) => { if (loc) setDropCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [drop, dropCoords, mapsReady]);
+
+  // Straight-line estimate shows instantly, then silently upgrades to the
+  // real routed distance once it resolves — same pattern as CustomerBooking.
+  const distanceRequestRef = useRef(0);
+  useEffect(() => {
+    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
+    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
+    if (!hasBothCoords || !mapsReady) return;
+    const requestId = ++distanceRequestRef.current;
+    fetchRoadDistanceKm(pickupCoords, dropCoords)
+      .then((km) => { if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100); })
+      .catch((e) => console.error("[fare calculator distance]", e));
+  }, [pickupCoords, dropCoords, mapsReady]);
+
+  const capacityKg = driver.vehicleSpec?.capacityKg;
+  const tier = capacityKg ? findFareTier(capacityKg, fareTiers) : null;
+  const fare = capacityKg ? calculateFare(capacityKg, distance, fareTiers) : null;
+
+  return (
+    <div className="px-5 py-5">
+      <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Fare Calculator" : lang === "mr" ? "भाडे कॅल्क्युलेटर" : "भाड़ा कैलकुलेटर"}</h2>
+      <p className="text-xs font-semibold mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Quote a fare for any trip before agreeing with a customer — uses the exact same rates the app itself charges." : lang === "mr" ? "कस्टमरशी बोलण्याआधी कोणत्याही ट्रिपचे भाडे इथे पहा — अ‍ॅप स्वतः वापरतो तेच दर वापरले जातात." : "कस्टमर से बात करने से पहले किसी भी ट्रिप का भाड़ा यहां देखें — ऐप खुद जो दरें लगाता है वही इस्तेमाल होती हैं।"}</p>
+
+      {!capacityKg ? (
+        <div className="rounded-lg p-3 mb-4 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>
+          {lang === "en" ? "Your vehicle's capacity isn't set yet — complete KYC first." : lang === "mr" ? "तुमच्या गाडीची क्षमता अजून सेट केलेली नाही — आधी KYC पूर्ण करा." : "आपकी गाड़ी की क्षमता अभी सेट नहीं है — पहले KYC पूरा करें।"}
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3">
+            <LocationField lang={lang} value={pickup}
+              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
+              onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); }}
+              mapsReady={mapsReady}
+              placeholder={lang === "en" ? "Pickup location" : lang === "mr" ? "पिकअप ठिकाण" : "पिकअप जगह"} />
+            <LocationField lang={lang} value={drop}
+              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
+              onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); }}
+              mapsReady={mapsReady}
+              placeholder={lang === "en" ? "Drop location" : lang === "mr" ? "ड्रॉप ठिकाण" : "ड्रॉप जगह"} />
+          </div>
+
+          <div className="rounded-xl p-4 mt-4" style={{ background: C.navy }}>
+            <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Distance" : lang === "mr" ? "अंतर" : "दूरी"}</div>
+            <div className="text-lg font-bold text-white" style={{ fontFamily: monoFont }}>
+              {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
+            </div>
+            {tier && (
+              <div className="text-[11px] mt-2" style={{ color: "#FFFFFF" }}>
+                {lang === "en" ? `Your tier: Base ${fmt(tier.baseFare)} + ${fmt(tier.perKmRate)}/km` : lang === "mr" ? `तुमचा स्तर: बेस ${fmt(tier.baseFare)} + ${fmt(tier.perKmRate)}/किमी` : `आपका स्तर: बेस ${fmt(tier.baseFare)} + ${fmt(tier.perKmRate)}/किमी`}
+              </div>
+            )}
+            <div className="text-3xl font-black text-white mt-2" style={{ fontFamily: monoFont }}>{fmt(fare)}</div>
+          </div>
+        </>
+      )}
+
+      <button onClick={onClose} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
+        {lang === "en" ? "Done" : lang === "mr" ? "झाले" : "हो गया"}
+      </button>
+    </div>
+  );
+}
+
+function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, fareTiers }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
@@ -6807,6 +6910,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
         {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
         {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} onOpen={announcementAlerts.markSeen} />}
         {settingsView === "batteryGuide" && <BackgroundAlertsGuide lang={lang} />}
+        {settingsView === "fareCalculator" && <DriverFareCalculator driver={driver} fareTiers={fareTiers} lang={lang} onClose={() => setSettingsView(null)} />}
       </div>
     );
   }
@@ -6924,6 +7028,9 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
               </button>
               <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
                 <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : lang === "mr" ? "सेटिंग्स (KYC व गाडी)" : "सेटिंग्स (KYC व गाड़ी)"}
+              </button>
+              <button onClick={() => { setSettingsView("fareCalculator"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <IndianRupee size={16} color={C.marigoldDeep} /> {lang === "en" ? "Fare Calculator" : lang === "mr" ? "भाडे कॅल्क्युलेटर" : "भाड़ा कैलकुलेटर"}
               </button>
               <div style={{ borderBottom: `1px solid ${C.line}` }}>
                 <button
@@ -8365,33 +8472,35 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
 }
 
 // Shows how many of the real, currently-registered drivers land in each
-// FARE_TIERS band — built so the tier thresholds/rates (picked without
+// fare tier band — built so the tier thresholds/rates (picked without
 // looking at any real fleet data) can actually be checked against the
 // fleet they're pricing, instead of trusting them blind. Counts every
 // driver with a capacityKg set, regardless of KYC/online status, since
-// the point is fleet composition, not who's currently biddable.
-function FareTierBreakdown({ drivers, lang }) {
-  const counts = FARE_TIERS.map(() => 0);
+// the point is fleet composition, not who's currently biddable. `tiers` is
+// the live, admin-editable table (see setFareTiers) — read-only display
+// here, editing happens in AdminSettings just above where this renders.
+function FareTierBreakdown({ drivers, tiers, lang }) {
+  const counts = tiers.map(() => 0);
   let noCapacity = 0;
   (drivers || []).forEach((d) => {
     const cap = d.vehicleSpec?.capacityKg;
     if (!cap) { noCapacity++; return; }
-    counts[FARE_TIERS.indexOf(findFareTier(cap))]++;
+    counts[tiers.indexOf(findFareTier(cap, tiers))]++;
   });
   const kg = (n) => n.toLocaleString("en-IN");
   const tierLabel = (i) => {
-    const min = i === 0 ? 0 : FARE_TIERS[i - 1].maxKg;
-    const max = FARE_TIERS[i].maxKg;
-    return max === Infinity
+    const min = i === 0 ? 0 : tiers[i - 1].maxKg;
+    const max = tiers[i].maxKg;
+    return max >= FARE_TIER_MAX_KG_UNCAPPED
       ? (lang === "en" ? `Above ${kg(min)} kg` : lang === "mr" ? `${kg(min)} किग्रा पेक्षा जास्त` : `${kg(min)} किग्रा से ऊपर`)
       : `${kg(min)}–${kg(max)} kg`;
   };
   return (
     <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
       <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Drivers per Fare Tier" : lang === "mr" ? "प्रत्येक भाडे स्तरातील ड्रायव्हर" : "प्रत्येक भाड़ा स्तर में ड्राइवर"}</div>
-      <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? `How your real fleet (by registered vehicle capacity) actually falls into the ${FARE_TIERS.length} fare tiers below — check this before trusting the rates.` : lang === "mr" ? `तुमचा खरा ताफा (नोंदणीकृत वाहन क्षमतेनुसार) खालील ${FARE_TIERS.length} भाडे स्तरांमध्ये कसा विभागला जातो — दर विश्वास ठेवण्यापूर्वी हे तपासा.` : `आपका असली बेड़ा (पंजीकृत वाहन क्षमता के अनुसार) नीचे दिए गए ${FARE_TIERS.length} भाड़ा स्तरों में कैसे बंटता है — दरों पर भरोसा करने से पहले इसे जांच लें।`}</div>
+      <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? `How your real fleet (by registered vehicle capacity) actually falls into the ${tiers.length} fare tiers below — check this before trusting the rates.` : lang === "mr" ? `तुमचा खरा ताफा (नोंदणीकृत वाहन क्षमतेनुसार) खालील ${tiers.length} भाडे स्तरांमध्ये कसा विभागला जातो — दर विश्वास ठेवण्यापूर्वी हे तपासा.` : `आपका असली बेड़ा (पंजीकृत वाहन क्षमता के अनुसार) नीचे दिए गए ${tiers.length} भाड़ा स्तरों में कैसे बंटता है — दरों पर भरोसा करने से पहले इसे जांच लें।`}</div>
       <div className="space-y-1.5">
-        {FARE_TIERS.map((t, i) => (
+        {tiers.map((t, i) => (
           <div key={i} className="flex items-center justify-between text-xs">
             <div style={{ color: C.ink }}>
               <span className="font-bold">{tierLabel(i)}</span>
@@ -8410,19 +8519,26 @@ function FareTierBreakdown({ drivers, lang }) {
   );
 }
 
-function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, drivers, lang }) {
-  // Commission/bonus/min-wallet are edited as a draft and only written to
-  // Firestore on Save, instead of firing a write on every keystroke. Stays
-  // in sync with the live values as long as there's no unsaved edit, so an
-  // external change (e.g. trial mode toggling commission to 0) still shows
-  // up immediately.
-  const [draft, setDraft] = useState({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
+function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, setFareTiers, drivers, lang }) {
+  // Commission/bonus/min-wallet/fare-tiers are edited as a draft and only
+  // written to Firestore on Save, instead of firing a write on every
+  // keystroke. Stays in sync with the live values as long as there's no
+  // unsaved edit, so an external change (e.g. trial mode toggling
+  // commission to 0) still shows up immediately.
+  const [draft, setDraft] = useState({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", fareTiers });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
-    if (!dirty) setDraft({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
+    if (!dirty) setDraft({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", fareTiers });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commissionPct, bonusPct, minWallet, latestVersionCode, updateUrl, dirty]);
+  }, [commissionPct, bonusPct, minWallet, latestVersionCode, updateUrl, fareTiers, dirty]);
+  // Patches one field on one tier row without touching the others — the
+  // last row's maxKg is never edited this way (see the "uncapped" row
+  // below), so every other row can go up to FARE_TIER_MAX_KG_UNCAPPED
+  // freely without needing its own special case here.
+  const updateFareTier = (i, patch) => {
+    updateDraft({ fareTiers: draft.fareTiers.map((t, idx) => (idx === i ? { ...t, ...patch } : t)) });
+  };
   const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
   const saveSettings = () => {
     setCommissionPct(draft.commissionPct);
@@ -8430,6 +8546,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
     setMinWallet(draft.minWallet);
     setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
     setUpdateUrl(draft.updateUrl.trim());
+    setFareTiers(draft.fareTiers);
     setDirty(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -8490,7 +8607,46 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
           className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
       </div>
 
-      <FareTierBreakdown drivers={drivers} lang={lang} />
+      <div className="rounded-lg p-3 mt-2 mb-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Fare Tiers (by vehicle capacity)" : lang === "mr" ? "भाडे स्तर (वाहन क्षमतेनुसार)" : "भाड़ा स्तर (वाहन क्षमता अनुसार)"}</div>
+        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Every fare = Base fare + (distance × Per-km rate). Edit any tier's boundary or rates below — takes effect everywhere the instant you Save, no app update needed." : lang === "mr" ? "प्रत्येक भाडे = बेस भाडे + (अंतर × प्रति-किमी दर). खालील कोणत्याही स्तराची मर्यादा किंवा दर बदला — Save केल्यावर लगेच सर्वत्र लागू होईल, अ‍ॅप अपडेटची गरज नाही." : "हर भाड़ा = बेस भाड़ा + (दूरी × प्रति-किमी दर)। नीचे किसी भी स्तर की सीमा या दरें बदलें — Save करते ही तुरंत हर जगह लागू हो जाएगा, ऐप अपडेट की ज़रूरत नहीं।"}</div>
+        <div className="space-y-2">
+          {draft.fareTiers.map((t, i) => {
+            const isLast = i === draft.fareTiers.length - 1;
+            const min = i === 0 ? 0 : draft.fareTiers[i - 1].maxKg;
+            return (
+              <div key={i} className="rounded-lg p-2.5" style={{ border: `1px solid ${C.line}` }}>
+                <div className="text-[11px] font-bold mb-1.5 flex items-center gap-1 flex-wrap" style={{ color: C.ink }}>
+                  {isLast ? (
+                    <span>{lang === "en" ? `Above ${min.toLocaleString("en-IN")} kg` : lang === "mr" ? `${min.toLocaleString("en-IN")} किग्रा पेक्षा जास्त` : `${min.toLocaleString("en-IN")} किग्रा से ऊपर`}</span>
+                  ) : (
+                    <>
+                      <span>{min.toLocaleString("en-IN")} {lang === "en" ? "kg to" : lang === "mr" ? "किग्रा ते" : "किग्रा से"}</span>
+                      <input type="number" value={t.maxKg} onChange={(e) => updateFareTier(i, { maxKg: Math.max(min + 1, Number(e.target.value) || min + 1) })}
+                        className="w-20 rounded px-2 py-1 text-xs font-bold text-center" style={{ fontFamily: monoFont, border: `1px solid ${C.line}`, color: C.ink }} />
+                      <span>kg</span>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Base ₹" : lang === "mr" ? "बेस ₹" : "बेस ₹"}</span>
+                    <input type="number" value={t.baseFare} onChange={(e) => updateFareTier(i, { baseFare: Math.max(0, Number(e.target.value) || 0) })}
+                      className="w-20 rounded px-2 py-1.5 text-sm font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Per km ₹" : lang === "mr" ? "प्रति किमी ₹" : "प्रति किमी ₹"}</span>
+                    <input type="number" value={t.perKmRate} onChange={(e) => updateFareTier(i, { perKmRate: Math.max(0, Number(e.target.value) || 0) })}
+                      className="w-20 rounded px-2 py-1.5 text-sm font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <FareTierBreakdown drivers={drivers} tiers={draft.fareTiers} lang={lang} />
 
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
       <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-3.5 font-bold text-base"
@@ -8779,7 +8935,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, setFareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review now lives inside
   // the Live Dashboard's "New Registrations" tile (see AdminFleet's
@@ -8807,7 +8963,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
-      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} drivers={drivers} lang={lang} />}
+      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} fareTiers={fareTiers} setFareTiers={setFareTiers} drivers={drivers} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
@@ -9082,13 +9238,19 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
-  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500 });
+  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500, fareTiers: DEFAULT_FARE_TIERS });
   const commissionPct = settings.commissionPct;
   const bonusPct = settings.bonusPct;
   const minWallet = settings.minWallet;
+  // Falls back to the code default whenever the settings doc doesn't have
+  // its own fareTiers yet (a brand-new project, or an existing one that
+  // hasn't been touched since this became admin-editable) — same
+  // generous-default reasoning as every other settings field here.
+  const fareTiers = settings.fareTiers || DEFAULT_FARE_TIERS;
   const setCommissionPct = (v) => patchDoc("settings", "main", { commissionPct: typeof v === "function" ? v(commissionPct) : v }).catch((e) => console.error(e));
   const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
   const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
+  const setFareTiers = (v) => patchDoc("settings", "main", { fareTiers: typeof v === "function" ? v(fareTiers) : v }).catch((e) => console.error(e));
   // Bumped by hand in Admin Settings each time a new Production release
   // actually goes out on the Play Console — there's no client-reachable API
   // that tells the app "what's live in Production" on its own, so this
@@ -9179,7 +9341,7 @@ export default function App() {
     // create before subscribing would leave everyone stuck on defaults
     // forever if that one initial call is slow on a flaky connection.
     const unsub = subscribeDoc("settings", "main", (data) => { if (data) setSettingsLocal(data); });
-    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500 })
+    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500, fareTiers: DEFAULT_FARE_TIERS })
       .catch((e) => console.error("[settings init]", e));
     return unsub;
   }, []);
@@ -9322,7 +9484,7 @@ export default function App() {
   // skips straight to "AwaitingDriver" targeting that driver, exactly
   // like acceptBid does once a customer picks a bid, just without an
   // actual bid having been placed first. Fare is now a fixed, calculated
-  // number (see calculateFare/FARE_TIERS) shown to the customer before they
+  // number (see calculateFare/fareTiers) shown to the customer before they
   // book, replacing the old "discuss on call" model — driver commission on
   // accept is deliberately still held at 0 despite fare being real again
   // (see driverRespondBooking). Returns an error message string to show the
@@ -9335,7 +9497,7 @@ export default function App() {
     const bookingId = genId();
     const conflict = findDriverLoadConflict(targetDriver, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
-    const fare = calculateFare(targetDriver.vehicleSpec?.capacityKg, distance);
+    const fare = calculateFare(targetDriver.vehicleSpec?.capacityKg, distance, fareTiers);
     createDoc("bookings", bookingId, {
       pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: driverName, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
@@ -9488,7 +9650,7 @@ export default function App() {
     // Commission cut on confirm — held credit from a past cancellation
     // offsets first; 0% while this driver is still inside their own trial.
     // Deliberately held at 0 regardless of commissionPct/bonusPct: fare is a
-    // real, fixed, calculated number again (see calculateFare/FARE_TIERS),
+    // real, fixed, calculated number again (see calculateFare/fareTiers),
     // but reactivating actual wallet deductions is a separate business
     // decision that hasn't been made yet — don't let fare-is-real-now
     // silently reactivate commission as a side effect.
@@ -9717,7 +9879,7 @@ export default function App() {
           <CustomerApp bookings={bookings} requestDriverDirectly={requestDriverDirectly} reassignAwaitingDriver={reassignAwaitingDriver} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
-            adminNotifications={adminNotifications} />
+            adminNotifications={adminNotifications} fareTiers={fareTiers} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth}
@@ -9767,13 +9929,13 @@ export default function App() {
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
-            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} />
+            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} fareTiers={fareTiers} />
         )}
         {role === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">
             <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
-              bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl} lang={lang} onLogout={logout}
+              bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl} fareTiers={fareTiers} setFareTiers={setFareTiers} lang={lang} onLogout={logout}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
               expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications}
