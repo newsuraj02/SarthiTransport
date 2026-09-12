@@ -7208,9 +7208,10 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
           both fixed to the viewport at the same top offset — this is the
           only role that needs a second top-right action. */}
       <button onClick={() => setSetFareOpen(true)}
-        className="fixed z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+        className="fixed z-50 h-9 pl-2.5 pr-3 rounded-full flex items-center gap-1 shadow-lg"
         style={{ background: C.navy, right: 56, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
-        <IndianRupee size={16} color="#fff" />
+        <IndianRupee size={14} color="#fff" />
+        <span className="text-xs font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Set Fare" : lang === "mr" ? "भाडे सेट करा" : "किराया सेट करें"}</span>
       </button>
       {setFareOpen && <SetFareForm driver={driver} routeFares={routeFares} lang={lang} onClose={() => setSetFareOpen(false)} />}
       <div className="flex-1 overflow-y-auto relative">
