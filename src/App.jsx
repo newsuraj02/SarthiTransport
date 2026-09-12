@@ -7011,10 +7011,10 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
         <div className="p-4 space-y-3 overflow-y-auto">
           <div className="rounded-lg p-3 text-xs font-semibold" style={{ background: C.metallicGold, color: "#000000" }}>
             {lang === "en"
-              ? "Set your fare according to the market so that you can get rides as soon as possible. Wherever you most frequently travel, fill out this form so that we can better provide rides."
+              ? "Wherever you travel/ ride to and fro, fill out this form so that we can better provide rides."
               : lang === "mr"
-              ? "बाजारानुसार तुमचे भाडे सेट करा जेणेकरून तुम्हाला लवकरात लवकर राईड्स मिळतील. तुम्ही जिथे सर्वात जास्त प्रवास करता, तिथला हा फॉर्म भरा जेणेकरून आम्ही चांगल्या प्रकारे राईड्स देऊ शकू."
-              : "बाजार के अनुसार अपना किराया सेट करें ताकि आपको जल्द से जल्द राइड्स मिल सकें। आप जहां सबसे ज्यादा सफर करते हैं, वहां का यह फॉर्म भरें ताकि हम बेहतर तरीके से राइड्स दे सकें।"}
+              ? "तुम्ही जिथे-जिथे प्रवास करता/ये-जा करता, तिथला हा फॉर्म भरा जेणेकरून आम्ही चांगल्या प्रकारे राईड्स देऊ शकू."
+              : "आप जहां-जहां सफर करते हैं/आना-जाना करते हैं, वहां का यह फॉर्म भरें ताकि हम बेहतर तरीके से राइड्स दे सकें।"}
           </div>
 
           <LocationField lang={lang} value={pickup}
