@@ -4182,7 +4182,7 @@ function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholde
     onPlaceSelected({ name: r.name, lat: coords?.lat ?? r.lat, lng: coords?.lng ?? r.lng });
   };
 
-  const inputCls = "w-full rounded-lg py-5 text-base font-bold outline-none";
+  const inputCls = "w-full rounded-lg py-5 text-sm font-bold outline-none";
   const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16 };
   const showDropdown = dropdownOpen && predictions.length > 0;
   // Shown instead of the live-predictions dropdown, only while the field is
@@ -4677,10 +4677,10 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                         </div>
                       } />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
-                        <div className="text-xs truncate" style={{ color: C.inkSoft }}>{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
+                        <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
+                        <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
                       </div>
-                      <div className="text-base font-black shrink-0" style={{ color: C.navy }}>{fmt(driverFare)}</div>
+                      <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(driverFare)}</div>
                     </button>
                     {isSelected && (
                       <button onClick={() => requestDriver(d.name)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5" style={{ background: C.success }}>
