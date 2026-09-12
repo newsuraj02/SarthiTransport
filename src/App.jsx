@@ -7965,6 +7965,7 @@ function AdminRouteFares({ routeFares, lang }) {
   const [editingEstimatedKm, setEditingEstimatedKm] = useState(null);
   const [draftTotalFare, setDraftTotalFare] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const groups = {};
   (routeFares || []).forEach((r) => {
@@ -7991,7 +7992,7 @@ function AdminRouteFares({ routeFares, lang }) {
     } catch (e) { console.error(e); }
     setSaving(false);
   };
-  const deleteEntry = (id) => removeDoc("routeFares", id).catch((e) => console.error(e));
+  const deleteEntry = (id) => { removeDoc("routeFares", id).catch((e) => console.error(e)); setConfirmDeleteId(null); };
 
   return (
     <div>
@@ -8034,23 +8035,32 @@ function AdminRouteFares({ routeFares, lang }) {
                         )}
                       </div>
                       {editingId === r.id ? (
-                        <>
-                          <button onClick={() => saveEdit(r.id)} disabled={saving} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.success }}>
-                            <CheckCircle2 size={13} color="#fff" />
+                        <div className="flex items-center gap-4 shrink-0">
+                          <button onClick={() => saveEdit(r.id)} disabled={saving} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                            <CheckCircle2 size={17} color="#fff" />
                           </button>
-                          <button onClick={cancelEdit} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.inkSoft }}>
-                            <X size={13} color="#fff" strokeWidth={3} />
+                          <button onClick={cancelEdit} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.inkSoft }}>
+                            <X size={17} color="#fff" strokeWidth={3} />
                           </button>
-                        </>
+                        </div>
+                      ) : confirmDeleteId === r.id ? (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button onClick={() => deleteEntry(r.id)} className="text-xs font-bold px-3 py-2.5 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                            {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                          </button>
+                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold px-3 py-2.5 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
+                            {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                          </button>
+                        </div>
                       ) : (
-                        <>
-                          <button onClick={() => startEdit(r)} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.navy }}>
-                            <Settings2 size={12} color="#fff" />
+                        <div className="flex items-center gap-4 shrink-0">
+                          <button onClick={() => startEdit(r)} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.navy }}>
+                            <Settings2 size={16} color="#fff" />
                           </button>
-                          <button onClick={() => deleteEntry(r.id)} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.safety }}>
-                            <X size={13} color="#fff" strokeWidth={3} />
+                          <button onClick={() => setConfirmDeleteId(r.id)} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.safety }}>
+                            <X size={17} color="#fff" strokeWidth={3} />
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   ))}
