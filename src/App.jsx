@@ -594,6 +594,48 @@ function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS) {
   return Math.round(tier.baseFare + distancePart);
 }
 
+// Route fares are matched by loose substring containment rather than exact
+// equality: a driver typing "Kolhapur" into Set Fare should match a
+// customer's fully resolved pickup address like "MG Road, Kolhapur,
+// Maharashtra" without either of them having to type the exact same string.
+function normalizeRouteText(s) {
+  return (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+function routeTextsMatch(a, b) {
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a);
+}
+// Averages every driver-submitted "Set Fare" quote (see SetFareForm) for
+// this same pickup/drop route — real market rates other drivers are
+// actually charging for a specific, well-known route (e.g. Pune-Kolhapur)
+// often don't track a flat per-km formula the way in-city trips do, so this
+// takes priority over calculateFare whenever at least one driver has quoted
+// this exact route. Returns null when nobody has.
+function getRouteAverageFare(pickup, drop, routeFares) {
+  const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
+  if (!p || !d || !Array.isArray(routeFares) || routeFares.length === 0) return null;
+  const matches = routeFares.filter((r) => routeTextsMatch(r.pickupKey, p) && routeTextsMatch(r.dropKey, d));
+  if (matches.length === 0) return null;
+  const avgFare = Math.round(matches.reduce((sum, r) => sum + (Number(r.totalFare) || 0), 0) / matches.length);
+  return { avgFare, count: matches.length };
+}
+// Single entry point every booking-fare display/write goes through, so the
+// driver-picker list, the actual booking write, and (indirectly) Set Fare
+// itself all agree on the same number for the same trip — see
+// getRouteAverageFare for when the crowd-sourced average wins over the
+// generic capacity-tier formula.
+function resolveFare(driver, pickup, drop, distanceKm, tiers, routeFares) {
+  const routeAvg = getRouteAverageFare(pickup, drop, routeFares);
+  if (routeAvg) return routeAvg.avgFare;
+  return calculateFare(driver?.vehicleSpec?.capacityKg, distanceKm, tiers);
+}
+// Firestore document IDs can't contain "/" and have a length cap — routes
+// are short place names in practice (Set Fare is meant for city-level
+// entries like "Pune"/"Kolhapur"), but sanitize defensively anyway.
+function sanitizeForDocId(s) {
+  return (s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "x";
+}
+
 // Straight-line estimate scaled up for roads — requires real GPS
 // coordinates for both ends. Returns null (not a guess) when either
 // coordinate is missing, since a distance that isn't actually derived from
@@ -4291,7 +4333,7 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission, fareTiers }) {
+function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission, fareTiers, routeFares }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -4561,7 +4603,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                 </p>
               ) : eligibleDrivers.map((d) => {
                 const isSelected = selectedDriverName === d.name;
-                const driverFare = calculateFare(d.vehicleSpec?.capacityKg, distance, fareTiers);
+                const driverFare = resolveFare(d, pickup, drop, distance, fareTiers, routeFares);
                 return (
                   <div key={d.mobile || d.id}>
                     <button onClick={() => setSelectedDriverName(d.name)}
@@ -5232,7 +5274,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications, fareTiers }) {
+function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications, fareTiers, routeFares }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -5560,7 +5602,7 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
               }} />
           ) : (
             <CustomerBooking requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
-              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} locationPermission={locationPermission} fareTiers={fareTiers} />
+              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} />
           )
         ) : (
           <div>
@@ -5862,7 +5904,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, lang, fareTiers, onOpenWallet }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, lang, onOpenWallet }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
@@ -6094,8 +6136,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 
   return (
     <div className="px-5 pt-5 pb-5">
-      <DriverFareCalculator driver={driver} fareTiers={fareTiers} lang={lang} />
-
       {notificationsLocked && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
           <Clock3 size={14} color="#000000" />
@@ -6858,21 +6898,27 @@ function loadEligibleForDriver(driver, load, bookings, vehicleTypes, lang) {
   return true;
 }
 
-// Lets a driver quote a fare for a hypothetical trip before agreeing to
-// anything with a customer over the phone/in person — reuses the exact
-// same fare engine (calculateFare + the live, admin-editable fareTiers)
-// and the same address-resolution pattern CustomerBooking already uses
-// (LocationField's autocomplete, falling back to geocoding whatever text
-// is typed by hand after a short pause), so a driver's quote here always
-// matches what the app itself would actually charge for that trip. Renders
-// as a card meant to sit inline on the driver's own home dashboard (see
-// DriverHome) — the only place this is used.
-function DriverFareCalculator({ driver, fareTiers, lang }) {
+// Lets a driver record what the market is actually charging for a
+// specific, well-known route (Pune-Kolhapur, Pune-Mumbai, etc.) — a flat
+// capacity-tier ₹/km formula doesn't track real long-distance rates well,
+// so instead every driver who quotes the same route (matched loosely by
+// pickup/drop text, see routeTextsMatch) has their number averaged
+// together, and that average becomes the fare shown to customers for that
+// route (see getRouteAverageFare/resolveFare) — taking priority over the
+// generic formula whenever it's available. Opened from the small button
+// next to the refresh button in DriverApp's header, not shown inline on
+// the dashboard, since this is an occasional "log a route" action rather
+// than something checked on every visit.
+function SetFareForm({ driver, routeFares, lang, onClose }) {
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropCoords, setDropCoords] = useState(null);
   const [distance, setDistance] = useState(null);
+  const [tier1to5Fare, setTier1to5Fare] = useState("");
+  const [totalFare, setTotalFare] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6897,59 +6943,123 @@ function DriverFareCalculator({ driver, fareTiers, lang }) {
     const requestId = ++distanceRequestRef.current;
     fetchRoadDistanceKm(pickupCoords, dropCoords)
       .then((km) => { if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100); })
-      .catch((e) => console.error("[fare calculator distance]", e));
+      .catch((e) => console.error("[set fare distance]", e));
   }, [pickupCoords, dropCoords, mapsReady]);
 
-  const capacityKg = driver.vehicleSpec?.capacityKg;
-  const tier = capacityKg ? findFareTier(capacityKg, fareTiers) : null;
-  const fare = capacityKg ? calculateFare(capacityKg, distance, fareTiers) : null;
+  const myRoutes = (routeFares || []).filter((r) => r.driverMobile === driver.mobile);
+
+  // Tapping a saved route reloads it into the form for editing — since the
+  // doc id is derived from the pickup/drop text (see save() below), saving
+  // again with the SAME text overwrites this exact entry; changing the
+  // text creates a new one and leaves this one as-is (removable below).
+  const editRoute = (r) => {
+    setPickup(r.pickupName || ""); setDrop(r.dropName || "");
+    setPickupCoords(null); setDropCoords(null);
+    setTier1to5Fare(r.tier1to5Fare != null ? String(r.tier1to5Fare) : "");
+    setTotalFare(r.totalFare != null ? String(r.totalFare) : "");
+    setSavedFlash(false);
+  };
+  const deleteRoute = (id) => removeDoc("routeFares", id).catch((e) => console.error(e));
+
+  const canSave = pickup.trim() && drop.trim() && totalFare !== "" && !saving;
+  const save = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    const docId = `${driver.mobile}__${sanitizeForDocId(pickup)}__${sanitizeForDocId(drop)}`;
+    try {
+      await createDoc("routeFares", docId, {
+        driverMobile: driver.mobile,
+        pickupName: pickup.trim(), dropName: drop.trim(),
+        pickupKey: normalizeRouteText(pickup), dropKey: normalizeRouteText(drop),
+        estimatedKm: distance,
+        tier1to5Fare: Number(tier1to5Fare) || 0,
+        totalFare: Number(totalFare) || 0,
+      });
+      setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
+      setTier1to5Fare(""); setTotalFare("");
+      setSavedFlash(true);
+    } catch (e) { console.error(e); }
+    setSaving(false);
+  };
 
   return (
-    <div className="rounded-xl p-4 mb-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
-        <IndianRupee size={16} color={C.marigoldDeep} /> {lang === "en" ? "Get Estimate" : lang === "mr" ? "अंदाज पहा" : "अनुमान देखें"}
-      </div>
-
-      {!capacityKg ? (
-        <div className="rounded-lg p-3 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>
-          {lang === "en" ? "Your vehicle's capacity isn't set yet — complete KYC first." : lang === "mr" ? "तुमच्या गाडीची क्षमता अजून सेट केलेली नाही — आधी KYC पूर्ण करा." : "आपकी गाड़ी की क्षमता अभी सेट नहीं है — पहले KYC पूरा करें।"}
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
+          <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Set Fare" : lang === "mr" ? "भाडे सेट करा" : "किराया सेट करें"}</h3>
+          <button onClick={onClose} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
         </div>
-      ) : (
-        <>
-          <div className="space-y-3">
-            <LocationField lang={lang} value={pickup}
-              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
-              onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); }}
-              mapsReady={mapsReady}
-              placeholder={lang === "en" ? "Pickup location" : lang === "mr" ? "पिकअप ठिकाण" : "पिकअप जगह"} />
-            <LocationField lang={lang} value={drop}
-              onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
-              onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); }}
-              mapsReady={mapsReady}
-              placeholder={lang === "en" ? "Drop location" : lang === "mr" ? "ड्रॉप ठिकाण" : "ड्रॉप जगह"} />
-          </div>
+        <div className="p-4 space-y-3 overflow-y-auto">
+          <LocationField lang={lang} value={pickup}
+            onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); }}
+            onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Pickup (e.g. Pune)" : lang === "mr" ? "पिकअप (उदा. पुणे)" : "पिकअप (उदा. पुणे)"} />
+          <LocationField lang={lang} value={drop}
+            onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setSavedFlash(false); }}
+            onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Drop (e.g. Kolhapur)" : lang === "mr" ? "ड्रॉप (उदा. कोल्हापूर)" : "ड्रॉप (उदा. कोल्हापुर)"} />
 
-          <div className="rounded-xl p-4 mt-4" style={{ background: C.navy }}>
-            <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Distance" : lang === "mr" ? "अंतर" : "दूरी"}</div>
-            <div className="text-lg font-bold text-white" style={{ fontFamily: monoFont }}>
+          <div>
+            <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Estimated km" : lang === "mr" ? "अंदाजे किमी" : "अनुमानित किमी"}</div>
+            <div className="rounded-lg p-2.5 text-sm font-black" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }}>
               {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
             </div>
-            {tier && (
-              <div className="text-[11px] mt-2" style={{ color: "#FFFFFF" }}>
-                {lang === "en" ? `Your tier: Base ${fmt(tier.baseFare)} + ${fmt(tier.perKmRate)}/km` : lang === "mr" ? `तुमचा स्तर: बेस ${fmt(tier.baseFare)} + ${fmt(tier.perKmRate)}/किमी` : `आपका स्तर: बेस ${fmt(tier.baseFare)} + ${fmt(tier.perKmRate)}/किमी`}
-              </div>
-            )}
-            <div className="text-3xl font-black text-white mt-2" style={{ fontFamily: monoFont }}>{fmt(fare)}</div>
           </div>
-        </>
-      )}
+
+          <div>
+            <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "1–5 km Fixed Fare" : lang === "mr" ? "1–5 किमी फिक्स्ड भाडे" : "1–5 किमी फिक्स्ड किराया"}</div>
+            <input type="number" inputMode="numeric" value={tier1to5Fare}
+              onChange={(e) => { setTier1to5Fare(e.target.value); setSavedFlash(false); }}
+              className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} placeholder="₹" />
+          </div>
+
+          <div>
+            <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Total Fare" : lang === "mr" ? "एकूण भाडे" : "कुल किराया"}</div>
+            <input type="number" inputMode="numeric" value={totalFare}
+              onChange={(e) => { setTotalFare(e.target.value); setSavedFlash(false); }}
+              className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} placeholder="₹" />
+          </div>
+
+          <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
+            style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
+            {saving ? "…" : (lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें")}
+          </button>
+          {savedFlash && (
+            <div className="rounded-lg p-2 text-xs font-bold text-center" style={{ background: C.success, color: "#fff" }}>
+              {lang === "en" ? "Saved." : lang === "mr" ? "सेव्ह झाले." : "सेव हो गया।"}
+            </div>
+          )}
+
+          {myRoutes.length > 0 && (
+            <div className="pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+              <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Your saved routes" : lang === "mr" ? "तुमचे सेव्ह केलेले रूट्स" : "आपके सेव किए गए रूट"}</div>
+              <div className="space-y-1.5">
+                {myRoutes.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                    <button onClick={() => editRoute(r)} className="flex-1 min-w-0 text-left">
+                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName} → {r.dropName}</div>
+                      <div className="text-[11px]" style={{ color: C.inkSoft }}>{fmt(r.totalFare)}</div>
+                    </button>
+                    <button onClick={() => deleteRoute(r.id)} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.safety }}>
+                      <X size={13} color="#fff" strokeWidth={3} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, fareTiers }) {
+function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [setFareOpen, setSetFareOpen] = useState(false);
   // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
   // away — it first drops down the ₹200 payout note in place, and only a
   // second tap (now "Continue to WhatsApp") actually shares. Reset shut
@@ -7052,6 +7162,15 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
   return (
     <>
       <FloatingHamburgerHint show={showBookingHint && !realHamburgerVisible} onOpenMenu={() => { setMenuOpen(true); setShareNoteOpen(false); setShowBookingHint(false); }} lang={lang} />
+      {/* Sits just left of the global pull-to-refresh button (see AppRoot),
+          both fixed to the viewport at the same top offset — this is the
+          only role that needs a second top-right action. */}
+      <button onClick={() => setSetFareOpen(true)}
+        className="fixed z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+        style={{ background: C.navy, right: 56, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
+        <IndianRupee size={16} color="#fff" />
+      </button>
+      {setFareOpen && <SetFareForm driver={driver} routeFares={routeFares} lang={lang} onClose={() => setSetFareOpen(false)} />}
       <div className="flex-1 overflow-y-auto relative">
         {/* This whole row (menu, advance badge) is for the idle main
             dashboard only -- Wallet, My Trips, and the Advance Ride/s view
@@ -7177,7 +7296,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} fareTiers={fareTiers} onOpenWallet={() => setTab("wallet")} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} onOpenWallet={() => setTab("wallet")} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
@@ -9378,6 +9497,17 @@ export default function App() {
     seedIfEmpty("vehicleTypes", DEFAULT_VEHICLES, "key").catch((e) => console.error("[seed vehicleTypes]", e));
     return subscribeCollection("vehicleTypes", setVehicleTypesLocal, null);
   }, []);
+  // Crowd-sourced route fares a driver enters via "Set Fare" (see
+  // SetFareForm) for common long-distance routes (Pune-Kolhapur, Pune-
+  // Mumbai, etc.) where a flat capacity-tier ₹/km formula doesn't track
+  // real market rates well — see getRouteAverageFare. Readable by everyone,
+  // same as vehicleTypes, since customers need it before any login-gated
+  // data loads; writes are scoped to the owning driver in firestore.rules.
+  const [routeFares, setRouteFares] = useState([]);
+  useEffect(() => {
+    if (!firestoreReady) return;
+    return subscribeCollection("routeFares", setRouteFares, null);
+  }, []);
   // These four collections require real authentication under the current
   // Firestore rules (isSignedIn()) — the dependency array must include every
   // auth transition, not just mount ([]) or role alone, otherwise a
@@ -9610,7 +9740,7 @@ export default function App() {
     const bookingId = genId();
     const conflict = findDriverLoadConflict(targetDriver, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
-    const fare = calculateFare(targetDriver.vehicleSpec?.capacityKg, distance, fareTiers);
+    const fare = resolveFare(targetDriver, pickup, drop, distance, fareTiers, routeFares);
     createDoc("bookings", bookingId, {
       pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: driverName, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
@@ -10003,7 +10133,7 @@ export default function App() {
           <CustomerApp bookings={bookings} requestDriverDirectly={requestDriverDirectly} reassignAwaitingDriver={reassignAwaitingDriver} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
-            adminNotifications={adminNotifications} fareTiers={fareTiers} />
+            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth}
@@ -10053,7 +10183,7 @@ export default function App() {
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
             minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
-            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} fareTiers={fareTiers} />
+            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} />
         )}
         {role === "admin" && adminAuth && (
           <div className="flex-1 overflow-y-auto">

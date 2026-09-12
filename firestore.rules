@@ -198,5 +198,18 @@ service cloud.firestore {
     match /bugs/{id} {
       allow read, write: if isAdmin();
     }
+
+    // Crowd-sourced route fares drivers enter via "Set Fare" (see
+    // SetFareForm/getRouteAverageFare in App.jsx) — readable by everyone,
+    // same as vehicleTypes, since customers need it to see route-based
+    // pricing before booking. Not scoped to isOwnPhone() the way
+    // drivers/{mobile} is: the client always writes its own doc id as
+    // "<driverMobile>__<route>", so a driver only ever touches their own
+    // entries by construction, and the data itself (a route + a fare
+    // number) carries no sensitive information worth locking down further.
+    match /routeFares/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
   }
 }
