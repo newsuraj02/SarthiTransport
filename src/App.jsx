@@ -7040,8 +7040,6 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
     setTotalFare(r.totalFare != null ? String(r.totalFare) : "");
     setSavedFlash(false);
   };
-  const deleteRoute = (id) => removeDoc("routeFares", id).catch((e) => console.error(e));
-
   const canSave = pickup.trim() && drop.trim() && totalFare !== "" && !saving;
   const save = async () => {
     if (!canSave) return;
@@ -7139,18 +7137,13 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
 
           {myRoutes.length > 0 && (
             <div className="pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-              <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Your saved routes" : lang === "mr" ? "तुमचे सेव्ह केलेले रूट्स" : "आपके सेव किए गए रूट"}</div>
+              <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Your saved routes (tap to edit — only Admin can remove an entry)" : lang === "mr" ? "तुमचे सेव्ह केलेले रूट्स (एडिट करण्यासाठी टॅप करा — फक्त अ‍ॅडमिन एंट्री काढू शकतो)" : "आपके सेव किए गए रूट (एडिट करने के लिए टैप करें — केवल एडमिन एंट्री हटा सकता है)"}</div>
               <div className="space-y-1.5">
                 {myRoutes.map((r) => (
-                  <div key={r.id} className="flex items-center gap-2 rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-                    <button onClick={() => editRoute(r)} className="flex-1 min-w-0 text-left">
-                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName} → {r.dropName}</div>
-                      <div className="text-[11px]" style={{ color: C.inkSoft }}>{fmt(r.totalFare)}</div>
-                    </button>
-                    <button onClick={() => deleteRoute(r.id)} className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: C.safety }}>
-                      <X size={13} color="#fff" strokeWidth={3} />
-                    </button>
-                  </div>
+                  <button key={r.id} onClick={() => editRoute(r)} className="w-full text-left rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName} → {r.dropName}</div>
+                    <div className="text-[11px]" style={{ color: C.inkSoft }}>{fmt(r.totalFare)}</div>
+                  </button>
                 ))}
               </div>
             </div>

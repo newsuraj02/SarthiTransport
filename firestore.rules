@@ -202,14 +202,17 @@ service cloud.firestore {
     // Crowd-sourced route fares drivers enter via "Set Fare" (see
     // SetFareForm/getRouteAverageFare in App.jsx) — readable by everyone,
     // same as vehicleTypes, since customers need it to see route-based
-    // pricing before booking. Writes are scoped to the entry's own driver
-    // (matching the client's doc id convention "<driverMobile>__<route>")
-    // or Admin, who can correct/remove any driver's entry from the "Driver
-    // Ride Entries" tile on the Live Dashboard (see AdminRouteFares).
+    // pricing before booking. A driver can create/edit their own entry
+    // (matching the client's doc id convention "<driverMobile>__<route>"),
+    // but deleting one is Admin-only — SetFareForm's own "your saved
+    // routes" list is reference/edit only, by design, with no delete
+    // control; only the "Driver Ride Entries" tile on the Live Dashboard
+    // (see AdminRouteFares) can remove an entry.
     match /routeFares/{id} {
       allow read: if true;
       allow create: if isAdmin() || isOwnPhone(request.resource.data.driverMobile);
-      allow update, delete: if isAdmin() || isOwnPhone(resource.data.driverMobile);
+      allow update: if isAdmin() || isOwnPhone(resource.data.driverMobile);
+      allow delete: if isAdmin();
     }
   }
 }
