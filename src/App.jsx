@@ -7138,16 +7138,6 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
             </div>
           )}
 
-          <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
-            style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
-            {saving ? "…" : (lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें")}
-          </button>
-          {savedFlash && (
-            <div className="rounded-lg p-2 text-xs font-bold text-center" style={{ background: C.success, color: "#fff" }}>
-              {lang === "en" ? "Saved." : lang === "mr" ? "सेव्ह झाले." : "सेव हो गया।"}
-            </div>
-          )}
-
           {myRoutes.length > 0 && (
             <div className="pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
               <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Your saved routes (tap to edit — only Admin can remove an entry)" : lang === "mr" ? "तुमचे सेव्ह केलेले रूट्स (एडिट करण्यासाठी टॅप करा — फक्त अ‍ॅडमिन एंट्री काढू शकतो)" : "आपके सेव किए गए रूट (एडिट करने के लिए टैप करें — केवल एडमिन एंट्री हटा सकता है)"}</div>
@@ -7160,6 +7150,21 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+        {/* Kept outside the scrollable area above (shrink-0, not part of the
+            flex-1 scroll region) so Save always stays on screen no matter
+            how much content — the guidance note, the route suggestion, the
+            saved-routes list — pushes above it. */}
+        <div className="p-4 pt-3 shrink-0" style={{ borderTop: `1px solid ${C.line}`, background: C.paper }}>
+          <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
+            style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
+            {saving ? "…" : (lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें")}
+          </button>
+          {savedFlash && (
+            <div className="rounded-lg p-2 mt-2 text-xs font-bold text-center" style={{ background: C.success, color: "#fff" }}>
+              {lang === "en" ? "Saved." : lang === "mr" ? "सेव्ह झाले." : "सेव हो गया।"}
             </div>
           )}
         </div>
