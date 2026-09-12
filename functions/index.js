@@ -3,7 +3,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const { getAuth } = require("firebase-admin/auth");
 
@@ -352,6 +352,21 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
   });
 
   return { ok: true, sentCount: recipientCount };
+});
+
+// Admin Announcements accumulate forever otherwise — meant to be a
+// same-day heads-up (both Admin's own "Sent Notifications" list and every
+// driver/customer's "Admin Announcements" inbox read from this same
+// collection), not a permanent record, so it was quietly growing Firestore
+// storage for no real benefit. Hard-deletes anything older than 24h, same
+// pattern as expireStaleLoads above.
+const ADMIN_NOTIFICATION_TTL_HOURS = 24;
+exports.expireOldAdminNotifications = onSchedule({ schedule: "0 * * * *", timeZone: "Asia/Kolkata" }, async () => {
+  const cutoff = Timestamp.fromMillis(Date.now() - ADMIN_NOTIFICATION_TTL_HOURS * 60 * 60 * 1000);
+  const snap = await db.collection("adminNotifications").where("createdAt", "<=", cutoff).get();
+  const deletions = [];
+  snap.forEach((doc) => deletions.push(doc.ref.delete()));
+  await Promise.all(deletions);
 });
 
 // ---------------- KYC photo classification (Gemini) ----------------
