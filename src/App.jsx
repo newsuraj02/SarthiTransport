@@ -6948,6 +6948,25 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
 
   const myRoutes = (routeFares || []).filter((r) => r.driverMobile === driver.mobile);
 
+  // Once another driver has already quoted this same route, surface their
+  // number (or the average across everyone who has) right here so this
+  // driver isn't guessing — a tap fills both fare fields with it, but
+  // typing over it afterward is always still allowed.
+  const routeSuggestion = (() => {
+    const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
+    if (!p || !d) return null;
+    const others = (routeFares || []).filter((r) => r.driverMobile !== driver.mobile && routeTextsMatch(r.pickupKey, p) && routeTextsMatch(r.dropKey, d));
+    if (others.length === 0) return null;
+    const avg = (field) => Math.round(others.reduce((sum, r) => sum + (Number(r[field]) || 0), 0) / others.length);
+    return { totalFare: avg("totalFare"), tier1to5Fare: avg("tier1to5Fare"), count: others.length };
+  })();
+  const useSuggestion = () => {
+    if (!routeSuggestion) return;
+    setTier1to5Fare(String(routeSuggestion.tier1to5Fare));
+    setTotalFare(String(routeSuggestion.totalFare));
+    setSavedFlash(false);
+  };
+
   // Tapping a saved route reloads it into the form for editing — since the
   // doc id is derived from the pickup/drop text (see save() below), saving
   // again with the SAME text overwrites this exact entry; changing the
@@ -6990,6 +7009,14 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
           <button onClick={onClose} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
         </div>
         <div className="p-4 space-y-3 overflow-y-auto">
+          <div className="rounded-lg p-3 text-xs font-semibold" style={{ background: C.metallicGold, color: "#000000" }}>
+            {lang === "en"
+              ? "Set your fare according to the market so that you can get rides as soon as possible. Wherever you most frequently travel, fill out this form so that we can better provide rides."
+              : lang === "mr"
+              ? "बाजारानुसार तुमचे भाडे सेट करा जेणेकरून तुम्हाला लवकरात लवकर राईड्स मिळतील. तुम्ही जिथे सर्वात जास्त प्रवास करता, तिथला हा फॉर्म भरा जेणेकरून आम्ही चांगल्या प्रकारे राईड्स देऊ शकू."
+              : "बाजार के अनुसार अपना किराया सेट करें ताकि आपको जल्द से जल्द राइड्स मिल सकें। आप जहां सबसे ज्यादा सफर करते हैं, वहां का यह फॉर्म भरें ताकि हम बेहतर तरीके से राइड्स दे सकें।"}
+          </div>
+
           <LocationField lang={lang} value={pickup}
             onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); }}
             onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
@@ -7000,6 +7027,21 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
             onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
             mapsReady={mapsReady}
             placeholder={lang === "en" ? "Drop (e.g. Kolhapur)" : lang === "mr" ? "ड्रॉप (उदा. कोल्हापूर)" : "ड्रॉप (उदा. कोल्हापुर)"} />
+
+          {routeSuggestion && (
+            <div className="rounded-lg p-3 flex items-center justify-between gap-2" style={{ background: C.bg, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <div className="text-xs font-semibold flex-1 min-w-0" style={{ color: C.ink }}>
+                {lang === "en"
+                  ? `${routeSuggestion.count > 1 ? "Other drivers charge" : "Another driver charges"} ~${fmt(routeSuggestion.totalFare)} for this route${routeSuggestion.count > 1 ? ` (avg of ${routeSuggestion.count})` : ""}.`
+                  : lang === "mr"
+                  ? `या रूटसाठी ${routeSuggestion.count > 1 ? "इतर ड्रायव्हर्स" : "एक ड्रायव्हर"} ~${fmt(routeSuggestion.totalFare)} आकारतात${routeSuggestion.count > 1 ? ` (${routeSuggestion.count} चा सरासरी)` : ""}.`
+                  : `इस रूट के लिए ${routeSuggestion.count > 1 ? "अन्य ड्राइवर" : "एक ड्राइवर"} ~${fmt(routeSuggestion.totalFare)} लेते हैं${routeSuggestion.count > 1 ? ` (${routeSuggestion.count} का औसत)` : ""}।`}
+              </div>
+              <button onClick={useSuggestion} className="shrink-0 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: C.marigoldDeep }}>
+                {lang === "en" ? "Use this" : lang === "mr" ? "हे वापरा" : "इसे उपयोग करें"}
+              </button>
+            </div>
+          )}
 
           <div>
             <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Estimated km" : lang === "mr" ? "अंदाजे किमी" : "अनुमानित किमी"}</div>
