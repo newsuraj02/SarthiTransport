@@ -7141,8 +7141,9 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
               <div className="space-y-1.5">
                 {myRoutes.map((r) => (
                   <button key={r.id} onClick={() => editRoute(r)} className="w-full text-left rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName} → {r.dropName}</div>
-                    <div className="text-[11px]" style={{ color: C.inkSoft }}>{fmt(r.totalFare)}</div>
+                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName}</div>
+                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>{fmt(r.totalFare)}</div>
                   </button>
                 ))}
               </div>
@@ -7982,8 +7983,11 @@ function AdminRouteFares({ routeFares, lang }) {
             const avgTotal = Math.round(g.entries.reduce((s, r) => s + (Number(r.totalFare) || 0), 0) / g.entries.length);
             return (
               <div key={gi} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                <div className="flex items-center justify-between mb-2 gap-2">
-                  <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{g.pickupName} → {g.dropName}</div>
+                <div className="flex items-start justify-between mb-2 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{g.pickupName}</div>
+                    <div className="text-sm font-bold truncate" style={{ color: C.ink }}>→ {g.dropName}</div>
+                  </div>
                   <div className="text-xs font-black shrink-0" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Avg" : lang === "mr" ? "सरासरी" : "औसत"}: {fmt(avgTotal)}</div>
                 </div>
                 <div className="space-y-1.5">
