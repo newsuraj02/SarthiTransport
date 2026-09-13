@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2, RefreshCw,
-  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone, Weight, Fingerprint,
+  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone, Weight,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -1256,16 +1256,6 @@ function isRunningInCapacitorApp() {
 function openNativeSettingsBridge(target) {
   SettingsBridgeNative.open({ target }).catch((e) => console.error("[settingsBridge]", e));
 }
-
-// Backs AdminBiometricLock — implemented only in android-admin's own native
-// project (see BiometricAuthPlugin.java there), not the main android/ one,
-// since the fingerprint lock is Admin-only. Calling any of these methods
-// from a context where the plugin isn't actually registered (a browser tab,
-// or the main Customer/Driver native apps if ?admin=1 were ever opened
-// there) rejects rather than throwing, which every call site below already
-// treats as "biometrics unavailable, fall back to password" — so this
-// degrades safely everywhere it isn't present.
-const BiometricAuthNative = registerPlugin("BiometricAuth");
 
 // Re-added for the driver "new load posted" push carve-out — see
 // useRideNotifications above. Also used on the Customer side now (see
@@ -2572,8 +2562,8 @@ function AdminLogin({ onVerified, lang, onBack }) {
     const unsub = onAuthStateChanged(adminFirebaseAuth, (user) => {
       setChecking(false);
       // false here (a silently-restored session, not a password just typed
-      // THIS visit) is what makes AdminBiometricLock actually show on a
-      // fresh app open — see the root component's adminUnlocked state.
+      // THIS visit) is what makes AdminPinLock actually show on a fresh
+      // app open — see the root component's adminUnlocked state.
       if (user) onVerified(false);
     });
     return unsub;
@@ -2658,101 +2648,82 @@ function AdminLogin({ onVerified, lang, onBack }) {
   );
 }
 
-// Fingerprint gate shown in front of the Admin dashboard on the native
-// Admin app every time it's opened or resumed from background (see the
+// PIN gate shown in front of the Admin dashboard on the native Admin app
+// every time it's opened or resumed from background (see the
 // appStateChange listener in the root component) — the Firebase session
 // AdminLogin sets up above never expires on its own, so without this,
 // anyone who physically picks up an already-logged-in phone would have
-// full Admin access with no further check. Never a dead end: unavailable,
-// not-yet-enrolled, or a fingerprint that doesn't match all fall back to
-// the existing email/password login (onUseFallback signs out, which
-// naturally routes back to AdminLogin above).
-function AdminBiometricLock({ lang, onUnlocked, onUseFallback }) {
-  const [status, setStatus] = useState("checking"); // checking | available | notEnrolled | noHardware | unavailable
-  const [scanning, setScanning] = useState(false);
-  const [noEnrollScreen, setNoEnrollScreen] = useState(false);
+// full Admin access with no further check. Started out as a fingerprint
+// scan instead of a PIN, but was swapped out after the fingerprint sensor
+// on the admin's own device turned out to be unreliable — a PIN has no
+// hardware to depend on. adminPin lives in localStorage (see
+// usePersistedState in the root component), device-local only, never sent
+// anywhere — it's a quick convenience lock on top of the real credential
+// (the Firebase password), not a replacement for it, so "forgot PIN" just
+// falls back to that password (onUseFallback signs out, which naturally
+// routes back to AdminLogin above).
+function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFallback }) {
+  const [step, setStep] = useState(adminPin ? "enter" : "setup"); // setup | confirm | enter
+  const [value, setValue] = useState("");
+  const [firstPin, setFirstPin] = useState("");
+  const [error, setError] = useState("");
 
-  const runCheck = () => {
-    setStatus("checking");
-    BiometricAuthNative.isAvailable()
-      .then((r) => setStatus(r?.status || "unavailable"))
-      .catch(() => setStatus("unavailable"));
+  const onChange = (raw) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 4);
+    setError("");
+    setValue(digits);
+    if (digits.length !== 4) return;
+
+    if (step === "setup") {
+      setFirstPin(digits);
+      setValue("");
+      setStep("confirm");
+    } else if (step === "confirm") {
+      if (digits !== firstPin) {
+        setError(lang === "en" ? "PINs don't match — start again." : lang === "mr" ? "PIN जुळत नाहीत — पुन्हा सुरू करा." : "PIN मेल नहीं खाते — फिर से शुरू करें।");
+        setValue(""); setFirstPin(""); setStep("setup");
+        return;
+      }
+      setAdminPin(digits);
+      onUnlocked();
+    } else {
+      if (digits === adminPin) { onUnlocked(); return; }
+      setError(lang === "en" ? "Wrong PIN." : lang === "mr" ? "चुकीचा PIN." : "गलत PIN।");
+      setValue("");
+    }
   };
-  useEffect(runCheck, []);
 
-  const scan = () => {
-    setScanning(true);
-    BiometricAuthNative.authenticate({
-      title: lang === "en" ? "Admin Login" : lang === "mr" ? "अ‍ॅडमिन लॉगिन" : "एडमिन लॉगिन",
-      subtitle: lang === "en" ? "Scan your fingerprint to continue" : lang === "mr" ? "पुढे जाण्यासाठी फिंगरप्रिंट स्कॅन करा" : "जारी रखने के लिए फिंगरप्रिंट स्कैन करें",
-      negativeButtonText: lang === "en" ? "Use password instead" : lang === "mr" ? "त्याऐवजी पासवर्ड वापरा" : "इसके बजाय पासवर्ड इस्तेमाल करें",
-    })
-      .then((r) => { setScanning(false); if (r?.success) onUnlocked(); else onUseFallback(); })
-      .catch(() => { setScanning(false); onUseFallback(); });
-  };
-
-  // Auto-triggers the system prompt the moment a fingerprint is ready to
-  // use — matches how every other Android app with a biometric lock
-  // behaves, no extra tap needed just to see it pop up.
-  useEffect(() => {
-    if (status === "available" && !scanning) scan();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
-
-  if (status === "checking") {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking..." : lang === "mr" ? "तपासले जात आहे..." : "जांचा जा रहा है..."}</p>
-      </div>
-    );
-  }
+  const heading = step === "setup"
+    ? (lang === "en" ? "Set up an Admin PIN" : lang === "mr" ? "अ‍ॅडमिन PIN सेट करा" : "एडमिन PIN सेट करें")
+    : step === "confirm"
+    ? (lang === "en" ? "Confirm your PIN" : lang === "mr" ? "तुमचा PIN कन्फर्म करा" : "अपना PIN कन्फर्म करें")
+    : (lang === "en" ? "Admin Locked" : lang === "mr" ? "अ‍ॅडमिन लॉक्ड" : "एडमिन लॉक्ड");
+  const subtext = step === "setup"
+    ? (lang === "en" ? "Choose a 4-digit PIN to quickly unlock the Admin app next time — this stays on this device only." : lang === "mr" ? "पुढच्या वेळी अ‍ॅडमिन अ‍ॅप पटकन अनलॉक करण्यासाठी 4-अंकी PIN निवडा — हे फक्त या डिव्हाइसवर राहील." : "अगली बार एडमिन ऐप जल्दी अनलॉक करने के लिए 4 अंकों का PIN चुनें — यह सिर्फ इस डिवाइस पर रहेगा।")
+    : step === "confirm"
+    ? (lang === "en" ? "Enter the same PIN again." : lang === "mr" ? "तोच PIN पुन्हा टाका." : "वही PIN फिर से डालें।")
+    : (lang === "en" ? "Enter your PIN to continue." : lang === "mr" ? "पुढे जाण्यासाठी तुमचा PIN टाका." : "जारी रखने के लिए अपना PIN डालें।");
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-10 text-center">
       <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.navy }}>
-        <Fingerprint size={30} color="#FFFFFF" />
+        <LayoutDashboard size={26} color="#FFFFFF" />
       </div>
-      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Admin Locked" : lang === "mr" ? "अ‍ॅडमिन लॉक्ड" : "एडमिन लॉक्ड"}</h2>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{heading}</h2>
+      <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{subtext}</p>
 
-      {status === "notEnrolled" && (
-        <>
-          <p className="text-xs mb-6" style={{ color: C.inkSoft }}>
-            {lang === "en" ? "Set up a fingerprint on this device to secure the Admin app." : lang === "mr" ? "अ‍ॅडमिन अ‍ॅप सुरक्षित करण्यासाठी या डिव्हाइसवर फिंगरप्रिंट सेट करा." : "एडमिन ऐप को सुरक्षित करने के लिए इस डिवाइस पर फिंगरप्रिंट सेट करें।"}
-          </p>
-          {noEnrollScreen && (
-            <p className="text-xs mb-3 font-semibold" style={{ color: C.safety }}>
-              {lang === "en" ? "Couldn't open fingerprint setup automatically — please open it yourself: phone Settings → Security → Fingerprint." : lang === "mr" ? "फिंगरप्रिंट सेटअप आपोआप उघडता आले नाही — कृपया स्वतः उघडा: फोन Settings → Security → Fingerprint." : "फिंगरप्रिंट सेटअप अपने आप नहीं खुल सका — कृपया खुद खोलें: फोन Settings → Security → Fingerprint."}
-            </p>
-          )}
-          <button onClick={() => BiometricAuthNative.openEnrollment().then((r) => { setNoEnrollScreen(r?.opened === false); runCheck(); }).catch(() => setNoEnrollScreen(true))} className="w-full rounded-lg py-4 font-bold text-base mb-3" style={{ background: C.marigold, color: "#000000" }}>
-            {lang === "en" ? "Set up fingerprint" : lang === "mr" ? "फिंगरप्रिंट सेट करा" : "फिंगरप्रिंट सेट करें"}
-          </button>
-        </>
-      )}
-
-      {(status === "noHardware" || status === "unavailable") && (
-        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "Fingerprint isn't available on this device right now." : lang === "mr" ? "या डिव्हाइसवर सध्या फिंगरप्रिंट उपलब्ध नाही." : "इस डिवाइस पर अभी फिंगरप्रिंट उपलब्ध नहीं है।"}
-        </p>
-      )}
-
-      {status === "available" && (
-        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>
-          {scanning
-            ? (lang === "en" ? "Waiting for fingerprint scan..." : lang === "mr" ? "फिंगरप्रिंट स्कॅनची वाट पाहत आहे..." : "फिंगरप्रिंट स्कैन का इंतज़ार हो रहा है...")
-            : (lang === "en" ? "Tap below to scan again." : lang === "mr" ? "पुन्हा स्कॅन करण्यासाठी खाली टॅप करा." : "फिर से स्कैन करने के लिए नीचे टैप करें।")}
-        </p>
-      )}
-
-      <div className="w-full space-y-2.5">
-        {status === "available" && (
-          <button onClick={scan} disabled={scanning} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
-            {lang === "en" ? "Scan fingerprint" : lang === "mr" ? "फिंगरप्रिंट स्कॅन करा" : "फिंगरप्रिंट स्कैन करें"}
+      <div className="w-full space-y-3">
+        <input key={step} type="password" inputMode="numeric" autoFocus value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg py-4 text-center text-2xl font-black outline-none"
+          style={{ background: C.bg, border: `1.5px solid ${C.line}`, color: C.ink, letterSpacing: 10, fontFamily: monoFont }}
+          placeholder="••••" />
+        {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+        {step === "enter" && (
+          <button onClick={onUseFallback} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.inkSoft }}>
+            {lang === "en" ? "Forgot PIN? Use password instead" : lang === "mr" ? "PIN विसरलात? त्याऐवजी पासवर्ड वापरा" : "PIN भूल गए? इसके बजाय पासवर्ड इस्तेमाल करें"}
           </button>
         )}
-        <button onClick={onUseFallback} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.inkSoft }}>
-          {lang === "en" ? "Use password instead" : lang === "mr" ? "त्याऐवजी पासवर्ड वापरा" : "इसके बजाय पासवर्ड इस्तेमाल करें"}
-        </button>
       </div>
     </div>
   );
@@ -9708,14 +9679,18 @@ export default function App() {
   }, []);
 
   const [adminAuth, setAdminAuth] = useState(false);
-  // Gates the Admin dashboard behind AdminBiometricLock on the native
-  // Admin app — starts false every cold app open (so a silently-restored
-  // Firebase session, see AdminLogin, still has to pass the fingerprint
-  // check), flips true once either a fingerprint scan succeeds or the
-  // admin types their password THIS visit (see onVerified below), and
-  // flips back to false every time the app returns from background (see
-  // the appStateChange listener a few lines down) so it re-locks exactly
-  // like the user asked: every time the app opens or resumes.
+  // Device-local PIN gate on top of the real Firebase login (see
+  // AdminPinLock) — plain string in localStorage, never sent anywhere;
+  // it's a quick convenience lock, not a credential of its own.
+  const [adminPin, setAdminPin] = usePersistedState("sarthi_adminPin", "");
+  // Gates the Admin dashboard behind AdminPinLock on the native Admin app
+  // — starts false every cold app open (so a silently-restored Firebase
+  // session, see AdminLogin, still has to pass the PIN check), flips true
+  // once either the PIN is entered correctly or the admin types their
+  // password THIS visit (see onVerified below), and flips back to false
+  // every time the app returns from background (see the appStateChange
+  // listener a few lines down) so it re-locks every time the app opens or
+  // resumes.
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const adminWasBackgroundedRef = useRef(false);
   useEffect(() => {
@@ -10573,7 +10548,7 @@ export default function App() {
             onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} />
         )}
         {role === "admin" && adminAuth && isNativeApp && !adminUnlocked && (
-          <AdminBiometricLock lang={lang} onUnlocked={() => setAdminUnlocked(true)} onUseFallback={() => logoutRole("admin")} />
+          <AdminPinLock adminPin={adminPin} setAdminPin={setAdminPin} lang={lang} onUnlocked={() => setAdminUnlocked(true)} onUseFallback={() => logoutRole("admin")} />
         )}
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
