@@ -655,7 +655,13 @@ function routeTextsMatch(a, b) {
 // different scripts. Matching by real GPS coordinates instead sidesteps
 // language entirely — same place, same lat/lng, regardless of what text
 // came back with it.
-const ROUTE_MATCH_RADIUS_KM = 5;
+// Set Fare's Pickup/Drop fields are restricted to city/town-level entries
+// only (see LocationField's citiesOnly prop) — a driver enters "Pune", not
+// a specific street in Pune — so this radius needs to cover a typical
+// Indian city's metro extent, not just GPS/geocoding noise around one
+// exact point. A customer's real pickup/drop can be anywhere within that
+// city and still correctly count as the same route.
+const ROUTE_MATCH_RADIUS_KM = 25;
 function locationsNear(lat1, lng1, lat2, lng2) {
   return haversineKm(lat1, lng1, lat2, lng2) <= ROUTE_MATCH_RADIUS_KM;
 }
@@ -4298,7 +4304,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi" }) {
+function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false }) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -4321,12 +4327,21 @@ function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholde
       // here: a genuine ~4km trip came out as a ~395km distance estimate
       // because the picked suggestion resolved to a distant namesake.
       new window.google.maps.places.AutocompleteService().getPlacePredictions(
-        { input: value, componentRestrictions: { country: "in" }, location: new window.google.maps.LatLng(18.6298, 73.8131), radius: 60000 },
+        {
+          input: value, componentRestrictions: { country: "in" }, location: new window.google.maps.LatLng(18.6298, 73.8131), radius: 60000,
+          // Set Fare's route pricing is city-to-city by design (see
+          // ROUTE_MATCH_RADIUS_KM) — restricting suggestions here to
+          // cities/towns keeps a driver's entry at the same granularity a
+          // customer's exact pickup/drop gets matched against, instead of
+          // one specific street address that a 25km radius would then be
+          // stretching to cover.
+          ...(citiesOnly ? { types: ["(cities)"] } : {}),
+        },
         (preds, status) => setPredictions(status === "OK" && preds ? preds : [])
       );
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [value, mapsReady]);
+  }, [value, mapsReady, citiesOnly]);
 
   useEffect(() => () => clearTimeout(blurTimeoutRef.current), []);
 
@@ -7285,16 +7300,16 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
               : "आप जहां-जहां सफर करते हैं/आना-जाना करते हैं, वहां का यह फॉर्म भरें ताकि हम बेहतर तरीके से राइड्स दे सकें।"}
           </div>
 
-          <LocationField lang={lang} value={pickup}
+          <LocationField lang={lang} value={pickup} citiesOnly
             onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); }}
             onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
             mapsReady={mapsReady}
-            placeholder={lang === "en" ? "Pickup (e.g. Pune)" : lang === "mr" ? "पिकअप (उदा. पुणे)" : "पिकअप (उदा. पुणे)"} />
-          <LocationField lang={lang} value={drop}
+            placeholder={lang === "en" ? "Pickup city (e.g. Pune)" : lang === "mr" ? "पिकअप शहर (उदा. पुणे)" : "पिकअप शहर (उदा. पुणे)"} />
+          <LocationField lang={lang} value={drop} citiesOnly
             onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setSavedFlash(false); }}
             onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
             mapsReady={mapsReady}
-            placeholder={lang === "en" ? "Drop (e.g. Kolhapur)" : lang === "mr" ? "ड्रॉप (उदा. कोल्हापूर)" : "ड्रॉप (उदा. कोल्हापुर)"} />
+            placeholder={lang === "en" ? "Drop city (e.g. Kolhapur)" : lang === "mr" ? "ड्रॉप शहर (उदा. कोल्हापूर)" : "ड्रॉप शहर (उदा. कोल्हापुर)"} />
 
           {routeSuggestion && (
             <div className="rounded-lg p-3 flex items-center justify-between gap-2" style={{ background: C.bg, border: `1.5px solid ${C.marigoldDeep}` }}>
