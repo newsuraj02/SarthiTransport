@@ -2670,6 +2670,7 @@ function AdminLogin({ onVerified, lang, onBack }) {
 function AdminBiometricLock({ lang, onUnlocked, onUseFallback }) {
   const [status, setStatus] = useState("checking"); // checking | available | notEnrolled | noHardware | unavailable
   const [scanning, setScanning] = useState(false);
+  const [noEnrollScreen, setNoEnrollScreen] = useState(false);
 
   const runCheck = () => {
     setStatus("checking");
@@ -2718,7 +2719,12 @@ function AdminBiometricLock({ lang, onUnlocked, onUseFallback }) {
           <p className="text-xs mb-6" style={{ color: C.inkSoft }}>
             {lang === "en" ? "Set up a fingerprint on this device to secure the Admin app." : lang === "mr" ? "अ‍ॅडमिन अ‍ॅप सुरक्षित करण्यासाठी या डिव्हाइसवर फिंगरप्रिंट सेट करा." : "एडमिन ऐप को सुरक्षित करने के लिए इस डिवाइस पर फिंगरप्रिंट सेट करें।"}
           </p>
-          <button onClick={() => BiometricAuthNative.openEnrollment().then(runCheck).catch(() => {})} className="w-full rounded-lg py-4 font-bold text-base mb-3" style={{ background: C.marigold, color: "#000000" }}>
+          {noEnrollScreen && (
+            <p className="text-xs mb-3 font-semibold" style={{ color: C.safety }}>
+              {lang === "en" ? "Couldn't open fingerprint setup automatically — please open it yourself: phone Settings → Security → Fingerprint." : lang === "mr" ? "फिंगरप्रिंट सेटअप आपोआप उघडता आले नाही — कृपया स्वतः उघडा: फोन Settings → Security → Fingerprint." : "फिंगरप्रिंट सेटअप अपने आप नहीं खुल सका — कृपया खुद खोलें: फोन Settings → Security → Fingerprint."}
+            </p>
+          )}
+          <button onClick={() => BiometricAuthNative.openEnrollment().then((r) => { setNoEnrollScreen(r?.opened === false); runCheck(); }).catch(() => setNoEnrollScreen(true))} className="w-full rounded-lg py-4 font-bold text-base mb-3" style={{ background: C.marigold, color: "#000000" }}>
             {lang === "en" ? "Set up fingerprint" : lang === "mr" ? "फिंगरप्रिंट सेट करा" : "फिंगरप्रिंट सेट करें"}
           </button>
         </>

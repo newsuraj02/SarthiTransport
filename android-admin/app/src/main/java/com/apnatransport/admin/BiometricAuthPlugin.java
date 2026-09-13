@@ -123,14 +123,39 @@ public class BiometricAuthPlugin extends Plugin {
     // in a couple more taps.
     @PluginMethod
     public void openEnrollment(PluginCall call) {
-        Intent intent;
+        // Tried in order, falling back whenever one has no Activity to
+        // handle it -- some OEM Android skins (Samsung/Xiaomi/etc.) don't
+        // implement ACTION_BIOMETRIC_ENROLL correctly even on Android 11+,
+        // silently leaving the admin on a dead end instead of the actual
+        // fingerprint enrollment screen. ACTION_SECURITY_SETTINGS is the
+        // one intent virtually every Android build honors, even if it only
+        // lands on a general security hub rather than fingerprint
+        // enrollment directly.
+        Intent[] candidates;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            intent = new Intent(Settings.ACTION_BIOMETRIC_ENROLL);
-            intent.putExtra(Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED, BiometricManager.Authenticators.BIOMETRIC_STRONG);
+            Intent biometricEnroll = new Intent(Settings.ACTION_BIOMETRIC_ENROLL);
+            biometricEnroll.putExtra(Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED, BiometricManager.Authenticators.BIOMETRIC_STRONG);
+            candidates = new Intent[] {
+                biometricEnroll,
+                new Intent(Settings.ACTION_FINGERPRINT_ENROLL),
+                new Intent(Settings.ACTION_SECURITY_SETTINGS),
+            };
         } else {
-            intent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
+            candidates = new Intent[] {
+                new Intent(Settings.ACTION_FINGERPRINT_ENROLL),
+                new Intent(Settings.ACTION_SECURITY_SETTINGS),
+            };
         }
-        getContext().startActivity(intent);
-        call.resolve();
+        for (Intent intent : candidates) {
+            if (intent.resolveActivity(getContext().getPackageManager()) != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(intent);
+                call.resolve();
+                return;
+            }
+        }
+        JSObject ret = new JSObject();
+        ret.put("opened", false);
+        call.resolve(ret);
     }
 }
