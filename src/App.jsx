@@ -914,6 +914,29 @@ function usePersistedState(key, initialValue) {
   return [value, setValue];
 }
 
+// Like usePersistedState, but backed by sessionStorage instead of
+// localStorage — survives a same-session reload (a manual pull-to-refresh,
+// or window.location.reload()) but resets the moment the tab/WebView
+// itself is actually closed and a new one opens, unlike localStorage which
+// survives that too. Used for AdminBiometricLock/AdminPinLock's unlocked
+// flag: a deliberate in-app refresh shouldn't force re-entering the PIN
+// (nothing about the device changed hands), but a genuine fresh app
+// launch should.
+function useSessionState(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = window.sessionStorage.getItem(key);
+      return raw !== null ? JSON.parse(raw) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  useEffect(() => {
+    try { window.sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+  }, [key, value]);
+  return [value, setValue];
+}
+
 // Like usePersistedState, but for {name, url} photo values specifically —
 // skips writing to localStorage when `url` is a base64 data: URI (the
 // fallback uploadPhoto uses when Firebase Storage isn't reachable/
@@ -9748,14 +9771,20 @@ export default function App() {
   // it's a quick convenience lock, not a credential of its own.
   const [adminPin, setAdminPin] = usePersistedState("sarthi_adminPin", "");
   // Gates the Admin dashboard behind AdminPinLock on the native Admin app
-  // — starts false every cold app open (so a silently-restored Firebase
-  // session, see AdminLogin, still has to pass the PIN check), flips true
-  // once either the PIN is entered correctly or the admin types their
-  // password THIS visit (see onVerified below), and flips back to false
-  // every time the app returns from background (see the appStateChange
-  // listener a few lines down) so it re-locks every time the app opens or
-  // resumes.
-  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  // — sessionStorage-backed (see useSessionState) rather than plain
+  // useState, so a deliberate in-app refresh (pull-to-refresh, the manual
+  // refresh button) doesn't re-trigger the PIN screen: that's a full
+  // window.location.reload(), indistinguishable from a cold app launch to
+  // a plain in-memory flag, even though nothing about who's holding the
+  // device changed. Starts false on a genuine fresh launch (new
+  // WebView/session — sessionStorage doesn't carry over) so a silently-
+  // restored Firebase session, see AdminLogin, still has to pass the PIN
+  // check, flips true once either the PIN is entered correctly or the
+  // admin types their password THIS visit (see onVerified below), and
+  // flips back to false every time the app actually returns from
+  // background (see the appStateChange listener a few lines down) so it
+  // still re-locks on that, exactly as asked.
+  const [adminUnlocked, setAdminUnlocked] = useSessionState("sarthi_adminUnlocked", false);
   const adminWasBackgroundedRef = useRef(false);
   useEffect(() => {
     if (!isNativeApp || role !== "admin" || !adminAuth) return;
