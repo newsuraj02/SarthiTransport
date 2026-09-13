@@ -9859,24 +9859,22 @@ export default function App() {
     seedIfEmpty("vehicleTypes", DEFAULT_VEHICLES, "key").catch((e) => console.error("[seed vehicleTypes]", e));
     return subscribeCollection("vehicleTypes", setVehicleTypesLocal, null);
   }, []);
-  // Crowd-sourced route fares a driver enters via "Set Fare" (see
-  // SetFareForm) for common long-distance routes (Pune-Kolhapur, Pune-
-  // Mumbai, etc.) where a flat capacity-tier ₹/km formula doesn't track
-  // real market rates well — see getRouteAverageFare. Readable by everyone,
-  // same as vehicleTypes, since customers need it before any login-gated
-  // data loads; writes are scoped to the owning driver in firestore.rules.
-  const [routeFares, setRouteFares] = useState([]);
-  useEffect(() => {
-    if (!firestoreReady) return;
-    return subscribeCollection("routeFares", setRouteFares, null);
-  }, []);
-  // These four collections require real authentication under the current
+  // These five collections require real authentication under the current
   // Firestore rules (isSignedIn()) — the dependency array must include every
   // auth transition, not just mount ([]) or role alone, otherwise a
   // subscription that first fires before login finishes gets permanently
   // denied and never retries once the user actually signs in.
   const authDeps = [role, customerAuth.verified, driverAuth.verified, adminAuth];
   useEffect(() => (firestoreReady ? subscribeCollection("drivers", setDrivers, null) : undefined), authDeps);
+  // Crowd-sourced route fares a driver enters via "Set Fare" (see
+  // SetFareForm) for common long-distance routes (Pune-Kolhapur, Pune-
+  // Mumbai, etc.) where a flat capacity-tier ₹/km formula doesn't track
+  // real market rates well — see getRouteAverageFare. Requires sign-in to
+  // read (not public like vehicleTypes) since each entry carries a real
+  // driver phone number in its driverMobile field — writes are further
+  // scoped to the owning driver (or Admin) in firestore.rules.
+  const [routeFares, setRouteFares] = useState([]);
+  useEffect(() => (firestoreReady ? subscribeCollection("routeFares", setRouteFares, null) : undefined), authDeps);
   // One-time backfill for drivers approved before the profile-photo change
   // (see DriverProfileEdit/DriverKyc) — copies the KYC driver photo into
   // the top-level photo field for anyone missing it, so their customer-
