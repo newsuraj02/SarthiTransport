@@ -313,12 +313,13 @@ const BUG_TRACKER_SEED = [
   },
   {
     id: "wallet-full-doc-overwrite-race",
-    title: "Driver wallet/profile updates overwrite the whole document, which can race with a concurrent write",
+    title: "Driver wallet/profile updates overwrote the whole document, which could race with a concurrent write",
     severity: "medium",
-    status: "open",
-    area: "Driver wallet / referrals / withdrawals (architecture)",
-    description: "setDriver (used by withdrawals, referral display, KYC, and more) calls replaceDoc — a full setDoc overwrite of the driver's entire profile from whatever copy is in the client's memory at that moment — rather than a targeted patchDoc+increment on just the changed field. If two writes land close together (e.g. admin approves a wallet recharge at the same moment the driver's own device fires an update built from a slightly stale in-memory copy), the second full-document write has no idea about the first change and can silently overwrite it. The trip-timer's pausedMs field already uses the safer increment()-based patchDoc pattern; wallet/bonus/heldCredit are the fields with real financial stakes and would benefit from the same treatment, but it's a broader refactor touching every setDriver call site, not attempted in this pass to avoid destabilizing many already-working flows.",
+    status: "fixed",
+    area: "Driver wallet / referrals / withdrawals",
+    description: "setDriver (used by withdrawals, referral display, KYC, and more) calls replaceDoc — a full setDoc overwrite of the driver's entire profile from whatever copy is in the client's memory at that moment — rather than a targeted patchDoc+increment on just the changed field. If two writes land close together (e.g. admin approves a wallet recharge at the same moment the driver's own device fires an update built from a slightly stale in-memory copy), the second full-document write had no idea about the first change and could silently overwrite it — and this wasn't just theoretical: driverRespondBooking (accepting a trip) and cancelBooking called setDriver on every single accept/cancel even when the actual financial delta was 0 (commission is currently paused), meaning the driver's ENTIRE profile got silently overwritten from a stale snapshot on two of the most frequent actions in the app. Fixed by adding adjustDriverWallet — a patchDoc using Firestore's increment() touching only wallet/bonus/heldCredit, which commutes correctly regardless of write order or staleness, and skips the write entirely when every delta is 0 — and routing every wallet/bonus/heldCredit mutation (requestWithdrawal, approveRecharge, driverRespondBooking, cancelBooking) through it instead of setDriver. approveRecharge's own read-then-write (target.wallet + amount) had the identical race between two quick approvals for the same driver and got the same fix. Every OTHER driver profile field (KYC, name, photo, online status, vehicleSpec, etc.) still goes through setDriver/replaceDoc unchanged — this fix is scoped to the fields with real financial stakes, not a rewrite of the whole driver-profile write path.",
     foundAt: "2026-09-09",
+    fixedAt: "2026-09-13",
   },
   {
     id: "admin-block-button-mobile-id-mismatch",
@@ -329,6 +330,45 @@ const BUG_TRACKER_SEED = [
     description: "AdminDriverList's Block/Unblock button called toggleBlacklist(d.id), but toggleBlacklist looked the driver up by matching x.mobile === mobile internally. For any driver record with no mobile field of its own (the file's own AdminDriverList comment already acknowledges old hand-seeded \"demo driver\" records with missing data) the lookup would fail and the function would return early with nothing shown — the button just did nothing, no error, no feedback. The Delete button right next to it already defensively called deleteDriver(d.mobile || d.id); Block/Unblock didn't. Fixed both the button (now passes d.mobile || d.id) and toggleBlacklist itself (now also matches by doc id) so it's correct either way.",
     foundAt: "2026-09-10",
     fixedAt: "2026-09-10",
+  },
+  {
+    id: "routefares-world-readable",
+    title: "routeFares (Set Fare) was readable by anyone on the internet with no login, exposing driver phone numbers",
+    severity: "high",
+    status: "fixed",
+    area: "Set Fare / firestore.rules",
+    description: "routeFares' Firestore rule mirrored vehicleTypes' \"allow read: if true\" without accounting for the fact that every entry carries a real driverMobile field — unlike vehicleTypes (just labels/rates), this meant any driver's phone number was directly queryable by anyone with the (publicly-shipped) Firebase client config, no app login required. Fixed by requiring isSignedIn() to read, matching every other collection with personal data. Also moved the client subscription from a mount-once effect to the same authDeps-based pattern bookings/drivers already use — otherwise the very first subscription attempt (fired before login finishes) would get permanently denied and never retry once the user actually signs in, silently leaving routeFares empty all session.",
+    foundAt: "2026-09-13",
+    fixedAt: "2026-09-13",
+  },
+  {
+    id: "withdrawals-recharge-broad-read",
+    title: "Any signed-in driver/customer could read every OTHER driver/customer's wallet withdrawal and recharge amounts",
+    severity: "medium",
+    status: "fixed",
+    area: "Driver Wallet / firestore.rules",
+    description: "withdrawals and rechargeRequests both used \"allow read: if isSignedIn()\" — any signed-in user's session could list the full collection, including every other driver's/customer's requested amount and phone number, not just their own. Unlike bookings/drivers (where the client genuinely needs to see every OTHER party's doc, e.g. every open load), a driver or customer only ever needs their own wallet history here. Fixed by scoping read to the document's own driverMobile/customerMobile (or Admin) — Firestore evaluates list-query rules per document, so the existing unscoped subscribeCollection calls needed no client-side changes at all; each session now simply receives only its own docs.",
+    foundAt: "2026-09-13",
+    fixedAt: "2026-09-13",
+  },
+  {
+    id: "admin-notification-single-target-broad-read",
+    title: "A 1:1 Admin message to one specific driver/customer was still downloaded to every signed-in user's device",
+    severity: "medium",
+    status: "fixed",
+    area: "Admin Announcements / firestore.rules",
+    description: "adminNotifications used \"allow read: if isSignedIn()\" — a message Admin sent to one specific recipient (e.g. a note about a KYC rejection) was still fetched by every other signed-in customer/driver's session, just hidden from view by client-side filtering in useAnnouncementAlerts/AnnouncementsInbox. Fixed for the single-recipient case (target is one mobile string) — read is now scoped to Admin or that one recipient. See admin-notification-batch-target-broad-read for the one remaining case this doesn't cover.",
+    foundAt: "2026-09-13",
+    fixedAt: "2026-09-13",
+  },
+  {
+    id: "admin-notification-batch-target-broad-read",
+    title: "A batch Admin message to a specific LIST of recipients is still broadly readable by any signed-in user",
+    severity: "low",
+    status: "open",
+    area: "Admin Announcements / firestore.rules",
+    description: "sendAdminNotification supports targeting an array of mobiles at once (e.g. AdminFleet's \"send capacity reminder to all incomplete\" button) by storing that array directly on the notification doc. Firestore security rules have no safe way to check \"is my own phone number one of the entries in this list\" without string-parsing the auth token's phone_number/email — risky to hand-write without a way to test it against production auth data first, and getting it wrong could silently break the notification for its own real recipients, which is worse than the current leak. Left broadly readable (isSignedIn()) for this one case rather than risk that; lower severity than the single-target case since batch sends seen so far are generic reminders (KYC nudges), not personal/sensitive notes. Proper fix: have sendAdminNotification fan batch sends out into one doc per recipient instead of one doc with an array, so every case reduces to the already-fixed single-target rule.",
+    foundAt: "2026-09-13",
   },
 ];
 
@@ -9919,15 +9959,25 @@ export default function App() {
   const [expenses, setExpenses] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("expenses", setExpenses) : undefined), authDeps);
   // Admin's internal Bug Tracker (see AdminBugTracker/AdminFleet) — admin-only,
-  // same pattern as expenses/alerts. Seeded once from BUG_TRACKER_SEED so it
-  // opens with the first audit's real findings instead of empty; every
-  // status change and every bug added afterward lives only in Firestore.
+  // same pattern as expenses/alerts. Every status change and every bug
+  // added afterward lives only in Firestore; BUG_TRACKER_SEED is just the
+  // running record of audit findings in code, synced in one id at a time
+  // below (NOT seedIfEmpty's whole-collection-or-nothing check, which
+  // would only ever fire once on a totally empty collection and silently
+  // never pick up new entries added to BUG_TRACKER_SEED after that first
+  // seed already happened).
   const [bugs, setBugs] = useState([]);
+  const bugsLoadedRef = useRef(false);
   useEffect(() => {
     if (!(firestoreReady && role === "admin" && adminAuth)) return undefined;
-    seedIfEmpty("bugs", BUG_TRACKER_SEED, "id").catch((e) => console.error("[seed bugs]", e));
-    return subscribeCollection("bugs", setBugs, null);
+    return subscribeCollection("bugs", (docs) => { bugsLoadedRef.current = true; setBugs(docs); }, null);
   }, authDeps);
+  useEffect(() => {
+    if (!bugsLoadedRef.current) return;
+    const existingIds = new Set(bugs.map((b) => b.id));
+    BUG_TRACKER_SEED.filter((b) => !existingIds.has(b.id))
+      .forEach((b) => createDoc("bugs", b.id, b).catch((e) => console.error("[seed bug]", e)));
+  }, [bugs]);
   const setBugStatus = (id, status) => patchDoc("bugs", id, { status, ...(status === "fixed" ? { fixedAt: Date.now() } : {}) }).catch((e) => console.error(e));
   const addBug = (fields) => createDoc("bugs", genId("BUG"), { ...fields, status: "open", foundAt: new Date().toISOString().slice(0, 10) }).catch((e) => console.error(e));
   const [expenseCategories, setExpenseCategories] = useState({}); // { hiName: {key, hi, en, icon} }
@@ -10004,6 +10054,37 @@ export default function App() {
     if (firestoreReady && driverAuth.mobile) replaceDoc("drivers", driverAuth.mobile, next).catch((e) => console.error("[driver save]", e));
   };
 
+  // Every wallet/bonus/heldCredit mutation goes through here instead of
+  // setDriver's full-document replaceDoc — see wallet-full-doc-overwrite-
+  // race in BUG_TRACKER_SEED. A full-document overwrite built from
+  // whatever copy of the driver's profile happens to be sitting in this
+  // client's memory silently clobbers ANY other concurrent write to that
+  // same doc (an admin approving a different recharge, a KYC status
+  // change, this driver's own profile edit landing a moment earlier) —
+  // not just a theoretical race, since driverRespondBooking/cancelBooking
+  // used to call setDriver on every single trip accept/cancel even when
+  // the actual financial delta was zero (commission is currently paused),
+  // meaning the ENTIRE driver document got silently overwritten from a
+  // stale snapshot on two of the most frequent actions in the app. Uses
+  // Firestore's increment() (a patchDoc, touching only these 3 fields) so
+  // concurrent adjustments always commute correctly regardless of order
+  // or how stale either side's local copy is, and skips the write
+  // entirely when there's nothing to actually change. NOTE: increment()
+  // can't clamp a result at a floor of 0 the way the old inline
+  // Math.max(0, ...) did — not a concern for any current caller (all
+  // deltas are 0 while commission is paused, or bounded by the UI before
+  // this is called), but if a future caller needs a guaranteed non-
+  // negative result under concurrent writes, that needs a transaction,
+  // not a plain increment.
+  const adjustDriverWallet = (mobile, { walletDelta = 0, bonusDelta = 0, heldCreditDelta = 0 } = {}) => {
+    if (!firestoreReady || !mobile || (!walletDelta && !bonusDelta && !heldCreditDelta)) return;
+    const patch = {};
+    if (walletDelta) patch.wallet = increment(walletDelta);
+    if (bonusDelta) patch.bonus = increment(bonusDelta);
+    if (heldCreditDelta) patch.heldCredit = increment(heldCreditDelta);
+    patchDoc("drivers", mobile, patch).catch((e) => console.error("[wallet adjust]", e));
+  };
+
   const [driverResubmitting, setDriverResubmitting] = useState(false);
   useEffect(() => {
     if (driver?.kyc !== "Rejected") setDriverResubmitting(false);
@@ -10053,7 +10134,7 @@ export default function App() {
 
   const requestWithdrawal = (amount) => {
     if (amount <= 0 || !driver) return;
-    setDriver({ ...driver, bonus: Math.max(0, (driver.bonus || 0) - amount) });
+    adjustDriverWallet(driver.mobile, { bonusDelta: -amount });
     createDoc("withdrawals", genId("W"), { role: "driver", driverMobile: driver.mobile, driverName: driver.name, amount, status: "Pending" }).catch((e) => console.error(e));
   };
   const approveWithdrawal = (id) => patchDoc("withdrawals", id, { status: "Approved" }).catch((e) => console.error(e));
@@ -10066,10 +10147,13 @@ export default function App() {
   };
   const approveRecharge = (id) => {
     const req = rechargeRequests.find((r) => r.id === id);
-    if (req && req.status === "Pending") {
-      const target = drivers.find((d) => d.mobile === req.driverMobile);
-      if (target) patchDoc("drivers", target.mobile, { wallet: (target.wallet || 0) + req.amount }).catch((e) => console.error(e));
-    }
+    // Was reading target.wallet from Admin's own local snapshot and
+    // writing back the sum — two approvals for the same driver in quick
+    // succession (before the first patch's remote update propagates back)
+    // could both compute from the same stale base and silently lose one
+    // credit. adjustDriverWallet's increment() commutes correctly
+    // regardless of order or staleness.
+    if (req && req.status === "Pending") adjustDriverWallet(req.driverMobile, { walletDelta: req.amount });
     patchDoc("rechargeRequests", id, { status: "Approved" }).catch((e) => console.error(e));
   };
 
@@ -10263,11 +10347,15 @@ export default function App() {
     const bonusAmt = (b.fare || 0) * (effBonusPct / 100);
     const held = driver.heldCredit || 0;
     const offset = Math.min(held, commissionAmt);
-    setDriver({
-      ...driver,
-      wallet: Math.max(0, driver.wallet - (commissionAmt - offset)),
-      bonus: (driver.bonus || 0) + bonusAmt,
-      heldCredit: Math.max(0, held - offset),
+    // adjustDriverWallet (not setDriver) — every value here is 0 today
+    // (commission paused), so this call no-ops entirely rather than
+    // forcing a full-document overwrite of this driver's profile on
+    // every single trip accept, one of the most frequent actions in the
+    // app. See wallet-full-doc-overwrite-race in BUG_TRACKER_SEED.
+    adjustDriverWallet(driver.mobile, {
+      walletDelta: -(commissionAmt - offset),
+      bonusDelta: bonusAmt,
+      heldCreditDelta: -offset,
     });
 
     // Freeze this driver's pending bids on every other open load — they're
@@ -10305,7 +10393,10 @@ export default function App() {
       const effBonusPct = 0;
       const held = b.fare * (effCommissionPct / 100);
       const bonusReverse = b.fare * (effBonusPct / 100);
-      setDriver({ ...driver, heldCredit: (driver.heldCredit || 0) + held, bonus: Math.max(0, (driver.bonus || 0) - bonusReverse) });
+      // adjustDriverWallet, not setDriver — see the same note in
+      // driverRespondBooking above (no-ops today, safe & atomic once
+      // commission is reactivated).
+      adjustDriverWallet(driver.mobile, { heldCreditDelta: held, bonusDelta: -bonusReverse });
     }
     if (b.status === "Ongoing" && b.driverName) unfreezeDriverName(b.driverName);
     patchDoc("bookings", id, { status: "Cancelled" }).catch((e) => console.error(e));

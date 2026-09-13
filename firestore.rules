@@ -142,8 +142,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Read is scoped per-document to the request's own driverMobile/
+    // customerMobile (or Admin) rather than a blanket isSignedIn() — unlike
+    // bookings/drivers (where the client genuinely needs every OTHER
+    // party's doc too, e.g. every open "Bidding" load), a driver or
+    // customer only ever needs their OWN withdrawal history. Firestore
+    // evaluates list-query rules per document, so the client's existing
+    // unscoped subscribeCollection("withdrawals", ...) doesn't need to
+    // change at all — it now simply receives only the caller's own docs
+    // (or everything, for Admin) instead of every driver/customer's
+    // amounts and phone number.
     match /withdrawals/{id} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin()
+        || isOwnPhone(resource.data.get('driverMobile', ''))
+        || isOwnPhone(resource.data.get('customerMobile', ''));
       allow create: if isSignedIn() && (
         (request.resource.data.role == 'driver' && isOwnPhone(request.resource.data.driverMobile)) ||
         (request.resource.data.role == 'customer' && isOwnPhone(request.resource.data.customerMobile))
@@ -151,8 +163,9 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Same per-document scoping as withdrawals above, same reasoning.
     match /rechargeRequests/{id} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || isOwnPhone(resource.data.get('driverMobile', ''));
       allow create: if isOwnPhone(request.resource.data.driverMobile);
       allow update, delete: if isAdmin();
     }
@@ -174,13 +187,27 @@ service cloud.firestore {
 
     // Admin "Send Notification" history (see functions/index.js:
     // sendAdminNotification) — written only by that Cloud Function via the
-    // Admin SDK, no client write path needed or allowed here. Any signed-in
-    // user can read (same broad-read-client-filters pattern as bookings/
-    // withdrawals/rechargeRequests above) since this doubles as the actual
-    // announcements drivers/customers read in their own "Admin
-    // Announcements" inbox, not just admin's own sent-history view.
+    // Admin SDK, no client write path needed or allowed here. Doubles as
+    // the actual announcements drivers/customers read in their own "Admin
+    // Announcements" inbox, not just admin's own sent-history view, so
+    // read is scoped per-document to who the message was actually for:
+    // "all" is visible to any signed-in user (matches its own meaning),
+    // and a single-recipient message (target is one mobile string) is
+    // visible only to Admin or that one recipient. KNOWN REMAINING GAP:
+    // a batch send to a specific LIST of recipients (target is a list —
+    // e.g. AdminFleet's "send capacity reminder to all incomplete") is
+    // still broadly readable by any signed-in user, same as before —
+    // Firestore rules can't express "is my own phone number one of the
+    // entries in this list" without unsafe string parsing of the auth
+    // token, so this case is left as-is rather than risk silently
+    // breaking the notification for its own real recipients. Tracked in
+    // the Bug Tracker (see BUG_TRACKER_SEED in App.jsx) rather than
+    // fixed silently.
     match /adminNotifications/{id} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin()
+        || resource.data.target == "all"
+        || (resource.data.target is string && isOwnPhone(resource.data.target))
+        || resource.data.target is list;
     }
 
     // Business expense tracking (Admin's "Expenses" tab) — admin-only,
