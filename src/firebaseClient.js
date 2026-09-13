@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getAuth, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -76,6 +76,23 @@ const adminApp = hasConfig ? initializeApp(firebaseConfig, "adminAuth") : null;
 export const customerFirebaseAuth = customerApp ? getAuth(customerApp) : null;
 export const driverFirebaseAuth = driverApp ? getAuth(driverApp) : null;
 export const adminFirebaseAuth = adminApp ? getAuth(adminApp) : null;
+
+// Without this, Auth's own persistence auto-detection has been seen to
+// silently settle on a non-durable mode (session-only or in-memory) in some
+// browser/WebView contexts — easy to miss during testing since a session
+// still looks fine right up until the tab/app actually reloads, at which
+// point it's just gone and the login screen appears again with no error
+// anywhere. Forcing indexedDBLocalPersistence explicitly (falling back to
+// browserLocalPersistence, e.g. Safari private mode or IndexedDB genuinely
+// unavailable) makes every one of the three role sessions survive a
+// refresh/relaunch the same way customerAuth/driverAuth/adminAuth's own
+// admin==true custom claim already assumes it will.
+[customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth].forEach((auth) => {
+  if (!auth) return;
+  setPersistence(auth, indexedDBLocalPersistence).catch(() =>
+    setPersistence(auth, browserLocalPersistence).catch((e) => console.error("[auth persistence]", e))
+  );
+});
 
 // autoDetectLongPolling: Firestore's default streaming transport
 // (WebChannel) can get stuck behind restrictive corporate/mobile proxies
