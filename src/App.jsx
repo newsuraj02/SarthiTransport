@@ -646,16 +646,40 @@ function routeTextsMatch(a, b) {
   if (!a || !b) return false;
   return a.includes(b) || b.includes(a);
 }
+// Google's autocomplete/geocoder returns place names in whatever script the
+// requesting device's locale prefers — the same real-world spot can come
+// back as "Talegaon Chowk, Chakan" on one phone and "चाकण चौक, तळेगाव रोड"
+// on another. Plain substring text matching (routeTextsMatch) can never
+// bridge that, so two entries for the identical real route look completely
+// unrelated whenever the driver's and customer's devices returned
+// different scripts. Matching by real GPS coordinates instead sidesteps
+// language entirely — same place, same lat/lng, regardless of what text
+// came back with it.
+const ROUTE_MATCH_RADIUS_KM = 5;
+function locationsNear(lat1, lng1, lat2, lng2) {
+  return haversineKm(lat1, lng1, lat2, lng2) <= ROUTE_MATCH_RADIUS_KM;
+}
 // Averages every driver-submitted "Set Fare" quote (see SetFareForm) for
 // this same pickup/drop route — real market rates other drivers are
 // actually charging for a specific, well-known route (e.g. Pune-Kolhapur)
 // often don't track a flat per-km formula the way in-city trips do, so this
 // takes priority over calculateFare whenever at least one driver has quoted
-// this exact route. Returns null when nobody has.
-function getRouteAverageFare(pickup, drop, routeFares) {
+// this route. Matches by coordinates when both sides have them (see
+// locationsNear above); falls back to routeTextsMatch only for older
+// entries saved before coordinates were captured, or if geocoding hasn't
+// resolved yet. Returns null when nobody has quoted this route.
+function getRouteAverageFare(pickup, drop, routeFares, pickupLat, pickupLng, dropLat, dropLng) {
   const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
   if (!p || !d || !Array.isArray(routeFares) || routeFares.length === 0) return null;
-  const matches = routeFares.filter((r) => routeTextsMatch(r.pickupKey, p) && routeTextsMatch(r.dropKey, d));
+  const matches = routeFares.filter((r) => {
+    const pickupOk = pickupLat != null && r.pickupLat != null
+      ? locationsNear(pickupLat, pickupLng, r.pickupLat, r.pickupLng)
+      : routeTextsMatch(r.pickupKey, p);
+    const dropOk = dropLat != null && r.dropLat != null
+      ? locationsNear(dropLat, dropLng, r.dropLat, r.dropLng)
+      : routeTextsMatch(r.dropKey, d);
+    return pickupOk && dropOk;
+  });
   if (matches.length === 0) return null;
   const avgFare = Math.round(matches.reduce((sum, r) => sum + (Number(r.totalFare) || 0), 0) / matches.length);
   return { avgFare, count: matches.length };
@@ -665,8 +689,8 @@ function getRouteAverageFare(pickup, drop, routeFares) {
 // itself all agree on the same number for the same trip — see
 // getRouteAverageFare for when the crowd-sourced average wins over the
 // generic capacity-tier formula.
-function resolveFare(driver, pickup, drop, distanceKm, tiers, routeFares) {
-  const routeAvg = getRouteAverageFare(pickup, drop, routeFares);
+function resolveFare(driver, pickup, drop, distanceKm, tiers, routeFares, pickupLat, pickupLng, dropLat, dropLng) {
+  const routeAvg = getRouteAverageFare(pickup, drop, routeFares, pickupLat, pickupLng, dropLat, dropLng);
   if (routeAvg) return routeAvg.avgFare;
   return calculateFare(driver?.vehicleSpec?.capacityKg, distanceKm, tiers);
 }
@@ -4813,7 +4837,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                 </p>
               ) : eligibleDrivers.map((d) => {
                 const isSelected = selectedDriverName === d.name;
-                const driverFare = resolveFare(d, pickup, drop, distance, fareTiers, routeFares);
+                const driverFare = resolveFare(d, pickup, drop, distance, fareTiers, routeFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng);
                 return (
                   <div key={d.mobile || d.id}>
                     <button onClick={() => setSelectedDriverName(d.name)}
@@ -7194,12 +7218,10 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
   // driver isn't guessing — a tap fills Total Fare with it, but typing
   // over it afterward is always still allowed.
   const routeSuggestion = (() => {
-    const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
-    if (!p || !d) return null;
-    const others = (routeFares || []).filter((r) => r.driverMobile !== driver.mobile && routeTextsMatch(r.pickupKey, p) && routeTextsMatch(r.dropKey, d));
-    if (others.length === 0) return null;
-    const avgTotal = Math.round(others.reduce((sum, r) => sum + (Number(r.totalFare) || 0), 0) / others.length);
-    return { totalFare: avgTotal, count: others.length };
+    if (!pickup.trim() || !drop.trim()) return null;
+    const others = (routeFares || []).filter((r) => r.driverMobile !== driver.mobile);
+    const avg = getRouteAverageFare(pickup, drop, others, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng);
+    return avg ? { totalFare: avg.avgFare, count: avg.count } : null;
   })();
   const useSuggestion = () => {
     if (!routeSuggestion) return;
@@ -7227,6 +7249,14 @@ function SetFareForm({ driver, routeFares, lang, onClose }) {
         driverMobile: driver.mobile,
         pickupName: pickup.trim(), dropName: drop.trim(),
         pickupKey: normalizeRouteText(pickup), dropKey: normalizeRouteText(drop),
+        // Real coordinates, not just text — see locationsNear/
+        // getRouteAverageFare. Google's autocomplete returns place names in
+        // whatever script the device's locale prefers, so two drivers
+        // quoting the identical real route can end up with completely
+        // different-looking pickupKey/dropKey text; matching by GPS
+        // location instead lets the average still find them both.
+        pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+        dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
         estimatedKm: distance,
         tier1to5Fare,
         totalFare: Number(totalFare) || 0,
@@ -10237,7 +10267,7 @@ export default function App() {
     const bookingId = genId();
     const conflict = findDriverLoadConflict(targetDriver, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
-    const fare = resolveFare(targetDriver, pickup, drop, distance, fareTiers, routeFares);
+    const fare = resolveFare(targetDriver, pickup, drop, distance, fareTiers, routeFares, pickupLat, pickupLng, dropLat, dropLng);
     createDoc("bookings", bookingId, {
       pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: driverName, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
