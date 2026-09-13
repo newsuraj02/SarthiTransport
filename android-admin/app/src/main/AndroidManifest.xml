@@ -52,4 +52,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- BiometricAuthPlugin's fingerprint lock (see AdminBiometricLock in
+         src/App.jsx). USE_BIOMETRIC covers API 28+; USE_FINGERPRINT is the
+         older, deprecated permission androidx.biometric still falls back
+         to on API 23-27 (this app's minSdkVersion — see android/variables.gradle). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
 </manifest>
