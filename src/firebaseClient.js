@@ -220,6 +220,26 @@ export async function creditDriverReferral() {
   }
 }
 
+// Verifies a driver's typed-in pickup OTP guess against the real value
+// server-side (see functions/index.js: verifyPickupOtp) without the real
+// value ever reaching this client at all — see DriverOtpEntry (App.jsx)
+// and otp-readable-by-any-driver in BUG_TRACKER_SEED for why this can no
+// longer just compare against a value already sitting in local state.
+// Resolves { valid: false } (never throws) on any failure — a network
+// blip or a genuine wrong guess look the same to the caller either way.
+export async function verifyPickupOtp(bookingId, otp) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { valid: false };
+  try {
+    const call = httpsCallable(functions, "verifyPickupOtp");
+    const result = await call({ bookingId, otp });
+    return result.data;
+  } catch (e) {
+    console.error("[verifyPickupOtp] callable failed", e);
+    return { valid: false };
+  }
+}
+
 // Forgot-PIN recovery, final step (see functions/index.js). Must be called
 // while already signed in via a fresh real Firebase Phone Auth session
 // (CustomerOnboarding/DriverOnboarding's Forgot PIN flow does the

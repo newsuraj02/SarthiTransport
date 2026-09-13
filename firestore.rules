@@ -142,6 +142,24 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // The real pickup OTP, split out of bookings/{id} on purpose (see the
+    // comment there) — that document is broadly readable by isSignedIn(),
+    // which used to mean any driver's app already had a booking's real
+    // OTP in local memory before ever visiting the pickup, defeating the
+    // entire point of it. Deliberately NOT readable by the assigned
+    // driver here either — verification happens through the
+    // verifyPickupOtp Cloud Function (functions/index.js), which reads
+    // this via the Admin SDK and returns pass/fail only, so a driver's
+    // client never sees the correct value at any point. Written by the
+    // assigned driver's own session at accept time (driverRespondBooking)
+    // — same trust level bookings/{id} already grants a driver over their
+    // own newly-accepted trip.
+    match /bookingOtps/{bookingId} {
+      allow read: if isAdmin() || isOwnPhone(resource.data.get('customerMobile', ''));
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
     // Read is scoped per-document to the request's own driverMobile/
     // customerMobile (or Admin) rather than a blanket isSignedIn() — unlike
     // bookings/drivers (where the client genuinely needs every OTHER

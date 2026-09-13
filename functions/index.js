@@ -369,6 +369,48 @@ exports.expireOldAdminNotifications = onSchedule({ schedule: "0 * * * *", timeZo
   await Promise.all(deletions);
 });
 
+// bookingOtps (see verifyPickupOtp above) is only ever needed for the
+// brief window between a trip starting and the driver verifying pickup —
+// same unbounded-growth concern as adminNotifications, same fix.
+const BOOKING_OTP_TTL_HOURS = 24;
+exports.expireOldBookingOtps = onSchedule({ schedule: "0 * * * *", timeZone: "Asia/Kolkata" }, async () => {
+  const cutoff = Timestamp.fromMillis(Date.now() - BOOKING_OTP_TTL_HOURS * 60 * 60 * 1000);
+  const snap = await db.collection("bookingOtps").where("createdAt", "<=", cutoff).get();
+  const deletions = [];
+  snap.forEach((doc) => deletions.push(doc.ref.delete()));
+  await Promise.all(deletions);
+});
+
+// Verifies a driver's pickup OTP guess without ever handing the real value
+// to any client (see DriverOtpEntry/verifyPickupOtp in App.jsx/
+// firebaseClient.js, and otp-readable-by-any-driver in BUG_TRACKER_SEED).
+// The OTP itself lives in bookingOtps/{bookingId} (written by
+// driverRespondBooking when the trip starts), readable only by that
+// booking's own customer or Admin per firestore.rules -- this function
+// reads it via the Admin SDK, which bypasses those rules entirely, so the
+// driver's own client (which calls this) never sees the correct answer at
+// any point, before or after a correct guess.
+exports.verifyPickupOtp = onCall({ region: "asia-south1" }, async (request) => {
+  const callerPhone = callerPhoneFromAuth(request.auth?.token);
+  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
+  const { bookingId, otp } = request.data || {};
+  if (!bookingId || !otp) throw new HttpsError("invalid-argument", "bookingId and otp are required.");
+
+  const bookingSnap = await db.collection("bookings").doc(bookingId).get();
+  if (!bookingSnap.exists) throw new HttpsError("not-found", "Booking not found.");
+  const booking = bookingSnap.data();
+  // Only the driver this booking is actually assigned to may attempt a
+  // guess -- otherwise any signed-in driver could brute-force another
+  // driver's pickup OTP through this same function.
+  if (!booking.driverMobile || callerPhone !== `+91${booking.driverMobile}`) {
+    throw new HttpsError("permission-denied", "Not the assigned driver for this booking.");
+  }
+
+  const otpSnap = await db.collection("bookingOtps").doc(bookingId).get();
+  const valid = otpSnap.exists && String(otpSnap.data().otp || "") === String(otp);
+  return { valid };
+});
+
 // ---------------- KYC photo classification (Gemini) ----------------
 // Catches drivers uploading a front or diagonal shot for the vehicle's
 // "Side" photo tile (found by spot-checking submitted KYC), and the same

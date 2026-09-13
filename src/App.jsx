@@ -14,7 +14,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp } from "./firebaseClient";
 import { registerPlugin } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -304,12 +304,13 @@ const BUG_TRACKER_SEED = [
   },
   {
     id: "otp-readable-by-any-driver",
-    title: "Pickup OTP is readable by any signed-in user, not just the two parties to that booking",
+    title: "Pickup OTP was readable by any signed-in user (including the assigned driver's own app) before it was ever entered",
     severity: "medium",
-    status: "open",
-    area: "Bookings / firestore.rules",
-    description: "The 4-digit pickup OTP (proves a driver is physically at the pickup point before loading starts) is stored in plain text on the booking document. firestore.rules intentionally allows `allow read: if isSignedIn()` on bookings/{id} — any signed-in driver or customer, not just this booking's own two parties — because the app fetches whole collections and filters client-side (e.g. a driver needs every open \"Bidding\" load, not just their own). That means any other signed-in driver could in principle read a booking's otp field directly from Firestore without ever visiting the pickup, defeating the point of the check. Fixing this properly needs either scoping bookings reads down (a bigger rewrite of the broad-read/client-filter pattern used throughout this app) or moving OTP verification into a Cloud Function that returns only pass/fail, never the code itself. Flagging for a deliberate decision rather than fixing silently, since it changes a load-bearing data-access pattern used everywhere.",
+    status: "fixed",
+    area: "Bookings / firestore.rules / Cloud Functions",
+    description: "The 4-digit pickup OTP (proves a driver is physically at the pickup point before loading starts) used to be stored directly on the booking document, which firestore.rules intentionally allows any signed-in user to read (the app fetches whole collections and filters client-side, e.g. a driver needs every open \"Bidding\" load) — meaning the assigned driver's OWN app already had the real OTP in local memory the moment they accepted the trip, before ever asking the customer for it, defeating the entire point of the check. Fixed by moving the OTP into its own bookingOtps/{id} document, readable only by that booking's own customer or Admin (never the driver, by rule — see firestore.rules), and adding a verifyPickupOtp Cloud Function that the driver's app calls with its guess and gets back pass/fail only, never the real value. driverRespondBooking now writes the OTP there instead of onto the booking doc; the customer's Active Ride screen reads it via a scoped subscription instead of the booking object it already had. bookingOtps gets the same 24h cleanup as adminNotifications (expireOldBookingOtps) since it's only ever needed for the brief pre-pickup window.",
     foundAt: "2026-09-09",
+    fixedAt: "2026-09-13",
   },
   {
     id: "wallet-full-doc-overwrite-race",
@@ -4868,6 +4869,19 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
   const [showDocs, setShowDocs] = useState(false);
   const docsSent = !!b.documents?.file?.url;
 
+  // The real OTP now lives in its own bookingOtps/{id} doc (see
+  // driverRespondBooking), readable only by this booking's own customer
+  // or Admin — never the driver, and never part of the broadly-readable
+  // bookings/{id} document itself (see otp-readable-by-any-driver in
+  // BUG_TRACKER_SEED). Only subscribed while it's actually still needed
+  // (Ongoing, pickup not yet verified) — no reason to hold a live listener
+  // on it before or after that window.
+  const [pickupOtp, setPickupOtp] = useState(null);
+  useEffect(() => {
+    if (!firestoreReady || b.status !== "Ongoing" || b.loadingStartedAt) { setPickupOtp(null); return; }
+    return subscribeDoc("bookingOtps", b.id, (data) => setPickupOtp(data?.otp || null));
+  }, [b.id, b.status, b.loadingStartedAt]);
+
   // Computed unconditionally (not just inside the b.status === "Bidding"
   // branch below) purely so useFlipListAnimation — a hook — can be called
   // unconditionally too, with the right ordering, on every render.
@@ -5083,10 +5097,10 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
             only makes sense once loading has genuinely started, so it takes
             this exact spot the moment OTP is no longer needed instead of
             the two ever being shown at once. */}
-        {b.otp && !b.loadingStartedAt ? (
+        {pickupOtp && !b.loadingStartedAt ? (
           <div className="flex-1 rounded-xl px-3 py-1.5 text-center guided-submit-ready">
             <div className="text-[8px] font-black" style={{ color: C.inkSoft }}>{lang === "en" ? "OTP" : lang === "mr" ? "OTP" : "OTP"}</div>
-            <div className="text-lg font-black leading-none mt-0.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 4 }}>{b.otp}</div>
+            <div className="text-lg font-black leading-none mt-0.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 4 }}>{pickupOtp}</div>
           </div>
         ) : (
           <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-3 pr-3.5 py-3 rounded-full text-base font-black shadow-sm text-white"
@@ -6001,14 +6015,24 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
 function DriverOtpEntry({ trip, startLoading, lang }) {
   const [otpInput, setOtpInput] = useState("");
   const [otpError, setOtpError] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   // Auto-submits the moment the 4th digit lands — no separate Confirm tap.
-  const handleChange = (e) => {
+  // Verified via a Cloud Function (see verifyPickupOtp in firebaseClient.js)
+  // instead of comparing against a local trip.otp value — the driver's own
+  // app is never given the real OTP at all anymore (see
+  // otp-readable-by-any-driver in BUG_TRACKER_SEED), so this is now a real
+  // check the driver can actually fail, not a formality their own app
+  // already knew the answer to.
+  const handleChange = async (e) => {
     const next = e.target.value.replace(/\D/g, "").slice(0, 4);
     setOtpInput(next);
     setOtpError(false);
     if (next.length === 4) {
-      if (next === String(trip.otp || "")) {
+      setChecking(true);
+      const { valid } = await verifyPickupOtp(trip.id, next);
+      setChecking(false);
+      if (valid) {
         startLoading(trip.id);
       } else {
         setOtpError(true);
@@ -6020,7 +6044,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
   return (
     <div className="flex-1 min-w-0">
       <div className="guided-submit-ready flex items-center justify-center rounded-xl px-2.5 py-1.5" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
-        <input value={otpInput} onChange={handleChange}
+        <input value={otpInput} onChange={handleChange} disabled={checking}
           placeholder={lang === "en" ? "Enter OTP" : lang === "mr" ? "OTP टाका" : "OTP डालें"} maxLength={4} inputMode="numeric"
           className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 18, letterSpacing: 4, fontWeight: 900 }} />
       </div>
@@ -10329,9 +10353,23 @@ export default function App() {
       return conflict;
     }
     const otp = String(Math.floor(1000 + Math.random() * 9000));
+    // The OTP is deliberately NOT written onto the bookings/{id} doc
+    // itself — that document is broadly readable by every signed-in
+    // driver/customer (the app fetches whole collections and filters
+    // client-side, e.g. every open "Bidding" load), which used to mean
+    // ANY driver's app already had this booking's real OTP sitting in
+    // its own local memory before ever visiting the pickup, defeating
+    // the entire point of asking for it. Written instead to its own
+    // bookingOtps/{id} doc, readable only by that booking's own customer
+    // or Admin (never the assigned driver — see firestore.rules) — the
+    // driver's app verifies a guess via the verifyPickupOtp Cloud
+    // Function (see DriverOtpEntry), which returns pass/fail only and
+    // never the real value. See otp-readable-by-any-driver in
+    // BUG_TRACKER_SEED.
+    createDoc("bookingOtps", bookingId, { otp, customerMobile: b.customerMobile || "" }).catch((e) => console.error("[booking otp]", e));
     patchDoc("bookings", bookingId, {
       status: "Ongoing", driverName: driver.name, driverMobile: driver.mobile || mobileForDriverName(driver.name),
-      progress: 0, otp, pendingDriverName: null, pendingBidId: null,
+      progress: 0, pendingDriverName: null, pendingBidId: null,
     }).catch((e) => console.error(e));
 
     // Commission cut on confirm — held credit from a past cancellation
