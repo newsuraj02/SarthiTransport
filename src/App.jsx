@@ -811,6 +811,25 @@ function maharashtraLongHaulDiscountPct(km) {
 function isLongHaulSmallLoad(estimatedKm, tierMaxKg) {
   return estimatedKm != null && estimatedKm >= 400 && tierMaxKg != null && tierMaxKg <= 1500;
 }
+// Turns a failed adminRouteFares write into something Admin can actually
+// act on. "permission-denied" specifically means the Firestore security
+// rule for this collection isn't live yet (it has to be deployed by hand
+// from a real machine -- see firestore.rules) -- surfacing that distinctly
+// matters because otherwise Save Rate looks like it just does nothing,
+// with no way to tell a rules problem apart from a network hiccup.
+function describeAdminRateSaveError(e, lang) {
+  if (e?.code === "permission-denied") {
+    return lang === "en"
+      ? "Not saved — permission denied. The adminRouteFares security rule likely hasn't been deployed yet (needs \"firebase deploy --only firestore:rules\" from your machine)."
+      : lang === "mr"
+      ? "सेव्ह झाले नाही — परवानगी नाकारली. adminRouteFares सिक्युरिटी रूल कदाचित अजून डिप्लॉय झालेला नाही (तुमच्या मशीनवरून \"firebase deploy --only firestore:rules\" चालवावे लागेल)."
+      : "सेव नहीं हुआ — अनुमति अस्वीकृत। adminRouteFares सिक्योरिटी रूल शायद अभी तक डिप्लॉय नहीं हुआ है (आपकी मशीन से \"firebase deploy --only firestore:rules\" चलाना होगा)।";
+  }
+  if (e?.code === "unavailable" || e?.code === "deadline-exceeded") {
+    return lang === "en" ? "Not saved — network problem. Check your connection and try again." : lang === "mr" ? "सेव्ह झाले नाही — नेटवर्क समस्या. कनेक्शन तपासा आणि पुन्हा प्रयत्न करा." : "सेव नहीं हुआ — नेटवर्क समस्या। कनेक्शन जांचें और फिर कोशिश करें।";
+  }
+  return lang === "en" ? `Not saved — ${e?.message || "unknown error"}.` : lang === "mr" ? `सेव्ह झाले नाही — ${e?.message || "अज्ञात त्रुटी"}.` : `सेव नहीं हुआ — ${e?.message || "अज्ञात त्रुटि"}।`;
+}
 // A small, deliberately varied trial batch for the "Test import" button --
 // Pune-Mumbai (short, no discount), Pune-Kolhapur (medium, no discount,
 // and the exact route this whole rate card started from), Pune-Nagpur
@@ -8428,6 +8447,7 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
   const [fareTouched, setFareTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
@@ -8470,10 +8490,11 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
 
   const resetForm = () => {
     setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
-    setWeight(""); setTotalFare(""); setFareTouched(false); setEditingId(null);
+    setWeight(""); setTotalFare(""); setFareTouched(false); setEditingId(null); setSaveError("");
   };
 
   const editEntry = (r) => {
+    setSaveError("");
     setPickup(r.pickupName || ""); setDrop(r.dropName || "");
     setPickupCoords(r.pickupLat != null ? { lat: r.pickupLat, lng: r.pickupLng } : null);
     setDropCoords(r.dropLat != null ? { lat: r.dropLat, lng: r.dropLng } : null);
@@ -8491,6 +8512,7 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
   const save = async () => {
     if (!canSave || !tier) return;
     setSaving(true);
+    setSaveError("");
     const docId = `${sanitizeForDocId(pickup)}__${sanitizeForDocId(drop)}__${tier.maxKg}`;
     try {
       await createDoc("adminRouteFares", docId, {
@@ -8506,7 +8528,10 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
       });
       resetForm();
       setSavedFlash(true);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setSaveError(describeAdminRateSaveError(e, lang));
+    }
     setSaving(false);
   };
 
@@ -8655,13 +8680,13 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
           </div>
 
           <LocationField lang={lang} value={pickup}
-            onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); }}
-            onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
+            onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); setSaveError(""); }}
+            onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); setSaveError(""); }}
             mapsReady={mapsReady}
             placeholder={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} />
           <LocationField lang={lang} value={drop}
-            onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setSavedFlash(false); }}
-            onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
+            onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setSavedFlash(false); setSaveError(""); }}
+            onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); setSaveError(""); }}
             mapsReady={mapsReady}
             placeholder={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} />
 
@@ -8675,7 +8700,7 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
             <div>
               <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Enter weight (kg)" : lang === "mr" ? "वजन टाका (किलो)" : "वजन डालें (किलो)"}</div>
               <input type="number" inputMode="numeric" value={weight}
-                onChange={(e) => { setWeight(e.target.value.replace(/\D/g, "")); setSavedFlash(false); }}
+                onChange={(e) => { setWeight(e.target.value.replace(/\D/g, "")); setSavedFlash(false); setSaveError(""); }}
                 className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
                 placeholder={lang === "en" ? "e.g. 1000" : "उदा. 1000"} />
             </div>
@@ -8687,7 +8712,7 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
               {suggestedFare != null && !fareTouched && <span style={{ color: C.marigoldDeep }}> · {lang === "en" ? "system suggestion" : lang === "mr" ? "सिस्टम सूचना" : "सिस्टम सुझाव"}</span>}
             </div>
             <input type="number" inputMode="numeric" value={totalFare}
-              onChange={(e) => { setTotalFare(e.target.value); setFareTouched(true); setSavedFlash(false); }}
+              onChange={(e) => { setTotalFare(e.target.value); setFareTouched(true); setSavedFlash(false); setSaveError(""); }}
               className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
               placeholder={lang === "en" ? "Fill rate" : lang === "mr" ? "दर भरा" : "दर भरें"} />
           </div>
@@ -8753,6 +8778,11 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
           {savedFlash && (
             <div className="rounded-lg p-2 mt-2 text-xs font-bold text-center" style={{ background: C.success, color: "#fff" }}>
               {lang === "en" ? "Saved." : lang === "mr" ? "सेव्ह झाले." : "सेव हो गया।"}
+            </div>
+          )}
+          {saveError && (
+            <div className="rounded-lg p-2 mt-2 text-xs font-bold text-center" style={{ background: C.safety, color: "#fff" }}>
+              {saveError}
             </div>
           )}
         </div>
