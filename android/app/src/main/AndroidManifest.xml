@@ -52,4 +52,28 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Without these, navigator.geolocation.getCurrentPosition/
+         watchPosition (see useLocationPermission, LocationBanner, and every
+         live-tracking watchPosition call site in App.jsx) has nothing to
+         request at the OS level. Capacitor's WebView bridge maps that web
+         API straight onto Android's real runtime permission dialog (the
+         same system "While using the app / Only this time / Don't allow"
+         prompt every native app shows), but only if the app is allowed to
+         hold the permission in the first place. Without this, the call just
+         fails immediately with no dialog ever appearing, which is why only
+         this app's own custom in-app banner was ever visible. FINE for GPS
+         accuracy tracking (this app's whole live-location feature depends
+         on real accuracy, not just a coarse city-level fix); COARSE
+         included as the graceful fallback Android itself offers when a user
+         picks "Approximate" in that dialog. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Explicit even though @capacitor/push-notifications' own Android
+         library likely already merges this in; costs nothing to state
+         directly rather than rely on an assumption about plugin manifest
+         merging, and this is exactly the permission behind Android 13+'s
+         own notification permission dialog (see requestNativePushToken in
+         firebaseClient.js, which already correctly calls
+         PushNotifications.requestPermissions()). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>
