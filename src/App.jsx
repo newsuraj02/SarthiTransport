@@ -797,14 +797,26 @@ function maharashtraLongHaulDiscountPct(km) {
   if (km <= 300) return 0;
   return Math.min(16, 16 * Math.sqrt((km - 300) / 500));
 }
+// A small, deliberately varied trial batch for the "Test import" button --
+// Pune-Mumbai (short, no discount), Pune-Kolhapur (medium, no discount,
+// and the exact route this whole rate card started from), Pune-Nagpur
+// (long-haul, discount + flagged small-weight brackets) -- so a look at
+// just these three exercises every code path the full 55-route import
+// does, before committing to all of them.
+const MAHARASHTRA_TEST_EDGES = [
+  [0, 1, 150],
+  [0, 3, 230],
+  [0, 10, 700],
+];
 // Every (hub pair x bracket), both directions -- 55 pairs x 8 brackets x 2
-// directions = 880 documents. Both directions need their own doc since a
+// directions = 880 documents by default (pass MAHARASHTRA_TEST_EDGES for
+// just the trial batch above). Both directions need their own doc since a
 // real booking's pickup/drop coordinates are matched directionally (see
 // getAdminRouteOverride), even though the modelled price itself doesn't
 // vary by direction.
-function buildMaharashtraDefaultRates() {
+function buildMaharashtraDefaultRates(edges) {
   const entries = [];
-  MAHARASHTRA_HUB_EDGES.forEach(([ai, bi, km]) => {
+  (edges || MAHARASHTRA_HUB_EDGES).forEach(([ai, bi, km]) => {
     const a = MAHARASHTRA_HUBS[ai], b = MAHARASHTRA_HUBS[bi];
     const factor = 1 - maharashtraLongHaulDiscountPct(km) / 100;
     MAHARASHTRA_RATE_BANDS.forEach((band) => {
@@ -8499,18 +8511,22 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
   // the last import, so it's skipped rather than silently clobbered. Only
   // docs that are missing entirely, or still carry the untouched default
   // tag, get (re)written.
-  const [importConfirm, setImportConfirm] = useState(false);
+  // importConfirm/importDone carry which batch is pending/just finished --
+  // "test" (the 3-route trial batch) or "full" (all 55 routes) -- so the
+  // same runImport/UI serves both without duplicating the write logic.
+  const [importConfirm, setImportConfirm] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(null);
   const [importDone, setImportDone] = useState(null);
-  const runImport = async () => {
+  const runImport = async (mode) => {
     setImporting(true);
     setImportDone(null);
+    const edges = mode === "test" ? MAHARASHTRA_TEST_EDGES : MAHARASHTRA_HUB_EDGES;
     const existingById = {};
     (adminRouteFares || []).forEach((r) => { existingById[r.id] = r; });
     const toWrite = [];
     let skipped = 0;
-    buildMaharashtraDefaultRates().forEach((e) => {
+    buildMaharashtraDefaultRates(edges).forEach((e) => {
       const docId = `${sanitizeForDocId(e.pickupName)}__${sanitizeForDocId(e.dropName)}__${e.tierMaxKg}`;
       const existing = existingById[docId];
       if (existing && existing.source !== "maharashtraDefault") { skipped++; return; }
@@ -8533,9 +8549,11 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
       setImportProgress({ done: Math.min(i + CHUNK, toWrite.length), total: toWrite.length });
     }
     setImporting(false);
-    setImportConfirm(false);
-    setImportDone({ ok, failed, skipped });
+    setImportConfirm(null);
+    setImportDone({ mode, ok, failed, skipped });
   };
+  const pendingEdges = importConfirm === "test" ? MAHARASHTRA_TEST_EDGES : MAHARASHTRA_HUB_EDGES;
+  const pendingCount = pendingEdges.length * MAHARASHTRA_RATE_BANDS.length * 2;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
@@ -8565,24 +8583,38 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
                 : "बल्क इम्पोर्ट: महाराष्ट्र के 11 प्रमुख शहरों (पुणे, मुंबई, नाशिक, कोल्हापुर, सोलापुर, छ. संभाजीनगर, अहमदनगर, सातारा, अमरावती, नांदेड, नागपुर) के बीच हर रूट और सभी 8 वजन ब्रैकेट के लिए मॉडेल्ड दरें। ये अनुमान हैं, असली मार्केट कोट नहीं — हर इम्पोर्ट की गई एंट्री नीचे हाथ से टाइप की गई एंट्री जैसी ही एडिट/हटाई जा सकती है। दोबारा इम्पोर्ट करना सुरक्षित है: आपने हाथ से बदली (या बनाई) कोई एंट्री कभी नहीं बदली जाती — सिर्फ बिना बदले डिफ़ॉल्ट या छूटे हुए रूट (दोबारा) लिखे जाते हैं।"}
             </p>
             {!importConfirm && !importing && (
-              <button onClick={() => setImportConfirm(true)} className="w-full mt-2 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.navy, color: "#fff" }}>
-                {lang === "en" ? "Import Maharashtra Rate Card defaults" : lang === "mr" ? "महाराष्ट्र रेट कार्ड डिफॉल्ट्स इम्पोर्ट करा" : "महाराष्ट्र रेट कार्ड डिफॉल्ट्स इम्पोर्ट करें"}
-              </button>
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setImportConfirm("test")} className="flex-1 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.paper, color: C.navy, border: `1.5px solid ${C.navy}` }}>
+                  {lang === "en" ? "Test import (3 routes)" : lang === "mr" ? "टेस्ट इम्पोर्ट (3 रूट्स)" : "टेस्ट इम्पोर्ट (3 रूट)"}
+                </button>
+                <button onClick={() => setImportConfirm("full")} className="flex-1 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.navy, color: "#fff" }}>
+                  {lang === "en" ? "Import all 11 hubs" : lang === "mr" ? "सर्व 11 शहरे इम्पोर्ट करा" : "सभी 11 शहर इम्पोर्ट करें"}
+                </button>
+              </div>
+            )}
+            {importConfirm === "test" && !importing && (
+              <p className="text-[10.5px] mt-2" style={{ color: C.inkSoft }}>
+                {lang === "en"
+                  ? "Trial batch: Pune↔Mumbai (short), Pune↔Kolhapur (medium — the route this rate card started from), Pune↔Nagpur (long-haul, discount + flagged small-weight brackets). Covers every code path on a small, easy-to-check set before you commit to all 55 routes."
+                  : lang === "mr"
+                  ? "ट्रायल बॅच: पुणे↔मुंबई (लहान), पुणे↔कोल्हापूर (मध्यम — हे रेट कार्ड ज्या रूटपासून सुरू झाले तो), पुणे↔नागपूर (लांब पल्ला, सूट + फ्लॅग केलेले कमी-वजन ब्रॅकेट्स). सर्व 55 रूट्ससाठी कमिट करण्यापूर्वी एका लहान, तपासण्यास सोप्या सेटवर सर्व कोड पाथ कव्हर करते."
+                  : "ट्रायल बैच: पुणे↔मुंबई (छोटा), पुणे↔कोल्हापुर (मध्यम — वह रूट जिससे यह रेट कार्ड शुरू हुआ था), पुणे↔नागपुर (लंबी दूरी, छूट + फ्लैग किए गए कम-वजन ब्रैकेट)। सभी 55 रूट के लिए कमिट करने से पहले एक छोटे, जांचने में आसान सेट पर हर कोड पथ को कवर करता है।"}
+              </p>
             )}
             {importConfirm && !importing && (
               <div className="mt-2 rounded-lg p-2.5" style={{ background: "#FDECEA", border: `1px solid ${C.safety}` }}>
                 <p className="text-[11px] font-bold" style={{ color: C.safety }}>
                   {lang === "en"
-                    ? "This writes up to 880 entries (55 routes × 8 brackets × 2 directions) now, live for real customer bookings immediately. Routes you've hand-edited or hand-created are automatically skipped — only missing routes and untouched defaults get written or refreshed. Continue?"
+                    ? `This writes up to ${pendingCount} entries (${pendingEdges.length} route${pendingEdges.length > 1 ? "s" : ""} × 8 brackets × 2 directions) now, live for real customer bookings immediately. Routes you've hand-edited or hand-created are automatically skipped — only missing routes and untouched defaults get written or refreshed. Continue?`
                     : lang === "mr"
-                    ? "हे आत्ता जास्तीत जास्त 880 एंट्री (55 रूट्स × 8 ब्रॅकेट्स × 2 दिशा) लिहील, जे लगेच खऱ्या ग्राहक बुकिंगसाठी लाइव्ह होईल. तुम्ही हाताने बदललेले किंवा तयार केलेले रूट्स आपोआप वगळले जातील — फक्त गहाळ रूट्स आणि न बदललेले डिफॉल्ट्स लिहिले/अपडेट होतील. सुरू ठेवायचे?"
-                    : "यह अभी अधिकतम 880 एंट्री (55 रूट × 8 ब्रैकेट × 2 दिशा) लिखेगा, जो तुरंत असली ग्राहक बुकिंग के लिए लाइव हो जाएगा। आपकी हाथ से बदली या बनाई गई एंट्री अपने आप छोड़ दी जाएंगी — सिर्फ छूटे हुए रूट और बिना बदले डिफ़ॉल्ट लिखे/अपडेट होंगे। जारी रखें?"}
+                    ? `हे आत्ता जास्तीत जास्त ${pendingCount} एंट्री (${pendingEdges.length} रूट्स × 8 ब्रॅकेट्स × 2 दिशा) लिहील, जे लगेच खऱ्या ग्राहक बुकिंगसाठी लाइव्ह होईल. तुम्ही हाताने बदललेले किंवा तयार केलेले रूट्स आपोआप वगळले जातील — फक्त गहाळ रूट्स आणि न बदललेले डिफॉल्ट्स लिहिले/अपडेट होतील. सुरू ठेवायचे?`
+                    : `यह अभी अधिकतम ${pendingCount} एंट्री (${pendingEdges.length} रूट × 8 ब्रैकेट × 2 दिशा) लिखेगा, जो तुरंत असली ग्राहक बुकिंग के लिए लाइव हो जाएगा। आपकी हाथ से बदली या बनाई गई एंट्री अपने आप छोड़ दी जाएंगी — सिर्फ छूटे हुए रूट और बिना बदले डिफ़ॉल्ट लिखे/अपडेट होंगे। जारी रखें?`}
                 </p>
                 <div className="flex items-center gap-4 mt-2">
-                  <button onClick={runImport} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                  <button onClick={() => runImport(importConfirm)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
                     {lang === "en" ? "Import now" : lang === "mr" ? "आत्ता इम्पोर्ट करा" : "अभी इम्पोर्ट करें"}
                   </button>
-                  <button onClick={() => setImportConfirm(false)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
+                  <button onClick={() => setImportConfirm(null)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
                     {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
                   </button>
                 </div>
@@ -8595,9 +8627,15 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
             )}
             {importDone && (
               <div className="mt-2 rounded-lg p-2 text-xs font-bold text-center" style={{ background: importDone.failed ? C.marigold : C.success, color: importDone.failed ? "#000" : "#fff" }}>
+                {importDone.mode === "test" ? (lang === "en" ? "Test import — " : lang === "mr" ? "टेस्ट इम्पोर्ट — " : "टेस्ट इम्पोर्ट — ") : ""}
                 {lang === "en" ? `Imported ${importDone.ok}` : lang === "mr" ? `${importDone.ok} इम्पोर्ट झाले` : `${importDone.ok} इम्पोर्ट हुईं`}
                 {importDone.skipped ? ` · ${importDone.skipped} ${lang === "en" ? "kept (hand-edited)" : lang === "mr" ? "जपले (हाताने बदललेले)" : "बचाए गए (हाथ से बदले)"}` : ""}
                 {importDone.failed ? ` — ${importDone.failed} ${lang === "en" ? "failed" : lang === "mr" ? "अयशस्वी" : "विफल"}` : "."}
+                {importDone.mode === "test" && !importDone.failed && (
+                  <div className="text-[10px] font-semibold mt-1" style={{ opacity: 0.9 }}>
+                    {lang === "en" ? "Check the 3 routes in \"Saved Admin rates\" below, then run the full import when ready." : lang === "mr" ? "खाली \"सेव्ह केलेले अ‍ॅडमिन दर\" मध्ये 3 रूट्स तपासा, मग तयार झाल्यावर पूर्ण इम्पोर्ट चालवा." : "नीचे \"सेव किए गए एडमिन दर\" में 3 रूट जांचें, फिर तैयार होने पर पूरा इम्पोर्ट चलाएं।"}
+                  </div>
+                )}
               </div>
             )}
           </div>
