@@ -830,101 +830,26 @@ function fetchRoadDistanceKm(pickupCoords, dropCoords) {
   });
 }
 
-// A real "pull down to refresh" gesture, the easier alternative to
-// force-closing and reopening the app to pick up a newly-deployed version
-// (see firebase.json's no-cache headers on index.html — that fix makes a
-// plain reload actually get the latest build; this just makes triggering
-// that reload a familiar one-handed gesture instead of a phone-level
-// switch-apps-and-swipe-away action). Deliberately a full
-// window.location.reload() rather than re-fetching individual pieces of
-// app state — every screen's data is already live via Firestore listeners
-// regardless, so the only thing that can ever actually be "stale" is the
-// app shell itself, and a real reload is the only way to guarantee a fresh
-// one.
+// Manual refresh — the way to pick up a newly-deployed version without
+// force-closing and reopening the app (see firebase.json's no-cache
+// headers on index.html — that fix makes a plain reload actually get the
+// latest build; this just gives a one-tap way to trigger it). Deliberately
+// a full window.location.reload() rather than re-fetching individual
+// pieces of app state — every screen's data is already live via Firestore
+// listeners regardless, so the only thing that can ever actually be
+// "stale" is the app shell itself, and a real reload is the only way to
+// guarantee a fresh one.
 //
-// Only arms once the touch actually starts from the very top of whichever
-// scrollable panel it's inside (walking up from the touch target to the
-// nearest `overflow-y/auto/scroll` ancestor and checking its scrollTop) —
-// this app nests each screen's own scroll container rather than scrolling
-// the page itself, so a plain `window.scrollY === 0` check would never
-// fire at all.
-const PULL_TO_REFRESH_THRESHOLD = 80;
-function usePullToRefresh() {
-  const [pull, setPull] = useState(0); // 0..1 progress toward the trigger
+// Used to also offer a pull-down gesture alongside this button, but touch-
+// event edge-case behavior isn't consistent across every Android WebView
+// version — it was triggering on far lighter pulls than intended on some
+// devices, with no reliable way to tune a single threshold that felt right
+// everywhere. Dropped entirely in favor of just this one always-visible,
+// unambiguous button.
+function useRefreshButton() {
   const [refreshing, setRefreshing] = useState(false);
-  const startYRef = useRef(null);
-  // Manual trigger for a plain always-visible refresh button — added
-  // alongside the gesture (not instead of it) since the gesture depends on
-  // touch-event edge-case behavior that isn't consistent across every
-  // Android WebView version and can silently fail on some devices with no
-  // way for a driver/customer to notice or work around it. Shares the same
-  // refreshing state/spinner so both paths look identical.
   const refresh = () => { setRefreshing(true); window.location.reload(); };
-
-  useEffect(() => {
-    const nearestScrollableIsAtTop = (el) => {
-      let node = el;
-      while (node && node !== document.body && node !== document.documentElement) {
-        if (/(auto|scroll)/.test(window.getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight) {
-          return node.scrollTop <= 0;
-        }
-        node = node.parentElement;
-      }
-      return true; // no scrollable ancestor at all -- nothing to be "not at the top" of
-    };
-
-    const onTouchStart = (e) => {
-      if (refreshing || e.touches.length !== 1) { startYRef.current = null; return; }
-      startYRef.current = nearestScrollableIsAtTop(e.target) ? e.touches[0].clientY : null;
-    };
-    const onTouchMove = (e) => {
-      if (startYRef.current == null || refreshing) return;
-      const dy = e.touches[0].clientY - startYRef.current;
-      if (dy <= 0) { setPull(0); return; }
-      // Must claim the gesture (block the phone's own scroll/bounce) on
-      // this very first downward move, not a few pixels in — once the
-      // phone's own scroll has already taken over a touch sequence,
-      // calling preventDefault() on a later touchmove in that same
-      // sequence is too late to hand control back, so the pull would
-      // silently do nothing (page just scrolls/bounces normally instead).
-      if (e.cancelable) e.preventDefault();
-      setPull(Math.min(1, dy / PULL_TO_REFRESH_THRESHOLD));
-    };
-    const onTouchEnd = () => {
-      if (startYRef.current == null) return;
-      startYRef.current = null;
-      setPull((p) => {
-        if (p >= 1) { setRefreshing(true); window.location.reload(); }
-        return 0;
-      });
-    };
-
-    document.addEventListener("touchstart", onTouchStart, { passive: true });
-    document.addEventListener("touchmove", onTouchMove, { passive: false });
-    document.addEventListener("touchend", onTouchEnd, { passive: true });
-    return () => {
-      document.removeEventListener("touchstart", onTouchStart);
-      document.removeEventListener("touchmove", onTouchMove);
-      document.removeEventListener("touchend", onTouchEnd);
-    };
-  }, [refreshing]);
-
-  return { pull, refreshing, refresh };
-}
-
-// Small floating spinner that grows/rotates with the pull, then spins in
-// place once the reload has actually been triggered — the only visual
-// feedback for usePullToRefresh above.
-function PullToRefreshIndicator({ pull, refreshing }) {
-  if (!refreshing && pull <= 0) return null;
-  return (
-    <div className="fixed left-0 right-0 flex justify-center z-50 pointer-events-none" style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
-      <div className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
-        style={{ background: C.marigoldDeep, opacity: refreshing ? 1 : Math.min(1, pull + 0.25), transform: `scale(${refreshing ? 1 : 0.6 + pull * 0.4})` }}>
-        <Loader2 size={18} color="#fff" className={refreshing ? "animate-spin" : ""} style={refreshing ? undefined : { transform: `rotate(${pull * 360}deg)` }} />
-      </div>
-    </div>
-  );
+  return { refreshing, refresh };
 }
 
 // Persists a piece of state to localStorage under `key`, so the app
@@ -10572,7 +10497,7 @@ export default function App() {
   }, [bookings, driver]);
 
   const isDesktop = role === "admin" && adminAuth;
-  const pullToRefresh = usePullToRefresh();
+  const refreshButton = useRefreshButton();
 
   // Standalone Driver KYC portal (?driverKyc=1&mobile=...) — entirely
   // separate from role-select/login (no auth at all, see
@@ -10647,15 +10572,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
-      <PullToRefreshIndicator pull={pullToRefresh.pull} refreshing={pullToRefresh.refreshing} />
-      {/* Guaranteed fallback for the pull gesture above — that one depends
-          on touch-event edge-case behavior that isn't consistent across
-          every Android WebView version and can silently do nothing on some
-          devices with no way to tell why. A plain tap always works. */}
-      <button onClick={pullToRefresh.refresh} disabled={pullToRefresh.refreshing}
+      <button onClick={refreshButton.refresh} disabled={refreshButton.refreshing}
         className="fixed right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
         style={{ background: C.marigoldDeep, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
-        <RefreshCw size={16} color="#fff" className={pullToRefresh.refreshing ? "animate-spin" : ""} />
+        <RefreshCw size={16} color="#fff" className={refreshButton.refreshing ? "animate-spin" : ""} />
       </button>
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
         {role === "admin" && adminAuth && (
