@@ -797,6 +797,20 @@ function maharashtraLongHaulDiscountPct(km) {
   if (km <= 300) return 0;
   return Math.min(16, 16 * Math.sqrt((km - 300) / 500));
 }
+// True for a route+bracket combination where a dedicated vehicle this
+// small, sent this far, is a bad match to how the real market actually
+// prices it (see the Maharashtra Rate Card's research note: a freight
+// marketplace quoted Pune-Nagpur at 5-6x less per kg than a dedicated
+// small truck would cost, because real shippers consolidate onto a shared
+// truck instead of dedicating one for a small long-haul load). Computed
+// live from each entry's own estimatedKm/tierMaxKg rather than stored, so
+// it applies equally to bulk-imported and hand-typed entries, and stays
+// correct if either field is edited later. Admin-facing only (shown in
+// AdminRateCalculator's saved-rates list) -- never seen by customers or
+// drivers, and never affects the price actually charged.
+function isLongHaulSmallLoad(estimatedKm, tierMaxKg) {
+  return estimatedKm != null && estimatedKm >= 400 && tierMaxKg != null && tierMaxKg <= 1500;
+}
 // A small, deliberately varied trial batch for the "Test import" button --
 // Pune-Mumbai (short, no discount), Pune-Kolhapur (medium, no discount,
 // and the exact route this whole rate card started from), Pune-Nagpur
@@ -8703,6 +8717,11 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
                       <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
                         {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {fmt(r.totalFare)}
                       </div>
+                      {isLongHaulSmallLoad(r.estimatedKm, r.tierMaxKg) && (
+                        <div className="text-[9.5px] font-bold mt-1" style={{ color: C.safety }}>
+                          ⚠ {lang === "en" ? "Small load, long haul — a shared/LTL truck is likely cheaper for the customer" : lang === "mr" ? "लहान लोड, लांब पल्ला — ग्राहकासाठी शेअर्ड/LTL ट्रक स्वस्त पडण्याची शक्यता आहे" : "छोटा लोड, लंबी दूरी — ग्राहक के लिए शेयर्ड/LTL ट्रक सस्ता पड़ सकता है"}
+                        </div>
+                      )}
                     </button>
                     <div className="flex items-center justify-end gap-4 mt-2">
                       {confirmDeleteId === r.id ? (
