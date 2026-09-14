@@ -4,7 +4,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2, RefreshCw,
-  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone, Weight,
+  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone, Weight, Calculator,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty,
@@ -690,15 +690,49 @@ function getRouteAverageFare(pickup, drop, routeFares, pickupLat, pickupLng, dro
   const avgFare = Math.round(matches.reduce((sum, r) => sum + (Number(r.totalFare) || 0), 0) / matches.length);
   return { avgFare, count: matches.length };
 }
+// Admin's own route-specific override (see AdminRateCalculator) — set
+// deliberately by Admin for one route AND one capacity tier at a time
+// (e.g. Pune-Kolhapur for a 5000kg-class vehicle might be priced
+// differently than the same route for a 9000kg one), and takes priority
+// over everything else once it exists: Admin has final say over what
+// drivers have individually quoted (getRouteAverageFare) or what the
+// generic formula would say (calculateFare). Matches by the same
+// coordinate radius as driver routes (locationsNear); if more than one
+// override somehow matches (two overlapping entries within 25km), the
+// most recently saved one wins, since these are meant to be one
+// authoritative decision, not something to average together.
+function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers) {
+  if (!Array.isArray(adminRouteFares) || adminRouteFares.length === 0) return null;
+  const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
+  if (!p || !d) return null;
+  const tier = findFareTier(capacityKg, tiers);
+  const matches = adminRouteFares.filter((r) => {
+    if (r.tierMaxKg !== tier.maxKg) return false;
+    const pickupOk = pickupLat != null && r.pickupLat != null
+      ? locationsNear(pickupLat, pickupLng, r.pickupLat, r.pickupLng)
+      : routeTextsMatch(r.pickupKey, p);
+    const dropOk = dropLat != null && r.dropLat != null
+      ? locationsNear(dropLat, dropLng, r.dropLat, r.dropLng)
+      : routeTextsMatch(r.dropKey, d);
+    return pickupOk && dropOk;
+  });
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return Number(matches[0].totalFare) || 0;
+}
 // Single entry point every booking-fare display/write goes through, so the
 // driver-picker list, the actual booking write, and (indirectly) Set Fare
-// itself all agree on the same number for the same trip — see
-// getRouteAverageFare for when the crowd-sourced average wins over the
-// generic capacity-tier formula.
-function resolveFare(driver, pickup, drop, distanceKm, tiers, routeFares, pickupLat, pickupLng, dropLat, dropLng) {
+// itself all agree on the same number for the same trip. Priority order:
+// Admin's own override for this route+tier (see getAdminRouteOverride) >
+// the crowd-sourced average of what drivers have quoted this route (see
+// getRouteAverageFare) > the generic capacity-tier formula.
+function resolveFare(driver, pickup, drop, distanceKm, tiers, routeFares, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares) {
+  const capacityKg = driver?.vehicleSpec?.capacityKg;
+  const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers);
+  if (adminOverride != null) return adminOverride;
   const routeAvg = getRouteAverageFare(pickup, drop, routeFares, pickupLat, pickupLng, dropLat, dropLng);
   if (routeAvg) return routeAvg.avgFare;
-  return calculateFare(driver?.vehicleSpec?.capacityKg, distanceKm, tiers);
+  return calculateFare(capacityKg, distanceKm, tiers);
 }
 // Firestore document IDs can't contain "/" and have a length cap — routes
 // are short place names in practice (Set Fare is meant for city-level
@@ -4507,7 +4541,7 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission, fareTiers, routeFares }) {
+function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission, fareTiers, routeFares, adminRouteFares }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -4777,7 +4811,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                 </p>
               ) : eligibleDrivers.map((d) => {
                 const isSelected = selectedDriverName === d.name;
-                const driverFare = resolveFare(d, pickup, drop, distance, fareTiers, routeFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng);
+                const driverFare = resolveFare(d, pickup, drop, distance, fareTiers, routeFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
                 return (
                   <div key={d.mobile || d.id}>
                     <button onClick={() => setSelectedDriverName(d.name)}
@@ -5461,7 +5495,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications, fareTiers, routeFares }) {
+function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -5789,7 +5823,7 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
               }} />
           ) : (
             <CustomerBooking requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
-              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} />
+              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} />
           )
         ) : (
           <div>
@@ -7659,7 +7693,7 @@ function StatTile({ label, value, color, onClick }) {
   return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${color}` }}>{content}</div>;
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, bugs, setBugStatus, addBug, routeFares }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, bugs, setBugStatus, addBug, routeFares, adminRouteFares, fareTiers }) {
   const isToday = (b) => {
     const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
     if (!d) return false;
@@ -7892,7 +7926,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
-        <AdminRouteFares routeFares={routeFares} lang={lang} />
+        <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} fareTiers={fareTiers} lang={lang} />
       </div>
     );
   }
@@ -8110,12 +8144,13 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
 // route so Admin can see at a glance what the whole fleet is charging for
 // each pickup/drop pair — and the only place any of these numbers can be
 // edited or removed by someone other than the driver who submitted them.
-function AdminRouteFares({ routeFares, lang }) {
+function AdminRouteFares({ routeFares, adminRouteFares, fareTiers, lang }) {
   const [editingId, setEditingId] = useState(null);
   const [editingEstimatedKm, setEditingEstimatedKm] = useState(null);
   const [draftTotalFare, setDraftTotalFare] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [rateCalcOpen, setRateCalcOpen] = useState(false);
 
   const groups = {};
   (routeFares || []).forEach((r) => {
@@ -8146,7 +8181,13 @@ function AdminRouteFares({ routeFares, lang }) {
 
   return (
     <div>
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"}</h2>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"}</h2>
+        <button onClick={() => setRateCalcOpen(true)} className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg" style={{ background: C.navy, color: "#fff" }}>
+          <Calculator size={14} /> {lang === "en" ? "Admin Rate Calculator" : lang === "mr" ? "अ‍ॅडमिन दर कॅल्क्युलेटर" : "एडमिन रेट कैलकुलेटर"}
+        </button>
+      </div>
+      {rateCalcOpen && <AdminRateCalculator adminRouteFares={adminRouteFares} fareTiers={fareTiers} lang={lang} onClose={() => setRateCalcOpen(false)} />}
       {groupList.length === 0 ? (
         <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver has set a route fare yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरने रूट भाडे सेट केलेले नाही." : "अभी तक किसी ड्राइवर ने रूट किराया सेट नहीं किया।"}</p>
       ) : (
@@ -8220,6 +8261,224 @@ function AdminRouteFares({ routeFares, lang }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Admin's own fixed-rate override for one route + one capacity/weight
+// bracket (see getAdminRouteOverride/resolveFare) — opened from the button
+// at the right end of AdminRouteFares' header. Deliberately mirrors
+// CustomerBooking's own Pickup/Drop/Weight fields (full address, not
+// restricted to cities like SetFareForm — Admin is pricing exact routes,
+// not logging a loose "I drove this corridor" entry) so the estimated
+// distance Admin sees while setting a rate matches what a customer would
+// actually see. Saving upserts a doc keyed by route+tier, so re-saving the
+// same pickup/drop for the same weight bracket edits that one entry rather
+// than creating a duplicate; a different weight bracket on the identical
+// route creates a separate entry (see the "Different rates per weight
+// bracket" design decision this was built to).
+function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
+  const [pickup, setPickup] = useState("");
+  const [drop, setDrop] = useState("");
+  const [pickupCoords, setPickupCoords] = useState(null);
+  const [dropCoords, setDropCoords] = useState(null);
+  const [distance, setDistance] = useState(null);
+  const [weight, setWeight] = useState("");
+  const [totalFare, setTotalFare] = useState("");
+  const [fareTouched, setFareTouched] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
+  const mapsReady = mapsHasKey && mapsLoaded;
+
+  useEffect(() => {
+    if (!mapsReady || pickupCoords || !pickup.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(pickup).then((loc) => { if (loc) setPickupCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [pickup, pickupCoords, mapsReady]);
+  useEffect(() => {
+    if (!mapsReady || dropCoords || !drop.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(drop).then((loc) => { if (loc) setDropCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [drop, dropCoords, mapsReady]);
+
+  // Straight-line estimate shows instantly, then silently upgrades to the
+  // real routed distance — same pattern as CustomerBooking/SetFareForm.
+  const distanceRequestRef = useRef(0);
+  useEffect(() => {
+    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
+    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
+    if (!hasBothCoords || !mapsReady) return;
+    const requestId = ++distanceRequestRef.current;
+    fetchRoadDistanceKm(pickupCoords, dropCoords)
+      .then((km) => { if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100); })
+      .catch((e) => console.error("[admin rate calc distance]", e));
+  }, [pickupCoords, dropCoords, mapsReady]);
+
+  const capacityKg = weight !== "" ? Number(weight) || 0 : null;
+  const tier = capacityKg != null ? findFareTier(capacityKg, fareTiers) : null;
+  // The system-calculated number for this weight+distance — shown as a
+  // starting point since Admin has to type something into Save Rate, but
+  // always editable: typing over it (fareTouched) stops it auto-updating.
+  const suggestedFare = tier != null ? calculateFare(capacityKg, distance, fareTiers) : null;
+  useEffect(() => {
+    if (fareTouched) return;
+    setTotalFare(suggestedFare != null ? String(suggestedFare) : "");
+  }, [suggestedFare, fareTouched]);
+
+  const resetForm = () => {
+    setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
+    setWeight(""); setTotalFare(""); setFareTouched(false); setEditingId(null);
+  };
+
+  const editEntry = (r) => {
+    setPickup(r.pickupName || ""); setDrop(r.dropName || "");
+    setPickupCoords(r.pickupLat != null ? { lat: r.pickupLat, lng: r.pickupLng } : null);
+    setDropCoords(r.dropLat != null ? { lat: r.dropLat, lng: r.dropLng } : null);
+    setDistance(r.estimatedKm ?? null);
+    setWeight(r.weight != null ? String(r.weight) : "");
+    setTotalFare(r.totalFare != null ? String(r.totalFare) : "");
+    setFareTouched(true);
+    setEditingId(r.id);
+    setSavedFlash(false);
+  };
+
+  const deleteEntry = (id) => { removeDoc("adminRouteFares", id).catch((e) => console.error(e)); setConfirmDeleteId(null); if (editingId === id) resetForm(); };
+
+  const canSave = pickup.trim() && drop.trim() && weight !== "" && totalFare !== "" && !saving;
+  const save = async () => {
+    if (!canSave || !tier) return;
+    setSaving(true);
+    const docId = `${sanitizeForDocId(pickup)}__${sanitizeForDocId(drop)}__${tier.maxKg}`;
+    try {
+      await createDoc("adminRouteFares", docId, {
+        pickupName: pickup.trim(), dropName: drop.trim(),
+        pickupKey: normalizeRouteText(pickup), dropKey: normalizeRouteText(drop),
+        pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+        dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+        estimatedKm: distance,
+        weight: capacityKg,
+        tierMaxKg: tier.maxKg,
+        totalFare: Number(totalFare) || 0,
+        updatedAt: Date.now(),
+      });
+      resetForm();
+      setSavedFlash(true);
+    } catch (e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const sorted = [...(adminRouteFares || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
+          <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Admin Rate Calculator" : lang === "mr" ? "अ‍ॅडमिन दर कॅल्क्युलेटर" : "एडमिन रेट कैलकुलेटर"}</h3>
+          <button onClick={onClose} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+        </div>
+        <div className="p-4 space-y-3 overflow-y-auto">
+          <div className="rounded-lg p-3 text-xs font-semibold" style={{ background: C.metallicGold, color: "#000000" }}>
+            {lang === "en"
+              ? "Set a fixed rate for a route + weight bracket. This overrides driver-entered rates and the standard formula for that exact route."
+              : lang === "mr"
+              ? "एका रूट + वजन ब्रॅकेटसाठी निश्चित दर सेट करा. हे त्या रूटसाठी ड्रायव्हरने भरलेले दर आणि स्टँडर्ड फॉर्म्युला यांना ओव्हरराइड करते."
+              : "एक रूट + वजन ब्रैकेट के लिए निश्चित दर सेट करें। यह उस रूट के लिए ड्राइवर द्वारा भरे गए दर और मानक फॉर्मूले को ओवरराइड करता है।"}
+          </div>
+
+          <LocationField lang={lang} value={pickup}
+            onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); }}
+            onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} />
+          <LocationField lang={lang} value={drop}
+            onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setSavedFlash(false); }}
+            onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Estimated distance" : lang === "mr" ? "अंदाजे अंतर" : "अनुमानित दूरी"}</div>
+              <div className="rounded-lg p-2.5 text-sm font-black" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }}>
+                {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Enter weight (kg)" : lang === "mr" ? "वजन टाका (किलो)" : "वजन डालें (किलो)"}</div>
+              <input type="number" inputMode="numeric" value={weight}
+                onChange={(e) => { setWeight(e.target.value.replace(/\D/g, "")); setSavedFlash(false); }}
+                className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
+                placeholder={lang === "en" ? "e.g. 1000" : "उदा. 1000"} />
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "Rate for this route" : lang === "mr" ? "या रूटसाठी दर" : "इस रूट के लिए दर"}
+              {suggestedFare != null && !fareTouched && <span style={{ color: C.marigoldDeep }}> · {lang === "en" ? "system suggestion" : lang === "mr" ? "सिस्टम सूचना" : "सिस्टम सुझाव"}</span>}
+            </div>
+            <input type="number" inputMode="numeric" value={totalFare}
+              onChange={(e) => { setTotalFare(e.target.value); setFareTouched(true); setSavedFlash(false); }}
+              className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
+              placeholder={lang === "en" ? "Fill rate" : lang === "mr" ? "दर भरा" : "दर भरें"} />
+          </div>
+
+          {editingId && (
+            <button onClick={resetForm} className="w-full text-center text-xs font-bold py-1" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "Cancel edit / start new entry" : lang === "mr" ? "एडिट रद्द करा / नवीन एंट्री सुरू करा" : "एडिट रद्द करें / नई एंट्री शुरू करें"}
+            </button>
+          )}
+
+          {sorted.length > 0 && (
+            <div className="pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+              <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Saved Admin rates" : lang === "mr" ? "सेव्ह केलेले अ‍ॅडमिन दर" : "सेव किए गए एडमिन दर"}</div>
+              <div className="space-y-1.5">
+                {sorted.map((r) => (
+                  <div key={r.id} className="rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                    <button onClick={() => editEntry(r)} className="w-full text-left">
+                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName}</div>
+                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
+                        {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {fmt(r.totalFare)}
+                      </div>
+                    </button>
+                    <div className="flex items-center justify-end gap-4 mt-2">
+                      {confirmDeleteId === r.id ? (
+                        <>
+                          <button onClick={() => deleteEntry(r.id)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                            {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                          </button>
+                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
+                            {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => setConfirmDeleteId(r.id)} className="text-[11px] font-bold px-3 py-2 rounded-lg" style={{ color: C.safety, background: C.paper, border: `1px solid ${C.safety}` }}>
+                          {lang === "en" ? "Remove" : lang === "mr" ? "काढा" : "हटाएं"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="px-4 pt-3 shrink-0" style={{ borderTop: `1px solid ${C.line}`, background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>
+          <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
+            style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
+            {saving ? "…" : (lang === "en" ? "Save Rate" : lang === "mr" ? "दर सेव्ह करा" : "दर सेव करें")}
+          </button>
+          {savedFlash && (
+            <div className="rounded-lg p-2 mt-2 text-xs font-bold text-center" style={{ background: C.success, color: "#fff" }}>
+              {lang === "en" ? "Saved." : lang === "mr" ? "सेव्ह झाले." : "सेव हो गया।"}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -9560,7 +9819,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, setFareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug, routeFares }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, setFareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug, routeFares, adminRouteFares }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review now lives inside
   // the Live Dashboard's "New Registrations" tile (see AdminFleet's
@@ -9584,7 +9843,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} fareTiers={fareTiers} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
@@ -9938,6 +10197,13 @@ export default function App() {
   // scoped to the owning driver (or Admin) in firestore.rules.
   const [routeFares, setRouteFares] = useState([]);
   useEffect(() => (firestoreReady ? subscribeCollection("routeFares", setRouteFares, null) : undefined), authDeps);
+  // Admin's own route+tier fare overrides (see AdminRateCalculator, opened
+  // from AdminRouteFares) — takes priority over routeFares above whenever
+  // it exists for a given route/tier (see getAdminRouteOverride/
+  // resolveFare). Same sign-in-required read as routeFares; writes are
+  // Admin-only in firestore.rules.
+  const [adminRouteFares, setAdminRouteFares] = useState([]);
+  useEffect(() => (firestoreReady ? subscribeCollection("adminRouteFares", setAdminRouteFares, null) : undefined), authDeps);
   // One-time backfill for drivers approved before the profile-photo change
   // (see DriverProfileEdit/DriverKyc) — copies the KYC driver photo into
   // the top-level photo field for anyone missing it, so their customer-
@@ -10207,7 +10473,7 @@ export default function App() {
     const bookingId = genId();
     const conflict = findDriverLoadConflict(targetDriver, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
-    const fare = resolveFare(targetDriver, pickup, drop, distance, fareTiers, routeFares, pickupLat, pickupLng, dropLat, dropLng);
+    const fare = resolveFare(targetDriver, pickup, drop, distance, fareTiers, routeFares, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
     createDoc("bookings", bookingId, {
       pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: driverName, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
@@ -10616,7 +10882,7 @@ export default function App() {
           <CustomerApp bookings={bookings} requestDriverDirectly={requestDriverDirectly} reassignAwaitingDriver={reassignAwaitingDriver} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
-            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} />
+            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth}
@@ -10679,7 +10945,7 @@ export default function App() {
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
               expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications}
-              bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} />
+              bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} />
           </div>
         )}
       </div>

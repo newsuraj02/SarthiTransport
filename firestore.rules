@@ -262,5 +262,15 @@ service cloud.firestore {
       allow update: if isAdmin() || isOwnPhone(resource.data.driverMobile);
       allow delete: if isAdmin();
     }
+
+    // Admin's own route + weight-bracket fare overrides (see
+    // AdminRateCalculator/getAdminRouteOverride in App.jsx) — same
+    // sign-in-required read as routeFares above (no phone number stored
+    // here, but no reason to expose it publicly either), but entirely
+    // Admin-owned: only Admin can create, edit, or remove an entry.
+    match /adminRouteFares/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
   }
 }
