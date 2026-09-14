@@ -8493,7 +8493,12 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
   // Every doc this creates is completely ordinary afterward: Admin can
   // open it via "Saved Admin rates" below and edit or remove it exactly
   // like a hand-typed entry (editing it away just overwrites the "Default"
-  // tag since save() below never sets source).
+  // tag since save() above never sets source) -- and that's exactly the
+  // signal a RE-import uses to protect it: an existing doc whose source
+  // isn't "maharashtraDefault" has been hand-edited (or hand-created) since
+  // the last import, so it's skipped rather than silently clobbered. Only
+  // docs that are missing entirely, or still carry the untouched default
+  // tag, get (re)written.
   const [importConfirm, setImportConfirm] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(null);
@@ -8501,27 +8506,35 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
   const runImport = async () => {
     setImporting(true);
     setImportDone(null);
-    const entries = buildMaharashtraDefaultRates();
-    setImportProgress({ done: 0, total: entries.length });
+    const existingById = {};
+    (adminRouteFares || []).forEach((r) => { existingById[r.id] = r; });
+    const toWrite = [];
+    let skipped = 0;
+    buildMaharashtraDefaultRates().forEach((e) => {
+      const docId = `${sanitizeForDocId(e.pickupName)}__${sanitizeForDocId(e.dropName)}__${e.tierMaxKg}`;
+      const existing = existingById[docId];
+      if (existing && existing.source !== "maharashtraDefault") { skipped++; return; }
+      toWrite.push({ ...e, docId });
+    });
+    setImportProgress({ done: 0, total: toWrite.length });
     const CHUNK = 20;
     let ok = 0, failed = 0;
-    for (let i = 0; i < entries.length; i += CHUNK) {
-      const chunk = entries.slice(i, i + CHUNK);
-      await Promise.all(chunk.map((e) => {
-        const docId = `${sanitizeForDocId(e.pickupName)}__${sanitizeForDocId(e.dropName)}__${e.tierMaxKg}`;
-        return createDoc("adminRouteFares", docId, {
+    for (let i = 0; i < toWrite.length; i += CHUNK) {
+      const chunk = toWrite.slice(i, i + CHUNK);
+      await Promise.all(chunk.map((e) =>
+        createDoc("adminRouteFares", e.docId, {
           pickupName: e.pickupName, dropName: e.dropName,
           pickupKey: normalizeRouteText(e.pickupName), dropKey: normalizeRouteText(e.dropName),
           pickupLat: e.pickupLat, pickupLng: e.pickupLng, dropLat: e.dropLat, dropLng: e.dropLng,
           estimatedKm: e.estimatedKm, weight: e.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? 8000 : e.tierMaxKg,
           tierMaxKg: e.tierMaxKg, totalFare: e.totalFare, updatedAt: Date.now(), source: "maharashtraDefault",
-        }).then(() => { ok++; }).catch((err) => { failed++; console.error(err); });
-      }));
-      setImportProgress({ done: Math.min(i + CHUNK, entries.length), total: entries.length });
+        }).then(() => { ok++; }).catch((err) => { failed++; console.error(err); })
+      ));
+      setImportProgress({ done: Math.min(i + CHUNK, toWrite.length), total: toWrite.length });
     }
     setImporting(false);
     setImportConfirm(false);
-    setImportDone({ ok, failed });
+    setImportDone({ ok, failed, skipped });
   };
 
   return (
@@ -8546,10 +8559,10 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
             </div>
             <p className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
               {lang === "en"
-                ? "One-time bulk import: modelled rates for all 11 major Maharashtra hubs (Pune, Mumbai, Nashik, Kolhapur, Solapur, Chh. Sambhajinagar, Ahmednagar, Satara, Amravati, Nanded, Nagpur), every route between them, all 8 weight brackets. These are estimates, not live market quotes — every imported entry is editable/removable below just like one you type by hand."
+                ? "Bulk import: modelled rates for all 11 major Maharashtra hubs (Pune, Mumbai, Nashik, Kolhapur, Solapur, Chh. Sambhajinagar, Ahmednagar, Satara, Amravati, Nanded, Nagpur), every route between them, all 8 weight brackets. These are estimates, not live market quotes — every imported entry is editable/removable below just like one you type by hand. Safe to re-run any time: an entry you've since hand-edited (or hand-created) is never touched, only untouched defaults or missing routes get (re)written."
                 : lang === "mr"
-                ? "एकवेळ बल्क इम्पोर्ट: महाराष्ट्रातील 11 प्रमुख शहरांमधील (पुणे, मुंबई, नाशिक, कोल्हापूर, सोलापूर, छ. संभाजीनगर, अहमदनगर, सातारा, अमरावती, नांदेड, नागपूर) सर्व रूट्स आणि सर्व 8 वजन ब्रॅकेट्ससाठी मॉडेल्ड दर. हे अंदाज आहेत, प्रत्यक्ष मार्केट कोट नाहीत — प्रत्येक इम्पोर्ट केलेली एंट्री खाली हाताने टाइप केल्यासारखी एडिट/काढता येते."
-                : "एकबारगी बल्क इम्पोर्ट: महाराष्ट्र के 11 प्रमुख शहरों (पुणे, मुंबई, नाशिक, कोल्हापुर, सोलापुर, छ. संभाजीनगर, अहमदनगर, सातारा, अमरावती, नांदेड, नागपुर) के बीच हर रूट और सभी 8 वजन ब्रैकेट के लिए मॉडेल्ड दरें। ये अनुमान हैं, असली मार्केट कोट नहीं — हर इम्पोर्ट की गई एंट्री नीचे हाथ से टाइप की गई एंट्री जैसी ही एडिट/हटाई जा सकती है।"}
+                ? "बल्क इम्पोर्ट: महाराष्ट्रातील 11 प्रमुख शहरांमधील (पुणे, मुंबई, नाशिक, कोल्हापूर, सोलापूर, छ. संभाजीनगर, अहमदनगर, सातारा, अमरावती, नांदेड, नागपूर) सर्व रूट्स आणि सर्व 8 वजन ब्रॅकेट्ससाठी मॉडेल्ड दर. हे अंदाज आहेत, प्रत्यक्ष मार्केट कोट नाहीत — प्रत्येक इम्पोर्ट केलेली एंट्री खाली हाताने टाइप केल्यासारखी एडिट/काढता येते. पुन्हा-इम्पोर्ट करणे सुरक्षित आहे: तुम्ही हाताने बदललेली (किंवा तयार केलेली) एंट्री कधीही बदलली जात नाही — फक्त न बदललेले डिफॉल्ट्स किंवा गहाळ रूट्स (पुन्हा) लिहिले जातात."
+                : "बल्क इम्पोर्ट: महाराष्ट्र के 11 प्रमुख शहरों (पुणे, मुंबई, नाशिक, कोल्हापुर, सोलापुर, छ. संभाजीनगर, अहमदनगर, सातारा, अमरावती, नांदेड, नागपुर) के बीच हर रूट और सभी 8 वजन ब्रैकेट के लिए मॉडेल्ड दरें। ये अनुमान हैं, असली मार्केट कोट नहीं — हर इम्पोर्ट की गई एंट्री नीचे हाथ से टाइप की गई एंट्री जैसी ही एडिट/हटाई जा सकती है। दोबारा इम्पोर्ट करना सुरक्षित है: आपने हाथ से बदली (या बनाई) कोई एंट्री कभी नहीं बदली जाती — सिर्फ बिना बदले डिफ़ॉल्ट या छूटे हुए रूट (दोबारा) लिखे जाते हैं।"}
             </p>
             {!importConfirm && !importing && (
               <button onClick={() => setImportConfirm(true)} className="w-full mt-2 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.navy, color: "#fff" }}>
@@ -8560,10 +8573,10 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
               <div className="mt-2 rounded-lg p-2.5" style={{ background: "#FDECEA", border: `1px solid ${C.safety}` }}>
                 <p className="text-[11px] font-bold" style={{ color: C.safety }}>
                   {lang === "en"
-                    ? "This writes 880 entries (55 routes × 8 brackets × 2 directions) now, live for real customer bookings immediately. Existing entries for the same route + bracket will be overwritten. Continue?"
+                    ? "This writes up to 880 entries (55 routes × 8 brackets × 2 directions) now, live for real customer bookings immediately. Routes you've hand-edited or hand-created are automatically skipped — only missing routes and untouched defaults get written or refreshed. Continue?"
                     : lang === "mr"
-                    ? "हे आत्ता 880 एंट्री (55 रूट्स × 8 ब्रॅकेट्स × 2 दिशा) लिहील, जे लगेच खऱ्या ग्राहक बुकिंगसाठी लाइव्ह होईल. त्याच रूट + ब्रॅकेटसाठी असलेल्या एंट्री ओव्हरराइट होतील. सुरू ठेवायचे?"
-                    : "यह अभी 880 एंट्री (55 रूट × 8 ब्रैकेट × 2 दिशा) लिखेगा, जो तुरंत असली ग्राहक बुकिंग के लिए लाइव हो जाएगा। उसी रूट + ब्रैकेट की मौजूदा एंट्री ओवरराइट हो जाएंगी। जारी रखें?"}
+                    ? "हे आत्ता जास्तीत जास्त 880 एंट्री (55 रूट्स × 8 ब्रॅकेट्स × 2 दिशा) लिहील, जे लगेच खऱ्या ग्राहक बुकिंगसाठी लाइव्ह होईल. तुम्ही हाताने बदललेले किंवा तयार केलेले रूट्स आपोआप वगळले जातील — फक्त गहाळ रूट्स आणि न बदललेले डिफॉल्ट्स लिहिले/अपडेट होतील. सुरू ठेवायचे?"
+                    : "यह अभी अधिकतम 880 एंट्री (55 रूट × 8 ब्रैकेट × 2 दिशा) लिखेगा, जो तुरंत असली ग्राहक बुकिंग के लिए लाइव हो जाएगा। आपकी हाथ से बदली या बनाई गई एंट्री अपने आप छोड़ दी जाएंगी — सिर्फ छूटे हुए रूट और बिना बदले डिफ़ॉल्ट लिखे/अपडेट होंगे। जारी रखें?"}
                 </p>
                 <div className="flex items-center gap-4 mt-2">
                   <button onClick={runImport} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
@@ -8583,6 +8596,7 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
             {importDone && (
               <div className="mt-2 rounded-lg p-2 text-xs font-bold text-center" style={{ background: importDone.failed ? C.marigold : C.success, color: importDone.failed ? "#000" : "#fff" }}>
                 {lang === "en" ? `Imported ${importDone.ok}` : lang === "mr" ? `${importDone.ok} इम्पोर्ट झाले` : `${importDone.ok} इम्पोर्ट हुईं`}
+                {importDone.skipped ? ` · ${importDone.skipped} ${lang === "en" ? "kept (hand-edited)" : lang === "mr" ? "जपले (हाताने बदललेले)" : "बचाए गए (हाथ से बदले)"}` : ""}
                 {importDone.failed ? ` — ${importDone.failed} ${lang === "en" ? "failed" : lang === "mr" ? "अयशस्वी" : "विफल"}` : "."}
               </div>
             )}
