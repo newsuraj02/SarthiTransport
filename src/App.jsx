@@ -741,6 +741,86 @@ function sanitizeForDocId(s) {
   return (s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "x";
 }
 
+// The "Maharashtra Corridor Rate Card" reference sheet, reproduced in code
+// so the "Import Maharashtra Defaults" button in AdminRateCalculator can
+// write it straight into adminRouteFares as ordinary, individually
+// editable/removable entries — 11 major hubs, every city pair (55 routes),
+// priced per capacity bracket the same way the standalone rate card was:
+// distance x a modelled Rs/km band, tapered by a long-haul discount for
+// pairs 300km+ apart. Distances and rates are modelled estimates (public
+// India trucking benchmarks + known road distances), not live scraped
+// quotes -- see the guidance note shown next to the Import button.
+const MAHARASHTRA_HUBS = [
+  { name: "Pune", lat: 18.5204, lng: 73.8567 },
+  { name: "Mumbai", lat: 19.0760, lng: 72.8777 },
+  { name: "Nashik", lat: 20.0059, lng: 73.7910 },
+  { name: "Kolhapur", lat: 16.7050, lng: 74.2433 },
+  { name: "Solapur", lat: 17.6599, lng: 75.9064 },
+  { name: "Chh. Sambhajinagar", lat: 19.8762, lng: 75.3433 },
+  { name: "Ahmednagar", lat: 19.0948, lng: 74.7480 },
+  { name: "Satara", lat: 17.6805, lng: 74.0183 },
+  { name: "Amravati", lat: 20.9374, lng: 77.7796 },
+  { name: "Nanded", lat: 19.1383, lng: 77.3210 },
+  { name: "Nagpur", lat: 21.1458, lng: 79.0882 },
+];
+// [fromHubIndex, toHubIndex, roadKm] for every unordered pair among the 11
+// hubs above (55 edges) -- approximate real road-route distances, treated
+// as symmetric in both directions (a known simplification: real freight
+// often prices differently by direction due to backhaul availability).
+const MAHARASHTRA_HUB_EDGES = [
+  [0,1,150],[0,2,210],[0,3,230],[0,4,250],[0,5,235],[0,6,120],[0,7,110],[0,8,480],[0,9,430],[0,10,700],
+  [1,2,165],[1,3,380],[1,4,400],[1,5,335],[1,6,260],[1,7,250],[1,8,660],[1,9,580],[1,10,710],
+  [2,3,430],[2,4,370],[2,5,190],[2,6,135],[2,7,300],[2,8,480],[2,9,430],[2,10,680],
+  [3,4,230],[3,5,380],[3,6,280],[3,7,110],[3,8,700],[3,9,490],[3,10,830],
+  [4,5,250],[4,6,200],[4,7,140],[4,8,480],[4,9,280],[4,10,590],
+  [5,6,115],[5,7,320],[5,8,350],[5,9,270],[5,10,500],
+  [6,7,180],[6,8,450],[6,9,350],[6,10,600],
+  [7,8,600],[7,9,500],[7,10,750],
+  [8,9,250],[8,10,155],
+  [9,10,340],
+];
+// Same 8 weight brackets as DEFAULT_FARE_TIERS, each with the modelled
+// Rs/km band used for that vehicle class (kept separate from
+// DEFAULT_FARE_TIERS, which is the generic base+perKm in-city formula, not
+// a route-specific rate band).
+const MAHARASHTRA_RATE_BANDS = [
+  { maxKg: 500, lo: 18, hi: 26 },
+  { maxKg: 750, lo: 20, hi: 29 },
+  { maxKg: 1000, lo: 22, hi: 30 },
+  { maxKg: 1500, lo: 25, hi: 35 },
+  { maxKg: 2500, lo: 32, hi: 45 },
+  { maxKg: 5000, lo: 42, hi: 58 },
+  { maxKg: 7000, lo: 48, hi: 65 },
+  { maxKg: FARE_TIER_MAX_KG_UNCAPPED, lo: 58, hi: 85 },
+];
+function maharashtraLongHaulDiscountPct(km) {
+  if (km <= 300) return 0;
+  return Math.min(16, 16 * Math.sqrt((km - 300) / 500));
+}
+// Every (hub pair x bracket), both directions -- 55 pairs x 8 brackets x 2
+// directions = 880 documents. Both directions need their own doc since a
+// real booking's pickup/drop coordinates are matched directionally (see
+// getAdminRouteOverride), even though the modelled price itself doesn't
+// vary by direction.
+function buildMaharashtraDefaultRates() {
+  const entries = [];
+  MAHARASHTRA_HUB_EDGES.forEach(([ai, bi, km]) => {
+    const a = MAHARASHTRA_HUBS[ai], b = MAHARASHTRA_HUBS[bi];
+    const factor = 1 - maharashtraLongHaulDiscountPct(km) / 100;
+    MAHARASHTRA_RATE_BANDS.forEach((band) => {
+      const totalFare = Math.round(km * ((band.lo + band.hi) / 2) * factor);
+      [[a, b], [b, a]].forEach(([from, to]) => {
+        entries.push({
+          pickupName: from.name, dropName: to.name,
+          pickupLat: from.lat, pickupLng: from.lng, dropLat: to.lat, dropLng: to.lng,
+          estimatedKm: km, tierMaxKg: band.maxKg, totalFare,
+        });
+      });
+    });
+  });
+  return entries;
+}
+
 // Straight-line estimate scaled up for roads — requires real GPS
 // coordinates for both ends. Returns null (not a guess) when either
 // coordinate is missing, since a distance that isn't actually derived from
@@ -7926,7 +8006,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
-        <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} fareTiers={fareTiers} lang={lang} />
+        <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} fareTiers={fareTiers} drivers={drivers} lang={lang} />
       </div>
     );
   }
@@ -8144,7 +8224,25 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
 // route so Admin can see at a glance what the whole fleet is charging for
 // each pickup/drop pair — and the only place any of these numbers can be
 // edited or removed by someone other than the driver who submitted them.
-function AdminRouteFares({ routeFares, adminRouteFares, fareTiers, lang }) {
+// Looks up the Admin default/override rate for one driver-submitted entry,
+// matched by the SAME route coordinates and the weight bracket that
+// entry's own driver's vehicle falls into (routeFares entries don't record
+// a bracket themselves -- see SetFareForm -- so the driver's real
+// capacityKg from the drivers list stands in for it). Used only for the
+// "vs default" comparison badge in AdminRouteFares; never touches pricing.
+function findMatchingDefaultRate(entry, capacityKg, adminRouteFares, fareTiers) {
+  if (capacityKg == null || entry.pickupLat == null || entry.dropLat == null) return null;
+  const tier = findFareTier(capacityKg, fareTiers);
+  const match = (adminRouteFares || []).find((r) =>
+    r.tierMaxKg === tier.maxKg &&
+    r.pickupLat != null && r.dropLat != null &&
+    locationsNear(entry.pickupLat, entry.pickupLng, r.pickupLat, r.pickupLng) &&
+    locationsNear(entry.dropLat, entry.dropLng, r.dropLat, r.dropLng)
+  );
+  return match ? Number(match.totalFare) || null : null;
+}
+
+function AdminRouteFares({ routeFares, adminRouteFares, fareTiers, drivers, lang }) {
   const [editingId, setEditingId] = useState(null);
   const [editingEstimatedKm, setEditingEstimatedKm] = useState(null);
   const [draftTotalFare, setDraftTotalFare] = useState("");
@@ -8194,6 +8292,15 @@ function AdminRouteFares({ routeFares, adminRouteFares, fareTiers, lang }) {
         <div className="space-y-3">
           {groupList.map((g, gi) => {
             const avgTotal = Math.round(g.entries.reduce((s, r) => s + (Number(r.totalFare) || 0), 0) / g.entries.length);
+            // Matches each entry to the Admin default for its own driver's
+            // capacity bracket, then averages just the entries that found
+            // one — a route with no matching Admin default anywhere shows
+            // no badge rather than a misleading comparison.
+            const defaultMatches = g.entries
+              .map((r) => findMatchingDefaultRate(r, (drivers || []).find((d) => d.mobile === r.driverMobile)?.vehicleSpec?.capacityKg, adminRouteFares, fareTiers))
+              .filter((v) => v != null);
+            const avgDefault = defaultMatches.length ? Math.round(defaultMatches.reduce((s, v) => s + v, 0) / defaultMatches.length) : null;
+            const diffPct = avgDefault ? Math.round(((avgTotal - avgDefault) / avgDefault) * 100) : null;
             return (
               <div key={gi} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <div className="flex items-start justify-between mb-2 gap-2">
@@ -8201,7 +8308,14 @@ function AdminRouteFares({ routeFares, adminRouteFares, fareTiers, lang }) {
                     <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{g.pickupName}</div>
                     <div className="text-sm font-bold truncate" style={{ color: C.ink }}>→ {g.dropName}</div>
                   </div>
-                  <div className="text-xs font-black shrink-0" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Avg" : lang === "mr" ? "सरासरी" : "औसत"}: {fmt(avgTotal)}</div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Avg" : lang === "mr" ? "सरासरी" : "औसत"}: {fmt(avgTotal)}</div>
+                    {avgDefault != null && (
+                      <div className="text-[10px] font-bold mt-0.5" style={{ color: Math.abs(diffPct) > 15 ? C.safety : C.inkSoft }}>
+                        {lang === "en" ? "Default" : lang === "mr" ? "डिफॉल्ट" : "डिफ़ॉल्ट"}: {fmt(avgDefault)} ({diffPct > 0 ? "+" : ""}{diffPct}%)
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   {g.entries.map((r) => (
@@ -8372,6 +8486,44 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
 
   const sorted = [...(adminRouteFares || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
+  // Bulk-seeds the Maharashtra rate-card defaults (11 hubs, 55 routes x 8
+  // brackets x 2 directions = 880 docs) straight into adminRouteFares --
+  // takes effect for real customer bookings immediately on write, per the
+  // explicit choice to go live rather than stage these for review first.
+  // Every doc this creates is completely ordinary afterward: Admin can
+  // open it via "Saved Admin rates" below and edit or remove it exactly
+  // like a hand-typed entry (editing it away just overwrites the "Default"
+  // tag since save() below never sets source).
+  const [importConfirm, setImportConfirm] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(null);
+  const [importDone, setImportDone] = useState(null);
+  const runImport = async () => {
+    setImporting(true);
+    setImportDone(null);
+    const entries = buildMaharashtraDefaultRates();
+    setImportProgress({ done: 0, total: entries.length });
+    const CHUNK = 20;
+    let ok = 0, failed = 0;
+    for (let i = 0; i < entries.length; i += CHUNK) {
+      const chunk = entries.slice(i, i + CHUNK);
+      await Promise.all(chunk.map((e) => {
+        const docId = `${sanitizeForDocId(e.pickupName)}__${sanitizeForDocId(e.dropName)}__${e.tierMaxKg}`;
+        return createDoc("adminRouteFares", docId, {
+          pickupName: e.pickupName, dropName: e.dropName,
+          pickupKey: normalizeRouteText(e.pickupName), dropKey: normalizeRouteText(e.dropName),
+          pickupLat: e.pickupLat, pickupLng: e.pickupLng, dropLat: e.dropLat, dropLng: e.dropLng,
+          estimatedKm: e.estimatedKm, weight: e.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? 8000 : e.tierMaxKg,
+          tierMaxKg: e.tierMaxKg, totalFare: e.totalFare, updatedAt: Date.now(), source: "maharashtraDefault",
+        }).then(() => { ok++; }).catch((err) => { failed++; console.error(err); });
+      }));
+      setImportProgress({ done: Math.min(i + CHUNK, entries.length), total: entries.length });
+    }
+    setImporting(false);
+    setImportConfirm(false);
+    setImportDone({ ok, failed });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -8386,6 +8538,54 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
               : lang === "mr"
               ? "एका रूट + वजन ब्रॅकेटसाठी निश्चित दर सेट करा. हे त्या रूटसाठी ड्रायव्हरने भरलेले दर आणि स्टँडर्ड फॉर्म्युला यांना ओव्हरराइड करते."
               : "एक रूट + वजन ब्रैकेट के लिए निश्चित दर सेट करें। यह उस रूट के लिए ड्राइवर द्वारा भरे गए दर और मानक फॉर्मूले को ओवरराइड करता है।"}
+          </div>
+
+          <div className="rounded-lg p-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>
+              {lang === "en" ? "Maharashtra Rate Card defaults" : lang === "mr" ? "महाराष्ट्र रेट कार्ड डिफॉल्ट्स" : "महाराष्ट्र रेट कार्ड डिफॉल्ट्स"}
+            </div>
+            <p className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
+              {lang === "en"
+                ? "One-time bulk import: modelled rates for all 11 major Maharashtra hubs (Pune, Mumbai, Nashik, Kolhapur, Solapur, Chh. Sambhajinagar, Ahmednagar, Satara, Amravati, Nanded, Nagpur), every route between them, all 8 weight brackets. These are estimates, not live market quotes — every imported entry is editable/removable below just like one you type by hand."
+                : lang === "mr"
+                ? "एकवेळ बल्क इम्पोर्ट: महाराष्ट्रातील 11 प्रमुख शहरांमधील (पुणे, मुंबई, नाशिक, कोल्हापूर, सोलापूर, छ. संभाजीनगर, अहमदनगर, सातारा, अमरावती, नांदेड, नागपूर) सर्व रूट्स आणि सर्व 8 वजन ब्रॅकेट्ससाठी मॉडेल्ड दर. हे अंदाज आहेत, प्रत्यक्ष मार्केट कोट नाहीत — प्रत्येक इम्पोर्ट केलेली एंट्री खाली हाताने टाइप केल्यासारखी एडिट/काढता येते."
+                : "एकबारगी बल्क इम्पोर्ट: महाराष्ट्र के 11 प्रमुख शहरों (पुणे, मुंबई, नाशिक, कोल्हापुर, सोलापुर, छ. संभाजीनगर, अहमदनगर, सातारा, अमरावती, नांदेड, नागपुर) के बीच हर रूट और सभी 8 वजन ब्रैकेट के लिए मॉडेल्ड दरें। ये अनुमान हैं, असली मार्केट कोट नहीं — हर इम्पोर्ट की गई एंट्री नीचे हाथ से टाइप की गई एंट्री जैसी ही एडिट/हटाई जा सकती है।"}
+            </p>
+            {!importConfirm && !importing && (
+              <button onClick={() => setImportConfirm(true)} className="w-full mt-2 rounded-lg py-2.5 text-xs font-bold" style={{ background: C.navy, color: "#fff" }}>
+                {lang === "en" ? "Import Maharashtra Rate Card defaults" : lang === "mr" ? "महाराष्ट्र रेट कार्ड डिफॉल्ट्स इम्पोर्ट करा" : "महाराष्ट्र रेट कार्ड डिफॉल्ट्स इम्पोर्ट करें"}
+              </button>
+            )}
+            {importConfirm && !importing && (
+              <div className="mt-2 rounded-lg p-2.5" style={{ background: "#FDECEA", border: `1px solid ${C.safety}` }}>
+                <p className="text-[11px] font-bold" style={{ color: C.safety }}>
+                  {lang === "en"
+                    ? "This writes 880 entries (55 routes × 8 brackets × 2 directions) now, live for real customer bookings immediately. Existing entries for the same route + bracket will be overwritten. Continue?"
+                    : lang === "mr"
+                    ? "हे आत्ता 880 एंट्री (55 रूट्स × 8 ब्रॅकेट्स × 2 दिशा) लिहील, जे लगेच खऱ्या ग्राहक बुकिंगसाठी लाइव्ह होईल. त्याच रूट + ब्रॅकेटसाठी असलेल्या एंट्री ओव्हरराइट होतील. सुरू ठेवायचे?"
+                    : "यह अभी 880 एंट्री (55 रूट × 8 ब्रैकेट × 2 दिशा) लिखेगा, जो तुरंत असली ग्राहक बुकिंग के लिए लाइव हो जाएगा। उसी रूट + ब्रैकेट की मौजूदा एंट्री ओवरराइट हो जाएंगी। जारी रखें?"}
+                </p>
+                <div className="flex items-center gap-4 mt-2">
+                  <button onClick={runImport} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                    {lang === "en" ? "Import now" : lang === "mr" ? "आत्ता इम्पोर्ट करा" : "अभी इम्पोर्ट करें"}
+                  </button>
+                  <button onClick={() => setImportConfirm(false)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
+                    {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {importing && (
+              <div className="mt-2 text-[11px] font-bold text-center" style={{ color: C.inkSoft }}>
+                {lang === "en" ? "Importing" : lang === "mr" ? "इम्पोर्ट होत आहे" : "इम्पोर्ट हो रहा है"}… {importProgress ? `${importProgress.done}/${importProgress.total}` : ""}
+              </div>
+            )}
+            {importDone && (
+              <div className="mt-2 rounded-lg p-2 text-xs font-bold text-center" style={{ background: importDone.failed ? C.marigold : C.success, color: importDone.failed ? "#000" : "#fff" }}>
+                {lang === "en" ? `Imported ${importDone.ok}` : lang === "mr" ? `${importDone.ok} इम्पोर्ट झाले` : `${importDone.ok} इम्पोर्ट हुईं`}
+                {importDone.failed ? ` — ${importDone.failed} ${lang === "en" ? "failed" : lang === "mr" ? "अयशस्वी" : "विफल"}` : "."}
+              </div>
+            )}
           </div>
 
           <LocationField lang={lang} value={pickup}
@@ -8439,7 +8639,14 @@ function AdminRateCalculator({ adminRouteFares, fareTiers, lang, onClose }) {
                 {sorted.map((r) => (
                   <div key={r.id} className="rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
                     <button onClick={() => editEntry(r)} className="w-full text-left">
-                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName}</div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName}</div>
+                        {r.source === "maharashtraDefault" && (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#000" }}>
+                            {lang === "en" ? "DEFAULT" : lang === "mr" ? "डिफॉल्ट" : "डिफ़ॉल्ट"}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
                       <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
                         {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {fmt(r.totalFare)}
