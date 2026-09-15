@@ -4937,6 +4937,12 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
               ) : eligibleDrivers.map((d) => {
                 const isSelected = selectedDriverName === d.name;
                 const driverFare = resolveFare(d, pickup, drop, distance, fareTiers, routeFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+                // KYC-entered vehicle capacity, not the shipment weight the
+                // customer just typed above — falls back to the vehicle
+                // type's own default capacity for drivers whose own KYC
+                // record didn't set one directly (same fallback
+                // loadEligibleForDriver uses for eligibility matching).
+                const driverCapacityKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || null;
                 return (
                   <div key={d.mobile || d.id}>
                     <button onClick={() => setSelectedDriverName(d.name)}
@@ -4948,8 +4954,8 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                         </div>
                       } />
                       <div className="flex-1 min-w-0">
-                        <div className="text-[11px]" style={{ color: C.ink }}>{d.name}</div>
-                        <div className="text-[11px]" style={{ color: C.inkSoft }}>{weight ? `${weight}kg · ` : ""}{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
+                        <div className="text-[10px]" style={{ color: C.ink }}>{d.name}</div>
+                        <div className="text-[10px]" style={{ color: C.inkSoft }}>{driverCapacityKg ? `${driverCapacityKg}kg · ` : ""}{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber}</div>
                       </div>
                       <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(driverFare)}</div>
                     </button>
