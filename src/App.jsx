@@ -4926,7 +4926,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
               <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose a driver" : lang === "mr" ? "ड्रायव्हर निवडा" : "ड्राइवर चुनें"}</h3>
               <button onClick={() => { setChoosingVehicle(false); setSelectedDriverName(null); }} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
             </div>
-            <div className="p-4 space-y-2 overflow-y-auto">
+            <div className="p-4 space-y-2 overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>
               {requestError && (
                 <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{requestError}</div>
               )}
@@ -4948,8 +4948,8 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                         </div>
                       } />
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
-                        <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
+                        <div className="text-[11px] truncate" style={{ color: C.ink }}>{d.name}</div>
+                        <div className="text-[11px] truncate" style={{ color: C.inkSoft }}>{weight ? `${weight}kg · ` : ""}{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
                       </div>
                       <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(driverFare)}</div>
                     </button>
