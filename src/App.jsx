@@ -4948,8 +4948,8 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
                         </div>
                       } />
                       <div className="flex-1 min-w-0">
-                        <div className="text-[11px] truncate" style={{ color: C.ink }}>{d.name}</div>
-                        <div className="text-[11px] truncate" style={{ color: C.inkSoft }}>{weight ? `${weight}kg · ` : ""}{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
+                        <div className="text-[11px]" style={{ color: C.ink }}>{d.name}</div>
+                        <div className="text-[11px]" style={{ color: C.inkSoft }}>{weight ? `${weight}kg · ` : ""}{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber} · ⭐ {d.rating || 4.6}</div>
                       </div>
                       <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(driverFare)}</div>
                     </button>
