@@ -10114,10 +10114,10 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   const nextGpsToRemind = gpsUnsent[0] || null;
   const gpsWhatsappLink = (mobile) => {
     const msg = lang === "en"
-      ? "Your GPS/location tracking looks off in our app right now. Please open the app and make sure Location is turned on -- both the phone's Location setting and the app's permission -- otherwise you may not get new loads."
+      ? "Your GPS/location tracking looks off in our app right now. To keep getting loads, you must turn it on -- please check these two things on your phone:\n1) Settings → Location → turn ON\n2) Settings → Apps → Apna Transport → Permissions → Location → Allow\nThen reopen our app."
       : lang === "mr"
-      ? "तुमची GPS/लोकेशन ट्रॅकिंग सध्या आमच्या अ‍ॅपमध्ये बंद दिसत आहे. कृपया अ‍ॅप उघडा आणि Location सुरू करा -- फोनची लोकेशन सेटिंग आणि अ‍ॅपची परमिशन, दोन्ही -- अन्यथा तुम्हाला नवीन लोड मिळणार नाहीत."
-      : "आपकी GPS/लोकेशन ट्रैकिंग अभी हमारे ऐप में बंद दिख रही है। कृपया ऐप खोलें और Location ऑन करें -- फोन की लोकेशन सेटिंग और ऐप की परमिशन, दोनों -- नहीं तो आपको नए लोड नहीं मिल पाएंगे।";
+      ? "तुमची GPS/लोकेशन ट्रॅकिंग सध्या आमच्या अ‍ॅपमध्ये बंद दिसत आहे. लोड मिळत राहण्यासाठी ती सुरू करणे आवश्यक आहे -- कृपया तुमच्या फोनमध्ये या दोन गोष्टी तपासा:\n1) Settings → Location → सुरू करा\n2) Settings → Apps → Apna Transport → Permissions → Location → Allow करा\nमग आमचे अ‍ॅप पुन्हा उघडा."
+      : "आपकी GPS/लोकेशन ट्रैकिंग अभी हमारे ऐप में बंद दिख रही है। लोड मिलते रहने के लिए इसे ऑन करना ज़रूरी है -- कृपया अपने फोन में ये दो चीज़ें चेक करें:\n1) Settings → Location → ऑन करें\n2) Settings → Apps → Apna Transport → Permissions → Location → Allow करें\nफिर हमारा ऐप फिर से खोलें।";
     return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
   };
   const filtered = byGps.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
