@@ -1,0 +1,16 @@
+node_modules
+dist
+.DS_Store
+*.local
+.env
+serviceAccountKey*.json
+*-firebase-adminsdk-*.json
+.claude/worktrees
+twa/project
+twa/*.keystore
+twa/*.jks
+android/*.keystore
+android/*.jks
+android-admin/*.keystore
+android-admin/*.jks
+scratchpad

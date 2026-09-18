@@ -1,0 +1,36 @@
+{
+  "name": "sarthi-transport",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "cap:sync": "cap sync android",
+    "import:mh-rates": "node scripts/importMaharashtraDefaults.mjs",
+    "verify:mh-rates": "node scripts/importMaharashtraDefaults.mjs --verify",
+    "revert:diesel-driver-rates": "node scripts/revertDieselDriverRates.mjs"
+  },
+  "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/push-notifications": "^8.1.2",
+    "@react-google-maps/api": "^2.20.8",
+    "firebase": "^12.16.0",
+    "lucide-react": "^0.462.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/cli": "^8.5.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "firebase-admin": "^12.7.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

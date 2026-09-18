@@ -1,0 +1,297 @@
+// Apna Transport — production Firestore rules
+//
+// Paste this into Firebase Console → Firestore Database → Rules, then
+// Publish. Requires: (1) admin accounts created via scripts/setupAdmin.js
+// (tags them with a custom "admin" claim), and (2) customers/drivers
+// continuing to sign in via real Firebase Phone Auth as they already do.
+//
+// Design notes / known trade-offs (read before changing):
+// - vehicleTypes/materials/settings stay readable by anyone, signed in or
+//   not — the app subscribes to them before login even happens, and none
+//   of it is sensitive (vehicle names, material names, commission %).
+// - drivers/bookings/withdrawals/rechargeRequests are readable by any
+//   signed-in user (not just the owner) because the client fetches whole
+//   collections and filters in JS rather than using scoped queries (e.g.
+//   a driver needs every "Bidding" booking, not just their own). Locking
+//   list-reads down further would need those queries rewritten first.
+//   Writes ARE scoped to the owning phone number (or admin) wherever the
+//   data model makes that safely checkable.
+// - customers is the one collection where the app never does a broad
+//   query except from Admin, so list access is admin-only while get
+//   (single-doc) access still works for the owning customer.
+// - alerts (SOS/complaints) are admin-only to read — only the Admin
+//   Portal ever displays them.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+    // Two ways a session can prove it owns a given mobile number, checked
+    // as an OR so neither migration direction ever locks anyone out:
+    // (1) Firebase Phone Auth's token carries the verified number as
+    //     "+91XXXXXXXXXX" -- the original login method, still valid
+    //     forever for any session that's still signed in this way.
+    // (2) PIN-based login (App.jsx: CustomerOnboarding/DriverOnboarding)
+    //     signs in as a normal email/password account under a synthetic
+    //     "<mobile>@customer.apnatransport.local" or
+    //     "<mobile>@driver.apnatransport.local" email (see
+    //     functions/index.js: pinAuthEmail) -- checked for both roles here
+    //     since the app deliberately lets one phone number hold both a
+    //     customer and a driver account. Every customer/driver doc is
+    //     keyed by the bare 10-digit number either way.
+    function isOwnPhone(mobile) {
+      return isSignedIn() && (
+        request.auth.token.phone_number == ('+91' + mobile) ||
+        request.auth.token.email == (mobile + '@customer.apnatransport.local') ||
+        request.auth.token.email == (mobile + '@driver.apnatransport.local')
+      );
+    }
+
+    // Fields a driver's own authenticated session must never be able to
+    // change on their OWN existing doc -- without this, isOwnPhone(mobile)
+    // alone let a driver self-approve KYC, un-blacklist themselves, credit
+    // their own wallet/bonus/heldCredit, or roll createdAt forward to stay
+    // in the 30-day free trial (isInTrial reads it) forever. Checked only
+    // on the authenticated-update path in drivers/{mobile} below -- NOT on
+    // the one-time unauthenticated first-submission path
+    // (resource.data.vehicleSpec == null), where DriverKyc's submit()
+    // legitimately sets kyc for the very first time as part of onboarding;
+    // that path can only ever fire once, before vehicleSpec exists at all.
+    function driverProtectedFieldsUnchanged() {
+      return request.resource.data.kyc == resource.data.kyc &&
+        request.resource.data.blacklisted == resource.data.blacklisted &&
+        request.resource.data.wallet == resource.data.wallet &&
+        request.resource.data.heldCredit == resource.data.heldCredit &&
+        request.resource.data.bonus == resource.data.bonus &&
+        request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /vehicleTypes/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /materials/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /settings/{id} {
+      // Lets the app's own "create if missing" bootstrap work on a brand
+      // new project before any admin account exists yet; once the doc
+      // exists, only admin can change it.
+      allow read: if true;
+      allow write: if isAdmin() || !exists(/databases/$(database)/documents/settings/$(id));
+    }
+
+    match /drivers/{mobile} {
+      // The standalone Driver KYC Portal (App.jsx: DriverKycPortal, linked
+      // from Admin's KYC desk) deliberately skips login/OTP — a driver
+      // opens their own personalized link (?driverKyc=1&mobile=...) and
+      // fills the form directly. Since there's no request.auth to check
+      // there, get/write for a single doc are allowed with no auth at all
+      // as long as that driver's KYC is still empty (vehicleSpec == null)
+      // -- once they've submitted once, this path closes and only the
+      // owning phone's real session (or admin) can touch it again. This
+      // trades a little security for zero friction: anyone who obtains
+      // that exact link before the driver uses it could submit or
+      // overwrite their still-empty KYC, so it must only ever be shared
+      // privately (WhatsApp/push to that driver), never posted publicly.
+      allow get: if isSignedIn() || resource.data.vehicleSpec == null;
+      allow list: if isSignedIn();
+      allow create: if isOwnPhone(mobile) || isAdmin();
+      // The KYC-portal branch (vehicleSpec == null) stays unconditional --
+      // it's the one legitimate place kyc/wallet/etc. get set for the
+      // first time. Everywhere else, a driver's own session can change
+      // anything on their doc EXCEPT the protected fields above.
+      allow update: if isAdmin()
+        || resource.data.vehicleSpec == null
+        || (isOwnPhone(mobile) && driverProtectedFieldsUnchanged());
+      allow delete: if isOwnPhone(mobile) || isAdmin();
+    }
+
+    match /customers/{mobile} {
+      allow get: if isOwnPhone(mobile) || isAdmin();
+      allow list: if isAdmin();
+      allow write: if isOwnPhone(mobile) || isAdmin();
+    }
+
+    match /bookings/{id} {
+      allow read: if isSignedIn();
+      allow create: if isOwnPhone(request.resource.data.customerMobile);
+      // driverMobile is only ever set once (driverRespondBooking, the
+      // moment a direct request OR an accepted bid actually gets accepted
+      // by that driver -- see App.jsx) -- before that, a booking is still
+      // Bidding/AwaitingDriver and driverMobile doesn't exist on the doc
+      // yet. Before assignment, any signed-in driver still needs write
+      // access (bidding/accepting) -- that pool is already visible to
+      // every eligible driver by design, a smaller/accepted exposure.
+      // BUT limited to exactly the fields those flows touch (addBid,
+      // unfreezeDriverName, retargetToNextDriver, driverRespondBooking's
+      // accept path) -- unlike the READ exposure, there's no reason a
+      // driver bidding on a load needs write access to its fare, pickup,
+      // drop, customerMobile, or weight, and without this allowlist any
+      // signed-in stranger could silently rewrite those on someone else's
+      // still-unassigned booking.
+      // Once assigned, only that specific driver, the booking's own
+      // customer, or admin may touch it -- closes off any other signed-in
+      // stranger rewriting someone else's fare/status/OTP/location on an
+      // active or completed trip.
+      allow update: if isAdmin()
+        || isOwnPhone(resource.data.customerMobile)
+        || (resource.data.get('driverMobile', null) == null && isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'bids', 'status', 'pendingDriverName', 'pendingDriverMobile', 'pendingBidId', 'acceptedAt',
+              'declinedBy', 'vehicle', 'driverName', 'driverMobile', 'progress'
+            ]))
+        || (resource.data.get('driverMobile', null) != null && isOwnPhone(resource.data.driverMobile));
+      allow delete: if isAdmin();
+    }
+
+    // The real pickup OTP, split out of bookings/{id} on purpose (see the
+    // comment there) — that document is broadly readable by isSignedIn(),
+    // which used to mean any driver's app already had a booking's real
+    // OTP in local memory before ever visiting the pickup, defeating the
+    // entire point of it. Deliberately NOT readable by the assigned
+    // driver here either — verification happens through the
+    // verifyPickupOtp Cloud Function (functions/index.js), which reads
+    // this via the Admin SDK and returns pass/fail only, so a driver's
+    // client never sees the correct value at any point. Written by the
+    // assigned driver's own session at accept time (driverRespondBooking)
+    // — same trust level bookings/{id} already grants a driver over their
+    // own newly-accepted trip.
+    match /bookingOtps/{bookingId} {
+      allow read: if isAdmin() || isOwnPhone(resource.data.get('customerMobile', ''));
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Read is scoped per-document to the request's own driverMobile/
+    // customerMobile (or Admin) rather than a blanket isSignedIn() — unlike
+    // bookings/drivers (where the client genuinely needs every OTHER
+    // party's doc too, e.g. every open "Bidding" load), a driver or
+    // customer only ever needs their OWN withdrawal history. Firestore
+    // evaluates list-query rules per document, so the client's existing
+    // unscoped subscribeCollection("withdrawals", ...) doesn't need to
+    // change at all — it now simply receives only the caller's own docs
+    // (or everything, for Admin) instead of every driver/customer's
+    // amounts and phone number.
+    match /withdrawals/{id} {
+      allow read: if isAdmin()
+        || isOwnPhone(resource.data.get('driverMobile', ''))
+        || isOwnPhone(resource.data.get('customerMobile', ''));
+      allow create: if isSignedIn() && (
+        (request.resource.data.role == 'driver' && isOwnPhone(request.resource.data.driverMobile)) ||
+        (request.resource.data.role == 'customer' && isOwnPhone(request.resource.data.customerMobile))
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // Same per-document scoping as withdrawals above, same reasoning.
+    match /rechargeRequests/{id} {
+      allow read: if isAdmin() || isOwnPhone(resource.data.get('driverMobile', ''));
+      allow create: if isOwnPhone(request.resource.data.driverMobile);
+      allow update, delete: if isAdmin();
+    }
+
+    match /alerts/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Masked-call audit trail (see functions/index.js: initiateMaskedCall)
+    // — written only by that Cloud Function via the Admin SDK, which
+    // bypasses these rules entirely, so no client write path is needed or
+    // allowed here. Admin-only read, for looking into a customer/driver
+    // dispute.
+    match /callLogs/{id} {
+      allow read: if isAdmin();
+    }
+
+    // Admin "Send Notification" history (see functions/index.js:
+    // sendAdminNotification) — written only by that Cloud Function via the
+    // Admin SDK, no client write path needed or allowed here. Doubles as
+    // the actual announcements drivers/customers read in their own "Admin
+    // Announcements" inbox, not just admin's own sent-history view, so
+    // read is scoped per-document to who the message was actually for:
+    // "all" is visible to any signed-in user (matches its own meaning),
+    // a single-recipient message (target is one mobile string) is visible
+    // only to Admin or that one recipient, and a batch send to a specific
+    // LIST of recipients checks the caller's own identity (either shape a
+    // session can carry -- PIN-login's synthetic email or a real Phone
+    // Auth phone_number) against targetEmails/targetPhones, precomputed
+    // server-side at send time since rules can't reformat
+    // request.auth.token itself to match against the raw mobile list.
+    match /adminNotifications/{id} {
+      allow read: if isAdmin()
+        || resource.data.target == "all"
+        || (resource.data.target is string && isOwnPhone(resource.data.target))
+        || (resource.data.targetEmails is list && request.auth.token.email in resource.data.targetEmails)
+        || (resource.data.targetPhones is list && request.auth.token.phone_number in resource.data.targetPhones);
+    }
+
+    // Business expense tracking (Admin's "Expenses" tab) — admin-only,
+    // since this is internal financial data, not app-functionality data.
+    match /expenses/{id} {
+      allow read, write: if isAdmin();
+    }
+    match /expenseCategories/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Admin's internal Bug Tracker (see AdminBugTracker in App.jsx) —
+    // admin-only, same as expenses above. Never read or written by a
+    // customer/driver session.
+    match /bugs/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Heartbeat timestamps from the daily health-check Cloud Functions
+    // (see dailyHealthCheckMorning/Night in functions/index.js) -- the
+    // GitHub-side half of the same daily check (a Claude Code Routine,
+    // which holds no Firebase credentials at all by design) reads this
+    // with a plain unauthenticated request to confirm the Cloud Function
+    // half is still actually running, not just deployed. Contains nothing
+    // but timestamps, so public read is safe; only the Cloud Functions'
+    // Admin SDK (which bypasses rules) and Admin itself can write it.
+    match /systemHealth/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Crowd-sourced route fares drivers enter via "Set Fare" (see
+    // SetFareForm/getRouteAverageFare in App.jsx) — unlike vehicleTypes,
+    // NOT publicly readable: every entry carries a real driver phone
+    // number in its driverMobile field, so read requires sign-in (any
+    // signed-in customer/driver/admin, matching the broad-read pattern
+    // used for bookings/drivers/withdrawals elsewhere in this file) rather
+    // than being open to the entire internet. A driver can create/edit
+    // their own entry (matching the client's doc id convention
+    // "<driverMobile>__<route>"), but deleting one is Admin-only —
+    // SetFareForm's own "your saved routes" list is reference/edit only,
+    // by design, with no delete control; only the "Driver Ride Entries"
+    // tile on the Live Dashboard (see AdminRouteFares) can remove an entry.
+    match /routeFares/{id} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() || isOwnPhone(request.resource.data.driverMobile);
+      allow update: if isAdmin() || isOwnPhone(resource.data.driverMobile);
+      allow delete: if isAdmin();
+    }
+
+    // Admin's own route + weight-bracket fare overrides (see
+    // AdminRateCalculator/getAdminRouteOverride in App.jsx) — same
+    // sign-in-required read as routeFares above (no phone number stored
+    // here, but no reason to expose it publicly either), but entirely
+    // Admin-owned: only Admin can create, edit, or remove an entry.
+    match /adminRouteFares/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

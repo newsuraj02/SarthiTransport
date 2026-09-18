@@ -1,0 +1,95 @@
+apply plugin: 'com.android.application'
+
+// Release signing — sourced from environment variables so CI (see
+// .github/workflows/build-capacitor-admin.yml) can supply them straight
+// from the same ANDROID_KEYSTORE_BASE64/ANDROID_KEYSTORE_PASSWORD/
+// ANDROID_KEY_ALIAS/ANDROID_KEY_PASSWORD secrets the main app's build
+// already uses (see android/app/build.gradle) — reusing the same signing
+// key is fine here since applicationId (below) is a completely separate
+// identity from the main app's com.apnatransport.app; this is its own
+// install, not an update to the existing Play Store listing.
+// ANDROID_KEYSTORE_PATH points at wherever CI decoded the keystore file
+// to. Left unset, a local/dev build just produces an unsigned release
+// artifact instead of failing outright.
+def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+def releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+def releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+
+android {
+    namespace = "com.apnatransport.admin"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.apnatransport.admin"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // Overridden from CI via -PappVersionCode/-PappVersionName (see
+        // build-capacitor.yml) — these two defaults only matter for a
+        // local/dev build run without those properties.
+        versionCode (project.hasProperty("appVersionCode") ? (project.appVersionCode as Integer) : 1)
+        versionName (project.hasProperty("appVersionName") ? project.appVersionName : "1.0")
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (releaseKeystorePath) {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Packages a native-debug-symbols.zip into the .aab so Play
+            // Console can symbolicate crashes/ANRs in the small amount of
+            // native (.so) code bundled by AndroidX/Capacitor dependencies
+            // (Play Console flagged this as missing on versionCode 12's
+            // upload) — pure metadata for crash reporting, doesn't change
+            // anything about how the app runs.
+            ndk {
+                debugSymbolLevel 'SYMBOL_TABLE'
+            }
+            if (releaseKeystorePath) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

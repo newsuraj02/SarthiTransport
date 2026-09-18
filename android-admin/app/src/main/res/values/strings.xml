@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Apna Transport Admin</string>
+    <string name="title_activity_main">Apna Transport Admin</string>
+    <string name="package_name">com.apnatransport.admin</string>
+    <string name="custom_url_scheme">com.apnatransport.admin</string>
+</resources>

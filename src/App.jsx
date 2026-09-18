@@ -1,0 +1,11857 @@
+import React, { useState, useEffect, useRef, useId } from "react";
+import {
+  Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
+  Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
+  Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
+  ClipboardList, MapPinned, Siren, Mic, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2, RefreshCw,
+  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone, Weight, Calculator, AlertTriangle,
+} from "lucide-react";
+import {
+  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs,
+} from "./firestoreStore";
+import { increment, serverTimestamp } from "firebase/firestore";
+import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
+import { useGoogleMaps } from "./googleMapsContext.jsx";
+import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
+import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, resolveChangeLogEntry } from "./firebaseClient";
+import { registerPlugin } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
+
+// Fallback Play Store link for the force-update screen — used whenever
+// admin hasn't set a custom settings.updateUrl (see AdminSettings).
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.apnatransport.app";
+
+// ---------------- design tokens ----------------
+// Bright/high-visibility flat palette — legible in direct outdoor sunlight
+// for drivers and customers using this on the road. Solid fills only, no
+// gradients/pastel tints (readability over decoration). Token names
+// (marigold, navy, etc.) are kept as-is even though they no longer mean
+// gold/maroon — every screen already references these by name, so this is
+// a value-only swap.
+const C = {
+  bg: "#FFFFFF",
+  paper: "#FFFFFF",
+  ink: "#000000",
+  inkSoft: "#333333",
+  marigold: "#FFCC00",
+  marigoldDeep: "#FF6600",
+  safety: "#FF2A2A",
+  success: "#00A854",
+  line: "#000000",
+  navy: "#0052CC",
+  pimpri: "#FF6600",
+  chinchwad: "#00A854",
+  // Flat solid fill (no gradient) for the app's highlighted info/policy
+  // boxes — Fare & Waiting Charge Policy, quote-entry, Scheduled-for, KYC
+  // tips, wallet summary, etc.
+  metallicGold: "#FFCC00",
+  // Flat solid fill for primary action buttons that used to carry a
+  // green gradient sheen — Send Quote, Book this vehicle, Save Changes,
+  // admin Approve/Add, etc.
+  metallicGreen: "#00A854",
+};
+const bodyFont = "'Noto Sans','Segoe UI',system-ui,sans-serif";
+const monoFont = "'JetBrains Mono','Courier New',monospace";
+
+// Brand mark — full-bleed bright-yellow square holding a bold flat truck
+// silhouette, with an "Apna Transport" wordmark band along the bottom. Same
+// design as the app's favicon/PWA/Play Store icons (public/favicon.svg,
+// public/icons/*) so the mark reads as one consistent icon everywhere it
+// appears, in-app or on a home screen. Built as inline SVG (not an image
+// file) so it stays crisp at any size; gradient ids are namespaced per
+// instance via useId so multiple Logos on one page don't clash.
+function Logo({ size = 64, showText = true }) {
+  const uid = useId();
+  const g = (name) => `${uid}-${name}`;
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" style={{ display: "block", borderRadius: size * 0.22, overflow: "hidden" }}>
+      <defs>
+        <linearGradient id={g("ybg")} x1="50%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" stopColor="#FFD93D" />
+          <stop offset="100%" stopColor="#FFC300" />
+        </linearGradient>
+        <linearGradient id={g("sheen")} x1="20%" y1="0%" x2="80%" y2="60%">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.5" />
+          <stop offset="55%" stopColor="#FFFFFF" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      <rect x="0" y="0" width="512" height="512" fill={`url(#${g("ybg")})`} />
+      <rect x="0" y="0" width="512" height="512" fill={`url(#${g("sheen")})`} />
+
+      {/* truck, a bold 2-tone silhouette — window/hubs are yellow
+          negative-space cutouts rather than a 3rd color, so it stays
+          legible even shrunk down to a small header icon */}
+      <g transform={showText ? "translate(0,-14)" : "translate(0,20) scale(1.28) translate(-56,-46)"}>
+        <rect x="70" y="196" width="238" height="120" rx="16" fill="#0B3D91" />
+        <rect x="90" y="214" width="150" height="30" rx="8" fill="#FFD93D" opacity="0.85" />
+
+        <path d="M308 224 L392 224 Q414 224 414 246 L414 316 L308 316 Z" fill="#0B3D91" />
+        <rect x="330" y="240" width="52" height="42" rx="7" fill="#FFD93D" opacity="0.85" />
+
+        <circle cx="150" cy="330" r="42" fill="#0B3D91" />
+        <circle cx="150" cy="330" r="16" fill="#FFD93D" opacity="0.85" />
+        <circle cx="356" cy="330" r="42" fill="#0B3D91" />
+        <circle cx="356" cy="330" r="16" fill="#FFD93D" opacity="0.85" />
+      </g>
+
+      {showText && (
+        <g>
+          <rect x="46" y="382" width="420" height="88" rx="20" fill="#0B3D91" />
+          <text x="256" y="424" textAnchor="middle" fontFamily={bodyFont} fontWeight="900" fontSize="40" letterSpacing="1" fill="#FFFFFF">APNA</text>
+          <text x="256" y="458" textAnchor="middle" fontFamily={bodyFont} fontWeight="900" fontSize="30" letterSpacing="3" fill="#FFFFFF">TRANSPORT</text>
+        </g>
+      )}
+    </svg>
+  );
+}
+
+const DEFAULT_VEHICLES = [
+  { key: "chhota", label: "छोटा हाथी", labelEn: "Chhota Hathi (Mini Truck)", rate: 20, capacity: "750 किग्रा", capacityEn: "750 kg", capacityKg: 750, l: 7, w: 4.5, h: 4.5 },
+  { key: "tataAce", label: "टाटा एस", labelEn: "Tata Ace", rate: 25, capacity: "850 किग्रा", capacityEn: "850 kg", capacityKg: 850, l: 7.5, w: 4.5, h: 5 },
+  { key: "pickup", label: "पिकअप", labelEn: "Pickup", rate: 30, capacity: "1.5 टन", capacityEn: "1.5 ton", capacityKg: 1500, l: 8.5, w: 5, h: 5.5 },
+  { key: "truck", label: "बड़ा ट्रक", labelEn: "Big Truck", rate: 50, capacity: "9+ टन", capacityEn: "9+ ton", capacityKg: 9000, l: 19, w: 6.5, h: 7 },
+];
+function slugify(str) {
+  return "v" + str.replace(/\s+/g, "").slice(0, 10) + Math.floor(Math.random() * 900 + 100);
+}
+// Reference specs for common Indian commercial vehicle models — lets Driver
+// KYC auto-fill capacity/length/width/height the moment a driver types a
+// recognizable model name into "Vehicle Name", instead of leaving them to
+// guess these numbers. Matched loosely against free-typed text (lowercase,
+// substring), since there's no dropdown here — "Tata Ace Gold", "ace",
+// "chhota hathi" all resolve sensibly. Values are commonly published
+// reference specs, not per-unit exact; the driver can always edit any field
+// afterward, and the auto-fill never overwrites a field once they have.
+const VEHICLE_MODEL_SPECS = [
+  { keys: ["tata ace gold"], capacityKg: 850, length: 7.5, width: 4.5, height: 5 },
+  { keys: ["tata ace", "chhota hathi", "chotta hathi", "chota hathi"], capacityKg: 750, length: 7, width: 4.5, height: 4.5 },
+  { keys: ["mahindra jeeto", "jeeto"], capacityKg: 600, length: 6.5, width: 4.3, height: 4.3 },
+  { keys: ["ashok leyland dost", "dost"], capacityKg: 1250, length: 8, width: 5, height: 5 },
+  { keys: ["bolero maxitruck", "bolero pickup", "bolero"], capacityKg: 1500, length: 8.5, width: 5, height: 5.5 },
+  { keys: ["tata 407"], capacityKg: 2500, length: 10, width: 5.5, height: 6 },
+  { keys: ["tata 709"], capacityKg: 4000, length: 12, width: 6, height: 6.5 },
+  { keys: ["eicher 14", "14 ft", "14ft"], capacityKg: 5000, length: 14, width: 6, height: 6.5 },
+  { keys: ["eicher 17", "17 ft", "17ft"], capacityKg: 7000, length: 17, width: 6.5, height: 7 },
+  { keys: ["eicher 19", "19 ft", "19ft"], capacityKg: 9000, length: 19, width: 6.5, height: 7 },
+  { keys: ["6 wheeler", "six wheeler", "6-wheeler"], capacityKg: 9000, length: 19, width: 6.5, height: 7 },
+  { keys: ["10 wheeler", "ten wheeler", "10-wheeler"], capacityKg: 16000, length: 22, width: 7, height: 7.5 },
+];
+function lookupVehicleModelSpec(name) {
+  const q = (name || "").trim().toLowerCase();
+  if (!q) return null;
+  return VEHICLE_MODEL_SPECS.find((v) => v.keys.some((k) => q.includes(k))) || null;
+}
+// Vehicle types added via "+ Add new type" only have one name (like custom
+// materials), so English falls back to the same string when no labelEn exists.
+const vehicleLabel = (v, lang) => (v ? (lang === "en" ? (v.labelEn || v.label) : v.label) : "");
+const vehicleCapacity = (v, lang) => (v ? (lang === "en" ? (v.capacityEn || v.capacity) : v.capacity) : "");
+
+// A curated slot picker (period -> a handful of round-hour times) instead of
+// a native <input type="time"> clock/dial, which testers found fiddly —
+// tap a period, then a slot, done. Slot values stay 24-hour "HH:MM" so
+// advanceTime/scheduledFor storage format is unchanged.
+const TIME_PERIODS = [
+  { key: "morning", icon: "🌅", labelHi: "सुबह", labelEn: "Morning", labelMr: "सकाळ", slots: ["06:00", "07:00", "08:00", "09:00"] },
+  { key: "afternoon", icon: "☀️", labelHi: "दोपहर", labelEn: "Afternoon", labelMr: "दुपार", slots: ["12:00", "13:00", "14:00", "15:00"] },
+  { key: "evening", icon: "🌆", labelHi: "शाम", labelEn: "Evening", labelMr: "संध्याकाळ", slots: ["16:00", "17:00", "18:00", "19:00"] },
+  { key: "night", icon: "🌙", labelHi: "रात", labelEn: "Night", labelMr: "रात्र", slots: ["20:00", "21:00", "22:00", "23:00"] },
+];
+function periodLabel(period, lang) {
+  return lang === "en" ? period.labelEn : lang === "mr" ? period.labelMr : period.labelHi;
+}
+function formatSlotShort(hhmm, lang) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const mm = String(m).padStart(2, "0");
+  return lang === "en" ? `${h12}:${mm} ${h < 12 ? "AM" : "PM"}` : lang === "mr" ? `${h12}:${mm} वाजता` : `${h12}:${mm} बजे`;
+}
+function formatTimeSlot(hhmm, lang) {
+  if (!hhmm) return "";
+  const period = TIME_PERIODS.find((p) => p.slots.includes(hhmm)) || TIME_PERIODS[0];
+  return `${periodLabel(period, lang)} ${formatSlotShort(hhmm, lang)}`;
+}
+function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
+  // Mirrors the date picker's own past-date block: if the chosen date is
+  // today, any slot whose hour has already passed (or is the current hour)
+  // is disabled — same "no past" rule, just applied at the hour level too.
+  const isToday = selectedDate === new Date().toISOString().slice(0, 10);
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const isPastSlot = (hhmm) => {
+    if (!isToday) return false;
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + m <= nowMinutes;
+  };
+  const defaultPeriod = (TIME_PERIODS.find((p) => p.slots.includes(value)) || TIME_PERIODS[0]).key;
+  const [activePeriod, setActivePeriod] = useState(defaultPeriod);
+  const [pending, setPending] = useState(value || "");
+  // Reselecting an already-set time shouldn't let Done through on the old
+  // value alone — the period defaults to the right one for convenience
+  // (so the relevant slots show immediately), but both it and a slot must
+  // be actively tapped again before Done unlocks. That requirement only
+  // makes sense when there WAS a prior value to reconfirm — on a genuinely
+  // first-time pick there's nothing to accidentally confirm, so the
+  // period (already shown highlighted as the sensible default) counts as
+  // picked from the start; only the slot itself needs a tap.
+  const [periodPicked, setPeriodPicked] = useState(!value);
+  const [slotPicked, setSlotPicked] = useState(false);
+  useEffect(() => {
+    if (open) { setActivePeriod(defaultPeriod); setPending(""); setPeriodPicked(!value); setSlotPicked(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  if (!open) return null;
+  const period = TIME_PERIODS.find((p) => p.key === activePeriod);
+  const canConfirm = periodPicked && slotPicked && !!pending;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl overflow-hidden" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4" style={{ background: C.navy }}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें"}</h3>
+            <button onClick={onClose} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+          </div>
+          <p className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Pick a period, then only that period's slots will show." : lang === "mr" ? "जो प्रहर निवडाल, फक्त तीच वेळ दिसेल" : "जो पहर चुनेंगे, सिर्फ वही समय दिखेगा"}</p>
+        </div>
+        <div className="p-5">
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>1. {lang === "en" ? "Choose period:" : lang === "mr" ? "प्रहर निवडा:" : "पहर चुनें:"}</div>
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {TIME_PERIODS.map((p) => {
+              const active = activePeriod === p.key;
+              return (
+                <button key={p.key} type="button" onClick={() => { setActivePeriod(p.key); setPeriodPicked(true); }}
+                  className="rounded-lg py-3.5 flex flex-col items-center gap-1 text-sm font-bold"
+                  style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.inkSoft }}>
+                  <span className="text-lg leading-none">{p.icon}</span>
+                  {periodLabel(p, lang)}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>2. {lang === "en" ? "Available time slots:" : lang === "mr" ? "उपलब्ध वेळ (Time Slots):" : "उपलब्ध समय (Time Slots):"}</div>
+          <div className="grid grid-cols-2 gap-2 mb-5">
+            {period.slots.map((s) => {
+              const active = pending === s;
+              const past = isPastSlot(s);
+              return (
+                <button key={s} type="button" disabled={past} onClick={() => { setPending(s); setSlotPicked(true); }}
+                  className="rounded-lg py-3.5 text-base font-bold text-left px-4"
+                  style={{
+                    background: past ? "#F0F0F0" : active ? C.marigoldDeep : C.paper,
+                    border: `1.5px solid ${past ? "#E0E0E0" : active ? C.marigoldDeep : C.line}`,
+                    color: past ? "#B0B0B0" : active ? "#FFFFFF" : C.ink,
+                  }}>
+                  {period.icon} {formatSlotShort(s, lang)}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={() => { if (canConfirm) { onSelect(pending); onClose(); } }} disabled={!canConfirm}
+            className="w-full rounded-lg py-4 font-bold text-base" style={{ background: canConfirm ? "#0052CC" : "#E0E0E0", color: canConfirm ? "#fff" : "#9AA3B0" }}>
+            {lang === "en" ? "Done" : lang === "mr" ? "ठीक आहे (Done)" : "ठीक है (Done)"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+const ALERT_TYPE_LABELS_EN = { "पुलिस सहायता": "Police Help", "इमरजेंसी कॉल": "Emergency Call", "व्हाट्सएप सपोर्ट": "WhatsApp Support", "शिकायत": "Complaint" };
+const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_EN[t]) ? ALERT_TYPE_LABELS_EN[t] : t;
+
+const CITY_COLORS = ["#FF6600", "#00A854", "#0052CC", "#FF2A2A", "#FFCC00", "#00A854"];
+
+const EN_LABELS = {
+  book: "Book Now", rides: "My Rides", home: "Home", wallet: "Wallet", history: "History",
+  kyc: "KYC", sos: "SOS", fleet: "Live Dashboard", drivers: "Drivers", settings: "Settings",
+  finance: "Reports", notify: "Notify", alerts: "Alerts", customers: "Customers", expenses: "Expenses",
+  callLogs: "Call Logs",
+};
+const MR_LABELS = {
+  book: "आत्ता बुक करा", rides: "माझ्या राइड्स", home: "होम", wallet: "वॉलेट", history: "हिस्टरी",
+  kyc: "KYC", sos: "SOS", fleet: "लाइव्ह डॅशबोर्ड", drivers: "ड्रायव्हर", settings: "सेटिंग्स",
+  finance: "रिपोर्ट्स", notify: "सूचना पाठवा", alerts: "अलर्ट्स", customers: "कस्टमर", expenses: "खर्च",
+  callLogs: "कॉल लॉग्स",
+};
+
+// Default business-expense categories for Admin's Expenses tab — admin can
+// add more via "+ Add Category", stored in the expenseCategories collection
+// and merged in, same custom-list pattern as materials/vehicleTypes.
+const DEFAULT_EXPENSE_CATEGORIES = [
+  { key: "server", icon: "🌐", hi: "सर्वर / डोमेन खर्च", en: "Server / Domain Expense", mr: "सर्व्हर / डोमेन खर्च" },
+  { key: "ads", icon: "📢", hi: "गूगल एड्स व प्रचार", en: "Google Ads & Promotion", mr: "गूगल अ‍ॅड्स व प्रचार" },
+  { key: "office", icon: "☕", hi: "ऑफिस व चाय पानी", en: "Office & Refreshments", mr: "ऑफिस व चहापाणी" },
+  { key: "fuel", icon: "⛽", hi: "फ्यूल व मेंटेनेंस", en: "Fuel & Maintenance", mr: "फ्युएल व मेंटेनन्स" },
+  { key: "other", icon: "📦", hi: "अन्य खर्चे", en: "Other Expenses", mr: "इतर खर्च" },
+];
+
+// One-time seed for the Admin "Bug Tracker" (see AdminBugTracker/AdminFleet)
+// — the findings from the first full code-audit pass, so the tracker opens
+// with real content instead of an empty list. seedIfEmpty only ever writes
+// these once (checked against the first item's doc existing); every bug
+// admin adds afterward, and every status change (Open/Fixed) on these or
+// later ones, lives only in Firestore from that point on — this constant is
+// never re-read once the collection exists.
+const BUG_TRACKER_SEED = [
+  {
+    id: "commission-fields-misleading",
+    title: "Driver Wallet/History showed commission deductions that never actually happened",
+    severity: "high",
+    status: "fixed",
+    area: "Driver Wallet, Trip History, trip cancellation",
+    description: "driverRespondBooking and AdminFinance were already hardcoded to 0% commission (a deliberate pause — fare is real again, but wallet deductions are not), but DriverWallet's transaction history, DriverHistory's fare display, and cancelBooking's held-credit/bonus-reversal math still computed against the live, admin-editable commissionPct/bonusPct Settings value. A completed trip showed a fabricated \"Commission −₹X\" line in the driver's wallet history and history list, and cancelling an Ongoing trip would hold heldCredit against a commission that was never actually deducted. Harmless while commissionPct is 0 (today's default), but the moment admin raised it in Settings for any reason, every driver would see deductions on screen that never touched their real balance. Fixed by hardcoding all three to 0, matching driverRespondBooking/AdminFinance.",
+    foundAt: "2026-09-09",
+    fixedAt: "2026-09-09",
+  },
+  {
+    id: "otp-readable-by-any-driver",
+    title: "Pickup OTP was readable by any signed-in user (including the assigned driver's own app) before it was ever entered",
+    severity: "medium",
+    status: "fixed",
+    type: "security",
+    area: "Bookings / firestore.rules / Cloud Functions",
+    description: "The 4-digit pickup OTP (proves a driver is physically at the pickup point before loading starts) used to be stored directly on the booking document, which firestore.rules intentionally allows any signed-in user to read (the app fetches whole collections and filters client-side, e.g. a driver needs every open \"Bidding\" load) — meaning the assigned driver's OWN app already had the real OTP in local memory the moment they accepted the trip, before ever asking the customer for it, defeating the entire point of the check. Fixed by moving the OTP into its own bookingOtps/{id} document, readable only by that booking's own customer or Admin (never the driver, by rule — see firestore.rules), and adding a verifyPickupOtp Cloud Function that the driver's app calls with its guess and gets back pass/fail only, never the real value. driverRespondBooking now writes the OTP there instead of onto the booking doc; the customer's Active Ride screen reads it via a scoped subscription instead of the booking object it already had. bookingOtps gets the same 24h cleanup as adminNotifications (expireOldBookingOtps) since it's only ever needed for the brief pre-pickup window.",
+    foundAt: "2026-09-09",
+    fixedAt: "2026-09-13",
+  },
+  {
+    id: "wallet-full-doc-overwrite-race",
+    title: "Driver wallet/profile updates overwrote the whole document, which could race with a concurrent write",
+    severity: "medium",
+    status: "fixed",
+    area: "Driver wallet / referrals / withdrawals",
+    description: "setDriver (used by withdrawals, referral display, KYC, and more) calls replaceDoc — a full setDoc overwrite of the driver's entire profile from whatever copy is in the client's memory at that moment — rather than a targeted patchDoc+increment on just the changed field. If two writes land close together (e.g. admin approves a wallet recharge at the same moment the driver's own device fires an update built from a slightly stale in-memory copy), the second full-document write had no idea about the first change and could silently overwrite it — and this wasn't just theoretical: driverRespondBooking (accepting a trip) and cancelBooking called setDriver on every single accept/cancel even when the actual financial delta was 0 (commission is currently paused), meaning the driver's ENTIRE profile got silently overwritten from a stale snapshot on two of the most frequent actions in the app. Fixed by adding adjustDriverWallet — a patchDoc using Firestore's increment() touching only wallet/bonus/heldCredit, which commutes correctly regardless of write order or staleness, and skips the write entirely when every delta is 0 — and routing every wallet/bonus/heldCredit mutation (requestWithdrawal, approveRecharge, driverRespondBooking, cancelBooking) through it instead of setDriver. approveRecharge's own read-then-write (target.wallet + amount) had the identical race between two quick approvals for the same driver and got the same fix. Every OTHER driver profile field (KYC, name, photo, online status, vehicleSpec, etc.) still goes through setDriver/replaceDoc unchanged — this fix is scoped to the fields with real financial stakes, not a rewrite of the whole driver-profile write path.",
+    foundAt: "2026-09-09",
+    fixedAt: "2026-09-13",
+  },
+  {
+    id: "admin-block-button-mobile-id-mismatch",
+    title: "Admin's Block/Unblock button silently did nothing for a driver record missing its own mobile field",
+    severity: "medium",
+    status: "fixed",
+    area: "Admin — All Drivers",
+    description: "AdminDriverList's Block/Unblock button called toggleBlacklist(d.id), but toggleBlacklist looked the driver up by matching x.mobile === mobile internally. For any driver record with no mobile field of its own (the file's own AdminDriverList comment already acknowledges old hand-seeded \"demo driver\" records with missing data) the lookup would fail and the function would return early with nothing shown — the button just did nothing, no error, no feedback. The Delete button right next to it already defensively called deleteDriver(d.mobile || d.id); Block/Unblock didn't. Fixed both the button (now passes d.mobile || d.id) and toggleBlacklist itself (now also matches by doc id) so it's correct either way.",
+    foundAt: "2026-09-10",
+    fixedAt: "2026-09-10",
+  },
+  {
+    id: "routefares-world-readable",
+    title: "routeFares (Set Fare) was readable by anyone on the internet with no login, exposing driver phone numbers",
+    severity: "high",
+    status: "fixed",
+    type: "security",
+    area: "Set Fare / firestore.rules",
+    description: "routeFares' Firestore rule mirrored vehicleTypes' \"allow read: if true\" without accounting for the fact that every entry carries a real driverMobile field — unlike vehicleTypes (just labels/rates), this meant any driver's phone number was directly queryable by anyone with the (publicly-shipped) Firebase client config, no app login required. Fixed by requiring isSignedIn() to read, matching every other collection with personal data. Also moved the client subscription from a mount-once effect to the same authDeps-based pattern bookings/drivers already use — otherwise the very first subscription attempt (fired before login finishes) would get permanently denied and never retry once the user actually signs in, silently leaving routeFares empty all session.",
+    foundAt: "2026-09-13",
+    fixedAt: "2026-09-13",
+  },
+  {
+    id: "withdrawals-recharge-broad-read",
+    title: "Any signed-in driver/customer could read every OTHER driver/customer's wallet withdrawal and recharge amounts",
+    severity: "medium",
+    status: "fixed",
+    area: "Driver Wallet / firestore.rules",
+    description: "withdrawals and rechargeRequests both used \"allow read: if isSignedIn()\" — any signed-in user's session could list the full collection, including every other driver's/customer's requested amount and phone number, not just their own. Unlike bookings/drivers (where the client genuinely needs to see every OTHER party's doc, e.g. every open load), a driver or customer only ever needs their own wallet history here. Fixed by scoping read to the document's own driverMobile/customerMobile (or Admin) — Firestore evaluates list-query rules per document, so the existing unscoped subscribeCollection calls needed no client-side changes at all; each session now simply receives only its own docs.",
+    foundAt: "2026-09-13",
+    fixedAt: "2026-09-13",
+  },
+  {
+    id: "admin-notification-single-target-broad-read",
+    title: "A 1:1 Admin message to one specific driver/customer was still downloaded to every signed-in user's device",
+    severity: "medium",
+    status: "fixed",
+    area: "Admin Announcements / firestore.rules",
+    description: "adminNotifications used \"allow read: if isSignedIn()\" — a message Admin sent to one specific recipient (e.g. a note about a KYC rejection) was still fetched by every other signed-in customer/driver's session, just hidden from view by client-side filtering in useAnnouncementAlerts/AnnouncementsInbox. Fixed for the single-recipient case (target is one mobile string) — read is now scoped to Admin or that one recipient. See admin-notification-batch-target-broad-read for the one remaining case this doesn't cover.",
+    foundAt: "2026-09-13",
+    fixedAt: "2026-09-13",
+  },
+  {
+    id: "admin-notification-batch-target-broad-read",
+    title: "A batch Admin message to a specific LIST of recipients is still broadly readable by any signed-in user",
+    severity: "low",
+    status: "fixed",
+    area: "Admin Announcements / firestore.rules",
+    description: "sendAdminNotification supports targeting an array of mobiles at once (e.g. AdminFleet's \"send capacity reminder to all incomplete\" button) by storing that array directly on the notification doc. Firestore security rules have no safe way to check \"is my own phone number one of the entries in this list\" without string-parsing the auth token's phone_number/email. Fixed by having sendAdminNotification precompute targetEmails/targetPhones (both identity shapes a session can carry -- PIN-login's synthetic email or a real Phone Auth phone_number) server-side at send time, so the rule can grant read with a plain `in` check against those precomputed arrays instead of parsing the token itself.",
+    foundAt: "2026-09-13",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "diesel-adjuster-per-km-amplification",
+    title: "Diesel +/- control moved driver-submitted rates by far more than the intended ₹1/km",
+    severity: "medium",
+    status: "fixed",
+    area: "Admin Rate Calculator / Driver Ride Entries",
+    description: "The Diesel control nudged a driver entry's displayed per-km rate directly, then rebuilt Total Fare from it via Set Fare's own beyond-5km-at-75%-of-total formula -- but that formula amplifies any per-km change by dividing it by 0.75 (the first 5km is a fixed 25% SLICE of the total, not a flat rupee amount), so \"+₹1/km\" on a 201km entry landed as +₹271, not +₹201. Admin's own rates (adminRouteFares) were unaffected since they use a flat totalFare += delta*estimatedKm. Fixed by using that same flat rule for driver entries too -- Total/1-5km Fare/perKmRate are still recomputed afterward for display, but none of them drive the math.",
+    foundAt: "2026-09-16",
+    fixedAt: "2026-09-16",
+  },
+  {
+    id: "set-fare-saved-without-resolved-coordinates",
+    title: "Set Fare / Admin Rate Calculator could save an entry before its address had actually geocoded",
+    severity: "medium",
+    status: "fixed",
+    area: "Set Fare / Admin Rate Calculator",
+    description: "canSave only checked that pickup/drop text and the fare were filled in -- it never required pickupCoords/dropCoords to have actually resolved. Saving before the debounced geocode caught up (e.g. re-editing an existing route, which resets coordinates and waits to re-resolve them, then saving too fast) produced an entry with real-looking text and even a real distance, but null pickupLat/dropLat. That entry could then only ever match a customer's address by loose text containment, which fails whenever the two are typed in different scripts/spellings -- root cause of a real customer-reported mismatch (a driver's ₹12,500 quote for Chakan->Bhamer never reached the customer, who saw the generic formula's ₹7,679 instead). Fixed by disabling Save with a \"resolving location\" message until coordinates are actually in hand (or immediately enabled if Maps isn't available at all).",
+    foundAt: "2026-09-16",
+    fixedAt: "2026-09-16",
+  },
+  {
+    id: "admin-rate-calculator-stale-fare-vs-fresh-label",
+    title: "Admin Rate Calculator could show a \"system formula\" label next to a totally unrelated leftover number",
+    severity: "medium",
+    status: "fixed",
+    area: "Admin Rate Calculator",
+    description: "Once the fare field was manually touched once (typing into it, or loading an existing entry), it stopped auto-syncing to the live suggestion for good (fareTouched) -- but the source label (\"system formula\"/\"admin rate\"/\"driver average\") kept recomputing fresh on every Pickup/Drop/Weight change regardless. That let the label correctly describe what the CURRENT inputs would suggest while the number sitting in the box was left over from a completely different earlier test in the same session, with no indication they'd diverged -- reported live as ₹320 for a 500kg bracket sitting under a \"system formula\" label that mathematically could only ever produce ₹202 at that route's real distance. Fixed by resetting fareTouched whenever Pickup, Drop, or Weight change by hand, so a genuinely new query always gets a fresh, matching suggestion.",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "route-match-radius-too-tight-for-long-haul",
+    title: "A flat 25km route-match radius was too tight for 300+ km inter-district hauls",
+    severity: "low",
+    status: "fixed",
+    area: "Admin Rate Calculator / Set Fare / resolveFare",
+    description: "getAdminRouteOverride/getRouteAverageFare/findMatchingDefaultRate all matched a route by comparing Pickup/Drop GPS coordinates within a flat 25km radius per end -- fine for a same-city trip, but two people independently typing/geocoding a rural pickup or drop 300+ km apart can land more than 25km apart even when they mean the same real place. Widened the radius to scale with the route's own length (25km floor, up to 60km for long hauls, via routeMatchRadiusKm) -- this alone didn't fully explain the Chakan->Bhamer mismatch that prompted it (the real root cause turned out to be set-fare-saved-without-resolved-coordinates above), but is a real, independent improvement kept in place regardless.",
+    foundAt: "2026-09-16",
+    fixedAt: "2026-09-16",
+  },
+  {
+    id: "live-tracking-map-post-otp-line-regression",
+    title: "Tracking map's route line disappeared entirely post-OTP if the driver's GPS hadn't reported in yet",
+    severity: "low",
+    status: "fixed",
+    area: "Customer/Driver live tracking map",
+    description: "Self-introduced regression while adding the live-follow-the-driver feature: switching the map's route origin to always be the driver's live GPS (needed for the follow-camera) meant \"route\" mode (post-OTP, heading to Drop) no longer had a fallback when the driver's location hadn't reported in yet -- previously it always drew a static Pickup->Drop line regardless. Fixed by restoring a real-road (not straight-line) Pickup->Drop fallback specifically for that case, found and fixed within the same session it was introduced.",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "verify-pickup-otp-function-never-deployed",
+    title: "Pickup OTP verification failed for every driver because the Cloud Function had never actually been deployed",
+    severity: "high",
+    status: "fixed",
+    area: "Deployment process / Cloud Functions",
+    description: "verifyPickupOtp (functions/index.js) existed in the repo, but a `firebase deploy --only functions` had never been run for it -- every deploy in this project's history had only ever targeted hosting. The client code (see firebaseClient.js: verifyPickupOtp) deliberately treats a network/function failure identically to a genuine wrong guess (\"a network blip or a genuine wrong guess look the same to the caller either way\"), so every real driver OTP attempt failed with a generic \"Incorrect OTP\" and no way to tell why. Confirmed by the deploy log itself once actually run: `functions[verifyPickupOtp(asia-south1)] Successful CREATE operation` -- create, not update, meaning it had never existed in production at all. Fixed by actually deploying it; no code change was needed. Worth remembering: this repo has two separate deploy targets (hosting and functions) and only one had been getting deployed.",
+    foundAt: "2026-09-16",
+    fixedAt: "2026-09-16",
+  },
+  {
+    id: "admin-rate-calculator-orphaned-duplicate-on-edit",
+    title: "Editing an existing Admin rate's route or weight bracket left the old entry behind as a stale duplicate",
+    severity: "medium",
+    status: "fixed",
+    type: "bug",
+    resolveAction: "cleanup-orphaned-admin-rates",
+    area: "Admin Rate Calculator",
+    description: "save() always createDoc's a new adminRouteFares entry keyed by the CURRENT pickup/drop/tier, but never removed the entry originally being edited (editingId) if that key changed. Correcting a Pickup typo or changing Weight enough to shift fare brackets left both the old (now-mislabeled) and new entries in place -- getAdminRouteOverride's \"most recently updated wins\" tie-break could later resurface the stale one for an overlapping route and quote an outdated fare. Found during a full-app audit. Fixed the code cause by deleting the editingId entry when the freshly-computed docId differs from it -- the Resolve (auto-fix) button on this entry re-scans live adminRouteFares for any duplicates left over from BEFORE that fix and removes them, safe to re-run any time.",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "driver-referral-self-fraud-unprotected-fields",
+    title: "A driver can self-referral-fraud unlimited wallet credit by editing their own driver record directly",
+    severity: "high",
+    status: "open",
+    type: "security",
+    area: "Driver Wallet / Referrals / firestore.rules / Cloud Functions",
+    description: "creditDriverReferral trusts a driver's own referredBy/referralCredited fields, which firestore.rules' driverProtectedFieldsUnchanged() does not protect from direct client writes (it only guards kyc/blacklisted/wallet/heldCredit/bonus/createdAt). A driver can use the Firebase client SDK to write { referredBy: <own mobile>, referralCredited: false } onto their own drivers/{mobile} doc, then call creditDriverReferral repeatedly -- each call resolves the \"referrer\" to their own doc and credits wallet += ₹200 via the Admin SDK, giving unlimited self-funded wallet credit as long as they have one completed trip and keep resetting referralCredited between calls. Found during a full-app audit. Explicitly left UNFIXED per direct instruction (only a specific subset of that audit's findings were authorized to be fixed) -- still open, needs a decision on when to close it.",
+    foundAt: "2026-09-17",
+  },
+  {
+    id: "unassigned-booking-write-no-field-allowlist",
+    title: "Any signed-in stranger could rewrite fare/pickup/drop/customerMobile on someone else's still-unassigned booking",
+    severity: "high",
+    status: "fixed",
+    type: "security",
+    area: "Bookings / firestore.rules",
+    description: "bookings/{id}'s update rule let any signed-in user write to any booking with no driverMobile yet (the Bidding/AwaitingDriver pool every eligible driver can already see), with no restriction on WHICH fields could change -- only the read side's broad exposure was ever a deliberate, documented tradeoff. A stranger could rewrite the fare, pickup, drop, or customerMobile on someone else's pending booking before a driver ever attached to it. Found during a full-app audit. Fixed by requiring the write's changed fields to be exactly the ones bidding/assignment flows actually touch (bids, status, pendingDriverName/Mobile, pendingBidId, acceptedAt, declinedBy, vehicle, driverName, driverMobile, progress) -- nothing else.",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "same-name-driver-lookup-collision",
+    title: "Two drivers sharing the same display name could receive each other's push alerts or referral credit",
+    severity: "medium",
+    status: "fixed",
+    area: "Cloud Functions (push alerts, referrals)",
+    description: "onDirectRequestAssigned's push-token lookup and creditDriverReferral's completed-trip lookup both keyed off a driver's free-text display name (registration only enforces length >= 3, no uniqueness check), so two same-named drivers could resolve to the wrong one's fcmToken or completed trip. Found during a full-app audit. Fixed by threading a new pendingDriverMobile field alongside pendingDriverName everywhere a direct request/accepted bid targets a driver, and switching both lookups to the driver's unique mobile (falling back to the old name query only for a booking written before the new field existed).",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "tracking-map-silent-beeps-autoplay-policy",
+    title: "Every in-app beep/chime silently failed to play because of the browser's audio autoplay policy",
+    severity: "medium",
+    status: "fixed",
+    area: "Driver Accept/Reject alarm, load-alert chime",
+    description: "playBeepTone/playChime/playStrongBeep each created a brand-new AudioContext per call and tried to play immediately -- but browsers/WebViews only let an AudioContext actually produce sound once it's been resumed from inside a genuine user gesture (tap/click) at least once per session. Every one of these alarms fires from a Firestore snapshot or a setInterval, neither of which counts, so the very first beep of a session (and every repeat after it) could silently never play. Reported live as \"no sound effect at all.\" Fixed by sharing one AudioContext (getAudioCtx) and priming it from the very first real tap anywhere in the app (unlockAudioContext, wired into the root component).",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "proximity-filter-fails-open-not-closed",
+    title: "Customer's driver picker showed drivers 1000+ km away when the pickup address hadn't finished geocoding",
+    severity: "high",
+    status: "fixed",
+    area: "Customer Booking / driver picker / auto-retarget",
+    description: "eligibleDrivers (CustomerBooking) and retargetToNextDriver both wrapped the haversine proximity check in `if (pickupCoords && d.lastKnownLocation) { ...check... }` -- if pickupCoords hadn't resolved yet (typed and hit Book Now before the debounced geocode finished) or a specific driver had no lastKnownLocation on file, the ENTIRE distance check was silently skipped, letting every capacity-matching driver through nationwide instead of correctly showing none. Reported live: a customer in Bansi (Uttar Pradesh) saw every Pune-based driver in the picker, 1000+ km outside the 30/50km radius. Fixed by failing CLOSED instead of open in both places -- a missing pickup coordinate or a missing driver location now excludes that driver, rather than being treated as \"can't check, so let them through.\"",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "pricing-simplified-to-two-layers",
+    title: "Removed the driver-average pricing layer; fare now resolves from only Admin override then the default formula",
+    severity: "low",
+    status: "fixed",
+    type: "feature",
+    area: "Fare calculation (resolveFare), Admin Rate Calculator, Diesel adjuster",
+    description: "resolveFare used to average in driver-submitted Set Fare entries for a route when no Admin override existed. Per explicit request, that layer was removed entirely -- driver-submitted rates (routeFares) are now reference-only and no longer affect what a customer is charged. resolveFare is just Admin override (getAdminRouteOverride) falling back to the generic distance/weight formula (calculateFare). AdminRateCalculator's driver-average suggestion source and AdminFleet's Diesel adjuster's driver-rate writes were removed to match.",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "tracking-map-eta-and-custom-icons",
+    title: "Live Tracking map now shows road ETA and uses custom Pickup/Drop/vehicle icons instead of default pins",
+    severity: "low",
+    status: "fixed",
+    type: "ui",
+    area: "Live Tracking Map",
+    description: "Added durationMin (ETA) to useDrivingRoute's output alongside the existing distance/path, and shown together on the map's distance badge. Replaced Google's default red pins with custom SVG teardrop pins (pinMarkerIcon, green \"P\" / red \"D\") and the emoji-on-circle driver marker with a navy circular vehicle badge (vehicleMarkerIcon), per explicit request that the defaults \"looked cheap.\"",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "driver-response-timeout-extended-2min",
+    title: "Driver accept/reject timer extended from 60 seconds to 2 minutes, with a repeating beep for the whole window",
+    severity: "low",
+    status: "fixed",
+    type: "config",
+    area: "ActiveRide (customer awaiting-driver countdown), DriverApp load alert",
+    description: "AWAITING_DRIVER_TIMEOUT_SEC raised from 60 to 120 -- 60s was reported as too short for a driver to notice and respond to a load request. DriverApp's load-alert alarm now fires playStrongBeep every second for the full window (previously a spoken alert every 2.5s) so the driver is far more likely to notice.",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "bug-tracker-broadened-to-change-log",
+    title: "Bug Tracker moved into System Settings and broadened into a searchable Change Log covering bugs, features, UI and config changes",
+    severity: "low",
+    status: "fixed",
+    type: "feature",
+    area: "Admin Panel / System Settings",
+    description: "Per explicit request, the standalone Bug Tracker (previously its own dashboard tile) now lives inside System Settings, alongside every other admin-config control. Broadened from bugs-only to a general Change Log: entries carry a type (Bug/Feature/UI/Config/Security), a search bar filters by title/description/area, and each entry has a Resolve button on the right -- a plain status flip for a one-time code fix, or \"Resolve (auto-fix)\" for an entry whose underlying issue can recur as a data problem (e.g. cleanup-orphaned-admin-rates actually re-scans and removes duplicate Admin rate entries, not just relabels the entry).",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "daily-health-check-added",
+    title: "Added an automated daily health check, split across two systems that watch each other",
+    severity: "low",
+    status: "fixed",
+    type: "feature",
+    area: "System reliability",
+    description: "Per explicit request, two daily checks now run automatically (9 AM and 11 PM IST): (1) a Claude Code Routine pulls the actual GitHub source, confirms every logged fix's specific markers are still present, and runs the build -- catching regressions in the app's own logic, independent of whether the app is even running; (2) two Firebase Scheduled Functions (dailyHealthCheckMorning/Night) run inside the Firebase project itself with no service-account key stored anywhere, and verify the production URL is up, PIN login works end-to-end for two dedicated test accounts (customers/9990001111, drivers/9990002222, tagged isHealthCheckAccount), and the proximity-eligibility math still fails closed for a known-far point and passes for a known-near one -- the exact regression behind proximity-filter-fails-open-not-closed. Each writes a heartbeat timestamp to systemHealth/heartbeat so the other side can tell if it silently stops running, and any finding lands here as a new Change Log entry, which is what surfaces the Live Dashboard alert card.",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "admin-driver-gps-status-view",
+    title: "Added a per-driver GPS status view so admin can see whether live tracking is actually working, not just guess from Online status",
+    severity: "low",
+    status: "fixed",
+    type: "feature",
+    area: "Admin Panel / Drivers tab",
+    description: "Per explicit request, AdminDriverList now shows a GPS badge per driver (Live / Xm ago / Xh ago / Xd ago / Never), computed from drivers/{mobile}.lastKnownLocation.updatedAt -- the same field DriverApp's watchPosition effect writes every 5s while a driver is Online. A driver can be marked Online with location permission denied or the app merely backgrounded, and Online status alone can't tell those apart -- this makes that visible per-driver instead of guessed at. A callout at the top counts drivers who are Online but have no live GPS, with a tap-to-filter toggle to show just them. Note: this cannot force a re-prompt for a driver who already granted or denied location permission -- that's a hard browser/OS security rule, not something any app can override; the one-time prompt still only ever fires once, on first launch, before role selection.",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+  {
+    id: "stale-online-driver-treated-as-available",
+    title: "Booking matching and push alerts treated a driver's days-old GPS coordinate as proof they're reachable near a pickup right now",
+    severity: "critical",
+    status: "fixed",
+    type: "bug",
+    area: "CustomerBooking / retargetToNextDriver / onNewLoadPosted",
+    description: "Measured live via the new Admin GPS status view: 188 of 203 drivers marked Online had no recent GPS at all -- online is a manual toggle with no auto-expiry, and mobile browsers pause watchPosition almost immediately once a tab is backgrounded/locked, so a driver who toggled on and then put their phone away stays 'Online' forever with a frozen lastKnownLocation. eligibleDrivers (CustomerBooking), retargetToNextDriver, and onNewLoadPosted (functions/index.js, the new-load push alert) all checked online + capacity + proximity, but never whether that stored coordinate was actually recent -- a driver's location from days ago could coincidentally fall inside the radius and be shown/pushed as available despite being unreachable. The 'nearby drivers' map (nearbyOnlineDrivers) already applied a 5-minute staleness cutoff (NEARBY_DRIVER_STALE_MS) for its own display; this was the one concept that hadn't been extended to real booking matching. Fixed by applying that same cutoff to all three: a driver whose lastKnownLocation.updatedAt is older than 5 minutes is now excluded, same fail-closed principle as proximity-filter-fails-open-not-closed.",
+    foundAt: "2026-09-17",
+    fixedAt: "2026-09-17",
+  },
+];
+
+function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
+function hashPos(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 997;
+  return { x: 15 + (h % 70), y: 15 + ((h * 7) % 70) };
+}
+function fmt(n) { return "₹" + Math.round(n).toLocaleString("en-IN"); }
+function stars(n) { return "★".repeat(Math.round(n)) + "☆".repeat(5 - Math.round(n)); }
+
+// A booking counts as a still-pending "advance" booking only while its
+// scheduled date is genuinely in the future — once that date arrives, it
+// should behave like any other active/ongoing booking. scheduledFor is
+// stored as "YYYY-MM-DD HH:MM", so a plain string comparison on the date
+// part is enough (no timezone math needed, same as isToday elsewhere).
+function isFutureAdvance(scheduledFor) {
+  if (!scheduledFor) return false;
+  const datePart = scheduledFor.split(" ")[0];
+  const today = new Date().toISOString().slice(0, 10);
+  return datePart > today;
+}
+
+function parseScheduledFor(scheduledFor) {
+  const [datePart, timePart] = scheduledFor.split(" ");
+  return new Date(`${datePart}T${timePart}:00`);
+}
+
+// Heavier loads need more lead time for a driver to actually be arranged —
+// enforced on Advance booking so a customer can't schedule, say, an 8-ton
+// load for 30 minutes from now.
+function minAdvanceNoticeHours(weightKg) {
+  if (weightKg > 8000) return 3;
+  if (weightKg >= 3000) return 2;
+  return 1;
+}
+
+// A driver with an upcoming Advance booking stops getting pinged for new
+// Current (immediate) loads — and can't have a new bid accepted for one —
+// starting this many hours before that booking's scheduled time. Bigger
+// vehicles get a longer protection window since they need more prep/travel
+// time before heading out. Keyed off the driver's own vehicle capacity.
+// 1-3 ton -> 1hr, 4-8 ton -> 2hr, 9-16 ton -> 3hr, >16 ton -> 4hr.
+function notificationLockHours(vehicleCapacityKg) {
+  if (vehicleCapacityKg > 16000) return 4;
+  if (vehicleCapacityKg > 8000) return 3;
+  if (vehicleCapacityKg >= 3000) return 2;
+  return 1;
+}
+
+// The real-world time window a driver is committed to once a bid is
+// accepted: starts at the scheduled time (advance) or the moment of
+// acceptance (immediate, via acceptedAt — falls back to createdAt for
+// older bookings from before that field existed), and runs for the
+// allotted hours. Used to stop a driver being double-booked into two
+// overlapping commitments (see acceptBid).
+function getBookingWindow(b) {
+  if (!b.hours) return null;
+  let start;
+  if (b.scheduledFor) start = parseScheduledFor(b.scheduledFor);
+  else if (b.acceptedAt?.toMillis) start = new Date(b.acceptedAt.toMillis());
+  else if (b.createdAt?.toMillis) start = new Date(b.createdAt.toMillis());
+  else return null;
+  return { start, end: new Date(start.getTime() + b.hours * 60 * 60 * 1000) };
+}
+
+// The single source of truth for "can this driver take this load" — used at
+// three points: hiding a load from a driver's list before they ever see it,
+// blocking the Send Quote button if they try anyway, and blocking Accept if
+// a customer somehow still selects a conflicting bid. A driver already
+// committed to another Ongoing booking (current trip in progress, or an
+// upcoming Advance booking) cannot bid on / be assigned anything whose time
+// falls inside that commitment's window PLUS the vehicle-tonnage buffer
+// ahead of it (notificationLockHours) — e.g. a 10 AM advance booking with a
+// 2-hour buffer and 4 allotted hours blocks everything from 8 AM to 2 PM.
+// `candidate.hours` is optional — omitted while just deciding whether to
+// show a load (duration isn't chosen yet), included once a bid amount/hours
+// has actually been entered so a full overlap (not just a start-time check)
+// can be tested.
+function findDriverLoadConflict(driver, candidate, bookings, vehicleTypes, lang) {
+  if (!driver) return null;
+  const driverVehicleDef = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
+  const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
+  const newStart = candidate.scheduledFor ? parseScheduledFor(candidate.scheduledFor) : new Date();
+  const newEnd = candidate.hours ? new Date(newStart.getTime() + candidate.hours * 60 * 60 * 1000) : newStart;
+  const myCommitments = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && b.id !== candidate.id);
+  for (const existing of myCommitments) {
+    const win = getBookingWindow(existing);
+    if (!win) continue;
+    const lockStart = new Date(win.start.getTime() - lockHours * 60 * 60 * 1000);
+    if (newStart < win.end && newEnd >= lockStart) {
+      const fmtTime = (d) => d.toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      return lang === "en"
+        ? `⚠️ You already have a ride booked from ${fmtTime(win.start)} to ${fmtTime(win.end)} (incl. ${lockHours}hr buffer) — you cannot bid on or take this load.`
+        : lang === "mr"
+        ? `⚠️ तुमची आधीच ${fmtTime(win.start)} पासून ${fmtTime(win.end)} पर्यंत (${lockHours} तासांच्या बफरसह) एक राइड बुक आहे — तुम्ही या लोडवर बोली लावू शकत नाही किंवा हा लोड घेऊ शकत नाही.`
+        : `⚠️ आपकी पहले से ${fmtTime(win.start)} से ${fmtTime(win.end)} तक (${lockHours} घंटे के बफर सहित) एक राइड बुक है — आप इस लोड पर बोली नहीं लगा सकते या इसे नहीं ले सकते।`;
+    }
+  }
+  return null;
+}
+
+function pad2(n) { return String(n).padStart(2, "0"); }
+
+function to12Hour(hours, minutes) {
+  const period = hours >= 12 ? "PM" : "AM";
+  const h12 = hours % 12 || 12;
+  return `${pad2(h12)}:${pad2(minutes)} ${period}`;
+}
+
+// Renders a booking's date/time in DD:MM:YYYY HH:MM AM/PM — for an advance
+// booking that's the scheduled date/time itself; for an immediate ride
+// (no scheduledFor) it's when the ride was actually posted.
+function rideDateTimeLabel(booking) {
+  if (booking.scheduledFor) {
+    const [datePart, timePart] = booking.scheduledFor.split(" ");
+    const [y, m, d] = datePart.split("-");
+    let timeLabel = "";
+    if (timePart) {
+      const [hh, mm] = timePart.split(":").map(Number);
+      timeLabel = " " + to12Hour(hh, mm);
+    }
+    return `${d}:${m}:${y}${timeLabel}`;
+  }
+  const d = booking.createdAt?.toDate ? booking.createdAt.toDate() : null;
+  if (!d) return "";
+  return `${pad2(d.getDate())}:${pad2(d.getMonth() + 1)}:${d.getFullYear()} ${to12Hour(d.getHours(), d.getMinutes())}`;
+}
+
+// Time-of-day greeting shown at the top of the Customer/Driver/Admin home
+// screens — computed fresh on every render, so it naturally flips from
+// Morning to Afternoon to Evening as the session stays open across the day.
+function greetingWord(lang) {
+  const hour = new Date().getHours();
+  if (lang === "en") return hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+  return hour < 12 ? "सुप्रभात" : hour < 17 ? "शुभ दोपहर" : "शुभ संध्या";
+}
+
+const AREAS = ["पिंपरी", "चिंचवड", "निगड़ी", "आकुर्डी", "भोसरी", "वाकड़", "तळवडे", "रावेत", "MG रोड", "MR-10", "काळेवाडी", "पिंपळे सौदागर", "थेरगाव", "चिखली", "मोशी", "भोसरी MIDC"];
+function suggestAreas(text) {
+  if (!text.trim()) return [];
+  return AREAS.filter((a) => a.toLowerCase().includes(text.trim().toLowerCase())).slice(0, 4);
+}
+// Great-circle ("as the crow flies") distance between two coordinates, in km.
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Loading/unloading time (the allowed-hours/waiting-charge clock) must only
+// count time actually spent at the pickup or drop point, never the drive
+// between them — see the geofence pause/resume logic in DriverHome's GPS
+// watcher and useTripClock below. Deliberately not surfaced to either side
+// as a distance/GPS concept — drivers and customers just see the existing
+// timer pause with a plain note, never the radius or the mechanism.
+// Straight-line (haversineKm), not road distance — free, instant, computed
+// entirely from coordinates already on the device/booking, no API call.
+const LOADING_GEOFENCE_M = 100;
+
+// For a current (non-advance) booking, only drivers within this straight-line
+// radius of the pickup point can see/bid on the load — keeps bids realistic
+// for jobs that need a truck right away. Advance bookings aren't restricted
+// since the driver has time to travel to the pickup point before the slot.
+// Auto-bid proximity: a Current (immediate) load only reaches drivers
+// within CURRENT_BID_RADIUS_KM of its pickup; an Advance load reaches a
+// wider ring since the driver has time to travel there.
+const CURRENT_BID_RADIUS_KM = 30;
+const ADVANCE_BID_RADIUS_KM = 50;
+// Vehicle-fit window: a driver auto-bids only when their vehicle's rated
+// capacity is between the load's weight and weight + this much headroom.
+const VEHICLE_HEADROOM_KG = 5000;
+// How long a directly-requested/accepted-bid driver has to Accept/Reject
+// before ActiveRide's countdown auto-retargets the booking at the next
+// eligible driver.
+const AWAITING_DRIVER_TIMEOUT_SEC = 120;
+
+// Roads aren't a straight line, so straight-line distance is scaled up by a
+// fixed factor as a stand-in for real road distance — typical for Indian
+// urban/semi-urban road networks. Good enough until this gets replaced by a
+// real routed distance from Google's Distance Matrix API.
+const ROAD_DISTANCE_FACTOR = 1.35;
+
+// Fixed, calculated fare — replaces the old "discuss on call" model with an
+// upfront price shown before booking, same idea as Porter's per-vehicle
+// pricing. Keyed by CAPACITY, not by vehicle-type identity: vehicle "types"
+// here aren't a fixed catalog (a driver just types their vehicle's name
+// during KYC — see resolveVehicleTypeKey in DriverKyc — and a new
+// vehicleTypes doc gets created on the fly if it doesn't match one that
+// already exists), so there's no small stable set of types to hang a rate
+// table off. capacityKg is the one thing every driver reliably has, so a
+// band lookup by capacity applies uniformly regardless of what a driver
+// happened to type their vehicle in as.
+// Ordered ascending by capacity; the last entry (maxKg: Infinity) is the
+// catch-all for anything bigger than 7 tonnes (19ft, 6-wheeler, 10-wheeler...).
+//
+// Every tier is priced at Porter's own number + ₹1, on both baseFare and
+// perKmRate — deliberately just ABOVE Porter rather than undercutting it.
+// Porter's own reference points (their site, city listings, Sep 2026) —
+// solid for the four small tiers (an actual published base fare and
+// per-km rate for the closest matching vehicle), thinner above 1,500kg
+// (1,500-2,500kg's per-km is from a comparable operator, not Porter's own
+// figure) and thinnest of all above 2,500kg, where Porter publishes only
+// a single base fare (14ft Canter) and nothing else — the per-km and the
+// three largest base fares are extrapolated by continuing Porter's own
+// step-up pattern between tiers, not sourced. Revisit those three
+// (2,500-5,000 / 5,000-7,000 / 7,000+) if better data on Porter's
+// larger-vehicle pricing turns up:
+//   0-500kg    -> 3-wheeler/Tempo  (base ~₹170,  ~₹16/km)
+//   500-750kg  -> Tata Ace         (base ~₹223,  ~₹19/km)
+//   750-1000kg -> Pickup 8ft       (base ~₹315,  ~₹20/km)
+//   1000-1500kg-> Pickup 8ft/Dost+ (base ~₹330,  ~₹22/km)
+//   1500-2500kg-> Tata 407         (base ~₹682,  ~₹42/km — per-km from a
+//                                   comparable operator; Porter doesn't
+//                                   publish its own 407 per-km rate)
+//   2500-5000kg-> Canter 14ft      (base ~₹1,120, ~₹69/km — per-km extrapolated)
+//   5000-7000kg-> larger Canter    (base ~₹1,680, ~₹97/km — both extrapolated)
+//   7000kg+    -> largest trucks   (base ~₹2,280, ~₹126/km — both extrapolated)
+// The catch-all last tier used to carry maxKg: Infinity, but Firestore
+// can't store that value (this table still lives in the settings doc as
+// `fareTiers`, read-only now — see the root component) — a plain large
+// number works exactly the same way here since findFareTier already
+// falls back to the last tier for anything past every threshold
+// regardless of what that threshold actually is.
+const FARE_TIER_MAX_KG_UNCAPPED = 999999;
+const DEFAULT_FARE_TIERS = [
+  { maxKg: 500, baseFare: 171, perKmRate: 17 },
+  { maxKg: 750, baseFare: 224, perKmRate: 20 },
+  { maxKg: 1000, baseFare: 316, perKmRate: 21 },
+  { maxKg: 1500, baseFare: 331, perKmRate: 23 },
+  { maxKg: 2500, baseFare: 683, perKmRate: 43 },
+  { maxKg: 5000, baseFare: 1121, perKmRate: 70 },
+  { maxKg: 7000, baseFare: 1681, perKmRate: 98 },
+  { maxKg: FARE_TIER_MAX_KG_UNCAPPED, baseFare: 2281, perKmRate: 127 },
+];
+
+// distanceKm may be null (coords never resolved — canPost doesn't require a
+// resolved distance, see CustomerBooking) — falls back to just the base
+// fare rather than blocking the booking over it. `tiers` is settings.fareTiers
+// (see the root component) — every caller passes it through explicitly
+// rather than reading a fixed constant, though there is no UI left that
+// ever changes it from DEFAULT_FARE_TIERS; this whole formula is now a
+// silent last resort inside resolveFare for a route with neither an Admin
+// override nor a driver-submitted average, not something Admin tunes.
+function findFareTier(capacityKg, tiers = DEFAULT_FARE_TIERS) {
+  // Falls back to the code default for anything that isn't a real,
+  // non-empty tier list — not just when the argument is missing (the
+  // default parameter above only covers that one case). Since fareTiers
+  // now comes from a Firestore doc an admin edits by hand, an empty array
+  // or a corrupted value is a real possibility, not just a theoretical
+  // one — without this, `tiers[tiers.length - 1]` would be undefined and
+  // calculateFare's `tier.baseFare` would throw, crashing the booking
+  // screen for every customer and driver at once.
+  const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
+  return list.find((t) => (capacityKg || 0) <= t.maxKg) || list[list.length - 1];
+}
+
+function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS) {
+  const tier = findFareTier(capacityKg, tiers);
+  const distancePart = distanceKm != null ? distanceKm * tier.perKmRate : 0;
+  return Math.round(tier.baseFare + distancePart);
+}
+
+// Route fares are matched by loose substring containment rather than exact
+// equality: a driver typing "Kolhapur" into Set Fare should match a
+// customer's fully resolved pickup address like "MG Road, Kolhapur,
+// Maharashtra" without either of them having to type the exact same string.
+function normalizeRouteText(s) {
+  return (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+function routeTextsMatch(a, b) {
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a);
+}
+// Google's autocomplete/geocoder returns place names in whatever script the
+// requesting device's locale prefers — the same real-world spot can come
+// back as "Talegaon Chowk, Chakan" on one phone and "चाकण चौक, तळेगाव रोड"
+// on another. Plain substring text matching (routeTextsMatch) can never
+// bridge that, so two entries for the identical real route look completely
+// unrelated whenever the driver's and customer's devices returned
+// different scripts. Matching by real GPS coordinates instead sidesteps
+// language entirely — same place, same lat/lng, regardless of what text
+// came back with it.
+// Set Fare's Pickup/Drop fields are restricted to city/town-level entries
+// only (see LocationField's citiesOnly prop) — a driver enters "Pune", not
+// a specific street in Pune — so this radius needs to cover a typical
+// Indian city's metro extent, not just GPS/geocoding noise around one
+// exact point. A customer's real pickup/drop can be anywhere within that
+// city and still correctly count as the same route.
+const ROUTE_MATCH_RADIUS_KM = 25;
+// A long inter-district haul (e.g. Chakan to a village near Bhamer, 300+
+// km) doesn't have the same well-defined "metro extent" a city does — a
+// driver and a customer independently typing/geocoding "roughly the same"
+// rural pickup or drop can legitimately land more than 25km apart, which
+// otherwise silently drops a real driver-submitted route quote and falls
+// back to the generic formula. So the allowed radius grows with the
+// route's own overall length: still exactly ROUTE_MATCH_RADIUS_KM for a
+// same-city trip, up to 60km for a long haul, capped so two genuinely
+// different nearby corridors still don't blend together.
+function routeMatchRadiusKm(routeKm) {
+  if (routeKm == null) return ROUTE_MATCH_RADIUS_KM;
+  return Math.min(60, Math.max(ROUTE_MATCH_RADIUS_KM, routeKm * 0.15));
+}
+function locationsNear(lat1, lng1, lat2, lng2, radiusKm = ROUTE_MATCH_RADIUS_KM) {
+  return haversineKm(lat1, lng1, lat2, lng2) <= radiusKm;
+}
+// Averages every driver-submitted "Set Fare" quote (see SetFareForm) for
+// this same pickup/drop route — real market rates other drivers are
+// actually charging for a specific, well-known route (e.g. Pune-Kolhapur)
+// often don't track a flat per-km formula the way in-city trips do, so this
+// takes priority over calculateFare whenever at least one driver has quoted
+// this route. Matches by coordinates when both sides have them (see
+// locationsNear above); falls back to routeTextsMatch only for older
+// entries saved before coordinates were captured, or if geocoding hasn't
+// resolved yet. Returns null when nobody has quoted this route.
+// tierMaxKg (optional) restricts the average to drivers whose OWN vehicle
+// capacity falls in the same bracket as the load actually being priced —
+// without it, a 500kg mini-truck's quote and a 12,000kg truck's quote for
+// the "same route" would get blended into one meaningless number. Older
+// entries saved before capacityKg/tierMaxKg were captured on the doc (see
+// SetFareForm) don't have a tierMaxKg at all — those stay eligible for any
+// bracket's average rather than being silently dropped, so existing driver
+// data doesn't just vanish the moment this shipped.
+function getRouteAverageFare(pickup, drop, routeFares, pickupLat, pickupLng, dropLat, dropLng, tierMaxKg) {
+  const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
+  if (!p || !d || !Array.isArray(routeFares) || routeFares.length === 0) return null;
+  const routeKm = pickupLat != null && dropLat != null ? haversineKm(pickupLat, pickupLng, dropLat, dropLng) : null;
+  const radiusKm = routeMatchRadiusKm(routeKm);
+  const matches = routeFares.filter((r) => {
+    if (tierMaxKg != null && r.tierMaxKg != null && r.tierMaxKg !== tierMaxKg) return false;
+    const pickupOk = pickupLat != null && r.pickupLat != null
+      ? locationsNear(pickupLat, pickupLng, r.pickupLat, r.pickupLng, radiusKm)
+      : routeTextsMatch(r.pickupKey, p);
+    const dropOk = dropLat != null && r.dropLat != null
+      ? locationsNear(dropLat, dropLng, r.dropLat, r.dropLng, radiusKm)
+      : routeTextsMatch(r.dropKey, d);
+    return pickupOk && dropOk;
+  });
+  if (matches.length === 0) return null;
+  const avgFare = Math.round(matches.reduce((sum, r) => sum + (Number(r.totalFare) || 0), 0) / matches.length);
+  return { avgFare, count: matches.length };
+}
+// Admin's own route-specific override (see AdminRateCalculator) — set
+// deliberately by Admin for one route AND one capacity tier at a time
+// (e.g. Pune-Kolhapur for a 5000kg-class vehicle might be priced
+// differently than the same route for a 9000kg one), and takes priority
+// over everything else once it exists: Admin has final say over what
+// drivers have individually quoted (getRouteAverageFare) or what the
+// generic formula would say (calculateFare). Matches by the same
+// coordinate radius as driver routes (locationsNear); if more than one
+// override somehow matches (two overlapping entries within 25km), the
+// most recently saved one wins, since these are meant to be one
+// authoritative decision, not something to average together.
+function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers) {
+  if (!Array.isArray(adminRouteFares) || adminRouteFares.length === 0) return null;
+  const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
+  if (!p || !d) return null;
+  const tier = findFareTier(capacityKg, tiers);
+  const routeKm = pickupLat != null && dropLat != null ? haversineKm(pickupLat, pickupLng, dropLat, dropLng) : null;
+  const radiusKm = routeMatchRadiusKm(routeKm);
+  const matches = adminRouteFares.filter((r) => {
+    if (r.tierMaxKg !== tier.maxKg) return false;
+    const pickupOk = pickupLat != null && r.pickupLat != null
+      ? locationsNear(pickupLat, pickupLng, r.pickupLat, r.pickupLng, radiusKm)
+      : routeTextsMatch(r.pickupKey, p);
+    const dropOk = dropLat != null && r.dropLat != null
+      ? locationsNear(dropLat, dropLng, r.dropLat, r.dropLng, radiusKm)
+      : routeTextsMatch(r.dropKey, d);
+    return pickupOk && dropOk;
+  });
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return Number(matches[0].totalFare) || 0;
+}
+// Single entry point every booking-fare display/write goes through, so the
+// driver-picker list and the actual booking write always agree on the same
+// number for the same trip. Two layers only, deliberately: Admin's own
+// override for this route+tier (see getAdminRouteOverride) takes final say
+// when it exists, else the generic capacity-tier formula. A third layer —
+// averaging what drivers themselves quote for a route (see
+// getRouteAverageFare) — used to sit between these two, but individual
+// drivers' numbers turned out wildly inconsistent for the same route+
+// bracket (e.g. a 500kg quote pricier than a 750kg one), which customers
+// saw as arbitrary and Admin couldn't easily audit. Set Fare (SetFareForm)
+// still exists for drivers to log what they're charging, and Admin's
+// Driver Ride Entries still shows it — it's just reference data now, with
+// zero effect on what a customer is actually quoted.
+function resolveFare(driver, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares) {
+  const capacityKg = driver?.vehicleSpec?.capacityKg;
+  const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers);
+  if (adminOverride != null) return adminOverride;
+  return calculateFare(capacityKg, distanceKm, tiers);
+}
+// Firestore document IDs can't contain "/" and have a length cap — routes
+// are short place names in practice (Set Fare is meant for city-level
+// entries like "Pune"/"Kolhapur"), but sanitize defensively anyway.
+function sanitizeForDocId(s) {
+  return (s || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "x";
+}
+
+// True for a route+bracket combination where a dedicated vehicle this
+// small, sent this far, is a bad match to how the real market actually
+// prices it (see the Maharashtra Rate Card's research note: a freight
+// marketplace quoted Pune-Nagpur at 5-6x less per kg than a dedicated
+// small truck would cost, because real shippers consolidate onto a shared
+// truck instead of dedicating one for a small long-haul load). Computed
+// live from each entry's own estimatedKm/tierMaxKg rather than stored, so
+// it applies equally to bulk-imported and hand-typed entries, and stays
+// correct if either field is edited later. Admin-facing only (shown in
+// AdminRateCalculator's saved-rates list) -- never seen by customers or
+// drivers, and never affects the price actually charged.
+function isLongHaulSmallLoad(estimatedKm, tierMaxKg) {
+  return estimatedKm != null && estimatedKm >= 400 && tierMaxKg != null && tierMaxKg <= 1500;
+}
+// Turns a failed adminRouteFares write into something Admin can actually
+// act on. "permission-denied" specifically means the Firestore security
+// rule for this collection isn't live yet (it has to be deployed by hand
+// from a real machine -- see firestore.rules) -- surfacing that distinctly
+// matters because otherwise Save Rate looks like it just does nothing,
+// with no way to tell a rules problem apart from a network hiccup.
+function describeAdminRateSaveError(e, lang) {
+  if (e?.code === "permission-denied") {
+    return lang === "en"
+      ? "Not saved — permission denied. The adminRouteFares security rule likely hasn't been deployed yet (needs \"firebase deploy --only firestore:rules\" from your machine)."
+      : lang === "mr"
+      ? "सेव्ह झाले नाही — परवानगी नाकारली. adminRouteFares सिक्युरिटी रूल कदाचित अजून डिप्लॉय झालेला नाही (तुमच्या मशीनवरून \"firebase deploy --only firestore:rules\" चालवावे लागेल)."
+      : "सेव नहीं हुआ — अनुमति अस्वीकृत। adminRouteFares सिक्योरिटी रूल शायद अभी तक डिप्लॉय नहीं हुआ है (आपकी मशीन से \"firebase deploy --only firestore:rules\" चलाना होगा)।";
+  }
+  if (e?.code === "unavailable" || e?.code === "deadline-exceeded") {
+    return lang === "en" ? "Not saved — network problem. Check your connection and try again." : lang === "mr" ? "सेव्ह झाले नाही — नेटवर्क समस्या. कनेक्शन तपासा आणि पुन्हा प्रयत्न करा." : "सेव नहीं हुआ — नेटवर्क समस्या। कनेक्शन जांचें और फिर कोशिश करें।";
+  }
+  return lang === "en" ? `Not saved — ${e?.message || "unknown error"}.` : lang === "mr" ? `सेव्ह झाले नाही — ${e?.message || "अज्ञात त्रुटी"}.` : `सेव नहीं हुआ — ${e?.message || "अज्ञात त्रुटि"}।`;
+}
+
+// Straight-line estimate scaled up for roads — requires real GPS
+// coordinates for both ends. Returns null (not a guess) when either
+// coordinate is missing, since a distance that isn't actually derived from
+// real locations is worse than showing nothing — it used to fall back to a
+// text-hash of the two address strings, which could land anywhere from
+// 2-18km regardless of the real distance (e.g. showing "6 km" for an
+// address pair that's actually 144 km apart).
+function estimateDistanceKm(pickupCoords, dropCoords) {
+  if (pickupCoords?.lat == null || pickupCoords?.lng == null || dropCoords?.lat == null || dropCoords?.lng == null) return null;
+  const straightLineKm = haversineKm(pickupCoords.lat, pickupCoords.lng, dropCoords.lat, dropCoords.lng);
+  return Math.round(straightLineKm * ROAD_DISTANCE_FACTOR * 100) / 100;
+}
+
+// Exact figure, not a rounded-off approximation — meters below 1km (whole
+// number, since fractional meters aren't meaningful), km with one decimal
+// place above it.
+function formatDistanceExact(km, lang) {
+  if (km == null) return null;
+  if (km < 1) return `${Math.round(km * 1000)} ${lang === "en" ? "m" : "मीटर"}`;
+  return `${km.toFixed(1)} ${lang === "en" ? "km" : "किमी"}`;
+}
+
+// Resolves free-typed address text to coordinates via Google's Geocoder —
+// used when the customer types Pickup/Drop by hand without ever tapping an
+// Autocomplete suggestion, so pickupCoords/dropCoords (and therefore the
+// distance estimate and the booking's saved lat/lng) don't stay empty just
+// because they didn't pick from the dropdown.
+function geocodeAddress(text) {
+  return new Promise((resolve) => {
+    if (!window.google?.maps?.Geocoder || !text?.trim()) { resolve(null); return; }
+    // Biases (doesn't hard-restrict) results toward the app's actual
+    // service area — Pimpri-Chinchwad/Pune, same default center used
+    // elsewhere (e.g. NEARBY_MAP_DEFAULT_CENTER) — without this, a short
+    // locality name typed by hand (no Autocomplete tap) can match a
+    // same-named place in a totally different Indian state/city instead of
+    // the nearby one actually meant, since componentRestrictions only
+    // narrows to "country: in" and India has many repeated locality names.
+    // That's a real bug reported here: "Vitthal Nagar" resolved ~390km
+    // away instead of the Pimpri-Chinchwad one, inflating a real ~4km trip
+    // into a bogus ~395km distance estimate.
+    const bias = new window.google.maps.LatLngBounds(
+      { lat: 18.6298 - 0.9, lng: 73.8131 - 0.9 },
+      { lat: 18.6298 + 0.9, lng: 73.8131 + 0.9 }
+    );
+    new window.google.maps.Geocoder().geocode(
+      { address: text, componentRestrictions: { country: "in" }, bounds: bias },
+      (results, status) => {
+        const loc = status === "OK" && results?.[0]?.geometry?.location;
+        resolve(loc ? { lat: loc.lat(), lng: loc.lng() } : null);
+      }
+    );
+  });
+}
+
+// The reverse of geocodeAddress — turns a tapped lat/lng (e.g. a point
+// picked on the live nearby-vehicles map) back into a readable address.
+// Falls back to free OSM reverse-geocoding if Google Maps isn't loaded.
+async function reverseGeocode(lat, lng) {
+  if (window.google?.maps?.Geocoder) {
+    return new Promise((resolve) => {
+      new window.google.maps.Geocoder().geocode({ location: { lat, lng } }, (results, status) => {
+        resolve(status === "OK" && results?.[0] ? stripPlusCode(results[0].formatted_address) : null);
+      });
+    });
+  }
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`, { headers: { Accept: "application/json" } });
+    const data = await res.json();
+    return stripPlusCode(data?.display_name) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Google's Geocoder/Places can return a Plus Code (e.g. "JQ38+PRM, Wakad,
+// Pimpri-Chinchwad") as part of an address for areas without a formal
+// street address — not something a customer/driver can read as a place
+// name, so it's stripped from every address string before it's shown or
+// stored (suggestion dropdown, reverse-geocode, current-location results).
+//
+// Previously this app also transliterated place names into the app's
+// current script (e.g. spelling an English name out phonetically in
+// Devanagari) whenever Google had no native name in that script on file.
+// That produced exactly this kind of broken/unusual text, since it's a
+// syllable-by-syllable guess, not a real translation — removed in favor of
+// just showing Google's own text as-is (already in the right language most
+// of the time, thanks to the `language` param the Maps script loads with —
+// see googleMapsContext.jsx).
+function stripPlusCode(text) {
+  if (!text) return text;
+  return text
+    .replace(/\b[A-Z0-9]{4,8}\+[A-Z0-9]{2,3}\b,?\s*/gi, "")
+    .replace(/^,\s*/, "")
+    .replace(/,\s*,/g, ",")
+    .trim();
+}
+
+// Real routed driving distance from Google's Distance Matrix Service (part
+// of the core Maps JavaScript API — no extra `libraries` entry needed,
+// unlike Places). Resolves in km, or rejects if Maps isn't loaded, the
+// request fails, or no route is found — callers should keep whatever
+// straight-line estimate they already showed as the fallback.
+function fetchRoadDistanceKm(pickupCoords, dropCoords) {
+  return new Promise((resolve, reject) => {
+    if (!window.google?.maps?.DistanceMatrixService) { reject(new Error("Distance Matrix not loaded")); return; }
+    const service = new window.google.maps.DistanceMatrixService();
+    service.getDistanceMatrix(
+      {
+        origins: [pickupCoords],
+        destinations: [dropCoords],
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        unitSystem: window.google.maps.UnitSystem.METRIC,
+      },
+      (response, status) => {
+        if (status !== "OK") { reject(new Error(status)); return; }
+        const el = response?.rows?.[0]?.elements?.[0];
+        if (!el || el.status !== "OK") { reject(new Error(el?.status || "no result")); return; }
+        resolve(el.distance.value / 1000);
+      }
+    );
+  });
+}
+
+// Manual refresh — the way to pick up a newly-deployed version without
+// force-closing and reopening the app (see firebase.json's no-cache
+// headers on index.html — that fix makes a plain reload actually get the
+// latest build; this just gives a one-tap way to trigger it). Deliberately
+// a full window.location.reload() rather than re-fetching individual
+// pieces of app state — every screen's data is already live via Firestore
+// listeners regardless, so the only thing that can ever actually be
+// "stale" is the app shell itself, and a real reload is the only way to
+// guarantee a fresh one.
+//
+// Used to also offer a pull-down gesture alongside this button, but touch-
+// event edge-case behavior isn't consistent across every Android WebView
+// version — it was triggering on far lighter pulls than intended on some
+// devices, with no reliable way to tune a single threshold that felt right
+// everywhere. Dropped entirely in favor of just this one always-visible,
+// unambiguous button.
+function useRefreshButton() {
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = () => { setRefreshing(true); window.location.reload(); };
+  return { refreshing, refresh };
+}
+
+// Persists a piece of state to localStorage under `key`, so the app
+// remembers role choice, bookings, wallet balances etc. across reloads.
+function usePersistedState(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw !== null ? JSON.parse(raw) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+  }, [key, value]);
+  return [value, setValue];
+}
+
+// Like usePersistedState, but backed by sessionStorage instead of
+// localStorage — survives a same-session reload (a manual pull-to-refresh,
+// or window.location.reload()) but resets the moment the tab/WebView
+// itself is actually closed and a new one opens, unlike localStorage which
+// survives that too. Used for AdminBiometricLock/AdminPinLock's unlocked
+// flag: a deliberate in-app refresh shouldn't force re-entering the PIN
+// (nothing about the device changed hands), but a genuine fresh app
+// launch should.
+function useSessionState(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = window.sessionStorage.getItem(key);
+      return raw !== null ? JSON.parse(raw) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  useEffect(() => {
+    try { window.sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+  }, [key, value]);
+  return [value, setValue];
+}
+
+// Like usePersistedState, but for {name, url} photo values specifically —
+// skips writing to localStorage when `url` is a base64 data: URI (the
+// fallback uploadPhoto uses when Firebase Storage isn't reachable/
+// configured). Those can be large enough on their own, let alone four of
+// them on one KYC form, to blow past localStorage's ~5-10MB per-origin
+// quota; once that's hit, the browser silently drops the write instead of
+// throwing somewhere visible, which is what made photos vanish on refresh.
+// A real Storage download URL is just a short link, so it always persists
+// fine — this only affects the degraded fallback path.
+function usePersistedPhoto(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      return raw !== null ? JSON.parse(raw) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  useEffect(() => {
+    if (value?.url?.startsWith("data:")) return;
+    try {
+      if (value) window.localStorage.setItem(key, JSON.stringify(value));
+      else window.localStorage.removeItem(key);
+    } catch { /* storage unavailable or quota exceeded */ }
+  }, [key, value]);
+  return [value, setValue];
+}
+
+// Animates a displayed number smoothly toward `value` whenever it changes
+// (e.g. a wallet balance after a commission deduction or recharge), instead
+// of the digits snapping instantly — a single requestAnimationFrame loop,
+// cheap enough for a budget phone, that re-targets itself if `value` changes
+// again mid-animation instead of queuing/jumping.
+function useCountUp(value, duration = 700) {
+  const [display, setDisplay] = useState(value);
+  const displayRef = useRef(value);
+  const rafRef = useRef(null);
+  useEffect(() => {
+    if (value === displayRef.current) return;
+    const from = displayRef.current;
+    const to = value;
+    const start = performance.now();
+    cancelAnimationFrame(rafRef.current);
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const next = from + (to - from) * eased;
+      displayRef.current = next;
+      setDisplay(next);
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [value, duration]);
+  return display;
+}
+
+// Smoothly glides a lat/lng marker toward a new GPS fix instead of snapping
+// straight to it — live tracking otherwise looks choppy since real GPS
+// updates only land every few seconds. Re-targets mid-flight the same way
+// useCountUp does; returns `target` unchanged (no animation) whenever it's
+// null or this is the very first position received, so the marker still
+// appears immediately rather than gliding in from nowhere.
+function useSmoothPosition(target, duration = 1200) {
+  const [display, setDisplay] = useState(target);
+  const displayRef = useRef(target);
+  const rafRef = useRef(null);
+  useEffect(() => {
+    if (!target) { displayRef.current = null; setDisplay(null); return; }
+    const from = displayRef.current;
+    if (!from) { displayRef.current = target; setDisplay(target); return; }
+    if (from.lat === target.lat && from.lng === target.lng) return;
+    const start = performance.now();
+    cancelAnimationFrame(rafRef.current);
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const next = { lat: from.lat + (target.lat - from.lat) * eased, lng: from.lng + (target.lng - from.lng) * eased };
+      displayRef.current = next;
+      setDisplay(next);
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.lat, target?.lng, duration]);
+  return display;
+}
+
+// FLIP-animates a reordered list (First-Last-Invert-Play): whenever the
+// order of `itemIds` changes, each item that moved is nudged back to its
+// previous on-screen spot with a transform and then transitioned to 0, so
+// the reorder reads as a smooth slide instead of an instant snap. Items are
+// located by `data-flip-id` inside `containerRef` — no measuring library,
+// just getBoundingClientRect, and it does nothing at all unless the order
+// actually changed.
+function useFlipListAnimation(containerRef, itemIds) {
+  const prevRectsRef = useRef(new Map());
+  const idsKey = itemIds.join(",");
+  useEffect(() => {
+    const container = containerRef.current;
+    const prevRects = prevRectsRef.current;
+    if (container && prevRects.size > 0) {
+      itemIds.forEach((id) => {
+        const el = container.querySelector(`[data-flip-id="${id}"]`);
+        if (!el) return;
+        const prev = prevRects.get(id);
+        const next = el.getBoundingClientRect();
+        if (!prev) return;
+        const dy = prev.top - next.top;
+        if (Math.abs(dy) < 1) return;
+        el.style.transition = "none";
+        el.style.transform = `translateY(${dy}px)`;
+        // Force layout so the browser registers the starting transform
+        // before the transition below is applied, otherwise it never animates.
+        // eslint-disable-next-line no-unused-expressions
+        el.getBoundingClientRect();
+        el.style.transition = "transform 0.28s ease";
+        el.style.transform = "";
+      });
+    }
+    const newRects = new Map();
+    if (container) {
+      itemIds.forEach((id) => {
+        const el = container.querySelector(`[data-flip-id="${id}"]`);
+        if (el) newRects.set(id, el.getBoundingClientRect());
+      });
+    }
+    prevRectsRef.current = newRects;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
+}
+
+// Shared across every beep/chime in the app instead of a fresh
+// `new AudioContext()` per call -- browsers/WebViews start an
+// AudioContext "suspended" until it's resumed from inside a real user
+// gesture (tap/click), and a context created and played from a
+// setInterval or a Firestore-snapshot-driven effect (exactly how the
+// repeating alarms below fire) never counts as one, so it silently never
+// makes a sound. unlockAudioContext (called from a real tap -- see its
+// own use in DriverApp) resumes this same instance early, so by the time
+// a beep is actually needed it's already running.
+let sharedAudioCtx = null;
+function getAudioCtx() {
+  try {
+    if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (sharedAudioCtx.state === "suspended") sharedAudioCtx.resume().catch(() => {});
+    return sharedAudioCtx;
+  } catch {
+    return null;
+  }
+}
+// Call from any real user-gesture handler (a tap/click anywhere) to prime
+// audio playback before it's actually needed -- see getAudioCtx above.
+function unlockAudioContext() {
+  getAudioCtx();
+}
+
+function playBeepTone() {
+  try {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    [0, 300].forEach((delay) => {
+      setTimeout(() => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880; gain.gain.value = 0.15;
+        osc.start(); osc.stop(ctx.currentTime + 0.2);
+      }, delay);
+    });
+  } catch { /* audio not available */ }
+}
+
+// Loud double-pulse alarm for the driver's Accept/Reject screen (see
+// awaitingBooking's repeating effect below) -- deliberately harsher and
+// much louder (gain 0.45 vs playBeepTone's 0.15) than every other sound
+// in the app, since a driver may not be looking at their phone when a
+// direct request/accepted bid needs an urgent response within the
+// 2-minute window before it auto-retargets to someone else.
+function playStrongBeep() {
+  try {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    [0, 150].forEach((delay) => {
+      setTimeout(() => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = "square";
+        osc.frequency.value = 1000; gain.gain.value = 0.45;
+        osc.start(); osc.stop(ctx.currentTime + 0.12);
+      }, delay);
+    });
+  } catch { /* audio not available */ }
+}
+
+// Localized text for the driver's spoken trip-alert announcement — one
+// shared place instead of duplicating the same ternary at every call site.
+function tripAlertText(lang) {
+  return lang === "en" ? "New Trip Alert" : lang === "mr" ? "नवीन ट्रिप अलर्ट" : "नई ट्रिप आया";
+}
+
+// A short, clean "ding" — single sine tone with a fast exponential decay —
+// played right before the spoken announcement below for a crisper, more
+// attention-grabbing lead-in than starting cold with a voice. Deliberately
+// a different shape from playBeepTone's flat double-beep (used elsewhere
+// for plain pushes/toasts), so this alert has its own distinct identity.
+function playChime() {
+  try {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.value = 1200;
+    gain.gain.setValueAtTime(0.22, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.18);
+  } catch { /* audio not available */ }
+}
+
+// Plays playChime() then speaks a short phrase aloud via the device's own
+// text-to-speech engine (Web Speech API — Chrome on Android bridges this
+// to the system TTS engine, e.g. Google Text-to-Speech). Used for the
+// driver's repeating "New Trip Alert" while the Accept/Reject screen is
+// up, and for new-load foreground pushes — a spoken announcement is much
+// harder to miss than a plain beep. cancel() first so a fast-repeating
+// interval never queues up overlapping utterances that pile up and lag
+// behind. This only ever plays while the app is actually open and
+// running — a background push notification (see functions/index.js) has
+// no way to trigger audio or speech synthesis while the app is closed,
+// backgrounded out of Recents, or the device is asleep; that's a hard
+// browser/OS limitation on what any web page's JavaScript can do once
+// it's not actually running, not something this function can work around.
+// Silently no-ops if the browser/WebView has no speech synthesis support,
+// or no installed voice for the given language.
+function speakAlert(text, lang = "hi") {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  try {
+    playChime();
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
+    utterance.rate = 1.05;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    setTimeout(() => window.speechSynthesis.speak(utterance), 220);
+  } catch { /* speech synthesis not available */ }
+}
+
+// Re-added for the driver "new load posted" alert only (see
+// functions/index.js: onNewLoadPosted/sendLoadAlert) — every other push
+// type stays removed. docId is where the FCM device token gets saved
+// ("drivers"/mobile) so that Cloud Function knows who to push to. Silently
+// re-issues a token on every load if permission was already granted in an
+// earlier session, so it stays fresh without asking again; `enable()` is
+// what the banner's button calls to trigger the actual browser permission
+// prompt on first use.
+function useRideNotifications(collectionName, docId, lang) {
+  // Web tab: Notification.permission is read synchronously so the very
+  // first render already shows the right banner (unchanged from before).
+  // Native app: there's no synchronous equivalent (checkPushPermission
+  // goes through the Capacitor bridge), so it starts at "default" and the
+  // effect below corrects it moments later — isNativeApp false (a plain
+  // browser tab, which is the only case that shipped before this
+  // migration) never takes this branch, so that behaviour is untouched.
+  const [permission, setPermission] = useState(() => {
+    if (isNativeApp) return "default";
+    return typeof Notification !== "undefined" ? Notification.permission : "unsupported";
+  });
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (!isNativeApp) return;
+    let cancelled = false;
+    checkPushPermission().then((p) => { if (!cancelled) setPermission(p); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const enable = async () => {
+    const result = await requestPushToken();
+    if (result.ok && docId) {
+      patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+      setPermission("granted");
+    } else if (isNativeApp) {
+      setPermission(result.reason === "unsupported" ? "unsupported" : await checkPushPermission());
+    } else {
+      setPermission(result.reason === "unsupported" ? "unsupported" : (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
+    }
+  };
+
+  useEffect(() => {
+    if (!docId) return;
+    let cancelled = false;
+    let unsub;
+    (async () => {
+      const granted = isNativeApp
+        ? (await checkPushPermission()) === "granted"
+        : (typeof Notification !== "undefined" && Notification.permission === "granted");
+      if (!granted || cancelled) return;
+      const result = await requestPushToken();
+      if (result.ok) patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+      const fn = await listenForegroundPush((payload) => {
+        // A new-load alert gets an actual spoken "New Trip Alert" instead
+        // of a beep — same reasoning as the direct-request Accept/Reject
+        // screen's repeating speakAlert, easier to notice/harder to
+        // ignore than a plain tone. Every other foreground push type
+        // (direct-request toast, customer booking-update toast) keeps the
+        // existing beep.
+        if (payload.data?.type === "new_load") {
+          speakAlert(tripAlertText(lang), lang);
+        } else {
+          playBeepTone();
+        }
+        setToast(payload.notification || null);
+        setTimeout(() => setToast(null), 5000);
+      });
+      if (cancelled) { fn?.(); return; }
+      unsub = fn;
+    })();
+    return () => { cancelled = true; unsub?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionName, docId]);
+
+  return { permission, enable, toast };
+}
+
+// Tracks whether the browser's location permission is granted/denied/not
+// yet asked, mirroring useRideNotifications' priming pattern above — a
+// bare getCurrentPosition/watchPosition call otherwise fails completely
+// silently on denial, leaving the map or GPS matching just quietly broken
+// with nothing on screen to explain why. The Permissions API (where
+// supported) gives a live read without ever triggering the OS prompt
+// itself; browsers without it (notably Safari) stay "prompt" until the
+// first real geolocation call resolves or is denied — every watchPosition/
+// getCurrentPosition call site reports back through markGranted/markDenied
+// so this stays accurate even there.
+function useLocationPermission() {
+  const [permission, setPermission] = useState(() => (navigator.geolocation ? "prompt" : "unsupported"));
+  useEffect(() => {
+    if (!navigator.geolocation || !navigator.permissions?.query) return;
+    let status;
+    navigator.permissions.query({ name: "geolocation" }).then((s) => {
+      status = s;
+      setPermission(s.state);
+      s.onchange = () => setPermission(s.state);
+    }).catch(() => {});
+    return () => { if (status) status.onchange = null; };
+  }, []);
+  const markDenied = () => setPermission("denied");
+  const markGranted = () => setPermission("granted");
+  // Returns a Promise (resolving either way, never rejecting) so callers
+  // that need to request Location and Notifications one after another (see
+  // usePrimePermissionsOnce) can await this before firing the next native prompt —
+  // browsers only ever show one permission dialog at a time, so firing both
+  // at once just silently drops one of them.
+  const enable = () => new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(); return; }
+    navigator.geolocation.getCurrentPosition(() => { markGranted(); resolve(); }, () => { markDenied(); resolve(); });
+  });
+  return { permission, enable, markDenied, markGranted };
+}
+
+// Tracks which Admin Announcements this specific customer/driver hasn't
+// seen yet — "seen" persists locally (per role+mobile) as the newest
+// createdAt millis they've been shown, so it survives app restarts and
+// naturally covers every announcement sent before this device ever existed
+// (nothing to catch up on) as well as ones sent while it was closed. Pairs
+// with AnnouncementAlertBanner (auto-popup) and a hamburger-menu badge —
+// either one calling markSeen() clears both at once, since they're the same
+// underlying "have you seen the latest one" state.
+function useAnnouncementAlerts(adminNotifications, myMobile, toRole) {
+  const mine = myMobile
+    ? (adminNotifications || []).filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile || (Array.isArray(n.target) && n.target.includes(myMobile))))
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+    : [];
+  const [lastSeenAt, setLastSeenAt] = usePersistedState(`sarthi_announcementsLastSeen_${toRole}_${myMobile || "none"}`, 0);
+  const unread = mine.filter((n) => (n.createdAt?.toMillis?.() || 0) > lastSeenAt);
+  const markSeen = () => {
+    const newest = mine[0]?.createdAt?.toMillis?.() || Date.now();
+    if (newest > lastSeenAt) setLastSeenAt(newest);
+  };
+  return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen };
+}
+
+// A direct intent:// link to a system "android.settings.*" screen (tried
+// earlier) is silently blocked by Chrome on a real device — no toast, no
+// app switch, nothing. That's a deliberate Chrome anti-phishing
+// restriction on web content specifically, not fixable from pure web
+// code. This instead links to a small native Activity built into the
+// Android app itself (see twa/patch-project.js, wired into
+// .github/workflows/build-twa.yml) via a custom, app-specific intent
+// action rather than a system one — Chrome has no reason to block a link
+// to this app's own declared action, and that native Activity has no
+// restriction on calling a real Settings intent on itself. Only resolves
+// to anything when actually running inside the installed Play Store app
+// (that Activity doesn't exist anywhere else), so gated behind
+// isRunningInOwnTwa(); a plain browser tab, iOS, or desktop falls back to
+// plain instructional text.
+const TWA_PACKAGE_ID = "com.apnatransport.app";
+function isRunningInOwnTwa() {
+  return typeof document !== "undefined" && document.referrer.startsWith(`android-app://${TWA_PACKAGE_ID}`);
+}
+function androidSettingsBridgeUrl(target) {
+  return `intent:#Intent;package=${TWA_PACKAGE_ID};action=${TWA_PACKAGE_ID}.OPEN_SETTINGS;S.target=${target};end`;
+}
+
+// Capacitor's Android app (android/ — the wrapper this app is migrating
+// to; see capacitor.config.ts) carries its own SettingsBridgeActivity,
+// ported 1:1 from the TWA's (see android/app/.../SettingsBridgeActivity.java
+// and its AndroidManifest.xml entry) — same custom OPEN_SETTINGS action,
+// same "target" extra. It's reached differently, though: Capacitor's
+// WebView (com.getcapacitor.Bridge), unlike Chrome/Custom Tabs (what the
+// TWA actually runs on), has no special handling for "intent:" scheme
+// links — an <a href={androidSettingsBridgeUrl(...)}> just silently fails
+// there too, the same failure this whole mechanism exists to route around.
+// So the web side instead calls a tiny custom native plugin
+// (android/app/.../SettingsBridgePlugin.java) directly through Capacitor's
+// JS bridge, which itself fires the same OPEN_SETTINGS intent natively.
+// document.referrer is not a reliable native/web signal inside a
+// Capacitor WebView (it isn't launched via an android-app:// referrer the
+// way a Custom Tab is), so this app is detected via Capacitor's own
+// isNativePlatform() (see isNativeApp in ./firebaseClient) instead.
+const SettingsBridgeNative = registerPlugin("SettingsBridge");
+function isRunningInCapacitorApp() {
+  return isNativeApp;
+}
+function openNativeSettingsBridge(target) {
+  SettingsBridgeNative.open({ target }).catch((e) => console.error("[settingsBridge]", e));
+}
+
+// Re-added for the driver "new load posted" push carve-out — see
+// useRideNotifications above. Also used on the Customer side now (see
+// context="customer") so they're told when their driver accepts/starts the
+// trip even while the app is backgrounded.
+// Both of these used to render a persistent in-app nag (a tappable
+// "Turn on notifications/location" button, or — once actually denied — a
+// banner linking to phone Settings) on every relevant screen. Removed per
+// explicit request: the one-time native OS prompt from
+// usePrimePermissionsOnce (fired silently, up front, before role
+// selection) is the only ask now. Still called from every existing site
+// with the same props, so this is the only change needed — no call sites
+// to touch. Tradeoff: a denial at that one prompt now fails silently
+// again (map/GPS matching or push alerts just don't work, nothing on
+// screen explains why), same as before this priming/these banners
+// existed at all.
+function NotificationBanner() {
+  return null;
+}
+
+function LocationBanner() {
+  return null;
+}
+
+function ForegroundToast({ toast }) {
+  if (!toast) return null;
+  return (
+    <div className="mx-5 mb-2 rounded-lg p-2.5 flex items-center gap-2" style={{ background: C.navy }}>
+      <Bell size={14} color={C.marigold} />
+      <div>
+        <div className="text-[11px] font-bold text-white">{toast.title}</div>
+        {toast.body && <div className="text-[10px]" style={{ color: "#FFFFFF" }}>{toast.body}</div>}
+      </div>
+    </div>
+  );
+}
+
+// Shown once per device (see permsPrimedGlobal in the root App below), as
+// the very first screen — before role selection, before login, for a
+// brand-new install AND an existing/returning user who hasn't seen this
+// yet, since the permission system itself is new. Deliberately role-
+// agnostic (nobody has picked Customer/Driver yet at this point) — fires
+// Location then Notifications back-to-back, never simultaneously (browsers
+// only ever show one native permission dialog at a time; firing both at
+// once just silently drops one of them). Deliberately NOT a screen of its
+// own anymore — it used to render a full explanatory "Before you start"
+// page with its own "Allow & Continue" button in front of these, which was
+// really just a second, custom-drawn prompt sitting in front of the real
+// OS one. Removed per explicit request: this now runs silently the moment
+// the app first loads, so the only thing anyone ever sees is the real
+// native Allow/Block dialog, stacked directly on top of whatever screen
+// (role selection) is already showing underneath. Camera has no
+// equivalent here — there's no durable grant to prime for the
+// <input type="file" capture> flow this app uses (tapping it just opens
+// the OS camera/gallery app directly), so the OS asks for it naturally,
+// and only the first time a photo is actually picked, later, whichever
+// role signs in.
+//
+// Notification permission is requested directly via requestPushToken()
+// here rather than through useRideNotifications, since there's no
+// logged-in customer/driver doc yet to save the resulting token onto —
+// once the person actually signs in, CustomerApp's/DriverHome's own
+// useRideNotifications effect re-issues and saves a token automatically
+// the moment it sees permission already "granted" (no second prompt).
+//
+// This can't truly force a grant — a user can always decline the native
+// dialog, and nothing server-side can detect or block that. Declining
+// just leaves location/GPS matching or push alerts silently not working,
+// same as before this priming existed at all; fixing it afterward means
+// going into the phone's own Settings, same as any other app.
+function usePrimePermissionsOnce(permsPrimedGlobal, setPermsPrimedGlobal) {
+  const location = useLocationPermission();
+  useEffect(() => {
+    if (permsPrimedGlobal) return;
+    (async () => {
+      if (location.permission !== "granted") await location.enable();
+      if (typeof Notification !== "undefined" && Notification.permission === "default") await requestPushToken();
+      setPermsPrimedGlobal(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
+// Post-signup language picker — shown once, right after a brand-new
+// Customer/Driver signup completes (see the langPromptPending gate in
+// AppRoot). Everything up through signup itself stays in Hindi; a
+// returning/login user never sees this. Once picked it's persisted and
+// applied everywhere; there is no in-app toggle to change it afterwards.
+function LanguageSelect({ onSelect }) {
+  const options = [
+    { code: "en", label: "English", sub: "Continue in English" },
+    { code: "hi", label: "हिंदी", sub: "हिंदी में जारी रखें" },
+    { code: "mr", label: "मराठी", sub: "मराठीत सुरू ठेवा" },
+  ];
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col items-center px-6 py-10">
+      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: "#EAF1FF" }}>
+        <Languages size={30} color={C.navy} />
+      </div>
+      <p className="text-lg font-black text-center mb-1" style={{ color: C.ink }}>Select your language</p>
+      <p className="text-sm font-semibold text-center mb-7" style={{ color: C.inkSoft }}>भाषा चुनें · भाषा निवडा</p>
+      <div className="w-full max-w-xs flex flex-col gap-3">
+        {options.map((o) => (
+          <button key={o.code} onClick={() => onSelect(o.code)} className="w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
+            <div className="text-lg font-black mb-0.5" style={{ color: C.ink }}>{o.label}</div>
+            <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{o.sub}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Badge + callout shown on the hamburger button right after a quote gets
+// accepted (Customer: the moment they tap Accept; Driver: the moment one of
+// their bids gets accepted) — see AppRoot's showBookingHint state. The badge
+// dot alone would be easy to miss the first time, so a "View your Booking
+// here" callout points at it too; both stay up until the menu is actually
+// opened. Must sit inside a `relative` wrapper around the hamburger button.
+function HamburgerHint({ show, lang }) {
+  if (!show) return null;
+  return (
+    <>
+      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>1</span>
+      <div className="absolute top-11 left-0 z-40 rounded-lg px-3 py-2 shadow-lg text-xs font-bold whitespace-nowrap" style={{ background: C.marigoldDeep, color: "#FFFFFF" }}>
+        {lang === "en" ? "View your Advance Booking here" : lang === "mr" ? "तुमची अ‍ॅडव्हान्स बुकिंग इथे पहा" : "अपनी एडवांस बुकिंग यहां देखें"}
+        <div className="absolute -top-1 left-4 w-2 h-2 rotate-45" style={{ background: C.marigoldDeep }} />
+      </div>
+    </>
+  );
+}
+
+// Standalone hamburger button + HamburgerHint, floated over whatever screen
+// is currently showing. Needed because the app's real hamburger button is
+// deliberately hidden the instant there's an active booking/trip (replaced
+// by the trip view itself) — exactly the moment this hint needs to appear,
+// so there's no real hamburger to attach the badge to. Callers pass
+// show={showBookingHint && <real hamburger isn't currently visible>} so
+// this and the real HamburgerHint never both show at once.
+function FloatingHamburgerHint({ show, onOpenMenu, lang }) {
+  if (!show) return null;
+  return (
+    <div className="fixed top-3 left-5 z-50">
+      <button onClick={onOpenMenu} className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
+        <Menu size={18} color="#fff" strokeWidth={2.5} />
+      </button>
+      <HamburgerHint show={show} lang={lang} />
+    </div>
+  );
+}
+
+// Auto-popup for a new, not-yet-seen Admin Announcement — shown on whatever
+// screen the customer/driver happens to open the app to, instead of relying
+// on them to notice the hamburger badge and go find it under Messages
+// themselves. Either button clears it (see useAnnouncementAlerts.markSeen):
+// "View" also opens the full inbox, "dismiss" just acknowledges it in place
+// since the message text is already fully readable right here.
+function AnnouncementAlertBanner({ announcement, onView, onDismiss, lang }) {
+  if (!announcement) return null;
+  return (
+    <div className="mx-5 mb-2 rounded-lg p-3 shadow-lg" style={{ background: C.navy, border: `1.5px solid ${C.marigold}` }}>
+      <div className="flex items-start gap-2">
+        <Bell size={16} color={C.marigold} className="shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-bold text-white mb-0.5">📢 {lang === "en" ? "New message from Admin" : lang === "mr" ? "अ‍ॅडमिनकडून नवीन संदेश" : "एडमिन से नया संदेश"}</div>
+          <div className="text-xs" style={{ color: "#FFFFFF" }}>{announcement.message}</div>
+        </div>
+        <button onClick={onDismiss} className="shrink-0" style={{ color: "#FFFFFF", opacity: 0.75 }}><X size={16} /></button>
+      </div>
+      <button onClick={onView} className="w-full mt-2 rounded-lg py-2 text-xs font-bold" style={{ background: C.marigold, color: "#000000" }}>
+        {lang === "en" ? "View" : lang === "mr" ? "पहा" : "देखें"}
+      </button>
+    </div>
+  );
+}
+
+
+// Driver/Customer "Admin Announcements" inbox (hamburger menu, both roles) —
+// past and present broadcasts sent from AdminNotify (functions/index.js:
+// sendAdminNotification), filtered to whatever was sent to "all" of this
+// role or to this person specifically. Read-only; there's no reply/compose
+// here, only what Admin has sent out.
+function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang, onOpen }) {
+  const mine = (adminNotifications || [])
+    .filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile || (Array.isArray(n.target) && n.target.includes(myMobile))))
+    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  // Opening this screen is itself "seeing" every announcement in it, same
+  // as tapping the auto-popup banner's View button — clears the hamburger
+  // badge whichever way the customer/driver actually got here.
+  useEffect(() => { onOpen?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  return (
+    <div className="px-5 py-5">
+      <h2 className="text-base font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"}</h2>
+      {mine.length === 0 ? (
+        <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No announcements yet." : lang === "mr" ? "अजून कोणतीही सूचना नाही." : "अभी तक कोई सूचना नहीं।"}</p>
+      ) : (
+        <div className="space-y-2">
+          {mine.map((n) => (
+            <div key={n.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>📢 {lang === "en" ? "Admin" : lang === "mr" ? "अ‍ॅडमिन" : "एडमिन"}</span>
+                <span className="text-[10px] shrink-0" style={{ color: C.inkSoft }}>{formatTime(n.createdAt)}</span>
+              </div>
+              <div className="text-sm" style={{ color: C.ink }}>{n.message}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TRIAL_DAYS = 30;
+// Each driver/customer gets their own 30-day trial from their own signup
+// date (their doc's createdAt), not one shared platform-wide clock. A
+// missing createdAt (still resolving right after signup, or a legacy doc
+// from before this field existed) is treated as "in trial" — generous by
+// default rather than accidentally charging someone commission early.
+const isInTrial = (createdAt) => (createdAt?.toMillis ? (Date.now() - createdAt.toMillis()) < TRIAL_DAYS * DAY_MS : true);
+// Whole days left in trial (0 on the last day, null once it's over or
+// createdAt isn't known yet) — used only for the admin's Free Trial /
+// Main Routine driver split and the "X days left" badge, purely derived
+// from createdAt like isInTrial so it can never drift out of sync with
+// the actual gating logic above.
+const trialDaysLeft = (createdAt) => {
+  if (!createdAt?.toMillis || !isInTrial(createdAt)) return null;
+  const elapsedMs = Date.now() - createdAt.toMillis();
+  return Math.max(0, Math.ceil((TRIAL_DAYS * DAY_MS - elapsedMs) / DAY_MS) - 1);
+};
+
+// There's no direct signal telling the backend a driver actually uninstalled
+// the app -- this infers it from inactivity instead, for AdminFleet's
+// Off Duty/App Uninstalled split (see lastActiveAt, bumped once per app open
+// in DriverApp below). Falls back to createdAt when lastActiveAt hasn't been
+// recorded yet (a driver who signed up before this field existed, or simply
+// hasn't reopened the app since it shipped) so the entire existing fleet
+// doesn't get mislabeled "uninstalled" the moment this ships -- only once a
+// driver, tracked or not, genuinely goes quiet for UNINSTALL_INACTIVE_DAYS.
+const UNINSTALL_INACTIVE_DAYS = 14;
+const isLikelyUninstalled = (driver) => {
+  const ts = driver.lastActiveAt?.toMillis ? driver.lastActiveAt : driver.createdAt;
+  if (!ts?.toMillis) return false;
+  return (Date.now() - ts.toMillis()) >= UNINSTALL_INACTIVE_DAYS * DAY_MS;
+};
+
+// GPS status diagnostic (see AdminDriverList) -- lastKnownLocation.updatedAt
+// is written by DriverApp's own watchPosition effect while a driver is
+// Online (throttled to one write every 5s -- see the useEffect near
+// LOADING_GEOFENCE_M in DriverApp). This just reads that same timestamp
+// back and classifies its freshness, so an admin can see exactly which
+// drivers are/aren't actually reporting live GPS right now, instead of
+// guessing from "Online" status alone (a driver can be marked Online with
+// permission denied or the app merely backgrounded, and Online alone
+// can't tell those apart).
+function gpsStatus(driver, lang) {
+  const updatedAt = driver.lastKnownLocation?.updatedAt;
+  if (!updatedAt) {
+    return { label: lang === "en" ? "Never" : lang === "mr" ? "कधीच नाही" : "कभी नहीं", bg: "#E5E5E5", color: C.inkSoft, stale: true };
+  }
+  const ageMs = Date.now() - updatedAt;
+  if (ageMs < 2 * 60 * 1000) {
+    return { label: lang === "en" ? "Live" : lang === "mr" ? "लाइव्ह" : "लाइव", bg: C.success, color: "#FFFFFF", stale: false };
+  }
+  if (ageMs < 60 * 60 * 1000) {
+    const mins = Math.round(ageMs / 60000);
+    return { label: lang === "en" ? `${mins}m ago` : lang === "mr" ? `${mins} मि आधी` : `${mins} मि पहले`, bg: C.marigoldDeep, color: "#FFFFFF", stale: true };
+  }
+  if (ageMs < 48 * 60 * 60 * 1000) {
+    const hours = Math.round(ageMs / 3600000);
+    return { label: lang === "en" ? `${hours}h ago` : lang === "mr" ? `${hours} तास आधी` : `${hours} घं पहले`, bg: C.safety, color: "#FFFFFF", stale: true };
+  }
+  const days = Math.round(ageMs / 86400000);
+  return { label: lang === "en" ? `${days}d ago` : lang === "mr" ? `${days} दिवस आधी` : `${days} दिन पहले`, bg: C.safety, color: "#FFFFFF", stale: true };
+}
+
+// ---------------- shared: mock map ----------------
+function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" }) {
+  const p1 = hashPos(pickup || "pickup");
+  const p2 = drop ? hashPos(drop + "x") : null;
+  const tx = p2 ? p1.x + (p2.x - p1.x) * (progress ?? 0) / 100 : p1.x;
+  const ty = p2 ? p1.y + (p2.y - p1.y) * (progress ?? 0) / 100 : p1.y;
+  // No real coordinates here (mock fallback), so hand off to Google Maps
+  // using the address text instead — same real-<a>-link handoff as the real
+  // LiveTrackingMap (see its mapsUrl comment for why it's not window.open()).
+  const mapsUrl = pickup
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pickup)}&destination=${encodeURIComponent(drop || pickup)}&travelmode=driving`
+    : null;
+  return (
+    <div>
+    <div className="relative rounded-lg overflow-hidden" style={{ height, background: "#E5E5E5", border: `1px solid ${C.line}` }}>
+      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <line key={"h" + i} x1="0" y1={i * 18} x2="100" y2={i * 18} stroke="#CCCCCC" strokeWidth="0.4" />
+        ))}
+        {Array.from({ length: 6 }).map((_, i) => (
+          <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#CCCCCC" strokeWidth="0.4" />
+        ))}
+        {p2 && <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={zoneColor || C.marigoldDeep} strokeWidth="1" strokeDasharray="2,2" />}
+        <circle cx={p1.x} cy={p1.y} r="2.2" fill={C.marigoldDeep} />
+        {p2 && <circle cx={p2.x} cy={p2.y} r="2.2" fill={C.safety} />}
+        {p2 && progress !== undefined && (
+          <circle cx={tx} cy={ty} r="2.6" fill={C.navy} stroke="#fff" strokeWidth="0.6" />
+        )}
+      </svg>
+      <div className="absolute bottom-1.5 left-2 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: C.paper, color: C.ink }}>
+        📍 {lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}
+      </div>
+      {p2 && (
+        <div className="absolute top-1.5 right-2 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: C.paper, color: C.ink }}>
+          🏁 {lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}
+        </div>
+      )}
+    </div>
+    {/* Below the box, not overlapping it — same reasoning as the real
+        LiveTrackingMap's button below (see its comment): keeps behavior
+        consistent regardless of which one happens to be rendering. */}
+    {mapsUrl && (
+      <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+        className="flex items-center justify-center gap-1.5 text-xs font-black py-2 mt-1.5 rounded-lg shadow-sm" style={{ background: "#FFCC00", color: "#000000" }}>
+        {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
+      </a>
+    )}
+    </div>
+  );
+}
+
+// Fetches an actual driving route (road-following polyline) between two
+// points via the Directions API, instead of a straight line drawn point-
+// to-point. Re-fetches when the destination changes, or when the origin
+// has moved more than ~50m from the last fetch (GPS jitter/frequent small
+// updates shouldn't each trigger a fresh Directions call) — a live-
+// tracking origin (the driver) moves continuously, a static one (Pickup)
+// never re-triggers on its own. Returns null until the first route lands,
+// so callers should fall back to a straight line in the meantime.
+function useDrivingRoute(origin, destination, isLoaded, hasKey) {
+  // Returns the road-following path (for drawing), the real driving
+  // distance in km, and the estimated travel time in minutes -- all from
+  // the same DirectionsService response, so no second API call is needed
+  // for an ETA on top of the "how far by road" number.
+  const [route, setRoute] = useState({ path: null, distanceKm: null, durationMin: null, error: null });
+  const lastOriginRef = useRef(null);
+  const lastDestRef = useRef(null);
+  useEffect(() => {
+    if (!isLoaded || !hasKey || !origin || !destination || !window.google?.maps) return;
+    const originMoved = !lastOriginRef.current || haversineKm(lastOriginRef.current.lat, lastOriginRef.current.lng, origin.lat, origin.lng) > 0.05;
+    const destMoved = !lastDestRef.current || lastDestRef.current.lat !== destination.lat || lastDestRef.current.lng !== destination.lng;
+    if (!originMoved && !destMoved) return;
+    let cancelled = false;
+    new window.google.maps.DirectionsService().route(
+      { origin, destination, travelMode: window.google.maps.TravelMode.DRIVING },
+      (result, status) => {
+        if (cancelled) return;
+        lastOriginRef.current = origin;
+        lastDestRef.current = destination;
+        if (status === "OK" && result?.routes?.[0]) {
+          const path = result.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() }));
+          const legs = result.routes[0].legs || [];
+          const distanceMeters = legs.reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
+          const durationSeconds = legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0);
+          setRoute({
+            path,
+            distanceKm: distanceMeters > 0 ? Math.round((distanceMeters / 1000) * 10) / 10 : null,
+            durationMin: durationSeconds > 0 ? Math.round(durationSeconds / 60) : null,
+            error: null,
+          });
+        } else {
+          // Was silently swallowed before -- a non-"OK" status (e.g.
+          // REQUEST_DENIED when the Directions API specifically isn't
+          // enabled/billed on this Google Cloud project, even though other
+          // Maps APIs like Distance Matrix or Geocoding work fine) left
+          // the map permanently stuck on the straight-line fallback with
+          // no way to tell why. Logged AND returned here so a caller can
+          // show it right on screen instead of requiring devtools.
+          console.error(`[useDrivingRoute] DirectionsService failed: ${status}`);
+          setRoute((prev) => ({ ...prev, error: status }));
+        }
+      }
+    );
+    return () => { cancelled = true; };
+  }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng, isLoaded, hasKey]);
+  return route;
+}
+
+// Compact ETA text ("18 min" / "1h 5min") from useDrivingRoute's
+// durationMin -- distinct from fmtHrMin (used for completed-trip
+// summaries), which always spells out hours even at 0 and reads as too
+// verbose for a live "X min away" badge.
+function formatEtaMin(min, lang) {
+  if (min == null) return null;
+  if (min < 60) return lang === "en" ? `${min} min` : lang === "mr" ? `${min} मिनिटे` : `${min} मिनट`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return lang === "en" ? `${h}h ${m}min` : lang === "mr" ? `${h}ता ${m}मि` : `${h}घं ${m}मि`;
+}
+
+// Rounded map-pin marker with a solid color fill and a bold letter,
+// replacing Google's plain default red teardrop + tiny text label --
+// Pickup and Drop each get their own color (green/red) instead of both
+// rendering as the same stock pin with only the letter to tell them apart.
+function pinMarkerIcon(color, letter) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="46" viewBox="0 0 34 46">
+    <path d="M17 0C7.6 0 0 7.6 0 17c0 12.4 17 29 17 29s17-16.6 17-29C34 7.6 26.4 0 17 0z" fill="${color}"/>
+    <circle cx="17" cy="17" r="11.5" fill="#fff"/>
+    <text x="17" y="22" font-family="Arial, sans-serif" font-size="14" font-weight="900" text-anchor="middle" fill="${color}">${letter}</text>
+  </svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(34, 46),
+    anchor: new window.google.maps.Point(17, 46),
+  };
+}
+
+// Circular badge with a real truck glyph (a standard "local shipping"
+// icon path) instead of an emoji label sitting on a plain colored circle
+// -- renders identically on every device/OS instead of depending on
+// however that platform happens to draw 🚚.
+function vehicleMarkerIcon() {
+  const truckPath = "M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zM18 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="18" fill="${C.navy}" stroke="#fff" stroke-width="3"/>
+    <g transform="translate(8,8)"><path d="${truckPath}" fill="#fff"/></g>
+  </svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(40, 40),
+    anchor: new window.google.maps.Point(20, 20),
+  };
+}
+
+// Real Google Maps live-tracking view — pickup/drop pins at real coordinates
+// plus the driver's live GPS marker, connected by the actual fastest driving
+// route (not a straight line) via useDrivingRoute. Falls back to the fake
+// MockMap when Google Maps isn't configured/loaded yet, or this booking has
+// no real coordinates (e.g. it was posted before Maps was set up).
+function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng, driverLocation, customerLocation, progress, zoneColor, height = 150, lang = "hi", mode = "route" }) {
+  const { isLoaded, hasKey } = useGoogleMaps();
+  // "toPickup" mode (used before a driver has entered the OTP) draws only
+  // the driver's live position and the Pickup pin, with the route line
+  // between THEM instead of Pickup->Drop — Drop isn't relevant yet since
+  // the driver hasn't picked up the load. Falls back to the normal
+  // Pickup->Drop route once mode is "route" (the default, post-OTP).
+  const toPickup = mode === "toPickup";
+  const hasCoords = toPickup ? (pickupLat != null && pickupLng != null) : (pickupLat != null && pickupLng != null && dropLat != null && dropLng != null);
+  const pickupPos = pickupLat != null && pickupLng != null ? { lat: pickupLat, lng: pickupLng } : null;
+  const dropPos = dropLat != null && dropLng != null ? { lat: dropLat, lng: dropLng } : null;
+  // Raw GPS fixes — used for the actual route request/bounds-fitting below,
+  // which should only recompute on a genuine new fix, not on every
+  // in-between animation frame. The marker itself renders the smoothed
+  // (glided) version further down instead, via useSmoothPosition, so live
+  // tracking doesn't look like it's teleporting between pings every few
+  // seconds.
+  const rawDriverPos = driverLocation?.lat != null && driverLocation?.lng != null ? { lat: driverLocation.lat, lng: driverLocation.lng } : null;
+  const rawCustomerPos = customerLocation?.lat != null && customerLocation?.lng != null ? { lat: customerLocation.lat, lng: customerLocation.lng } : null;
+  const driverPos = useSmoothPosition(rawDriverPos);
+  const customerPos = useSmoothPosition(rawCustomerPos);
+  // Always the driver's actual live position to wherever they're headed
+  // next — Pickup until the OTP is entered, then Drop for the rest of the
+  // trip — never a fixed Pickup->Drop reference line. Both the drawn path
+  // and roadDistanceKm below come from the same real routing call, so the
+  // customer sees actual remaining road distance, not a straight-line
+  // guess, continuously through the whole trip rather than it resetting
+  // to an overview once loading starts.
+  const routeOrigin = rawDriverPos;
+  const routeDestination = toPickup ? pickupPos : dropPos;
+  const { path: roadPath, distanceKm: roadDistanceKm, durationMin: roadDurationMin, error: roadError } = useDrivingRoute(routeOrigin, routeDestination, isLoaded, hasKey);
+  // Fallback real road route (Pickup->Drop) for whenever the driver's GPS
+  // hasn't reported in yet, so "no live position yet" still draws the
+  // actual road-following path instead of a straight diagonal line across
+  // the map. Only meaningful in "route" mode -- toPickup has no Pickup->Drop
+  // leg to fall back to. This second DirectionsService query only actually
+  // fires while routeOrigin above is null (driverPos missing), since
+  // useDrivingRoute no-ops without both an origin and destination.
+  const { path: staticRoadPath, error: staticRoadError } = useDrivingRoute(!toPickup ? pickupPos : null, !toPickup ? dropPos : null, isLoaded, hasKey);
+  // Whichever query is actually the one currently relevant (driver-origin
+  // once a position exists, else the Pickup->Drop fallback) -- shown right
+  // on screen so "why is the line straight" has an answer without needing
+  // devtools. A real Google API error code (REQUEST_DENIED,
+  // OVER_QUERY_LIMIT, ...) almost always means the Directions API itself
+  // isn't enabled/billed on this Google Cloud project -- a separate
+  // product from Distance Matrix/Geocoding, which the rest of the app's
+  // distance numbers already rely on successfully.
+  const routeLineError = driverPos ? roadError : staticRoadError;
+  const [mapInstance, setMapInstance] = useState(null);
+  // Auto-frames the route once per "leg" of the trip (once for the rough
+  // straight line, again once the real road-following path loads), then
+  // stops — the map is pan/zoomable now (see options below), so re-fitting
+  // on every single GPS ping would fight anyone who's manually zoomed in or
+  // panned around. A genuinely new leg (toPickup -> route, once the OTP is
+  // entered) still gets its own fresh auto-frame.
+  const fittedKeyRef = useRef(null);
+  useEffect(() => {
+    if (!mapInstance || !window.google?.maps) return;
+    // Guards against a known Google Maps JS quirk: if the container's real
+    // size wasn't settled at the exact moment the map first painted (e.g. a
+    // layout reflow landing a beat later), the map can get stuck rendering
+    // at a stale/zero size until something explicitly tells it to remeasure.
+    window.google.maps.event.trigger(mapInstance, "resize");
+    const fitKey = `${mode}:${roadPath?.length ? "route" : staticRoadPath?.length ? "static-route" : "straight"}`;
+    if (fittedKeyRef.current === fitKey) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    if (roadPath?.length) {
+      roadPath.forEach((p) => bounds.extend(p));
+    } else if (staticRoadPath?.length) {
+      staticRoadPath.forEach((p) => bounds.extend(p));
+    } else {
+      if (routeOrigin) bounds.extend(routeOrigin);
+      if (routeDestination) bounds.extend(routeDestination);
+    }
+    if (!toPickup && customerPos) bounds.extend(customerPos);
+    // Pickup's pin renders on screen the whole trip (see the always-on
+    // MarkerF below), so it needs to stay inside the fitted bounds even
+    // in "route" mode, where the live route itself no longer passes
+    // through it.
+    if (pickupPos) bounds.extend(pickupPos);
+    if (!bounds.isEmpty()) {
+      mapInstance.fitBounds(bounds, 28);
+      fittedKeyRef.current = fitKey;
+    }
+  }, [mapInstance, roadPath, staticRoadPath, routeOrigin?.lat, routeOrigin?.lng, routeDestination?.lat, routeDestination?.lng, mode]);
+
+  // "Follow" mode: once the initial framing above has run for this leg,
+  // every genuinely new GPS fix from the driver smoothly re-centers the
+  // map on them, like a live nav camera — visible to both the Customer and
+  // Driver app, since both render this same component. Keyed off
+  // rawDriverPos (the actual GPS fix), not the smoothed driverPos used for
+  // the marker itself, which re-renders up to 60x/second while gliding
+  // between two fixes (see useSmoothPosition) — panning on every one of
+  // those would fight Google Maps' own pan animation and feel janky.
+  // Turns off the moment someone manually drags the map, exactly like a
+  // real nav app, so it never fights a customer/driver trying to look
+  // around — a small button (below) lets them jump back to following.
+  const [following, setFollowing] = useState(true);
+  // A new leg (toPickup -> route, once the OTP is entered) gets its own
+  // fresh follow, same as the bounds-fit above, instead of staying paused
+  // just because someone happened to pan away during the previous leg.
+  useEffect(() => { setFollowing(true); }, [mode]);
+  useEffect(() => {
+    if (!mapInstance || !window.google?.maps) return;
+    const listener = mapInstance.addListener("dragstart", () => setFollowing(false));
+    return () => listener.remove();
+  }, [mapInstance]);
+  useEffect(() => {
+    if (!mapInstance || !following || !rawDriverPos || !fittedKeyRef.current) return;
+    mapInstance.panTo(rawDriverPos);
+  }, [mapInstance, following, rawDriverPos?.lat, rawDriverPos?.lng]);
+
+  // The embedded map is now pan/zoomable in place (gestureHandling: "greedy"
+  // + a real zoom control below) instead of being a tap-anywhere preview —
+  // a full-cover overlay would block those gestures entirely, so "open in
+  // real Google Maps" moved to its own small corner button instead. It's a
+  // genuine <a> link (not a button + onClick calling window.open) — inside
+  // the installed Capacitor app, window.open() from JS needs native "new
+  // window" support Capacitor doesn't enable by default, so it silently
+  // does nothing there; a real anchor click is what Capacitor's WebView
+  // actually hands off to the system browser/Maps app for any URL outside
+  // the app's own origin.
+  // routeOrigin is always the driver's own live GPS now — until their
+  // first fix comes in (just opened the app, weak signal, permission
+  // prompt not yet answered), there's no origin yet even though
+  // routeDestination (Pickup, or Drop once loading's started) is always
+  // known. Tapping needs to work through the whole trip regardless — Before
+  // OTP, During OTP, After OTP, until End Trip — so this falls back to just
+  // opening that destination point alone instead of going dead.
+  const mapsUrl = routeDestination
+    ? routeOrigin
+      ? `https://www.google.com/maps/dir/?api=1&origin=${routeOrigin.lat},${routeOrigin.lng}&destination=${routeDestination.lat},${routeDestination.lng}&travelmode=driving`
+      : `https://www.google.com/maps/search/?api=1&query=${routeDestination.lat},${routeDestination.lng}`
+    : null;
+
+  if (!hasKey || !isLoaded || !hasCoords) {
+    return <MockMap pickup={pickup} drop={toPickup ? null : drop} progress={toPickup ? undefined : progress} zoneColor={zoneColor} height={height} lang={lang} />;
+  }
+  return (
+    <div>
+    <div className="relative rounded-lg overflow-hidden" style={{ height, border: `1px solid ${C.line}` }}>
+      <GoogleMap
+        mapContainerStyle={{ width: "100%", height: "100%" }}
+        onLoad={setMapInstance}
+        options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: true, gestureHandling: "greedy", disableDefaultUI: true, clickableIcons: false, keyboardShortcuts: false }}
+      >
+        <MarkerF position={pickupPos} icon={pinMarkerIcon(C.success, "P")} />
+        {!toPickup && dropPos && <MarkerF position={dropPos} icon={pinMarkerIcon(C.safety, "D")} />}
+        {/* Prefers the live driver->target road route whenever the
+            driver's GPS has actually reported in. Before that first fix
+            arrives (e.g. the driver hasn't granted location permission
+            yet, or just opened the app), "route" mode still falls back to
+            the static Pickup->Drop line rather than showing nothing --
+            "toPickup" mode has no meaningful fallback (there's no
+            Pickup->Drop leg to draw yet), so it stays blank until a real
+            driver position shows up, same as before this feature existed. */}
+        {driverPos && routeDestination && <PolylineF path={roadPath || [driverPos, routeDestination]} options={{ strokeColor: C.navy, strokeOpacity: 1, strokeWeight: 8 }} />}
+        {!driverPos && !toPickup && pickupPos && dropPos && <PolylineF path={staticRoadPath || [pickupPos, dropPos]} options={{ strokeColor: C.navy, strokeOpacity: 1, strokeWeight: 8 }} />}
+        {driverPos && (
+          <MarkerF position={driverPos} icon={vehicleMarkerIcon()} />
+        )}
+        {!toPickup && customerPos && (
+          <MarkerF
+            position={customerPos}
+            label={{ text: "🧍", fontSize: "14px" }}
+            icon={{
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 14,
+              fillColor: C.success,
+              fillOpacity: 1,
+              strokeColor: "#fff",
+              strokeWeight: 2,
+              labelOrigin: new window.google.maps.Point(0, 0),
+            }}
+          />
+        )}
+      </GoogleMap>
+      {/* Real road distance + ETA from the driver's live position to
+          wherever they're headed next (Pickup, then Drop) — the same
+          route the drawn line above is based on, not a straight-line
+          estimate. */}
+      {roadDistanceKm != null && (
+        <div className="absolute top-2 left-2 rounded-full pl-2 pr-2.5 py-1 shadow-sm flex items-center gap-1" style={{ background: "rgba(255,255,255,0.95)", border: `1px solid ${C.line}` }}>
+          <Truck size={12} color={C.navy} />
+          <span className="text-[11px] font-black" style={{ color: C.navy }}>
+            {formatDistanceExact(roadDistanceKm, lang)}
+            {roadDurationMin != null && <> · {formatEtaMin(roadDurationMin, lang)}</>}
+            {" "}{toPickup
+              ? (lang === "en" ? "to pickup" : lang === "mr" ? "पिकअपपर्यंत" : "पिकअप तक")
+              : (lang === "en" ? "to drop" : lang === "mr" ? "ड्रॉपपर्यंत" : "ड्रॉप तक")}
+          </span>
+        </div>
+      )}
+      {/* On-screen version of the console log above -- so "why is this
+          line straight instead of road-shaped" has a visible answer
+          without needing devtools. */}
+      {routeLineError && (
+        <div className="absolute top-2 right-2 rounded-lg px-2 py-1 shadow-sm" style={{ background: "rgba(139,0,0,0.92)", maxWidth: "60%" }}>
+          <span className="text-[9px] font-bold leading-tight" style={{ color: "#fff" }}>
+            {lang === "en" ? `Route line unavailable (${routeLineError})` : lang === "mr" ? `रूट लाइन उपलब्ध नाही (${routeLineError})` : `रूट लाइन उपलब्ध नहीं (${routeLineError})`}
+          </span>
+        </div>
+      )}
+      {/* Reappears once follow-mode paused (see the dragstart listener
+          above) -- taps resume centering on the driver's live position,
+          same as re-centering in any nav app after panning away. */}
+      {!following && rawDriverPos && (
+        <button
+          onClick={() => { setFollowing(true); mapInstance.panTo(rawDriverPos); }}
+          className="absolute bottom-2 right-2 w-9 h-9 rounded-full shadow-sm flex items-center justify-center"
+          style={{ background: C.navy, border: "1px solid rgba(255,255,255,0.4)" }}
+          aria-label={lang === "en" ? "Follow driver" : lang === "mr" ? "ड्रायव्हरला फॉलो करा" : "ड्राइवर को फॉलो करें"}
+        >
+          <Navigation size={16} color="#fff" />
+        </button>
+      )}
+    </div>
+    {/* Sits in normal flow right below the map now, not overlapping it —
+        with gestureHandling: "greedy" enabled above (see options), Google's
+        own map div can swallow touches meant for anything absolutely
+        positioned on top of it, which is exactly what made this button
+        visible but unresponsive. Placing it outside the map's box entirely
+        removes any doubt about who receives the tap. */}
+    {mapsUrl && (
+      <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+        className="flex items-center justify-center gap-1.5 text-xs font-black py-2 mt-1.5 rounded-lg shadow-sm" style={{ background: "#FFCC00", color: "#000000" }}>
+        {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
+      </a>
+    )}
+    </div>
+  );
+}
+
+// Live "browse" map on the Customer home screen — shows nearby ONLINE
+// drivers' real last-known GPS. No new tracking was needed for this: every
+// online driver already reports lastKnownLocation continuously (see
+// DriverApp's GPS effect), originally only for its own 100km bid-radius
+// check — this just reads that same, already-live field. A driver who
+// hasn't reported in NEARBY_DRIVER_STALE_MS is treated as gone (closed the
+// app, lost signal) rather than shown stuck in a stale spot.
+const NEARBY_DRIVER_STALE_MS = 5 * 60 * 1000;
+const NEARBY_DRIVER_RADIUS_KM = 25;
+const NEARBY_DRIVER_MAX = 20;
+
+function nearbyOnlineDrivers(drivers, customerLocation) {
+  const now = Date.now();
+  const fresh = (drivers || []).filter((d) => {
+    if (!d.online || d.blacklisted) return false;
+    const loc = d.lastKnownLocation;
+    if (!loc || loc.lat == null || loc.lng == null) return false;
+    return loc.updatedAt && now - loc.updatedAt < NEARBY_DRIVER_STALE_MS;
+  });
+  if (!customerLocation) return fresh.slice(0, NEARBY_DRIVER_MAX);
+  return fresh
+    .map((d) => ({ driver: d, km: haversineKm(customerLocation.lat, customerLocation.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) }))
+    .filter((x) => x.km <= NEARBY_DRIVER_RADIUS_KM)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, NEARBY_DRIVER_MAX)
+    .map((x) => x.driver);
+}
+
+// Same shape as nearbyOnlineDrivers, but for drivers who are currently off
+// duty — shown on the same map (in a muted icon, see driverTruckIconInactive)
+// so a customer can see the full fleet near them, not just who's bookable
+// right now. No staleness cutoff here: an offline driver's location simply
+// stops updating the moment they go off duty, so "old" is expected and
+// still meaningful — it's their last known parking spot, not a bug.
+function nearbyOfflineDrivers(drivers, customerLocation) {
+  const withLocation = (drivers || []).filter((d) => {
+    if (d.online || d.blacklisted) return false;
+    const loc = d.lastKnownLocation;
+    return loc && loc.lat != null && loc.lng != null;
+  });
+  if (!customerLocation) return withLocation.slice(0, NEARBY_DRIVER_MAX);
+  return withLocation
+    .map((d) => ({ driver: d, km: haversineKm(customerLocation.lat, customerLocation.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) }))
+    .filter((x) => x.km <= NEARBY_DRIVER_RADIUS_KM)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, NEARBY_DRIVER_MAX)
+    .map((x) => x.driver);
+}
+
+// Pimpri-Chinchwad / Pune — same fallback default as MapPicker, used only
+// until the customer's own GPS fix comes in (or if it never does).
+const NEARBY_MAP_DEFAULT_CENTER = { lat: 18.6298, lng: 73.8131 };
+
+// Classic map-pin drop for the customer's own location — a teardrop shape
+// anchored at its bottom point (so it visually "sits on" the exact spot),
+// instead of a plain centered dot.
+function customerPinIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">` +
+    `<path d="M15 0C6.7 0 0 6.7 0 15c0 11.25 15 25 15 25s15-13.75 15-25C30 6.7 23.3 0 15 0z" fill="${C.success}" stroke="#fff" stroke-width="1.5"/>` +
+    `<circle cx="15" cy="15" r="6" fill="#fff"/></svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(30, 40),
+    anchor: new window.google.maps.Point(15, 40),
+  };
+}
+
+// A small truck/tempo silhouette in a white badge, in place of a plain dot
+// or emoji, for each nearby online driver — closer to how ride-hailing
+// apps show an actual vehicle shape on the map.
+function driverTruckIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">` +
+    `<circle cx="17" cy="17" r="16" fill="#fff" stroke="${C.marigoldDeep}" stroke-width="2"/>` +
+    `<g transform="translate(6,11)">` +
+    `<rect x="0" y="0" width="14" height="8" rx="1.2" fill="${C.navy}"/>` +
+    `<path d="M14 2h5.5L22 6v2H14z" fill="${C.navy}"/>` +
+    `<circle cx="4.5" cy="9" r="2.1" fill="${C.navy}"/>` +
+    `<circle cx="17.5" cy="9" r="2.1" fill="${C.navy}"/>` +
+    `</g></svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(34, 34),
+    anchor: new window.google.maps.Point(17, 17),
+  };
+}
+
+// Same silhouette as driverTruckIcon, greyed out — an off-duty driver
+// plotted at their last known spot, visually distinct from a bookable one.
+function driverTruckIconInactive() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">` +
+    `<circle cx="17" cy="17" r="16" fill="#fff" stroke="#9AA3B0" stroke-width="2"/>` +
+    `<g transform="translate(6,11)">` +
+    `<rect x="0" y="0" width="14" height="8" rx="1.2" fill="#9AA3B0"/>` +
+    `<path d="M14 2h5.5L22 6v2H14z" fill="#9AA3B0"/>` +
+    `<circle cx="4.5" cy="9" r="2.1" fill="#9AA3B0"/>` +
+    `<circle cx="17.5" cy="9" r="2.1" fill="#9AA3B0"/>` +
+    `</g></svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(34, 34),
+    anchor: new window.google.maps.Point(17, 17),
+  };
+}
+
+function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick, showOpenInMaps = true }) {
+  const { isLoaded, hasKey } = useGoogleMaps();
+  const nearby = nearbyOnlineDrivers(drivers, customerLocation);
+  const nearbyInactive = nearbyOfflineDrivers(drivers, customerLocation);
+  const center = customerLocation || NEARBY_MAP_DEFAULT_CENTER;
+  const [mapInstance, setMapInstance] = useState(null);
+
+  const googleMapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${center.lat},${center.lng}`;
+  // Until Pickup and Drop are both filled in, there's no fixed route yet to
+  // hand off to Google Maps — the customer just tracks nearby vehicles live
+  // right here on the in-app map, so the button stays hidden until then.
+  // A real <a> link, not a button + window.open() — see LiveTrackingMap's
+  // mapsUrl comment for why: Capacitor's WebView hands off genuine link
+  // clicks to the system browser by default, but not JS window.open() calls.
+  const OpenInMapsButton = () => showOpenInMaps ? (
+    <a href={googleMapsSearchUrl} target="_blank" rel="noopener noreferrer"
+      className="absolute bottom-2 right-2 text-xs font-black px-2.5 py-1.5 rounded-full shadow-lg" style={{ background: "#FFCC00", color: "#000000" }}>
+      {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
+    </a>
+  ) : null;
+
+  useEffect(() => {
+    if (!mapInstance || !window.google?.maps) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    bounds.extend(center);
+    nearby.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
+    nearbyInactive.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
+    mapInstance.fitBounds(bounds, 48);
+    // Don't zoom in past a sane street-level view just because there are no
+    // (or one) nearby driver(s) to spread the bounds out.
+    const listener = window.google.maps.event.addListenerOnce(mapInstance, "bounds_changed", () => {
+      if (mapInstance.getZoom() > 15) mapInstance.setZoom(15);
+    });
+    return () => window.google.maps.event.removeListener(listener);
+  }, [mapInstance, center.lat, center.lng, nearby.length, nearbyInactive.length]);
+
+  const countLabel = lang === "en"
+    ? `${nearby.length} active${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} inactive` : ""} nearby`
+    : lang === "mr"
+    ? `जवळपास ${nearby.length} सक्रिय${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} निष्क्रिय` : ""} गाड्या`
+    : `आस-पास ${nearby.length} सक्रिय${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} निष्क्रिय` : ""} गाड़ियां`;
+
+  if (!hasKey || !isLoaded) {
+    // Schematic fallback (no Maps key configured) — still plots each
+    // driver's REAL relative position around the customer, just without
+    // map tile imagery underneath.
+    const scale = 900; // px-per-degree, tuned for a city-block-ish spread
+    const toXY = (lat, lng) => ({ x: 50 + (lng - center.lng) * scale, y: 50 - (lat - center.lat) * scale });
+    return (
+      <div className="relative overflow-hidden" style={{ height, background: "#E5E5E5" }}>
+        <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+          {Array.from({ length: 8 }).map((_, i) => <line key={"h" + i} x1="0" y1={i * 14} x2="100" y2={i * 14} stroke="#D8D8D8" strokeWidth="0.4" />)}
+          {Array.from({ length: 8 }).map((_, i) => <line key={"v" + i} x1={i * 14} y1="0" x2={i * 14} y2="100" stroke="#D8D8D8" strokeWidth="0.4" />)}
+          <circle cx="50" cy="50" r="3" fill={C.success} stroke="#fff" strokeWidth="1" />
+          {nearbyInactive.map((d) => {
+            const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+            if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
+            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill="#9AA3B0" stroke="#fff" strokeWidth="0.6" />;
+          })}
+          {nearby.map((d) => {
+            const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+            if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
+            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill={C.navy} stroke="#fff" strokeWidth="0.6" />;
+          })}
+        </svg>
+        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+          {countLabel}
+        </div>
+        <OpenInMapsButton />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative" style={{ height }}>
+      <GoogleMap
+        mapContainerStyle={{ width: "100%", height: "100%" }}
+        onLoad={setMapInstance}
+        onClick={(e) => onMapClick?.(e.latLng.lat(), e.latLng.lng())}
+        options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, clickableIcons: false, keyboardShortcuts: false, gestureHandling: "greedy" }}
+      >
+        <MarkerF position={center} icon={customerPinIcon()} />
+        {nearbyInactive.map((d) => (
+          <MarkerF
+            key={d.mobile || d.id}
+            position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }}
+            icon={driverTruckIconInactive()}
+          />
+        ))}
+        {nearby.map((d) => (
+          <MarkerF
+            key={d.mobile || d.id}
+            position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }}
+            icon={driverTruckIcon()}
+          />
+        ))}
+      </GoogleMap>
+      <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+        {countLabel}
+      </div>
+      <OpenInMapsButton />
+    </div>
+  );
+}
+
+function BottomNav({ tabs, tab, setTab, lang = "hi" }) {
+  return (
+    <div className="flex border-t" style={{ borderColor: C.line, background: C.paper }}>
+      {tabs.map(([key, label, Icon]) => (
+        <button key={key} onClick={() => setTab(key)} className="flex-1 flex flex-col items-center gap-1 py-4">
+          <Icon size={22} color={tab === key ? C.marigoldDeep : C.ink} />
+          <span className="text-xs font-semibold" style={{ color: tab === key ? C.marigoldDeep : C.ink }}>{lang === "en" ? (EN_LABELS[key] || label) : lang === "mr" ? (MR_LABELS[key] || label) : label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Free OpenStreetMap-based location picker — no API key needed.
+// Uses a static map image (staticmap.openstreetmap.de) + Web Mercator math to
+// convert taps into lat/lng, then reverse-geocodes via Nominatim (OSM, free).
+function MapPicker({ onConfirm, onClose, lang = "hi" }) {
+  const CENTER = { lat: 18.6298, lon: 73.8131 }; // Pimpri-Chinchwad / Pune area default
+  const ZOOM = 11;
+  const W = 380, H = 320;
+  const [pin, setPin] = useState(null); // {x,y,lat,lon}
+  const [address, setAddress] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  const mapUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${CENTER.lat},${CENTER.lon}&zoom=${ZOOM}&size=${W}x${H}&maptype=mapnik`;
+
+  const pixelToLatLon = (px, py) => {
+    const scale = 256 * Math.pow(2, ZOOM);
+    const centerX = ((CENTER.lon + 180) / 360) * scale;
+    const latRad = (CENTER.lat * Math.PI) / 180;
+    const centerY = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * scale;
+    const worldX = centerX + (px - W / 2);
+    const worldY = centerY + (py - H / 2);
+    const lon = (worldX / scale) * 360 - 180;
+    const n = Math.PI - (2 * Math.PI * worldY) / scale;
+    const lat = (180 / Math.PI) * Math.atan(Math.sinh(n));
+    return { lat, lon };
+  };
+
+  const handleTap = async (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const { lat, lon } = pixelToLatLon(px, py);
+    setPin({ x: px, y: py, lat, lon });
+    setAddress("");
+    setLoading(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=16`, {
+        headers: { Accept: "application/json" },
+      });
+      const data = await res.json();
+      setAddress(stripPlusCode(data?.display_name) || `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+    } catch {
+      setAddress(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.7)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Tap to mark location" : lang === "mr" ? "जागा निवडण्यासाठी टॅप करा" : "जगह चुनने के लिए टैप करें"}</span>
+          <button onClick={onClose} className="text-base font-bold px-3 py-2" style={{ color: C.inkSoft }}>✕</button>
+        </div>
+
+        <div className="relative rounded-lg overflow-hidden mb-3" style={{ height: H, background: "#E5E5E5", cursor: "crosshair" }} onClick={handleTap}>
+          {!imgError ? (
+            <img src={mapUrl} alt="map" width={W} height={H} className="w-full h-full object-cover select-none" draggable={false} onError={() => setImgError(true)} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-center px-6">
+              <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Map couldn't load — check internet connection" : lang === "mr" ? "मॅप लोड झाला नाही — इंटरनेट कनेक्शन तपासा" : "मैप लोड नहीं हुआ — इंटरनेट कनेक्शन देखें"}</span>
+            </div>
+          )}
+          {pin && (
+            <div className="absolute" style={{ left: pin.x - 12, top: pin.y - 24, pointerEvents: "none" }}>
+              <MapPin size={28} color={C.safety} fill={C.safety} />
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg p-3 mb-3" style={{ background: C.paper, minHeight: 50 }}>
+          {loading ? (
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Finding address..." : lang === "mr" ? "पत्ता शोधला जात आहे..." : "पता ढूंढा जा रहा है..."}</span>
+          ) : pin ? (
+            <span className="text-xs" style={{ color: C.ink }}>{address}</span>
+          ) : (
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Tap anywhere on the map above to drop a pin" : lang === "mr" ? "वरील मॅपवर कुठेही टॅप करून पिन लावा" : "ऊपर मैप पर कहीं भी टैप करके पिन लगाएं"}</span>
+          )}
+        </div>
+
+        <button onClick={() => pin && onConfirm(address, pin.lat, pin.lon)} disabled={!pin || loading}
+          className="w-full rounded-lg py-4 font-bold text-base"
+          style={{ background: pin && !loading ? C.marigoldDeep : "#E0E0E0", color: pin && !loading ? "#fff" : "#9AA3B0" }}>
+          {lang === "en" ? "Use this location" : lang === "mr" ? "ही जागा वापरा" : "यह जगह इस्तेमाल करें"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Real Google Maps location picker — search box (Places Autocomplete) +
+// tap/drag-to-place marker + reverse geocoding, returning real lat/lng.
+function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
+  const CENTER = { lat: 18.6298, lng: 73.8131 }; // Pimpri-Chinchwad / Pune area default
+  const [marker, setMarker] = useState(null); // {lat,lng}
+  const [address, setAddress] = useState("");
+  const [loading, setLoading] = useState(false);
+  const mapRef = useRef(null);
+  const autocompleteRef = useRef(null);
+  const geocoderRef = useRef(null);
+
+  const reverseGeocode = (lat, lng) => {
+    setLoading(true);
+    if (!geocoderRef.current) geocoderRef.current = new window.google.maps.Geocoder();
+    geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
+      setLoading(false);
+      setAddress(status === "OK" && results?.[0] ? stripPlusCode(results[0].formatted_address) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    });
+  };
+
+  const placeMarker = (lat, lng) => {
+    setMarker({ lat, lng });
+    reverseGeocode(lat, lng);
+  };
+
+  const onPlaceChanged = () => {
+    const place = autocompleteRef.current?.getPlace();
+    const loc = place?.geometry?.location;
+    if (!loc) return;
+    const lat = loc.lat(), lng = loc.lng();
+    setMarker({ lat, lng });
+    setAddress(stripPlusCode(place.formatted_address || place.name || ""));
+    setLoading(false);
+    mapRef.current?.panTo({ lat, lng });
+    mapRef.current?.setZoom(16);
+  };
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const { latitude, longitude } = pos.coords;
+      placeMarker(latitude, longitude);
+      mapRef.current?.panTo({ lat: latitude, lng: longitude });
+      mapRef.current?.setZoom(16);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.7)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Search or tap to mark location" : lang === "mr" ? "जागा शोधा किंवा टॅप करून निवडा" : "जगह खोजें या टैप करके चुनें"}</span>
+          <button onClick={onClose} className="text-base font-bold px-3 py-2" style={{ color: C.inkSoft }}>✕</button>
+        </div>
+
+        <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged}>
+          <input
+            className="w-full rounded-lg px-3 py-2.5 text-sm outline-none mb-2"
+            style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}
+            placeholder={lang === "en" ? "Search an address" : lang === "mr" ? "पत्ता शोधा" : "पता खोजें"}
+          />
+        </Autocomplete>
+
+        <div className="relative rounded-lg overflow-hidden mb-3" style={{ height: 320, cursor: "crosshair" }}>
+          <GoogleMap
+            mapContainerStyle={{ width: "100%", height: "100%" }}
+            center={marker || CENTER}
+            zoom={marker ? 15 : 12}
+            onClick={(e) => placeMarker(e.latLng.lat(), e.latLng.lng())}
+            onLoad={(map) => (mapRef.current = map)}
+            options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+          >
+            {marker && <MarkerF position={marker} draggable onDragEnd={(e) => placeMarker(e.latLng.lat(), e.latLng.lng())} />}
+          </GoogleMap>
+        </div>
+
+        <button type="button" onClick={useMyLocation} className="text-base font-semibold mb-3 flex items-center gap-1" style={{ color: C.marigoldDeep }}>
+          <Navigation size={12} /> {lang === "en" ? "Use my current location" : lang === "mr" ? "माझी सध्याची जागा वापरा" : "मेरी मौजूदा जगह इस्तेमाल करें"}
+        </button>
+
+        <div className="rounded-lg p-3 mb-3" style={{ background: C.paper, minHeight: 50 }}>
+          {loading ? (
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Finding address..." : lang === "mr" ? "पत्ता शोधला जात आहे..." : "पता ढूंढा जा रहा है..."}</span>
+          ) : marker ? (
+            <span className="text-xs" style={{ color: C.ink }}>{address}</span>
+          ) : (
+            <span className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Search above or tap anywhere on the map to drop a pin" : lang === "mr" ? "वर शोधा किंवा मॅपवर कुठेही टॅप करून पिन लावा" : "ऊपर खोजें या मैप पर कहीं भी टैप करके पिन लगाएं"}</span>
+          )}
+        </div>
+
+        <button onClick={() => marker && onConfirm(address, marker.lat, marker.lng)} disabled={!marker || loading}
+          className="w-full rounded-lg py-4 font-bold text-base"
+          style={{ background: marker && !loading ? C.marigoldDeep : "#E0E0E0", color: marker && !loading ? "#fff" : "#9AA3B0" }}>
+          {lang === "en" ? "Use this location" : lang === "mr" ? "ही जागा वापरा" : "यह जगह इस्तेमाल करें"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Picks the real Google Maps picker when a Maps API key is configured and
+// loaded; otherwise falls back to the free OSM-based picker so location
+// picking still works before/without a Google Maps key.
+function LocationPicker(props) {
+  const { isLoaded, hasKey } = useGoogleMaps();
+  if (hasKey && isLoaded) return <GoogleLocationPicker {...props} />;
+  return <MapPicker {...props} />;
+}
+
+function MicButton({ onResult, lang = "hi", label, size = 8, iconSize = 14 }) {
+  const [listening, setListening] = useState(false);
+  const recRef = useRef(null);
+
+  const start = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      alert(lang === "en" ? "This device/browser doesn't support voice input." : lang === "mr" ? "हे डिव्हाइस/ब्राउझर व्हॉइस इनपुट सपोर्ट करत नाही." : "यह डिवाइस/ब्राउज़र वॉइस इनपुट सपोर्ट नहीं करता।");
+      return;
+    }
+    const rec = new SR();
+    rec.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+      const text = e.results?.[0]?.[0]?.transcript;
+      if (text) onResult(text);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recRef.current = rec;
+    setListening(true);
+    rec.start();
+  };
+
+  const stop = () => {
+    recRef.current?.stop();
+    setListening(false);
+  };
+
+  if (label) {
+    return (
+      <button type="button" onClick={listening ? stop : start}
+        className="w-full flex items-center justify-center gap-1.5 rounded-xl py-5 text-base font-bold"
+        style={{ background: listening ? C.safety : C.success, color: "#fff" }}>
+        <Mic size={18} /> {label}
+      </button>
+    );
+  }
+
+  return (
+    <button type="button" onClick={listening ? stop : start}
+      className="shrink-0 rounded-full flex items-center justify-center"
+      style={{ background: listening ? C.safety : C.paper, border: listening ? "none" : `1.5px solid ${C.marigoldDeep}`, width: size * 4, height: size * 4 }}>
+      <Mic size={iconSize} color={listening ? "#fff" : C.marigoldDeep} />
+    </button>
+  );
+}
+
+// Calls the other party in a booking through Exotel's number-masking
+// bridge (see initiateMaskedCall in firebaseClient.js / functions/index.js)
+// instead of a plain tel: link that would show either side's real number
+// to the other -- neither party's number is displayed here either, since
+// printing it on screen would defeat the point even if the actual call is
+// masked. Falls back to a normal tel: link to fallbackMobile if masking
+// isn't configured yet or the bridge request fails for any reason --
+// calling must never break, masking is a privacy layer on top of it, not
+// a replacement for it working at all.
+function MaskedCallButton({ bookingId, fallbackMobile, label, lang, className, style }) {
+  const [calling, setCalling] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const handleClick = async () => {
+    if (calling) return;
+    setCalling(true);
+    const result = await initiateMaskedCall(bookingId);
+    setCalling(false);
+    if (result.ok) {
+      setConnected(true);
+      setTimeout(() => setConnected(false), 6000);
+    } else if (fallbackMobile) {
+      window.location.href = `tel:${fallbackMobile}`;
+    }
+  };
+  return (
+    <div>
+      <button type="button" onClick={handleClick} disabled={calling} className={className} style={style}>
+        <Phone size={16} color={style?.color || "#000000"} /> {calling ? (lang === "en" ? "Connecting..." : lang === "mr" ? "जोडत आहोत..." : "जोड़ रहे हैं...") : label}
+      </button>
+      {connected && (
+        <div className="text-[10px] font-bold text-center mt-1" style={{ color: C.success }}>
+          {lang === "en" ? "You'll receive a call shortly to connect you." : lang === "mr" ? "तुम्हाला लवकरच कॉल येईल जो तुम्हाला जोडेल." : "आपको जल्द ही कॉल आएगी जो आपको जोड़ देगी।"}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StarRating({ value, onRate }) {
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} onClick={() => onRate(n)} className="text-xl leading-none" style={{ color: n <= (value || 0) ? C.marigold : C.line }}>★</button>
+      ))}
+    </div>
+  );
+}
+
+const ADMIN_PHONE = "+917972399892";
+const ADMIN_WHATSAPP = "917972399892";
+
+// Best-effort phone-brand sniff from the User-Agent string, purely to
+// preselect the right tab in BackgroundAlertsGuide below — Android OEMs
+// don't expose a real "what brand am I" API to the web, so this can guess
+// wrong (spoofed/unusual UA strings, rebadged devices); the guide always
+// lets the driver pick a different brand by hand regardless.
+function detectPhoneBrand() {
+  const ua = navigator.userAgent || "";
+  if (/iPhone|iPad|iPod/i.test(ua)) return "ios";
+  if (/POCO|Redmi|MI \d|XIAOMI/i.test(ua)) return "xiaomi";
+  if (/\bvivo\b|iQOO/i.test(ua)) return "vivo";
+  if (/\bOPPO\b|CPH\d/i.test(ua)) return "oppo";
+  if (/RMX\d|realme/i.test(ua)) return "realme";
+  if (/SM-|Samsung/i.test(ua)) return "samsung";
+  if (/OnePlus/i.test(ua)) return "oneplus";
+  return "other";
+}
+
+// Per-brand steps for the two Android settings (battery optimization +
+// autostart/background-activity manager) that OEMs hide behind their own,
+// non-standard menus — the actual, common reason a driver whose phone is
+// already "trusting" Porter still doesn't get Apna Transport's alerts with
+// the app closed. Nothing here is something the app can flip itself (no
+// web API reaches into Android's settings) — this is purely a step-by-step
+// guide the driver has to walk through by hand, once, on their own phone.
+const BATTERY_GUIDE_BRANDS = [
+  {
+    key: "xiaomi", label: "Xiaomi / Redmi / POCO",
+    steps: [
+      { en: "Settings → Apps → Manage apps → Apna Transport → Battery saver → set to \"No restrictions\".", mr: "Settings → Apps → Manage apps → Apna Transport → Battery saver → \"No restrictions\" निवडा.", hi: "Settings → Apps → Manage apps → Apna Transport → Battery saver → \"No restrictions\" चुनें।" },
+      { en: "Settings → Apps → Permissions → Autostart → turn ON for Apna Transport.", mr: "Settings → Apps → Permissions → Autostart → Apna Transport साठी चालू करा.", hi: "Settings → Apps → Permissions → Autostart → Apna Transport के लिए ऑन करें।" },
+      { en: "Recent apps screen → find Apna Transport's card → tap the lock icon so MIUI doesn't close it.", mr: "Recent apps स्क्रीनवर Apna Transport चे कार्ड शोधा → लॉक आयकॉनवर टॅप करा, जेणेकरून MIUI ते बंद करणार नाही.", hi: "Recent apps स्क्रीन में Apna Transport का कार्ड ढूंढें → लॉक आइकन पर टैप करें ताकि MIUI इसे बंद न करे।" },
+    ],
+  },
+  {
+    key: "vivo", label: "Vivo / iQOO",
+    steps: [
+      { en: "Settings → Battery → Background power consumption management → find Apna Transport → set to \"Allow\".", mr: "Settings → Battery → Background power consumption management → Apna Transport शोधा → \"Allow\" करा.", hi: "Settings → Battery → Background power consumption management → Apna Transport ढूंढें → \"Allow\" करें।" },
+      { en: "Settings → Apps → Autostart (or More Settings → Permission Manager → Autostart) → turn ON for Apna Transport.", mr: "Settings → Apps → Autostart (किंवा More Settings → Permission Manager → Autostart) → Apna Transport साठी चालू करा.", hi: "Settings → Apps → Autostart (या More Settings → Permission Manager → Autostart) → Apna Transport के लिए ऑन करें।" },
+      { en: "Recent apps screen → tap the lock icon on Apna Transport's card.", mr: "Recent apps स्क्रीनवर Apna Transport च्या कार्डवरील लॉक आयकॉनवर टॅप करा.", hi: "Recent apps स्क्रीन में Apna Transport के कार्ड पर लॉक आइकन पर टैप करें।" },
+    ],
+  },
+  {
+    key: "oppo", label: "Oppo",
+    steps: [
+      { en: "Settings → Battery → Apna Transport → choose \"Allow background activity\" / \"Don't optimize\".", mr: "Settings → Battery → Apna Transport → \"Allow background activity\" / \"Don't optimize\" निवडा.", hi: "Settings → Battery → Apna Transport → \"Allow background activity\" / \"Don't optimize\" चुनें।" },
+      { en: "Settings → App Management → Startup Manager (or Privacy Permissions → Startup Manager) → turn ON Apna Transport.", mr: "Settings → App Management → Startup Manager (किंवा Privacy Permissions → Startup Manager) → Apna Transport चालू करा.", hi: "Settings → App Management → Startup Manager (या Privacy Permissions → Startup Manager) → Apna Transport ऑन करें।" },
+      { en: "Recent apps screen → tap the lock icon on Apna Transport's card.", mr: "Recent apps स्क्रीनवर Apna Transport च्या कार्डवरील लॉक आयकॉनवर टॅप करा.", hi: "Recent apps स्क्रीन में Apna Transport के कार्ड पर लॉक आइकन पर टैप करें।" },
+    ],
+  },
+  {
+    key: "realme", label: "Realme",
+    steps: [
+      { en: "Settings → Battery → Apna Transport → choose \"Allow background activity\" / \"Don't optimize\".", mr: "Settings → Battery → Apna Transport → \"Allow background activity\" / \"Don't optimize\" निवडा.", hi: "Settings → Battery → Apna Transport → \"Allow background activity\" / \"Don't optimize\" चुनें।" },
+      { en: "Settings → App Management → Startup Manager → turn ON Apna Transport.", mr: "Settings → App Management → Startup Manager → Apna Transport चालू करा.", hi: "Settings → App Management → Startup Manager → Apna Transport ऑन करें।" },
+      { en: "Recent apps screen → tap the lock icon on Apna Transport's card.", mr: "Recent apps स्क्रीनवर Apna Transport च्या कार्डवरील लॉक आयकॉनवर टॅप करा.", hi: "Recent apps स्क्रीन में Apna Transport के कार्ड पर लॉक आइकन पर टैप करें।" },
+    ],
+  },
+  {
+    key: "samsung", label: "Samsung",
+    steps: [
+      { en: "Settings → Apps → Apna Transport → Battery → set to \"Unrestricted\".", mr: "Settings → Apps → Apna Transport → Battery → \"Unrestricted\" करा.", hi: "Settings → Apps → Apna Transport → Battery → \"Unrestricted\" करें।" },
+      { en: "Settings → Battery and device care → Background usage limits → make sure Apna Transport is NOT in \"Sleeping apps\" or \"Deep sleeping apps\" — remove it from there if it is.", mr: "Settings → Battery and device care → Background usage limits → Apna Transport \"Sleeping apps\" किंवा \"Deep sleeping apps\" मध्ये नाही याची खात्री करा — असल्यास तिथून काढा.", hi: "Settings → Battery and device care → Background usage limits → देखें कि Apna Transport \"Sleeping apps\" या \"Deep sleeping apps\" में तो नहीं है — अगर है तो वहां से हटाएं।" },
+    ],
+  },
+  {
+    key: "oneplus", label: "OnePlus",
+    steps: [
+      { en: "Settings → Battery → Battery optimization → find Apna Transport → \"Don't optimize\".", mr: "Settings → Battery → Battery optimization → Apna Transport शोधा → \"Don't optimize\" निवडा.", hi: "Settings → Battery → Battery optimization → Apna Transport ढूंढें → \"Don't optimize\" चुनें।" },
+      { en: "Settings → Apps → Special app access → Auto-launch → turn ON for Apna Transport.", mr: "Settings → Apps → Special app access → Auto-launch → Apna Transport साठी चालू करा.", hi: "Settings → Apps → Special app access → Auto-launch → Apna Transport के लिए ऑन करें।" },
+    ],
+  },
+  {
+    key: "other", label: "Other Android",
+    steps: [
+      { en: "Settings → Apps → Apna Transport → Battery → set to \"Unrestricted\" / \"Don't optimize\".", mr: "Settings → Apps → Apna Transport → Battery → \"Unrestricted\" / \"Don't optimize\" करा.", hi: "Settings → Apps → Apna Transport → Battery → \"Unrestricted\" / \"Don't optimize\" करें।" },
+      { en: "Settings → Apps → Apna Transport → Mobile data & Wi-Fi → make sure background data isn't restricted.", mr: "Settings → Apps → Apna Transport → Mobile data & Wi-Fi → बॅकग्राउंड डेटा बंद नाही याची खात्री करा.", hi: "Settings → Apps → Apna Transport → Mobile data & Wi-Fi → देखें कि बैकग्राउंड डेटा बंद तो नहीं है।" },
+    ],
+  },
+  {
+    key: "ios", label: "iPhone",
+    steps: [
+      { en: "iPhones don't have a battery/autostart manager like Android — the only thing that matters is adding Apna Transport to your Home Screen (below). Without that, notifications don't work at all on iPhone.", mr: "iPhone मध्ये Android सारखे बॅटरी/ऑटोस्टार्ट मॅनेजर नसते — फक्त खाली दिलेल्याप्रमाणे Apna Transport Home Screen वर अ‍ॅड करणे महत्त्वाचे आहे. तसे न केल्यास iPhone वर नोटिफिकेशन अजिबात काम करणार नाहीत.", hi: "iPhone में Android जैसा बैटरी/ऑटोस्टार्ट मैनेजर नहीं होता — बस नीचे बताए अनुसार Apna Transport को Home Screen पर जोड़ना ज़रूरी है। ऐसा न करने पर iPhone पर नोटिफिकेशन बिल्कुल काम नहीं करेंगे।" },
+      { en: "Settings → Apna Transport (under installed apps) → make sure Background App Refresh is ON.", mr: "Settings → Apna Transport (installed apps मध्ये) → Background App Refresh चालू असल्याची खात्री करा.", hi: "Settings → Apna Transport (installed apps में) → Background App Refresh ऑन है यह पक्का करें।" },
+    ],
+  },
+];
+
+// Menu item (both roles' hamburger menus) linking here — see the exact
+// per-brand steps above. Purely instructional: nothing on this screen
+// changes an Android setting itself, since no web page can reach into the
+// phone's settings — the driver has to do each step by hand, once, on
+// their own phone. Explains, up front, why this is needed at all (a real,
+// frequent driver complaint: Porter already works in the background on
+// their phone because they whitelisted it at some point; every new app,
+// Apna Transport included, starts from zero on these OEM-specific toggles
+// — it is never a case of one app "blocking" another).
+function BackgroundAlertsGuide({ lang }) {
+  const [brand, setBrand] = useState(() => detectPhoneBrand());
+  const active = BATTERY_GUIDE_BRANDS.find((b) => b.key === brand) || BATTERY_GUIDE_BRANDS[BATTERY_GUIDE_BRANDS.length - 1];
+
+  return (
+    <div className="px-5 py-5">
+      <div className="rounded-xl p-4 mb-4" style={{ background: C.metallicGold }}>
+        <h2 className="text-base font-bold mb-1" style={{ color: "#000000" }}>{lang === "en" ? "Fix background alerts" : lang === "mr" ? "बॅकग्राउंड अलर्ट सुरळीत करा" : "बैकग्राउंड अलर्ट ठीक करें"}</h2>
+        <p className="text-xs font-semibold" style={{ color: "#000000" }}>
+          {lang === "en" ? "If you're not getting new-load alerts with the app closed, it's almost always your phone's own battery/autostart settings — not something Apna Transport or any other app is blocking. Every app (including Porter) has to be individually allowed here; it's never exclusive to one app." : lang === "mr" ? "अ‍ॅप बंद असताना नवीन लोड अलर्ट येत नसतील, तर हे जवळजवळ नेहमीच तुमच्या फोनच्या बॅटरी/ऑटोस्टार्ट सेटिंग्जमुळे असते — Apna Transport किंवा दुसरे कोणतेही अ‍ॅप हे ब्लॉक करत नाही. इथे प्रत्येक अ‍ॅपला (Porter सह) वेगवेगळी परवानगी द्यावी लागते; ती कधीच एकाच अ‍ॅपसाठी खास राखीव नसते." : "अगर ऐप बंद होने पर नए लोड अलर्ट नहीं आ रहे, तो लगभग हमेशा यह आपके फोन की अपनी बैटरी/ऑटोस्टार्ट सेटिंग्स की वजह से होता है — Apna Transport या कोई और ऐप इसे ब्लॉक नहीं कर रहा। यहां हर ऐप को (Porter सहित) अलग से इजाज़त देनी पड़ती है; यह कभी किसी एक ऐप के लिए खास नहीं होता।"}
+        </p>
+      </div>
+
+      <div className="rounded-lg p-3 mb-4" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <div className="text-xs font-bold mb-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 1 — install it as a real app (do this first)" : lang === "mr" ? "स्टेप 1 — आधी खरे अ‍ॅप म्हणून इन्स्टॉल करा" : "स्टेप 1 — पहले इसे असली ऐप की तरह इंस्टॉल करें"}</div>
+        <p className="text-xs font-semibold" style={{ color: C.ink }}>
+          {lang === "en" ? "If you're opening Apna Transport from a browser bookmark instead of an icon on your home screen, do this first: open your browser's menu → \"Add to Home Screen\" / \"Install app\". Without this, your phone won't even show a separate \"Apna Transport\" entry in the settings below — everything falls under \"Chrome\" instead, so the steps below have nothing to point you at." : lang === "mr" ? "जर तुम्ही Apna Transport ब्राउझर बुकमार्कवरून उघडत असाल (होम स्क्रीनवरील आयकॉनऐवजी), तर आधी हे करा: ब्राउझरच्या मेनूमध्ये जा → \"Add to Home Screen\" / \"Install app\". हे न केल्यास, खालील सेटिंग्जमध्ये तुमच्या फोनवर \"Apna Transport\" असे वेगळे नावच दिसणार नाही — सर्व काही \"Chrome\" च्या नावाखाली येईल, त्यामुळे खालील स्टेप्स करण्यासाठी काहीच सापडणार नाही." : "अगर आप Apna Transport को होम स्क्रीन के आइकन की बजाय ब्राउज़र बुकमार्क से खोलते हैं, तो पहले यह करें: ब्राउज़र के मेनू में जाएं → \"Add to Home Screen\" / \"Install app\"। ऐसा न करने पर, नीचे की सेटिंग्स में आपके फोन पर \"Apna Transport\" नाम से अलग एंट्री दिखेगी ही नहीं — सब कुछ \"Chrome\" के नाम से आएगा, इसलिए नीचे दिए स्टेप्स के लिए कुछ मिलेगा ही नहीं।"}
+        </p>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
+        {BATTERY_GUIDE_BRANDS.map((b) => (
+          <button key={b.key} onClick={() => setBrand(b.key)}
+            className="shrink-0 px-3.5 py-2 rounded-full text-xs font-bold whitespace-nowrap"
+            style={{ background: brand === b.key ? C.marigoldDeep : C.paper, color: brand === b.key ? "#FFFFFF" : C.ink, border: `1.5px solid ${C.marigoldDeep}` }}>
+            {b.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] font-semibold mb-3" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "Guessed from your phone — tap a different brand above if this isn't yours." : lang === "mr" ? "तुमच्या फोनवरून अंदाज घेतला आहे — हा तुमचा ब्रँड नसल्यास वरून दुसरा निवडा." : "आपके फोन से अंदाज़ा लगाया गया है — अगर यह आपका ब्रांड नहीं है तो ऊपर से दूसरा चुनें।"}
+      </p>
+
+      <div className="space-y-3">
+        {active.steps.map((step, i) => (
+          <div key={i} className="flex items-start gap-3 rounded-xl p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-black text-white" style={{ background: C.navy }}>{i + 2}</div>
+            <span className="text-xs font-semibold" style={{ color: C.ink }}>{step[lang] || step.en}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
+  const [complaint, setComplaint] = useState("");
+  const [sent, setSent] = useState(false);
+  const submitComplaint = () => {
+    if (!complaint.trim()) return;
+    raiseAlert?.(role, "शिकायत", complaint.trim());
+    setComplaint("");
+    setSent(true);
+    setTimeout(() => setSent(false), 3000);
+  };
+  return (
+    <div className="px-5 py-5">
+      <div className="rounded-xl p-5 text-center mb-5" style={{ background: C.safety }}>
+        <Siren size={26} color="#FFFFFF" className="mx-auto mb-2" />
+        <h2 className="text-base font-bold" style={{ color: "#FFFFFF" }}>SOS / {lang === "en" ? "Help" : lang === "mr" ? "मदत" : "मदद"}</h2>
+        <p className="text-xs mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "For any problem or booking help, click the button below." : lang === "mr" ? "कोणत्याही समस्येसाठी किंवा बुकिंग मदतीसाठी खालील बटणावर क्लिक करा." : "किसी भी समस्या या बुकिंग सहायता के लिए नीचे दिए गए बटन पर क्लिक करें।"}</p>
+      </div>
+      {tripLocked && (
+        <div className="rounded-xl p-4 mb-5 text-center" style={{ background: C.safety }}>
+          <div className="text-sm font-bold mb-1" style={{ color: "#FFFFFF" }}>⚠️ {lang === "en" ? "Trip cannot be cancelled!" : lang === "mr" ? "ट्रिप रद्द केली जाऊ शकत नाही!" : "ट्रिप कैंसल नहीं की जा सकती!"}</div>
+          <p className="text-xs" style={{ color: "#FFFFFF" }}>{lang === "en" ? "The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support below for any help." : lang === "mr" ? "ड्रायव्हरने ओटीपी (OTP) सत्यापित केला आहे आणि माल लोड/ट्रान्झिटमध्ये आहे. ही ट्रिप फक्त ड्रायव्हरने प्रवास पूर्ण (End Trip) केल्यावरच संपेल. कोणत्याही मदतीसाठी खाली सपोर्टशी संपर्क करा." : "ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए नीचे सपोर्ट से संपर्क करें।"}</p>
+        </div>
+      )}
+      <div className="space-y-3">
+        <a href="tel:100" onClick={() => raiseAlert?.(role, "पुलिस सहायता")}
+          className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: "#000000" }}>
+          <Siren size={16} /> {lang === "en" ? "Police Help (100)" : lang === "mr" ? "पोलीस मदत (100)" : "पुलिस सहायता (100)"}
+        </a>
+        <a href={`tel:${ADMIN_PHONE}`} onClick={() => raiseAlert?.(role, "इमरजेंसी कॉल")}
+          className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: C.safety }}>
+          <Phone size={16} /> {lang === "en" ? "Call Admin" : lang === "mr" ? "अ‍ॅडमिनला कॉल करा" : "एडमिन को कॉल करें"}
+        </a>
+        <a href={`https://wa.me/${ADMIN_WHATSAPP}`} target="_blank" rel="noreferrer" onClick={() => raiseAlert?.(role, "व्हाट्सएप सपोर्ट")}
+          className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white shadow-lg" style={{ background: C.metallicGreen }}>
+          <MessageCircle size={16} /> {lang === "en" ? "WhatsApp Support" : lang === "mr" ? "व्हॉट्सअ‍ॅप सपोर्ट" : "व्हाट्सएप सपोर्ट"}
+        </a>
+      </div>
+      <div className="rounded-xl p-4 mt-5 shadow-sm" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+        <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "File a Complaint" : lang === "mr" ? "तक्रार नोंदवा" : "शिकायत दर्ज करें"}</div>
+        <p className="text-[11px] mb-2" style={{ color: C.inkSoft }}>
+          {role === "driver"
+            ? (lang === "en" ? "Send admin details of any issue related to the customer or the goods." : lang === "mr" ? "ग्राहक किंवा सामानाशी संबंधित कोणत्याही समस्येची माहिती अ‍ॅडमिनला पाठवा." : "ग्राहक या सामान से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")
+            : (lang === "en" ? "Send admin details of any issue related to the driver or your booking." : lang === "mr" ? "ड्रायव्हर किंवा तुमच्या बुकिंगशी संबंधित कोणत्याही समस्येची माहिती अ‍ॅडमिनला पाठवा." : "ड्राइवर या आपकी बुकिंग से जुड़ी किसी समस्या की जानकारी एडमिन को भेजें।")}
+        </p>
+        <textarea value={complaint} onChange={(e) => setComplaint(e.target.value)} rows={3}
+          placeholder={role === "driver"
+            ? (lang === "en" ? "e.g. Customer gave wrong address, wrong weight told..." : lang === "mr" ? "उदा: ग्राहकाने चुकीचा पत्ता दिला, सामानाचे वजन चुकीचे सांगितले..." : "जैसे: ग्राहक ने गलत पता दिया, सामान का वजन गलत बताया...")
+            : (lang === "en" ? "e.g. Driver asked for extra money, vehicle was different than promised..." : lang === "mr" ? "उदा: ड्रायव्हरने जास्त पैसे मागितले, गाडी वचनापेक्षा वेगळी होती..." : "जैसे: ड्राइवर ने अतिरिक्त पैसे मांगे, गाड़ी वादे से अलग थी...")}
+          className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+        {sent && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Complaint sent to admin" : lang === "mr" ? "तक्रार अ‍ॅडमिनला पाठवली गेली" : "शिकायत एडमिन को भेज दी गई"}</div>}
+        <button onClick={submitComplaint} disabled={!complaint.trim()} className="w-full rounded-lg py-3.5 font-bold text-base"
+          style={{ background: complaint.trim() ? "#0052CC" : "#E0E0E0", color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : lang === "mr" ? "तक्रार पाठवा" : "शिकायत भेजें"}</button>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// CUSTOMER LOGIN — मोबाइल + OTP
+// =====================================================================
+// =====================================================================
+// ROLE SELECTION — shown once so each user only sees their own platform
+// =====================================================================
+function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVerified, onLogoutRole, adminEntry }) {
+  const anyVerified = customerVerified || driverVerified || adminVerified;
+  // One number, one app: while a Customer or Driver session is active on
+  // this device, the other role is hidden — opening it requires logging
+  // out of the active one first (via the "Not you?" link below). Logging
+  // out brings back this same screen with both options visible again.
+  const showCustomer = !driverVerified;
+  const showDriver = !customerVerified;
+  // Admin Login is invisible to regular Customer/Driver users — it only
+  // shows up when the page was opened with the secret ?admin=1 link, or
+  // once already signed in as admin (so the logout link stays reachable).
+  const showAdmin = (adminEntry && !anyVerified) || adminVerified;
+  const logoutLink = (role, label) => (
+    <button onClick={() => onLogoutRole(role)} className="w-full text-center text-sm font-semibold mt-1.5" style={{ color: C.inkSoft }}>
+      {lang === "en" ? `Not you? Logout of ${label}` : lang === "mr" ? `तुम्ही नाही आहात? ${label} मधून लॉगआउट करा` : `आप नहीं हैं? ${label} से लॉगआउट करें`}
+    </button>
+  );
+  const bothShown = showCustomer && showDriver;
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col items-center px-5 py-8">
+      {anyVerified ? (
+        <p className="text-sm text-center mb-6" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Continue where you left off, or logout to switch" : lang === "mr" ? "जिथून सोडले होते तिथून सुरू ठेवा, किंवा स्विच करण्यासाठी लॉगआउट करा" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें"}
+        </p>
+      ) : (
+        <div className="w-full rounded-2xl p-4 mb-5 text-center" style={{ background: "#FFF3C4", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <p className="text-base font-bold leading-relaxed" style={{ color: C.ink }}>
+            {lang === "en"
+              ? <>Are you a driver? If you want fare/loads, choose the <span className="font-black" style={{ color: C.navy }}>Driver App</span>.</>
+              : lang === "mr"
+              ? <>तुम्ही कोण आहात? ड्रायव्हर आहात? तुम्हाला भाडे/लोड हवे असतील तर तुम्ही <span className="font-black" style={{ color: C.navy }}>ड्रायव्हर अ‍ॅप</span> निवडा.</>
+              : <>आप कौन हैं? ड्राइवर हैं? आप को भाड़ा चाहिए तो आप <span className="font-black" style={{ color: C.navy }}>ड्राइवर ऐप</span> चुनें।</>}
+          </p>
+          <p className="text-base font-bold leading-relaxed mt-2" style={{ color: C.ink }}>
+            {lang === "en"
+              ? <>Are you a customer? If you want to book a vehicle, choose the <span className="font-black" style={{ color: C.success }}>Customer App</span>.</>
+              : lang === "mr"
+              ? <>तुम्ही कस्टमर आहात का? तुम्हाला गाडी बुक करायची असेल तर तुम्ही <span className="font-black" style={{ color: C.success }}>कस्टमर अ‍ॅप</span> निवडा.</>
+              : <>अगर आप कस्टमर हैं? आप को गाड़ी बुक करना है तो आप <span className="font-black" style={{ color: C.success }}>कस्टमर ऐप</span> चुनें।</>}
+          </p>
+        </div>
+      )}
+
+      <div className={bothShown ? "w-full grid grid-cols-2 gap-3" : "w-full flex flex-col items-center"}>
+        {showDriver && (
+          <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col"}>
+            <button onClick={() => onSelect("driver")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#EAF1FF" }}>
+                <IdCard size={30} color={C.navy} />
+              </div>
+              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver App" : lang === "mr" ? "ड्रायव्हर अ‍ॅप" : "ड्राइवर ऐप"}</div>
+              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To find fare & loads" : lang === "mr" ? "भाडे आणि लोड शोधण्यासाठी" : "भाड़ा और लोड खोजने के लिए"}</div>
+            </button>
+            {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
+          </div>
+        )}
+
+        {showCustomer && (
+          <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col mt-3"}>
+            <button onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.success}` }}>
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#E6F7EE" }}>
+                <UserCheck size={30} color={C.success} />
+              </div>
+              <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : lang === "mr" ? "कस्टमर अ‍ॅप" : "कस्टमर ऐप"}</div>
+              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To book a vehicle" : lang === "mr" ? "गाडी बुक करण्यासाठी" : "गाड़ी बुक करने के लिए"}</div>
+            </button>
+            {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
+          </div>
+        )}
+      </div>
+
+      {showAdmin && (
+        <button onClick={() => onSelect("admin")} className="mt-8 text-sm font-semibold" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Admin Login" : lang === "mr" ? "अ‍ॅडमिन लॉगिन" : "एडमिन लॉगिन"}
+        </button>
+      )}
+      {adminVerified && logoutLink("admin", lang === "en" ? "Admin" : lang === "mr" ? "अ‍ॅडमिन" : "एडमिन")}
+    </div>
+  );
+}
+
+// =====================================================================
+// ADMIN LOGIN — password protected, separate from customer/driver
+// =====================================================================
+function AdminLogin({ onVerified, lang, onBack }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const inputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+
+  // A real, persisted Firebase Auth session (not a locally-stored flag) —
+  // refreshing the page or reopening the app skips straight past this form
+  // if already signed in, same as Customer/Driver already do.
+  useEffect(() => {
+    if (!adminFirebaseAuth) { setChecking(false); return; }
+    const unsub = onAuthStateChanged(adminFirebaseAuth, (user) => {
+      setChecking(false);
+      // false here (a silently-restored session, not a password just typed
+      // THIS visit) is what makes AdminPinLock actually show on a fresh
+      // app open — see the root component's adminUnlocked state.
+      if (user) onVerified(false);
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const submit = async () => {
+    if (!adminFirebaseAuth || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await signInWithEmailAndPassword(adminFirebaseAuth, email.trim(), password);
+      onVerified(true);
+    } catch (e) {
+      console.error(e);
+      // Firebase folds "no such user" and "wrong password" into the same
+      // generic invalid-credential code (to avoid leaking which one it
+      // was) — but operation-not-allowed / configuration errors are
+      // distinct and mean something needs fixing in Firebase Console
+      // rather than the typed-in credentials, so surface those separately.
+      if (e?.code === "auth/operation-not-allowed") {
+        setError(lang === "en" ? "Email/Password sign-in isn't enabled yet in Firebase Console (Authentication → Sign-in method)." : lang === "mr" ? "Firebase Console मध्ये Email/Password साइन-इन अजून चालू नाही (Authentication → Sign-in method)." : "Firebase Console में Email/Password साइन-इन अभी चालू नहीं है (Authentication → Sign-in method)।");
+      } else if (e?.code === "auth/too-many-requests") {
+        setError(lang === "en" ? "Too many attempts — please wait a while before trying again." : lang === "mr" ? "खूप जास्त प्रयत्न — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।");
+      } else if (e?.code === "auth/network-request-failed") {
+        setError(lang === "en" ? "Network error — check your internet connection." : lang === "mr" ? "नेटवर्क त्रुटी — तुमचे इंटरनेट कनेक्शन तपासा." : "नेटवर्क त्रुटि — अपना इंटरनेट कनेक्शन जांचें।");
+      } else if (e?.code === "auth/invalid-email") {
+        setError(lang === "en" ? "That doesn't look like a valid email address." : lang === "mr" ? "हा वैध ईमेल पत्ता वाटत नाही." : "यह एक मान्य ईमेल पता नहीं लगता।");
+      } else {
+        setError(
+          (lang === "en" ? "Incorrect email or password" : lang === "mr" ? "ईमेल किंवा पासवर्ड चुकीचा आहे" : "ईमेल या पासवर्ड गलत है")
+          + (e?.code ? ` (${e.code})` : "")
+        );
+      }
+    }
+    setSubmitting(false);
+  };
+
+  if (checking) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : lang === "mr" ? "तुमचे सेशन तपासले जात आहे..." : "आपका सेशन जांचा जा रहा है..."}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+      {onBack && (
+        <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+      )}
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.navy }}>
+        <LayoutDashboard size={26} color="#FFFFFF" />
+      </div>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Admin Login" : lang === "mr" ? "अ‍ॅडमिन लॉगिन" : "एडमिन लॉगिन"}</h2>
+      <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Authorized personnel only" : lang === "mr" ? "फक्त अधिकृत व्यक्तींनीच पुढे जावे" : "सिर्फ अधिकृत व्यक्ति ही आगे बढ़ें"}</p>
+
+      <div className="w-full space-y-3">
+        <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Admin email / ID" : lang === "mr" ? "अ‍ॅडमिन ईमेल / आयडी" : "एडमिन ईमेल / आईडी"} value={email}
+          onChange={(e) => { setEmail(e.target.value); setError(""); }} />
+        <div className="relative">
+          <input type={showPassword ? "text" : "password"} className={inputCls} style={{ ...inputStyle, paddingRight: 40 }} placeholder={lang === "en" ? "Password" : lang === "mr" ? "पासवर्ड" : "पासवर्ड"} value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(""); }} />
+          <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute top-1/2 -translate-y-1/2 right-3" style={{ color: C.inkSoft }}
+            aria-label={lang === "en" ? (showPassword ? "Hide password" : "Show password") : lang === "mr" ? (showPassword ? "पासवर्ड लपवा" : "पासवर्ड दाखवा") : (showPassword ? "पासवर्ड छुपाएं" : "पासवर्ड दिखाएं")}>
+            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
+        {error && (
+          <div className="text-[11px] text-center font-semibold" style={{ color: C.safety }}>
+            {error}
+          </div>
+        )}
+        <button onClick={submit} disabled={!email.trim() || !password.trim() || submitting} className="w-full rounded-lg py-4 font-bold text-base"
+          style={{ background: email.trim() && password.trim() && !submitting ? C.marigold : "#E0E0E0", color: email.trim() && password.trim() && !submitting ? "#000000" : "#9AA3B0" }}>
+          {submitting ? (lang === "en" ? "Logging in..." : lang === "mr" ? "लॉगिन होत आहे..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// PIN gate shown in front of the Admin dashboard on the native Admin app
+// every time it's opened or resumed from background (see the
+// appStateChange listener in the root component) — the Firebase session
+// AdminLogin sets up above never expires on its own, so without this,
+// anyone who physically picks up an already-logged-in phone would have
+// full Admin access with no further check. Started out as a fingerprint
+// scan instead of a PIN, but was swapped out after the fingerprint sensor
+// on the admin's own device turned out to be unreliable — a PIN has no
+// hardware to depend on. adminPin lives in localStorage (see
+// usePersistedState in the root component), device-local only, never sent
+// anywhere — it's a quick convenience lock on top of the real credential
+// (the Firebase password), not a replacement for it, so "forgot PIN" just
+// falls back to that password (onUseFallback signs out, which naturally
+// routes back to AdminLogin above).
+function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFallback }) {
+  const [step, setStep] = useState(adminPin ? "enter" : "setup"); // setup | confirm | enter
+  const [value, setValue] = useState("");
+  const [firstPin, setFirstPin] = useState("");
+  const [error, setError] = useState("");
+
+  const onChange = (raw) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 4);
+    setError("");
+    setValue(digits);
+    if (digits.length !== 4) return;
+
+    if (step === "setup") {
+      setFirstPin(digits);
+      setValue("");
+      setStep("confirm");
+    } else if (step === "confirm") {
+      if (digits !== firstPin) {
+        setError(lang === "en" ? "PINs don't match — start again." : lang === "mr" ? "PIN जुळत नाहीत — पुन्हा सुरू करा." : "PIN मेल नहीं खाते — फिर से शुरू करें।");
+        setValue(""); setFirstPin(""); setStep("setup");
+        return;
+      }
+      setAdminPin(digits);
+      onUnlocked();
+    } else {
+      if (digits === adminPin) { onUnlocked(); return; }
+      setError(lang === "en" ? "Wrong PIN." : lang === "mr" ? "चुकीचा PIN." : "गलत PIN।");
+      setValue("");
+    }
+  };
+
+  const heading = step === "setup"
+    ? (lang === "en" ? "Set up an Admin PIN" : lang === "mr" ? "अ‍ॅडमिन PIN सेट करा" : "एडमिन PIN सेट करें")
+    : step === "confirm"
+    ? (lang === "en" ? "Confirm your PIN" : lang === "mr" ? "तुमचा PIN कन्फर्म करा" : "अपना PIN कन्फर्म करें")
+    : (lang === "en" ? "Admin Locked" : lang === "mr" ? "अ‍ॅडमिन लॉक्ड" : "एडमिन लॉक्ड");
+  const subtext = step === "setup"
+    ? (lang === "en" ? "Choose a 4-digit PIN to quickly unlock the Admin app next time — this stays on this device only." : lang === "mr" ? "पुढच्या वेळी अ‍ॅडमिन अ‍ॅप पटकन अनलॉक करण्यासाठी 4-अंकी PIN निवडा — हे फक्त या डिव्हाइसवर राहील." : "अगली बार एडमिन ऐप जल्दी अनलॉक करने के लिए 4 अंकों का PIN चुनें — यह सिर्फ इस डिवाइस पर रहेगा।")
+    : step === "confirm"
+    ? (lang === "en" ? "Enter the same PIN again." : lang === "mr" ? "तोच PIN पुन्हा टाका." : "वही PIN फिर से डालें।")
+    : (lang === "en" ? "Enter your PIN to continue." : lang === "mr" ? "पुढे जाण्यासाठी तुमचा PIN टाका." : "जारी रखने के लिए अपना PIN डालें।");
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-8 py-10 text-center">
+      <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.navy }}>
+        <LayoutDashboard size={26} color="#FFFFFF" />
+      </div>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{heading}</h2>
+      <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{subtext}</p>
+
+      <div className="w-full space-y-3">
+        <input key={step} type="password" inputMode="numeric" autoFocus value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg py-4 text-center text-2xl font-black outline-none"
+          style={{ background: C.bg, border: `1.5px solid ${C.line}`, color: C.ink, letterSpacing: 10, fontFamily: monoFont }}
+          placeholder="••••" />
+        {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+        {step === "enter" && (
+          <button onClick={onUseFallback} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.inkSoft }}>
+            {lang === "en" ? "Forgot PIN? Use password instead" : lang === "mr" ? "PIN विसरलात? त्याऐवजी पासवर्ड वापरा" : "PIN भूल गए? इसके बजाय पासवर्ड इस्तेमाल करें"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// CUSTOMER REGISTRATION — two separate steps. Step 1 is mobile/OTP only.
+// Step 2 (profile details) only appears once, right after verifying, and
+// only if this exact mobile number has no saved profile yet.
+// =====================================================================
+function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobile, hasProfile, checking, onOtpVerified, onLogout, onComplete }) {
+  // Step 2 fields — profile/address, asked only once, only if needed.
+  // Persisted to localStorage so refreshing mid-registration (a slow
+  // connection, an accidental reload) doesn't force retyping everything —
+  // cleared once submitProfile actually completes.
+  const [name, setName] = usePersistedState("sarthi_customerReg_name", "");
+  const [photo, setPhoto] = usePersistedPhoto("sarthi_customerReg_photo", null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
+  // Sign Up's photo picker runs before OTP verifies, but Storage's security
+  // rules require real auth to write — so the file just sits here (never
+  // persisted; Files aren't JSON-serializable) and the actual upload
+  // happens inside submitProfile, once verifyOtp has signed the user in.
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  useEffect(() => {
+    if (!photoFile) return;
+    const url = URL.createObjectURL(photoFile);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
+
+  // Which button they tapped on the very first screen — purely about
+  // showing the right labels/copy, since the underlying mobile+OTP flow is
+  // identical either way and already figures out on its own (via
+  // hasProfile) whether this number needs the registration form or not.
+  const [mode, setMode] = useState(null); // null | "login" | "signup"
+
+  // Step 1 — mobile + PIN. "stage" is purely local UI progression (moving
+  // from the mobile field to the PIN field costs nothing — unlike the old
+  // OTP flow, there's no SMS to send just to advance a screen).
+  const [mobile, setMobile] = useState("");
+  const [pin, setPin] = useState("");
+  const [pinConfirm, setPinConfirm] = useState(""); // Sign Up only
+  const [stage, setStage] = useState("mobile"); // "mobile" | "pin"
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  // Forgot-PIN — reachable only from Login's PIN screen. Reuses Firebase's
+  // own Phone Auth (reCAPTCHA + real SMS OTP) as the recovery proof instead
+  // of a custom SMS path — it already works today with no DLT template to
+  // wait on, and showing the "I'm not a robot" check on this one rare
+  // recovery path costs far less than showing it on every login (which is
+  // the whole reason PIN login exists). "forgotStage" tracks its own
+  // 2-step flow: verify via real OTP, then set a new PIN.
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotStage, setForgotStage] = useState("otp"); // "otp" | "newPin"
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPin, setForgotNewPin] = useState("");
+  const [forgotNewPinConfirm, setForgotNewPinConfirm] = useState("");
+  const [forgotSending, setForgotSending] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const forgotConfirmationRef = useRef(null);
+  const forgotRecaptchaRef = useRef(null);
+
+  const otpInputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center placeholder:text-[#C7B8B3]";
+  const otpInputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
+  const fieldCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+  const fieldStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+
+  // A still-valid Firebase session on this device — skip straight past
+  // Step 1. Covers both a real (legacy) Firebase Phone Auth session and a
+  // PIN-based one (identified by its synthetic email — see pinAuthEmail).
+  // Whether a profile exists for that number is checked separately and
+  // live from Firestore, so there's no stale-cache risk here.
+  useEffect(() => {
+    const current = authInstance?.currentUser;
+    const phoneMatch = current?.phoneNumber;
+    if (phoneMatch) { onOtpVerified(phoneMatch.replace("+91", "")); return; }
+    const emailMatch = current?.email?.match(/^(\d{10})@customer\.apnatransport\.local$/);
+    if (emailMatch) onOtpVerified(emailMatch[1]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const detailsValid = name.trim().length >= 3;
+
+  // Guided-step highlighting for the registration details field — see
+  // GuidedStep. Shared by both places this form renders (post-login
+  // completion and Sign Up), since both use the same field state.
+  const regStepCompleted = [name.trim().length >= 3];
+  // pinFocus: true — don't jump the guided highlight/scroll to the next
+  // field the instant this one's validation passes; stay put until the
+  // customer/driver actually taps away, so they can keep typing (e.g. a
+  // name past the 3-char minimum) without the form yanking ahead of them.
+  // autoAdvanceMs releases it on its own after 5 quiet seconds so they
+  // don't have to tap elsewhere on screen just to move on.
+  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
+
+  const goToPinStage = () => {
+    // Sign Up requires the details form to be filled in first; Login just
+    // needs a valid-length mobile number. No network call here — the PIN
+    // itself is what actually authenticates, entered on the next screen.
+    if ((mode === "signup" && !detailsValid) || mobile.length !== 10) return;
+    setPin(""); setPinConfirm(""); setError("");
+    setStage("pin");
+  };
+
+  const submitPin = async () => {
+    if (mobile.length !== 10 || pin.length !== 4 || !authInstance || sending) return;
+    if (mode === "signup" && (!detailsValid || pin !== pinConfirm)) return;
+    setSending(true);
+    setError("");
+    try {
+      if (mode === "signup") {
+        await createUserWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "customer"), pinToPassword(pin));
+      } else {
+        await signInWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "customer"), pinToPassword(pin));
+      }
+      onOtpVerified(mobile);
+      // Sign Up already collected every field above — submit it straight
+      // away instead of showing a second, redundant details screen.
+      if (mode === "signup" && detailsValid) submitProfile();
+    } catch (e) {
+      console.error(e);
+      setError(
+        mode === "signup" && e?.code === "auth/email-already-in-use"
+          ? (lang === "en" ? "This number is already registered — please Login instead." : lang === "mr" ? "हा नंबर आधीच नोंदणीकृत आहे — कृपया लॉगिन करा." : "यह नंबर पहले से रजिस्टर्ड है — कृपया लॉगिन करें।")
+          : mode === "login"
+          ? (lang === "en" ? "Incorrect mobile number or PIN." : lang === "mr" ? "चुकीचा मोबाइल नंबर किंवा PIN." : "गलत मोबाइल नंबर या PIN।")
+          : (lang === "en" ? "Something went wrong — try again." : lang === "mr" ? "काहीतरी चुकले — पुन्हा प्रयत्न करा." : "कुछ गलत हुआ — फिर कोशिश करें।")
+      );
+      setSending(false);
+      return;
+    }
+    setSending(false);
+  };
+
+  const getForgotRecaptcha = () => {
+    if (!forgotRecaptchaRef.current) {
+      forgotRecaptchaRef.current = new RecaptchaVerifier(authInstance, "recaptcha-forgot-pin-customer", { size: "invisible" });
+    }
+    return forgotRecaptchaRef.current;
+  };
+
+  const openForgotPin = async () => {
+    if (mobile.length !== 10 || forgotSending || !authInstance) return;
+    setForgotSending(true);
+    setForgotError("");
+    try {
+      forgotConfirmationRef.current = await signInWithPhoneNumber(authInstance, "+91" + mobile, getForgotRecaptcha());
+      setForgotOtp("");
+      setForgotStage("otp");
+      setForgotOpen(true);
+    } catch (e) {
+      console.error(e);
+      try { forgotRecaptchaRef.current?.clear(); } catch { /* already gone */ }
+      forgotRecaptchaRef.current = null;
+      setForgotError(
+        e?.code === "auth/too-many-requests"
+          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : lang === "mr" ? "खूप जास्त प्रयत्न — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
+          : (lang === "en" ? "Couldn't send OTP — try again." : lang === "mr" ? "OTP पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "OTP नहीं भेज सका — फिर कोशिश करें।")
+      );
+    }
+    setForgotSending(false);
+  };
+
+  const verifyForgotOtp = async () => {
+    if (forgotOtp.length !== 6 || !forgotConfirmationRef.current || forgotSending) return;
+    setForgotSending(true);
+    setForgotError("");
+    try {
+      await forgotConfirmationRef.current.confirm(forgotOtp);
+      setForgotStage("newPin");
+    } catch (e) {
+      console.error(e);
+      setForgotError(lang === "en" ? "Incorrect OTP — try again." : lang === "mr" ? "चुकीचा OTP — पुन्हा प्रयत्न करा." : "गलत OTP — फिर कोशिश करें।");
+    }
+    setForgotSending(false);
+  };
+
+  const submitForgotNewPin = async () => {
+    if (forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
+    setForgotSending(true);
+    setForgotError("");
+    const result = await resetPinAfterPhoneVerify("customer", pinToPassword(forgotNewPin));
+    setForgotSending(false);
+    if (!result.ok) {
+      setForgotError(lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
+      return;
+    }
+    // Already phone-verified for real just above -- straight into the app,
+    // no separate re-login with the new PIN needed.
+    onOtpVerified(mobile);
+  };
+
+  const submitProfile = async () => {
+    if (!detailsValid) return;
+    const ownMobile = verifiedMobile || mobile;
+    // Sign Up's photo was only picked, not uploaded (couldn't be — Storage
+    // requires real auth, which didn't exist until verifyOtp just now) —
+    // upload it for real at this point, now that it does.
+    let finalPhoto = photo;
+    if (photoFile && ownMobile) {
+      setPhotoUploading(true);
+      finalPhoto = await uploadPhoto(photoFile, `customers/${ownMobile}/profile.jpg`);
+      setPhotoUploading(false);
+    }
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    const referredBy = ref && ref !== ownMobile ? ref : null;
+    // Pass the mobile we actually verified, not left for the caller to read
+    // off its own state — onOtpVerified's setCustomerAuth update above hasn't
+    // necessarily been re-rendered yet by the time this callback runs (no
+    // photo means submitProfile has nothing to await in between), so the
+    // caller's own "current" mobile can still be the pre-verification value.
+    // That mismatch used to make the profile save under the wrong Firestore
+    // doc ID, so the next refresh found no profile and re-asked for sign-up.
+    onComplete({ name, photo: finalPhoto, referredBy, referralCredited: false, mobile: ownMobile });
+    // Submitted for real — clear the draft so it can't leak into a future
+    // registration attempt on this same device (e.g. a different customer).
+    setName(""); setPhoto(null); setPhotoFile(null);
+  };
+
+  const backButton = (
+    <button onClick={onLogout} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+      <ChevronLeft size={18} strokeWidth={3} />
+    </button>
+  );
+
+  if (verified && checking) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-5">
+        {backButton}
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your profile..." : lang === "mr" ? "तुमची प्रोफाइल तपासली जात आहे..." : "आपकी प्रोफाइल जांची जा रही है..."}</p>
+      </div>
+    );
+  }
+
+  if (verified && hasProfile) {
+    // Root is about to swap to CustomerApp — never show anything else here.
+    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : lang === "mr" ? "लोड होत आहे..." : "लोड हो रहा है..."}</p></div>;
+  }
+
+  if (verified && !hasProfile && mode !== "signup") {
+    // This number chose (or defaulted to, via a resumed session) Login, but
+    // genuinely has no registration on file — the details form must only
+    // ever be reachable through Sign Up, so send them there instead of
+    // silently letting a Login tap register a new account.
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
+        {backButton}
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
+          <XCircle size={26} color="#FFFFFF" />
+        </div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : lang === "mr" ? "अजून रजिस्टर्ड नाही" : "अभी रजिस्टर्ड नहीं है"}</h2>
+        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a customer account yet. Please sign up first." : lang === "mr" ? "या मोबाइल नंबरने अजून कोणतेही कस्टमर खाते नाही. कृपया आधी साइन अप करा." : "इस मोबाइल नंबर से अभी तक कोई कस्टमर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
+        <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
+          {lang === "en" ? "Sign Up Now" : lang === "mr" ? "आत्ता साइन अप करा" : "अभी साइन अप करें"}
+        </button>
+      </div>
+    );
+  }
+
+  if (verified && !hasProfile) {
+    // Verified via Sign Up, and this number genuinely has no saved profile
+    // yet.
+    return (
+      <div className="flex-1 overflow-y-auto px-6 py-8 relative">
+        {backButton}
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
+          <MapPin size={22} color="#000000" />
+        </div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Registration" : lang === "mr" ? "कस्टमर रजिस्ट्रेशन" : "कस्टमर रजिस्ट्रेशन"}</h2>
+        <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : lang === "mr" ? "फक्त एकदाच — सेटअप पूर्ण करण्यासाठी तुमची माहिती भरा." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
+
+        <div className="space-y-3">
+          <div className="flex justify-center">
+            <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => {
+              setPhotoUploading(true); setPhotoError(false);
+              uploadPhoto(f, `customers/${verifiedMobile || mobile}/profile.jpg`).then((p) => {
+                setPhotoUploading(false);
+                if (p) setPhoto(p); else setPhotoError(true);
+              });
+            }}>
+              <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
+                {photoUploading
+                  ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</p>
+                  : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
+              </div>
+            </PhotoPicker>
+          </div>
+          {photoError && (
+            <p className="text-[10px] font-semibold text-center" style={{ color: C.safety }}>{lang === "en" ? "Photo upload failed — please try another photo" : lang === "mr" ? "फोटो अपलोड झाला नाही — कृपया दुसरा फोटो वापरा" : "फोटो अपलोड नहीं हुई — कृपया दूसरी फोटो लें"}</p>
+          )}
+          <GuidedStep {...regStepProps(0)} lang={lang}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+          </GuidedStep>
+        </div>
+
+        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा" : "आगे बढ़ने के लिए ऊपर नाम भरें"}</div>}
+        <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className={`w-full rounded-lg py-4 font-bold text-base mt-3 ${detailsValid && !photoUploading ? "guided-submit-ready" : ""}`}
+          style={{ background: detailsValid && !photoUploading ? C.marigold : "#E0E0E0", color: detailsValid && !photoUploading ? "#000000" : "#9AA3B0" }}>
+          {photoUploading ? (lang === "en" ? "Uploading photo..." : lang === "mr" ? "फोटो अपलोड होत आहे..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : lang === "mr" ? "रजिस्ट्रेशन पूर्ण करा" : "रजिस्ट्रेशन पूरा करें")}
+        </button>
+      </div>
+    );
+  }
+
+  if (!verified && mode === null) {
+    // First screen — a plain choice, before anything else, so a returning
+    // customer knows they can go straight to OTP without expecting a
+    // registration form (and a new customer knows what to expect too).
+    // The actual mobile+OTP mechanics are identical either way — the app
+    // already checks Firestore (hasProfile) after verifying and only shows
+    // the registration form if this number genuinely has none yet.
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <div className="mb-4"><Logo size={96} /></div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : lang === "mr" ? "तुम्ही आधीपासून रजिस्टर्ड आहात, की नवीन आहात?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
+        <div className="w-full space-y-3">
+          <button onClick={() => setMode("login")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
+            {lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें"}
+          </button>
+          <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.paper, color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
+            {lang === "en" ? "Sign Up (New Customer)" : lang === "mr" ? "साइन अप करा (नवीन कस्टमर)" : "साइन अप करें (नया कस्टमर)"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "login") {
+    // Login — mobile + PIN, no SMS needed except via the Forgot PIN path.
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <div className="mb-4"><Logo size={96} /></div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Login" : lang === "mr" ? "कस्टमर लॉगिन" : "कस्टमर लॉगिन"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Enter your mobile number and PIN to continue." : lang === "mr" ? "सुरू ठेवण्यासाठी तुमचा मोबाइल नंबर आणि PIN टाका." : "जारी रखने के लिए अपना मोबाइल नंबर और PIN डालें।"}</p>
+        <div className="w-full">
+          {stage === "mobile" ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <Phone size={16} color={C.inkSoft} />
+                <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
+                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+              </div>
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={goToPinStage} disabled={mobile.length !== 10}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: mobile.length === 10 ? C.marigold : "#E0E0E0", color: mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
+                {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
+              </button>
+            </div>
+          ) : forgotOpen ? (
+            forgotStage === "otp" ? (
+              <div className="space-y-3">
+                <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to +91${mobile} to verify it's really you.` : lang === "mr" ? `तुम्हीच आहात याची खात्री करण्यासाठी +91${mobile} वर OTP पाठवला.` : `यह सच में आप हैं यह जांचने के लिए +91${mobile} पर OTP भेजा गया।`}</p>
+                <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                  <ShieldCheck size={16} color={C.inkSoft} />
+                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={forgotOtp}
+                    onChange={(e) => { setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                </div>
+                {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
+                <button onClick={verifyForgotOtp} disabled={forgotOtp.length !== 6 || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotOtp.length === 6 && !forgotSending ? C.marigold : "#E0E0E0", color: forgotOtp.length === 6 && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  {forgotSending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : lang === "mr" ? "व्हेरिफाय करा" : "वेरीफाई करें")}
+                </button>
+                <div className="flex items-center justify-between">
+                  <button onClick={() => { setForgotOpen(false); setForgotError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}</button>
+                  <button onClick={openForgotPin} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : lang === "mr" ? "OTP पुन्हा पाठवा" : "OTP दोबारा भेजें"}</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
+                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
+                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
+                {forgotNewPin && forgotNewPinConfirm && forgotNewPin !== forgotNewPinConfirm && (
+                  <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
+                )}
+                {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
+                <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  {forgotSending ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें")}
+                </button>
+              </div>
+            )
+          ) : (
+            <div className="space-y-3">
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={submitPin} disabled={pin.length !== 4 || sending}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Logging in..." : lang === "mr" ? "लॉगिन होत आहे..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें")}
+              </button>
+              <div className="flex items-center justify-between">
+                <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
+                <button onClick={openForgotPin} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{forgotSending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Forgot PIN?" : lang === "mr" ? "PIN विसरलात?" : "PIN भूल गए?")}</button>
+              </div>
+              {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
+            </div>
+          )}
+        </div>
+        <div id="recaptcha-forgot-pin-customer" />
+      </div>
+    );
+  }
+
+  // Sign Up — the registration form comes first, with mobile/OTP
+  // verification at the bottom of this same page.
+  return (
+    <div className="flex-1 overflow-y-auto px-6 py-8 relative">
+      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <ChevronLeft size={18} strokeWidth={3} />
+      </button>
+      <div className="mb-4"><Logo size={96} /></div>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Sign Up" : lang === "mr" ? "कस्टमर साइन अप" : "कस्टमर साइन अप"}</h2>
+      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "Step 1 of 2 — Fill in your details, then set a PIN below." : lang === "mr" ? "स्टेप 1 / 2 — तुमची माहिती भरा, नंतर खाली PIN सेट करा." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे PIN सेट करें।"}
+      </p>
+
+      <div className="space-y-3">
+        <div className="flex justify-center">
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => setPhotoFile(f)}>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
+              <SafeImage src={photoPreview} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />
+            </div>
+          </PhotoPicker>
+        </div>
+        <GuidedStep {...regStepProps(0)} lang={lang}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+        </GuidedStep>
+      </div>
+
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Set Up Login" : lang === "mr" ? "लॉगिन सेट करा" : "लॉगिन सेट करें"}</div>
+        {stage === "mobile" ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <Phone size={16} color={C.inkSoft} />
+                <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
+                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+              </div>
+              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : lang === "mr" ? "आधी वरील सर्व माहिती भरा" : "पहले ऊपर सारी जानकारी भरें"}</div>}
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={goToPinStage} disabled={!detailsValid || mobile.length !== 10}
+                className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 ? C.marigold : "#E0E0E0", color: detailsValid && mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
+                {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 4-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 4-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 4-अंकों का PIN सेट करें।"}</p>
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
+                value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+              {pin && pinConfirm && pin !== pinConfirm && (
+                <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
+              )}
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={submitPin} disabled={pin.length !== 4 || pin !== pinConfirm || sending}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Creating account..." : lang === "mr" ? "खाते तयार होत आहे..." : "खाता बन रहा है...") : (lang === "en" ? "Create Account" : lang === "mr" ? "खाते तयार करा" : "खाता बनाएं")}
+              </button>
+              <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
+            </div>
+          )}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// DRIVER REGISTRATION — one continuous page: phone OTP, then straight
+// into KYC submission, instead of two separate screens.
+// =====================================================================
+function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType, onFirstSignupComplete, forceMode = null }) {
+  // Which button they tapped on the very first screen — purely about
+  // labels/copy, since the mobile+OTP mechanics are identical either way.
+  // forceMode skips that first screen entirely (used by DriverKycPortal,
+  // where the visitor is always an already-registered driver completing
+  // KYC, so there's no real "new here?" choice to ask).
+  const [mode, setMode] = useState(forceMode); // null | "login" | "signup"
+
+  // Personal details — only ever asked for AFTER OTP verifies, and only if
+  // this driver doc genuinely has none yet (first-time signup). Persisted
+  // to localStorage so a refresh mid-fill doesn't wipe it.
+  const [name, setName] = usePersistedState("sarthi_driverReg_name", "");
+  // Mandatory acknowledgment that keeping vehicle documents (RC, insurance,
+  // fitness, permit, PUC) and the driving license valid/updated is the
+  // driver/owner's own responsibility, not the app's — see the Vehicle
+  // Documents & Legal Compliance clause in TermsModal. Required before
+  // registration can complete, same as every other field here.
+  const [acceptedDocsTerms, setAcceptedDocsTerms] = usePersistedState("sarthi_driverReg_acceptedDocsTerms", false);
+
+  // Step 1 — mobile + PIN. "stage" starts at "checking" only to avoid a
+  // one-frame flash of the mobile-entry screen while the effect below
+  // resolves an already-valid session on this device.
+  const [mobile, setMobile] = useState("");
+  const [pin, setPin] = useState("");
+  const [pinConfirm, setPinConfirm] = useState(""); // Sign Up only
+  const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile"); // "checking" | "mobile" | "pin"
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  // Forgot-PIN — reachable only from Login's PIN screen. See
+  // CustomerOnboarding's identical block for the full explanation (reuses
+  // real Firebase Phone Auth as the recovery proof).
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotStage, setForgotStage] = useState("otp"); // "otp" | "newPin"
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPin, setForgotNewPin] = useState("");
+  const [forgotNewPinConfirm, setForgotNewPinConfirm] = useState("");
+  const [forgotSending, setForgotSending] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const forgotConfirmationRef = useRef(null);
+  const forgotRecaptchaRef = useRef(null);
+
+  const otpInputCls = "w-full rounded-lg py-3 px-3 text-sm outline-none text-center placeholder:text-[#C7B8B3]";
+  const otpInputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
+  const fieldCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+  const fieldStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+
+  useEffect(() => {
+    const current = authInstance?.currentUser;
+    const phoneMatch = current?.phoneNumber;
+    if (phoneMatch) { onOtpVerified(phoneMatch.replace("+91", "")); return; }
+    const emailMatch = current?.email?.match(/^(\d{10})@driver\.apnatransport\.local$/);
+    if (emailMatch) { onOtpVerified(emailMatch[1]); return; }
+    setStage("mobile");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Once OTP verifies and the driver doc exists, attach whatever was
+  // collected on the Sign Up form (pre-OTP). Login has no fields to apply —
+  // this simply won't fire for that path since name stays empty. A driver
+  // doc's name is seeded to its own mobile number as a placeholder at
+  // creation (see getOrCreateDoc in App()), so "name still equals mobile"
+  // is the signal that registration details haven't been given yet —
+  // there's no separate address field anymore to check instead.
+  const infoAppliedRef = useRef(false);
+  useEffect(() => {
+    if (verified && driver && driver.name === driver.mobile && !infoAppliedRef.current && name.trim()) {
+      infoAppliedRef.current = true;
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      const referredBy = ref && ref !== driver.mobile ? ref : null;
+      setDriver({ ...driver, name: name.trim(), referredBy, referralCredited: false });
+      setName(""); setAcceptedDocsTerms(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verified, driver]);
+
+  const detailsValid = name.trim().length >= 3 && acceptedDocsTerms;
+
+  // Guided-step highlighting for the registration details field — see
+  // GuidedStep. Shared by both places this form renders (the fallback
+  // completion form and Sign Up), since both use the same field state.
+  const regStepCompleted = [name.trim().length >= 3];
+  // pinFocus: true — don't jump the guided highlight/scroll to the next
+  // field the instant this one's validation passes; stay put until the
+  // customer/driver actually taps away, so they can keep typing (e.g. a
+  // name past the 3-char minimum) without the form yanking ahead of them.
+  // autoAdvanceMs releases it on its own after 5 quiet seconds so they
+  // don't have to tap elsewhere on screen just to move on.
+  const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
+
+  const goToPinStage = () => {
+    // Sign Up requires the details form to be filled in first; Login just
+    // needs a valid-length mobile number.
+    if ((mode === "signup" && !detailsValid) || mobile.length !== 10) return;
+    setPin(""); setPinConfirm(""); setError("");
+    setStage("pin");
+  };
+
+  const submitPin = async () => {
+    if (mobile.length !== 10 || pin.length !== 4 || !authInstance || sending) return;
+    if (mode === "signup" && (!detailsValid || pin !== pinConfirm)) return;
+    setSending(true);
+    setError("");
+    try {
+      if (mode === "signup") {
+        await createUserWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pinToPassword(pin));
+      } else {
+        await signInWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pinToPassword(pin));
+      }
+      onOtpVerified(mobile);
+      // Sign Up's details attach to the driver doc automatically once it's
+      // ready (see the effect above) — nothing more to do here.
+    } catch (e) {
+      console.error(e);
+      setError(
+        mode === "signup" && e?.code === "auth/email-already-in-use"
+          ? (lang === "en" ? "This number is already registered — please Login instead." : lang === "mr" ? "हा नंबर आधीच नोंदणीकृत आहे — कृपया लॉगिन करा." : "यह नंबर पहले से रजिस्टर्ड है — कृपया लॉगिन करें।")
+          : mode === "login"
+          ? (lang === "en" ? "Incorrect mobile number or PIN." : lang === "mr" ? "चुकीचा मोबाइल नंबर किंवा PIN." : "गलत मोबाइल नंबर या PIN।")
+          : (lang === "en" ? "Something went wrong — try again." : lang === "mr" ? "काहीतरी चुकले — पुन्हा प्रयत्न करा." : "कुछ गलत हुआ — फिर कोशिश करें।")
+      );
+      setSending(false);
+      return;
+    }
+    setSending(false);
+  };
+
+  const getForgotRecaptcha = () => {
+    if (!forgotRecaptchaRef.current) {
+      forgotRecaptchaRef.current = new RecaptchaVerifier(authInstance, "recaptcha-forgot-pin-driver", { size: "invisible" });
+    }
+    return forgotRecaptchaRef.current;
+  };
+
+  const openForgotPin = async () => {
+    if (mobile.length !== 10 || forgotSending || !authInstance) return;
+    setForgotSending(true);
+    setForgotError("");
+    try {
+      forgotConfirmationRef.current = await signInWithPhoneNumber(authInstance, "+91" + mobile, getForgotRecaptcha());
+      setForgotOtp("");
+      setForgotStage("otp");
+      setForgotOpen(true);
+    } catch (e) {
+      console.error(e);
+      try { forgotRecaptchaRef.current?.clear(); } catch { /* already gone */ }
+      forgotRecaptchaRef.current = null;
+      setForgotError(
+        e?.code === "auth/too-many-requests"
+          ? (lang === "en" ? "Too many attempts — please wait a while before trying again." : lang === "mr" ? "खूप जास्त प्रयत्न — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "बहुत ज़्यादा कोशिशें — कृपया थोड़ी देर बाद फिर कोशिश करें।")
+          : (lang === "en" ? "Couldn't send OTP — try again." : lang === "mr" ? "OTP पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "OTP नहीं भेज सका — फिर कोशिश करें।")
+      );
+    }
+    setForgotSending(false);
+  };
+
+  const verifyForgotOtp = async () => {
+    if (forgotOtp.length !== 6 || !forgotConfirmationRef.current || forgotSending) return;
+    setForgotSending(true);
+    setForgotError("");
+    try {
+      await forgotConfirmationRef.current.confirm(forgotOtp);
+      setForgotStage("newPin");
+    } catch (e) {
+      console.error(e);
+      setForgotError(lang === "en" ? "Incorrect OTP — try again." : lang === "mr" ? "चुकीचा OTP — पुन्हा प्रयत्न करा." : "गलत OTP — फिर कोशिश करें।");
+    }
+    setForgotSending(false);
+  };
+
+  const submitForgotNewPin = async () => {
+    if (forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending) return;
+    setForgotSending(true);
+    setForgotError("");
+    const result = await resetPinAfterPhoneVerify("driver", pinToPassword(forgotNewPin));
+    setForgotSending(false);
+    if (!result.ok) {
+      setForgotError(lang === "en" ? "Couldn't set new PIN — try again." : lang === "mr" ? "नवीन PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "नया PIN सेट नहीं हो सका — फिर कोशिश करें।");
+      return;
+    }
+    // Already phone-verified for real just above -- straight into the app,
+    // no separate re-login with the new PIN needed.
+    onOtpVerified(mobile);
+  };
+
+  // Fallback completion form (see the "still just a placeholder name"
+  // branch below) — covers someone who tapped Login but turned out to be
+  // a new driver, so they're not stuck with no way to finish setting up.
+  const completeDetails = () => {
+    if (!detailsValid || !driver) return;
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    const referredBy = ref && ref !== driver.mobile ? ref : null;
+    setDriver({ ...driver, name: name.trim(), referredBy, referralCredited: false });
+    setName("");
+  };
+
+  const backButton = (
+    <button onClick={onLogout} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+      <ChevronLeft size={18} strokeWidth={3} />
+    </button>
+  );
+
+  if (!verified && stage === "checking") {
+    return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : lang === "mr" ? "तुमचे सेशन तपासले जात आहे..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
+  }
+
+  if (verified && driver && driver.vehicleSpec) {
+    // Returning driver, same number — already fully registered. The root
+    // will swap to the KYC-pending or DriverApp screen on its next render.
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-5">
+        {backButton}
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : lang === "mr" ? "तुमची प्रोफाइल लोड होत आहे..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
+      </div>
+    );
+  }
+
+  if (verified && !driver) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-5">
+        {backButton}
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading your profile..." : lang === "mr" ? "तुमची प्रोफाइल लोड होत आहे..." : "आपकी प्रोफाइल लोड हो रही है..."}</p>
+      </div>
+    );
+  }
+
+  if (verified && driver && driver.name !== driver.mobile) {
+    // Details already on file (normal returning-driver path) — move
+    // straight to documents.
+    return (
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-5 pt-4">{backButton}</div>
+        <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
+          stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : lang === "mr" ? "स्टेप 2 / 2 — कागदपत्रे आणि गाडी" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"}
+          onFirstSubmit={onFirstSignupComplete} />
+      </div>
+    );
+  }
+
+  if (verified && driver && !driver.vehicleSpec && driver.name === driver.mobile && mode !== "signup") {
+    // This number chose (or defaulted to, via a resumed session) Login, but
+    // genuinely has no registration on file — the details form must only
+    // ever be reachable through Sign Up, so send them there instead of
+    // silently letting a Login tap register a new account.
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
+        {backButton}
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
+          <XCircle size={26} color="#FFFFFF" />
+        </div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Not registered yet" : lang === "mr" ? "अजून रजिस्टर्ड नाही" : "अभी रजिस्टर्ड नहीं है"}</h2>
+        <p className="text-xs mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "This mobile number doesn't have a driver account yet. Please sign up first." : lang === "mr" ? "या मोबाइल नंबरने अजून कोणतेही ड्रायव्हर खाते नाही. कृपया आधी साइन अप करा." : "इस मोबाइल नंबर से अभी तक कोई ड्राइवर खाता नहीं है। कृपया पहले साइन अप करें।"}</p>
+        <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
+          {lang === "en" ? "Sign Up Now" : lang === "mr" ? "आत्ता साइन अप करा" : "अभी साइन अप करें"}
+        </button>
+      </div>
+    );
+  }
+
+  if (verified && driver && !driver.vehicleSpec && driver.name === driver.mobile) {
+    // STEP 2 — verified via Sign Up, and this number genuinely has no
+    // details yet.
+    return (
+      <div className="flex-1 overflow-y-auto px-6 py-8 relative">
+        {backButton}
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: C.marigold }}>
+          <MapPin size={22} color="#000000" />
+        </div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Registration" : lang === "mr" ? "ड्रायव्हर रजिस्ट्रेशन" : "ड्राइवर रजिस्ट्रेशन"}</h2>
+        <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Just this once — fill in your details to finish setting up." : lang === "mr" ? "फक्त एकदाच — सेटअप पूर्ण करण्यासाठी तुमची माहिती भरा." : "बस एक बार — सेटअप पूरा करने के लिए अपनी जानकारी भरें।"}</p>
+        <div className="space-y-3">
+          <GuidedStep {...regStepProps(0)} lang={lang}>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+          </GuidedStep>
+        </div>
+        <div className="rounded-lg p-3 mt-3" style={{ background: C.safety }}>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" checked={acceptedDocsTerms} onChange={(e) => setAcceptedDocsTerms(e.target.checked)} className="mt-0.5 shrink-0" style={{ width: 18, height: 18 }} />
+            <span className="text-[11px] font-semibold leading-snug" style={{ color: "#FFFFFF" }}>
+              {lang === "en"
+                ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
+                : lang === "mr" ? "मी याची पुष्टी करतो/करते की माझ्या गाडीचे RC, इन्शुरन्स, फिटनेस सर्टिफिकेट, परमिट, PUC आणि माझा ड्रायव्हिंग लायसन्स वैध व अद्ययावत ठेवणे, ड्रायव्हर/गाडी मालक म्हणून, पूर्णपणे माझी जबाबदारी आहे. कोणत्याही कागदपत्राच्या कमतरतेमुळे किंवा त्यामुळे होणाऱ्या RTO/कायदेशीर कारवाई, दंड किंवा चलनासाठी अपना ट्रान्सपोर्ट जबाबदार राहणार नाही — त्याची संपूर्ण जबाबदारी माझी स्वतःची असेल." : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
+            </span>
+          </label>
+        </div>
+        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above and accept the document responsibility clause to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "आगे बढ़ने के लिए ऊपर नाम भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
+        <button onClick={completeDetails} disabled={!detailsValid} className={`w-full rounded-lg py-4 font-bold text-base mt-3 ${detailsValid ? "guided-submit-ready" : ""}`}
+          style={{ background: detailsValid ? C.marigold : "#E0E0E0", color: detailsValid ? "#000000" : "#9AA3B0" }}>
+          {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
+        </button>
+      </div>
+    );
+  }
+
+  if (!verified && mode === null) {
+    // First screen — a plain choice, before any OTP or details. A
+    // returning driver on a brand-new device/browser used to be forced to
+    // re-type their whole profile just to log in; now Login goes straight
+    // to OTP and Sign Up is clearly the "I'm new" path — either way lands
+    // on the same underlying check (does this number have a real name on
+    // file yet, or just its own mobile-number placeholder?).
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+        <button onClick={onLogout} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <div className="mb-4"><Logo size={96} /></div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : lang === "mr" ? "तुम्ही आधीपासून रजिस्टर्ड आहात, की नवीन आहात?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
+        <div className="w-full space-y-3">
+          <button onClick={() => setMode("login")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
+            {lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें"}
+          </button>
+          <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.paper, color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
+            {lang === "en" ? "Sign Up (New Driver)" : lang === "mr" ? "साइन अप करा (नवीन ड्रायव्हर)" : "साइन अप करें (नया ड्राइवर)"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "login") {
+    // Login — mobile + PIN, no SMS needed except via the Forgot PIN path.
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
+        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <div className="mb-4"><Logo size={96} /></div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Login" : lang === "mr" ? "ड्रायव्हर लॉगिन" : "ड्राइवर लॉगिन"}</h2>
+        <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Enter your mobile number and PIN to continue." : lang === "mr" ? "सुरू ठेवण्यासाठी तुमचा मोबाइल नंबर आणि PIN टाका." : "जारी रखने के लिए अपना मोबाइल नंबर और PIN डालें।"}</p>
+        <div className="w-full">
+          {stage === "mobile" ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <Phone size={16} color={C.inkSoft} />
+                <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
+                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+              </div>
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={goToPinStage} disabled={mobile.length !== 10}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: mobile.length === 10 ? C.marigold : "#E0E0E0", color: mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
+                {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
+              </button>
+            </div>
+          ) : forgotOpen ? (
+            forgotStage === "otp" ? (
+              <div className="space-y-3">
+                <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to +91${mobile} to verify it's really you.` : lang === "mr" ? `तुम्हीच आहात याची खात्री करण्यासाठी +91${mobile} वर OTP पाठवला.` : `यह सच में आप हैं यह जांचने के लिए +91${mobile} पर OTP भेजा गया।`}</p>
+                <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                  <ShieldCheck size={16} color={C.inkSoft} />
+                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={forgotOtp}
+                    onChange={(e) => { setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
+                </div>
+                {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
+                <button onClick={verifyForgotOtp} disabled={forgotOtp.length !== 6 || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotOtp.length === 6 && !forgotSending ? C.marigold : "#E0E0E0", color: forgotOtp.length === 6 && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  {forgotSending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : lang === "mr" ? "व्हेरिफाय करा" : "वेरीफाई करें")}
+                </button>
+                <div className="flex items-center justify-between">
+                  <button onClick={() => { setForgotOpen(false); setForgotError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}</button>
+                  <button onClick={openForgotPin} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Resend OTP" : lang === "mr" ? "OTP पुन्हा पाठवा" : "OTP दोबारा भेजें"}</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
+                  value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
+                  value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
+                {forgotNewPin && forgotNewPinConfirm && forgotNewPin !== forgotNewPinConfirm && (
+                  <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
+                )}
+                {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
+                <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  {forgotSending ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें")}
+                </button>
+              </div>
+            )
+          ) : (
+            <div className="space-y-3">
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={submitPin} disabled={pin.length !== 4 || sending}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Logging in..." : lang === "mr" ? "लॉगिन होत आहे..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें")}
+              </button>
+              <div className="flex items-center justify-between">
+                <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
+                <button onClick={openForgotPin} disabled={forgotSending} className="text-sm font-semibold" style={{ color: C.marigoldDeep }}>{forgotSending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Forgot PIN?" : lang === "mr" ? "PIN विसरलात?" : "PIN भूल गए?")}</button>
+              </div>
+              {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
+            </div>
+          )}
+        </div>
+        <div id="recaptcha-forgot-pin-driver" />
+      </div>
+    );
+  }
+
+  // Sign Up — the registration form comes first, with mobile/OTP
+  // verification at the bottom of this same page.
+  return (
+    <div className="flex-1 overflow-y-auto px-6 py-8 relative">
+      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <ChevronLeft size={18} strokeWidth={3} />
+      </button>
+      <div className="mb-4"><Logo size={96} /></div>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Sign Up" : lang === "mr" ? "ड्रायव्हर साइन अप" : "ड्राइवर साइन अप"}</h2>
+      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "Step 1 of 2 — Fill in your details, then set a PIN below." : lang === "mr" ? "स्टेप 1 / 2 — तुमची माहिती भरा, नंतर खाली PIN सेट करा." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे PIN सेट करें।"}
+      </p>
+
+      <div className="space-y-3">
+        <GuidedStep {...regStepProps(0)} lang={lang}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</label>
+          <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+        </GuidedStep>
+      </div>
+
+      <div className="rounded-lg p-3 mt-3" style={{ background: C.safety }}>
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" checked={acceptedDocsTerms} onChange={(e) => setAcceptedDocsTerms(e.target.checked)} className="mt-0.5 shrink-0" style={{ width: 18, height: 18 }} />
+          <span className="text-[11px] font-semibold leading-snug" style={{ color: "#FFFFFF" }}>
+            {lang === "en"
+              ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
+              : lang === "mr" ? "मी याची पुष्टी करतो/करते की माझ्या गाडीचे RC, इन्शुरन्स, फिटनेस सर्टिफिकेट, परमिट, PUC आणि माझा ड्रायव्हिंग लायसन्स वैध व अद्ययावत ठेवणे, ड्रायव्हर/गाडी मालक म्हणून, पूर्णपणे माझी जबाबदारी आहे. कोणत्याही कागदपत्राच्या कमतरतेमुळे किंवा त्यामुळे होणाऱ्या RTO/कायदेशीर कारवाई, दंड किंवा चलनासाठी अपना ट्रान्सपोर्ट जबाबदार राहणार नाही — त्याची संपूर्ण जबाबदारी माझी स्वतःची असेल." : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
+          </span>
+        </label>
+      </div>
+
+      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+        <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Set Up Login" : lang === "mr" ? "लॉगिन सेट करा" : "लॉगिन सेट करें"}</div>
+        {stage === "mobile" ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <Phone size={16} color={C.inkSoft} />
+                <span className="text-sm" style={{ color: C.inkSoft, fontFamily: monoFont }}>+91</span>
+                <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
+                  value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
+              </div>
+              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above and accept the document responsibility clause first" : lang === "mr" ? "आधी वरील नाव भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "पहले ऊपर नाम भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={goToPinStage} disabled={!detailsValid || mobile.length !== 10}
+                className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 ? C.marigold : "#E0E0E0", color: detailsValid && mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
+                {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 4-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 4-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 4-अंकों का PIN सेट करें।"}</p>
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
+                value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
+              {pin && pinConfirm && pin !== pinConfirm && (
+                <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
+              )}
+              {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
+              <button onClick={submitPin} disabled={pin.length !== 4 || pin !== pinConfirm || sending}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
+                {sending ? (lang === "en" ? "Creating account..." : lang === "mr" ? "खाते तयार होत आहे..." : "खाता बन रहा है...") : (lang === "en" ? "Create Account" : lang === "mr" ? "खाते तयार करा" : "खाता बनाएं")}
+              </button>
+              <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
+            </div>
+          )}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// DRIVER KYC PORTAL — a standalone route (?driverKyc=1&mobile=...),
+// reached only via the "Send" button/WhatsApp link on Admin's KYC desk
+// (AdminKyc), separate from the normal role-select/app flow entirely.
+// No login or OTP step at all — the link is personalized per driver (the
+// mobile is right there in the URL), and Firestore's rules allow reading
+// and writing that one driver's doc without any auth as long as their
+// KYC is still empty (see firestore.rules: drivers/{mobile} — closes
+// again the moment vehicleSpec is set, so a stale/forwarded link can't
+// be used to tamper with an already-submitted KYC). Fetches that single
+// doc directly (not the admin-only full driver list) so it works for a
+// genuinely unauthenticated visitor. Reuses DriverOnboarding/DriverKyc
+// for the actual document-upload form (and, on the rare account that
+// somehow still has no personal details on file, that same step-1 form).
+// =====================================================================
+function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
+  const mobile = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("mobile") : null;
+  const [portalDriver, setPortalDriverState] = useState(undefined); // undefined = still loading, null = not found
+  useEffect(() => {
+    if (!firestoreReady || !mobile) { setPortalDriverState(null); return; }
+    return subscribeDoc("drivers", mobile, setPortalDriverState);
+  }, [mobile]);
+  const setPortalDriver = (updater) => {
+    if (!portalDriver) return;
+    const next = typeof updater === "function" ? updater(portalDriver) : updater;
+    if (firestoreReady && mobile) replaceDoc("drivers", mobile, next).catch((e) => console.error("[driver kyc portal save]", e));
+  };
+  // DriverOnboarding's own back button normally logs out of the app — not
+  // meaningful here (there's no login to leave). Repurposed instead to
+  // step back to a plain name-review screen, since this is the only
+  // "step 1" left to recheck once KYC (step 2) is showing.
+  const [editingName, setEditingName] = useState(false);
+
+  return (
+    <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+      <div className="w-full max-w-sm min-h-screen flex flex-col" style={{ background: C.bg }}>
+        <div className="px-5 py-3" style={{ background: C.safety }}>
+          <p className="text-xs font-bold text-center" style={{ color: "#FFFFFF" }}>
+            {lang === "en"
+              ? "⚠️ Completing your KYC is mandatory to receive new loads."
+              : lang === "mr"
+              ? "⚠️ नवीन लोड मिळवण्यासाठी तुमची KYC पूर्ण करणे अनिवार्य आहे."
+              : "⚠️ नए लोड पाने के लिए अपनी KYC पूरी करना अनिवार्य है।"}
+          </p>
+        </div>
+        {!mobile || portalDriver === null ? (
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}>
+              <XCircle size={26} color="#FFFFFF" />
+            </div>
+            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
+              {lang === "en" ? "No driver account found" : lang === "mr" ? "कोणतेही ड्रायव्हर खाते सापडले नाही" : "कोई ड्राइवर खाता नहीं मिला"}
+            </h2>
+            <p className="text-xs" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "This link looks incomplete or incorrect." : lang === "mr" ? "ही लिंक अपूर्ण किंवा चुकीची वाटते." : "यह लिंक अधूरी या गलत लगती है।"}
+            </p>
+          </div>
+        ) : portalDriver === undefined ? (
+          <div className="flex-1 flex items-center justify-center px-8 text-center">
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Loading..." : lang === "mr" ? "लोड होत आहे..." : "लोड हो रहा है..."}</p>
+          </div>
+        ) : portalDriver.vehicleSpec?.capacityKg ? (
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.success }}>
+              <CheckCircle2 size={26} color="#FFFFFF" />
+            </div>
+            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>
+              {lang === "en" ? "Your KYC is already on file" : lang === "mr" ? "तुमची KYC आधीच जमा आहे" : "आपकी KYC पहले से जमा है"}
+            </h2>
+            <p className="text-xs" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "Nothing more to do here — you can close this page." : lang === "mr" ? "इथे आणखी काही करायचे नाही — तुम्ही हे पेज बंद करू शकता." : "यहां और कुछ करने की जरूरत नहीं — आप यह पेज बंद कर सकते हैं।"}
+            </p>
+          </div>
+        ) : editingName ? (
+          <DriverKycPortalNameEdit driver={portalDriver} setDriver={setPortalDriver} lang={lang} onDone={() => setEditingName(false)} />
+        ) : (
+          // driver is known (from the URL, no login needed) and just
+          // hasn't submitted KYC yet — verified is a constant true (no
+          // OTP screens ever render), forceMode="signup" routes straight
+          // to whichever form applies (personal details, if somehow
+          // still missing, then DriverKyc) without DriverOnboarding's own
+          // "not registered — sign up now" interstitial in between.
+          <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth}
+            verified={true} forceMode="signup"
+            onOtpVerified={() => {}} onLogout={() => setEditingName(true)}
+            driver={portalDriver} setDriver={setPortalDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Reached via the KYC (step 2) screen's back button inside DriverKycPortal
+// — lets a driver recheck/fix their name before continuing, without any
+// of DriverOnboarding's own OTP/step machinery (which assumes a first-time
+// fill, not editing a value that's already saved).
+function DriverKycPortalNameEdit({ driver, setDriver, lang, onDone }) {
+  const [name, setName] = useState(driver?.name === driver?.mobile ? "" : (driver?.name || ""));
+  const valid = name.trim().length >= 3;
+  const save = () => {
+    if (!valid) return;
+    setDriver({ ...driver, name: name.trim() });
+    onDone();
+  };
+  return (
+    <div className="flex-1 overflow-y-auto px-6 py-8 relative">
+      <button onClick={onDone} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <ChevronLeft size={18} strokeWidth={3} />
+      </button>
+      <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</h2>
+      <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Review or update your name." : lang === "mr" ? "तुमचे नाव तपासा किंवा बदला." : "अपना नाम जांचें या बदलें।"}</p>
+      <input className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}
+        placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
+      {!valid && <div className="text-[11px] font-semibold mt-2" style={{ color: C.safety }}>{lang === "en" ? "Name must be at least 3 characters" : lang === "mr" ? "नाव किमान 3 अक्षरांचे असावे" : "नाम कम से कम 3 अक्षर का होना चाहिए"}</div>}
+      <button onClick={save} disabled={!valid} className="w-full rounded-lg py-4 font-bold text-base mt-4"
+        style={{ background: valid ? C.marigold : "#E0E0E0", color: valid ? "#000000" : "#9AA3B0" }}>
+        {lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें"}
+      </button>
+    </div>
+  );
+}
+
+// Wraps any tappable "upload a photo" tile — tapping it opens an action
+// sheet asking Take Photo vs Choose from Library, instead of jumping
+// straight to the OS file picker. Each option triggers its own hidden file
+// input (one forces the camera via `capture`, the other doesn't).
+
+// Largest source file we'll even attempt to decode. Android camera photos
+// are ~2-6 MB; anything past this is an edited/downloaded/panorama file
+// that risks OOM-crashing the WebView on a low-RAM phone mid-decode, so we
+// reject it up front with a clear reason instead.
+const MAX_PHOTO_BYTES = 25 * 1024 * 1024;
+
+// Resizes/compresses an uploaded photo client-side and hands back the
+// decoded <canvas> — shared by uploadPhoto below. Rejects with an Error
+// whose .message is a stable code ("toobig" | "timeout" | "decode") so
+// callers can show the driver a reason they can act on.
+function resizeImageToCanvas(file, maxDim = 900) {
+  return new Promise((resolve, reject) => {
+    if (file && file.size > MAX_PHOTO_BYTES) { reject(new Error("toobig")); return; }
+    // Hard timeout: on some Android WebViews a huge photo the decoder
+    // chokes on fires neither img.onload nor img.onerror — without this the
+    // promise would hang forever, leaving the KYC tile stuck on "Uploading"
+    // and anyUploading permanently true so the driver can never submit.
+    const timeoutId = setTimeout(() => reject(new Error("timeout")), 20000);
+    const finish = (fn) => (arg) => { clearTimeout(timeoutId); fn(arg); };
+    const ok = finish(resolve);
+    const fail = finish((e) => reject(e instanceof Error && ["toobig", "timeout", "decode"].includes(e.message) ? e : new Error("decode")));
+    const reader = new FileReader();
+    reader.onerror = () => fail(new Error("decode"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => fail(new Error("decode"));
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            const scale = maxDim / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          ok(canvas);
+        } catch (e) {
+          fail(e);
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Resizes a photo and uploads it to Firebase Storage at `path` (overwriting
+// any previous photo at that same path), returning {name, url} with a real,
+// permanent download URL — so profile/KYC/vehicle photos live as small
+// links in Firestore instead of full images inline in every document. Falls
+// back to an inline base64 data URL if Storage isn't configured, so the app
+// still works before that one-time setup step is done. Returns null (never
+// throws) if the file itself can't be read/decoded — e.g. a corrupted photo
+// or a format the browser can't open — so callers can always clear their
+// "uploading" state and show an error instead of hanging forever. Before
+// returning null it calls onFail(reason) with a code ("toobig" | "timeout"
+// | "decode" | "upload") so callers can tell the driver what to fix.
+//
+// Uses a resumable upload (uploadBytesResumable) rather than a one-shot
+// uploadBytes — on the flaky mobile connections drivers actually sign up
+// on, a resumable session survives brief drops instead of the whole
+// attempt dying on the first blip, and its state_changed events give
+// callers real bytes-transferred progress (via the optional onProgress
+// callback) instead of a static "Uploading..." with no sense of whether
+// it's actually moving. Still has a cap — 30s, well past what the ~50-150KB
+// blob these photos compress down to should ever need even on a slow
+// connection — so a genuinely dead connection still falls through to the
+// base64 fallback below instead of hanging forever; cancelling the task
+// makes its own 'error' branch fire rather than needing a separate race.
+async function uploadPhoto(file, path, maxDim = 900, quality = 0.72, onProgress = null, onFail = null) {
+  let canvas;
+  try {
+    canvas = await resizeImageToCanvas(file, maxDim);
+  } catch (e) {
+    console.error("[photo decode]", e);
+    onFail?.(["toobig", "timeout", "decode"].includes(e?.message) ? e.message : "decode");
+    return null;
+  }
+  const storage = getActiveStorage();
+  if (storage) {
+    try {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      const ref = storageRef(storage, path);
+      const url = await new Promise((resolve, reject) => {
+        const task = uploadBytesResumable(ref, blob, { contentType: "image/jpeg" });
+        const timeoutId = setTimeout(() => task.cancel(), 30000);
+        task.on(
+          "state_changed",
+          (snapshot) => onProgress?.(snapshot.totalBytes ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0),
+          (err) => { clearTimeout(timeoutId); reject(err); },
+          () => { clearTimeout(timeoutId); getDownloadURL(task.snapshot.ref).then(resolve, reject); }
+        );
+      });
+      return { name: file.name, url };
+    } catch (e) {
+      console.error("[storage upload]", e);
+    }
+  }
+  try {
+    return { name: file.name, url: canvas.toDataURL("image/jpeg", quality) };
+  } catch (e) {
+    console.error("[photo base64 fallback]", e);
+    onFail?.("upload");
+    return null;
+  }
+}
+
+// Resizes a photo down to a small base64 JPEG for classifyKycPhoto — kept
+// separate from uploadPhoto's own resize (rather than sharing one canvas)
+// so a classification failure can return early before Storage is ever
+// touched, and a config/network hiccup here just falls through to a normal
+// uploadPhoto call instead of blocking it. Smaller than uploadPhoto's own
+// 900px/0.72 (the model only needs to recognize a viewing angle, not read
+// fine print) to keep the callable function's payload light. Returns null
+// (never throws) on any decode failure — callers should treat that as
+// "skip the check", not as a rejection; uploadPhoto's own resize will
+// surface the real error to the driver if the file is genuinely bad.
+// Bounds how long startPhotoUpload waits on classifyKycPhoto before giving
+// up and falling through to the normal upload — Firebase callable functions
+// don't time out client-side for ~70s by default, which on weak wifi would
+// otherwise leave a KYC photo tile stuck on "Uploading..." for over a
+// minute (on top of uploadPhoto's own 30s) before anything happens. The
+// slow call itself isn't cancelled (callable functions can't be aborted
+// from here), it just stops being waited on -- resolving late and getting
+// ignored is harmless since nothing still reads its result.
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(fallback), ms))]);
+}
+
+async function fileToClassifyPayload(file) {
+  try {
+    const canvas = await resizeImageToCanvas(file, 700);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+    return { base64: dataUrl.split(",")[1], mimeType: "image/jpeg" };
+  } catch (e) {
+    console.error("[classify photo resize]", e);
+    return null;
+  }
+}
+
+// Higher-fidelity variant of uploadPhoto for scanned bill/invoice documents —
+// the text needs to stay legible at a police/RTO checkpoint, so this uses a
+// larger max dimension and higher JPEG quality than profile/KYC photos.
+async function uploadDocumentPhoto(file, path) {
+  return uploadPhoto(file, path, 1600, 0.85);
+}
+
+// Turns an uploadPhoto onFail(reason) code into a short, action-oriented
+// line for a photo tile — tells the driver what actually went wrong and
+// what to do about it, instead of a bare "Upload failed".
+function uploadErrorInfo(reason, lang) {
+  const M = {
+    toobig: {
+      en: "Photo is too large. Take a fresh photo instead of an edited or downloaded one.",
+      hi: "फोटो बहुत बड़ी है। एडिट या डाउनलोड की हुई फोटो की जगह नई फोटो लें।",
+      mr: "फोटो खूप मोठा आहे. एडिट किंवा डाउनलोड केलेल्याऐवजी नवीन फोटो घ्या.",
+    },
+    timeout: {
+      en: "This photo is too heavy for your phone to process. Take a new photo.",
+      hi: "यह फोटो आपके फोन के लिए बहुत भारी है। नई फोटो लें।",
+      mr: "हा फोटो तुमच्या फोनसाठी खूप जड आहे. नवीन फोटो घ्या.",
+    },
+    decode: {
+      en: "Couldn't open this photo — it may be damaged or an unsupported type. Take a new photo.",
+      hi: "यह फोटो नहीं खुल पाई — यह खराब या असमर्थित हो सकती है। नई फोटो लें।",
+      mr: "हा फोटो उघडता आला नाही — तो खराब किंवा असमर्थित असू शकतो. नवीन फोटो घ्या.",
+    },
+    upload: {
+      en: "Upload failed — check your internet and retry.",
+      hi: "अपलोड नहीं हुआ — इंटरनेट जांचें और फिर कोशिश करें।",
+      mr: "अपलोड झाले नाही — इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.",
+    },
+    // AI-checked at upload time (see classifyKycPhoto) — this photo decoded
+    // and uploaded fine, it just doesn't show what this tile needs.
+    not_side_view: {
+      en: "This doesn't look like a side view of the vehicle. Take a photo from directly beside it, showing its full length.",
+      hi: "यह गाड़ी की साइड वाली फोटो नहीं लग रही। गाड़ी के ठीक बगल से खड़े होकर, पूरी लंबाई दिखाते हुए फोटो लें।",
+      mr: "हा गाडीचा साइड फोटो वाटत नाही. गाडीच्या अगदी बाजूला उभे राहून, संपूर्ण लांबी दाखवत फोटो घ्या.",
+    },
+    not_license: {
+      en: "This doesn't look like a driving license. Take a clear photo of the license card itself.",
+      hi: "यह ड्राइविंग लाइसेंस नहीं लग रहा। लाइसेंस कार्ड की साफ फोटो लें।",
+      mr: "हा ड्रायव्हिंग लायसन्स वाटत नाही. लायसन्स कार्डचा स्पष्ट फोटो घ्या.",
+    },
+  };
+  const m = M[reason] || M.upload;
+  return lang === "en" ? m.en : lang === "mr" ? m.mr : m.hi;
+}
+
+// Uploads a file (e.g. a PDF) to Storage as-is, no resizing — used for the
+// E-Way Bill when the customer picks a PDF instead of scanning a photo. No
+// base64 fallback here (PDFs are too large to inline into a Firestore doc),
+// so this simply fails if Storage isn't reachable.
+async function uploadRawFile(file, path) {
+  const storage = getActiveStorage();
+  if (!storage) return null;
+  try {
+    const ref = storageRef(storage, path);
+    const attempt = uploadBytes(ref, file, { contentType: file.type || "application/pdf" }).then(() => getDownloadURL(ref));
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Storage upload timed out")), 20000));
+    const url = await Promise.race([attempt, timeout]);
+    return { name: file.name, url };
+  } catch (e) {
+    console.error("[storage upload]", e);
+    return null;
+  }
+}
+
+// Renders an <img>, falling back to `fallback` if there's no src yet or the
+// image fails to load (e.g. a stale blob: URL from an older upload that no
+// longer resolves on this device) — avoids the browser's broken-image glyph.
+function SafeImage({ src, alt = "", className, style, fallback = null }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [src]);
+  if (!src || failed) return fallback;
+  return <img src={src} alt={alt} className={className} style={style} onError={() => setFailed(true)} />;
+}
+
+function PhotoPicker({ label, lang = "hi", onSelect, children }) {
+  const [choosing, setChoosing] = useState(false);
+  const cameraRef = useRef(null);
+  const libraryRef = useRef(null);
+
+  const handleFile = (e) => {
+    const f = e.target.files?.[0];
+    if (f) onSelect(f);
+    setChoosing(false);
+    e.target.value = "";
+  };
+
+  return (
+    <>
+      <div onClick={() => setChoosing(true)}>{children}</div>
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+      <input ref={libraryRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+      {choosing && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={() => setChoosing(false)}>
+          <div className="w-full max-w-sm rounded-t-2xl p-4" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+            <div className="text-sm font-bold mb-3 text-center" style={{ color: C.ink }}>{label}</div>
+            <button type="button" onClick={() => cameraRef.current?.click()} className="w-full rounded-lg py-4 mb-2 font-bold text-base flex items-center justify-center gap-2" style={{ background: C.marigold, color: "#fff" }}>
+              <Camera size={16} /> {lang === "en" ? "Take Photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें"}
+            </button>
+            <button type="button" onClick={() => libraryRef.current?.click()} className="w-full rounded-lg py-4 mb-2 font-bold text-base" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
+              {lang === "en" ? "Choose from Library" : lang === "mr" ? "लायब्ररीमधून निवडा" : "लाइब्रेरी से चुनें"}
+            </button>
+            <button type="button" onClick={() => setChoosing(false)} className="w-full rounded-lg py-3.5 text-base font-semibold" style={{ color: C.safety }}>
+              {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Customer-facing "Upload Documents / Send Invoice" flow — scans/uploads the
+// Original invoice, Duplicate copy, and E-Way Bill (which also accepts a
+// straight PDF upload), then patches them onto the booking doc. A Cloud
+// Function (onBillDocumentsUploaded) picks up once all three are present,
+// merges them into one PDF, and pushes an "Invoice & E-Way Bill Received"
+// alert to the driver — nothing else here talks to the driver directly.
+function BillDocumentsModal({ booking, onClose, lang }) {
+  const existing = booking.documents || {};
+  const [file, setFile] = useState(existing.file || null);
+  const [uploading, setUploading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const uploadFileRef = useRef(null);
+  const scanInputRef = useRef(null);
+
+  const alreadySent = !!existing.file?.url;
+
+  const doUpload = async (f, isPdf) => {
+    setUploading(true);
+    setError("");
+    const path = `bookings/${booking.id}/documents/invoice.${isPdf ? "pdf" : "jpg"}`;
+    const result = isPdf ? await uploadRawFile(f, path) : await uploadDocumentPhoto(f, path);
+    setUploading(false);
+    if (!result) { setError(lang === "en" ? "Upload failed — check your connection and try again." : lang === "mr" ? "अपलोड अयशस्वी — कनेक्शन तपासा आणि पुन्हा प्रयत्न करा." : "अपलोड विफल — कनेक्शन जांचें और फिर कोशिश करें।"); return; }
+    setFile({ ...result, type: isPdf ? "pdf" : "image" });
+  };
+
+  const send = async () => {
+    setSending(true);
+    setError("");
+    try {
+      await patchDoc("bookings", booking.id, { "documents.file": file });
+      onClose();
+    } catch (e) {
+      console.error(e);
+      setError(lang === "en" ? "Could not send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।");
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
+      <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Send Invoice" : lang === "mr" ? "इनव्हॉइस पाठवा" : "इनवॉइस भेजें"}</h3>
+          <button onClick={onClose}><X size={18} color={C.inkSoft} /></button>
+        </div>
+
+        {alreadySent && (
+          <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2" style={{ background: C.success }}>
+            <CheckCircle2 size={14} color="#FFFFFF" />
+            <span className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Already sent to driver — you can resend to update." : lang === "mr" ? "आधीच ड्रायव्हरला पाठवले गेले आहे — अपडेटसाठी पुन्हा पाठवू शकता." : "पहले ही ड्राइवर को भेजा जा चुका है — अपडेट के लिए फिर भेज सकते हैं।"}</span>
+          </div>
+        )}
+
+        <div className="rounded-xl p-3 mb-3" style={{ background: C.paper, border: `1.5px solid ${file?.url ? C.success : C.line}` }}>
+          <div className="flex items-center gap-2 mb-2">
+            <FileText size={16} color={file?.url ? C.success : C.marigoldDeep} className="shrink-0" />
+            <span className="text-sm font-bold flex-1 min-w-0" style={{ color: C.ink }}>{lang === "en" ? "Invoice / Bill" : lang === "mr" ? "इनव्हॉइस / बिल" : "इनवॉइस / बिल"}</span>
+            {file?.url && <CheckCircle2 size={16} color={C.success} className="shrink-0" />}
+          </div>
+          {file?.url && <div className="text-[11px] truncate mb-2" style={{ color: C.inkSoft }}>{file.name}</div>}
+          <div className="flex gap-2">
+            <button type="button" onClick={() => scanInputRef.current?.click()} className="rounded-lg py-3.5 px-3 flex items-center justify-center gap-1.5 text-base font-bold" style={{ background: C.marigoldDeep, color: "#fff" }}>
+              <Camera size={16} /> {file?.url ? (lang === "en" ? "Rescan" : lang === "mr" ? "पुन्हा स्कॅन करा" : "फिर स्कैन करें") : (lang === "en" ? "Scan Document" : lang === "mr" ? "कागदपत्र स्कॅन करा" : "दस्तावेज़ स्कैन करें")}
+            </button>
+            {/* capture="environment" launches the camera directly — no Take
+                Photo/Choose from Library sheet — since this button's whole
+                job is scanning, not picking an existing photo. */}
+            <input ref={scanInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, false); e.target.value = ""; }} />
+            <button type="button" onClick={() => uploadFileRef.current?.click()} className="rounded-lg py-3.5 px-3 flex items-center justify-center gap-1.5 text-base font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }}>
+              <Upload size={16} /> {lang === "en" ? "Upload Invoice" : lang === "mr" ? "इनव्हॉइस अपलोड करा" : "इनवॉइस अपलोड करें"}
+            </button>
+            {/* No capture attribute here — this one's for picking an
+                existing file/photo, not scanning a new one. */}
+            <input ref={uploadFileRef} type="file" accept="image/*,application/pdf" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f, f.type === "application/pdf"); e.target.value = ""; }} />
+          </div>
+          {uploading && (
+            <div className="text-[11px] font-semibold mt-2 flex items-center gap-1.5" style={{ color: C.marigoldDeep }}>
+              <Loader2 size={12} className="animate-spin" /> {lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}
+            </div>
+          )}
+        </div>
+
+        {error && <div className="text-xs font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
+
+        <button onClick={send} disabled={!file?.url || sending} className={`w-full rounded-xl py-4 text-base font-black text-white ${file?.url ? "shadow-lg" : ""}`}
+          style={{ background: file?.url ? C.metallicGreen : "#E0E0E0", color: file?.url ? "#fff" : "#9AA3B0" }}>
+          {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send to Driver" : lang === "mr" ? "ड्रायव्हरला पाठवा" : "ड्राइवर को भेजें")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Driver-facing read-only view opened by the "Receive Bill" button — shows
+// whether the invoice has arrived yet and links straight to it. Drivers
+// never upload here; only the customer does, from BillDocumentsModal. Works
+// both mid-ride (myTrip) and post-ride (a completed trip row), so it's a
+// plain read of whatever the passed-in booking already has on its
+// documents field.
+function BillDocumentsViewModal({ trip, onClose, lang }) {
+  const file = trip.documents?.file;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
+      <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Receive Bill" : lang === "mr" ? "बिल मिळवा" : "बिल प्राप्त करें"}</h3>
+          <button onClick={onClose}><X size={18} color={C.inkSoft} /></button>
+        </div>
+
+        {file?.url ? (
+          <a href={file.url} target="_blank" rel="noreferrer" className="w-full rounded-xl py-3 text-sm font-black text-white flex items-center justify-center gap-2 shadow-lg" style={{ background: C.metallicGreen }}>
+            <Download size={16} /> {lang === "en" ? "View / Download Invoice" : lang === "mr" ? "इनव्हॉइस पहा / डाउनलोड करा" : "इनवॉइस देखें / डाउनलोड करें"}
+          </a>
+        ) : (
+          <div className="text-xs font-semibold text-center" style={{ color: C.inkSoft }}>{lang === "en" ? "Waiting for the customer to send the invoice." : lang === "mr" ? "ग्राहकाकडून इनव्हॉइस पाठवण्याची वाट पाहत आहे." : "ग्राहक द्वारा इनवॉइस भेजे जाने का इंतज़ार है।"}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Pickup/Drop address field — wires Google Places Autocomplete directly onto
+// the text input (live suggestion dropdown while typing) when Maps is
+// configured/loaded, falling back to a plain input otherwise.
+// Custom-built suggestion dropdown (AutocompleteService + Geocoder) instead
+// of Google's own embedded Autocomplete widget — the native widget renders
+// its own popup directly into the page, completely outside React's control,
+// so there was no way to localize what it displayed (see
+// stripPlusCode). This version fetches predictions itself and
+// renders them as an ordinary list, so each row's text can be transliterated
+// to match the app's language toggle before it's ever shown.
+function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false }) {
+  const [predictions, setPredictions] = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const debounceRef = useRef(null);
+  const blurTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    if (!mapsReady || !window.google?.maps?.places?.AutocompleteService || !value.trim()) {
+      setPredictions([]);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      // location+radius below is a soft bias (ranks nearby matches higher),
+      // not a hard filter — componentRestrictions alone only narrows to
+      // "country: in", and India has many same-named localities in
+      // different states/cities. Without this, typing a short local name
+      // (e.g. "Vitthal Nagar") could surface an unrelated same-named place
+      // hundreds of km away above the actual nearby one, and picking it
+      // would silently save the wrong coordinates — a real bug reported
+      // here: a genuine ~4km trip came out as a ~395km distance estimate
+      // because the picked suggestion resolved to a distant namesake.
+      new window.google.maps.places.AutocompleteService().getPlacePredictions(
+        {
+          input: value, componentRestrictions: { country: "in" }, location: new window.google.maps.LatLng(18.6298, 73.8131), radius: 60000,
+          // Set Fare's route pricing is city-to-city by design (see
+          // ROUTE_MATCH_RADIUS_KM) — restricting suggestions here to
+          // cities/towns keeps a driver's entry at the same granularity a
+          // customer's exact pickup/drop gets matched against, instead of
+          // one specific street address that a 25km radius would then be
+          // stretching to cover.
+          ...(citiesOnly ? { types: ["(cities)"] } : {}),
+        },
+        (preds, status) => setPredictions(status === "OK" && preds ? preds : [])
+      );
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [value, mapsReady, citiesOnly]);
+
+  useEffect(() => () => clearTimeout(blurTimeoutRef.current), []);
+
+  const selectPrediction = (p) => {
+    setDropdownOpen(false);
+    setPredictions([]);
+    if (!window.google?.maps?.Geocoder) return;
+    new window.google.maps.Geocoder().geocode({ placeId: p.place_id }, (results, status) => {
+      const r = status === "OK" && results?.[0];
+      const loc = r?.geometry?.location;
+      if (!loc) return;
+      onPlaceSelected({ name: stripPlusCode(r.formatted_address || p.description), lat: loc.lat(), lng: loc.lng() });
+    });
+  };
+  const selectRecent = async (r) => {
+    setDropdownOpen(false);
+    // Re-resolves through the now-bias-corrected geocodeAddress instead of
+    // trusting r.lat/r.lng verbatim — those were saved on a past booking,
+    // so if that booking's own address was ever mis-geocoded (the exact
+    // "resolved to a same-named place hundreds of km away" bug just fixed
+    // there), picking it as a "recent" would otherwise keep replaying that
+    // same wrong location indefinitely. Falls back to the stored value
+    // only if this lookup itself fails (e.g. offline).
+    const coords = await geocodeAddress(r.name);
+    onPlaceSelected({ name: r.name, lat: coords?.lat ?? r.lat, lng: coords?.lng ?? r.lng });
+  };
+
+  const inputCls = "w-full rounded-lg py-5 text-xs font-bold outline-none";
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16 };
+  const showDropdown = dropdownOpen && predictions.length > 0;
+  // Shown instead of the live-predictions dropdown, only while the field is
+  // focused and still empty — the moment there's real input, predictions
+  // (once they arrive) take over instead. Mirrors the common ride-hailing-
+  // app pattern of surfacing recent addresses before the customer types
+  // anything, rather than only ever showing them once they start searching.
+  const showRecents = dropdownOpen && !value.trim() && (recentItems?.length > 0);
+
+  return (
+    <div>
+      <div className="relative w-full">
+        <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
+          onChange={(e) => { onChange(e); setDropdownOpen(true); }}
+          onFocus={() => { setDropdownOpen(true); onFocus?.(); }}
+          onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
+        {value && (
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
+            className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
+            <X size={20} color={C.inkSoft} strokeWidth={2.5} />
+          </button>
+        )}
+        {showDropdown && (
+          <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+            {predictions.map((p) => {
+              const main = stripPlusCode(p.structured_formatting?.main_text || p.description);
+              const secondary = stripPlusCode(p.structured_formatting?.secondary_text || "");
+              return (
+                <button key={p.place_id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectPrediction(p)}
+                  className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <MapPin size={14} color={C.marigoldDeep} className="mt-0.5 shrink-0" />
+                  <span className="text-xs leading-snug">
+                    <span className="font-bold" style={{ color: C.ink }}>{main}</span>
+                    {secondary && <span style={{ color: C.inkSoft }}> {secondary}</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {showRecents && (
+          <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+            {recentItems.map((r, i) => (
+              <button key={i} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectRecent(r)}
+                className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
+                <Clock3 size={14} color={C.inkSoft} className="mt-0.5 shrink-0" />
+                <span className="text-xs font-bold leading-snug" style={{ color: C.ink }}>{r.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1">
+          {suggestions.map((a) => (
+            <button key={a} onClick={() => onSuggestionTap(a)} className="text-sm font-semibold px-3 py-1.5 rounded-full" style={{ background: C.marigoldDeep, color: "#FFFFFF" }}>{a}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Wraps one field/section of a multi-step form with the app-wide guided
+// pattern: the active step glows amber (see .guided-step-active in
+// index.css) so it's obvious what to fill next, and a green "Completed"
+// badge appears the instant that step is done. `stepRef` is what the
+// parent form scrolls into view when this step becomes active — see the
+// auto-scroll effect in CustomerBooking for the reference implementation.
+// Only a step that's neither active nor already completed is locked —
+// `inert` blocks pointer, keyboard and screen-reader interaction with
+// everything inside it in one shot (dropdowns, photo pickers, mic buttons
+// included, no matter what's nested inside), and the dimmed opacity/
+// pointer-events are a fallback for the rare browser without `inert`
+// support. This forces the form forward strictly in the order shown on
+// screen, while still letting the customer go back and fix an earlier,
+// already-filled field at any time — editing one back to incomplete just
+// re-activates it (via activeStep's findIndex in the parent) and re-locks
+// whatever comes after until it's filled again.
+function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, onBlurStep, onFieldInput }) {
+  const locked = !active && !completed;
+  // Border and padding are reserved at all times (transparent/see-through
+  // when inactive) instead of only appearing once a step goes active --
+  // otherwise the box's own size jumps the instant the guided highlight
+  // reaches it, which is most visible when two steps sit side by side
+  // (e.g. Material Type / Enter Weight) since the neighbor visibly shifts too.
+  return (
+    <div ref={stepRef} className={`relative rounded-2xl h-full ${active ? "guided-step-active" : ""}`}
+      style={{ border: `2px solid ${active ? C.marigoldDeep : "transparent"}`, background: active ? C.marigold : "transparent", padding: 10 }}
+      onFocus={onFocusStep} onBlur={onBlurStep} onInput={onFieldInput} onChange={onFieldInput}>
+      <div inert={locked ? "" : undefined} className="h-full" style={locked ? { pointerEvents: "none", userSelect: "none", opacity: 0.45 } : undefined}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Shared by every multi-step guided form (see GuidedStep above). By default,
+// the active step auto-shifts to the next field the instant the current one
+// becomes complete — the original, snappy behavior every guided form except
+// the driver's bid card still uses.
+//
+// The driver's Fare/Loading-Unloading Time/Waiting bid card (LoadAlertCard) opts into
+// `pinFocus: true` instead, because naively picking the first incomplete
+// field as "active" made the highlight jump away from a field the instant
+// its value became non-empty/non-zero there specifically — e.g. typing
+// "5000" into Fare, one digit at a time, would yank the glow to the next
+// field right after the first "5", while still mid-keystroke. With
+// pinFocus on, the active step stays pinned to whichever field the user is
+// actually still focused in, even after it becomes "complete", and only
+// really advances once focus genuinely leaves that step (a true blur — not
+// just moving between two elements inside the same step). Every other
+// guided form doesn't have that mid-keystroke false-positive (their fields
+// don't flip "complete" on a truthy partial number), so they keep the
+// plain auto-shift-on-completion behavior.
+//
+// autoAdvanceMs (only meaningful together with pinFocus) releases the pin
+// on its own after that many quiet milliseconds — no further typing/input
+// on the focused field — instead of making the customer/driver tap
+// somewhere else to move on. It only ever fires while the field is
+// genuinely valid at that moment; a pause on a still-incomplete field is a
+// no-op (they're just thinking), and every keystroke pushes the deadline
+// back out, so it can never cut off someone still actively typing.
+function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, autoAdvanceMs = null } = {}) {
+  const [focusedStep, setFocusedStep] = useState(null);
+  const rawActive = stepCompleted.findIndex((done) => !done); // -1 once all done
+  const activeStep = pinFocus && focusedStep != null && stepCompleted[focusedStep] && (rawActive === -1 || rawActive > focusedStep)
+    ? focusedStep
+    : rawActive;
+  const stepRefsHolder = useRef([]);
+  stepRefsHolder.current = stepCompleted.map((_, i) => stepRefsHolder.current[i] || { current: null });
+  const advanceTimerRef = useRef(null);
+  const clearAdvanceTimer = () => {
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
+  };
+  // The timer callback below must NOT read stepCompleted directly out of
+  // this closure: the keystroke that flips a field from invalid to valid
+  // fires its onChange (updating that field's state) and bubbles to
+  // onFieldInput (arming this timer) as part of one and the same native
+  // event, before React has re-rendered — so armAdvanceTimer would always
+  // capture the PRE-keystroke stepCompleted, permanently false for exactly
+  // the keystroke that mattered. A single-digit entry (hits valid on its
+  // only keystroke) never released; a multi-digit one only worked because
+  // it was already valid a keystroke earlier. This ref is reassigned fresh
+  // on every render (not inside an effect), so by the time the timer
+  // actually fires — long after React has caught up — reading it here
+  // reflects the true current validity instead of that stale snapshot.
+  const stepCompletedRef = useRef(stepCompleted);
+  stepCompletedRef.current = stepCompleted;
+  // Set right before the timer releases the pin, so the effect below knows
+  // this particular activeStep change was an auto-advance (not the user
+  // manually tapping/focusing elsewhere) and should carry keyboard focus
+  // along with it — a tap-away already leaves focus wherever the user put
+  // it, so that path never touches this flag.
+  const autoAdvancedRef = useRef(false);
+  const armAdvanceTimer = (step) => {
+    if (!autoAdvanceMs) return;
+    clearAdvanceTimer();
+    advanceTimerRef.current = setTimeout(() => {
+      // Only release if that step is still the focused one AND it's
+      // actually valid right now — otherwise leave the pin exactly as is.
+      setFocusedStep((f) => {
+        if (f === step && stepCompletedRef.current[step]) {
+          autoAdvancedRef.current = true;
+          return null;
+        }
+        return f;
+      });
+    }, autoAdvanceMs);
+  };
+  useEffect(() => clearAdvanceTimer, []);
+  // Skip the very first run — a form/card that just mounted (e.g. a new
+  // load alert appearing the moment a driver goes online) shouldn't yank
+  // the page straight to its first field before the driver has even seen
+  // what's above it. Only auto-scroll once the user has actually advanced
+  // past a step themselves. autoScroll:false opts a form out of this
+  // entirely — used by CustomerBooking, where scrolling the page while a
+  // Pickup/Drop suggestion dropdown is open fights with the user browsing
+  // that list themselves.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (!autoScroll) return;
+    if (!mountedRef.current) { mountedRef.current = true; return; }
+    if (activeStep >= 0) stepRefsHolder.current[activeStep]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep, autoScroll]);
+  // Carries the cursor to the next field on an auto-advance, so typing can
+  // just continue without a tap — prefers a real text field over a button
+  // (a photo-upload step has only the latter to fall back to).
+  useEffect(() => {
+    if (!autoAdvancedRef.current) return;
+    autoAdvancedRef.current = false;
+    if (activeStep < 0) return;
+    const wrapper = stepRefsHolder.current[activeStep]?.current;
+    const focusable = wrapper?.querySelector("input, select, textarea") || wrapper?.querySelector("button");
+    focusable?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep]);
+  const stepProps = (i) => ({
+    active: activeStep === i,
+    completed: stepCompleted[i],
+    stepRef: stepRefsHolder.current[i],
+    onFocusStep: pinFocus ? () => { setFocusedStep(i); armAdvanceTimer(i); } : undefined,
+    onBlurStep: pinFocus ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) { setFocusedStep((f) => (f === i ? null : f)); clearAdvanceTimer(); } } : undefined,
+    onFieldInput: pinFocus && autoAdvanceMs ? () => armAdvanceTimer(i) : undefined,
+  });
+  return { activeStep, stepProps };
+}
+
+// =====================================================================
+// CUSTOMER APP
+// =====================================================================
+function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, lang, drivers, advanceOpen, setAdvanceOpen, locationPermission, fareTiers, routeFares, adminRouteFares }) {
+  const VEHICLES = vehicleTypes;
+  const [advanceDate, setAdvanceDate] = useState("");
+  const [advanceTime, setAdvanceTime] = useState("");
+  const [showTimeModal, setShowTimeModal] = useState(false);
+  // Whether the Advance date/time panel is expanded — owned by CustomerApp
+  // (advanceOpen/setAdvanceOpen props) since its trigger button now lives
+  // in CustomerApp's header row, not on this page.
+  const [pickup, setPickup] = useState("");
+  const [drop, setDrop] = useState("");
+  const [pickupCoords, setPickupCoords] = useState(null); // {lat,lng} | null
+  const [dropCoords, setDropCoords] = useState(null);
+  const [pickupSelected, setPickupSelected] = useState(false);
+  const [dropSelected, setDropSelected] = useState(false);
+  const [vehicle, setVehicle] = useState(VEHICLES[0]?.key || "chhota");
+  const [weight, setWeight] = useState("");
+  const [distance, setDistance] = useState(null);
+  const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
+  const mapsReady = mapsHasKey && mapsLoaded;
+
+  // Which field (Pickup or Drop) the cursor was last in — tapping a point
+  // on the live map fills THAT field with the tapped location, same as if
+  // it had been typed. Deliberately sticky (only ever set on focus, never
+  // cleared on blur): tapping the map blurs whatever input was focused
+  // before the map's own click event fires, so a "currently focused"
+  // version would already be null by the time this runs. Falls back to
+  // whichever of the two is still empty if neither was ever focused.
+  const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | null
+  const onMapClick = async (lat, lng) => {
+    const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
+    if (!field) return;
+    const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setPickupSelected(true); }
+    else { setDrop(name); setDropCoords({ lat, lng }); setDropSelected(true); }
+  };
+
+  // If the customer typed Pickup/Drop by hand without tapping an
+  // Autocomplete suggestion, pickupCoords/dropCoords stay null — geocode
+  // the typed text after a short pause so the distance estimate (and the
+  // coordinates actually saved on the booking) are still based on the real
+  // location, not left empty or guessed.
+  useEffect(() => {
+    if (!mapsReady || pickupCoords || !pickup.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(pickup).then((loc) => { if (loc) setPickupCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [pickup, pickupCoords, mapsReady]);
+  useEffect(() => {
+    if (!mapsReady || dropCoords || !drop.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(drop).then((loc) => { if (loc) setDropCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [drop, dropCoords, mapsReady]);
+
+  // Customer's own live position for the nearby-vehicles map at the top of
+  // this page — watched (throttled to one write every 5s, same as the
+  // driver/trip GPS effects elsewhere) for as long as this booking screen
+  // is mounted (i.e. until there's an active booking and CustomerApp swaps
+  // this out for ActiveRide).
+  const [customerLocation, setCustomerLocation] = useState(null);
+  const lastHomeGpsRef = useRef(0);
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        locationPermission?.markGranted();
+        const now = Date.now();
+        if (now - lastHomeGpsRef.current < 5000) return;
+        lastHomeGpsRef.current = now;
+        setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      (err) => { if (err.code === err.PERMISSION_DENIED) locationPermission?.markDenied(); },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // Shows the straight-line estimate immediately (no blank/loading state),
+  // then silently upgrades to the real routed distance from Google's
+  // Distance Matrix once it resolves — keeping the straight-line number if
+  // that call fails or Maps isn't configured at all. Both stay null (no
+  // banner shown) until real coordinates for both ends are known.
+  const distanceRequestRef = useRef(0);
+  useEffect(() => {
+    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
+    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
+    if (!hasBothCoords || !mapsReady) return;
+    const requestId = ++distanceRequestRef.current;
+    fetchRoadDistanceKm(pickupCoords, dropCoords)
+      .then((km) => {
+        if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100);
+      })
+      .catch((e) => console.error("[distance matrix]", e));
+  }, [pickupCoords, dropCoords, mapsReady]);
+
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupSelected(true); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropSelected(true); };
+
+  // Minimum lead-time rule for Advance bookings, scaled by load weight —
+  // heavier loads need more notice to actually line up a driver.
+  const advanceNoticeError = (() => {
+    if (!advanceDate || !advanceTime || !weight.trim()) return "";
+    const scheduled = parseScheduledFor(`${advanceDate} ${advanceTime}`);
+    const minHours = minAdvanceNoticeHours(Number(weight) || 0);
+    const hoursUntil = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
+    if (hoursUntil >= minHours) return "";
+    return lang === "en"
+      ? `This weight needs at least ${minHours} hour${minHours > 1 ? "s" : ""} advance notice — please pick a later time.`
+      : lang === "mr"
+      ? `या वजनासाठी किमान ${minHours} तास आधी बुकिंग आवश्यक आहे — कृपया नंतरची वेळ निवडा.`
+      : `इस वजन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`;
+  })();
+
+  const canPostNow = !!(pickup.trim() && drop.trim() && weight.trim());
+  const canPost = canPostNow && !advanceNoticeError;
+
+  useEffect(() => {
+    const w = Number(weight);
+    if (!weight || !w) return;
+    const smallFit = VEHICLES.filter((v) => v.capacityKg >= w).sort((a, b) => a.capacityKg - b.capacityKg)[0];
+    if (smallFit) setVehicle(smallFit.key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weight]);
+
+  const resetFields = () => {
+    setPickup(""); setDrop(""); setWeight("");
+    setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
+  };
+  // Book Now no longer posts straight away — it opens a list of actual
+  // KYC-approved, online drivers who can carry this weight, so the
+  // customer can request one directly (see requestDriver below) instead
+  // of just posting a type and waiting for bids to trickle in. "Post to
+  // all drivers" (post(), below) stays as a fallback for when no one
+  // suitable is listed, or the customer would rather not pick one driver.
+  const [choosingVehicle, setChoosingVehicle] = useState(false);
+  const [requestError, setRequestError] = useState("");
+  // Which driver's card is tapped/highlighted in the picker sheet — a
+  // separate step from actually requesting them (see requestDriver below),
+  // so the customer gets a chance to see the green highlight + "Book Now"
+  // button before the request actually fires, instead of it firing the
+  // instant they tap the card.
+  const [selectedDriverName, setSelectedDriverName] = useState(null);
+  const isScheduling = advanceOpen && !!advanceDate && !!advanceTime;
+  const scheduledForValue = isScheduling ? `${advanceDate} ${advanceTime}` : null;
+
+  // Online, approved, not blacklisted, capacity fits the load, within the
+  // request radius of Pickup — no rate card / fare requirement (pricing is
+  // paused for now, see requestDriverDirectly).
+  const eligibleDrivers = drivers.filter((d) => {
+    if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+    const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+    const loadKg = Number(weight) || 0;
+    if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+    // Fails CLOSED, not open: a real bug reported live -- a customer in
+    // Bansi (Uttar Pradesh) saw every Pune-based driver in the picker,
+    // because pickupCoords hadn't resolved yet (typed and hit Book Now
+    // before the debounced geocode finished) and the old `if (pickupCoords
+    // && d.lastKnownLocation)` guard just skipped the whole distance check
+    // in that case, letting every capacity-matching driver through
+    // nationwide instead of none. Same reasoning for a specific driver
+    // with no lastKnownLocation at all -- their real distance is unknown,
+    // so they're excluded rather than assumed nearby.
+    if (!pickupCoords || !d.lastKnownLocation) return false;
+    // A driver who's still marked online but whose GPS hasn't updated in
+    // NEARBY_DRIVER_STALE_MS is exactly the "toggled Online, then locked
+    // their phone" case (see the Admin Drivers tab's GPS status column,
+    // and admin-driver-gps-status-view in BUG_TRACKER_SEED) -- 92% of a
+    // real fleet measured this way. Their last coordinate could be from
+    // days ago and just happen to fall inside the radius by coincidence;
+    // that's not the same as actually being reachable near this pickup
+    // right now. The "nearby drivers" map (nearbyOnlineDrivers) already
+    // applies this exact cutoff for its own display -- this was the one
+    // place doing real booking matching that didn't.
+    if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
+    {
+      const maxKm = isScheduling ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+      if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > maxKm) return false;
+    }
+    return true;
+  });
+  // Cheapest first, so the customer sees the best price up top instead of
+  // whatever order Firestore happens to return drivers in. Same-priced
+  // drivers (common -- see resolveFare's bracket-wide pricing) then sort
+  // by capacity ascending, so the smallest adequate vehicle for the load
+  // leads the tie instead of an arbitrary Firestore order.
+  const eligibleDriversByPrice = [...eligibleDrivers]
+    .map((d) => ({
+      d,
+      fare: resolveFare(d, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares),
+      capacityKg: Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || Infinity,
+    }))
+    .sort((a, b) => (a.fare ?? Infinity) - (b.fare ?? Infinity) || a.capacityKg - b.capacityKg)
+    .map(({ d }) => d);
+
+  const requestDriver = (driverName) => {
+    setRequestError("");
+    const err = requestDriverDirectly({
+      pickup, drop, weight, distance, scheduledFor: scheduledForValue,
+      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+      driverName,
+    });
+    if (err) { setRequestError(err); return; }
+    resetFields();
+    setChoosingVehicle(false);
+    setSelectedDriverName(null);
+    if (isScheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
+  };
+
+  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+
+  return (
+    <div className="pt-0 pb-8">
+      {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
+      <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} showOpenInMaps={!!(pickup.trim() && drop.trim())} />
+      <div className="px-5 pt-4 space-y-4">
+        {advanceOpen && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              {/* A native date input can't take a real placeholder — this
+                  overlay label (matching Pickup/Drop's grey placeholder
+                  colour, #9CA3AF — Tailwind's default) sits on top and lets
+                  clicks pass through (pointer-events-none) to still open
+                  the native picker; it disappears once a date is chosen and
+                  the input's own text (now dark, like Pickup's typed text)
+                  takes over. */}
+              <div className="relative">
+                <input type="date" value={advanceDate} min={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => { if (!e.target.value || e.target.value >= new Date().toISOString().slice(0, 10)) setAdvanceDate(e.target.value); }}
+                  className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
+                {!advanceDate && (
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#9CA3AF" }}>
+                    {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
+                  </span>
+                )}
+              </div>
+              <button type="button" onClick={() => setShowTimeModal(true)} className={`${inputCls} flex items-center justify-center`} style={inputStyle}>
+                <span className="truncate" style={{ color: advanceTime ? C.ink : "#9CA3AF" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
+              </button>
+            </div>
+            {advanceNoticeError && (
+              <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{advanceNoticeError}</div>
+            )}
+            <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
+          </div>
+        )}
+
+        <LocationField
+          lang={lang}
+          value={pickup}
+          onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupSelected(false); }}
+          onPlaceSelected={onPickupPlaceSelected}
+          mapsReady={mapsReady}
+          placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
+          suggestions={suggestAreas(pickup)}
+          onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); setPickupSelected(false); }}
+          onFocus={() => setActiveField("pickup")}
+          recentItems={recentPickups}
+        />
+
+        <LocationField
+          lang={lang}
+          value={drop}
+          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropSelected(false); }}
+          onPlaceSelected={onDropPlaceSelected}
+          mapsReady={mapsReady}
+          placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
+          suggestions={suggestAreas(drop)}
+          onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
+          onFocus={() => setActiveField("drop")}
+        />
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
+            <Navigation size={16} color={C.inkSoft} className="shrink-0" />
+            <span className="truncate">
+              {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
+            </span>
+          </div>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
+        </div>
+
+        <button onClick={() => setChoosingVehicle(true)} disabled={!canPost} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
+          style={{ background: canPost ? C.success : "#E0E0E0", color: canPost ? "#fff" : "#9AA3B0" }}>
+          🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
+        </button>
+      </div>
+
+      {choosingVehicle && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => { setChoosingVehicle(false); setSelectedDriverName(null); }}>
+          <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[80vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
+              <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose a driver" : lang === "mr" ? "ड्रायव्हर निवडा" : "ड्राइवर चुनें"}</h3>
+              <button onClick={() => { setChoosingVehicle(false); setSelectedDriverName(null); }} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+            </div>
+            <div className="p-4 space-y-2 overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>
+              {requestError && (
+                <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{requestError}</div>
+              )}
+              {eligibleDrivers.length === 0 ? (
+                <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
+                  {lang === "en" ? "No online driver can carry this load right now." : lang === "mr" ? "सध्या हा लोड नेऊ शकेल असा कोणताही ऑनलाइन ड्रायव्हर नाही." : "अभी इस लोड को ले जा सकने वाला कोई ऑनलाइन ड्राइवर नहीं है।"}
+                </p>
+              ) : eligibleDriversByPrice.map((d) => {
+                const isSelected = selectedDriverName === d.name;
+                const driverFare = resolveFare(d, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+                // KYC-entered vehicle capacity, not the shipment weight the
+                // customer just typed above — falls back to the vehicle
+                // type's own default capacity for drivers whose own KYC
+                // record didn't set one directly (same fallback
+                // loadEligibleForDriver uses for eligibility matching).
+                const driverCapacityKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || null;
+                return (
+                  <div key={d.mobile || d.id}>
+                    <button onClick={() => setSelectedDriverName(d.name)}
+                      className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
+                      style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : "transparent" }}>
+                      <SafeImage src={d.vehicleSpec?.photoSide?.url} alt="" className="w-32 h-16 rounded-xl object-contain shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
+                        <div className="w-32 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                          <Truck size={32} color={C.marigoldDeep} />
+                        </div>
+                      } />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px]" style={{ color: C.ink }}>{d.name}</div>
+                        <div className="text-[10px]" style={{ color: C.inkSoft }}>{driverCapacityKg ? `${driverCapacityKg}kg · ` : ""}{vehicleLabel(VEHICLES.find((v) => v.key === d.vehicleSpec?.type), lang) || d.vehicleSpec?.vehicleNumber}</div>
+                      </div>
+                      <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(driverFare)}</div>
+                    </button>
+                    {isSelected && (
+                      <button onClick={() => requestDriver(d.name)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5" style={{ background: C.success }}>
+                        {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"} · {fmt(driverFare)}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Bold From/To route line with pickup/drop dots — used in booking lists so
+// the route is the most visually prominent thing on the card.
+function RouteLine({ pickup, drop, lang }) {
+  return (
+    <div className="flex items-stretch gap-2.5 my-1.5">
+      <div className="flex flex-col items-center pt-1">
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: C.marigoldDeep }} />
+        <span className="flex-1 my-0.5" style={{ width: 2, background: C.line, minHeight: 16 }} />
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: C.safety }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}</div>
+        <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{pickup}</div>
+        <div className="text-[9px] font-bold uppercase tracking-wide mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}</div>
+        <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{drop}</div>
+      </div>
+    </div>
+  );
+}
+
+// Full-width, high-contrast banner stating plainly whether a load/booking
+// is an Immediate or Advance ride, plus its date/time — deliberately big
+// and bold rather than a small pill, so it's the first thing anyone sees
+// on any screen showing load/booking details, for both Customer and Driver.
+function RideTypeBanner({ booking, lang }) {
+  const advance = !!booking.scheduledFor;
+  return (
+    <div className="w-full rounded-xl px-4 py-3.5 mb-3 flex items-center justify-center gap-2.5 text-center" style={{ background: advance ? C.marigoldDeep : C.success }}>
+      <Clock3 size={20} color="#fff" strokeWidth={2.5} />
+      <span className="text-sm sm:text-base font-extrabold text-white tracking-wide">
+        {advance ? (lang === "en" ? "Advance Ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : lang === "mr" ? "तात्काळ राइड" : "तुरंत राइड")} · {rideDateTimeLabel(booking)}
+      </span>
+    </div>
+  );
+}
+
+// Shows a single active (Bidding or Ongoing) booking — the customer's main
+// page focuses on this one card instead of a separate "My Rides" tab.
+function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassignAwaitingDriver, driverVehicle, drivers, lang, onAddAnother, onBidAccepted }) {
+  const VEHICLES = vehicleTypes;
+  const [selectedBid, setSelectedBid] = useState(null);
+  const [acceptError, setAcceptError] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [showDocs, setShowDocs] = useState(false);
+  const docsSent = !!b.documents?.file?.url;
+
+  // The real OTP now lives in its own bookingOtps/{id} doc (see
+  // driverRespondBooking), readable only by this booking's own customer
+  // or Admin — never the driver, and never part of the broadly-readable
+  // bookings/{id} document itself (see otp-readable-by-any-driver in
+  // BUG_TRACKER_SEED). Only subscribed while it's actually still needed
+  // (Ongoing, pickup not yet verified) — no reason to hold a live listener
+  // on it before or after that window.
+  const [pickupOtp, setPickupOtp] = useState(null);
+  useEffect(() => {
+    if (!firestoreReady || b.status !== "Ongoing" || b.loadingStartedAt) { setPickupOtp(null); return; }
+    return subscribeDoc("bookingOtps", b.id, (data) => setPickupOtp(data?.otp || null));
+  }, [b.id, b.status, b.loadingStartedAt]);
+
+  // Computed unconditionally (not just inside the b.status === "Bidding"
+  // branch below) purely so useFlipListAnimation — a hook — can be called
+  // unconditionally too, with the right ordering, on every render.
+  const sortedBids = b.status === "Bidding" ? (b.bids || []).filter((x) => !x.paused).sort((x, y) => x.amount - y.amount || (y.hours || 0) - (x.hours || 0)) : [];
+  const selectedId = selectedBid;
+  // Once the customer taps a bid, it jumps to the top of the list — makes
+  // the screen visibly "settle" around their choice instead of leaving it
+  // wherever price-sorting happened to place it (which could be buried in
+  // the scrollable rest, far from the Book button that now appears right
+  // under it). The true lowest-price bid still keeps its "Lowest bid" tag
+  // even if it's no longer the one on top.
+  const displayBids = selectedId
+    ? [...sortedBids.filter((x) => x.id === selectedId), ...sortedBids.filter((x) => x.id !== selectedId)]
+    : sortedBids;
+  const lowestBidId = sortedBids[0]?.id;
+  // Animates the jump-to-top above as a smooth slide instead of an instant
+  // snap — see useFlipListAnimation. bidsListRef is attached to the shared
+  // wrapper around both the pinned top bid and the scrollable rest below,
+  // so the technique still works even though the moving card physically
+  // reparents between those two containers.
+  const bidsListRef = useRef(null);
+  useFlipListAnimation(bidsListRef, displayBids.map((x) => x.id));
+
+  // 2-minute countdown while waiting on a directly-requested driver (see
+  // the AwaitingDriver branch below, where it's shown inside the clock
+  // icon) — once it hits 0, reassignAwaitingDriver retargets the booking
+  // at the next eligible driver with a similar-capacity vehicle and this
+  // restarts. Computed unconditionally, same reasoning as sortedBids
+  // above, so this hook is always called in the same order regardless of
+  // which branch below actually renders.
+  const isAwaiting = b.status === "AwaitingDriver";
+  const [secondsLeft, setSecondsLeft] = useState(AWAITING_DRIVER_TIMEOUT_SEC);
+  const reassignedForRef = useRef(null);
+  useEffect(() => {
+    if (!isAwaiting) return;
+    const startMs = b.acceptedAt?.toMillis ? b.acceptedAt.toMillis() : Date.now();
+    const tick = () => {
+      const left = Math.max(0, AWAITING_DRIVER_TIMEOUT_SEC - Math.floor((Date.now() - startMs) / 1000));
+      setSecondsLeft(left);
+      if (left === 0 && reassignedForRef.current !== b.pendingDriverName) {
+        reassignedForRef.current = b.pendingDriverName;
+        reassignAwaitingDriver?.(b.id);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAwaiting, b.id, b.pendingDriverName, b.acceptedAt]);
+
+  const shareTrip = () => {
+    const text = lang === "en"
+      ? `My goods are moving via Apna Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
+      : lang === "mr"
+      ? `माझे सामान अपना ट्रान्सपोर्टद्वारे जात आहे.\nबुकिंग: ${b.id}\nड्रायव्हर: ${b.driverName || "—"}\nगाडी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूर्ण`
+      : `मेरा सामान अपना ट्रांसपोर्ट से जा रहा है।\nबुकिंग: ${b.id}\nड्राइवर: ${b.driverName || "—"}\nगाड़ी नंबर: ${driverVehicle?.vehicleNumber || "—"}\nरूट: ${b.pickup} → ${b.drop}\nस्टेटस: ${b.progress}% पूरा`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
+  if (b.status === "AwaitingDriver") {
+    const pd = drivers.find((d) => d.name === b.pendingDriverName);
+    const pdVeh = VEHICLES.find((vt) => vt.key === pd?.vehicleSpec?.type);
+    return (
+      <div className="min-h-full flex flex-col justify-between px-5 py-5">
+        <div className="rounded-xl p-4 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+          {b.scheduledFor && (
+            <div className="rounded-lg p-2 mb-3 flex items-center justify-center gap-1.5 shadow-lg" style={{ background: C.marigoldDeep }}>
+              <Clock3 size={12} color="#FFFFFF" />
+              <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
+            </div>
+          )}
+          <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2 guided-submit-ready" style={{ background: C.navy }}>
+            <span className="text-base font-black" style={{ color: "#FFFFFF" }}>{secondsLeft}</span>
+          </div>
+          <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for Driver's Confirmation" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
+          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{pdVeh ? `${vehicleLabel(pdVeh, lang)} · ${b.pendingDriverName}` : b.pendingDriverName}{b.fare ? ` · ${fmt(b.fare)}` : ""}</div>
+        </div>
+        <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: "#8B0000" }}>
+          {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+        </button>
+      </div>
+    );
+  }
+
+  if (b.status === "Bidding") {
+    // Each bid comes from a driver who may have a different vehicle type,
+    // so the vehicle shown per bid is that driver's own — never the load's
+    // pre-suggested type, since the customer never confirmed one.
+    const bidRow = (bid, isLowest) => {
+      const isSelected = selectedId === bid.id;
+      const bidDriver = drivers.find((d) => d.name === bid.driverName);
+      const bidVehicleType = VEHICLES.find((vt) => vt.key === bidDriver?.vehicleSpec?.type);
+      return (
+        <React.Fragment key={bid.id}>
+        <div onClick={() => setSelectedBid(bid.id)} data-flip-id={bid.id}
+          className="w-full text-left rounded-xl p-3 relative cursor-pointer"
+          style={{ background: C.paper, border: `${isSelected ? 2.5 : 1.5}px solid ${isSelected ? C.marigoldDeep : isLowest ? C.success : C.marigoldDeep}` }}>
+          {isLowest && <span className="absolute -top-2 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.success }}>{lang === "en" ? "Lowest bid" : lang === "mr" ? "सर्वात कमी बोली" : "सबसे कम बोली"}</span>}
+          <div className="flex items-center gap-3 mt-1">
+            <SafeImage
+              src={bidDriver?.vehicleSpec?.photoSide?.url}
+              alt={lang === "en" ? `${vehicleLabel(bidVehicleType, lang)} - Side` : lang === "mr" ? `${vehicleLabel(bidVehicleType, lang)} - बाजू` : `${vehicleLabel(bidVehicleType, lang)} - साइड`}
+              className="w-14 h-14 rounded-lg object-cover shrink-0"
+              fallback={
+                <div className="w-14 h-14 rounded-lg flex items-center justify-center shrink-0" style={{ background: isSelected ? C.marigoldDeep : isLowest ? C.success : C.marigoldDeep }}>
+                  <Truck size={22} color="#fff" />
+                </div>
+              }
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{vehicleLabel(bidVehicleType, lang) || bid.driverName}</div>
+              {bid.distanceKm != null && <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{bid.distanceKm} {lang === "en" ? "km away" : lang === "mr" ? "किमी दूर" : "किमी दूर"}</div>}
+              {bidVehicleType && <div className="text-[9px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{vehicleCapacity(bidVehicleType, lang)}</div>}
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-base font-bold" style={{ color: "#000000" }}>{fmt(bid.amount)}</div>
+            </div>
+          </div>
+          {(bid.hours || bid.extraHourRate) && (
+            <div className="text-xs font-bold mt-1.5 pt-1.5" style={{ color: C.ink, borderTop: `1px solid ${C.marigoldDeep}` }}>
+              {bid.hours ? (lang === "en" ? `${bid.hours} hrs loading/unloading · ` : lang === "mr" ? `${bid.hours} तास लोडिंग/अनलोडिंग · ` : `${bid.hours} घंटे लोडिंग/अनलोडिंग · `) : ""}
+              {bid.extraHourRate ? (lang === "en" ? `then ${fmt(bid.extraHourRate)}/hr waiting charge` : lang === "mr" ? `त्यानंतर ${fmt(bid.extraHourRate)}/तास वेटिंग चार्ज` : `उसके बाद ${fmt(bid.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
+            </div>
+          )}
+          <div className="flex justify-end mt-2">
+            <button onClick={(e) => { e.stopPropagation(); setSelectedBid(bid.id); }}
+              className="flex items-center gap-1 rounded-full px-4 py-2.5 text-base font-black shadow-sm text-white"
+              style={{ background: "#0052CC" }}>
+              {isSelected ? <><CheckCircle2 size={14} /> {lang === "en" ? "Selected" : lang === "mr" ? "निवडलेले" : "चयनित"}</> : (lang === "en" ? "Select" : lang === "mr" ? "निवडा" : "चुनें")}
+            </button>
+          </div>
+        </div>
+        {isSelected && (
+          <>
+            <button onClick={() => {
+              const err = acceptBid(b.id, bid.id);
+              if (err) setAcceptError(err);
+              else { setSelectedBid(null); setAcceptError(""); onBidAccepted?.(b); }
+            }}
+              className="w-full rounded-lg py-3.5 font-bold text-base mt-2 text-white" style={{ background: C.success }}>
+              {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"}
+            </button>
+            {acceptError && <div className="text-xs font-bold mt-1" style={{ color: C.safety }}>{acceptError}</div>}
+          </>
+        )}
+        </React.Fragment>
+      );
+    };
+    return (
+      <div className="px-5 py-5">
+        <div className="rounded-xl p-3 mb-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+            {b.scheduledFor && (
+              <div className="rounded-lg p-2 mb-2 flex items-center gap-1.5 shadow-lg" style={{ background: C.marigoldDeep }}>
+                <Clock3 size={12} color="#FFFFFF" />
+                <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
+              </div>
+            )}
+            {b.declinedBy?.length > 0 && (
+              <div className="rounded-lg p-2 mb-2 text-[11px] font-bold" style={{ background: "#FDECEC", color: C.safety }}>
+                {lang === "en" ? "The driver you picked couldn't take it — please choose another vehicle." : lang === "mr" ? "तुम्ही निवडलेला ड्रायव्हर घेऊ शकला नाही — कृपया दुसरी गाडी निवडा." : "आपने जो ड्राइवर चुना वह नहीं ले सका — कृपया दूसरी गाड़ी चुनें।"}
+              </div>
+            )}
+
+            {sortedBids.length === 0 ? (
+              <div className="guided-submit-ready shadow-lg rounded-lg px-4 py-3 my-1 flex items-center justify-center" style={{ background: C.navy }}>
+                <span className="text-sm font-black text-center" style={{ color: "#FFFFFF" }}>{lang === "en" ? "In some time, you will see vehicles according to your requirement" : lang === "mr" ? "थोड्याच वेळात तुमच्या गरजेनुसार गाड्या दिसतील" : "कुछ ही समय में आपकी ज़रूरत के अनुसार गाड़ियां दिखेंगी"}</span>
+              </div>
+            ) : (
+              <div className="space-y-2" ref={bidsListRef}>
+                {bidRow(displayBids[0], displayBids[0].id === lowestBidId)}
+                {displayBids.length > 1 && (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
+                    {displayBids.slice(1).map((bid) => bidRow(bid, bid.id === lowestBidId))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {sortedBids.length === 0 && (
+              <div className="flex justify-end mt-2">
+                <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-sm font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel load" : lang === "mr" ? "लोड रद्द करा" : "लोड रद्द करें"}</button>
+              </div>
+            )}
+            {cancelError && <div className="text-[11px] font-bold mt-1 text-right" style={{ color: C.safety }}>{cancelError}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  const v = VEHICLES.find((x) => x.key === b.vehicle);
+  return (
+    <div className="pt-0 pb-5">
+      {/* Live map placed at the very top, edge-to-edge — matches the exact
+          position/pattern NearbyVehiclesMap uses on CustomerBooking's main
+          page, instead of being tucked mid-page inside a padded card. A
+          fixed vh height is passed straight to LiveTrackingMap itself (no
+          wrapping div + height:100% indirection) — that percentage-height
+          chain was found to silently collapse to zero on some devices,
+          leaving the whole map invisible and untappable; a plain vh value
+          has no such ambiguity. */}
+      <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
+        driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="35vh" lang={lang}
+        mode={b.loadingStartedAt ? "route" : "toPickup"} />
+    <div className="px-5 pt-3">
+      <div className="rounded-2xl py-3.5 px-2 mb-2.5 shadow-sm flex items-center justify-between gap-1" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        {onAddAnother ? (
+          <button onClick={onAddAnother} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} color="#000000" strokeWidth={3} />
+          </button>
+        ) : <div />}
+        {/* Until the driver actually enters this OTP (loadingStartedAt flips
+            true), show it right here so it's impossible to miss — Invoice
+            only makes sense once loading has genuinely started, so it takes
+            this exact spot the moment OTP is no longer needed instead of
+            the two ever being shown at once. */}
+        {pickupOtp && !b.loadingStartedAt ? (
+          <div className="flex-1 rounded-xl px-3 py-1.5 text-center guided-submit-ready">
+            <div className="text-[8px] font-black" style={{ color: C.inkSoft }}>{lang === "en" ? "OTP" : lang === "mr" ? "OTP" : "OTP"}</div>
+            <div className="text-lg font-black leading-none mt-0.5" style={{ color: "#000000", fontFamily: monoFont, letterSpacing: 4 }}>{pickupOtp}</div>
+          </div>
+        ) : (
+          <button onClick={() => setShowDocs(true)} className="shrink-0 flex items-center gap-1.5 pl-3 pr-3.5 py-3 rounded-full text-base font-black shadow-sm text-white"
+            style={{ background: docsSent ? C.metallicGreen : C.navy, border: `1.5px solid ${docsSent ? C.success : C.navy}` }}>
+            <FileText size={15} /> {docsSent ? (lang === "en" ? "Sent ✓" : lang === "mr" ? "पाठवले गेले ✓" : "भेजा गया ✓") : (lang === "en" ? "Invoice" : lang === "mr" ? "इनव्हॉइस" : "इनवॉइस")}
+          </button>
+        )}
+      </div>
+
+      <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex-1 p-3 flex items-center gap-2.5">
+          <SafeImage
+            src={drivers.find((d) => d.name === b.driverName)?.photo?.url}
+            alt={lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}
+            className="w-10 h-10 rounded-full object-cover"
+            fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>}
+          />
+          <div className="text-sm font-bold" style={{ color: C.ink }}>{b.driverName}</div>
+        </div>
+        <div className="w-px" style={{ background: C.line }} />
+        <div className="flex-1 p-3">
+          <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Details" : lang === "mr" ? "गाडीची माहिती" : "गाड़ी की जानकारी"}</div>
+          <div className="text-sm font-bold mt-0.5" style={{ color: C.ink }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "unavailable" : lang === "mr" ? "उपलब्ध नाही" : "उपलब्ध नहीं")}</div>
+        </div>
+      </div>
+
+      {b.driverMobile && (
+        <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
+          label={lang === "en" ? "Call Driver" : lang === "mr" ? "कॉल ड्रायव्हर" : "कॉल ड्राइवर"}
+          className="w-full flex items-center justify-center gap-2 px-3.5 py-3.5 mb-2.5 rounded-2xl text-base font-black shadow-sm"
+          style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
+      )}
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        {!b.loadingStartedAt && (
+          <div style={{ color: C.ink }}>
+            <span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span>
+            {b.distance != null && (
+              <div className="mt-1.5">
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(b.distance, lang)}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {b.loadingStartedAt && (
+          <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
+        )}
+      </div>
+
+      {b.loadingStartedAt && (
+        <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: "#4FC3F7", border: "2px solid #0288D1" }}>
+          <div className="text-sm font-bold" style={{ color: "#FFFFFF", fontFamily: bodyFont }}>
+            {lang === "en" ? "💡 Once the vehicle is loaded, the driver may ask for an advance payment — this is a mutual agreement between the customer and driver, not a fixed app rule." : lang === "mr" ? "💡 गाडी लोड झाल्यानंतर ड्रायव्हर अ‍ॅडव्हान्स पेमेंट मागू शकतो — ही ग्राहक आणि ड्रायव्हर यांच्यातील परस्पर सहमती आहे, अ‍ॅपचा कोणताही निश्चित नियम नाही." : "💡 गाड़ी लोड होने के बाद ड्राइवर एडवांस भुगतान मांग सकता है — यह ग्राहक और ड्राइवर के बीच आपसी सहमति है, ऐप का कोई तय नियम नहीं।"}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        {b.loadingStartedAt && <TripOvertimeBanner booking={b} lang={lang} />}
+        {!b.loadingStartedAt && (
+          <div className="flex justify-end">
+            <button onClick={() => { const err = cancelBooking(b.id); if (err) setCancelError(err); }} className="text-sm font-semibold flex items-center justify-center" style={{ color: C.safety }}>{lang === "en" ? "Cancel booking" : lang === "mr" ? "बुकिंग रद्द करा" : "बुकिंग रद्द करें"}</button>
+          </div>
+        )}
+        {b.loadingStartedAt && (
+          <div className="rounded-lg p-2.5" style={{ background: C.safety, color: "#FFFFFF" }}>
+            <div className="text-[11px] font-bold">
+              ⚠️ {lang === "en" ? "This trip cannot be cancelled now — it will end only when the driver completes it (End Trip)." : lang === "mr" ? "ही ट्रिप आता रद्द केली जाऊ शकत नाही — ही फक्त ड्रायव्हरने पूर्ण (End Trip) केल्यावरच संपेल." : "यह ट्रिप अब रद्द नहीं की जा सकती — यह केवल ड्राइवर द्वारा पूरी (End Trip) करने पर ही समाप्त होगी।"}
+            </div>
+          </div>
+        )}
+        {b.loadingStartedAt && (
+          <div className="flex justify-end mt-2">
+            <button onClick={shareTrip} className="text-sm font-semibold flex items-center justify-center gap-1" style={{ color: C.success }}><MessageCircle size={12} /> {lang === "en" ? "Share trip" : lang === "mr" ? "ट्रिप शेअर करा" : "ट्रिप शेयर करें"}</button>
+          </div>
+        )}
+        {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
+      </div>
+      {showDocs && <BillDocumentsModal booking={b} onClose={() => setShowDocs(false)} lang={lang} />}
+    </div>
+    </div>
+  );
+}
+
+// Completed/cancelled booking history — reached from the hamburger menu now
+// that the main page focuses on the single active ride.
+function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
+  const VEHICLES = vehicleTypes;
+  const others = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled");
+  const [docsBooking, setDocsBooking] = useState(null);
+  const statusMeta = lang === "en"
+    ? { Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
+    : { Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
+
+  // Same Context/Time/Charges breakdown as the in-app trip summary table
+  // (see TripBreakdownTable), laid out as a fixed-width plain-text table
+  // since this downloads as a .txt file — no HTML/CSS available to draw
+  // real borders, so column padding + a rule line stand in for them.
+  const downloadInvoice = (b) => {
+    const baseFare = (b.fare || 0) - (b.extraCharge || 0);
+    const { totalMs, loadingUnloadingMs, waitingMs } = tripHourBreakdown(b);
+    const col1 = 34, col2 = 16;
+    const line = (context, time, charges) => `${context.padEnd(col1)}${(time || "-").padEnd(col2)}${charges || "-"}`;
+    const rule = "-".repeat(col1 + col2 + 12);
+    const rows = [
+      line("Fare", "-", fmt(baseFare)),
+      line("Total time", fmtHrMin(totalMs, "en"), "-"),
+      line("Loading/Unloading time", fmtHrMin(loadingUnloadingMs, "en"), "-"),
+    ];
+    if (b.extraCharge > 0) rows.push(line(`Waiting charge (${fmt(b.extraHourRate || 0)}/hr)`, fmtHrMin(waitingMs, "en"), fmt(b.extraCharge)));
+    rows.push(rule, line("Total", "-", fmt(b.fare)));
+    const text = [
+      "Apna Transport - Trip Invoice",
+      `Booking: ${b.id}`, `Pickup: ${b.pickup}`, `Drop: ${b.drop}`,
+      `Vehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}`, `Distance: ${b.distance} km`, "",
+      line("Context", "Time", "Charges (Rs)"), rule, ...rows, "",
+      `Status: ${b.status}`,
+    ].join("\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${b.id}-invoice.txt`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="px-5 py-4">
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Ride History" : lang === "mr" ? "राइड हिस्टरी" : "राइड हिस्ट्री"}</h2>
+      {others.length === 0 ? (
+        <div className="text-center py-12 px-6">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.marigoldDeep }}>
+            <Package size={26} color="#FFFFFF" />
+          </div>
+          <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No past rides yet" : lang === "mr" ? "अजून कोणतीही जुनी राइड नाही" : "अभी कोई पुरानी राइड नहीं है"}</p>
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Completed and cancelled bookings will show up here." : lang === "mr" ? "पूर्ण आणि रद्द बुकिंग इथे दिसतील." : "पूर्ण और रद्द बुकिंग यहां दिखेंगी।"}</p>
+        </div>
+      ) : others.map((b) => {
+        const meta = statusMeta[b.status];
+        return (
+          <div key={b.id} className="rounded-xl mb-3 p-3 shadow-sm" style={{ background: C.paper, border: `1px dashed ${C.line}` }}>
+            <div className="flex justify-between items-start">
+              <div className="text-[11px]" style={{ fontFamily: monoFont, color: C.inkSoft }}>{b.id}</div>
+              <div className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: meta.color, background: meta.bg }}>{meta.label}</div>
+            </div>
+            <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+            <div className="flex items-center justify-between mt-2">
+              <div>
+                <div className="text-[9px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Transaction Amount" : lang === "mr" ? "व्यवहार रक्कम" : "लेन-देन राशि"}</div>
+                <span className="text-lg font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{b.fare ? fmt(b.fare) : "—"}</span>
+              </div>
+              {b.status === "Completed" && (
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setDocsBooking(b)} className="text-sm font-semibold flex items-center gap-1" style={{ color: b.documents?.file?.url ? C.success : C.marigoldDeep }}>
+                    <FileText size={12} /> {lang === "en" ? "Send Invoice" : lang === "mr" ? "इनव्हॉइस पाठवा" : "इनवॉइस भेजें"}
+                  </button>
+                  <button onClick={() => downloadInvoice(b)} className="text-sm font-semibold flex items-center gap-1" style={{ color: C.marigoldDeep }}><Download size={12} /> {lang === "en" ? "Invoice" : lang === "mr" ? "इनव्हॉइस" : "इनवॉइस"}</button>
+                </div>
+              )}
+            </div>
+            {b.status === "Completed" && b.fare > 0 && (
+              <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>
+                {lang === "en" ? "Payment Type" : lang === "mr" ? "पेमेंटचा प्रकार" : "भुगतान का प्रकार"}: <span className="font-semibold" style={{ color: C.ink }}>{lang === "en" ? "Cash / UPI (paid directly to driver)" : lang === "mr" ? "रोख / UPI (थेट ड्रायव्हरला)" : "नकद / UPI (सीधे ड्राइवर को)"}</span>
+              </div>
+            )}
+            {b.status === "Completed" && (
+              <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                <span className="text-[11px]" style={{ color: C.inkSoft }}>{b.rating ? (lang === "en" ? "Your rating:" : lang === "mr" ? "तुमचे रेटिंग:" : "आपकी रेटिंग:") : (lang === "en" ? "Rate the driver:" : lang === "mr" ? "ड्रायव्हरला रेट करा:" : "ड्राइवर को रेट करें:")}</span>
+                <StarRating value={b.rating} onRate={(n) => rateBooking(b.id, n)} />
+              </div>
+            )}
+            {b.status === "Completed" && b.fare > 0 && (
+              <div className="mt-2">
+                <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : lang === "mr" ? "बेस भाडे" : "बेस भाड़ा"} baseFare={b.fare - (b.extraCharge || 0)} totalAmount={b.fare} trip={b} lang={lang} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {docsBooking && <BillDocumentsModal booking={docsBooking} onClose={() => setDocsBooking(null)} lang={lang} />}
+    </div>
+  );
+}
+
+// Editable customer profile — photo, name, email, mobile (read-only, tied to
+// the verified login), and address, with a Save button that persists via
+// onUpdateProfile.
+function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, onChangeLang, onLogout }) {
+  const [name, setName] = useState(customerProfile?.name || "");
+  const [photo, setPhoto] = useState(customerProfile?.photo || null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+
+  // Kept to just name + photo (mobile is the login itself, never edited
+  // here) — email/address/area/city/state/pincode were dropped in the
+  // profile-simplification pass; the app never used them for anything.
+  const save = () => {
+    onSave?.({ name: name.trim(), photo });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  // Migration nudge for an account still on the old Firebase Phone Auth
+  // login (real phone-auth users never get a Firebase email set) — lets
+  // them add PIN login on TOP of their existing session via linkWithCredential
+  // (same uid, same account, no new/competing account and no re-verification
+  // needed since they're already proven by just being logged in here).
+  // Already-PIN accounts (email set) or brand-new PIN signups never see this.
+  const hasPinAlready = !!customerFirebaseAuth?.currentUser?.email;
+  const [pinPromptOpen, setPinPromptOpen] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [newPinConfirm, setNewPinConfirm] = useState("");
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pinError, setPinError] = useState("");
+  const [pinDone, setPinDone] = useState(false);
+
+  const setUpPin = async () => {
+    if (newPin.length !== 4 || newPin !== newPinConfirm || pinSaving || !customerFirebaseAuth?.currentUser || !customerMobile) return;
+    setPinSaving(true);
+    setPinError("");
+    try {
+      const credential = EmailAuthProvider.credential(pinAuthEmail(customerMobile, "customer"), pinToPassword(newPin));
+      await linkWithCredential(customerFirebaseAuth.currentUser, credential);
+      setPinDone(true);
+      setNewPin(""); setNewPinConfirm(""); setPinPromptOpen(false);
+    } catch (e) {
+      console.error(e);
+      setPinError(lang === "en" ? "Couldn't set PIN — try again." : lang === "mr" ? "PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "PIN सेट नहीं हो सका — फिर कोशिश करें।");
+    }
+    setPinSaving(false);
+  };
+
+  return (
+    <div className="px-5 py-4">
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}</h2>
+      <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex justify-center">
+          <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => {
+            setPhotoUploading(true); setPhotoError(false);
+            uploadPhoto(f, `customers/${customerMobile}/profile.jpg`).then((p) => {
+              setPhotoUploading(false);
+              if (p) setPhoto(p); else setPhotoError(true);
+            });
+          }}>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center cursor-pointer overflow-hidden" style={{ background: C.paper, border: `2px dashed ${C.marigoldDeep}` }}>
+              {photoUploading
+                ? <p className="text-[9px] text-center px-1" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading..." : lang === "mr" ? "अपलोड होत आहे..." : "अपलोड हो रहा है..."}</p>
+                : <SafeImage src={photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={22} color={C.marigoldDeep} />} />}
+            </div>
+          </PhotoPicker>
+        </div>
+        {photoError && (
+          <p className="text-[10px] font-semibold text-center" style={{ color: C.safety }}>{lang === "en" ? "Photo upload failed — please try another photo" : lang === "mr" ? "फोटो अपलोड झाला नाही — कृपया दुसरा फोटो वापरा" : "फोटो अपलोड नहीं हुई — कृपया दूसरी फोटो लें"}</p>
+        )}
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
+          <input className={inputCls} style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : lang === "mr" ? "मोबाइल" : "मोबाइल"}</label>
+          <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, background: C.bg, color: C.inkSoft }} value={customerMobile || ""} disabled />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Language" : lang === "mr" ? "भाषा" : "भाषा"}</label>
+          <select className={inputCls} style={inputStyle} value={lang} onChange={(e) => onChangeLang?.(e.target.value)}>
+            <option value="en">English</option>
+            <option value="hi">हिंदी</option>
+            <option value="mr">मराठी</option>
+          </select>
+        </div>
+        <button onClick={save} disabled={photoUploading} className={`w-full rounded-lg py-3.5 font-bold text-base text-white ${saved ? "shadow-lg" : ""}`} style={{ background: photoUploading ? C.line : saved ? C.metallicGreen : C.marigoldDeep }}>
+          {photoUploading ? (lang === "en" ? "Uploading photo..." : lang === "mr" ? "फोटो अपलोड होत आहे..." : "फोटो अपलोड हो रही है...") : saved ? (lang === "en" ? "Saved ✓" : lang === "mr" ? "सेव्ह झाले ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें")}
+        </button>
+      </div>
+
+      {!hasPinAlready && (
+        <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+          {pinDone ? (
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={18} color={C.success} />
+              <span className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "PIN set! You can use it to log in next time." : lang === "mr" ? "PIN सेट झाला! पुढच्या वेळी लॉगिनसाठी वापरू शकता." : "PIN सेट हो गया! अगली बार लॉगिन के लिए इस्तेमाल कर सकते हैं।"}</span>
+            </div>
+          ) : !pinPromptOpen ? (
+            <>
+              <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Set a PIN for faster login" : lang === "mr" ? "जलद लॉगिनसाठी PIN सेट करा" : "तेज़ लॉगिन के लिए PIN सेट करें"}</div>
+              <p className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Skip the OTP next time — just your mobile number and a PIN." : lang === "mr" ? "पुढच्या वेळी OTP टाळा — फक्त मोबाइल नंबर आणि PIN." : "अगली बार OTP छोड़ें — बस मोबाइल नंबर और PIN।"}</p>
+              <button onClick={() => setPinPromptOpen(true)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Set PIN" : lang === "mr" ? "PIN सेट करा" : "PIN सेट करें"}</button>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={newPin} onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
+              <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
+                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
+              {newPin && newPinConfirm && newPin !== newPinConfirm && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>}
+              {pinError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{pinError}</div>}
+              <button onClick={setUpPin} disabled={newPin.length !== 4 || newPin !== newPinConfirm || pinSaving}
+                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E0E0E0", color: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
+                {pinSaving ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save PIN" : lang === "mr" ? "PIN सेव्ह करा" : "PIN सेव करें")}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
+        <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
+      </button>
+    </div>
+  );
+}
+
+// Shown to the customer the moment the driver taps End Trip — the booking
+// flips straight to status "Completed", which would otherwise drop the
+// customer instantly back to the "What do you need?" chooser (activeBooking
+// only matches Bidding/Ongoing) with no chance to review what they owe.
+// Mirrors the driver's own DriverTripSummary.
+function CustomerTripSummary({ trip, lang, onDone }) {
+  const baseFare = (trip.fare || 0) - (trip.extraCharge || 0);
+  const totalAmount = trip.fare || 0;
+  const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  return (
+    <div>
+      <div className="rounded-2xl p-4 mb-2.5 shadow-sm text-center" style={{ background: C.navy }}>
+        <div className="text-xl font-black" style={{ color: "#FFFFFF" }}>Apna Transport</div>
+        <div className="text-[11px] font-bold mt-0.5" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Trip Invoice" : lang === "mr" ? "ट्रिप इनव्हॉइस" : "ट्रिप इनवॉइस"}</div>
+      </div>
+
+      <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "LR No." : "LR नंबर"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink, fontFamily: monoFont }}>{trip.id}</div>
+        </div>
+        <div className="w-px" style={{ background: C.line }} />
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Date" : lang === "mr" ? "दिनांक" : "तारीख़"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{completedLabel || "—"}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.driverName || "—"}</div>
+        </div>
+        <div className="w-px" style={{ background: C.line }} />
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : lang === "mr" ? "ग्राहक" : "ग्राहक"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.customerName || "—"}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
+        <CheckCircle2 size={20} color={C.success} className="shrink-0" />
+        <div className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : lang === "mr" ? "ट्रिप पूर्ण झाली" : "ट्रिप पूरी हुई"}</div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <RouteLine pickup={trip.pickup} drop={trip.drop} lang={lang} />
+      </div>
+
+      <TripBreakdownTable baseFareLabel={lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"} baseFare={baseFare} totalAmount={totalAmount} trip={trip} lang={lang} />
+
+      <button onClick={onDone} className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
+        {lang === "en" ? "Done" : lang === "mr" ? "पूर्ण" : "पूर्ण"}
+      </button>
+    </div>
+  );
+}
+
+function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Badge + "View your Booking here" callout on the hamburger button, shown
+  // right after a bid is accepted (see the onBidAccepted callbacks below)
+  // until the menu is actually opened — see HamburgerHint.
+  const [showBookingHint, setShowBookingHint] = useState(false);
+  // Whether CustomerBooking's Advance-ride Date/Time panel is expanded —
+  // lifted up here (rather than owned inside CustomerBooking) so the
+  // trigger button can live in this header row instead of on the page
+  // itself.
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState(null); // 'helpline' | 'profile' | 'liveLocation' | 'settings' | 'history' | null
+  const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
+  // Toggle between Current and Advance rides, shown as a bar in the header
+  // (between the hamburger menu and Home button) instead of a hamburger-menu
+  // entry — replaces the old "Advance Bookings" menu item.
+  const [rideView, setRideView] = useState("current");
+  // `bookings` is the whole platform's list (drivers need to see every open
+  // load to bid on) — a customer must only ever see their own, so every
+  // lookup below filters to this customer's mobile number first.
+  const myBookings = bookings.filter((b) => b.customerMobile === customerMobile);
+  // Last 3 distinct pickup addresses this customer has actually used
+  // before, coordinates included (from that booking's own pickupLat/Lng —
+  // no re-geocoding needed) — shown as a quick "recent" list the moment
+  // they tap into the Pickup field, before typing anything, mirroring the
+  // common ride-hailing-app pattern. myBookings is already newest-first
+  // (see subscribeCollection's default createdAt-desc ordering), so the
+  // first occurrence of a given address is always its most recent use.
+  const recentPickups = [];
+  const seenPickupNames = new Set();
+  for (const b of myBookings) {
+    const name = b.pickup?.trim();
+    if (!name || seenPickupNames.has(name) || b.pickupLat == null || b.pickupLng == null) continue;
+    seenPickupNames.add(name);
+    recentPickups.push({ name, lat: b.pickupLat, lng: b.pickupLng });
+    if (recentPickups.length >= 3) break;
+  }
+  // Posting a new ride while another one is already active/advance-booked —
+  // see the "Back" button on ActiveRide below, which flips this back on to
+  // return to the booking form. Cleared the moment a new booking actually
+  // lands (myBookings.length changes).
+  const [addingAnother, setAddingAnother] = useState(false);
+  useEffect(() => { setAddingAnother(false); }, [myBookings.length]);
+  // A booking scheduled for a future date shouldn't hog the home screen or
+  // block posting today's ride — it stays reachable via the Current/Advance
+  // toggle in the header instead (see rideView below).
+  // Still-Bidding advance loads stay on the main page like any other load
+  // (so the customer sees bids come in and can accept one) — only a bid
+  // actually being accepted (status flips to Ongoing) moves a future-dated
+  // one out to Advance Bookings.
+  const advanceBookings = myBookings.filter((b) => b.status === "Ongoing" && isFutureAdvance(b.scheduledFor));
+  const ongoingTrip = myBookings.find((b) => b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor));
+  // "AwaitingDriver" = the customer picked a bid and is waiting for that
+  // driver to Accept/Reject. Keep it on the Current tab regardless of
+  // advance/current so the customer sees the "waiting" card; once the
+  // driver Accepts it flips to Ongoing and (if advance) moves to the menu.
+  const activeBooking = myBookings.find((b) => b.status === "Bidding" || b.status === "AwaitingDriver" || (b.status === "Ongoing" && !isFutureAdvance(b.scheduledFor)));
+
+  // Surfaces a fare-review summary the moment the driver ends the trip,
+  // instead of silently dropping the customer back to the chooser the
+  // instant status flips to Completed (see CustomerTripSummary above).
+  // Deliberately NOT a "detect the live transition" effect — that only
+  // fires if this component happened to stay mounted at the exact moment
+  // the driver tapped End Trip. A customer's phone is very often locked/
+  // backgrounded mid-delivery, so reopening the app afterward would skip
+  // straight past that moment and never show anything. Instead this is
+  // derived every render from persisted data: the most recently completed
+  // booking, shown until acknowledged (Done) — survives the app being
+  // fully closed and reopened.
+  const [ackedTripId, setAckedTripId] = usePersistedState(`sarthi_ackedTrip_${customerMobile}`, null);
+  const recentCompleted = myBookings
+    .filter((b) => b.status === "Completed" && b.completedAt && Date.now() - b.completedAt < 2 * 60 * 60 * 1000)
+    .sort((a, b) => b.completedAt - a.completedAt)[0] || null;
+  const completedTripSummary = recentCompleted && recentCompleted.id !== ackedTripId ? recentCompleted : null;
+  // Whichever single booking ActiveRide is currently showing (if any) — used
+  // to put its "Immediate/Advance Ride · date time" badge in the header, in
+  // the gap between the hamburger menu and Home button, instead of inside
+  // the page body where RideTypeBanner used to render it.
+  const headerRideBooking = rideView === "current"
+    ? (activeBooking && !addingAnother ? activeBooking : null)
+    : advanceBookings.find((ab) => ab.id === selectedAdvanceId) || null;
+  // The hamburger shows whenever the main booking page (map +
+  // Pickup/Drop/Weight, with the Advance ride panel just expanding in
+  // place on that same page) is what's on screen — i.e. the Current tab
+  // with no active/being-added ride.
+  const showHamburger = rideView === "current" && (!activeBooking || addingAnother);
+  // The actual assigned driver's vehicle — looked up from the shared drivers
+  // list by name, not this device's own driver session (a customer's phone
+  // usually isn't also logged in as the driver who accepted their load).
+  const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
+  const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer");
+  // Lifted up here (rather than owned inside CustomerBooking) so the same
+  // permission state/banner carries across from the booking-entry screen
+  // into the Ongoing-trip GPS sharing below, instead of resetting the
+  // moment CustomerBooking unmounts for ActiveRide.
+  const locationPermission = useLocationPermission();
+  const rideNotifications = useRideNotifications("customers", customerMobile, lang);
+
+  // Real GPS live-tracking, mirroring the driver's own — shares the
+  // customer's actual device location while a trip is Ongoing, so the
+  // driver (and the customer's own map) can see both parties together.
+  const lastCustomerGpsWriteRef = useRef(0);
+  useEffect(() => {
+    if (!ongoingTrip || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        locationPermission.markGranted();
+        const now = Date.now();
+        if (now - lastCustomerGpsWriteRef.current < 5000) return;
+        lastCustomerGpsWriteRef.current = now;
+        const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
+        patchDoc("bookings", ongoingTrip.id, { customerLocation: location }).catch((e) => console.error(e));
+      },
+      (err) => { console.error("GPS tracking error", err); if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied(); },
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ongoingTrip?.id]);
+
+  const shareApp = () => {
+    // No referral code — customers no longer earn anything for sharing
+    // (only drivers do, see DriverApp's shareApp).
+    const link = "https://sarthi-transport-74865.web.app";
+    const msg = lang === "en"
+      ? `Book trucks and tempos easily with Apna Transport. Download the app: ${link}`
+      : lang === "mr"
+      ? `ट्रक आणि टेम्पो सहज बुक करण्यासाठी अपना ट्रान्सपोर्ट डाउनलोड करा: ${link}`
+      : `ट्रक और टेम्पो आसानी से बुक करने के लिए अपना ट्रांसपोर्ट डाउनलोड करें: ${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  if (completedTripSummary) {
+    return (
+      <div className="flex-1 overflow-y-auto relative px-5 pt-5 pb-5">
+        <CustomerTripSummary trip={completedTripSummary} lang={lang} onDone={() => setAckedTripId(completedTripSummary.id)} />
+      </div>
+    );
+  }
+
+  if (settingsView) {
+    return (
+      <div className="flex-1 overflow-y-auto relative">
+        <div className="px-5 pt-3">
+          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 p-3 rounded-full shadow-sm self-start" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} />
+          </button>
+        </div>
+        {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} />}
+        {settingsView === "profile" && (
+          <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} />
+        )}
+        {settingsView === "history" && <CustomerHistory bookings={myBookings} vehicleTypes={vehicleTypes} rateBooking={rateBooking} lang={lang} />}
+        {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={customerMobile} toRole="customer" lang={lang} onOpen={announcementAlerts.markSeen} />}
+      </div>
+    );
+  }
+
+  // While a load is still Bidding (no driver assigned yet), the header shows
+  // Back + "My Active Booking" instead of the Immediate/Advance Ride time
+  // badge — that badge only makes sense once a driver is actually en route.
+  const biddingHeader = rideView === "current" && !addingAnother && activeBooking?.status === "Bidding";
+  // The Ongoing (assigned-driver) ride view on the Current tab has its own
+  // Back + OTP/Send-Invoice row right at the top of the page body, so the
+  // header's ride-time badge would just be dead space above it — only show
+  // the badge for the Advance tab's own selected-ride detail view.
+  const showRideBadge = headerRideBooking && headerRideBooking.status !== "Bidding" && rideView !== "current";
+  const headerHasContent = showHamburger || rideView === "advance" || biddingHeader || !!showRideBadge;
+
+  return (
+    <>
+      <FloatingHamburgerHint show={showBookingHint && !showHamburger} onOpenMenu={() => { setMenuOpen(true); setShowBookingHint(false); }} lang={lang} />
+      <div className="flex-1 overflow-y-auto relative">
+        {headerHasContent && (
+          <div className="flex items-center justify-between gap-2 px-5 pt-3">
+            {showHamburger ? (
+              <div className="relative shrink-0">
+                <button onClick={() => { setMenuOpen(true); setShowBookingHint(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
+                  <Menu size={18} color="#fff" strokeWidth={2.5} />
+                </button>
+                <HamburgerHint show={showBookingHint} lang={lang} />
+                {announcementAlerts.unreadCount > 0 && (
+                  <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>
+                    {announcementAlerts.unreadCount}
+                  </span>
+                )}
+              </div>
+            ) : rideView === "advance" ? (
+              <button onClick={() => (selectedAdvanceId ? setSelectedAdvanceId(null) : setRideView("current"))} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                <ChevronLeft size={18} color="#000000" strokeWidth={3} />
+              </button>
+            ) : biddingHeader ? (
+              <button onClick={() => setAddingAnother(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                <ChevronLeft size={18} color="#000000" strokeWidth={3} />
+              </button>
+            ) : <div className="w-9 h-9 shrink-0" />}
+            {showRideBadge ? (
+              <div className="flex-1 min-w-0 rounded-full px-3 py-2 flex items-center justify-center gap-1.5 shadow-sm" style={{ background: headerRideBooking.scheduledFor ? C.marigoldDeep : C.success }}>
+                <Clock3 size={16} color="#fff" strokeWidth={2.5} className="shrink-0" />
+                <span className="text-sm font-extrabold text-white truncate">
+                  {headerRideBooking.scheduledFor ? (lang === "en" ? "Advance Ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : lang === "mr" ? "तात्काळ राइड" : "तुरंत राइड")} · {rideDateTimeLabel(headerRideBooking)}
+                </span>
+              </div>
+            ) : showHamburger ? (
+              <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
+                {/* Replaces the old "Advance Booking/s" hamburger menu item —
+                    only shown when there's actually one to jump to. */}
+                {advanceBookings.length > 0 && (
+                  <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }}
+                    className="relative shrink-0 rounded-full pl-3 pr-2.5 py-2 flex items-center gap-1 shadow-sm" style={{ background: C.marigoldDeep }}>
+                    <Clock3 size={13} color="#FFFFFF" />
+                    <span className="text-xs font-black text-white">{lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}</span>
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shadow-sm" style={{ background: "#FFFFFF", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
+                      {advanceBookings.length}
+                    </span>
+                  </button>
+                )}
+                {activeBooking && (
+                  <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : lang === "mr" ? "सध्याच्या राइडवर जा" : "मौजूदा राइड पर जाएं"}
+                    className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                    <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
+                  </button>
+                )}
+                {/* Toggles between the two booking modes — shows what
+                    tapping it will switch TO, not the mode you're currently
+                    in: "Book Advance" (blue, matching the hamburger) while
+                    on the immediate-booking page, flipping to "Book
+                    Current" (green, matching Book Now) once the Advance
+                    Date/Time panel is open, so tapping it again switches
+                    straight back. */}
+                <button onClick={() => setAdvanceOpen((v) => !v)}
+                  className="rounded-full pl-3 pr-3.5 py-2 flex items-center gap-1.5 shadow-sm shrink-0"
+                  style={{ background: advanceOpen ? C.success : "#0052CC", border: `1.5px solid ${advanceOpen ? C.success : "#0052CC"}` }}>
+                  {advanceOpen ? <Truck size={16} color="#fff" strokeWidth={2.5} /> : <CalendarClock size={16} color="#fff" strokeWidth={2.5} />}
+                  <span className="text-xs font-black text-white whitespace-nowrap">
+                    {advanceOpen
+                      ? (lang === "en" ? "Book Current" : lang === "mr" ? "करंट बुक करा" : "करंट बुक करें")
+                      : (lang === "en" ? "Book Advance" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें")}
+                  </span>
+                </button>
+              </div>
+            ) : biddingHeader ? (
+              <div className="flex-1 min-w-0">
+                <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "My Active Booking" : lang === "mr" ? "माझी सक्रिय बुकिंग" : "मेरी सक्रिय बुकिंग"}</span>
+              </div>
+            ) : (
+              <div className="flex-1 min-w-0" />
+            )}
+            {showHamburger ? null : <div className="w-9 h-9 shrink-0" />}
+          </div>
+        )}
+        <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="customer" />
+        <ForegroundToast toast={rideNotifications.toast} />
+        <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
+          onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
+          onDismiss={announcementAlerts.markSeen} lang={lang} />
+        {menuOpen && (
+          <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
+            <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 py-4 flex items-center gap-3" style={{ background: C.navy }}>
+                <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 overflow-hidden" style={{ background: C.marigold }}>
+                  {customerProfile?.photo ? <img src={customerProfile.photo.url} alt="" className="w-full h-full object-cover" /> : <UserCircle2 size={24} color="#000000" />}
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-white">{customerProfile?.name || (lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}</div>
+                  {customerMobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{customerMobile}</div>}
+                </div>
+              </div>
+              <div className="p-2 space-y-2" style={{ borderBottom: `1px solid ${C.line}` }}>
+                <button onClick={() => { setRideView("current"); setAddingAnother(false); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: C.success }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+                    <Truck size={13} color={C.success} />
+                  </div>
+                  <div className="flex-1 min-w-0 text-xs font-black text-white">{lang === "en" ? "Current Booking/s" : lang === "mr" ? "सध्याची बुकिंग पहा" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
+                </button>
+                {/* Same blue (#0052CC) the old hamburger "Advance Booking/s"
+                    item used before it was replaced by the header pill (see
+                    the "Advance" badge above) — restored here alongside it,
+                    not instead of it. */}
+                <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: "#0052CC" }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+                    <Clock3 size={13} color="#0052CC" />
+                  </div>
+                  <div className="flex-1 min-w-0 text-xs font-black text-white">{lang === "en" ? "View Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग पहा" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                </button>
+              </div>
+              <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}
+              </button>
+              <button onClick={() => { setSettingsView("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "Ride History" : lang === "mr" ? "राइड हिस्टरी" : "राइड हिस्ट्री"}
+              </button>
+              <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "customer" && (n.target === "all" || n.target === customerMobile)).length})
+                {announcementAlerts.unreadCount > 0 && (
+                  <span className="rounded-full px-1.5 py-0.5 text-[10px] font-black text-white" style={{ background: C.safety }}>{announcementAlerts.unreadCount} {lang === "en" ? "new" : lang === "mr" ? "नवीन" : "नई"}</span>
+                )}
+              </button>
+              <button onClick={() => { shareApp(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <MessageCircle size={16} color={C.success} /> {lang === "en" ? "Share App" : lang === "mr" ? "अ‍ॅप शेअर करा" : "ऐप शेयर करें"}
+              </button>
+              <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : lang === "mr" ? "संपर्क व हेल्पलाइन" : "संपर्क व हेल्पलाइन"}
+              </button>
+              <button onClick={() => { onOpenTerms(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : lang === "mr" ? "नियम व अटी" : "नियम व शर्तें"}
+              </button>
+              <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink }}>
+                <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : lang === "mr" ? "गोपनीयता धोरण" : "गोपनीयता नीति"}
+              </a>
+            </div>
+            <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
+          </div>
+        )}
+        {rideView === "current" ? (
+          activeBooking && !addingAnother ? (
+            <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} reassignAwaitingDriver={reassignAwaitingDriver} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
+              onAddAnother={() => setAddingAnother(true)}
+              onBidAccepted={(booking) => {
+                // The bid isn't booked yet — it's now "AwaitingDriver", shown
+                // as a "waiting to confirm" card right here on the Current tab
+                // (activeBooking includes AwaitingDriver). For an advance load,
+                // nudge the hamburger too so they know that's where it lands
+                // once the driver confirms.
+                if (isFutureAdvance(booking.scheduledFor)) setShowBookingHint(true);
+              }} />
+          ) : (
+            <CustomerBooking requestDriverDirectly={requestDriverDirectly} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
+              advanceOpen={advanceOpen} setAdvanceOpen={setAdvanceOpen} locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} />
+          )
+        ) : (
+          <div>
+            {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
+              <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} reassignAwaitingDriver={reassignAwaitingDriver}
+                driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
+                drivers={drivers} lang={lang} onBidAccepted={() => setShowBookingHint(true)} />
+            ) : (
+              <div className="px-5 py-5">
+                {advanceBookings.length === 0 ? (
+                  <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {advanceBookings.map((ab) => (
+                      <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                        <RideTypeBanner booking={ab} lang={lang} />
+                        <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
+                        <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{ab.status === "Bidding" ? (lang === "en" ? "Waiting for bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार") : (lang === "en" ? `Driver assigned — ${ab.driverName}` : lang === "mr" ? `ड्रायव्हर निश्चित झाला — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`)}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// =====================================================================
+// DRIVER APP
+// =====================================================================
+
+function fmtHMS(ms) {
+  const hh = Math.floor(ms / 3600000);
+  const mm = Math.floor((ms % 3600000) / 60000);
+  const ss = Math.floor((ms % 60000) / 1000);
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+// "X hr Y min" — used on the trip breakdown table/invoice, where whole
+// minutes read easier than a HH:MM:SS stopwatch face.
+function fmtHrMin(ms, lang) {
+  const totalMin = Math.round(Math.max(0, ms) / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return lang === "en" ? `${h} hr ${m} min` : lang === "mr" ? `${h} तास ${m} मिनिट` : `${h} घं ${m} मिनट`;
+}
+// Splits a completed trip's total loading-to-drop-off time into its three
+// billing categories — loading/unloading (up to the booked allowance),
+// travel (paused out of the clock entirely, see the geofence in
+// DriverHome), and waiting (the overage beyond the booked allowance,
+// billed via the 15-min-grace rule in useTripClock). Derived straight from
+// the persisted booking fields, not the live clock, so it works the same
+// whether it's rendered from the driver's onEnded snapshot or the
+// customer's Firestore doc.
+function tripHourBreakdown(trip) {
+  const bookedHours = trip.hours || 0;
+  const pausedMs = trip.pausedMs || 0;
+  const totalMs = trip.completedAt && trip.loadingStartedAt ? Math.max(0, trip.completedAt - trip.loadingStartedAt) : 0;
+  const activeMs = Math.max(0, totalMs - pausedMs);
+  const waitingMs = Math.max(0, activeMs - bookedHours * 3600000);
+  const loadingUnloadingMs = activeMs - waitingMs;
+  return { totalMs, loadingUnloadingMs, travelMs: pausedMs, waitingMs };
+}
+
+// The itemized Context/Time/Charges table shown on both trip summary
+// screens (and mirrored as plain text in the downloadable invoice) — bold,
+// left-aligned Time/Charges columns, and full solid-black borders per the
+// agreed design, not the app's usual thin grey hairlines.
+function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }) {
+  const { totalMs, loadingUnloadingMs, waitingMs } = tripHourBreakdown(trip);
+  const cellStyle = { border: "1.5px solid #000000", padding: "8px 10px", fontSize: 13, textAlign: "left" };
+  const Row = ({ context, time, charges, bold, zebra }) => (
+    <tr style={{ background: bold ? C.success : zebra ? C.bg : C.paper }}>
+      <td style={{ ...cellStyle, fontFamily: bodyFont, fontWeight: bold ? 900 : 700, color: bold ? "#fff" : "#000000" }}>{context}</td>
+      <td style={{ ...cellStyle, fontFamily: monoFont, color: bold ? "#fff" : time ? "#000000" : C.inkSoft }}>{time || "—"}</td>
+      <td style={{ ...cellStyle, fontFamily: monoFont, color: bold ? "#fff" : charges ? "#000000" : C.inkSoft }}>{charges || "—"}</td>
+    </tr>
+  );
+  return (
+    <div className="rounded-xl overflow-hidden mb-2.5 shadow-sm" style={{ border: "2px solid #000000" }}>
+      <table className="w-full" style={{ borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ background: C.marigold }}>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Context" : lang === "mr" ? "तपशील" : "विवरण"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Time" : lang === "mr" ? "वेळ" : "समय"}</th>
+            <th style={{ ...cellStyle, fontFamily: bodyFont, color: "#000000" }}>{lang === "en" ? "Charges (₹)" : lang === "mr" ? "चार्ज (₹)" : "चार्ज (₹)"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <Row context={baseFareLabel} charges={fmt(baseFare)} />
+          <Row context={lang === "en" ? "Total time" : lang === "mr" ? "एकूण वेळ" : "कुल समय"} time={fmtHrMin(totalMs, lang)} zebra />
+          <Row context={lang === "en" ? "Loading/Unloading time" : lang === "mr" ? "लोडिंग/अनलोडिंग वेळ" : "लोडिंग/अनलोडिंग समय"} time={fmtHrMin(loadingUnloadingMs, lang)} />
+          {trip.extraCharge > 0 && (
+            <Row context={`${lang === "en" ? "Waiting charge" : lang === "mr" ? "वेटिंग चार्ज" : "वेटिंग चार्ज"} (${fmt(trip.extraHourRate || 0)}/${lang === "en" ? "hr" : lang === "mr" ? "तास" : "घं"})`}
+              time={fmtHrMin(waitingMs, lang)} charges={fmt(trip.extraCharge)} />
+          )}
+          <Row context={lang === "en" ? "Total" : lang === "mr" ? "एकूण" : "कुल"} charges={fmt(totalAmount)} bold />
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Shared elapsed/remaining-time math for a loading trip, used by both the
+// driver's timer screen and the customer's ongoing-trip overtime banner so
+// the "बीप-बीप" alarm behaves identically on both sides.
+//
+// pausedMs (completed travel segments) and travelPausedAt (an in-progress
+// one, set while the driver is between the pickup and drop geofences — see
+// LOADING_GEOFENCE_M) are subtracted out here so every downstream number —
+// remaining time, overtime, waiting charge — reflects only time actually
+// spent at the pickup/drop point, never the drive between them.
+function useTripClock(loadingStartedAt, hours, extraHourRate, pausedMs = 0, travelPausedAt = null) {
+  const [now, setNow] = useState(Date.now());
+  const beepedRef = useRef(false);
+  const started = !!loadingStartedAt;
+  const isPaused = !!travelPausedAt;
+
+  useEffect(() => {
+    if (!started) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [started, loadingStartedAt]);
+
+  const rawElapsedMs = started ? now - loadingStartedAt : 0;
+  const currentPauseMs = isPaused ? Math.max(0, now - travelPausedAt) : 0;
+  const elapsedMs = Math.max(0, rawElapsedMs - (pausedMs || 0) - currentPauseMs);
+  const elapsedHoursExact = elapsedMs / 3600000;
+  const bookedHours = hours || 0;
+  const isOvertime = started && bookedHours > 0 && elapsedHoursExact >= bookedHours;
+  const extraHours = Math.max(0, elapsedHoursExact - bookedHours);
+  // Waiting is billed in full-hour blocks, not pro-rated by the minute, but
+  // with a 15-minute grace window at the start of each block — up to 15
+  // minutes into a waiting hour costs nothing extra yet, but a single
+  // minute past that bills the whole hour.
+  const WAITING_GRACE_HOURS = 0.25;
+  const extraHoursWhole = Math.floor(extraHours);
+  const extraHoursFraction = extraHours - extraHoursWhole;
+  const billableHours = extraHours > 0 ? extraHoursWhole + (extraHoursFraction > WAITING_GRACE_HOURS ? 1 : 0) : 0;
+  const extraCharge = Math.round(billableHours * (extraHourRate || 0));
+  const remainingMs = Math.max(0, bookedHours * 3600000 - elapsedMs);
+  // A separate stopwatch for the waiting-time box — starts fresh at zero the
+  // moment overtime begins, instead of reusing the trip's total elapsed time.
+  const waitingElapsedMs = Math.max(0, elapsedMs - bookedHours * 3600000);
+
+  useEffect(() => {
+    if (isOvertime && !beepedRef.current) {
+      beepedRef.current = true;
+      playBeepTone();
+    }
+    if (!isOvertime) beepedRef.current = false;
+  }, [isOvertime]);
+
+  return { started, isPaused, isOvertime, extraHours, billableHours, extraCharge, elapsedStr: fmtHMS(elapsedMs), remainingStr: fmtHMS(remainingMs), waitingElapsedStr: fmtHMS(waitingElapsedMs) };
+}
+
+// Read-only overtime banner shown on the customer's ongoing-trip card —
+// mirrors the driver's alarm so both sides get the "समय खत्म" alert.
+function TripOvertimeBanner({ booking, lang }) {
+  const clock = useTripClock(booking.loadingStartedAt, booking.hours, booking.extraHourRate, booking.pausedMs, booking.travelPausedAt);
+  if (!clock.started || !clock.isOvertime) return null;
+  return (
+    <div className="rounded-lg mt-2 p-2.5" style={{ background: C.safety }}>
+      <div className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>🔔 {lang === "en" ? "Beep-beep! Loading/Unloading time is over" : lang === "mr" ? "बीप-बीप! लोडिंग/अनलोडिंग वेळ संपली" : "बीप-बीप! लोडिंग/अनलोडिंग समय खत्म हो गया"}</div>
+      <div className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>
+        {lang === "en" ? `Extra time: ${clock.extraHours.toFixed(2)} hrs (billed as ${clock.billableHours} hr${clock.billableHours === 1 ? "" : "s"}) · Waiting charge so far: ${fmt(clock.extraCharge)}` : lang === "mr" ? `अतिरिक्त वेळ: ${clock.extraHours.toFixed(2)} तास (${clock.billableHours} तासांनुसार बिल) · आतापर्यंत वेटिंग चार्ज: ${fmt(clock.extraCharge)}` : `अतिरिक्त समय: ${clock.extraHours.toFixed(2)} घंटे (${clock.billableHours} घंटे के हिसाब से बिल) · अब तक वेटिंग चार्ज: ${fmt(clock.extraCharge)}`}
+      </div>
+      {clock.isPaused && (
+        <div className="text-[11px] mt-1 font-semibold" style={{ color: "#FFFFFF" }}>⏸ {lang === "en" ? "Timer paused — travel time isn't counted" : lang === "mr" ? "टायमर थांबलेला आहे — प्रवासाचा वेळ मोजला जात नाही" : "टाइमर रुका हुआ है — यात्रा का समय नहीं गिना जाता"}</div>
+      )}
+    </div>
+  );
+}
+
+function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
+  const clock = useTripClock(trip.loadingStartedAt, trip.hours, trip.extraHourRate, trip.pausedMs, trip.travelPausedAt);
+
+  // Entering the OTP itself now happens up top, next to the Online/Offline
+  // switch (see DriverOtpEntry) — mirrors where the customer's own OTP
+  // display sits on their Active Ride page. Nothing to show here until
+  // that's actually done and loading has started.
+  if (!trip.loadingStartedAt) return null;
+
+  return (
+    <div className="mt-3 space-y-2.5">
+      {/* The Loading/Unloading + Waiting clocks are gone — auto-bids carry
+          no loading-hours/waiting-rate (both 0), so those boxes had nothing
+          real to show. clock.extraCharge is still computed (harmlessly 0)
+          and handed to completeBooking below. */}
+      <button
+        onClick={() => {
+          completeBooking(trip.id, clock.extraCharge);
+          onEnded?.({ ...trip, extraCharge: clock.extraCharge, billableHours: clock.billableHours, waitingElapsedStr: clock.waitingElapsedStr });
+        }}
+        className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
+        {lang === "en" ? "End Trip" : lang === "mr" ? "एंड ट्रिप" : "एंड ट्रिप"}
+      </button>
+    </div>
+  );
+}
+
+// Compact OTP entry sitting next to the Online/Offline switch at the top of
+// the driver's Active Ride page — same top-row position as the read-only
+// OTP the customer sees on their own Active Ride page. Pulses (via the same
+// guided-submit-ready animation used for other ready-to-act CTAs) so it's
+// impossible to miss once there's an actual trip waiting on it.
+function DriverOtpEntry({ trip, startLoading, lang }) {
+  const [otpInput, setOtpInput] = useState("");
+  const [otpError, setOtpError] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  // Auto-submits the moment the 4th digit lands — no separate Confirm tap.
+  // Verified via a Cloud Function (see verifyPickupOtp in firebaseClient.js)
+  // instead of comparing against a local trip.otp value — the driver's own
+  // app is never given the real OTP at all anymore (see
+  // otp-readable-by-any-driver in BUG_TRACKER_SEED), so this is now a real
+  // check the driver can actually fail, not a formality their own app
+  // already knew the answer to.
+  const handleChange = async (e) => {
+    const next = e.target.value.replace(/\D/g, "").slice(0, 4);
+    setOtpInput(next);
+    setOtpError(false);
+    if (next.length === 4) {
+      setChecking(true);
+      const { valid } = await verifyPickupOtp(trip.id, next);
+      setChecking(false);
+      if (valid) {
+        startLoading(trip.id);
+      } else {
+        setOtpError(true);
+        setOtpInput("");
+      }
+    }
+  };
+
+  return (
+    <div className="flex-1 min-w-0">
+      <div className="guided-submit-ready flex items-center justify-center rounded-xl px-2.5 py-1.5" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <input value={otpInput} onChange={handleChange} disabled={checking}
+          placeholder={lang === "en" ? "Enter OTP" : lang === "mr" ? "OTP टाका" : "OTP डालें"} maxLength={4} inputMode="numeric"
+          className="w-full text-center outline-none bg-transparent" style={{ color: C.ink, fontFamily: monoFont, fontSize: 18, letterSpacing: 4, fontWeight: 900 }} />
+      </div>
+      {otpError && <div className="text-[10px] font-semibold mt-1" style={{ color: C.safety }}>{lang === "en" ? "Incorrect OTP — ask the customer again" : lang === "mr" ? "OTP चुकीचा आहे — ग्राहकाला पुन्हा विचारा" : "OTP गलत है — ग्राहक से दोबारा पूछें"}</div>}
+    </div>
+  );
+}
+
+// Post-trip receipt shown right after End Trip is tapped — the booking has
+// already flipped to status "Completed" by then (so myTrip in DriverHome no
+// longer matches it), so this renders from the snapshot LoadingTimer's
+// onEnded captured at the moment of the tap, not from the live booking.
+// Laid out in the order a real bill reads: letterhead, then reference
+// number + date, then the two parties, then the itemized route, and only
+// then the fare/total at the end — not just a "trip completed" confirmation
+// card with numbers on it.
+function DriverTripSummary({ trip, lang, onDone }) {
+  const baseFare = trip.fare || 0;
+  const totalAmount = baseFare + (trip.extraCharge || 0);
+  const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  return (
+    <div>
+      <div className="rounded-2xl p-4 mb-2.5 shadow-sm text-center" style={{ background: C.navy }}>
+        <div className="text-xl font-black" style={{ color: "#FFFFFF" }}>Apna Transport</div>
+        <div className="text-[11px] font-bold mt-0.5" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Trip Invoice" : lang === "mr" ? "ट्रिप इनव्हॉइस" : "ट्रिप इनवॉइस"}</div>
+      </div>
+
+      <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "LR No." : "LR नंबर"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink, fontFamily: monoFont }}>{trip.id}</div>
+        </div>
+        <div className="w-px" style={{ background: C.line }} />
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Date" : lang === "mr" ? "दिनांक" : "तारीख़"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{completedLabel || "—"}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.driverName || "—"}</div>
+        </div>
+        <div className="w-px" style={{ background: C.line }} />
+        <div className="flex-1 p-3">
+          <div className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : lang === "mr" ? "ग्राहक" : "ग्राहक"}</div>
+          <div className="text-sm font-black mt-0.5" style={{ color: C.ink }}>{trip.customerName || "—"}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
+        <CheckCircle2 size={20} color={C.success} className="shrink-0" />
+        <div className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : lang === "mr" ? "ट्रिप पूर्ण झाली" : "ट्रिप पूरी हुई"}</div>
+      </div>
+
+      <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <RouteLine pickup={trip.pickup} drop={trip.drop} lang={lang} />
+      </div>
+
+      <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : lang === "mr" ? "बेस भाडे" : "बेस भाड़ा"} baseFare={baseFare} totalAmount={totalAmount} trip={trip} lang={lang} />
+
+      <button onClick={onDone} className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
+        {lang === "en" ? "Done" : lang === "mr" ? "पूर्ण" : "पूर्ण"}
+      </button>
+    </div>
+  );
+}
+
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, lang, onOpenWallet }) {
+  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
+  // Snapshot of the trip End Trip was just tapped on — the booking flips to
+  // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
+  // above stop matching it on the very next render, so this is what the
+  // summary screen renders from instead of the (by then gone) live trip.
+  const [completedTrip, setCompletedTrip] = useState(null);
+  // A driver sees a load if it needs their exact vehicle type, or any
+  // smaller/lighter type — a bigger truck can always carry a smaller load,
+  // so "above" vehicle options can bid too, not just an exact match.
+  const driverVehicleDef = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
+
+  // If this driver has an upcoming Advance booking, Current (immediate)
+  // loads are hidden entirely — no notification, no listing, no bidding —
+  // starting N hours before it (N scaled by this driver's own vehicle
+  // tonnage), so they aren't pulled toward a new immediate job while they
+  // should be prepping for/heading to the advance one. Used only for the
+  // banner below — the actual filtering (which also covers any OTHER load,
+  // including another Advance one, whose time would conflict) is done by
+  // findDriverLoadConflict in openLoads.
+  const myAdvanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
+  const notificationsLocked = myAdvanceBookings.some((b) => {
+    const scheduled = parseScheduledFor(b.scheduledFor);
+    const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
+    const lockStart = scheduled.getTime() - lockHours * 60 * 60 * 1000;
+    return Date.now() >= lockStart && Date.now() < scheduled.getTime();
+  });
+
+  // Real GPS live-tracking: while this driver has an active trip, share their
+  // actual device location so the customer (and admin fleet map) see it live.
+  // Also runs whenever the driver is simply Online (not on a trip) so
+  // lastKnownLocation stays fresh for the 100km bid-radius check below —
+  // otherwise an idle online driver would have no location on file at all.
+  const lastGpsWriteRef = useRef(0);
+  // The watch below only resubscribes when the trip ID changes (see its own
+  // dependency array) — kept in sync separately here so the GPS callback
+  // always reads this trip's current pause-tracking fields instead of a
+  // stale closure from whenever that ID last changed.
+  const myTripRef = useRef(myTrip);
+  useEffect(() => { myTripRef.current = myTrip; }, [myTrip]);
+  useEffect(() => {
+    if ((!myTrip && !driver.online) || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        locationPermission.markGranted();
+        const now = Date.now();
+        if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
+        lastGpsWriteRef.current = now;
+        const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
+        if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
+        if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
+
+        // Loading/unloading-time geofence — pauses the allowed-hours/waiting
+        // clock (see useTripClock) the moment the driver's straight-line
+        // distance from the pickup point exceeds LOADING_GEOFENCE_M, and
+        // resumes it for good once straight-line distance to the drop point
+        // drops to/below it (or resumes without locking in if they're simply
+        // back near pickup — still loading, never left for real). Runs on
+        // the same 5s cadence as the GPS write itself, since haversineKm is
+        // free local math, not an API call. Never surfaced to either side
+        // beyond the plain "paused" note already added to the timer boxes.
+        const trip = myTripRef.current;
+        if (trip?.loadingStartedAt && !trip.reachedDropAt &&
+            trip.pickupLat != null && trip.pickupLng != null && trip.dropLat != null && trip.dropLng != null) {
+          const distPickupM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.pickupLat, trip.pickupLng) * 1000;
+          const distDropM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.dropLat, trip.dropLng) * 1000;
+          if (distDropM <= LOADING_GEOFENCE_M) {
+            const patch = { reachedDropAt: now, travelPausedAt: null, pausedMs: increment(trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+            patchDoc("bookings", trip.id, patch).catch((e) => console.error(e));
+            myTripRef.current = { ...trip, reachedDropAt: now, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+          } else if (distPickupM > LOADING_GEOFENCE_M && !trip.travelPausedAt) {
+            patchDoc("bookings", trip.id, { travelPausedAt: now }).catch((e) => console.error(e));
+            myTripRef.current = { ...trip, travelPausedAt: now };
+          } else if (distPickupM <= LOADING_GEOFENCE_M && trip.travelPausedAt) {
+            patchDoc("bookings", trip.id, { travelPausedAt: null, pausedMs: increment(now - trip.travelPausedAt) }).catch((e) => console.error(e));
+            myTripRef.current = { ...trip, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (now - trip.travelPausedAt) };
+          }
+        }
+      },
+      (err) => { console.error("GPS tracking error", err); if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied(); },
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [myTrip?.id, driver.online, driver.mobile]);
+
+  // A customer has directly requested this driver and is waiting for
+  // Accept/Reject — takes over the screen until they respond. Computed
+  // unconditionally (not just after the completedTrip early return below)
+  // purely so the ringtone effect right after it — a hook — can be called
+  // unconditionally too, same reasoning as myTripRef above.
+  const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && b.pendingDriverName === driver.name);
+  // Ringtone-style repeating strong beep while this screen is up — the
+  // background push (see functions/index.js: onDirectRequestAssigned) is
+  // what actually reaches the driver if the app is closed; this is the
+  // foreground counterpart. Every 1 second (not the spoken "New Trip
+  // Alert" this used to be, which fired every 2.5s) since a loud, fast
+  // beep is harder to miss while the driver isn't necessarily looking at
+  // the screen, and won't overlap/garble mid-sentence the way stacking a
+  // spoken phrase at a 1s interval would.
+  useEffect(() => {
+    if (!awaitingBooking) return;
+    playStrongBeep();
+    const id = setInterval(playStrongBeep, 1000);
+    return () => clearInterval(id);
+  }, [awaitingBooking?.id]);
+
+  if (completedTrip) {
+    return (
+      <div className="px-5 pt-5 pb-5">
+        <DriverTripSummary trip={completedTrip} lang={lang} onDone={() => setCompletedTrip(null)} />
+      </div>
+    );
+  }
+
+  // Read-only overview of the open loads this driver's app is auto-bidding
+  // on (same eligibility as the auto-bid effect) — newest first, capped.
+  const nearbyLoads = bookings
+    .filter((b) => loadEligibleForDriver(driver, b, bookings, vehicleTypes, lang))
+    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+    .slice(0, 25);
+
+  if (awaitingBooking && !myTrip) {
+    const ab = awaitingBooking;
+    return (
+      <div className="px-5 pt-5 pb-5">
+        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.success }}>
+          <CheckCircle2 size={16} color="#FFFFFF" />
+          <span className="text-sm font-black text-white">{lang === "en" ? "A customer has requested you directly" : lang === "mr" ? "एका ग्राहकाने तुम्हाला थेट विनंती केली आहे" : "एक ग्राहक ने आपसे सीधे अनुरोध किया है"}</span>
+        </div>
+        <div className="rounded-xl p-3 shadow-sm mb-3" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
+          <RideTypeBanner booking={ab} lang={lang} />
+          <div className="mb-2">
+            <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{ab.pickup}</span></div>
+            <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{ab.drop}</span></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.distance} {lang === "en" ? "km" : "किमी"}</span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+          </div>
+          {ab.fare != null && (
+            <div className="text-center rounded-lg py-2.5 mb-3" style={{ background: C.metallicGold }}>
+              <div className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Your fare" : lang === "mr" ? "तुमचे भाडे" : "आपका भाड़ा"}</div>
+              <div className="text-2xl font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(ab.fare)}</div>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => driverRespondBooking?.(ab.id, false)}
+              className="rounded-lg py-3.5 text-base font-black" style={{ background: C.paper, border: `2px solid ${C.safety}`, color: C.safety }}>
+              {lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "अस्वीकार"}
+            </button>
+            <button type="button" onClick={() => driverRespondBooking?.(ab.id, true)}
+              className="rounded-lg py-3.5 text-base font-black text-white guided-submit-ready" style={{ background: C.metallicGreen }}>
+              {lang === "en" ? "Accept" : lang === "mr" ? "स्वीकारा" : "स्वीकार"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Live map placed at the very top, edge-to-edge — matches the exact
+  // position/pattern NearbyVehiclesMap uses on CustomerBooking's main page —
+  // only while there's an active trip; the "waiting for a load" states below
+  // keep their normal padded layout since there's no map to show there.
+  // A fixed vh height is passed straight to LiveTrackingMap itself (no
+  // wrapping div + height:100%/flex-grow indirection) — that percentage-
+  // height chain was found to silently collapse to zero on some devices,
+  // leaving the whole map invisible and untappable. A plain vh value has
+  // no such ambiguity. Sized generously (55vh, well past the old 35vh) so
+  // the map itself — not an added info card below it — is what uses up the
+  // space this short screen (OTP box + one Pickup line, nothing else until
+  // loading starts) would otherwise leave empty.
+  if (myTrip) {
+    return (
+      <div className="pb-5">
+        <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
+          driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="55vh" lang={lang}
+          mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
+        <div className="px-5 pt-2">
+          {!myTrip.loadingStartedAt && (
+            <div className="mb-4">
+              <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
+            </div>
+          )}
+
+          {notificationsLocked && (
+            <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
+              <Clock3 size={14} color="#000000" />
+              <span className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : lang === "mr" ? "तुमची अ‍ॅडव्हान्स बुकिंग लवकरच आहे — तोपर्यंत करंट (तात्काळ) लोड दिसणार नाहीत." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
+            </div>
+          )}
+
+          {driver.blacklisted && (
+            <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: C.safety }}>
+              <XCircle size={15} color="#FFFFFF" />
+              <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Your account has been blocked by admin — loads won't show." : lang === "mr" ? "तुमचे खाते अ‍ॅडमिनने ब्लॉक केले आहे — लोड दिसणार नाहीत." : "आपका खाता एडमिन द्वारा ब्लॉक किया गया है — लोड नहीं दिखेंगे।"}</span>
+            </div>
+          )}
+
+          <div>
+            {myTrip.customerMobile && (
+              <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
+                label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
+                className="w-full flex items-center justify-center gap-2 px-3.5 py-3.5 mb-2.5 rounded-2xl text-base font-black shadow-sm"
+                style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
+            )}
+
+            <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              {!myTrip.loadingStartedAt && (
+                <div style={{ color: C.ink }}>
+                  <span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span>
+                  {myTrip.distance != null && (
+                    <div className="mt-1.5">
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(myTrip.distance, lang)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {myTrip.loadingStartedAt && (
+                <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
+              )}
+            </div>
+
+            <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 pt-5 pb-5">
+      {notificationsLocked && (
+        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
+          <Clock3 size={14} color="#000000" />
+          <span className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "You have an Advance booking coming up soon — Current (immediate) loads are hidden until then." : lang === "mr" ? "तुमची अ‍ॅडव्हान्स बुकिंग लवकरच आहे — तोपर्यंत करंट (तात्काळ) लोड दिसणार नाहीत." : "आपकी एडवांस बुकिंग जल्द है — तब तक करेंट (तुरंत) लोड नहीं दिखेंगे।"}</span>
+        </div>
+      )}
+
+      {driver.blacklisted && (
+        <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: C.safety }}>
+          <XCircle size={15} color="#FFFFFF" />
+          <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Your account has been blocked by admin — loads won't show." : lang === "mr" ? "तुमचे खाते अ‍ॅडमिनने ब्लॉक केले आहे — लोड दिसणार नाहीत." : "आपका खाता एडमिन द्वारा ब्लॉक किया गया है — लोड नहीं दिखेंगे।"}</span>
+        </div>
+      )}
+
+      {driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
+        nearbyLoads.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
+            <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: C.success }}>
+              <IndianRupee size={24} color="#FFFFFF" />
+            </div>
+            <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "You're live" : lang === "mr" ? "तुम्ही लाइव्ह आहात" : "आप लाइव हैं"}</p>
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — a load will be sent to you here." : lang === "mr" ? "ऑनलाइन रहा — इथे तुम्हाला लोड पाठवला जाईल." : "ऑनलाइन रहें — यहां आपको लोड भेजा जाएगा।"}</p>
+          </div>
+        ) : (
+          <>
+            <div className="text-sm font-black mb-3" style={{ color: C.navy }}>{lang === "en" ? "Nearby loads" : lang === "mr" ? "जवळचे लोड" : "आसपास के लोड"} ({nearbyLoads.length})</div>
+            <div className="space-y-3">
+              {nearbyLoads.map((load) => (
+                <div key={load.id} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
+                  <div className="flex items-center gap-1 mb-1.5">
+                    <Bell size={13} color={C.marigoldDeep} />
+                    <span className="text-xs font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "New Load" : lang === "mr" ? "नवीन लोड" : "नया लोड"}</span>
+                  </div>
+                  <RideTypeBanner booking={load} lang={lang} />
+                  <div className="mb-2">
+                    <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{load.pickup}</span></div>
+                    <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{load.drop}</span></div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.distance} {lang === "en" ? "km" : "किमी"}</span>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{load.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )
+      ) : (
+        <div className="text-center py-10">
+          <Truck size={28} color={C.inkSoft} className="mx-auto mb-2" />
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : lang === "mr" ? "लोड मिळवण्यासाठी ड्युटी ऑन करा" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
+        </div>
+      )}
+
+      {/* My Wallet + Driver Duty switch — moved down here from the header
+          row above DriverHome (see DriverApp) so the Get Estimate card can
+          take that top spot instead. */}
+      <div className="flex items-center gap-2.5 mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+        <button onClick={() => onOpenWallet?.()} className="flex-1 rounded-full px-4 py-3 text-base font-black text-white text-center flex items-center justify-center gap-1.5" style={{ background: "#0052CC" }}>
+          <Wallet size={16} color="#fff" /> {lang === "en" ? "My Wallet" : lang === "mr" ? "माझे वॉलेट" : "मेरा वॉलेट"}
+        </button>
+        <div className="flex items-center gap-1.5 shrink-0 rounded-full px-2.5 py-1.5" style={{ background: C.marigoldDeep }}>
+          <div className="flex flex-col items-center leading-none" style={{ color: "#FFFFFF" }}>
+            <span className="text-[9px] font-bold">{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</span>
+            <span className="text-[9px] font-bold mt-0.5">{lang === "en" ? "Duty" : lang === "mr" ? "ड्युटी" : "ड्यूटी"}</span>
+          </div>
+          <button onClick={() => setDriver({ ...driver, online: !driver.online })} className="shrink-0 flex items-center">
+            <span className="w-14 h-8 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
+              <span className="absolute inset-0 flex items-center text-[10px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 8 : 0, paddingRight: driver.online ? 0 : 8 }}>{driver.online ? "On" : "Off"}</span>
+              <span className="w-6 h-6 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 31 : 4 }} />
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
+  const [showComingSoon, setShowComingSoon] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  // Balance/bonus count smoothly toward their real value instead of
+  // snapping — see useCountUp.
+  const displayWallet = useCountUp(driver.wallet || 0);
+  const displayBonus = useCountUp(driver.bonus || 0);
+  const inTrial = isInTrial(driver.createdAt);
+  const myWithdrawals = (withdrawals || []).filter((w) => w.driverName === driver.name);
+  const myRecharges = (rechargeRequests || []).filter((r) => r.driverName === driver.name);
+
+  // The wallet balance moves for two reasons right now: an approved
+  // recharge landing, or a referral reward — commission is deliberately
+  // held at 0 (see driverRespondBooking/AdminFinance), so a completed trip
+  // itself never touches the wallet and doesn't belong in this ledger; a
+  // "Commission — X → Y" debit line computed off commissionPct used to show
+  // up here for every trip even though nothing was ever actually deducted,
+  // which would only get more misleading the moment admin sets that
+  // percentage above 0 in Settings without also reactivating the real
+  // deduction. Referral entries store a plain millis number (Date.now())
+  // rather than a Firestore Timestamp, hence txMillis/txTime below handling
+  // both shapes.
+  const referralEntries = driver.referralEntries || [];
+  const txMillis = (createdAt) => createdAt?.toMillis?.() || (typeof createdAt === "number" ? createdAt : 0);
+  const walletTransactions = [
+    ...myRecharges.filter((r) => r.status === "Approved").map((r) => ({
+      id: r.id, type: "credit", createdAt: r.createdAt,
+      label: lang === "en" ? "Wallet recharge" : lang === "mr" ? "वॉलेट रिचार्ज" : "वॉलेट रीचार्ज",
+      amount: r.amount,
+    })),
+    ...referralEntries.map((r, i) => ({
+      id: `ref-${i}-${r.creditedAt}`, type: "credit", createdAt: r.creditedAt,
+      label: lang === "en" ? "Referral bonus" : lang === "mr" ? "रेफरल बोनस" : "रेफरल बोनस",
+      amount: r.amount,
+    })),
+  ].sort((a, b) => txMillis(b.createdAt) - txMillis(a.createdAt));
+  const txTime = (createdAt) => {
+    const ms = txMillis(createdAt);
+    return ms ? new Date(ms).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+  };
+
+  return (
+    <div className="px-5 py-5">
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"}</h2>
+      <div className="rounded-xl p-4 mb-3" style={{ background: C.navy }}>
+        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Wallet Balance" : lang === "mr" ? "वॉलेट बॅलन्स" : "वॉलेट बैलेंस"}</div>
+        <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(displayWallet)}</div>
+        {!inTrial && driver.wallet < minWallet && (
+          <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : lang === "mr" ? `किमान ${fmt(minWallet)} बॅलन्स आवश्यक आहे — अ‍ॅप बंद होऊ शकते` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
+        )}
+        {(driver.heldCredit || 0) > 0 && (
+          <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : lang === "mr" ? `रद्द झालेल्या ट्रिपमधून ${fmt(driver.heldCredit)} होल्डमध्ये आहे — पुढील ट्रिपच्या कमिशनमध्ये आपोआप अ‍ॅडजस्ट होईल.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
+        )}
+        <button onClick={() => setShowComingSoon(true)} className="w-full mt-3 rounded-lg py-3.5 font-bold text-base flex items-center justify-center gap-1.5" style={{ background: "#FFFFFF", color: C.navy }}>
+          <IndianRupee size={14} /> {lang === "en" ? "Recharge" : lang === "mr" ? "रिचार्ज करा" : "रीचार्ज करें"}
+        </button>
+        {showComingSoon && (
+          <div className="rounded-lg p-2.5 mt-2 text-[11px] font-semibold text-center shadow-lg" style={{ background: C.metallicGold, color: "#000000" }}>
+            {lang === "en" ? "Online payments are coming soon." : lang === "mr" ? "ऑनलाइन पेमेंट लवकरच येत आहे." : "ऑनलाइन पेमेंट जल्द आ रहा है।"}
+          </div>
+        )}
+        <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-lg py-3 text-base font-bold flex items-center justify-center gap-1.5" style={{ background: "#000000", color: "#fff" }}>
+          <ClipboardList size={13} /> {showHistory ? (lang === "en" ? "Hide Transaction History" : lang === "mr" ? "व्यवहार हिस्टरी लपवा" : "लेन-देन हिस्ट्री छुपाएं") : (lang === "en" ? "Transaction History" : lang === "mr" ? "व्यवहार हिस्टरी" : "लेन-देन हिस्ट्री")}
+        </button>
+      </div>
+      {showHistory && (
+        <div className="rounded-xl p-3 mb-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          {walletTransactions.length === 0 ? (
+            <p className="text-[11px] text-center py-2" style={{ color: C.inkSoft }}>{lang === "en" ? "No wallet transactions yet." : lang === "mr" ? "अजून कोणताही व्यवहार झाला नाही." : "अभी तक कोई लेन-देन नहीं हुआ।"}</p>
+          ) : (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {walletTransactions.map((tx) => (
+                <div key={tx.id} className="rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold truncate" style={{ color: C.ink }}>{tx.label}</div>
+                    <div className="text-[10px]" style={{ color: C.inkSoft }}>{txTime(tx.createdAt)}</div>
+                  </div>
+                  <span className="text-xs font-bold shrink-0" style={{ color: tx.type === "credit" ? C.success : C.safety, fontFamily: monoFont }}>
+                    {tx.type === "credit" ? "+" : "−"}{fmt(tx.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Driver Bonus" : lang === "mr" ? "ड्रायव्हर बोनस" : "ड्राइवर बोनस"}</div>
+          <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(displayBonus)}</div>
+        </div>
+        <div className="text-[11px] font-semibold mb-2" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Withdraw anytime" : lang === "mr" ? "कधीही काढा" : "कभी भी निकालें"}</div>
+        <button onClick={() => requestWithdrawal(driver.bonus || 0)} disabled={!driver.bonus}
+          className={`w-full rounded-lg py-3 text-base font-bold text-white flex items-center justify-center gap-1.5 ${driver.bonus ? "shadow-lg" : ""}`}
+          style={{ background: driver.bonus ? C.metallicGreen : "#E0E0E0", color: driver.bonus ? "#fff" : "#9AA3B0" }}>
+          <Wallet size={13} /> {lang === "en" ? "Send to Bank" : lang === "mr" ? "बँकेत पाठवा" : "बैंक में भेजें"}
+        </button>
+      </div>
+
+      {myWithdrawals.length > 0 && (
+        <div className="mb-4">
+          <div className="text-[11px] font-bold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Withdrawal Requests" : lang === "mr" ? "विड्रॉल रिक्वेस्ट" : "विड्रॉल रिक्वेस्ट"}</div>
+          <div className="space-y-1.5">
+            {myWithdrawals.map((w) => (
+              <div key={w.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <span className="text-xs font-semibold" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(w.amount)}</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: w.status === "Approved" ? C.success : C.marigoldDeep }}>
+                  {w.status === "Approved" ? (lang === "en" ? "Sent to bank ✓" : lang === "mr" ? "बँकेत पाठवले ✓" : "बैंक में भेज दिया ✓") : (lang === "en" ? "Pending admin approval" : lang === "mr" ? "अ‍ॅडमिन अप्रूव्हल बाकी" : "एडमिन अप्रूवल बाकी")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+function DriverHistory({ tripLog, driver, lang }) {
+  const myTrips = tripLog.filter((t) => t.driverName === driver.name);
+  const [docsTrip, setDocsTrip] = useState(null);
+  return (
+    <div className="px-5 py-5">
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Trip History" : lang === "mr" ? "ट्रिप हिस्टरी" : "ट्रिप हिस्ट्री"}</h2>
+      <div className="space-y-2">
+        {myTrips.length === 0 && (
+          <div className="text-center py-10">
+            <Package size={28} color={C.inkSoft} className="mx-auto mb-2" />
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid accepted yet." : lang === "mr" ? "अजून कोणतीही बिड अ‍ॅक्सेप्ट झाली नाही." : "अभी कोई बिड एक्सेप्ट नहीं हुई।"}</p>
+          </div>
+        )}
+        {myTrips.map((t) => (
+          <div key={t.id} className="rounded-lg px-3 py-2.5" style={{ background: C.paper, border: `1px solid ${t.status === "Cancelled" ? C.safety : C.line}` }}>
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
+              <div className="text-sm font-bold" style={{ color: t.status === "Cancelled" ? C.safety : C.success, fontFamily: monoFont }}>
+                {t.status === "Cancelled" ? (lang === "en" ? "Cancelled" : lang === "mr" ? "रद्द" : "रद्द") : fmt(t.fare)}
+              </div>
+            </div>
+            {/* No commission line here — commission is deliberately held at
+                0 right now (see driverRespondBooking/AdminFinance), so a
+                trip's full fare is exactly what the driver actually keeps;
+                a "commission −₹X" figure computed off admin's live
+                commissionPct setting would show a deduction that never
+                actually happened to the wallet. */}
+            <div className="flex items-center justify-between mt-1">
+              <div className="text-[10px]" style={{ color: C.inkSoft }}>
+                {lang === "en" ? `Fare ${fmt(t.fare)}` : lang === "mr" ? `भाडे ${fmt(t.fare)}` : `भाड़ा ${fmt(t.fare)}`}
+              </div>
+              {t.status === "Cancelled" ? null : t.rating ? <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{stars(t.rating)}</div> : <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status === "Ongoing" ? (lang === "en" ? "In progress" : lang === "mr" ? "चालू" : "चालू") : (lang === "en" ? "Rating pending" : lang === "mr" ? "रेटिंग बाकी" : "रेटिंग बाकी")}</div>}
+            </div>
+            {t.status === "Completed" && (
+              <button onClick={() => setDocsTrip(t)} className="text-sm font-semibold mt-1.5 flex items-center gap-1"
+                style={{ color: t.documents?.file?.url ? C.success : C.marigoldDeep }}>
+                <FileText size={12} /> {lang === "en" ? "Receive Bill" : lang === "mr" ? "बिल मिळवा" : "बिल प्राप्त करें"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {docsTrip && <BillDocumentsViewModal trip={docsTrip} onClose={() => setDocsTrip(null)} lang={lang} />}
+    </div>
+  );
+}
+
+function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, onFirstSubmit }) {
+  const VEHICLES = vehicleTypes;
+  // Persisted to localStorage so a refresh mid-fill (slow connection,
+  // accidental reload) doesn't force re-uploading photos or retyping —
+  // cleared once submit() actually attaches them to the driver doc. Falls
+  // back to whatever's already saved on the driver (e.g. on KYC
+  // resubmission after a rejection) only when there's no in-progress draft.
+  const [dl, setDl] = usePersistedPhoto("sarthi_driverKyc_dl", null);
+  const [photo, setPhoto] = usePersistedPhoto("sarthi_driverKyc_photo", null);
+  // Which photo tiles are mid-upload — a set, not a single value, so
+  // uploading two photos at once (e.g. tapping Front then Side before the
+  // first finishes) doesn't make one tile's "uploading" indicator vanish
+  // while it's still actually in flight.
+  const [uploadingKeys, setUploadingKeys] = useState({});
+  const markUploading = (key, on) => setUploadingKeys((prev) => ({ ...prev, [key]: on }));
+  const anyUploading = Object.values(uploadingKeys).some(Boolean);
+  // Set when a tile's photo failed to upload (e.g. a corrupted file the
+  // browser couldn't decode) — surfaced as inline text on that tile instead
+  // of leaving "Uploading..." stuck forever with no explanation.
+  // Per-tile upload failure reason ("toobig" | "timeout" | "decode" |
+  // "upload"), or false when there's no error. Surfaced as an inline,
+  // action-oriented line on the tile (see uploadErrorInfo) instead of
+  // leaving "Uploading..." stuck forever with no explanation.
+  const [uploadErrorKeys, setUploadErrorKeys] = useState({});
+  const markUploadError = (key, reason) => setUploadErrorKeys((prev) => ({ ...prev, [key]: reason || false }));
+  // Real bytes-transferred percentage per tile, fed by uploadPhoto's
+  // onProgress callback — replaces a static "Uploading..." with something
+  // that visibly moves, so a slow connection doesn't look identical to a
+  // stuck one.
+  const [uploadProgress, setUploadProgress] = useState({});
+  const markProgress = (key, pct) => setUploadProgress((prev) => ({ ...prev, [key]: pct }));
+  // The last File actually picked per tile — kept around purely so Retry
+  // can re-run the same upload without sending the driver back through the
+  // camera/library picker sheet for a failure that was probably just a
+  // network blip, not a bad photo.
+  const lastFilesRef = useRef({});
+
+  const existingVehicleType = VEHICLES.find((v) => v.key === driver.vehicleSpec?.type);
+  // The driver just types their vehicle's name — no dropdown of preset
+  // types to pick from. Resolved to a vehicleTypes entry (reusing a
+  // matching one by name, or creating a new one) only at submit time.
+  const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : "");
+  const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
+  const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
+  // vehicleSpec.capacityKg is stored as a number (see resolveVehicleTypeKey
+  // below) -- String(...) here so this always starts as a string, since
+  // canSubmit/kycStepCompleted below call .trim() on it. Skipping this cast
+  // crashed the whole KYC screen (capacityKg.trim is not a function) for
+  // any driver whose vehicleSpec already had a numeric capacityKg set --
+  // e.g. reopening "Settings (KYC & Vehicle)" after a first submission.
+  const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg != null ? String(driver.vehicleSpec.capacityKg) : "");
+  const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "");
+
+  // Auto-fills capacity from VEHICLE_MODEL_SPECS the moment the typed
+  // vehicle name matches a known model — but only if the driver hasn't
+  // already touched it, so it never clobbers a manual entry. Length/width/
+  // height used to be collected too; dropped from the visible KYC form per
+  // the profile-simplification pass — capacity alone is what bidding needs.
+  const matchedModelSpec = lookupVehicleModelSpec(vehicleTypeName);
+  useEffect(() => {
+    if (!matchedModelSpec) return;
+    if (capacityKg) return;
+    setCapacityKg(String(matchedModelSpec.capacityKg));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicleTypeName]);
+
+  // Reuses a vehicleTypes entry with a matching name (case-insensitive) so
+  // typing the same vehicle name as another driver doesn't fragment the
+  // shared type list; otherwise creates a new one from what's typed here.
+  const resolveVehicleTypeKey = () => {
+    const name = vehicleTypeName.trim();
+    const match = VEHICLES.find((v) => v.label.toLowerCase() === name.toLowerCase() || (v.labelEn || "").toLowerCase() === name.toLowerCase());
+    if (match) return match.key;
+    const key = slugify(name);
+    addVehicleType({ key, label: name, rate: 25, capacity: "", capacityKg: Number(capacityKg) || 0 });
+    return key;
+  };
+
+  // Shared by all three KYC photo tiles (driver photo, DL, vehicle side) —
+  // onDoc/onVehiclePhoto used to be separate, identical copies of this same
+  // logic. Also used by retryUpload below, which re-invokes this with the
+  // same File instead of a fresh one from the picker.
+  // vehicleSide/dl only — spot-checking submitted KYC turned up drivers
+  // uploading a front or diagonal shot for the vehicle "Side" tile, so
+  // those two get an AI check (see classifyKycPhoto) before ever reaching
+  // Storage: a rejection here stops before uploadPhoto runs, so a bad
+  // photo never overwrites whatever good one was already saved at that
+  // driver's fixed vehicleSide.jpg/dl.jpg path. Fails open, not closed —
+  // classifyKycPhoto/fileToClassifyPayload returning nothing usable (no
+  // Gemini key configured yet, a network hiccup, a decode issue) just
+  // falls through to the normal upload below rather than blocking KYC
+  // over an unrelated problem.
+  const KYC_CLASSIFY_DOCTYPE = { vehicleSide: "vehicleSide", dl: "drivingLicense" };
+  const startPhotoUpload = (setVal, key) => async (f) => {
+    if (!f) return;
+    lastFilesRef.current[key] = f;
+    markUploading(key, true);
+    markUploadError(key, false);
+    markProgress(key, 0);
+
+    const docType = KYC_CLASSIFY_DOCTYPE[key];
+    if (docType) {
+      const payload = await fileToClassifyPayload(f);
+      if (payload) {
+        const verdict = await withTimeout(classifyKycPhoto(payload.base64, payload.mimeType, docType), 8000, { ok: false, reason: "timeout" });
+        if (verdict.ok && verdict.isMatch === false) {
+          markUploading(key, false);
+          markUploadError(key, key === "vehicleSide" ? "not_side_view" : "not_license");
+          return;
+        }
+      }
+    }
+
+    let failReason = null;
+    uploadPhoto(f, `drivers/${driver.mobile}/${key}.jpg`, 900, 0.72,
+      (pct) => markProgress(key, pct),
+      (reason) => { failReason = reason; },
+    ).then((p) => {
+      markUploading(key, false);
+      if (p) setVal(p); else markUploadError(key, failReason || "upload");
+    });
+  };
+  // Re-send the exact same File — only offered for a "upload" (network)
+  // failure. A "toobig"/"timeout"/"decode" failure needs a different photo,
+  // so those tiles show "tap to take again" (reopens the picker) instead.
+  const retryUpload = (setVal, key) => () => {
+    const f = lastFilesRef.current[key];
+    if (f) startPhotoUpload(setVal, key)(f);
+  };
+
+  // Defensive re-coercion, not just at capacityKg's usePersistedState
+  // default above: a device that already has an OLDER saved draft for
+  // "sarthi_driverKyc_capacityKg" -- e.g. saved back when nothing called
+  // .trim() on it yet, if vehicleSpec.capacityKg (a number) was its
+  // starting value at the time -- has that raw number sitting in
+  // localStorage, and a saved draft always wins over the initial-value
+  // default on every future load. String(...) at the actual point of use
+  // means it can't crash regardless of what's already stored on a given
+  // device.
+  const capacityKgStr = String(capacityKg ?? "");
+  // A non-empty string alone isn't enough — "0" (or "abc", or "-5") passes
+  // .trim() truthy but Number(capacityKg) || undefined at submit time below
+  // then silently discards it as undefined, so KYC "succeeds" with no
+  // capacity ever actually saved. Found via Admin Settings' fare-tier
+  // breakdown turning up drivers with no capacity set despite this field
+  // supposedly being required. Requiring a real positive number here closes
+  // that gap for every future submission.
+  const capacityKgValid = Number(capacityKgStr.trim()) > 0;
+  const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && capacityKgValid && vehicleTypeName.trim() && !anyUploading);
+  // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
+  // Front isn't required here — see the photo tile below, same reasoning as
+  // DriverProfileEdit's document list already applied: the side profile is
+  // the only vehicle photo that matters to a customer browsing bids, so
+  // dropping Front halves the photo-upload burden on signup without losing
+  // anything a customer actually sees.
+  const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), capacityKgValid, !!vehicleTypeName.trim(), !!vehiclePhotoSide];
+  const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
+  // First-time submission within this driver's own 30-day trial (from
+  // their own signup date) skips the admin approval wait entirely — a
+  // driver who's already been reviewed before (kyc isn't null, e.g.
+  // resubmitting after a rejection or editing an approved profile) still
+  // goes back through the normal Pending review either way.
+  const isFirstSubmission = driver.kyc == null;
+  const submit = () => {
+    if (!canSubmit) return;
+    setDriver({
+      // The KYC driver photo doubles as the profile photo (see
+      // DriverProfileEdit) — kept in sync here every time KYC is
+      // submitted/resubmitted, rather than letting the two drift apart.
+      ...driver, kyc: isInTrial(driver.createdAt) && isFirstSubmission ? "Approved" : "Pending", photo, docs: { dl, photo },
+      vehicleSpec: {
+        type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
+        // canSubmit already guarantees Number(capacityKg) > 0 by this point
+        // — || null here is just defense in depth, and null (an explicit
+        // "not set") is the correct fallback shape, not undefined (which
+        // silently vanishes from what gets saved).
+        capacityKg: Number(capacityKg) || null,
+        vehicleNumber: vehicleNumber.trim().toUpperCase(),
+      },
+    });
+    // Submitted for real — clear the draft so a later resubmission (after a
+    // rejection) starts from the driver's actual saved data, not this.
+    setDl(null); setPhoto(null); setVehicleTypeName(""); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
+    setCapacityKg(""); setVehicleNumber("");
+    if (isFirstSubmission) onFirstSubmit?.();
+  };
+
+  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+  const docLabels = lang === "en"
+    ? { photo: "Driver Photo", dl: "Driving License" }
+    : lang === "mr"
+    ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
+    : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
+
+  return (
+    <div className="px-5 py-5">
+      {stepLabel && <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{stepLabel}</div>}
+      <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : lang === "mr" ? "कागदपत्रे (KYC)" : "दस्तावेज़ (KYC)"}</h2>
+      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Upload your photo and driving license, and enter your vehicle's number and dimensions." : lang === "mr" ? "तुमचा फोटो आणि ड्रायव्हिंग लायसन्स अपलोड करा, आणि तुमच्या गाडीचा नंबर व साइझ टाका." : "अपनी फोटो और ड्राइविंग लाइसेंस अपलोड करें, और अपनी गाड़ी का नंबर व साइज़ डालें।"}</p>
+
+      <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: driver.kyc === "Approved" ? C.success : C.marigoldDeep }}>
+        <ShieldCheck size={16} color="#FFFFFF" />
+        <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Status" : lang === "mr" ? "स्टेटस" : "स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित") : (lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित")}</span>
+      </div>
+
+      <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Documents" : lang === "mr" ? "कागदपत्रे" : "दस्तावेज़"}</div>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {[
+          ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
+        ].map(([key, label, val, setVal], i) => (
+          <GuidedStep key={key} {...kycStepProps(i)} lang={lang}>
+            <PhotoPicker label={label} lang={lang} onSelect={startPhotoUpload(setVal, key)}>
+              <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
+                {uploadingKeys[key] ? (
+                  <div className="p-2 flex flex-col items-center justify-center">
+                    <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading" : lang === "mr" ? "अपलोड होत आहे" : "अपलोड हो रहा है"}{uploadProgress[key] ? ` ${uploadProgress[key]}%` : "..."}</span>
+                  </div>
+                ) : (
+                  <SafeImage
+                    src={val?.url}
+                    alt={label}
+                    className="w-full h-16 object-cover"
+                    fallback={
+                      <div className="p-2 flex flex-col items-center justify-center">
+                        <Camera size={16} color={C.inkSoft} />
+                        <span className="text-[10px] font-semibold mt-1" style={{ color: C.ink }}>{label}</span>
+                      </div>
+                    }
+                  />
+                )}
+                {uploadErrorKeys[key] ? (
+                  <div className="mt-0.5 pb-1 px-1">
+                    <span className="block text-[9px] font-semibold leading-tight" style={{ color: C.safety }}>{uploadErrorInfo(uploadErrorKeys[key], lang)}</span>
+                    {uploadErrorKeys[key] === "upload" ? (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(setVal, key)(); }} className="text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
+                        {lang === "en" ? "Retry" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
+                      </button>
+                    ) : (
+                      <span className="block text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
+                        {lang === "en" ? "Tap to take again" : lang === "mr" ? "पुन्हा घेण्यासाठी टॅप करा" : "फिर से लेने के लिए टैप करें"}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>
+                    {val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}
+                  </span>
+                )}
+              </div>
+            </PhotoPicker>
+          </GuidedStep>
+        ))}
+      </div>
+
+      <GuidedStep {...kycStepProps(2)} lang={lang}>
+        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : lang === "mr" ? "गाडी रजिस्टर्ड नंबर" : "गाड़ी रजिस्टर्ड नंबर"}</label>
+        <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 12 }} placeholder="MH-14-XX-XXXX" value={vehicleNumber}
+          onChange={(e) => setVehicleNumber(e.target.value)} />
+      </GuidedStep>
+
+      <GuidedStep {...kycStepProps(3)} lang={lang}>
+        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलोग्राम)" : "क्षमता (किलोग्राम)"}</label>
+        {matchedModelSpec && (
+          <p className="text-[10px] font-semibold mb-1.5" style={{ color: C.success }}>
+            {lang === "en" ? "Auto-filled for this vehicle model — edit if yours differs." : lang === "mr" ? "या गाडी मॉडेलनुसार आपोआप भरले गेले आहे — वेगळे असल्यास बदलू शकता." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
+          </p>
+        )}
+        <div className="mb-4">
+          <input type="number" className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 750" : lang === "mr" ? "उदा: 750" : "जैसे: 750"} value={capacityKgStr} onChange={(e) => setCapacityKg(e.target.value)} />
+        </div>
+      </GuidedStep>
+
+      <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Step 2 — Vehicle Details" : lang === "mr" ? "स्टेप 2 — गाडीची माहिती" : "स्टेप 2 — गाड़ी की जानकारी"}</div>
+      <div className="rounded-xl p-3 mb-4 shadow-lg" style={{ border: `2px solid ${C.marigoldDeep}`, background: C.metallicGold }}>
+        <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#000000" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : lang === "mr" ? "स्पष्ट भरा — कस्टमरला हीच दिसेल" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
+
+        <GuidedStep {...kycStepProps(4)} lang={lang}>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : lang === "mr" ? "गाडीचे नाव" : "गाड़ी का नाम"}</label>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tata 109" : lang === "mr" ? "उदा: Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
+        </GuidedStep>
+
+        <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo (Side)" : lang === "mr" ? "गाडीचा फोटो (बाजूने)" : "गाड़ी की फोटो (साइड से)"}</label>
+        {/* Front used to be required here too — dropped (see kycStepCompleted
+            above) since the side profile is the only vehicle photo a
+            customer ever sees on a bid card, same reasoning already applied
+            to DriverProfileEdit's own document list. Halves the photo-upload
+            burden a new driver faces during signup. */}
+        <div className="max-w-[180px] mb-2">
+          <GuidedStep {...kycStepProps(5)} lang={lang}>
+            <PhotoPicker label={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"} lang={lang} onSelect={startPhotoUpload(setVehiclePhotoSide, "vehicleSide")}>
+              <div className="rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer" style={{ border: `1.5px dashed ${C.marigoldDeep}`, background: C.paper, minHeight: 110 }}>
+                {uploadingKeys.vehicleSide ? (
+                  <div className="text-xs font-semibold py-6" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading" : lang === "mr" ? "अपलोड होत आहे" : "अपलोड हो रहा है"}{uploadProgress.vehicleSide ? ` ${uploadProgress.vehicleSide}%` : "..."}</div>
+                ) : (
+                  <SafeImage
+                    src={vehiclePhotoSide?.url}
+                    alt={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"}
+                    className="w-full h-24 rounded-lg object-cover"
+                    fallback={
+                      <>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: C.marigoldDeep }}><Camera size={18} color="#FFFFFF" /></div>
+                        <div className="text-[10px] font-semibold text-center" style={{ color: C.ink }}>{lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"}</div>
+                      </>
+                    }
+                  />
+                )}
+              </div>
+              {uploadErrorKeys.vehicleSide ? (
+                <div className="mt-0.5 px-1 text-center">
+                  <span className="block text-[9px] font-semibold leading-tight" style={{ color: C.safety }}>{uploadErrorInfo(uploadErrorKeys.vehicleSide, lang)}</span>
+                  {uploadErrorKeys.vehicleSide === "upload" ? (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); retryUpload(setVehiclePhotoSide, "vehicleSide")(); }} className="text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
+                      {lang === "en" ? "Retry" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
+                    </button>
+                  ) : (
+                    <span className="block text-[9px] font-bold underline mt-0.5" style={{ color: C.navy }}>
+                      {lang === "en" ? "Tap to take again" : lang === "mr" ? "पुन्हा घेण्यासाठी टॅप करा" : "फिर से लेने के लिए टैप करें"}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="text-[9px] mt-0.5 text-center" style={{ color: vehiclePhotoSide ? C.success : C.inkSoft }}>
+                  {vehiclePhotoSide ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
+                </div>
+              )}
+            </PhotoPicker>
+          </GuidedStep>
+        </div>
+        <div className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div className="text-[10px] font-semibold mb-1" style={{ color: C.ink }}>{lang === "en" ? "For a good photo:" : lang === "mr" ? "चांगल्या फोटोसाठी:" : "अच्छी फोटो के लिए:"}</div>
+          <div className="text-[10px]" style={{ color: C.inkSoft, lineHeight: 1.6 }}>
+            {lang === "en" ? (
+              <>• Take it in daylight, at a clean spot<br />• The full vehicle should be in frame<br />• The number plate should be clearly visible<br />• Don't upload blurry, dark, or cropped photos</>
+            ) : lang === "mr" ? (
+              <>• दिवसाच्या उजेडात, स्वच्छ जागी फोटो घ्या<br />• संपूर्ण गाडी फ्रेममध्ये यायला हवी<br />• गाडी नंबर प्लेट स्पष्ट दिसायला हवी<br />• धूसर, अंधारी किंवा कापलेली फोटो टाकू नका</>
+            ) : (
+              <>• दिन की रोशनी में, साफ जगह पर फोटो लें<br />• पूरी गाड़ी फ्रेम में आनी चाहिए<br />• गाड़ी नंबर प्लेट साफ दिखनी चाहिए<br />• धुंधली, अंधेरी या कटी हुई फोटो न डालें</>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle name & number to submit" : lang === "mr" ? "सबमिट करण्यासाठी तुमचा फोटो, लायसन्स, गाडीचे दोन्ही फोटो, गाडीचे नाव आणि नंबर टाका" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो, गाड़ी का नाम और नंबर डालें"}</div>}
+      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-4 font-bold text-base ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : "#E0E0E0", color: canSubmit ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Submit" : lang === "mr" ? "सबमिट करा" : "सबमिट करें"}</button>
+    </div>
+  );
+}
+
+// Driver's My Profile: name, disabled mobile, language, a read-only view of
+// the KYC documents (with a Change button into the KYC form), the editable
+// Rate Setup card, an optional set-a-PIN block, and Logout. No address
+// fields — the driver flow never collects an address. The profile photo
+// isn't separately uploadable here either: it's the KYC "Driver Photo"
+// (DriverKyc's submit writes it to driver.photo), shown read-only so it's
+// always exactly what the customer sees on their active ride page.
+function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, onEditDocuments }) {
+  const [name, setName] = useState(driver?.name || "");
+  const [saved, setSaved] = useState(false);
+
+  // "My Rates" (rate card) editing removed here along with pricing —
+  // preserved on the backup-before-pricing-removal branch.
+
+  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
+  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
+
+  const save = () => {
+    setDriver({ ...driver, name: name.trim() });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  // Migration nudge for an account still on the old Firebase Phone Auth
+  // login — see CustomerProfileEdit's identical block for the full
+  // explanation of why linkWithCredential (not a new account) is used here.
+  const hasPinAlready = !!driverFirebaseAuth?.currentUser?.email;
+  const [pinPromptOpen, setPinPromptOpen] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [newPinConfirm, setNewPinConfirm] = useState("");
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pinError, setPinError] = useState("");
+  const [pinDone, setPinDone] = useState(false);
+
+  const setUpPin = async () => {
+    if (newPin.length !== 4 || newPin !== newPinConfirm || pinSaving || !driverFirebaseAuth?.currentUser || !driver?.mobile) return;
+    setPinSaving(true);
+    setPinError("");
+    try {
+      const credential = EmailAuthProvider.credential(pinAuthEmail(driver.mobile, "driver"), pinToPassword(newPin));
+      await linkWithCredential(driverFirebaseAuth.currentUser, credential);
+      setPinDone(true);
+      setNewPin(""); setNewPinConfirm(""); setPinPromptOpen(false);
+    } catch (e) {
+      console.error(e);
+      setPinError(lang === "en" ? "Couldn't set PIN — try again." : lang === "mr" ? "PIN सेट होऊ शकला नाही — पुन्हा प्रयत्न करा." : "PIN सेट नहीं हो सका — फिर कोशिश करें।");
+    }
+    setPinSaving(false);
+  };
+
+  return (
+    <div className="px-5 py-4">
+      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}</h2>
+      <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex justify-center">
+          <div className="w-28 h-28 rounded-full flex items-center justify-center overflow-hidden" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
+            <SafeImage src={driver?.photo?.url} alt="" className="w-full h-full object-cover" fallback={<Camera size={30} color={C.marigoldDeep} />} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
+          <input className={inputCls} style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Mobile" : lang === "mr" ? "मोबाइल" : "मोबाइल"}</label>
+          <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, background: C.bg, color: C.inkSoft }} value={driver?.mobile || ""} disabled />
+        </div>
+        <div>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Language" : lang === "mr" ? "भाषा" : "भाषा"}</label>
+          <select className={inputCls} style={inputStyle} value={lang} onChange={(e) => onChangeLang?.(e.target.value)}>
+            <option value="en">English</option>
+            <option value="hi">हिंदी</option>
+            <option value="mr">मराठी</option>
+          </select>
+        </div>
+
+        {/* Every document submitted with KYC, visible right here — View/
+            Download per document via KycDocThumb (same component the admin
+            review screen uses), and a single Change button that jumps to
+            the existing KYC & Vehicle form to re-upload/edit any of them
+            (including the driver photo above), instead of duplicating that
+            upload flow here. Vehicle - Front isn't shown — the side profile
+            is the only vehicle photo that matters to a customer browsing
+            bids. */}
+        <div className="pt-1">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Documents" : lang === "mr" ? "कागदपत्रे" : "दस्तावेज़"}</h3>
+            <button onClick={onEditDocuments} className="text-base font-bold px-4 py-2.5 rounded-lg" style={{ background: C.marigold, color: "#000000" }}>
+              {lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { key: "dl", label: lang === "en" ? "Driving License" : lang === "mr" ? "ड्रायव्हिंग लायसन्स" : "ड्राइविंग लाइसेंस", url: driver?.docs?.dl?.url },
+              { key: "vehicleSide", label: lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड", url: driver?.vehicleSpec?.photoSide?.url },
+            ].map((d) => (
+              <KycDocThumb key={d.key} url={d.url} label={d.label} lang={lang} fileName={`${driver?.name || "driver"}-${d.key}.jpg`} />
+            ))}
+          </div>
+        </div>
+
+        <button onClick={save} className={`w-full rounded-lg py-3.5 font-bold text-base text-white ${saved ? "shadow-lg" : ""}`} style={{ background: saved ? C.metallicGreen : C.marigoldDeep }}>
+          {saved ? (lang === "en" ? "Saved ✓" : lang === "mr" ? "सेव्ह झाले ✓" : "सेव हो गया ✓") : (lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें")}
+        </button>
+      </div>
+
+      {!hasPinAlready && (
+        <div className="rounded-xl p-4 mb-3 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+          {pinDone ? (
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={18} color={C.success} />
+              <span className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "PIN set! You can use it to log in next time." : lang === "mr" ? "PIN सेट झाला! पुढच्या वेळी लॉगिनसाठी वापरू शकता." : "PIN सेट हो गया! अगली बार लॉगिन के लिए इस्तेमाल कर सकते हैं।"}</span>
+            </div>
+          ) : !pinPromptOpen ? (
+            <>
+              <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Set a PIN for faster login" : lang === "mr" ? "जलद लॉगिनसाठी PIN सेट करा" : "तेज़ लॉगिन के लिए PIN सेट करें"}</div>
+              <p className="text-[11px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Skip the OTP next time — just your mobile number and a PIN." : lang === "mr" ? "पुढच्या वेळी OTP टाळा — फक्त मोबाइल नंबर आणि PIN." : "अगली बार OTP छोड़ें — बस मोबाइल नंबर और PIN।"}</p>
+              <button onClick={() => setPinPromptOpen(true)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Set PIN" : lang === "mr" ? "PIN सेट करा" : "PIN सेट करें"}</button>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+                value={newPin} onChange={(e) => { setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
+              <input className={inputCls} style={{ ...inputStyle, textAlign: "center", letterSpacing: 2, fontFamily: monoFont }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
+                value={newPinConfirm} onChange={(e) => { setNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }} />
+              {newPin && newPinConfirm && newPin !== newPinConfirm && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>}
+              {pinError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{pinError}</div>}
+              <button onClick={setUpPin} disabled={newPin.length !== 4 || newPin !== newPinConfirm || pinSaving}
+                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E0E0E0", color: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
+                {pinSaving ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save PIN" : lang === "mr" ? "PIN सेव्ह करा" : "PIN सेव करें")}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
+        <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
+      </button>
+    </div>
+  );
+}
+
+// Rate cards / auto-bid pricing (RATE_FIELDS, rateCardComplete,
+// computeAutoBid, loadIsHeavy) and the RateSetup screen are paused for
+// now — full code preserved on the backup-before-pricing-removal branch.
+// Booking is direct-request only in the meantime (see
+// requestDriverDirectly and CustomerBooking's driver picker) — no fare is
+// computed or shown anywhere in that flow.
+
+// Whether a load is one this driver's app would auto-bid on — shared by the
+// auto-bid effect and the read-only "nearby loads" overview on DriverHome.
+// (Doesn't check "already bid" / rate-card presence — callers handle those.)
+function loadEligibleForDriver(driver, load, bookings, vehicleTypes, lang) {
+  if (load.status !== "Bidding") return false;
+  if (load.declinedBy?.includes(driver.name)) return false;
+  const dCapKg = Number(driver.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type)?.capacityKg || 0;
+  const loadKg = Number(load.weight) || 0;
+  if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+  if (load.pickupLat != null && load.pickupLng != null) {
+    const loc = driver.lastKnownLocation;
+    const maxKm = isFutureAdvance(load.scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+    if (!loc || haversineKm(loc.lat, loc.lng, load.pickupLat, load.pickupLng) > maxKm) return false;
+  }
+  if (findDriverLoadConflict(driver, { id: load.id, scheduledFor: load.scheduledFor }, bookings, vehicleTypes, lang)) return false;
+  return true;
+}
+
+// Lets a driver record what the market is actually charging for a
+// specific, well-known route (Pune-Kolhapur, Pune-Mumbai, etc.) — a flat
+// capacity-tier ₹/km formula doesn't track real long-distance rates well,
+// so instead every driver who quotes the same route (matched loosely by
+// pickup/drop text, see routeTextsMatch) has their number averaged
+// together, and that average becomes the fare shown to customers for that
+// route (see getRouteAverageFare/resolveFare) — taking priority over the
+// generic formula whenever it's available. Opened from the small button
+// next to the refresh button in DriverApp's header, not shown inline on
+// the dashboard, since this is an occasional "log a route" action rather
+// than something checked on every visit.
+function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
+  const [pickup, setPickup] = useState("");
+  const [drop, setDrop] = useState("");
+  const [pickupCoords, setPickupCoords] = useState(null);
+  const [dropCoords, setDropCoords] = useState(null);
+  const [distance, setDistance] = useState(null);
+  const [totalFare, setTotalFare] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
+  const mapsReady = mapsHasKey && mapsLoaded;
+
+  useEffect(() => {
+    if (!mapsReady || pickupCoords || !pickup.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(pickup).then((loc) => { if (loc) setPickupCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [pickup, pickupCoords, mapsReady]);
+  useEffect(() => {
+    if (!mapsReady || dropCoords || !drop.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(drop).then((loc) => { if (loc) setDropCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [drop, dropCoords, mapsReady]);
+
+  // Straight-line estimate shows instantly, then silently upgrades to the
+  // real routed distance once it resolves — same pattern as CustomerBooking.
+  const distanceRequestRef = useRef(0);
+  useEffect(() => {
+    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
+    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
+    if (!hasBothCoords || !mapsReady) return;
+    const requestId = ++distanceRequestRef.current;
+    fetchRoadDistanceKm(pickupCoords, dropCoords)
+      .then((km) => { if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100); })
+      .catch((e) => console.error("[set fare distance]", e));
+  }, [pickupCoords, dropCoords, mapsReady]);
+
+  const myRoutes = (routeFares || []).filter((r) => r.driverMobile === driver.mobile);
+  // This driver's own vehicle capacity/bracket — captured on save() below
+  // so Admin can see it on every entry, and so the crowd-sourced average
+  // (getRouteAverageFare) only ever blends quotes from similarly-sized
+  // vehicles instead of mixing a mini-truck's number with a big truck's.
+  const myCapacityKg = driver.vehicleSpec?.capacityKg || null;
+  const myTier = myCapacityKg != null ? findFareTier(myCapacityKg, fareTiers) : null;
+
+  // 1-5 km Fixed Fare is no longer a separate input -- it's always exactly
+  // 25% of Total Fare, the one number a driver actually types in.
+  const tier1to5Fare = totalFare !== "" ? Math.round((Number(totalFare) || 0) * 0.25) : 0;
+  // What's left of the total, spread over the km beyond the first 5, gives
+  // a real ₹/km rate for this specific route -- not used to price anything
+  // yet, but stored (see save() below) so it's there to use later (e.g. to
+  // estimate a fare for a nearby distance on the same route).
+  const perKmRate = distance != null && distance > 5 && totalFare !== "" ? Math.round((Number(totalFare) - tier1to5Fare) / (distance - 5)) : null;
+
+  // Once another driver has already quoted this same route, surface their
+  // number (or the average across everyone who has) right here so this
+  // driver isn't guessing — a tap fills Total Fare with it, but typing
+  // over it afterward is always still allowed.
+  const routeSuggestion = (() => {
+    if (!pickup.trim() || !drop.trim()) return null;
+    const others = (routeFares || []).filter((r) => r.driverMobile !== driver.mobile);
+    const avg = getRouteAverageFare(pickup, drop, others, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, myTier?.maxKg);
+    return avg ? { totalFare: avg.avgFare, count: avg.count } : null;
+  })();
+  const useSuggestion = () => {
+    if (!routeSuggestion) return;
+    setTotalFare(String(routeSuggestion.totalFare));
+    setSavedFlash(false);
+  };
+
+  // Tapping a saved route reloads it into the form for editing — since the
+  // doc id is derived from the pickup/drop text (see save() below), saving
+  // again with the SAME text overwrites this exact entry; changing the
+  // text creates a new one and leaves this one as-is (removable below).
+  const editRoute = (r) => {
+    setPickup(r.pickupName || ""); setDrop(r.dropName || "");
+    setPickupCoords(null); setDropCoords(null);
+    setTotalFare(r.totalFare != null ? String(r.totalFare) : "");
+    setSavedFlash(false);
+  };
+  // Requiring resolved coordinates (whenever Maps is actually available) is
+  // deliberate, not just a nice-to-have: this entry's whole reason to exist
+  // is to be matched by GPS against a customer's own typed address (see
+  // getRouteAverageFare) -- a save that goes through before geocoding
+  // catches up silently produces a coordinate-less entry that can only
+  // ever match by loose text containment, which two people describing the
+  // same real place in different words/scripts will often fail. Still
+  // allowed with no coords at all if Maps genuinely isn't loaded, matching
+  // the text-fallback this was always meant to cover.
+  const locationResolved = !mapsReady || (pickupCoords != null && dropCoords != null);
+  const canSave = pickup.trim() && drop.trim() && totalFare !== "" && !saving && locationResolved;
+  const save = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    const docId = `${driver.mobile}__${sanitizeForDocId(pickup)}__${sanitizeForDocId(drop)}`;
+    try {
+      await createDoc("routeFares", docId, {
+        driverMobile: driver.mobile,
+        pickupName: pickup.trim(), dropName: drop.trim(),
+        pickupKey: normalizeRouteText(pickup), dropKey: normalizeRouteText(drop),
+        // Real coordinates, not just text — see locationsNear/
+        // getRouteAverageFare. Google's autocomplete returns place names in
+        // whatever script the device's locale prefers, so two drivers
+        // quoting the identical real route can end up with completely
+        // different-looking pickupKey/dropKey text; matching by GPS
+        // location instead lets the average still find them both.
+        pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+        dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+        estimatedKm: distance,
+        tier1to5Fare,
+        totalFare: Number(totalFare) || 0,
+        perKmRate,
+        capacityKg: myCapacityKg,
+        tierMaxKg: myTier?.maxKg ?? null,
+      });
+      setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
+      setTotalFare("");
+      setSavedFlash(true);
+    } catch (e) { console.error(e); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
+          <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Set Fare" : lang === "mr" ? "भाडे सेट करा" : "किराया सेट करें"}</h3>
+          <button onClick={onClose} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+        </div>
+        <div className="p-4 space-y-3 overflow-y-auto">
+          <div className="rounded-lg p-3 text-xs font-semibold" style={{ background: C.metallicGold, color: "#000000" }}>
+            {lang === "en"
+              ? "Wherever you travel/ ride to and fro, fill out this form so that we can better provide rides."
+              : lang === "mr"
+              ? "तुम्ही जिथे-जिथे प्रवास करता/ये-जा करता, तिथला हा फॉर्म भरा जेणेकरून आम्ही चांगल्या प्रकारे राईड्स देऊ शकू."
+              : "आप जहां-जहां सफर करते हैं/आना-जाना करते हैं, वहां का यह फॉर्म भरें ताकि हम बेहतर तरीके से राइड्स दे सकें।"}
+          </div>
+
+          <LocationField lang={lang} value={pickup} citiesOnly
+            onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); }}
+            onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Pickup city (e.g. Pune)" : lang === "mr" ? "पिकअप शहर (उदा. पुणे)" : "पिकअप शहर (उदा. पुणे)"} />
+          <LocationField lang={lang} value={drop} citiesOnly
+            onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setSavedFlash(false); }}
+            onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); }}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Drop city (e.g. Kolhapur)" : lang === "mr" ? "ड्रॉप शहर (उदा. कोल्हापूर)" : "ड्रॉप शहर (उदा. कोल्हापुर)"} />
+
+          {routeSuggestion && (
+            <div className="rounded-lg p-3 flex items-center justify-between gap-2" style={{ background: C.bg, border: `1.5px solid ${C.marigoldDeep}` }}>
+              <div className="text-xs font-semibold flex-1 min-w-0" style={{ color: C.ink }}>
+                {lang === "en"
+                  ? `${routeSuggestion.count > 1 ? "Other drivers charge" : "Another driver charges"} ~${fmt(routeSuggestion.totalFare)} for this route${routeSuggestion.count > 1 ? ` (avg of ${routeSuggestion.count})` : ""}.`
+                  : lang === "mr"
+                  ? `या रूटसाठी ${routeSuggestion.count > 1 ? "इतर ड्रायव्हर्स" : "एक ड्रायव्हर"} ~${fmt(routeSuggestion.totalFare)} आकारतात${routeSuggestion.count > 1 ? ` (${routeSuggestion.count} चा सरासरी)` : ""}.`
+                  : `इस रूट के लिए ${routeSuggestion.count > 1 ? "अन्य ड्राइवर" : "एक ड्राइवर"} ~${fmt(routeSuggestion.totalFare)} लेते हैं${routeSuggestion.count > 1 ? ` (${routeSuggestion.count} का औसत)` : ""}।`}
+              </div>
+              <button onClick={useSuggestion} className="shrink-0 rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: C.marigoldDeep }}>
+                {lang === "en" ? "Use this" : lang === "mr" ? "हे वापरा" : "इसे उपयोग करें"}
+              </button>
+            </div>
+          )}
+
+          <div>
+            <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Estimated km" : lang === "mr" ? "अंदाजे किमी" : "अनुमानित किमी"}</div>
+            <div className="rounded-lg p-2.5 text-sm font-black" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }}>
+              {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Total Fare" : lang === "mr" ? "एकूण भाडे" : "कुल किराया"}</div>
+            <input type="number" inputMode="numeric" value={totalFare}
+              onChange={(e) => { setTotalFare(e.target.value); setSavedFlash(false); }}
+              className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
+              placeholder={lang === "en" ? "Fill total fare" : lang === "mr" ? "एकूण भाडे भरा" : "कुल किराया भरें"} />
+          </div>
+
+          {totalFare !== "" && (
+            <div className="rounded-lg p-2.5 text-[11px] font-semibold space-y-0.5" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.inkSoft }}>
+              <div>
+                {lang === "en" ? "1–5 km Fixed Fare (25% of total, auto)" : lang === "mr" ? "1–5 किमी फिक्स्ड भाडे (एकूणच्या 25%, आपोआप)" : "1–5 किमी फिक्स्ड किराया (कुल का 25%, स्वतः)"}: <b style={{ color: C.ink }}>{fmt(tier1to5Fare)}</b>
+              </div>
+              {perKmRate != null && (
+                <div>
+                  {lang === "en" ? "Rate beyond 5 km" : lang === "mr" ? "5 किमी नंतरचा दर" : "5 किमी के बाद दर"}: <b style={{ color: C.ink }}>{fmt(perKmRate)}/km</b>
+                </div>
+              )}
+            </div>
+          )}
+
+          {myRoutes.length > 0 && (
+            <div className="pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+              <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Your saved routes (tap to edit — only Admin can remove an entry)" : lang === "mr" ? "तुमचे सेव्ह केलेले रूट्स (एडिट करण्यासाठी टॅप करा — फक्त अ‍ॅडमिन एंट्री काढू शकतो)" : "आपके सेव किए गए रूट (एडिट करने के लिए टैप करें — केवल एडमिन एंट्री हटा सकता है)"}</div>
+              <div className="space-y-1.5">
+                {myRoutes.map((r) => (
+                  <button key={r.id} onClick={() => editRoute(r)} className="w-full text-left rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName}</div>
+                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>{fmt(r.totalFare)}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Kept outside the scrollable area above (shrink-0, not part of the
+            flex-1 scroll region) so Save always stays on screen no matter
+            how much content — the guidance note, the route suggestion, the
+            saved-routes list — pushes above it. Bottom padding adds the
+            device's safe-area-inset-bottom on top of the usual 16px so this
+            sheet, which touches the true bottom edge of the screen (see the
+            "items-end" wrapper below), clears the on-screen Android
+            nav bar on edge-to-edge devices instead of sitting under it. */}
+        <div className="px-4 pt-3 shrink-0" style={{ borderTop: `1px solid ${C.line}`, background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>
+          {!locationResolved && pickup.trim() && drop.trim() && (
+            <div className="text-[11px] font-semibold text-center mb-1.5" style={{ color: C.marigoldDeep }}>
+              {lang === "en" ? "Resolving exact location — wait a moment before saving" : lang === "mr" ? "नेमके ठिकाण शोधले जात आहे — सेव्ह करण्यापूर्वी थोडे थांबा" : "सटीक स्थान खोजा जा रहा है — सेव करने से पहले थोड़ा रुकें"}
+            </div>
+          )}
+          <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
+            style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
+            {saving ? "…" : (lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें")}
+          </button>
+          {savedFlash && (
+            <div className="rounded-lg p-2 mt-2 text-xs font-bold text-center" style={{ background: C.success, color: "#fff" }}>
+              {lang === "en" ? "Saved." : lang === "mr" ? "सेव्ह झाले." : "सेव हो गया।"}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, fareTiers }) {
+  const [tab, setTab] = useState("home");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [setFareOpen, setSetFareOpen] = useState(false);
+  // Tapping "Share App" in the hamburger menu doesn't open WhatsApp right
+  // away — it first drops down the ₹200 payout note in place, and only a
+  // second tap (now "Continue to WhatsApp") actually shares. Reset shut
+  // whenever the menu itself closes, so it's always collapsed on reopen.
+  const [shareNoteOpen, setShareNoteOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | null
+  const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
+  // 'current' (default) shows the driver's own trip/bidding activity
+  // automatically; 'advance' is the driver's own accepted advance bookings,
+  // reached via the "View Advance Ride/s" box below.
+  const [rideView, setRideView] = useState("current");
+  // Bumped once per mount (i.e. once per real app open, not on every
+  // re-render) -- the only signal AdminFleet's Off Duty/App Uninstalled
+  // split (see isLikelyUninstalled) has for "this driver actually opened
+  // the app recently," since there's no way to detect a real uninstall
+  // directly.
+  useEffect(() => {
+    patchDoc("drivers", driver.mobile, { lastActiveAt: serverTimestamp() }).catch((e) => console.error("[driver lastActiveAt]", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
+  // Jobs this driver is already assigned to but that are scheduled for a
+  // future date — kept out of myTrip (above) so today's home screen isn't
+  // stuck showing a trip that's days away, but still reachable here.
+  const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
+  const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
+  const locationPermission = useLocationPermission();
+  const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver");
+
+  // Badge + "View your Booking here" callout, shown the moment one of this
+  // driver's ADVANCE bids gets accepted (see HamburgerHint/
+  // FloatingHamburgerHint) until the menu is actually opened — immediate
+  // (myTrip) acceptances deliberately don't trigger this. Unlike the
+  // Customer side, acceptance here is a real-time Firestore event triggered
+  // by someone else (the customer), not a local button tap — so it's
+  // detected by watching for an advanceBookings id that's newly assigned to
+  // this driver that wasn't there on the previous check. The ref starts at
+  // null so the very first run (mount, or the driver already had an
+  // advance booking when they opened the app) just records the baseline
+  // instead of firing a false hint.
+  const [showBookingHint, setShowBookingHint] = useState(false);
+  const assignedIdsKey = advanceBookings.map((b) => b.id).sort().join(",");
+  const prevAssignedIdsRef = useRef(null);
+  useEffect(() => {
+    const currentIds = new Set(assignedIdsKey ? assignedIdsKey.split(",") : []);
+    if (prevAssignedIdsRef.current === null) {
+      prevAssignedIdsRef.current = currentIds;
+      return;
+    }
+    const hasNew = [...currentIds].some((id) => !prevAssignedIdsRef.current.has(id));
+    if (hasNew) setShowBookingHint(true);
+    prevAssignedIdsRef.current = currentIds;
+  }, [assignedIdsKey]);
+
+  // Auto-bidding/pricing is paused for now (see requestDriverDirectly and
+  // CustomerBooking's driver picker — the customer requests a driver
+  // directly, no bid/fare involved) — removed from here along with Rate
+  // Setup. Full pre-removal code is preserved on the
+  // backup-before-pricing-removal branch for when this is reintroduced.
+
+  const shareApp = () => {
+    // The link carries this driver's own mobile number as their referral
+    // code either way, but the ₹200 only ever pays out for a driver-to-driver
+    // referral — a customer who signs up via this link is still tracked as
+    // referred by this driver, just without a payout (see creditDriverReferral
+    // in functions/index.js). The reward itself isn't mentioned in the message text.
+    const link = `https://sarthi-transport-74865.web.app?ref=${driver.mobile}`;
+    const msg = lang === "en"
+      ? `Join Apna Transport — book trucks/tempos or sign up as a driver-partner using my link: ${link}`
+      : lang === "mr"
+      ? `अपना ट्रान्सपोर्टमध्ये सामील व्हा — माझ्या लिंकवरून ट्रक/टेम्पो बुक करा किंवा ड्रायव्हर-पार्टनर व्हा: ${link}`
+      : `अपना ट्रांसपोर्ट से जुड़ें — मेरे लिंक से ट्रक/टेम्पो बुक करें या ड्राइवर-पार्टनर बनें: ${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  if (settingsView) {
+    return (
+      <div className="flex-1 overflow-y-auto relative">
+        <div className="px-5 pt-3">
+          <button onClick={() => setSettingsView(null)} className="flex items-center gap-1 p-3 rounded-full shadow-sm self-start" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} />
+          </button>
+        </div>
+        {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
+        {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
+        {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
+        {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} onOpen={announcementAlerts.markSeen} />}
+        {settingsView === "batteryGuide" && <BackgroundAlertsGuide lang={lang} />}
+      </div>
+    );
+  }
+
+  const realHamburgerVisible = tab === "home" && rideView === "current" && !myTrip;
+
+  // Rate Setup used to gate the dashboard here until a driver filled in
+  // their rate card — removed along with pricing (see
+  // backup-before-pricing-removal branch). A KYC-approved driver now goes
+  // straight to the dashboard.
+
+  return (
+    <>
+      <FloatingHamburgerHint show={showBookingHint && !realHamburgerVisible} onOpenMenu={() => { setMenuOpen(true); setShareNoteOpen(false); setShowBookingHint(false); }} lang={lang} />
+      {/* Sits just left of the global pull-to-refresh button (see AppRoot),
+          both fixed to the viewport at the same top offset — this is the
+          only role that needs a second top-right action. */}
+      <button onClick={() => setSetFareOpen(true)}
+        className="fixed z-50 h-9 pl-2.5 pr-3 rounded-full flex items-center gap-1 shadow-lg"
+        style={{ background: C.navy, right: 56, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
+        <IndianRupee size={14} color="#fff" />
+        <span className="text-xs font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Set Fare" : lang === "mr" ? "भाडे सेट करा" : "किराया सेट करें"}</span>
+      </button>
+      {setFareOpen && <SetFareForm driver={driver} routeFares={routeFares} fareTiers={fareTiers} lang={lang} onClose={() => setSetFareOpen(false)} />}
+      <div className="flex-1 overflow-y-auto relative">
+        {/* This whole row (menu, advance badge) is for the idle main
+            dashboard only -- Wallet, My Trips, and the Advance Ride/s view
+            (all reached via the hamburger menu, and all with their own Back
+            control) don't need it, same as an active trip doesn't. My
+            Wallet and the Driver Duty switch used to live here too — moved
+            down to the bottom of DriverHome's own idle screen instead (see
+            DriverHome), alongside the new Get Estimate card that now takes
+            this top spot. */}
+        {realHamburgerVisible && (
+          <div className="flex items-center justify-between gap-2 px-5 pt-3">
+            <div className="relative shrink-0">
+              <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); setShowBookingHint(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
+                <Menu size={18} color="#fff" strokeWidth={2.5} />
+              </button>
+              <HamburgerHint show={showBookingHint} lang={lang} />
+              {announcementAlerts.unreadCount > 0 && (
+                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: C.safety }}>
+                  {announcementAlerts.unreadCount}
+                </span>
+              )}
+            </div>
+            {/* Replaces the old "Advance Booking/s" hamburger menu item —
+                only shown when there's actually one to jump to. */}
+            {advanceBookings.length > 0 && (
+              <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); }}
+                className="relative shrink-0 rounded-full pl-3 pr-2.5 py-2 flex items-center gap-1 shadow-sm" style={{ background: C.marigoldDeep }}>
+                <Clock3 size={13} color="#FFFFFF" />
+                <span className="text-xs font-black text-white">{lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}</span>
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shadow-sm" style={{ background: "#FFFFFF", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
+                  {advanceBookings.length}
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+        {!driver.trialNoteSeen && (
+          <button onClick={() => setDriver({ ...driver, trialNoteSeen: true })} className="w-full flex items-center justify-between gap-2 px-5 py-3.5 text-left" style={{ background: C.metallicGold }}>
+            <span className="text-xs font-black" style={{ color: "#000000" }}>🎁 {lang === "en" ? "Free trial for 30 days" : lang === "mr" ? "30 दिवसांची फ्री ट्रायल" : "30 दिनों का फ्री ट्रायल"}</span>
+            <X size={14} color="#000000" strokeWidth={3} />
+          </button>
+        )}
+        {tab === "home" && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="driver" />}
+        {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="driver" />}
+        <ForegroundToast toast={rideNotifications.toast} />
+        <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
+          onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
+          onDismiss={announcementAlerts.markSeen} lang={lang} />
+        {menuOpen && (
+          <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
+            <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 py-4" style={{ background: C.navy }}>
+                <div className="text-sm font-bold text-white">{driver.name}</div>
+                {driver.mobile && <div className="text-[11px]" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{driver.mobile}</div>}
+              </div>
+              <div className="p-2" style={{ borderBottom: `1px solid ${C.line}` }}>
+                {/* Same blue (#0052CC) the old hamburger "Advance Booking/s"
+                    item used before it was replaced by the header pill (see
+                    the "Advance" badge above) — restored here alongside it,
+                    not instead of it. No "Current Booking" entry here —
+                    unlike the customer, a driver's active trip goes
+                    straight to the loading/OTP screen, so there's no
+                    separate booking list worth a menu shortcut. */}
+                <button onClick={() => { setTab("home"); setRideView("advance"); setSelectedAdvanceId(null); setMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 rounded-lg shadow-sm text-left" style={{ background: "#0052CC" }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
+                    <Clock3 size={13} color="#0052CC" />
+                  </div>
+                  <div className="flex-1 min-w-0 text-xs font-black text-white">{lang === "en" ? "View Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग पहा" : "एडवांस बुकिंग देखें"} ({advanceBookings.length})</div>
+                </button>
+              </div>
+              <button onClick={() => { setSettingsView("profile"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <UserCircle2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}
+              </button>
+              <button onClick={() => { setTab("history"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Package size={16} color={C.marigoldDeep} /> {lang === "en" ? "My Trips" : lang === "mr" ? "माझ्या ट्रिप्स" : "मेरी ट्रिप्स"}
+              </button>
+              <button onClick={() => { setSettingsView("messages"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"} ({(adminNotifications || []).filter((n) => n.toRole === "driver" && (n.target === "all" || n.target === driver.mobile)).length})
+                {announcementAlerts.unreadCount > 0 && (
+                  <span className="rounded-full px-1.5 py-0.5 text-[10px] font-black text-white" style={{ background: C.safety }}>{announcementAlerts.unreadCount} {lang === "en" ? "new" : lang === "mr" ? "नवीन" : "नई"}</span>
+                )}
+              </button>
+              <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : lang === "mr" ? "सेटिंग्स (KYC व गाडी)" : "सेटिंग्स (KYC व गाड़ी)"}
+              </button>
+              <div style={{ borderBottom: `1px solid ${C.line}` }}>
+                <button
+                  onClick={() => { if (shareNoteOpen) { shareApp(); setMenuOpen(false); setShareNoteOpen(false); } else { setShareNoteOpen(true); } }}
+                  className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left"
+                  style={{ color: C.ink }}>
+                  <MessageCircle size={16} color={C.success} className="shrink-0" />
+                  <span className="flex-1">{lang === "en" ? "Share App" : lang === "mr" ? "अ‍ॅप शेअर करा" : "ऐप शेयर करें"}</span>
+                  <ChevronDown size={16} color={C.inkSoft} className="shrink-0 transition-transform" style={{ transform: shareNoteOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                {shareNoteOpen && (
+                  <div className="px-4 pb-3 -mt-1">
+                    <div className="rounded-lg p-3" style={{ background: C.success }}>
+                      <div className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>
+                        {lang === "en" ? "You get ₹200 once a driver you refer completes their first ride. Referring a customer just helps them download the app — no bonus for that." : lang === "mr" ? "तुम्ही रेफर केलेल्या ड्रायव्हरची पहिली राइड पूर्ण होताच तुम्हाला ₹200 मिळतील. कस्टमरला रेफर केल्याने फक्त त्यांना अ‍ॅप डाउनलोड करण्यास मदत होते — त्यासाठी कोणताही बोनस नाही." : "आपके रेफर किए हुए ड्राइवर की पहली राइड पूरी होते ही आपको ₹200 मिलेंगे। कस्टमर को रेफर करने से सिर्फ उन्हें ऐप डाउनलोड करने में मदद मिलती है — उसके लिए कोई बोनस नहीं है।"}
+                      </div>
+                      <button onClick={() => { shareApp(); setMenuOpen(false); setShareNoteOpen(false); }}
+                        className="w-full mt-2 rounded-lg py-3 text-base font-bold text-white shadow-lg"
+                        style={{ background: C.metallicGreen }}>
+                        {lang === "en" ? "Continue to WhatsApp" : lang === "mr" ? "WhatsApp वर सुरू ठेवा" : "WhatsApp पर जारी रखें"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => { setSettingsView("helpline"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Phone size={16} color={C.safety} /> {lang === "en" ? "Contact & Helpline" : lang === "mr" ? "संपर्क व हेल्पलाइन" : "संपर्क व हेल्पलाइन"}
+              </button>
+              <button onClick={() => { setSettingsView("batteryGuide"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <Smartphone size={16} color={C.marigoldDeep} /> {lang === "en" ? "Fix Background Alerts" : lang === "mr" ? "बॅकग्राउंड अलर्ट सुरळीत करा" : "बैकग्राउंड अलर्ट ठीक करें"}
+              </button>
+              <button onClick={() => { onOpenTerms(); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
+                <ClipboardList size={16} color={C.marigoldDeep} /> {lang === "en" ? "Terms & Conditions" : lang === "mr" ? "नियम व अटी" : "नियम व शर्तें"}
+              </button>
+              <a href="/privacy.html" target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left" style={{ color: C.ink }}>
+                <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : lang === "mr" ? "गोपनीयता धोरण" : "गोपनीयता नीति"}
+              </a>
+            </div>
+            <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
+          </div>
+        )}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} onOpenWallet={() => setTab("wallet")} />}
+        {tab === "home" && rideView === "advance" && (
+          selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
+            const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
+            return (
+              <div className="px-5 py-4">
+                <button onClick={() => setSelectedAdvanceId(null)} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+                  <ChevronLeft size={18} strokeWidth={3} />
+                </button>
+                <RideTypeBanner booking={ab} lang={lang} />
+                <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-extrabold">{ab.pickup}</span></div>
+                  <div style={{ color: C.ink }}><span className="text-sm font-normal">{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-extrabold">{ab.drop}</span></div>
+                </div>
+                <div className="rounded-2xl p-3.5 mb-2.5 shadow-lg" style={{ background: C.metallicGold, border: `2px solid ${C.pimpri}` }}>
+                  <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Fare and Waiting Charge Policy" : lang === "mr" ? "भाडे आणि वेटिंग चार्ज नियम" : "भाड़ा और वेटिंग चार्ज नियम"}</div>
+                  <div className="flex items-center gap-1.5 mt-1" style={{ color: C.marigoldDeep }}>
+                    <Clock3 size={13} />
+                    <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Advance ride:" : lang === "mr" ? "अ‍ॅडव्हान्स राइड:" : "एडवांस राइड:"} {rideDateTimeLabel(ab)}</span>
+                  </div>
+                  <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : lang === "mr" ? "निश्चित भाडे:" : "तय भाड़ा:"} {fmt(ab.fare)}</div>
+                  {ab.hours && (
+                    <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
+                      {lang === "en" ? `${ab.hours} hrs loading/unloading` : lang === "mr" ? `${ab.hours} तास लोडिंग/अनलोडिंग` : `${ab.hours} घंटे लोडिंग/अनलोडिंग`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting charge` : lang === "mr" ? ` · त्यानंतर ${fmt(ab.extraHourRate)}/तास वेटिंग चार्ज` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
+                    </div>
+                  )}
+                  <div className="mt-2">
+                    {ab.customerMobile ? (
+                      <MaskedCallButton bookingId={ab.id} fallbackMobile={ab.customerMobile} lang={lang}
+                        label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
+                        className="w-full flex items-center justify-center gap-2 rounded-lg py-3 font-extrabold text-base" style={{ color: "#FFFFFF", fontFamily: bodyFont, background: "#4FC3F7" }} />
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <Phone size={14} color="#000000" />
+                        <span className="text-sm font-bold" style={{ color: "#000000", fontFamily: bodyFont }}>{lang === "en" ? "revealing after commission cut..." : lang === "mr" ? "कमिशन कापल्यानंतर दिसेल..." : "कमीशन कटने के बाद दिखेगा..."}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })() : (
+            <div className="px-5 py-4">
+              <button onClick={() => setRideView("current")} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+                <ChevronLeft size={18} strokeWidth={3} />
+              </button>
+              {advanceBookings.length === 0 ? (
+                <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
+              ) : (
+                <div className="space-y-2">
+                  {advanceBookings.map((ab) => (
+                    <button key={ab.id} onClick={() => setSelectedAdvanceId(ab.id)} className="w-full text-left rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                      <RideTypeBanner booking={ab} lang={lang} />
+                      <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{ab.pickup}</span></div>
+                      <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{ab.drop}</span></div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        )}
+        {(tab === "wallet" || tab === "history") && (
+          <div className="px-5 pt-3">
+            <button onClick={() => setTab("home")} className="flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} />
+            </button>
+          </div>
+        )}
+        {tab === "wallet" && <DriverWallet driver={driver} setDriver={setDriver} minWallet={minWallet} lang={lang} withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge} />}
+        {tab === "history" && <DriverHistory tripLog={tripLog} driver={driver} lang={lang} />}
+      </div>
+    </>
+  );
+}
+
+// =====================================================================
+// ADMIN PANEL (desktop)
+// =====================================================================
+// Live fleet map — plots drivers at their real last-known GPS position
+// (shared while they're on an active trip) when Google Maps is configured
+// and at least one driver has reported one; otherwise falls back to the
+// old fake hashed-position layout so the panel still shows something.
+function StatTile({ label, value, color, onClick }) {
+  const content = (
+    <>
+      <div className="text-xs font-bold" style={{ color: C.ink }}>{label}</div>
+      <div className="text-3xl font-bold mt-1" style={{ color, fontFamily: monoFont }}>{value}</div>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button onClick={onClick} className="rounded-xl p-5 shadow-sm text-left w-full" style={{ background: C.paper, border: `1.5px solid ${color}` }}>
+        {content}
+      </button>
+    );
+  }
+  return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${color}` }}>{content}</div>;
+}
+
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
+  const isToday = (b) => {
+    const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
+    if (!d) return false;
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  };
+  // "Booked today" previously counted every Ongoing/Completed trip ever
+  // logged (no date filter) despite the label — scope it to today like the
+  // other trip-based tiles below.
+  const bookedTodayList = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t));
+  const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
+  // Everyone else approved-but-not-online, split by isLikelyUninstalled
+  // (see its own comment) so admin can tell "toggled off, still around" from
+  // "gone quiet long enough to probably not have the app anymore" instead of
+  // one undifferentiated "not online" bucket.
+  const notReadyApprovedDrivers = drivers.filter((d) => !d.online && d.kyc === "Approved" && !d.blacklisted);
+  const offDutyDrivers = notReadyApprovedDrivers.filter((d) => !isLikelyUninstalled(d));
+  const uninstalledDrivers = notReadyApprovedDrivers.filter((d) => isLikelyUninstalled(d));
+  const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
+  const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet);
+  // New customer signups today, and drivers still inside their 30-day free
+  // trial — both derived live from createdAt, same source of truth as
+  // everywhere else trial/signup timing is used in the app.
+  const newCustomersToday = (customers || []).filter(isToday);
+  // Today's new driver signups — separate from pendingApprovals below.
+  // pendingApprovals only counts drivers still sitting in "Pending" KYC,
+  // but a driver signing up inside their own 30-day trial gets
+  // auto-approved instantly (see DriverKyc's submit()), skipping "Pending"
+  // entirely — so during this pilot, the "New Registrations" tile could
+  // read 0 even with a steady stream of real signups, since none of them
+  // ever paused in Pending long enough to be counted. This tracks actual
+  // signup volume instead, same createdAt-based approach as
+  // newCustomersToday above.
+  const newDriversToday = drivers.filter(isToday);
+  // isInTrial alone also matched drivers who just verified their phone
+  // and never went any further (no name, no KYC) — cluttering this list
+  // with abandoned signups nobody can actually act on. Only count a
+  // driver as "in trial" here once they've completed every step that
+  // actually lets them take loads: basic details (name set, not just the
+  // placeholder-name-equals-mobile a fresh signup starts with) and KYC
+  // approved. Rate setup used to be a third required step here too —
+  // dropped along with pricing (see backup-before-pricing-removal).
+  const trialDrivers = drivers.filter((d) => isInTrial(d.createdAt) && d.name && d.name !== d.mobile && d.kyc === "Approved");
+
+  const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b));
+  // Any not-yet-finished booking scheduled for a future date, regardless of
+  // whether it's still awaiting bids or already has a driver assigned.
+  const advanceBookingsList = (bookings || []).filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed");
+
+  // Tapping one of the "drill-down" tiles opens a dedicated full page (with
+  // its own Back button) showing the live record list behind that count —
+  // a separate screen, not an inline panel on the dashboard itself.
+  const [detailView, setDetailView] = useState(null);
+
+  // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) by
+  // ₹1/km per +/- tap, up or down. Driver-submitted quotes (routeFares)
+  // are untouched by this since commit ae40cb4 dropped them as a
+  // customer-pricing layer entirely -- Diesel has no reason to move a
+  // number that no longer affects what anyone is charged.
+  // Deliberately a flat totalFare += delta*estimatedKm rather than
+  // nudging a displayed per-km rate and rebuilding Total from it, which
+  // was tried first: that approach amplifies any per-km change by
+  // dividing it by 0.75 (the first 5km is a fixed 25% SLICE of the
+  // total, not a flat rupee amount) -- a real bug: "+₹1/km" on a 201km
+  // entry landed as +₹271, not +₹201. Entries with no usable distance
+  // are left untouched -- there's no per-km rate to move.
+  //
+  // Tapping +/- only ever changes dieselPending (an in-memory net count,
+  // no network at all) so repeated taps are instant -- nothing actually
+  // writes to Firestore until "Save Diesel Rate" commits the accumulated
+  // net change in a single pass, using bulkUpdateDocs (chunked Firestore
+  // batches) rather than one write per document, since a several-hundred-
+  // doc bulk operation from a mobile browser is exactly the kind of long-
+  // running write that kept failing halfway during the Maharashtra import.
+  const [dieselPending, setDieselPending] = useState(0);
+  const [dieselAdjusting, setDieselAdjusting] = useState(false);
+  const [dieselFlash, setDieselFlash] = useState("");
+  const [dieselError, setDieselError] = useState("");
+  const saveDiesel = async () => {
+    if (dieselAdjusting || dieselPending === 0) return;
+    const delta = dieselPending;
+    setDieselAdjusting(true);
+    setDieselFlash("");
+    setDieselError("");
+    try {
+      // Admin's own rates only, now that driver-submitted quotes (routeFares)
+      // no longer feed into customer pricing at all -- see resolveFare.
+      const adminUpdates = (adminRouteFares || [])
+        .filter((r) => r.estimatedKm > 0)
+        .map((r) => ({
+          id: r.id,
+          patch: { totalFare: Math.max(1, Math.round((Number(r.totalFare) || 0) + delta * r.estimatedKm)) },
+        }));
+      await bulkUpdateDocs("adminRouteFares", adminUpdates);
+      const count = adminUpdates.length;
+      setDieselFlash(lang === "en" ? `Adjusted ${count} rates by ${delta > 0 ? "+" : ""}₹${delta}/km.` : lang === "mr" ? `${count} दर ${delta > 0 ? "+" : ""}₹${delta}/किमी ने बदलले.` : `${count} दरों को ${delta > 0 ? "+" : ""}₹${delta}/किमी से बदला गया।`);
+      setDieselPending(0);
+    } catch (e) {
+      console.error(e);
+      setDieselError(lang === "en" ? "Couldn't adjust rates -- try again." : lang === "mr" ? "दर बदलता आले नाहीत — पुन्हा प्रयत्न करा." : "दर बदले नहीं जा सके — फिर कोशिश करें।");
+    }
+    setDieselAdjusting(false);
+  };
+
+  // Which side of the merged New Registrations screen is showing — see
+  // detailView === "newRegistrations" below. Defaults to Driver since KYC
+  // approval (the thing that actually needs admin action) lives there;
+  // Customer is purely informational.
+  const [newRegTab, setNewRegTab] = useState("driver");
+
+  const statusMeta = lang === "en"
+    ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
+    : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
+  const recentActivity = (bookings || []).slice(0, 5);
+  const activityTime = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleTimeString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" }) : "—");
+
+  const [vehicleQuery, setVehicleQuery] = useState("");
+  const q = vehicleQuery.trim().toUpperCase();
+  const matchedDriver = q ? drivers.find((d) => d.vehicleSpec?.vehicleNumber?.toUpperCase() === q) : null;
+  const vehicleHistory = matchedDriver ? tripLog.filter((t) => t.driverName === matchedDriver.name) : [];
+
+  // Each drill-down tile's dedicated detail page: title, empty-state
+  // message, the live items array, and how to render one row.
+  const detailPages = {
+    online: {
+      title: lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार",
+      emptyMsg: lang === "en" ? "No drivers currently online." : lang === "mr" ? "अजून कोणताही ड्रायव्हर ऑनलाइन नाही." : "अभी कोई ड्राइवर ऑनलाइन नहीं है।",
+      items: readyOnlineDrivers,
+      renderItem: (d) => (
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+          <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+        </div>
+      ),
+    },
+    offDuty: {
+      title: lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी",
+      emptyMsg: lang === "en" ? "No approved driver is currently off duty." : lang === "mr" ? "सध्या कोणताही अप्रूव्ह्ड ड्रायव्हर ऑफ ड्युटीवर नाही." : "फिलहाल कोई अप्रूव्ड ड्राइवर ऑफ ड्यूटी पर नहीं है।",
+      items: offDutyDrivers,
+      renderItem: (d) => (
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+          <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+        </div>
+      ),
+    },
+    uninstalled: {
+      title: lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)",
+      emptyMsg: lang === "en" ? "No approved driver has gone quiet this long." : lang === "mr" ? "कोणताही अप्रूव्ह्ड ड्रायव्हर इतका काळ गप्प नाही." : "कोई भी अप्रूव्ड ड्राइवर इतने दिन से खामोश नहीं है।",
+      items: uninstalledDrivers,
+      renderItem: (d) => (
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+          </div>
+          <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+        </div>
+      ),
+    },
+    booked: {
+      title: lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं",
+      emptyMsg: lang === "en" ? "No vehicles booked today yet." : lang === "mr" ? "आज अद्याप कोणतीही गाडी बुक झाली नाही." : "आज तक कोई गाड़ी बुक नहीं हुई।",
+      items: bookedTodayList,
+      renderItem: (t) => (
+        <div key={t.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fmt(t.fare)} · {statusMeta[t.status]?.label || t.status}</div>
+        </div>
+      ),
+    },
+    cancelled: {
+      title: lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं",
+      emptyMsg: lang === "en" ? "Nothing cancelled today." : lang === "mr" ? "आज काहीही रद्द झाले नाही." : "आज कुछ भी रद्द नहीं हुआ।",
+      items: cancelledTodayList,
+      renderItem: (b) => (
+        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : lang === "mr" ? "कोणताही ड्रायव्हर निश्चित झाला नाही" : "कोई ड्राइवर तय नहीं हुआ")}</div>
+        </div>
+      ),
+    },
+    lowWallet: {
+      title: lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर",
+      emptyMsg: lang === "en" ? "No online driver is below the minimum wallet balance." : lang === "mr" ? "कोणताही ऑनलाइन ड्रायव्हर किमान वॉलेटपेक्षा कमी नाही." : "कोई भी ऑनलाइन ड्राइवर न्यूनतम वॉलेट से कम नहीं है।",
+      items: lowWalletDrivers,
+      renderItem: (d) => (
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.safety}` }}>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.safety, fontFamily: monoFont }}>{fmt(d.wallet)}</div>
+        </div>
+      ),
+    },
+    advance: {
+      title: lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग",
+      emptyMsg: lang === "en" ? "No advance bookings yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही." : "अभी तक कोई एडवांस बुकिंग नहीं है।",
+      items: advanceBookingsList,
+      renderItem: (b) => (
+        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}</div>
+        </div>
+      ),
+    },
+    trial: {
+      title: lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर",
+      emptyMsg: lang === "en" ? "No driver is currently in their free trial." : lang === "mr" ? "सध्या कोणताही ड्रायव्हर फ्री ट्रायलमध्ये नाही." : "फिलहाल कोई भी ड्राइवर फ्री ट्रायल में नहीं है।",
+      items: trialDrivers,
+      renderItem: (d) => (
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
+            {lang === "en" ? `${trialDaysLeft(d.createdAt)}d left` : lang === "mr" ? `${trialDaysLeft(d.createdAt)} दिवस बाकी` : `${trialDaysLeft(d.createdAt)} दिन बाकी`}
+          </span>
+        </div>
+      ),
+    },
+  };
+
+  // Merged "New Registrations" screen — replaces the old separate "Pending
+  // KYC approvals" tile/tab. Customer side is a plain informational list
+  // (a customer registration has no pending/incomplete state, so "today"
+  // is the only meaningful scope); Driver side embeds the full AdminKyc
+  // workflow as-is (Incomplete/Complete tabs, Approve/Block, WhatsApp
+  // nudge) — covering every driver still needing review, not just today's
+  // signups, since that's the whole point of consolidating KYC here.
+  if (detailView === "newRegistrations") {
+    return (
+      <div>
+        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"}</h2>
+        <div className="flex gap-2 mb-4">
+          <button onClick={() => setNewRegTab("customer")} className="flex-1 rounded-lg py-3 text-sm font-bold"
+            style={{ background: newRegTab === "customer" ? C.navy : C.paper, color: newRegTab === "customer" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "customer" ? C.navy : C.line}` }}>
+            {lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}{newCustomersToday.length > 0 ? ` (${newCustomersToday.length})` : ""}
+          </button>
+          <button onClick={() => setNewRegTab("driver")} className="flex-1 rounded-lg py-3 text-sm font-bold"
+            style={{ background: newRegTab === "driver" ? C.navy : C.paper, color: newRegTab === "driver" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "driver" ? C.navy : C.line}` }}>
+            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{pendingApprovals > 0 ? ` (${pendingApprovals})` : ""}
+          </button>
+        </div>
+        {newRegTab === "customer" ? (
+          newCustomersToday.length === 0 ? (
+            <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No new customer signups today yet." : lang === "mr" ? "आज अद्याप कोणताही नवीन कस्टमर साइनअप झाला नाही." : "आज तक कोई नया कस्टमर साइनअप नहीं हुआ।"}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {newCustomersToday.map((c) => (
+                <div key={c.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />
+        )}
+      </div>
+    );
+  }
+
+  if (detailView === "routeFares") {
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <button onClick={() => setDetailView(null)} className="shrink-0 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} />
+          </button>
+          <div className="flex-1 grid grid-cols-3 gap-2">
+            <button onClick={() => setDieselPending((p) => p - 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.safety, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>−</button>
+            <div className="h-11 rounded-lg flex items-center justify-center text-sm font-bold" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}>
+              {lang === "en" ? "Diesel" : lang === "mr" ? "डिझेल" : "डीज़ल"}{dieselPending !== 0 && ` (${dieselPending > 0 ? "+" : ""}${dieselPending})`}
+            </div>
+            <button onClick={() => setDieselPending((p) => p + 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.success, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>+</button>
+          </div>
+        </div>
+        {dieselPending !== 0 && (
+          <button onClick={saveDiesel} disabled={dieselAdjusting} className="w-full rounded-lg py-2.5 mb-2 text-sm font-bold" style={{ background: dieselAdjusting ? "#E0E0E0" : C.navy, color: dieselAdjusting ? "#9AA3B0" : "#fff" }}>
+            {dieselAdjusting
+              ? "…"
+              : (lang === "en" ? `Save Diesel Rate (${dieselPending > 0 ? "+" : ""}${dieselPending})` : lang === "mr" ? `डिझेल दर सेव्ह करा (${dieselPending > 0 ? "+" : ""}${dieselPending})` : `डीज़ल दर सेव करें (${dieselPending > 0 ? "+" : ""}${dieselPending})`)}
+          </button>
+        )}
+        {(dieselFlash || dieselError) && (
+          <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: dieselError ? C.safety : C.success, color: "#fff" }}>
+            {dieselError || dieselFlash}
+          </div>
+        )}
+        <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} lang={lang} />
+      </div>
+    );
+  }
+
+  if (detailView) {
+    const page = detailPages[detailView];
+    return (
+      <div>
+        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{page.title}</h2>
+        {page.items.length === 0 ? (
+          <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{page.emptyMsg}</p>
+        ) : (
+          <div className="space-y-1.5">{page.items.map(page.renderItem)}</div>
+        )}
+      </div>
+    );
+  }
+
+  // Change Log alert card — sits at the top of the Live Dashboard exactly
+  // where the old standalone Bug Tracker card used to live, per explicit
+  // request that "if anything comes up... inform the Admin on the Live
+  // Dashboard, just where the bug tracker was placed before." Only renders
+  // when there's actually something open (including anything the daily
+  // health-check Routine logs here) -- tapping it jumps straight into
+  // Settings, where the full Change Log (AdminBugTracker) now lives.
+  const openChangeLogCount = (bugs || []).filter((b) => b.status !== "fixed").length;
+  const criticalChangeLogCount = (bugs || []).filter((b) => b.status !== "fixed" && (b.severity === "critical" || b.severity === "high")).length;
+
+  // Always-visible daily health check status -- per explicit request,
+  // this must inform the admin whether the last run passed OR failed, not
+  // just show up when something's broken (that's what the Change Log card
+  // below is for). Reads systemHealth/heartbeat directly (see
+  // dailyHealthCheckMorning/Night in functions/index.js), which both
+  // scheduled runs update every time, pass or fail.
+  const morningAt = systemHealth?.lastMorningRunAt?.toMillis ? systemHealth.lastMorningRunAt.toMillis() : null;
+  const nightAt = systemHealth?.lastNightRunAt?.toMillis ? systemHealth.lastNightRunAt.toMillis() : null;
+  const latestIsMorning = (morningAt || 0) >= (nightAt || 0);
+  const latestHealthMs = latestIsMorning ? morningAt : nightAt;
+  const latestHealthStatus = latestIsMorning ? systemHealth?.lastMorningRunStatus : systemHealth?.lastNightRunStatus;
+  const latestHealthSummary = latestIsMorning ? systemHealth?.lastMorningRunSummary : systemHealth?.lastNightRunSummary;
+  const healthStaleHours = latestHealthMs ? (Date.now() - latestHealthMs) / 3600000 : null;
+  const healthIsStale = healthStaleHours == null || healthStaleHours > 26;
+  const healthColor = healthIsStale ? C.marigoldDeep : latestHealthStatus === "pass" ? C.success : C.safety;
+  const healthTimeStr = latestHealthMs ? new Date(latestHealthMs).toLocaleString(lang === "mr" ? "mr-IN" : lang === "hi" ? "hi-IN" : "en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const healthLabel = !latestHealthMs
+    ? (lang === "en" ? "Daily health check — hasn't run yet" : lang === "mr" ? "डेली हेल्थ चेक — अजून चालले नाही" : "डेली हेल्थ चेक — अभी तक नहीं चला")
+    : healthIsStale
+    ? (lang === "en" ? `Daily health check — last ran ${healthTimeStr}, may have stopped` : lang === "mr" ? `डेली हेल्थ चेक — शेवटचे ${healthTimeStr} ला चालले, थांबले असू शकते` : `डेली हेल्थ चेक — आखिरी बार ${healthTimeStr} को चला, रुक गया हो सकता है`)
+    : latestHealthStatus === "pass"
+    ? (lang === "en" ? `Daily health check passed — ${healthTimeStr}` : lang === "mr" ? `डेली हेल्थ चेक पास झाला — ${healthTimeStr}` : `डेली हेल्थ चेक पास हुआ — ${healthTimeStr}`)
+    : (lang === "en" ? `Daily health check found issues — ${healthTimeStr}` : lang === "mr" ? `डेली हेल्थ चेकमध्ये समस्या आढळल्या — ${healthTimeStr}` : `डेली हेल्थ चेक में समस्याएं मिलीं — ${healthTimeStr}`);
+
+  return (
+    <div>
+      <div className="w-full rounded-xl p-3 mb-3 flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${healthColor}` }}>
+        {healthIsStale ? <AlertTriangle size={16} color={healthColor} /> : latestHealthStatus === "pass" ? <CheckCircle2 size={16} color={healthColor} /> : <XCircle size={16} color={healthColor} />}
+        <div className="flex-1">
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{healthLabel}</div>
+          {latestHealthSummary && latestHealthStatus !== "pass" && !healthIsStale && (
+            <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>{latestHealthSummary}</div>
+          )}
+        </div>
+      </div>
+      {openChangeLogCount > 0 && (
+        <button onClick={() => onNavigate("settings")} className="w-full rounded-xl p-4 mb-5 shadow-sm text-left" style={{ background: criticalChangeLogCount > 0 ? C.safety : C.marigold, border: `1.5px solid ${criticalChangeLogCount > 0 ? C.safety : C.marigoldDeep}` }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: criticalChangeLogCount > 0 ? "#FFFFFF" : "#000000" }}>
+              <ClipboardList size={16} /> {lang === "en" ? "Change Log needs attention" : lang === "mr" ? "चेंज लॉगकडे लक्ष द्या" : "चेंज लॉग पर ध्यान दें"}
+            </div>
+            <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: criticalChangeLogCount > 0 ? "#FFFFFF" : C.marigoldDeep, color: criticalChangeLogCount > 0 ? C.safety : "#FFFFFF" }}>
+              {openChangeLogCount}
+            </span>
+          </div>
+          <p className="text-[11px] font-semibold mt-1" style={{ color: criticalChangeLogCount > 0 ? "#FFFFFF" : "#000000" }}>
+            {lang === "en" ? `${openChangeLogCount} open (${criticalChangeLogCount} high/critical) — tap to review in Settings` : lang === "mr" ? `${openChangeLogCount} उघड्या (${criticalChangeLogCount} हाय/क्रिटिकल) — Settings मध्ये पाहण्यासाठी टॅप करा` : `${openChangeLogCount} खुले (${criticalChangeLogCount} हाई/क्रिटिकल) — Settings में देखने के लिए टैप करें`}
+          </p>
+        </button>
+      )}
+      {/* Most to least important: New Registrations (today's total
+          Customer+Driver signups — see newCustomersToday/newDriversToday
+          above for why this isn't just pendingApprovals) comes first, then
+          today's health signals (at-risk wallets, cancellations, earnings,
+          bookings, capacity), then pipeline (advance bookings), then
+          growth metrics (trial) last — those are useful context, not
+          something to act on today. Still flags red via pendingApprovals
+          when there's an actual KYC backlog to act on, independent of how
+          many signups happened today. */}
+      <div className="grid grid-cols-2 gap-3 mb-5">
+        <StatTile label={lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"} value={newCustomersToday.length + newDriversToday.length} color={pendingApprovals > 0 ? C.safety : C.success} onClick={() => setDetailView("newRegistrations")} />
+        <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
+        <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
+        <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
+        <StatTile label={lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
+        <StatTile label={lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी"} value={offDutyDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("offDuty")} />
+        <StatTile label={lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)"} value={uninstalledDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
+        <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
+        <StatTile label={lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
+        <StatTile label={lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"} value={(routeFares || []).length} color={C.pimpri} onClick={() => setDetailView("routeFares")} />
+      </div>
+
+      <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Truck size={16} /> {lang === "en" ? "Search history by vehicle number" : lang === "mr" ? "गाडी नंबरने हिस्टरी पहा" : "गाड़ी नंबर से हिस्ट्री देखें"}</div>
+        <input value={vehicleQuery} onChange={(e) => setVehicleQuery(e.target.value)} placeholder="जैसे: MH-14-AB-4521"
+          className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
+        {q && !matchedDriver && (
+          <div className="text-[11px] mt-2" style={{ color: C.safety }}>{lang === "en" ? "No vehicle found with this number." : lang === "mr" ? "या नंबरची कोणतीही गाडी सापडली नाही." : "इस नंबर की कोई गाड़ी नहीं मिली।"}</div>
+        )}
+        {matchedDriver && (
+          <div className="mt-3">
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{matchedDriver.name} · {matchedDriver.vehicleSpec?.vehicleNumber || "—"}</div>
+            <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Total trips" : lang === "mr" ? "एकूण ट्रिप्स" : "कुल ट्रिप्स"}: {vehicleHistory.length}</div>
+            {vehicleHistory.length === 0 ? (
+              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No trip history for this vehicle yet." : lang === "mr" ? "या गाडीची अजून कोणतीही ट्रिप हिस्टरी नाही." : "इस गाड़ी की अभी कोई ट्रिप हिस्ट्री नहीं है।"}</p>
+            ) : (
+              <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
+                {vehicleHistory.map((t) => (
+                  <div key={t.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                    <div>
+                      <div className="text-[11px] font-bold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
+                      <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status}</div>
+                    </div>
+                    <div className="text-sm font-bold" style={{ color: C.pimpri, fontFamily: monoFont }}>{fmt(t.fare)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Activity size={16} /> {lang === "en" ? "Recent Activity" : lang === "mr" ? "अलीकडील हालचाल" : "हाल की गतिविधि"}</div>
+        {recentActivity.length === 0 ? (
+          <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No activity yet." : lang === "mr" ? "अजून कोणतीही हालचाल नाही." : "अभी तक कोई गतिविधि नहीं।"}</p>
+        ) : (
+          <div className="space-y-1.5">
+            {recentActivity.map((b) => {
+              const sm = statusMeta[b.status] || statusMeta.Bidding;
+              return (
+                <div key={b.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</div>
+                    <div className="text-[10px]" style={{ color: C.inkSoft }}>{b.driverName ? `${b.driverName} · ` : ""}{activityTime(b)}</div>
+                  </div>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <button onClick={onLogout} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold flex items-center justify-center gap-1.5" style={{ color: "#FFFFFF", background: C.safety }}>
+        <XCircle size={14} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
+      </button>
+    </div>
+  );
+}
+
+const BUG_SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+const BUG_SEVERITY_COLOR = { critical: C.safety, high: C.safety, medium: C.marigoldDeep, low: C.inkSoft };
+const BUG_SEVERITY_LABEL = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
+// Broadened from a pure bug log into a general Change Log per explicit
+// request -- every change worth remembering (a bug fix, a UI tweak, a
+// Maps/permissions config change, a new feature) gets an entry here, not
+// just defects. `type` is purely a filter/label; the underlying "bugs"
+// Firestore collection and BUG_TRACKER_SEED array are unchanged, just no
+// longer bug-only in what they hold.
+const CHANGE_TYPE_LABEL = { bug: "Bug", feature: "Feature", ui: "UI", config: "Config", security: "Security" };
+const CHANGE_TYPE_COLOR = { bug: C.safety, feature: C.navy, ui: C.marigoldDeep, config: C.metallicGreen, security: "#8B0000" };
+
+// Admin's internal Change Log (see AdminSettings, where this now lives) —
+// a running record of what's actually changed in this app: bugs found and
+// fixed, features added, UI tweaks, config/permissions changes. Seeded
+// once per new entry with BUG_TRACKER_SEED and added to over time via the
+// form below. Nothing here is customer/driver-facing; SOS/complaint
+// reports (AdminAlerts) are a separate, unrelated inbox.
+function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState({ title: "", description: "", area: "", severity: "medium", type: "bug" });
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [resolvingId, setResolvingId] = useState(null);
+  const q = query.trim().toLowerCase();
+  const filtered = (bugs || []).filter((b) => {
+    if (typeFilter !== "all" && (b.type || "bug") !== typeFilter) return false;
+    if (!q) return true;
+    return [b.title, b.description, b.area].some((f) => (f || "").toLowerCase().includes(q));
+  });
+  const sorted = [...filtered].sort((a, b) => {
+    if ((a.status === "fixed") !== (b.status === "fixed")) return a.status === "fixed" ? 1 : -1;
+    return (BUG_SEVERITY_ORDER[a.severity] ?? 9) - (BUG_SEVERITY_ORDER[b.severity] ?? 9);
+  });
+  const submit = () => {
+    if (!draft.title.trim()) return;
+    addBug({ title: draft.title.trim(), description: draft.description.trim(), area: draft.area.trim(), severity: draft.severity, type: draft.type });
+    setDraft({ title: "", description: "", area: "", severity: "medium", type: "bug" });
+    setShowForm(false);
+  };
+  // Resolve now runs server-side (see functions/index.js:
+  // resolveChangeLogEntry) instead of the browser flipping status itself —
+  // the function marks the entry "resolving" immediately (every admin
+  // session sees it live, not just this tab), runs any real registered
+  // data remedy against live Firestore data, then has Claude verify/report
+  // and settles the entry on "fixed" or back to "open" with a note either
+  // way. resolvingId here is just an immediate local lock against a
+  // double-click while the call is in flight -- b.status === "resolving"
+  // (from Firestore) is what actually tracks progress across sessions.
+  const resolve = async (b) => {
+    setResolvingId(b.id);
+    try {
+      await resolveChangeLogEntry(b.id);
+    } catch (e) {
+      console.error("[resolve]", e);
+    }
+    setResolvingId(null);
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Change Log" : lang === "mr" ? "चेंज लॉग" : "चेंज लॉग"}</h2>
+        <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1 text-xs font-bold px-3 py-2 rounded-lg" style={{ background: C.marigoldDeep, color: "#FFFFFF" }}>
+          <Plus size={13} /> {lang === "en" ? "Log a change" : lang === "mr" ? "बदल नोंदवा" : "बदलाव दर्ज करें"}
+        </button>
+      </div>
+      <input value={query} onChange={(e) => setQuery(e.target.value)}
+        placeholder={lang === "en" ? "Search changes..." : lang === "mr" ? "बदल शोधा..." : "बदलाव खोजें..."}
+        className="w-full rounded-lg px-3 py-2.5 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink, background: C.paper }} />
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-0.5">
+        {["all", ...Object.keys(CHANGE_TYPE_LABEL)].map((t) => (
+          <button key={t} onClick={() => setTypeFilter(t)} className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold"
+            style={{ background: typeFilter === t ? C.navy : C.bg, color: typeFilter === t ? "#fff" : C.inkSoft, border: `1px solid ${typeFilter === t ? C.navy : C.line}` }}>
+            {t === "all" ? (lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी") : CHANGE_TYPE_LABEL[t]}
+          </button>
+        ))}
+      </div>
+      {showForm && (
+        <div className="rounded-xl p-3 mb-4 space-y-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder={lang === "en" ? "Title" : lang === "mr" ? "शीर्षक" : "शीर्षक"}
+            className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+          <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} rows={3} placeholder={lang === "en" ? "What changed, and why" : lang === "mr" ? "काय बदलले, आणि का" : "क्या बदला, और क्यों"}
+            className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+          <input value={draft.area} onChange={(e) => setDraft({ ...draft, area: e.target.value })} placeholder={lang === "en" ? "Area (e.g. Driver KYC)" : lang === "mr" ? "क्षेत्र (उदा. ड्रायव्हर KYC)" : "क्षेत्र (जैसे ड्राइवर KYC)"}
+            className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+          <div className="flex gap-1.5 flex-wrap">
+            {Object.keys(CHANGE_TYPE_LABEL).map((t) => (
+              <button key={t} onClick={() => setDraft({ ...draft, type: t })} className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold"
+                style={{ background: draft.type === t ? CHANGE_TYPE_COLOR[t] : C.bg, color: draft.type === t ? "#FFFFFF" : C.inkSoft, border: `1.5px solid ${CHANGE_TYPE_COLOR[t]}` }}>
+                {CHANGE_TYPE_LABEL[t]}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1.5">
+            {Object.keys(BUG_SEVERITY_LABEL).map((s) => (
+              <button key={s} onClick={() => setDraft({ ...draft, severity: s })} className="flex-1 rounded-lg py-2 text-[11px] font-bold"
+                style={{ background: draft.severity === s ? BUG_SEVERITY_COLOR[s] : C.bg, color: draft.severity === s ? "#FFFFFF" : C.inkSoft, border: `1.5px solid ${BUG_SEVERITY_COLOR[s]}` }}>
+                {BUG_SEVERITY_LABEL[s]}
+              </button>
+            ))}
+          </div>
+          <button onClick={submit} disabled={!draft.title.trim()} className="w-full rounded-lg py-2.5 text-sm font-bold"
+            style={{ background: draft.title.trim() ? C.metallicGreen : "#E0E0E0", color: draft.title.trim() ? "#fff" : "#9AA3B0" }}>
+            {lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें"}
+          </button>
+        </div>
+      )}
+      {sorted.length === 0 ? (
+        <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{q || typeFilter !== "all" ? (lang === "en" ? "Nothing matches." : lang === "mr" ? "काहीही जुळत नाही." : "कुछ भी मेल नहीं खाता।") : (lang === "en" ? "No changes logged yet." : lang === "mr" ? "अजून कोणताही बदल नोंदवलेला नाही." : "अभी तक कोई बदलाव दर्ज नहीं हुआ।")}</p>
+      ) : (
+        <div className="space-y-2">
+          {sorted.map((b) => {
+            const fixed = b.status === "fixed";
+            const type = b.type || "bug";
+            const resolving = resolvingId === b.id || b.status === "resolving";
+            return (
+              <div key={b.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${fixed ? C.line : BUG_SEVERITY_COLOR[b.severity] || C.line}`, opacity: fixed ? 0.7 : 1 }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{b.title}</div>
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: resolving ? C.marigoldDeep : fixed ? C.success : (BUG_SEVERITY_COLOR[b.severity] || C.inkSoft), color: "#FFFFFF" }}>
+                    {resolving ? (lang === "en" ? "RESOLVING…" : lang === "mr" ? "सोडवत आहे…" : "हल हो रहा है…") : fixed ? (lang === "en" ? "FIXED" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड") : (BUG_SEVERITY_LABEL[b.severity] || b.severity || "").toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded" style={{ background: CHANGE_TYPE_COLOR[type] || C.inkSoft, color: "#fff" }}>{CHANGE_TYPE_LABEL[type] || type}</span>
+                  {b.area && <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{b.area}</div>}
+                </div>
+                {b.resolutionNote && <p className="text-[10px] italic mt-1" style={{ color: C.inkSoft }}>{b.resolutionNote}</p>}
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[10px]" style={{ color: C.inkSoft }}>
+                    {lang === "en" ? "Found" : lang === "mr" ? "सापडले" : "मिला"} {b.foundAt || "—"}{fixed && b.fixedAt ? ` · ${lang === "en" ? "Fixed" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड"} ${typeof b.fixedAt === "number" ? new Date(b.fixedAt).toISOString().slice(0, 10) : b.fixedAt}` : ""}
+                  </span>
+                  <button onClick={() => fixed ? setBugStatus(b.id, "open") : resolve(b)} disabled={resolving} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: fixed ? C.paper : C.metallicGreen, color: fixed ? C.inkSoft : "#FFFFFF", border: fixed ? `1px solid ${C.line}` : "none", opacity: resolving ? 0.6 : 1 }}>
+                    {resolving
+                      ? (lang === "en" ? "Resolving…" : lang === "mr" ? "सोडवत आहे…" : "हल हो रहा है…")
+                      : fixed
+                      ? (lang === "en" ? "Reopen" : lang === "mr" ? "पुन्हा उघडा" : "फिर से खोलें")
+                      : (lang === "en" ? "Resolve" : lang === "mr" ? "सोडवा" : "हल करें")}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Every driver-submitted "Set Fare" entry (see SetFareForm), grouped by
+// route so Admin can see at a glance what the whole fleet is charging for
+// each pickup/drop pair — and the only place any of these numbers can be
+// edited or removed by someone other than the driver who submitted them.
+// Looks up the Admin default/override rate for one driver-submitted entry,
+// matched by the SAME route coordinates and the weight bracket that
+// entry's own driver's vehicle falls into (routeFares entries don't record
+// a bracket themselves -- see SetFareForm -- so the driver's real
+// capacityKg from the drivers list stands in for it). Used only for the
+// "vs default" comparison badge in AdminRouteFares; never touches pricing.
+function findMatchingDefaultRate(entry, capacityKg, adminRouteFares, fareTiers) {
+  if (capacityKg == null || entry.pickupLat == null || entry.dropLat == null) return null;
+  const tier = findFareTier(capacityKg, fareTiers);
+  const radiusKm = routeMatchRadiusKm(haversineKm(entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng));
+  const match = (adminRouteFares || []).find((r) =>
+    r.tierMaxKg === tier.maxKg &&
+    r.pickupLat != null && r.dropLat != null &&
+    locationsNear(entry.pickupLat, entry.pickupLng, r.pickupLat, r.pickupLng, radiusKm) &&
+    locationsNear(entry.dropLat, entry.dropLng, r.dropLat, r.dropLng, radiusKm)
+  );
+  return match ? Number(match.totalFare) || null : null;
+}
+
+function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, lang }) {
+  const [editingId, setEditingId] = useState(null);
+  const [editingEstimatedKm, setEditingEstimatedKm] = useState(null);
+  const [draftTotalFare, setDraftTotalFare] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [rateCalcOpen, setRateCalcOpen] = useState(false);
+
+  const groups = {};
+  (routeFares || []).forEach((r) => {
+    const key = `${r.pickupKey || ""}→${r.dropKey || ""}`;
+    if (!groups[key]) groups[key] = { pickupName: r.pickupName, dropName: r.dropName, entries: [] };
+    groups[key].entries.push(r);
+  });
+  const groupList = Object.values(groups).sort((a, b) => b.entries.length - a.entries.length);
+
+  // Same 25%-of-total rule SetFareForm applies — kept in sync here so an
+  // admin edit can't leave a driver's entry with a 1-5 km fare that no
+  // longer matches its total.
+  const draftTier1to5Fare = draftTotalFare !== "" ? Math.round((Number(draftTotalFare) || 0) * 0.25) : 0;
+  const draftPerKmRate = editingEstimatedKm != null && editingEstimatedKm > 5 && draftTotalFare !== ""
+    ? Math.round((Number(draftTotalFare) - draftTier1to5Fare) / (editingEstimatedKm - 5)) : null;
+
+  const startEdit = (r) => { setEditingId(r.id); setEditingEstimatedKm(r.estimatedKm ?? null); setDraftTotalFare(String(r.totalFare ?? "")); };
+  const cancelEdit = () => setEditingId(null);
+  const saveEdit = async (id) => {
+    setSaving(true);
+    try {
+      await patchDoc("routeFares", id, { tier1to5Fare: draftTier1to5Fare, totalFare: Number(draftTotalFare) || 0, perKmRate: draftPerKmRate });
+      setEditingId(null);
+    } catch (e) { console.error(e); }
+    setSaving(false);
+  };
+  const deleteEntry = (id) => { removeDoc("routeFares", id).catch((e) => console.error(e)); setConfirmDeleteId(null); };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"}</h2>
+        <button onClick={() => setRateCalcOpen(true)} className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg" style={{ background: C.navy, color: "#fff" }}>
+          <Calculator size={14} /> {lang === "en" ? "Admin Rate Calculator" : lang === "mr" ? "अ‍ॅडमिन दर कॅल्क्युलेटर" : "एडमिन रेट कैलकुलेटर"}
+        </button>
+      </div>
+      <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+        {lang === "en"
+          ? "Reference only — what drivers say they charge for a route no longer affects the fare a customer is actually quoted. Only an Admin rate (Rate Calculator) or the default formula does."
+          : lang === "mr"
+          ? "फक्त संदर्भासाठी — ड्रायव्हर एखाद्या रूटसाठी काय आकारतो हे आता ग्राहकाला दाखवल्या जाणाऱ्या दरावर परिणाम करत नाही. फक्त अ‍ॅडमिन दर (रेट कॅल्क्युलेटर) किंवा डिफॉल्ट फॉर्म्युला दर ठरवते."
+          : "केवल संदर्भ के लिए — ड्राइवर किसी रूट के लिए क्या चार्ज करता है, इसका अब ग्राहक को दिखाए जाने वाले दर पर कोई असर नहीं है। केवल एडमिन दर (रेट कैलकुलेटर) या डिफ़ॉल्ट फॉर्मूला ही दर तय करता है।"}
+      </div>
+      {adminRouteFaresError && (
+        <div className="rounded-lg p-3 mb-3 text-xs font-bold" style={{ background: C.safety, color: "#fff" }}>
+          {lang === "en"
+            ? `Couldn't load Admin default rates (${adminRouteFaresError}). Whatever's in Firestore may be fine — this is a read failure on this device, not proof the data is missing.`
+            : lang === "mr"
+            ? `अ‍ॅडमिन डिफॉल्ट दर लोड होऊ शकले नाहीत (${adminRouteFaresError}). Firestore मध्ये डेटा असू शकतो — हे या डिव्हाइसवरील रीड फेल्युअर आहे, डेटा गहाळ असल्याचा पुरावा नाही.`
+            : `एडमिन डिफ़ॉल्ट दर लोड नहीं हो सके (${adminRouteFaresError})। Firestore में डेटा ठीक हो सकता है — यह इस डिवाइस पर रीड फेल्योर है, डेटा गायब होने का सबूत नहीं।`}
+        </div>
+      )}
+      {rateCalcOpen && <AdminRateCalculator adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} lang={lang} onClose={() => setRateCalcOpen(false)} />}
+      {groupList.length === 0 ? (
+        <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver has set a route fare yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरने रूट भाडे सेट केलेले नाही." : "अभी तक किसी ड्राइवर ने रूट किराया सेट नहीं किया।"}</p>
+      ) : (
+        <div className="space-y-3">
+          {groupList.map((g, gi) => {
+            const avgTotal = Math.round(g.entries.reduce((s, r) => s + (Number(r.totalFare) || 0), 0) / g.entries.length);
+            // Matches each entry to the Admin default for its own driver's
+            // capacity bracket, then averages just the entries that found
+            // one — a route with no matching Admin default anywhere shows
+            // no badge rather than a misleading comparison.
+            const defaultMatches = g.entries
+              // Prefer the capacity the driver actually had ON RECORD when
+              // they quoted (stored directly on the entry now) over a live
+              // lookup in the current drivers list, which only exists for
+              // entries saved before that field was captured.
+              .map((r) => findMatchingDefaultRate(r, r.capacityKg ?? (drivers || []).find((d) => d.mobile === r.driverMobile)?.vehicleSpec?.capacityKg, adminRouteFares, fareTiers))
+              .filter((v) => v != null);
+            const avgDefault = defaultMatches.length ? Math.round(defaultMatches.reduce((s, v) => s + v, 0) / defaultMatches.length) : null;
+            const diffPct = avgDefault ? Math.round(((avgTotal - avgDefault) / avgDefault) * 100) : null;
+            return (
+              <div key={gi} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <div className="flex items-start justify-between mb-2 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{g.pickupName}</div>
+                    <div className="text-sm font-bold truncate" style={{ color: C.ink }}>→ {g.dropName}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Avg" : lang === "mr" ? "सरासरी" : "औसत"}: {fmt(avgTotal)}</div>
+                    {avgDefault != null && (
+                      <div className="text-[10px] font-bold mt-0.5" style={{ color: Math.abs(diffPct) > 15 ? C.safety : C.inkSoft }}>
+                        {lang === "en" ? "Default" : lang === "mr" ? "डिफॉल्ट" : "डिफ़ॉल्ट"}: {fmt(avgDefault)} ({diffPct > 0 ? "+" : ""}{diffPct}%)
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {g.entries.map((r) => {
+                    // Older entries saved before capacityKg was captured on
+                    // the routeFares doc itself don't have it — fall back to
+                    // the driver's current KYC record so the badge still
+                    // shows the real number instead of "unknown".
+                    const entryCapacityKg = r.capacityKg ?? (drivers || []).find((d) => d.mobile === r.driverMobile)?.vehicleSpec?.capacityKg ?? null;
+                    return (
+                    <div key={r.id} className="rounded-lg p-2.5 flex items-center gap-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-bold flex items-center gap-1.5" style={{ color: C.ink, fontFamily: monoFont }}>
+                          {r.driverMobile}
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#1a1200" }}>
+                            {entryCapacityKg != null ? `${entryCapacityKg}kg` : (lang === "en" ? "capacity unknown" : lang === "mr" ? "क्षमता अज्ञात" : "क्षमता अज्ञात")}
+                          </span>
+                        </div>
+                        {editingId === r.id ? (
+                          <div className="mt-1">
+                            <input type="number" inputMode="numeric" value={draftTotalFare} onChange={(e) => setDraftTotalFare(e.target.value)}
+                              className="w-24 rounded p-1.5 text-xs font-bold outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "Total" : "कुल"} />
+                            <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>
+                              {lang === "en" ? "1-5km (25%, auto)" : "1-5किमी (25%, स्वतः)"}: {fmt(draftTier1to5Fare)}
+                              {draftPerKmRate != null && <> · {fmt(draftPerKmRate)}/km</>}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
+                            {lang === "en" ? "1-5km" : "1-5किमी"}: {fmt(r.tier1to5Fare)} · {lang === "en" ? "Total" : lang === "mr" ? "एकूण" : "कुल"}: {fmt(r.totalFare)}
+                            {r.estimatedKm != null && <> · {formatDistanceExact(r.estimatedKm, lang)}</>}
+                            {r.perKmRate != null && <> · {fmt(r.perKmRate)}/km</>}
+                          </div>
+                        )}
+                        {/* Raw saved coordinates -- lets this exact entry's
+                            pickup/drop point be compared directly against
+                            whatever a customer's typed address resolves
+                            to, when a route-match mismatch needs tracing. */}
+                        {r.pickupLat != null && (
+                          <div className="text-[9px] mt-0.5 leading-tight" style={{ color: C.inkSoft, fontFamily: monoFont }}>
+                            P: {r.pickupLat.toFixed(4)},{r.pickupLng.toFixed(4)} · D: {r.dropLat.toFixed(4)},{r.dropLng.toFixed(4)}
+                          </div>
+                        )}
+                      </div>
+                      {editingId === r.id ? (
+                        <div className="flex items-center gap-4 shrink-0">
+                          <button onClick={() => saveEdit(r.id)} disabled={saving} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                            <CheckCircle2 size={17} color="#fff" />
+                          </button>
+                          <button onClick={cancelEdit} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.inkSoft }}>
+                            <X size={17} color="#fff" strokeWidth={3} />
+                          </button>
+                        </div>
+                      ) : confirmDeleteId === r.id ? (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button onClick={() => deleteEntry(r.id)} className="text-xs font-bold px-3 py-2.5 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                            {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                          </button>
+                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold px-3 py-2.5 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
+                            {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-4 shrink-0">
+                          <button onClick={() => startEdit(r)} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.navy }}>
+                            <Settings2 size={16} color="#fff" />
+                          </button>
+                          <button onClick={() => setConfirmDeleteId(r.id)} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.safety }}>
+                            <X size={17} color="#fff" strokeWidth={3} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );})}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Admin's own fixed-rate override for one route + one capacity/weight
+// bracket (see getAdminRouteOverride/resolveFare) — opened from the button
+// at the right end of AdminRouteFares' header. Deliberately mirrors
+// CustomerBooking's own Pickup/Drop/Weight fields (full address, not
+// restricted to cities like SetFareForm — Admin is pricing exact routes,
+// not logging a loose "I drove this corridor" entry) so the estimated
+// distance Admin sees while setting a rate matches what a customer would
+// actually see. Saving upserts a doc keyed by route+tier, so re-saving the
+// same pickup/drop for the same weight bracket edits that one entry rather
+// than creating a duplicate; a different weight bracket on the identical
+// route creates a separate entry (see the "Different rates per weight
+// bracket" design decision this was built to).
+function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, lang, onClose }) {
+  const [pickup, setPickup] = useState("");
+  const [drop, setDrop] = useState("");
+  const [pickupCoords, setPickupCoords] = useState(null);
+  const [dropCoords, setDropCoords] = useState(null);
+  const [distance, setDistance] = useState(null);
+  const [weight, setWeight] = useState("");
+  const [totalFare, setTotalFare] = useState("");
+  const [fareTouched, setFareTouched] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
+  const mapsReady = mapsHasKey && mapsLoaded;
+
+  useEffect(() => {
+    if (!mapsReady || pickupCoords || !pickup.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(pickup).then((loc) => { if (loc) setPickupCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [pickup, pickupCoords, mapsReady]);
+  useEffect(() => {
+    if (!mapsReady || dropCoords || !drop.trim()) return;
+    const t = setTimeout(() => { geocodeAddress(drop).then((loc) => { if (loc) setDropCoords(loc); }); }, 900);
+    return () => clearTimeout(t);
+  }, [drop, dropCoords, mapsReady]);
+
+  // Straight-line estimate shows instantly, then silently upgrades to the
+  // real routed distance — same pattern as CustomerBooking/SetFareForm.
+  const distanceRequestRef = useRef(0);
+  useEffect(() => {
+    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
+    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
+    if (!hasBothCoords || !mapsReady) return;
+    const requestId = ++distanceRequestRef.current;
+    fetchRoadDistanceKm(pickupCoords, dropCoords)
+      .then((km) => { if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100); })
+      .catch((e) => console.error("[admin rate calc distance]", e));
+  }, [pickupCoords, dropCoords, mapsReady]);
+
+  const capacityKg = weight !== "" ? Number(weight) || 0 : null;
+  const tier = capacityKg != null ? findFareTier(capacityKg, fareTiers) : null;
+  // Mirrors resolveFare's own two-layer priority (Admin override, else the
+  // generic formula) instead of always jumping straight to the formula --
+  // otherwise this "suggestion" can flatly contradict what a customer is
+  // actually being quoted right now for this exact route+bracket (a real
+  // bug: it used to always show the generic-formula number even when a
+  // correct Admin default already existed, making it easy to overwrite a
+  // right answer with a wrong one without any warning). Shown as a
+  // starting point since Admin has to type something into Save Rate, but
+  // always editable: typing over it (fareTouched) stops it auto-updating.
+  const existingOverride = tier != null && pickup.trim() && drop.trim()
+    ? getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, fareTiers)
+    : null;
+  const suggestedFare = existingOverride != null ? existingOverride
+    : (tier != null ? calculateFare(capacityKg, distance, fareTiers) : null);
+  const suggestionSource = existingOverride != null ? "admin" : "formula";
+  useEffect(() => {
+    if (fareTouched) return;
+    setTotalFare(suggestedFare != null ? String(suggestedFare) : "");
+  }, [suggestedFare, fareTouched]);
+
+  const resetForm = () => {
+    setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
+    setWeight(""); setTotalFare(""); setFareTouched(false); setEditingId(null); setSaveError("");
+  };
+
+  const editEntry = (r) => {
+    setSaveError("");
+    setPickup(r.pickupName || ""); setDrop(r.dropName || "");
+    setPickupCoords(r.pickupLat != null ? { lat: r.pickupLat, lng: r.pickupLng } : null);
+    setDropCoords(r.dropLat != null ? { lat: r.dropLat, lng: r.dropLng } : null);
+    setDistance(r.estimatedKm ?? null);
+    setWeight(r.weight != null ? String(r.weight) : "");
+    setTotalFare(r.totalFare != null ? String(r.totalFare) : "");
+    setFareTouched(true);
+    setEditingId(r.id);
+    setSavedFlash(false);
+  };
+
+  const deleteEntry = (id) => { removeDoc("adminRouteFares", id).catch((e) => console.error(e)); setConfirmDeleteId(null); if (editingId === id) resetForm(); };
+
+  // Same reasoning as SetFareForm's own locationResolved check: an Admin
+  // override that saves before geocoding catches up would only ever match
+  // by loose text containment, defeating the whole point of an
+  // authoritative, GPS-anchored rate for this exact route+bracket.
+  const locationResolved = !mapsReady || (pickupCoords != null && dropCoords != null);
+  const canSave = pickup.trim() && drop.trim() && weight !== "" && totalFare !== "" && !saving && locationResolved;
+  const save = async () => {
+    if (!canSave || !tier) return;
+    setSaving(true);
+    setSaveError("");
+    const docId = `${sanitizeForDocId(pickup)}__${sanitizeForDocId(drop)}__${tier.maxKg}`;
+    try {
+      await createDoc("adminRouteFares", docId, {
+        pickupName: pickup.trim(), dropName: drop.trim(),
+        pickupKey: normalizeRouteText(pickup), dropKey: normalizeRouteText(drop),
+        pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+        dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+        estimatedKm: distance,
+        weight: capacityKg,
+        tierMaxKg: tier.maxKg,
+        totalFare: Number(totalFare) || 0,
+        updatedAt: Date.now(),
+      });
+      // docId is derived fresh from the CURRENT pickup/drop/tier -- if
+      // Admin edited an existing entry's route text or weight enough to
+      // shift brackets, that no longer matches editingId's original doc.
+      // Without this, the old doc would be left behind as an orphaned
+      // duplicate that could later resurface via getAdminRouteOverride's
+      // "most recent wins" tie-break and quote a stale fare -- the same
+      // class of bug already fixed once for the fare-vs-label mismatch
+      // (commit f9d8695).
+      if (editingId && editingId !== docId) {
+        await removeDoc("adminRouteFares", editingId).catch((e) => console.error("[stale admin rate cleanup]", e));
+      }
+      resetForm();
+      setSavedFlash(true);
+    } catch (e) {
+      console.error(e);
+      setSaveError(describeAdminRateSaveError(e, lang));
+    }
+    setSaving(false);
+  };
+
+  const sorted = [...(adminRouteFares || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  // A real count to check against, instead of scrolling a list of
+  // hundreds and losing track -- e.g. after the Maharashtra bulk import,
+  // this is the only in-app way to confirm "yes, all 880 are really here"
+  // without opening Firestore or running a script.
+  const defaultCount = sorted.filter((r) => r.source === "maharashtraDefault").length;
+  const handEditedCount = sorted.length - defaultCount;
+
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
+          <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Admin Rate Calculator" : lang === "mr" ? "अ‍ॅडमिन दर कॅल्क्युलेटर" : "एडमिन रेट कैलकुलेटर"}</h3>
+          <button onClick={onClose} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+        </div>
+        <div className="p-4 space-y-3 overflow-y-auto">
+          <div className="rounded-lg p-3 text-xs font-semibold" style={{ background: C.metallicGold, color: "#000000" }}>
+            {lang === "en"
+              ? "Set a fixed rate for a route + weight bracket. This overrides driver-entered rates and the standard formula for that exact route."
+              : lang === "mr"
+              ? "एका रूट + वजन ब्रॅकेटसाठी निश्चित दर सेट करा. हे त्या रूटसाठी ड्रायव्हरने भरलेले दर आणि स्टँडर्ड फॉर्म्युला यांना ओव्हरराइड करते."
+              : "एक रूट + वजन ब्रैकेट के लिए निश्चित दर सेट करें। यह उस रूट के लिए ड्राइवर द्वारा भरे गए दर और मानक फॉर्मूले को ओवरराइड करता है।"}
+          </div>
+
+          <LocationField lang={lang} value={pickup}
+            onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); setSaveError(""); setFareTouched(false); }}
+            onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); setSaveError(""); setFareTouched(false); }}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} />
+          <LocationField lang={lang} value={drop}
+            onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setSavedFlash(false); setSaveError(""); setFareTouched(false); }}
+            onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); setSaveError(""); setFareTouched(false); }}
+            mapsReady={mapsReady}
+            placeholder={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Estimated distance" : lang === "mr" ? "अंदाजे अंतर" : "अनुमानित दूरी"}</div>
+              <div className="rounded-lg p-2.5 text-sm font-black" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }}>
+                {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
+              </div>
+              {/* Raw resolved coordinates, admin-only -- lets a route-match
+                  mismatch (typed address geocoding somewhere unexpected)
+                  actually be seen and compared against a driver's own
+                  saved entry, instead of guessing blind. */}
+              {(pickupCoords || dropCoords) && (
+                <div className="text-[9px] mt-1 leading-tight" style={{ color: C.inkSoft, fontFamily: monoFont }}>
+                  {pickupCoords ? `P: ${pickupCoords.lat.toFixed(4)},${pickupCoords.lng.toFixed(4)}` : "P: —"}
+                  {" · "}
+                  {dropCoords ? `D: ${dropCoords.lat.toFixed(4)},${dropCoords.lng.toFixed(4)}` : "D: —"}
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Enter weight (kg)" : lang === "mr" ? "वजन टाका (किलो)" : "वजन डालें (किलो)"}</div>
+              <input type="number" inputMode="numeric" value={weight}
+                onChange={(e) => { setWeight(e.target.value.replace(/\D/g, "")); setSavedFlash(false); setSaveError(""); setFareTouched(false); }}
+                className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
+                placeholder={lang === "en" ? "e.g. 1000" : "उदा. 1000"} />
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "Rate for this route" : lang === "mr" ? "या रूटसाठी दर" : "इस रूट के लिए दर"}
+              {suggestedFare != null && !fareTouched && suggestionSource === "admin" && (
+                <span style={{ color: C.safety }}> · {lang === "en" ? "⚠ already live as an Admin rate — saving now just re-confirms it" : lang === "mr" ? "⚠ आधीच अ‍ॅडमिन दर म्हणून लाइव्ह आहे — आत्ता सेव्ह केल्यास तेच पुन्हा कन्फर्म होईल" : "⚠ पहले से एडमिन दर के रूप में लाइव है — अभी सेव करने से यह वही दोबारा कन्फर्म होगा"}</span>
+              )}
+              {suggestedFare != null && !fareTouched && suggestionSource === "formula" && (
+                <span style={{ color: C.marigoldDeep }}> · {lang === "en" ? "system formula — no Admin rate set for this route yet" : lang === "mr" ? "सिस्टम फॉर्म्युला — या रूटसाठी अजून अ‍ॅडमिन दर नाही" : "सिस्टम फॉर्मूला — इस रूट के लिए अभी तक एडमिन दर नहीं है"}</span>
+              )}
+            </div>
+            <input type="number" inputMode="numeric" value={totalFare}
+              onChange={(e) => { setTotalFare(e.target.value); setFareTouched(true); setSavedFlash(false); setSaveError(""); }}
+              className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
+              placeholder={lang === "en" ? "Fill rate" : lang === "mr" ? "दर भरा" : "दर भरें"} />
+          </div>
+
+          {editingId && (
+            <button onClick={resetForm} className="w-full text-center text-xs font-bold py-1" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "Cancel edit / start new entry" : lang === "mr" ? "एडिट रद्द करा / नवीन एंट्री सुरू करा" : "एडिट रद्द करें / नई एंट्री शुरू करें"}
+            </button>
+          )}
+
+          {adminRouteFaresError && (
+            <div className="rounded-lg p-2.5 text-[11px] font-bold" style={{ background: C.safety, color: "#fff" }}>
+              {lang === "en"
+                ? `Can't load saved rates right now (${adminRouteFaresError}) — this list may be showing nothing even though entries exist. Try closing and reopening the app.`
+                : lang === "mr"
+                ? `सेव्ह केलेले दर आत्ता लोड होऊ शकत नाहीत (${adminRouteFaresError}) — एंट्री असूनही ही यादी काहीही दाखवत नसेल. अ‍ॅप बंद करून पुन्हा उघडून पहा.`
+                : `सेव किए गए दर अभी लोड नहीं हो सकते (${adminRouteFaresError}) — एंट्री होने के बावजूद यह लिस्ट कुछ नहीं दिखा सकती। ऐप बंद करके फिर से खोलें।`}
+            </div>
+          )}
+          {sorted.length > 0 && (
+            <div className="pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+              <div className="flex items-center justify-between mb-2 gap-2">
+                <div className="text-xs font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Saved Admin rates" : lang === "mr" ? "सेव्ह केलेले अ‍ॅडमिन दर" : "सेव किए गए एडमिन दर"}</div>
+                <div className="text-xs font-black shrink-0" style={{ color: C.navy }}>{sorted.length}</div>
+              </div>
+              <div className="text-[10.5px] font-semibold mb-2" style={{ color: C.inkSoft }}>
+                {lang === "en" ? `${defaultCount} imported default${handEditedCount ? ` · ${handEditedCount} hand-typed/edited` : ""}` : lang === "mr" ? `${defaultCount} इम्पोर्ट केलेले डिफॉल्ट${handEditedCount ? ` · ${handEditedCount} हाताने टाइप/एडिट केलेले` : ""}` : `${defaultCount} इम्पोर्ट किए गए डिफ़ॉल्ट${handEditedCount ? ` · ${handEditedCount} हाथ से टाइप/एडिट किए गए` : ""}`}
+              </div>
+              <div className="space-y-1.5">
+                {sorted.map((r) => (
+                  <div key={r.id} className="rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                    <button onClick={() => editEntry(r)} className="w-full text-left">
+                      <div className="flex items-center gap-1.5">
+                        <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName}</div>
+                        {r.source === "maharashtraDefault" && (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#000" }}>
+                            {lang === "en" ? "DEFAULT" : lang === "mr" ? "डिफॉल्ट" : "डिफ़ॉल्ट"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
+                        {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {fmt(r.totalFare)}
+                      </div>
+                      {isLongHaulSmallLoad(r.estimatedKm, r.tierMaxKg) && (
+                        <div className="text-[9.5px] font-bold mt-1" style={{ color: C.safety }}>
+                          ⚠ {lang === "en" ? "Small load, long haul — a shared/LTL truck is likely cheaper for the customer" : lang === "mr" ? "लहान लोड, लांब पल्ला — ग्राहकासाठी शेअर्ड/LTL ट्रक स्वस्त पडण्याची शक्यता आहे" : "छोटा लोड, लंबी दूरी — ग्राहक के लिए शेयर्ड/LTL ट्रक सस्ता पड़ सकता है"}
+                        </div>
+                      )}
+                    </button>
+                    <div className="flex items-center justify-end gap-4 mt-2">
+                      {confirmDeleteId === r.id ? (
+                        <>
+                          <button onClick={() => deleteEntry(r.id)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                            {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                          </button>
+                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
+                            {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => setConfirmDeleteId(r.id)} className="text-[11px] font-bold px-3 py-2 rounded-lg" style={{ color: C.safety, background: C.paper, border: `1px solid ${C.safety}` }}>
+                          {lang === "en" ? "Remove" : lang === "mr" ? "काढा" : "हटाएं"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="px-4 pt-3 shrink-0" style={{ borderTop: `1px solid ${C.line}`, background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>
+          {!locationResolved && pickup.trim() && drop.trim() && (
+            <div className="text-[11px] font-semibold text-center mb-1.5" style={{ color: C.marigoldDeep }}>
+              {lang === "en" ? "Resolving exact location — wait a moment before saving" : lang === "mr" ? "नेमके ठिकाण शोधले जात आहे — सेव्ह करण्यापूर्वी थोडे थांबा" : "सटीक स्थान खोजा जा रहा है — सेव करने से पहले थोड़ा रुकें"}
+            </div>
+          )}
+          <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
+            style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
+            {saving ? "…" : (lang === "en" ? "Save Rate" : lang === "mr" ? "दर सेव्ह करा" : "दर सेव करें")}
+          </button>
+          {savedFlash && (
+            <div className="rounded-lg p-2 mt-2 text-xs font-bold text-center" style={{ background: C.success, color: "#fff" }}>
+              {lang === "en" ? "Saved." : lang === "mr" ? "सेव्ह झाले." : "सेव हो गया।"}
+            </div>
+          )}
+          {saveError && (
+            <div className="rounded-lg p-2 mt-2 text-xs font-bold text-center" style={{ background: C.safety, color: "#fff" }}>
+              {saveError}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Renders one KYC/vehicle document thumbnail with View (opens full-size in
+// a new tab) and Download buttons. Download fetches the image as a blob
+// first so the browser actually saves the file instead of just navigating
+// to it — Firebase Storage download URLs are cross-origin, and browsers
+// ignore a plain <a download> on cross-origin links.
+function KycDocThumb({ url, label, lang, fileName, height = "h-24" }) {
+  const handleDownload = async (e) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName || label;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("[kyc doc download]", err);
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+  return (
+    <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
+      <SafeImage
+        src={url}
+        alt={label}
+        className={`w-full ${height} object-cover`}
+        fallback={
+          <div className={`w-full ${height} flex items-center justify-center`} style={{ background: C.paper }}>
+            <XCircle size={16} color={C.safety} />
+          </div>
+        }
+      />
+      <div className="text-[10px] font-semibold text-center py-1 flex items-center justify-center gap-1" style={{ color: "#FFFFFF", background: url ? C.success : C.safety }}>
+        {url ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {label}
+      </div>
+      {url && (
+        <div className="flex" style={{ borderTop: `1px solid ${C.line}` }}>
+          <button onClick={() => window.open(url, "_blank", "noopener,noreferrer")} className="flex-1 flex items-center justify-center gap-1 py-2 text-sm font-semibold" style={{ color: C.marigoldDeep }}>
+            <Eye size={11} /> {lang === "en" ? "View" : lang === "mr" ? "पहा" : "देखें"}
+          </button>
+          <button onClick={handleDownload} className="flex-1 flex items-center justify-center gap-1 py-2 text-sm font-semibold" style={{ color: C.marigoldDeep, borderLeft: `1px solid ${C.line}` }}>
+            <Download size={11} /> {lang === "en" ? "Download" : lang === "mr" ? "डाउनलोड" : "डाउनलोड"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminKyc({ drivers, updateDriverKyc, lang }) {
+  // "Incomplete" = still needs admin's attention — either never
+  // submitted any KYC documents, or submitted and is sitting in Pending
+  // review (the Approve button on that row only actually does anything
+  // once the driver has submitted). "Complete" = fully resolved
+  // (Approved or Rejected/Blocked) — nothing left to do, so it's
+  // view-only there.
+  const notSubmitted = drivers.filter((d) => !d.vehicleSpec);
+  const incomplete = drivers.filter((d) => !d.vehicleSpec || d.kyc === "Pending");
+  const complete = drivers.filter((d) => d.vehicleSpec && d.kyc !== "Pending");
+  // A separate, disjoint concern from notSubmitted/incomplete above: these
+  // drivers DID submit KYC (photos, license, vehicle number all on file)
+  // but a since-fixed validation gap (typing "0" for capacity used to pass
+  // the form's own check yet get discarded as undefined on save) left
+  // vehicleSpec.capacityKg empty — which quietly excludes them from the
+  // fixed-fare tiers below (findFareTier/calculateFare need a real
+  // capacityKg), so they show no fare and can't be booked against by
+  // weight. Fixing the validation gap stops new occurrences; this list is
+  // the backlog of drivers already caught by the old bug.
+  const missingCapacity = drivers.filter((d) => d.vehicleSpec && !d.vehicleSpec.capacityKg);
+  const [view, setView] = useState("incomplete"); // 'incomplete' | 'complete' | 'capacity'
+  const [expandedId, setExpandedId] = useState(null);
+  const [sendingCapacity, setSendingCapacity] = useState(false);
+  const [sendResultCapacity, setSendResultCapacity] = useState(null);
+  // Persisted (not just in-memory) because tapping WhatsApp on a phone
+  // switches away to the WhatsApp app — mobile browsers/TWAs routinely
+  // discard or reload a backgrounded tab like that, which would silently
+  // wipe a plain useState the moment admin switches back. Keyed by
+  // mobile -> the date it was tapped, so the tick clears itself the next
+  // day instead of accumulating forever (opening WhatsApp still doesn't
+  // guarantee the message was actually sent from there, just that admin
+  // already nudged this driver today).
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const [whatsappSentMap, setWhatsappSentMap] = usePersistedState("sarthi_kycWhatsappSent", {});
+  const markWhatsappSent = (mobile) => setWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStr() }));
+  const sentToday = (mobile) => whatsappSentMap[mobile] === todayStr();
+  const docLabels = lang === "en"
+    ? { photo: "Driver Photo", dl: "Driving License" }
+    : lang === "mr"
+    ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
+    : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
+  const statusMeta = {
+    Approved: { label: lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित", bg: C.success },
+    Pending: { label: lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित", bg: C.marigoldDeep },
+    Rejected: { label: lang === "en" ? "Blocked" : lang === "mr" ? "ब्लॉक्ड" : "ब्लॉक्ड", bg: C.safety },
+  };
+
+  // "Send KYC reminder to all" used to fire a single sendAdminNotification
+  // push broadcast — but push relies on the driver already having granted
+  // notification permission at some point, exactly the kind of thing a
+  // driver who never finished KYC usually hasn't done, so in practice it
+  // reached almost no one and admin never saw an actual WhatsApp go out.
+  // WhatsApp needs none of that: it opens a chat straight to the driver's
+  // number with a personalized link (?driverKyc=1&mobile=...) prefilled.
+  // A browser can't fire off many wa.me opens at once from one tap (each
+  // is a real navigation, and popup blockers kill anything beyond the
+  // first), so this button instead walks admin through the not-yet-
+  // reminded drivers one at a time: tap it, WhatsApp opens for the next
+  // driver in line and that driver drops off the list (via sentToday
+  // below), tap again for the one after — same real <a> mechanism as each
+  // row's own WhatsApp button, just queued instead of one-by-one hunting
+  // through the list.
+  const notSubmittedUnsent = notSubmitted.filter((d) => !sentToday(d.mobile));
+  const nextToRemind = notSubmittedUnsent[0] || null;
+  const whatsappLink = (mobile) => {
+    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
+    const msg = lang === "en"
+      ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}\nIf you're unable to fill the form yourself, share it on this WhatsApp number instead — reply here with: Phone number, Driver photo, Driving license, Vehicle side photo, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height — and we'll complete it for you.`
+      : lang === "mr"
+      ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}\nजर तुम्हाला स्वतः फॉर्म भरता येत नसेल, तर त्याऐवजी याच व्हॉट्सअॅप नंबरवर पाठवा — इथे उत्तर द्या: फोन नंबर, ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडीचा साइडचा फोटो, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची — आम्ही तुमच्या वतीने पूर्ण करू.`
+      : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}\nअगर आप खुद फॉर्म नहीं भर पा रहे हैं, तो इसके बजाय इसी व्हाट्सएप नंबर पर भेजें — यहां जवाब दें: फोन नंबर, ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी की साइड फोटो, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई — और हम आपकी ओर से पूरा कर देंगे।`;
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  };
+
+  // Capacity-only nudge — unlike reminderMessage/whatsappLink above, these
+  // drivers already have every other document on file, so the message (and
+  // the portal link's DriverKycPortal gate, changed to key off
+  // vehicleSpec.capacityKg instead of vehicleSpec presence) sends them
+  // straight to the KYC form pre-filled with what they already submitted,
+  // just missing capacity.
+  const capacityMessage = lang === "en"
+    ? "Your vehicle's carrying capacity is missing from your KYC — please add it so you can be matched and paid the right fare for loads. It only takes a moment."
+    : lang === "mr"
+    ? "तुमच्या KYC मध्ये गाडीची क्षमता (कॅपॅसिटी) नमूद केलेली नाही — योग्य लोड आणि योग्य भाडे मिळण्यासाठी कृपया ती भरा. यासाठी फक्त एक क्षण लागेल."
+    : "आपकी KYC में गाड़ी की क्षमता (कैपेसिटी) दर्ज नहीं है — सही लोड और सही भाड़ा पाने के लिए कृपया इसे भरें। इसमें बस एक पल लगेगा।";
+  const sendToMissingCapacity = async () => {
+    if (sendingCapacity || missingCapacity.length === 0) return;
+    setSendingCapacity(true);
+    setSendResultCapacity(null);
+    const result = await sendAdminNotification(missingCapacity.map((d) => d.mobile), capacityMessage, "driver");
+    setSendingCapacity(false);
+    setSendResultCapacity(result);
+  };
+  const capacityWhatsappLink = (mobile) => {
+    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
+    const msg = lang === "en"
+      ? `Your vehicle's carrying capacity is missing from your KYC — please add it here so you can be matched and paid the right fare for loads: ${portalLink}\nYour photo, license and vehicle details are already saved — you'll just need to fill in the capacity.`
+      : lang === "mr"
+      ? `तुमच्या KYC मध्ये गाडीची क्षमता (कॅपॅसिटी) नमूद केलेली नाही — योग्य लोड आणि भाडे मिळण्यासाठी कृपया इथे भरा: ${portalLink}\nतुमचा फोटो, लायसन्स आणि गाडीची माहिती आधीच सेव्ह आहे — फक्त क्षमता भरायची आहे.`
+      : `आपकी KYC में गाड़ी की क्षमता (कैपेसिटी) दर्ज नहीं है — सही लोड और भाड़ा पाने के लिए कृपया यहां भरें: ${portalLink}\nआपका फोटो, लाइसेंस और गाड़ी की जानकारी पहले से सेव है — बस क्षमता भरनी है।`;
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  };
+
+  const docSection = (d) => (
+    <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {Object.entries(docLabels).map(([key, label]) => {
+          const doc = d.docs?.[key];
+          return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
+        })}
+      </div>
+      {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
+        <>
+          <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} height="h-28" />}
+            {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} height="h-28" />}
+          </div>
+        </>
+      )}
+      {d.vehicleSpec && (
+        <div className="text-[11px] mb-2" style={{ color: C.ink }}>
+          <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
+          <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} ·{" "}
+          {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
+        </div>
+      )}
+      {!d.vehicleSpec && !d.docs && (
+        <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setView("incomplete")} className="flex-1 rounded-lg py-3 text-sm font-bold flex items-center justify-center gap-1.5"
+          style={{ background: view === "incomplete" ? C.navy : C.paper, color: view === "incomplete" ? "#fff" : C.inkSoft, border: `1.5px solid ${view === "incomplete" ? C.navy : C.line}` }}>
+          <XCircle size={14} /> {lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरी"} ({incomplete.length})
+        </button>
+        <button onClick={() => setView("complete")} className="flex-1 rounded-lg py-3 text-sm font-bold flex items-center justify-center gap-1.5"
+          style={{ background: view === "complete" ? C.navy : C.paper, color: view === "complete" ? "#fff" : C.inkSoft, border: `1.5px solid ${view === "complete" ? C.navy : C.line}` }}>
+          <Users size={14} /> {lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी"} ({complete.length})
+        </button>
+      </div>
+      {missingCapacity.length > 0 && (
+        <button onClick={() => setView("capacity")} className="w-full rounded-lg py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 mb-4"
+          style={{ background: view === "capacity" ? C.navy : C.paper, color: view === "capacity" ? "#fff" : C.safety, border: `1.5px solid ${view === "capacity" ? C.navy : C.safety}` }}>
+          <Weight size={13} /> {lang === "en" ? `Missing vehicle capacity (${missingCapacity.length})` : lang === "mr" ? `गाडीची क्षमता नमूद नाही (${missingCapacity.length})` : `गाड़ी की क्षमता दर्ज नहीं (${missingCapacity.length})`}
+        </button>
+      )}
+
+      {view === "incomplete" ? (
+        <div>
+          <p className="text-[11px] mb-3" style={{ color: C.inkSoft }}>
+            {lang === "en" ? "Some haven't submitted KYC yet; others are submitted and waiting on your approval." : lang === "mr" ? "काहींनी अजून KYC जमा केलेली नाही; इतरांनी जमा केली आहे आणि तुमच्या अप्रूव्हलची वाट पाहत आहेत." : "कुछ ने अभी तक KYC जमा नहीं की; बाकी जमा हो चुकी है और आपके अप्रूवल का इंतज़ार कर रही है।"}
+          </p>
+          {notSubmitted.length === 0 ? null : nextToRemind ? (
+            <a href={whatsappLink(nextToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(nextToRemind.mobile)}
+              className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.success }}>
+              <MessageCircle size={14} />
+              {lang === "en" ? `Send next KYC reminder on WhatsApp (${notSubmittedUnsent.length} left)` : lang === "mr" ? `पुढचा KYC रिमाइंडर WhatsApp वर पाठवा (${notSubmittedUnsent.length} बाकी)` : `अगला KYC रिमाइंडर WhatsApp पर भेजें (${notSubmittedUnsent.length} बाकी)`}
+            </a>
+          ) : (
+            <div className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+              <CheckCircle2 size={14} />
+              {lang === "en" ? "Everyone reminded today" : lang === "mr" ? "आज सर्वांना आठवण दिली" : "आज सभी को याद दिलाया गया"}
+            </div>
+          )}
+          {incomplete.length === 0 ? (
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver's KYC is resolved." : lang === "mr" ? "सर्व ड्रायव्हरांची KYC निकाली काढली आहे." : "सभी ड्राइवरों की KYC निपटा दी गई है।"}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {incomplete.map((d) => {
+                if (d.vehicleSpec) {
+                  // Submitted, awaiting review — Approve/Block are live here.
+                  const expanded = expandedId === d.id;
+                  return (
+                    <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1 min-w-0">
+                          <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                          <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+                          <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
+                        </button>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें"}</button>
+                          <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                        </div>
+                      </div>
+                      {expanded && docSection(d)}
+                    </div>
+                  );
+                }
+                // Not submitted yet — Approve is shown but disabled since
+                // there's nothing to review; WhatsApp is the live action.
+                return (
+                  <div key={d.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                      <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <div className="flex gap-2">
+                        <button disabled title={lang === "en" ? "Approve unlocks once this driver submits KYC" : lang === "mr" ? "ड्रायव्हरने KYC जमा केल्यावरच अप्रूव्ह करता येईल" : "ड्राइवर के KYC जमा करने के बाद ही अप्रूव कर सकते हैं"}
+                          className="rounded-lg px-3 py-2 text-xs font-bold" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+                          {lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}
+                        </button>
+                        <a href={whatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(d.mobile)}
+                          className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
+                          <MessageCircle size={14} /> WhatsApp
+                        </a>
+                      </div>
+                      {sentToday(d.mobile) && (
+                        <span className="text-[10px] font-semibold" style={{ color: C.navy }}>
+                          ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : view === "capacity" ? (
+        <div>
+          <p className="text-[11px] mb-3" style={{ color: C.inkSoft }}>
+            {lang === "en" ? "These drivers already submitted KYC (photo, license, vehicle number) but their vehicle capacity is missing — without it, they get no fare shown and can't be matched to loads by weight." : lang === "mr" ? "या ड्रायव्हरांनी KYC (फोटो, लायसन्स, गाडी नंबर) आधीच जमा केली आहे, पण त्यांची गाडीची क्षमता नमूद नाही — त्याशिवाय त्यांना भाडे दिसत नाही आणि वजनानुसार लोड जुळत नाही." : "इन ड्राइवरों ने KYC (फोटो, लाइसेंस, गाड़ी नंबर) पहले ही जमा कर दी है, लेकिन उनकी गाड़ी की क्षमता दर्ज नहीं है — इसके बिना उन्हें भाड़ा नहीं दिखता और वजन के हिसाब से लोड नहीं मिल पाते।"}
+          </p>
+          <button onClick={sendToMissingCapacity} disabled={missingCapacity.length === 0 || sendingCapacity}
+            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5"
+            style={{ background: missingCapacity.length && !sendingCapacity ? C.marigold : "#E0E0E0", color: missingCapacity.length && !sendingCapacity ? "#000000" : "#9AA3B0" }}>
+            <Bell size={14} />
+            {sendingCapacity
+              ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...")
+              : (lang === "en" ? `Send capacity reminder to all (${missingCapacity.length})` : lang === "mr" ? `सर्वांना क्षमता रिमाइंडर पाठवा (${missingCapacity.length})` : `सभी को क्षमता रिमाइंडर भेजें (${missingCapacity.length})`)}
+          </button>
+          {sendResultCapacity && (
+            <div className="text-[11px] font-semibold mb-3" style={{ color: sendResultCapacity.ok ? C.success : C.safety }}>
+              {sendResultCapacity.ok
+                ? (lang === "en" ? `Sent — delivered to ${sendResultCapacity.sentCount || 0} device(s).` : lang === "mr" ? `पाठवले — ${sendResultCapacity.sentCount || 0} डिव्हाइसवर पोहोचले.` : `भेज दिया — ${sendResultCapacity.sentCount || 0} डिवाइस पर पहुंचा।`)
+                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।")}
+            </div>
+          )}
+          {missingCapacity.length === 0 ? (
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver's vehicle capacity is on file." : lang === "mr" ? "सर्व ड्रायव्हरांची गाडी क्षमता नोंदवलेली आहे." : "सभी ड्राइवरों की गाड़ी क्षमता दर्ज है।"}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {missingCapacity.map((d) => (
+                <div key={d.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                    <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <a href={capacityWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(d.mobile)}
+                      className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
+                      <MessageCircle size={14} /> WhatsApp
+                    </a>
+                    {sentToday(d.mobile) && (
+                      <span className="text-[10px] font-semibold" style={{ color: C.navy }}>
+                        ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          {complete.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver's KYC has been resolved yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरची KYC निकाली निघालेली नाही." : "अभी तक किसी ड्राइवर की KYC निपटाई नहीं गई है।"}</p> : (
+            <div className="space-y-2">
+              {complete.map((d) => {
+                const expanded = expandedId === d.id;
+                const meta = statusMeta[d.kyc] || statusMeta.Approved;
+                return (
+                  <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1 min-w-0">
+                        <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                        <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+                        <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
+                      </button>
+                      <span className="text-[10px] font-bold px-2.5 py-1.5 rounded-full text-white shrink-0" style={{ background: meta.bg }}>{meta.label}</span>
+                    </div>
+                    {expanded && docSection(d)}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
+  const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
+  const pendingWithdrawals = (withdrawals || []).filter((w) => w.status === "Pending");
+  const pendingRecharges = (rechargeRequests || []).filter((r) => r.status === "Pending");
+  // Docs only ever get a createdAt (server timestamp) — there's no separate
+  // "time" field — so format that instead of the undefined w.time/r.time/a.time
+  // this used to read (which is why timestamps never actually showed up).
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  return (
+    <div className="space-y-4">
+      {pendingRecharges.length > 0 && (
+        <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : lang === "mr" ? "वॉलेट रिचार्ज रिक्वेस्ट" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
+          <div className="space-y-2">
+            {pendingRecharges.map((r) => (
+              <div key={r.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <div>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{r.driverName}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(r.createdAt)}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(r.amount)}</span>
+                  <button onClick={() => approveRecharge(r.id)} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white" style={{ background: C.marigoldDeep }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {pendingWithdrawals.length > 0 && (
+        <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.success} /> {lang === "en" ? "Withdrawal Requests" : lang === "mr" ? "विड्रॉल रिक्वेस्ट" : "विड्रॉल रिक्वेस्ट"}</div>
+          <div className="space-y-2">
+            {pendingWithdrawals.map((w) => (
+              <div key={w.id} className="rounded-lg p-3 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <div>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{w.driverName || w.customerName} <span className="font-normal" style={{ color: C.inkSoft }}>· {w.role === "customer" ? (lang === "en" ? "Referral" : lang === "mr" ? "रेफरल" : "रेफरल") : (lang === "en" ? "Driver bonus" : lang === "mr" ? "ड्रायव्हर बोनस" : "ड्राइवर बोनस")}</span></div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(w.createdAt)}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold" style={{ color: C.success, fontFamily: monoFont }}>{fmt(w.amount)}</span>
+                  <button onClick={() => approveWithdrawal(w.id)} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Siren size={16} color={C.safety} /> {lang === "en" ? "Emergency Alerts" : lang === "mr" ? "इमर्जन्सी अलर्ट्स" : "इमरजेंसी अलर्ट्स"}</div>
+        {alerts.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No alerts yet." : lang === "mr" ? "अजून कोणताही अलर्ट आला नाही." : "अभी कोई अलर्ट नहीं आया।"}</p> : (() => {
+          // Police Help / Emergency Call / WhatsApp Support carry no extra
+          // info per tap — a driver tapping "WhatsApp Support" 5 times just
+          // adds 5 identical rows. Collapse those into one row per role+type
+          // with a tap count, so the list reads as distinct alert kinds, not
+          // a repeated instruction. Complaints keep one row each since every
+          // one has its own real text.
+          const grouped = {};
+          const complaints = [];
+          for (const a of alerts) {
+            if (a.type === "शिकायत") { complaints.push(a); continue; }
+            const key = `${a.role}|${a.type}`;
+            if (!grouped[key]) grouped[key] = { role: a.role, type: a.type, count: 0, latest: a.createdAt };
+            grouped[key].count += 1;
+          }
+          const groupedRows = Object.values(grouped); // alerts is newest-first, so first-seen == latest per key
+          return (
+            <div className="space-y-2">
+              {groupedRows.map((g) => {
+                const urgent = g.type === "इमरजेंसी कॉल" || g.type === "पुलिस सहायता";
+                return (
+                  <div key={`${g.role}|${g.type}`} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${urgent ? C.safety : C.line}` }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold flex items-center gap-1" style={{ color: urgent ? C.safety : C.ink }}>
+                        {urgent && <Siren size={12} />} {roleLabel[g.role] || g.role} · {alertTypeLabel(g.type, lang)}
+                        {g.count > 1 && <span className="font-normal" style={{ color: C.inkSoft }}>&nbsp;×{g.count}</span>}
+                      </span>
+                      <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(g.latest)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {complaints.map((a) => (
+                <div key={a.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold" style={{ color: C.ink }}>{roleLabel[a.role] || a.role} · {alertTypeLabel(a.type, lang)}</span>
+                    <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(a.createdAt)}</span>
+                  </div>
+                  {a.note && <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{a.note}</div>}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+
+// Dispute-resolution audit trail for masked calls (see functions/index.js:
+// initiateMaskedCall) -- who called who, on which booking, when. Only the
+// initial connect request gets logged (no duration/answer status, since
+// Exotel's Connect API response is all this reads -- a call-status webhook
+// would be needed for more than that, which isn't wired up).
+function AdminCallLogs({ callLogs, bookings, lang }) {
+  const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  return (
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
+        <PhoneCall size={16} color={C.marigoldDeep} /> {lang === "en" ? "Masked Call Logs" : lang === "mr" ? "मास्क्ड कॉल लॉग्स" : "मास्क्ड कॉल लॉग्स"}
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{(callLogs || []).length}</span>
+      </div>
+      {(callLogs || []).length === 0 ? (
+        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No masked calls yet." : lang === "mr" ? "अजून कोणताही मास्क्ड कॉल झाला नाही." : "अभी तक कोई मास्क्ड कॉल नहीं हुई।"}</p>
+      ) : (
+        <div className="space-y-2">
+          {callLogs.map((log) => {
+            const b = (bookings || []).find((x) => x.id === log.bookingId);
+            return (
+              <div key={log.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold" style={{ color: C.ink }}>{roleLabel[log.initiatedBy] || log.initiatedBy} {lang === "en" ? "called" : lang === "mr" ? "ने कॉल केला" : "ने कॉल किया"}</span>
+                  <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(log.createdAt)}</span>
+                </div>
+                {b ? (
+                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.pickup} → {b.drop}{b.driverName ? ` · ${b.driverName}` : ""}</div>
+                ) : (
+                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Booking" : lang === "mr" ? "बुकिंग" : "बुकिंग"}: {log.bookingId}</div>
+                )}
+                {log.exotelCallSid && <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>SID: {log.exotelCallSid}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
+  const [q, setQ] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [showCall, setShowCall] = useState(false);
+  const [callQ, setCallQ] = useState("");
+  // Free Trial vs Main Routine is computed live from each driver's own
+  // createdAt (see isInTrial/trialDaysLeft) instead of a stored status
+  // field — a driver moves the instant their 30 days are up, on every
+  // render, with nothing that can fall out of sync if a scheduled check
+  // were ever missed. The Cloud Function on the backend does the same
+  // computation independently, only for sending the one-time "trial
+  // ended" push notification (see functions/index.js).
+  const [trialTab, setTrialTab] = useState("all"); // 'all' | 'trial' | 'main'
+  const trialCount = drivers.filter((d) => isInTrial(d.createdAt)).length;
+  const byTrialTab = trialTab === "all" ? drivers : drivers.filter((d) => (trialTab === "trial" ? isInTrial(d.createdAt) : !isInTrial(d.createdAt)));
+  // GPS diagnostic (see gpsStatus) -- an Online driver whose lastKnownLocation
+  // is stale/missing is the exact "is this actually tracking?" question,
+  // made visible per-driver instead of guessed at from Online status alone.
+  const [gpsOnly, setGpsOnly] = useState(false);
+  const onlineNoLiveGps = drivers.filter((d) => d.online && gpsStatus(d, lang).stale);
+  const byGps = gpsOnly ? byTrialTab.filter((d) => d.online && gpsStatus(d, lang).stale) : byTrialTab;
+  const filtered = byGps.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
+  const kycMeta = lang === "en"
+    ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E5E5E5" } }
+    : lang === "mr"
+    ? { Approved: { label: "सत्यापित", color: "#FFFFFF", bg: C.success }, Pending: { label: "प्रलंबित", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "ब्लॉक्ड", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC सबमिट झाले नाही", color: C.inkSoft, bg: "#E5E5E5" } }
+    : { Approved: { label: "सत्यापित", color: "#FFFFFF", bg: C.success }, Pending: { label: "लंबित", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "ब्लॉक्ड", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC सबमिट नहीं हुआ", color: C.inkSoft, bg: "#E5E5E5" } };
+  const docLabels = lang === "en"
+    ? { photo: "Driver Photo", dl: "Driving License" }
+    : lang === "mr"
+    ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
+    : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
+
+  return (
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
+          <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"}
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{drivers.length}</span>
+        </div>
+        <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
+          {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : lang === "mr" ? "ड्रायव्हरला कॉल करा" : "ड्राइवर को कॉल करें"}</>}
+        </button>
+      </div>
+      {onlineNoLiveGps.length > 0 && (
+        <button onClick={() => setGpsOnly((v) => !v)} className="w-full rounded-lg p-3 mb-3 text-left" style={{ background: gpsOnly ? C.safety : "#FFF3F3", border: `1.5px solid ${C.safety}` }}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: gpsOnly ? "#FFFFFF" : C.safety }}>
+              <MapPin size={14} /> {lang === "en" ? "Online but no live GPS" : lang === "mr" ? "ऑनलाइन पण लाइव्ह GPS नाही" : "ऑनलाइन लेकिन लाइव GPS नहीं"}
+            </span>
+            <span className="text-xs font-black px-2 py-0.5 rounded-full" style={{ background: gpsOnly ? "#FFFFFF" : C.safety, color: gpsOnly ? C.safety : "#FFFFFF" }}>{onlineNoLiveGps.length}</span>
+          </div>
+          <p className="text-[10px] font-semibold mt-1" style={{ color: gpsOnly ? "#FFFFFF" : C.safety }}>
+            {gpsOnly
+              ? (lang === "en" ? "Showing only these — tap again to show everyone." : lang === "mr" ? "फक्त हेच दाखवत आहे — पुन्हा टॅप करून सर्व पहा." : "सिर्फ यही दिखा रहा है — फिर टैप करके सभी देखें।")
+              : (lang === "en" ? "These drivers say Online but haven't sent a GPS update recently — tap to filter to just them." : lang === "mr" ? "हे ड्रायव्हर ऑनलाइन आहेत पण अलीकडे GPS अपडेट पाठवलेले नाही — फक्त हेच पाहण्यासाठी टॅप करा." : "ये ड्राइवर ऑनलाइन हैं लेकिन हाल में GPS अपडेट नहीं भेजा — सिर्फ इन्हें देखने के लिए टैप करें।")}
+          </p>
+        </button>
+      )}
+      {showCall && (() => {
+        const callFiltered = drivers.filter((d) => d.name.includes(callQ) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(callQ.toLowerCase()) || (d.mobile || "").includes(callQ));
+        return (
+          <div className="rounded-lg p-2 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : lang === "mr" ? "नाव, गाडी नंबर किंवा मोबाइलने शोधा..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."}
+              className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {callFiltered.length === 0 ? (
+                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : lang === "mr" ? "कोणताही ड्रायव्हर सापडला नाही." : "कोई ड्राइवर नहीं मिला।"}</p>
+              ) : callFiltered.map((d) => (
+                <a key={d.id} href={`tel:${d.mobile}`} onClick={() => setShowCall(false)}
+                  className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
+                    <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+                  </div>
+                  <Phone size={16} color={C.success} className="shrink-0" />
+                </a>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+      <div className="grid grid-cols-3 gap-1.5 mb-3">
+        {[
+          ["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी", drivers.length],
+          ["trial", lang === "en" ? "Free Trial" : lang === "mr" ? "फ्री ट्रायल" : "फ्री ट्रायल", trialCount],
+          ["main", lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन", drivers.length - trialCount],
+        ].map(([key, label, count]) => (
+          <button key={key} onClick={() => setTrialTab(key)} className="rounded-lg py-3 text-sm font-bold text-center"
+            style={{ background: trialTab === key ? C.marigoldDeep : C.bg, color: trialTab === key ? "#fff" : C.inkSoft, border: `1px solid ${trialTab === key ? C.marigoldDeep : C.line}` }}>
+            {label} ({count})
+          </button>
+        ))}
+      </div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : lang === "mr" ? "नाव, गाडी नंबर किंवा मोबाइलने शोधा..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+      <div className="space-y-2">
+        {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : lang === "mr" ? "कोणताही ड्रायव्हर सापडला नाही." : "कोई ड्राइवर नहीं मिला।"}</p>}
+        {filtered.map((d) => {
+          const km = kycMeta[d.kyc] || kycMeta.none;
+          const expanded = expandedId === d.id;
+          const daysLeft = trialDaysLeft(d.createdAt);
+          const gps = gpsStatus(d, lang);
+          return (
+            <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
+                  <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"} {fmt(d.wallet)}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: d.online ? C.success : C.marigoldDeep }}>{d.online ? (lang === "en" ? "Online" : lang === "mr" ? "ऑनलाइन" : "ऑनलाइन") : (lang === "en" ? "Offline" : lang === "mr" ? "ऑफलाइन" : "ऑफलाइन")}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5" style={{ color: gps.color, background: gps.bg }} title={lang === "en" ? "GPS status" : lang === "mr" ? "GPS स्थिती" : "GPS स्थिति"}>
+                    <MapPin size={9} /> GPS {gps.label}
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
+                  {daysLeft != null ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
+                      {lang === "en" ? `Trial · ${daysLeft}d left` : lang === "mr" ? `ट्रायल · ${daysLeft} दिवस बाकी` : `ट्रायल · ${daysLeft} दिन बाकी`}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.inkSoft, background: "#E5E5E5" }}>{lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन"}</span>
+                  )}
+                </div>
+              </div>
+
+              <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-sm font-bold mt-2" style={{ color: C.marigoldDeep }}>
+                {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
+              </button>
+              {expanded && (
+                <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    {Object.entries(docLabels).map(([key, label]) => {
+                      const doc = d.docs?.[key];
+                      return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
+                    })}
+                  </div>
+                  {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
+                    <>
+                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} />}
+                        {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} />}
+                      </div>
+                    </>
+                  )}
+                  {d.vehicleSpec && (
+                    <div className="text-[11px] mb-2" style={{ color: C.ink }}>
+                      <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
+                      <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
+                    </div>
+                  )}
+                  {!d.vehicleSpec && !d.docs && <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                {d.blacklisted ? <span className="text-[11px] font-bold" style={{ color: C.safety }}>⛔ {lang === "en" ? "Blocked — won't get bookings" : lang === "mr" ? "ब्लॉक्ड — बुकिंग मिळणार नाही" : "ब्लॉक्ड — बुकिंग नहीं मिलेगी"}</span> : <span />}
+                <div className="flex items-center gap-2">
+                  {confirmDeleteId === d.id ? (
+                    <>
+                      <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : lang === "mr" ? "कायमचे काढून टाकायचे?" : "हमेशा के लिए हटाएं?"}</span>
+                      <button onClick={() => { deleteDriver(d.mobile || d.id); setConfirmDeleteId(null); }} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                        {lang === "en" ? "Yes, delete" : lang === "mr" ? "हो, काढा" : "हां, हटाएं"}
+                      </button>
+                      <button onClick={() => setConfirmDeleteId(null)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
+                        {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#FFFFFF", background: d.blacklisted ? C.success : C.safety }}>
+                        {d.blacklisted ? (lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें") : (lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें")}
+                      </button>
+                      <button onClick={() => setConfirmDeleteId(d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
+                        {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Read-only oversight of customer registrations — name, address, KYC info.
+// Customers are never gated by admin approval (only drivers are), so this
+// is visibility only, not a verification queue.
+function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
+  const [q, setQ] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [showCall, setShowCall] = useState(false);
+  const [callQ, setCallQ] = useState("");
+  const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q));
+  const statusMeta = lang === "en"
+    ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
+    : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
+  const bookingDate = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
+
+  return (
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
+          <Users size={16} /> {lang === "en" ? "All Customers" : lang === "mr" ? "सर्व कस्टमर" : "सभी कस्टमर"}
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{(customers || []).length}</span>
+        </div>
+        <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
+          {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Customer" : lang === "mr" ? "कस्टमरला कॉल करा" : "कस्टमर को कॉल करें"}</>}
+        </button>
+      </div>
+      {showCall && (() => {
+        const callFiltered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(callQ.toLowerCase()) || (c.mobile || "").includes(callQ));
+        return (
+          <div className="rounded-lg p-2 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name or mobile..." : lang === "mr" ? "नाव किंवा मोबाइलने शोधा..." : "नाम या मोबाइल से खोजें..."}
+              className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {callFiltered.length === 0 ? (
+                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : lang === "mr" ? "कोणताही कस्टमर सापडला नाही." : "कोई कस्टमर नहीं मिला।"}</p>
+              ) : callFiltered.map((c) => (
+                <a key={c.mobile} href={`tel:${c.mobile}`} onClick={() => setShowCall(false)}
+                  className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
+                    <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                  </div>
+                  <Phone size={16} color={C.success} className="shrink-0" />
+                </a>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name or mobile..." : lang === "mr" ? "नाव किंवा मोबाइलने शोधा..." : "नाम या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
+      <div className="space-y-2">
+        {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : lang === "mr" ? "कोणताही कस्टमर सापडला नाही." : "कोई कस्टमर नहीं मिला।"}</p>}
+        {filtered.map((c) => {
+          const expanded = expandedId === c.mobile;
+          const rides = (bookings || []).filter((b) => b.customerMobile === c.mobile);
+          return (
+            <div key={c.mobile} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
+              <div className="flex items-center gap-2.5">
+                <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
+                  <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{c.mobile}</div>
+                </div>
+                <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-sm font-semibold px-3.5 py-2.5 rounded-lg" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
+                  {expanded ? (lang === "en" ? "Hide" : lang === "mr" ? "लपवा" : "छुपाएं") : (lang === "en" ? "View Details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें")}
+                </button>
+              </div>
+
+              {expanded && (
+                <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <div className="text-[11px] mb-3" style={{ color: C.ink }}>
+                    <b>{lang === "en" ? "Contact number" : lang === "mr" ? "संपर्क नंबर" : "संपर्क नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{c.mobile}</span>
+                  </div>
+                  <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>
+                    {lang === "en" ? `Ride history (${rides.length})` : lang === "mr" ? `राइड हिस्टरी (${rides.length})` : `राइड हिस्ट्री (${rides.length})`}
+                  </div>
+                  {rides.length === 0 ? (
+                    <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No bookings yet." : lang === "mr" ? "अजून कोणतीही बुकिंग नाही." : "अभी तक कोई बुकिंग नहीं।"}</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                      {rides.map((b) => {
+                        const sm = statusMeta[b.status] || statusMeta.Cancelled;
+                        return (
+                          <div key={b.id} className="rounded-lg p-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
+                            </div>
+                            <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
+                              {b.weight} {lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}
+                            </div>
+                            <div className="text-[10px] flex items-center justify-between mt-1">
+                              <span style={{ color: C.inkSoft }}>{b.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${b.driverName}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(b)}</span>
+                              {b.fare != null && <span className="font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(b.fare)}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-end gap-2 mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                    {confirmDeleteId === c.mobile ? (
+                      <>
+                        <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : lang === "mr" ? "कायमचे काढून टाकायचे?" : "हमेशा के लिए हटाएं?"}</span>
+                        <button onClick={() => { deleteCustomer(c.mobile); setConfirmDeleteId(null); }} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                          {lang === "en" ? "Yes, delete" : lang === "mr" ? "हो, काढा" : "हां, हटाएं"}
+                        </button>
+                        <button onClick={() => setConfirmDeleteId(null)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
+                          {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => setConfirmDeleteId(c.mobile)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
+                        {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AdminNotify({ drivers, customers, adminNotifications, lang }) {
+  const [audience, setAudience] = useState("driver"); // 'driver' | 'customer'
+  const [target, setTarget] = useState("all");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const audiencePeople = audience === "driver" ? (drivers || []) : (customers || []);
+  const allLabel = lang === "en"
+    ? (audience === "driver" ? "All Drivers" : "All Customers")
+    : lang === "mr"
+    ? (audience === "driver" ? "सर्व ड्रायव्हर" : "सर्व कस्टमर")
+    : (audience === "driver" ? "सभी ड्राइवर" : "सभी कस्टमर");
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
+  const send = async () => {
+    if (!message.trim() || sending) return;
+    setSending(true);
+    setError("");
+    const result = await sendAdminNotification(target, message.trim(), audience);
+    setSending(false);
+    if (result.ok) setMessage("");
+    else setError(lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।");
+  };
+  const notifLabel = (n) => {
+    const label = n.toRole === "customer"
+      ? (lang === "en" ? "All Customers" : lang === "mr" ? "सर्व कस्टमर" : "सभी कस्टमर")
+      : (lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर");
+    if (n.target === "all") return label;
+    if (Array.isArray(n.target)) return n.targetName || (lang === "en" ? `${n.target.length} drivers` : lang === "mr" ? `${n.target.length} ड्रायव्हर` : `${n.target.length} ड्राइवर`);
+    return n.targetName || n.target;
+  };
+  return (
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> {lang === "en" ? "Send Notification" : lang === "mr" ? "सूचना पाठवा" : "सूचना भेजें"}</div>
+      <div className="flex gap-2 mb-3">
+        {["driver", "customer"].map((a) => (
+          <button key={a} onClick={() => { setAudience(a); setTarget("all"); }} className="flex-1 rounded-lg py-3 text-base font-bold"
+            style={{ background: audience === a ? C.navy : C.paper, color: audience === a ? "#fff" : C.inkSoft, border: `1.5px solid ${audience === a ? C.navy : C.line}` }}>
+            {a === "driver" ? (lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर") : (lang === "en" ? "Customers" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
+          </button>
+        ))}
+      </div>
+      <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Send to" : lang === "mr" ? "कोणाला पाठवायचे" : "किसे भेजें"}</label>
+      <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+        <option value="all">{allLabel}</option>
+        {audiencePeople.map((p) => <option key={p.mobile} value={p.mobile}>{p.name}</option>)}
+      </select>
+      <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : lang === "mr" ? "संदेश लिहा..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+      {error && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
+      <button onClick={send} disabled={!message.trim() || sending} className="w-full rounded-lg py-3.5 font-bold text-base mb-4" style={{ background: message.trim() && !sending ? C.marigold : "#E0E0E0", color: message.trim() && !sending ? "#000000" : "#9AA3B0" }}>
+        {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send" : lang === "mr" ? "पाठवा" : "भेजें")}
+      </button>
+      <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Sent Notifications" : lang === "mr" ? "पाठवलेल्या सूचना" : "भेजी गई सूचनाएं"}</div>
+      <div className="space-y-2">
+        {(adminNotifications || []).length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No notifications sent yet." : lang === "mr" ? "अजून कोणतीही सूचना पाठवली गेली नाही." : "अभी कोई सूचना नहीं भेजी गई।"}</p>}
+        {(adminNotifications || []).map((n) => (
+          <div key={n.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold" style={{ color: C.ink }}>
+                <span className="px-1.5 py-0.5 rounded mr-1" style={{ background: n.toRole === "customer" ? C.success : C.navy, color: "#fff", fontSize: 9 }}>
+                  {n.toRole === "customer" ? (lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर") : (lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
+                </span>
+                {notifLabel(n)}
+              </span>
+              <span className="text-[10px] shrink-0" style={{ color: C.inkSoft }}>{formatTime(n.createdAt)}</span>
+            </div>
+            <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>{n.message}</div>
+            <div className="text-[10px] mt-0.5" style={{ color: n.recipientCount > 0 ? C.success : C.safety }}>
+              {n.recipientCount > 0
+                ? (lang === "en" ? `Delivered to ${n.recipientCount} device${n.recipientCount > 1 ? "s" : ""}` : lang === "mr" ? `${n.recipientCount} डिव्हाइसवर पोहोचली` : `${n.recipientCount} डिवाइस पर पहुंची`)
+                : (lang === "en" ? "No device had notifications enabled" : lang === "mr" ? "कोणत्याही डिव्हाइसवर नोटिफिकेशन चालू नव्हते" : "किसी डिवाइस पर नोटिफिकेशन चालू नहीं था")}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, bugs, setBugStatus, addBug, lang }) {
+  // Commission/bonus/min-wallet are edited as a draft and only written to
+  // Firestore on Save, instead of firing a write on every keystroke. Stays
+  // in sync with the live values as long as there's no unsaved edit, so an
+  // external change (e.g. trial mode toggling commission to 0) still shows
+  // up immediately.
+  const [draft, setDraft] = useState({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    if (!dirty) setDraft({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commissionPct, bonusPct, minWallet, latestVersionCode, updateUrl, dirty]);
+  const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
+  const saveSettings = () => {
+    setCommissionPct(draft.commissionPct);
+    setBonusPct(draft.bonusPct);
+    setMinWallet(draft.minWallet);
+    setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
+    setUpdateUrl(draft.updateUrl.trim());
+    setDirty(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+  return (
+    <div>
+    <div className="rounded-xl p-4 shadow-sm mb-5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : lang === "mr" ? "सिस्टम सेटिंग्स" : "सिस्टम सेटिंग्स"}</div>
+
+      <div className="rounded-lg p-3 mb-4" style={{ background: C.success }}>
+        <div className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : lang === "mr" ? "लॉगिनच्या तारखेपासून, नवीन ड्रायव्हर आणि कस्टमरसाठी 30 दिवसांचा ट्रायल मोड आपोआप सुरू होतो" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
+        <div className="text-[11px] font-bold mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : lang === "mr" ? "त्या ड्रायव्हरच्या ट्रायल दरम्यान कोणतेही कमिशन किंवा किमान बॅलन्स लागू होत नाही. ट्रायल संपल्यावर खाली दिलेले दर आपोआप लागू होतील." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
+      </div>
+
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Commission Percentage" : lang === "mr" ? "कमिशन टक्केवारी" : "कमीशन प्रतिशत"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted, once their trial has ended" : lang === "mr" ? "ट्रायल संपल्यानंतर, बिड अ‍ॅक्सेप्ट होताच हे % ड्रायव्हरच्या वॉलेटमधून कापले जाईल" : "ट्रायल खत्म होने के बाद, बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <input type="number" value={draft.commissionPct} onChange={(e) => updateDraft({ commissionPct: Math.max(0, Number(e.target.value) || 0) })}
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+          <span className="text-base font-bold" style={{ color: C.ink }}>%</span>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Bonus Percentage" : lang === "mr" ? "ड्रायव्हर बोनस टक्केवारी" : "ड्राइवर बोनस प्रतिशत"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % out of the commission goes back to the driver's bonus account" : lang === "mr" ? "कमिशनमधून हे % ड्रायव्हरच्या बोनस खात्यात परत जाईल" : "कमीशन में से यह % ड्राइवर के बोनस अकाउंट में वापस जाएगा"}</div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <input type="number" value={draft.bonusPct} onChange={(e) => updateDraft({ bonusPct: Math.max(0, Number(e.target.value) || 0) })}
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+          <span className="text-base font-bold" style={{ color: C.ink }}>%</span>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Minimum Wallet Balance" : lang === "mr" ? "किमान वॉलेट बॅलन्स" : "न्यूनतम वॉलेट बैलेंस"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver must maintain this balance to keep the app active" : lang === "mr" ? "अ‍ॅप अ‍ॅक्टिव्ह ठेवण्यासाठी ड्रायव्हरला हे बॅलन्स ठेवावे लागेल" : "ऐप एक्टिव रखने के लिए ड्राइवर को यह बैलेंस रखना होगा"}</div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-base font-bold" style={{ color: C.ink }}>₹</span>
+          <input type="number" value={draft.minWallet} onChange={(e) => updateDraft({ minWallet: Math.max(0, Number(e.target.value) || 0) })}
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+        </div>
+      </div>
+
+      <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Force Update (Play Store)" : lang === "mr" ? "फोर्स अपडेट (Play Store)" : "फोर्स अपडेट (Play Store)"}</div>
+        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Set this to the versionCode of whatever you just published to the Production track — anyone on an older install gets blocked until they update. Leave blank to turn this off." : lang === "mr" ? "तुम्ही नुकतीच Production track वर पब्लिश केलेल्या versionCode इथे टाका — जुन्या व्हर्जनवरील सर्वांना अपडेट होईपर्यंत ब्लॉक केले जाईल. बंद करण्यासाठी रिकामे ठेवा." : "आपने अभी-अभी Production track पर publish किया हुआ versionCode यहां डालें — पुराने वर्शन वाले सभी को अपडेट होने तक ब्लॉक कर दिया जाएगा। बंद करने के लिए खाली छोड़ें।"}</div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Required versionCode" : lang === "mr" ? "आवश्यक versionCode" : "आवश्यक versionCode"}</div>
+          <input type="number" placeholder={lang === "en" ? "Off" : lang === "mr" ? "बंद" : "बंद"} value={draft.latestVersionCode} onChange={(e) => updateDraft({ latestVersionCode: e.target.value })}
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+        </div>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Play Store link (optional)" : lang === "mr" ? "Play Store लिंक (ऐच्छिक)" : "Play Store लिंक (वैकल्पिक)"}</div>
+        <input type="text" placeholder={PLAY_STORE_URL} value={draft.updateUrl} onChange={(e) => updateDraft({ updateUrl: e.target.value })}
+          className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
+      </div>
+
+      {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
+      <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-3.5 font-bold text-base"
+        style={{ background: dirty ? "#0052CC" : "#E0E0E0", color: dirty ? "#fff" : "#9AA3B0" }}>
+        {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
+      </button>
+    </div>
+    <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />
+    </div>
+  );
+}
+
+function AdminFinance({ tripLog, commissionPct, lang }) {
+  // Commission is deliberately held at 0 here too (see driverRespondBooking)
+  // — fare is a real, fixed, calculated number again, but this report
+  // shouldn't show non-zero "would-be" commission while actual wallet
+  // deductions are still intentionally off; would be misleading otherwise.
+  const activeCommissionPct = 0;
+  const totalCommission = tripLog.filter((t) => t.status !== "Cancelled").reduce((s, t) => s + t.fare * (activeCommissionPct / 100), 0);
+  const downloadReport = () => {
+    const header = "Driver,Route,Fare,Commission,Status\n";
+    const rows = tripLog.map((t) => `${t.driverName},"${t.pickup} to ${t.drop}",${t.fare},${t.status === "Cancelled" ? 0 : Math.round(t.fare * (activeCommissionPct / 100))},${t.status}`).join("\n");
+    const blob = new Blob([header + rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "commission-report.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Reports — Commission & Earnings" : lang === "mr" ? "रिपोर्ट्स — कमिशन आणि कमाई" : "रिपोर्ट्स — कमीशन और कमाई"}</div>
+        <button onClick={downloadReport} disabled={tripLog.length === 0} className="text-sm font-semibold flex items-center gap-1 px-3.5 py-2.5 rounded-lg"
+          style={{ color: tripLog.length ? "#FFFFFF" : C.inkSoft, background: tripLog.length ? C.marigoldDeep : "#E5E5E5" }}>
+          <Download size={12} /> {lang === "en" ? "Download CSV" : lang === "mr" ? "एक्सेल डाउनलोड करा" : "एक्सेल डाउनलोड करें"}
+        </button>
+      </div>
+      <div className="rounded-lg p-3 mb-3" style={{ background: C.success }}>
+        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Total commission so far (${activeCommissionPct}%)` : lang === "mr" ? `आजपर्यंतचे एकूण कमिशन (${activeCommissionPct}%)` : `आज का कुल कमीशन (${activeCommissionPct}%)`}</div>
+        <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(totalCommission)}</div>
+      </div>
+      {tripLog.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid has been accepted yet." : lang === "mr" ? "आज अजून कोणतीही बिड अ‍ॅक्सेप्ट झाली नाही." : "आज अभी तक कोई बिड एक्सेप्ट नहीं हुई।"}</p> : (
+        <table className="w-full text-xs">
+          <thead><tr style={{ color: C.inkSoft }}>
+            <th className="text-left font-semibold pb-1">{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</th>
+            <th className="text-left font-semibold pb-1">{lang === "en" ? "Route" : lang === "mr" ? "रूट" : "रूट"}</th>
+            <th className="text-right font-semibold pb-1">{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}</th>
+            <th className="text-right font-semibold pb-1">{lang === "en" ? "Commission" : lang === "mr" ? "कमिशन" : "कमीशन"}</th>
+          </tr></thead>
+          <tbody>
+            {tripLog.map((t) => (
+              <tr key={t.id} style={{ borderTop: `1px solid ${C.line}` }}>
+                <td className="py-1.5" style={{ color: C.ink }}>{t.driverName}</td>
+                <td className="py-1.5" style={{ color: C.inkSoft }}>{t.pickup} → {t.drop}</td>
+                <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: C.ink }}>{fmt(t.fare)}</td>
+                <td className="py-1.5 text-right" style={{ fontFamily: monoFont, color: t.status === "Cancelled" ? C.safety : C.success }}>
+                  {t.status === "Cancelled" ? (lang === "en" ? "Cancelled (refunded)" : lang === "mr" ? "रद्द (परत)" : "रद्द (वापस)") : fmt(t.fare * (activeCommissionPct / 100))}
+                </td>
+              </tr>
+            ))}
+
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// Admin's private expense tracker — for keeping receipts/bills organized
+// so they can be handed to a CA at tax time (server bills, ads, fuel,
+// office costs, etc.). Entirely separate from driver commission/earnings,
+// which already live under the Reports tab.
+function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCategory, lang }) {
+  const categories = [...DEFAULT_EXPENSE_CATEGORIES, ...Object.values(expenseCategories || {}).filter((c) => !DEFAULT_EXPENSE_CATEGORIES.some((d) => d.hi === c.hi))];
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const blankForm = { date: todayISO(), category: categories[0]?.hi || "", amount: "", note: "", photo: null };
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState(blankForm);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const now = new Date();
+  const totalAllTime = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const totalThisMonth = expenses.filter((e) => {
+    const d = e.date ? new Date(e.date) : null;
+    return d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).reduce((s, e) => s + (e.amount || 0), 0);
+  const receiptsCount = expenses.filter((e) => e.photoUrl).length;
+
+  const resetForm = () => { setForm({ ...blankForm, category: categories[0]?.hi || "" }); setAddingCategory(false); setNewCategoryName(""); setSaveError(""); };
+  const openAdd = (prefill = {}) => { resetForm(); setForm((f) => ({ ...f, ...prefill })); setShowAdd(true); };
+
+  const submit = async () => {
+    if (!form.amount || Number(form.amount) <= 0) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const id = genId("EXP");
+      let photoUrl = null;
+      if (form.photo) {
+        const uploaded = await uploadPhoto(form.photo, `expenses/${id}.jpg`);
+        photoUrl = uploaded.url;
+      }
+      await addExpense({ id, date: form.date, category: form.category, amount: Number(form.amount), note: form.note.trim(), photoUrl });
+      setShowAdd(false);
+      resetForm();
+    } catch (e) {
+      console.error(e);
+      setSaveError(lang === "en" ? "Couldn't save — please try again." : lang === "mr" ? "सेव्ह होऊ शकले नाही — पुन्हा प्रयत्न करा." : "सेव नहीं हो सका — दोबारा कोशिश करें।");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const downloadReport = () => {
+    const header = "Date,Category,Amount,Description,Photo Attached\n";
+    const rows = [...expenses].sort((a, b) => (a.date < b.date ? -1 : 1))
+      .map((e) => `${e.date},"${e.category}",${e.amount},"${(e.note || "").replace(/"/g, "'")}",${e.photoUrl ? "Yes" : "No"}`).join("\n");
+    const blob = new Blob([header + rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "expense-report.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const recent = [...expenses].sort((a, b) => (a.date < b.date ? 1 : -1));
+  // Expense History below shows every month ever recorded, but the total
+  // tile above only counts the current month — without some marker, the two
+  // numbers look inconsistent even though each is correct for what it says.
+  // A month divider (recent is already sorted newest-first, so same-month
+  // entries are always consecutive) makes the boundary visible instead.
+  const currentMonthKey = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+  const monthLabel = (key) => {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { month: "long", year: "numeric" });
+  };
+
+  return (
+    <div>
+      <div className="text-xs font-bold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Expense Tools:" : lang === "mr" ? "खर्चाचे टूल:" : "खर्चे के टूल:"}</div>
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <button onClick={() => openAdd()} className="rounded-xl py-5 flex flex-col items-center gap-1.5" style={{ background: C.marigold }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Plus size={18} color={C.navy} /></div>
+          <span className="text-[11px] font-bold" style={{ color: "#000000" }}>{lang === "en" ? "New Expense" : lang === "mr" ? "नवीन खर्च" : "नया खर्च"}</span>
+        </button>
+        <PhotoPicker label={lang === "en" ? "Attach a bill photo" : lang === "mr" ? "बिलाचा फोटो जोडा" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => openAdd({ photo: file })}>
+          <div className="rounded-xl py-4 flex flex-col items-center gap-1.5 cursor-pointer" style={{ background: C.safety }}>
+            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Camera size={16} color={C.safety} /></div>
+            <span className="text-[11px] font-bold text-center" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Camera / Bill" : lang === "mr" ? "कॅमेरा / बिल" : "कैमरा / बिल"}</span>
+          </div>
+        </PhotoPicker>
+        <button onClick={downloadReport} disabled={expenses.length === 0} className="rounded-xl py-5 flex flex-col items-center gap-1.5" style={{ background: C.success, opacity: expenses.length ? 1 : 0.5 }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#FFFFFF" }}><Download size={16} color={C.success} /></div>
+          <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>Excel {lang === "en" ? "Report" : lang === "mr" ? "रिपोर्ट" : "रिपोर्ट"}</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <StatTile label={lang === "en" ? "Total expense (all time)" : lang === "mr" ? "एकूण खर्च (सर्व वेळ)" : "कुल खर्च (सभी समय)"} value={fmt(totalAllTime)} color={C.ink} />
+        <StatTile label={lang === "en" ? "Monthly expense" : lang === "mr" ? "मासिक खर्च" : "मासिक खर्च"} value={fmt(totalThisMonth)} color={C.marigoldDeep} />
+        <div className="col-span-2">
+          <StatTile label={lang === "en" ? "Bills" : lang === "mr" ? "बिले" : "बिल"} value={`${receiptsCount} ${lang === "en" ? "bills" : lang === "mr" ? "बिल" : "बिल"}`} color={C.success} />
+        </div>
+      </div>
+
+      <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><ClipboardList size={16} /> {lang === "en" ? "Expense History" : lang === "mr" ? "खर्चांचा इतिहास" : "खर्चों का इतिहास"}</div>
+        {recent.length === 0 ? (
+          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No expenses recorded yet." : lang === "mr" ? "अजून कोणताही खर्च नोंदवला गेला नाही." : "अभी तक कोई खर्च दर्ज नहीं हुआ।"}</p>
+        ) : (
+          <div className="space-y-2">
+            {(() => {
+              let lastMonthKey = null;
+              return recent.map((e) => {
+                const monthKey = (e.date || "").slice(0, 7);
+                const showDivider = monthKey !== lastMonthKey;
+                lastMonthKey = monthKey;
+                const isCurrentMonth = monthKey === currentMonthKey;
+                const cat = categories.find((c) => c.hi === e.category || c.en === e.category);
+                return (
+                  <React.Fragment key={e.id}>
+                    {showDivider && (
+                      <div className="text-[11px] font-bold pt-1.5 pb-0.5" style={{ color: isCurrentMonth ? C.marigoldDeep : C.inkSoft }}>
+                        {monthLabel(monthKey)}
+                        {isCurrentMonth ? (lang === "en" ? " — counted in the total above" : lang === "mr" ? " — वरील एकूणमध्ये समाविष्ट" : " — ऊपर के कुल में शामिल") : ""}
+                      </div>
+                    )}
+                    <div className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{e.note || (cat ? (lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi) : e.category)}</div>
+                          <div className="text-[10px]" style={{ color: C.inkSoft }}>{e.date} · {cat ? `${cat.icon} ${lang === "en" ? cat.en : lang === "mr" ? (cat.mr || cat.hi) : cat.hi}` : e.category}</div>
+                        </div>
+                        <div className="text-sm font-bold shrink-0" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(e.amount)}</div>
+                      </div>
+                      {e.photoUrl && (
+                        <a href={e.photoUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold mt-1.5 inline-flex items-center gap-1" style={{ color: C.success }}>
+                          <CheckCircle2 size={11} /> {lang === "en" ? "Photo secured" : lang === "mr" ? "फोटो सुरक्षित" : "फोटो सुरक्षित"}
+                        </a>
+                      )}
+                    </div>
+                  </React.Fragment>
+                );
+              });
+            })()}
+          </div>
+        )}
+      </div>
+
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setShowAdd(false)}>
+          <div className="w-full max-w-sm rounded-t-2xl max-h-[85vh] overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{ background: C.navy }}>
+              <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: "#fff" }}><ClipboardList size={15} /> {lang === "en" ? "Add New Expense" : lang === "mr" ? "नवीन खर्च नोंदवा" : "नया खर्च दर्ज करें"}</h3>
+              <button onClick={() => setShowAdd(false)} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+            </div>
+            <div className="p-5 space-y-3">
+              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+
+              <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Choose expense category:" : lang === "mr" ? "खर्चाची कॅटेगरी निवडा:" : "खर्च की कैटेगरी चुनें:"}</div>
+              <div className="space-y-1.5">
+                {categories.map((c) => {
+                  const active = form.category === c.hi;
+                  return (
+                    <button key={c.key} type="button" onClick={() => setForm({ ...form, category: c.hi })}
+                      className="w-full rounded-lg px-4 py-3.5 flex items-center justify-between"
+                      style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}` }}>
+                      <span className="text-xs font-bold flex items-center gap-2" style={{ color: active ? "#FFFFFF" : C.ink }}>
+                        <span>{c.icon}</span> {lang === "en" ? c.en : lang === "mr" ? (c.mr || c.hi) : c.hi}
+                      </span>
+                      <span className="w-4 h-4 rounded-full shrink-0" style={{ border: `2px solid ${active ? C.marigoldDeep : C.line}`, background: active ? C.marigoldDeep : "transparent" }} />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {addingCategory ? (
+                <div className="flex gap-2">
+                  <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder={lang === "en" ? "New category name" : lang === "mr" ? "नवीन कॅटेगरीचे नाव" : "नई कैटेगरी का नाम"}
+                    className="flex-1 min-w-0 rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+                  <button type="button" onClick={() => {
+                    const name = newCategoryName.trim();
+                    if (!name) return;
+                    addExpenseCategory(name);
+                    setForm((f) => ({ ...f, category: name }));
+                    setNewCategoryName(""); setAddingCategory(false);
+                  }} className="px-4 rounded-lg text-base font-bold text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Add" : lang === "mr" ? "जोडा" : "जोड़ें"}</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setAddingCategory(true)} className="w-full rounded-lg py-3.5 text-base font-bold" style={{ border: `2px dashed ${C.marigold}`, color: C.marigoldDeep }}>
+                  + {lang === "en" ? "Add Category" : lang === "mr" ? "नवीन कॅटेगरी जोडा (Add Category)" : "नयी कैटेगरी जोड़ें (Add Category)"}
+                </button>
+              )}
+
+              <div>
+                <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>💰 {lang === "en" ? "Amount (₹)" : lang === "mr" ? "रक्कम (₹)" : "रकम (₹)"}</label>
+                <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder={lang === "en" ? "e.g. 2500" : lang === "mr" ? "उदा: 2500" : "उदा: 2500"}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>📝 {lang === "en" ? "Description (note)" : lang === "mr" ? "तपशील (नोंद लिहा)" : "विवरण (नोट लिखें)"}</label>
+                <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder={lang === "en" ? "e.g. Firebase domain & server charge" : lang === "mr" ? "उदा: फायरबेस डोमेन आणि सर्व्हर चार्ज" : "उदा: फायरबेस डोमेन और सर्वर चार्ज"}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+              </div>
+
+              <PhotoPicker label={lang === "en" ? "Attach a bill photo" : lang === "mr" ? "बिलाचा फोटो जोडा" : "बिल की फोटो जोड़ें"} lang={lang} onSelect={(file) => setForm((f) => ({ ...f, photo: file }))}>
+                <div className="w-full rounded-lg py-2.5 text-xs font-bold text-center cursor-pointer" style={{ background: form.photo ? C.success : C.bg, color: form.photo ? "#FFFFFF" : C.inkSoft, border: `1.5px dashed ${form.photo ? C.success : C.line}` }}>
+                  {form.photo ? `✓ ${lang === "en" ? "Photo attached" : lang === "mr" ? "फोटो जोडला गेला" : "फोटो जोड़ी गई"}` : `📷 ${lang === "en" ? "Camera Photo / Choose Gallery" : lang === "mr" ? "कॅमेरा फोटो / गॅलरी निवडा" : "कैमरा फोटो / गैलरी चुनिए"}`}
+                </div>
+              </PhotoPicker>
+
+              {saveError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{saveError}</div>}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowAdd(false)} className="flex-1 rounded-lg py-4 text-base font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.inkSoft }}>{lang === "en" ? "Cancel" : lang === "mr" ? "रद्द" : "रद्द"}</button>
+                <button onClick={submit} disabled={!form.amount || Number(form.amount) <= 0 || saving} className="flex-1 rounded-lg py-4 text-base font-bold text-white flex items-center justify-center gap-1.5"
+                  style={{ background: (!form.amount || Number(form.amount) <= 0 || saving) ? C.line : C.success }}>
+                  <CheckCircle2 size={15} /> {saving ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save Securely" : lang === "mr" ? "सुरक्षित सेव्ह करा" : "सुरक्षित सेव करें")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+  const [tab, setTab] = useState("fleet");
+  // "kyc" is deliberately not in this list -- KYC review now lives inside
+  // the Live Dashboard's "New Registrations" tile (see AdminFleet's
+  // detailView === "newRegistrations", Driver tab) instead of its own
+  // top-level tab or a separate "Pending KYC approvals" tile.
+  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren], ["callLogs", "कॉल लॉग्स", PhoneCall]];
+  return (
+    <div className="p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <LayoutDashboard size={18} color={C.marigoldDeep} />
+          <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Control Panel" : lang === "mr" ? "अ‍ॅडमिन कंट्रोल पॅनल" : "एडमिन कंट्रोल पैनल"}</h2>
+        </div>
+      </div>
+      {tab === "fleet" && <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : lang === "mr" ? "अ‍ॅडमिन" : "एडमिन"} 👋</div>}
+      <div className="flex gap-2 mb-5 overflow-x-auto">
+        {tabs.map(([k, label, Icon]) => (
+          <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-4 py-3 rounded-full text-base font-black whitespace-nowrap shadow-sm"
+            style={{ background: tab === k ? C.navy : C.marigold, color: tab === k ? "#fff" : "#000000", border: `1.5px solid ${tab === k ? C.navy : C.marigoldDeep}` }}>
+            <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : lang === "mr" ? (MR_LABELS[k] || label) : label}
+          </button>
+        ))}
+      </div>
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
+      {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
+      {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
+      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
+      {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
+      {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} lang={lang} />}
+      {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
+      {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
+    </div>
+  );
+}
+
+// ---------------- Terms ----------------
+function TermsModal({ open, onClose, commissionPct, bonusPct, lang, role }) {
+  if (!open) return null;
+  // Cancellation and Vehicle Documents & Legal Compliance are driver-only
+  // concerns (commission/advance-fare holdback, driving license/RC/KYC) —
+  // shown to drivers, skipped for customers. Numbering is applied after
+  // filtering, so the customer's shorter list still reads as a clean 1..N
+  // instead of jumping straight from 2 to 5.
+  const allSections = lang === "en" ? [
+    ["Load Posting", "Once a load is posted, the pickup-drop details cannot be changed. The final fare will be whatever was agreed in the driver's Accepted Bid.", false],
+    ["Bidding System", "The customer is free to accept any one bid among multiple drivers. Once a bid is accepted, it is treated as final.", false],
+    ["Cancellation", "If a trip is cancelled by either side after a driver is assigned, the deducted commission/advance fare is not refunded instantly — it is held by admin and automatically adjusted against the driver's next accepted trip, so the driver is not out of pocket. Repeated cancellations may lead to temporary account suspension.", true],
+    ["Vehicle Documents & Legal Compliance", "The driver is required to submit a valid driving license, vehicle RC and KYC documents at signup — no load will be shown until admin approves this verification. Beyond that submission, keeping all vehicle documents (RC, insurance, fitness certificate, national/state permit, PUC) and the driver's license valid, accurate, and up to date at all times is the complete and sole responsibility of the Vehicle Owner and Driver — not Apna Transport. If any document is found incomplete, incorrect, expired, or invalid during any trip or inspection, Apna Transport / the company bears no liability whatsoever. Any fine, challan, or legal action imposed by the RTO, traffic police, or any government authority — including full responsibility for payment or settlement — rests solely with the Driver and Vehicle Owner.", true],
+    ["Payment", "Apna Transport does not currently charge any commission on trips. The agreed fare is paid by the customer directly to the driver (cash, UPI, or any digital mode) after delivery — the app does not collect any payment on your behalf.", false],
+    ["Responsibility for Goods & Loading Costs", "It is the customer's responsibility to ensure the safety and correct information (material type and weight) of the goods, and to bear the full cost of loading/unloading labour (hamali) — this is not the driver's expense. The company is not responsible for any loss, damage, or delay of goods — this responsibility lies with the concerned driver/transporter.", false],
+    ["Platform's Role — Intermediary Only (Most Important)",
+      "Apna Transport is a technology platform that only serves as a medium to connect the customer (load owner) and independent drivers/transporters. The company/admin is not itself a party to any transport of goods, nor a transport service provider. The platform does not currently charge any fee or commission for connecting customers and drivers; this may change in the future with prior notice to users. Every deal between customer and driver (fare, timing, terms) is entirely a private agreement between the two. The company, admin, or platform will not be liable in any way for theft, damage, delay, accident, wrong payment, dispute, or any direct/indirect loss related to the goods. Full responsibility for any such matter rests with the concerned customer and driver themselves.", false],
+    ["Disputes and Jurisdiction", "In case of any complaint or dispute, contact admin via the SOS section — admin can only help as a facilitator, this does not mean admin is responsible for the dispute. In case of any legal dispute, jurisdiction will lie only with Pimpri-Chinchwad / Pune courts.", false],
+    ["Overload Charges", "Apna Transport is not responsible for any overload fine, challan, or penalty charged by the RTO, traffic police, or any other authority to either the customer or the driver. Ensuring the vehicle is loaded within its permitted capacity is the joint responsibility of the customer (who declares the weight) and the driver/vehicle owner (who accepts the load) — any overload-related charge or legal action must be settled directly between them.", false],
+  ] : lang === "mr" ? [
+    ["लोड पोस्टिंग", "लोड पोस्ट केल्यानंतर पिकअप-ड्रॉपची माहिती बदलली जाऊ शकत नाही. अंतिम भाडे तेच असेल जे ड्रायव्हरच्या स्वीकृत बोलीमध्ये (Accepted Bid) ठरले असेल.", false],
+    ["बिडिंग सिस्टम", "ग्राहक अनेक ड्रायव्हरांपैकी कोणतीही एक बोली स्वीकारण्यास मोकळा आहे. एकदा बोली स्वीकारल्यानंतर ती अंतिम मानली जाईल.", false],
+    ["रद्दीकरण", "बुकिंग फायनल झाल्यानंतर जर कोणत्याही बाजूने ट्रिप रद्द केली गेली, तर कापलेले कमिशन/अ‍ॅडव्हान्स भाडे लगेच परत केले जात नाही — ते अ‍ॅडमिनकडे होल्ड राहते आणि ड्रायव्हरच्या पुढील स्वीकृत ट्रिपच्या कमिशनमध्ये आपोआप अ‍ॅडजस्ट होते, जेणेकरून ड्रायव्हरचे नुकसान होणार नाही. वारंवार रद्द केल्यास खाते तात्पुरते बंद केले जाऊ शकते.", true],
+    ["गाडीचे कागदपत्र व कायदेशीर पालन", "ड्रायव्हरने साइनअपच्या वेळी वैध ड्रायव्हिंग लायसन्स, गाडीचे RC आणि KYC कागदपत्रे जमा करणे अनिवार्य आहे — अ‍ॅडमिन अप्रूव्हलपर्यंत कोणताही लोड दाखवला जाणार नाही. याशिवाय, गाडीची सर्व कागदपत्रे (RC, इन्शुरन्स, फिटनेस सर्टिफिकेट, नॅशनल/स्टेट परमिट, PUC) आणि ड्रायव्हरचा लायसन्स नेहमी वैध, बरोबर आणि अद्ययावत ठेवण्याची संपूर्ण व एकमेव जबाबदारी गाडी मालक आणि ड्रायव्हरची असेल — अपना ट्रान्सपोर्टची नाही. जर कोणत्याही ट्रिप किंवा तपासणी दरम्यान एखादे कागदपत्र अपूर्ण, चुकीचे, एक्सपायर्ड किंवा अवैध आढळले, तर अपना ट्रान्सपोर्ट / कंपनी यासाठी कोणत्याही प्रकारे जबाबदार राहणार नाही. RTO, ट्रॅफिक पोलीस किंवा कोणत्याही सरकारी प्राधिकरणाने लावलेला कोणताही दंड, चलन किंवा कायदेशीर कारवाई — पेमेंट किंवा निपटाऱ्याच्या संपूर्ण जबाबदारीसह — पूर्णपणे ड्रायव्हर आणि गाडी मालकाची असेल.", true],
+    ["पेमेंट", "अपना ट्रान्सपोर्ट सध्या कोणत्याही ट्रिपवर कोणतेही कमिशन घेत नाही. निश्चित भाडे ग्राहकाकडून डिलिव्हरीनंतर थेट ड्रायव्हरला (रोख, UPI किंवा कोणत्याही डिजिटल माध्यमाने) दिले जाते — अ‍ॅप तुमच्या वतीने कोणतेही पेमेंट गोळा करत नाही.", false],
+    ["सामानाची जबाबदारी व लोडिंग खर्च", "सामानाची सुरक्षा आणि बरोबर माहिती (मटेरियल टाइप व वजन) देणे, तसेच लोडिंग-अनलोडिंगच्या हमालीचा संपूर्ण खर्च उचलणे ही ग्राहकाची जबाबदारी आहे — हा ड्रायव्हरचा खर्च नाही. कोणत्याही प्रकारच्या मालाचे नुकसान, तुटफूट किंवा उशीर यासाठी कंपनी जबाबदार राहणार नाही — ही जबाबदारी संबंधित ड्रायव्हर/ट्रान्सपोर्टरची असेल.", false],
+    ["प्लॅटफॉर्मची भूमिका — फक्त मध्यस्थ (सर्वात महत्त्वाचे)",
+      "अपना ट्रान्सपोर्ट हे एक टेक्नॉलॉजी प्लॅटफॉर्म आहे जे फक्त ग्राहक (लोड मालक) आणि स्वतंत्र ड्रायव्हर/ट्रान्सपोर्टर यांना एकमेकांशी जोडण्याचे माध्यम आहे. कंपनी/अ‍ॅडमिन कोणत्याही मालाच्या वाहतुकीत स्वतः पक्षकार (party) नाही आणि ट्रान्सपोर्ट सेवा पुरवठादारही नाही. प्लॅटफॉर्म सध्या ग्राहक आणि ड्रायव्हरला जोडण्यासाठी कोणतेही शुल्क किंवा कमिशन घेत नाही; भविष्यात यात बदल झाल्यास वापरकर्त्यांना आधीच सूचित केले जाईल. ग्राहक आणि ड्रायव्हर यांच्यात झालेला प्रत्येक व्यवहार (भाडे, वेळ, अटी) पूर्णपणे त्या दोघांमधील खासगी करार आहे. मालाची चोरी, नुकसान, उशीर, अपघात, चुकीचे पेमेंट, वाद, किंवा कोणत्याही प्रकारच्या प्रत्यक्ष/अप्रत्यक्ष नुकसानीसाठी कंपनी, अ‍ॅडमिन किंवा प्लॅटफॉर्म कोणत्याही प्रकारे जबाबदार (liable) राहणार नाही. अशा कोणत्याही प्रकरणाची संपूर्ण जबाबदारी संबंधित ग्राहक आणि ड्रायव्हरची स्वतःची असेल.", false],
+    ["वाद आणि क्षेत्राधिकार", "कोणत्याही तक्रारीच्या किंवा वादाच्या स्थितीत SOS सेक्शनद्वारे अ‍ॅडमिनशी संपर्क करा — अ‍ॅडमिन फक्त सहाय्य (facilitation) म्हणून मदत करू शकतो, याचा अर्थ असा नाही की वादाची जबाबदारी अ‍ॅडमिनची आहे. कोणत्याही कायदेशीर वादाच्या स्थितीत क्षेत्राधिकार (Jurisdiction) फक्त पिंपरी-चिंचवड / पुणे कोर्टाचा राहील.", false],
+    ["ओव्हरलोड चार्ज", "RTO, ट्रॅफिक पोलीस किंवा इतर कोणत्याही प्राधिकरणाने ग्राहक किंवा ड्रायव्हरवर लावलेल्या कोणत्याही ओव्हरलोड दंड, चलन किंवा पेनल्टीसाठी अपना ट्रान्सपोर्ट जबाबदार नाही. गाडी तिच्या निश्चित क्षमतेच्या आत लोड करणे सुनिश्चित करणे ही ग्राहक (जो वजन सांगतो) आणि ड्रायव्हर/गाडी मालक (जो लोड स्वीकारतो) — दोघांची संयुक्त जबाबदारी आहे. ओव्हरलोडशी संबंधित कोणताही चार्ज किंवा कायदेशीर कारवाई दोघांमध्ये थेट निपटवली गेली पाहिजे.", false],
+  ] : [
+    ["लोड पोस्टिंग", "लोड पोस्ट करने के बाद पिकअप-ड्रॉप की जानकारी बदली नहीं जा सकती। अंतिम भाड़ा वही होगा जो ड्राइवर की स्वीकृत बोली (Accepted Bid) में तय हुआ हो।", false],
+    ["बिडिंग सिस्टम", "ग्राहक कई ड्राइवरों में से किसी भी एक बोली को स्वीकार करने के लिए स्वतंत्र है। एक बार बोली स्वीकार होने के बाद वह अंतिम मानी जाएगी।", false],
+    ["रद्दीकरण", "बुकिंग फाइनल होने के बाद अगर किसी भी तरफ से ट्रिप रद्द की जाती है, तो कटा हुआ कमीशन/एडवांस भाड़ा तुरंत वापस नहीं किया जाता — यह एडमिन के पास होल्ड रहता है और ड्राइवर की अगली स्वीकृत ट्रिप के कमीशन में अपने आप एडजस्ट हो जाता है, ताकि ड्राइवर को नुकसान न हो। बार-बार रद्द करने पर खाता अस्थायी रूप से बंद किया जा सकता है।", true],
+    ["गाड़ी के दस्तावेज़ व कानूनी अनुपालन", "ड्राइवर को साइनअप के समय वैध ड्राइविंग लाइसेंस, गाड़ी की RC और KYC दस्तावेज़ जमा करना अनिवार्य है — एडमिन अप्रूवल तक कोई भी लोड नहीं दिखाया जाएगा। इसके अलावा, गाड़ी के सभी दस्तावेज़ों (RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, नेशनल/स्टेट परमिट, PUC) और ड्राइवर के लाइसेंस को हर समय वैध, सही और अपडेट रखने की पूरी और एकमात्र जिम्मेदारी गाड़ी मालिक और ड्राइवर की होगी — अपना ट्रांसपोर्ट की नहीं। यदि किसी भी ट्रिप या जांच के दौरान कोई दस्तावेज़ अधूरा, गलत, एक्सपायर्ड या अमान्य पाया जाता है, तो अपना ट्रांसपोर्ट / कंपनी इसके लिए किसी भी प्रकार से उत्तरदायी नहीं होगी। RTO, ट्रैफिक पुलिस या किसी भी सरकारी प्राधिकरण द्वारा लगाया गया कोई भी जुर्माना, चालान या कानूनी कार्रवाई — भुगतान या निपटान की पूरी जिम्मेदारी सहित — पूरी तरह ड्राइवर और गाड़ी मालिक की होगी।", true],
+    ["भुगतान", "अपना ट्रांसपोर्ट फिलहाल किसी भी ट्रिप पर कोई कमीशन नहीं लेता। तय भाड़ा ग्राहक द्वारा डिलीवरी के बाद सीधे ड्राइवर को (नकद, UPI या किसी भी डिजिटल माध्यम से) दिया जाता है — ऐप आपकी ओर से कोई भुगतान कलेक्ट नहीं करता।", false],
+    ["सामान की जिम्मेदारी व लोडिंग खर्च", "सामान की सुरक्षा और सही जानकारी (मटेरियल टाइप व वजन) देना, साथ ही लोडिंग-अनलोडिंग की हमाली का पूरा खर्च उठाना ग्राहक की जिम्मेदारी है — यह ड्राइवर का खर्च नहीं है। किसी भी प्रकार के माल के नुकसान, टूट-फूट या देरी के लिए कंपनी जिम्मेदार नहीं होगी — यह जिम्मेदारी संबंधित ड्राइवर/ट्रांसपोर्टर की होगी।", false],
+    ["प्लेटफ़ॉर्म की भूमिका — केवल मध्यस्थ (सबसे ज़रूरी)",
+      "अपना ट्रांसपोर्ट एक टेक्नोलॉजी प्लेटफ़ॉर्म है जो सिर्फ ग्राहक (लोड मालिक) और स्वतंत्र ड्राइवर/ट्रांसपोर्टर को आपस में जोड़ने का माध्यम है। कंपनी/एडमिन किसी भी माल की ढुलाई में स्वयं पक्षकार (party) नहीं है और न ही ट्रांसपोर्ट सेवा प्रदाता है। प्लेटफ़ॉर्म फिलहाल ग्राहक और ड्राइवर को जोड़ने के लिए कोई शुल्क या कमीशन नहीं लेता; भविष्य में इसमें बदलाव होने पर उपयोगकर्ताओं को पहले से सूचित किया जाएगा। ग्राहक और ड्राइवर के बीच हुआ हर सौदा (भाड़ा, समय, शर्तें) पूरी तरह उन दोनों के बीच का निजी अनुबंध है। माल की चोरी, नुकसान, देरी, दुर्घटना, गलत भुगतान, विवाद, या किसी भी प्रकार के प्रत्यक्ष/अप्रत्यक्ष नुकसान के लिए कंपनी, एडमिन या प्लेटफ़ॉर्म किसी भी रूप में उत्तरदायी (liable) नहीं होगा। ऐसे किसी भी मामले की पूरी जिम्मेदारी संबंधित ग्राहक और ड्राइवर की खुद की होगी।", false],
+    ["विवाद और क्षेत्राधिकार", "किसी भी शिकायत या विवाद की स्थिति में SOS सेक्शन से एडमिन से संपर्क करें — एडमिन केवल सहायता (facilitation) के तौर पर मदद कर सकता है, इसका मतलब यह नहीं कि विवाद की जिम्मेदारी एडमिन की है। किसी भी कानूनी विवाद की स्थिति में क्षेत्राधिकार (Jurisdiction) केवल पिंपरी-चिंचवड़ / पुणे कोर्ट का रहेगा।", false],
+    ["ओवरलोड चार्ज", "RTO, ट्रैफिक पुलिस या किसी भी अन्य प्राधिकरण द्वारा ग्राहक या ड्राइवर पर लगाया गया कोई भी ओवरलोड जुर्माना, चालान या पेनल्टी के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं है। गाड़ी को उसकी तय क्षमता के भीतर लोड करना सुनिश्चित करना ग्राहक (जो वजन बताता है) और ड्राइवर/गाड़ी मालिक (जो लोड स्वीकार करता है) — दोनों की साझा जिम्मेदारी है। ओवरलोड से जुड़ा कोई भी चार्ज या कानूनी कार्रवाई दोनों के बीच सीधे निपटाई जानी चाहिए।", false],
+  ];
+  const sections = allSections
+    .filter(([, , driverOnly]) => role !== "customer" || !driverOnly)
+    .map(([title, text], i) => [`${i + 1}. ${title}`, text]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Terms & Conditions" : lang === "mr" ? "नियम व अटी (Terms & Conditions)" : "नियम व शर्तें (Terms & Conditions)"}</h3>
+          <button onClick={onClose} className="text-base font-bold px-3 py-2 rounded" style={{ color: C.inkSoft }}>✕</button>
+        </div>
+        <div className="space-y-3">
+          {sections.map(([title, text]) => (
+            <div key={title}>
+              <div className="text-xs font-bold mb-0.5" style={{ color: C.marigoldDeep }}>{title}</div>
+              <p className="text-xs leading-relaxed" style={{ color: C.inkSoft }}>{text}</p>
+            </div>
+          ))}
+        </div>
+        <button onClick={onClose} className="w-full rounded-lg py-3.5 font-bold text-base mt-4" style={{ background: C.marigold, color: "#000000" }}>{lang === "en" ? "Got it" : lang === "mr" ? "समजले" : "समझ गया"}</button>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// ROOT APP
+// =====================================================================
+export default function App() {
+  // Persisted so the app remembers the user's role choice and data across reloads —
+  // real re-auth (OTP/password) still runs each time via the *Auth verified flags.
+  // This per-device stuff stays in localStorage; everything shared between
+  // testers (bookings, bids, driver profiles, admin settings...) now lives in
+  // Firestore — see firestoreStore.js.
+  const [app, setApp] = usePersistedState("sarthi_app", "customer");
+  const [role, setRole] = usePersistedState("sarthi_role", null);
+  // Every Firestore/Storage read or write below goes through whichever
+  // role's own authenticated client is "active" (see setActiveRole in
+  // firebaseClient.js) — this has to run before any other effect in this
+  // component that touches Firestore, so it's declared first.
+  useEffect(() => { setActiveRole(role); }, [role]);
+  // Primes the shared Web Audio context (see getAudioCtx/unlockAudioContext)
+  // from the very first real tap anywhere in the app -- browsers/WebViews
+  // only allow an AudioContext to actually produce sound once it's been
+  // resumed from inside a genuine user gesture at least once; every beep
+  // this app plays afterward (driver's repeating Accept/Reject alarm,
+  // load-alert chime) is triggered by a Firestore snapshot or a
+  // setInterval, neither of which counts, so without this the very first
+  // beep of a session could otherwise silently never play.
+  useEffect(() => {
+    const unlock = () => { unlockAudioContext(); document.removeEventListener("pointerdown", unlock); document.removeEventListener("touchstart", unlock); document.removeEventListener("click", unlock); };
+    document.addEventListener("pointerdown", unlock, { once: true });
+    document.addEventListener("touchstart", unlock, { once: true });
+    document.addEventListener("click", unlock, { once: true });
+    return () => { document.removeEventListener("pointerdown", unlock); document.removeEventListener("touchstart", unlock); document.removeEventListener("click", unlock); };
+  }, []);
+  // Admin Login is only revealed when the page is opened with this secret
+  // link (e.g. https://yourapp/?admin=1) — regular Customer/Driver users
+  // never see it on the plain URL.
+  const adminEntry = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("admin") === "1";
+  // The standalone Driver KYC portal (e.g. https://yourapp/?driverKyc=1) —
+  // linked from Admin's KYC desk "Send" button — is a self-contained route
+  // that bypasses role-select/login entirely, see the render gate below
+  // and DriverKycPortal.
+  const driverKycPortal = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("driverKyc") === "1";
+  // Not persisted like customer/driver auth (those are real Firebase phone
+  // OTP sessions) — admin is gated by a plain password, so every fresh page
+  // load must go through AdminLogin again rather than silently staying
+  // signed in and jumping straight to the Customer/Driver preview toggle.
+  // Tracks real connectivity (not just navigator.onLine, which only means
+  // "some network interface is up" — WiFi connected to a router with no
+  // actual internet, or certain mobile data states, still reports true)
+  // so the app can reliably block behind a "you're offline" screen. Backed
+  // by an actual network probe: a tiny same-origin fetch with a timeout,
+  // re-checked periodically and whenever the browser's own online/offline
+  // events fire or the tab becomes visible again.
+  // connectivityChecked stays false until the very first probe resolves, so
+  // the app never briefly flashes real content (or the offline screen)
+  // based on the unverified initial guess before we actually know.
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [connectivityChecked, setConnectivityChecked] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    // A single failed probe isn't trusted on its own anymore -- see below.
+    let consecutiveFailures = 0;
+    const check = async () => {
+      // A real browser-reported offline event (the actual network
+      // interface going down) is trustworthy immediately; no reason to
+      // debounce that one.
+      if (!navigator.onLine) { consecutiveFailures = 0; if (!cancelled) { setIsOnline(false); setConnectivityChecked(true); } return; }
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        await fetch(`/favicon.svg?_=${Date.now()}`, { method: "GET", cache: "no-store", signal: controller.signal });
+        clearTimeout(timeout);
+        consecutiveFailures = 0;
+        if (!cancelled) setIsOnline(true);
+      } catch {
+        // A real connection is up (navigator.onLine is true) but this one
+        // small probe still failed or timed out -- on its own that's just
+        // as likely to be the device's OWN heavy network use starving a
+        // small unrelated request (e.g. the rate-card bulk import writing
+        // hundreds of docs in quick succession over a weak mobile signal)
+        // as it is to be a real outage. Only tear down the whole app
+        // behind the offline screen once it fails twice in a row, which a
+        // one-off contention blip won't do.
+        consecutiveFailures++;
+        if (!cancelled && consecutiveFailures >= 2) setIsOnline(false);
+      } finally {
+        if (!cancelled) setConnectivityChecked(true);
+      }
+    };
+    check();
+    const interval = setInterval(check, 6000);
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    window.addEventListener("online", check);
+    window.addEventListener("offline", check);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("online", check);
+      window.removeEventListener("offline", check);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  const [adminAuth, setAdminAuth] = useState(false);
+  // Device-local PIN gate on top of the real Firebase login (see
+  // AdminPinLock) — plain string in localStorage, never sent anywhere;
+  // it's a quick convenience lock, not a credential of its own.
+  const [adminPin, setAdminPin] = usePersistedState("sarthi_adminPin", "");
+  // Gates the Admin dashboard behind AdminPinLock on the native Admin app
+  // — sessionStorage-backed (see useSessionState) rather than plain
+  // useState, so a deliberate in-app refresh (pull-to-refresh, the manual
+  // refresh button) doesn't re-trigger the PIN screen: that's a full
+  // window.location.reload(), indistinguishable from a cold app launch to
+  // a plain in-memory flag, even though nothing about who's holding the
+  // device changed. Starts false on a genuine fresh launch (new
+  // WebView/session — sessionStorage doesn't carry over) so a silently-
+  // restored Firebase session, see AdminLogin, still has to pass the PIN
+  // check, flips true once either the PIN is entered correctly or the
+  // admin types their password THIS visit (see onVerified below), and
+  // flips back to false every time the app actually returns from
+  // background (see the appStateChange listener a few lines down) so it
+  // still re-locks on that, exactly as asked.
+  const [adminUnlocked, setAdminUnlocked] = useSessionState("sarthi_adminUnlocked", false);
+  const adminWasBackgroundedRef = useRef(false);
+  useEffect(() => {
+    if (!isNativeApp || role !== "admin" || !adminAuth) return;
+    let handle;
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) { adminWasBackgroundedRef.current = true; return; }
+      if (adminWasBackgroundedRef.current) {
+        adminWasBackgroundedRef.current = false;
+        setAdminUnlocked(false);
+      }
+    }).then((h) => { handle = h; }).catch((e) => console.error("[admin lock] appStateChange", e));
+    return () => { if (handle) handle.remove(); };
+  }, [role, adminAuth]);
+  const [customerAuth, setCustomerAuth] = usePersistedState("sarthi_customerAuth", { verified: false, mobile: "" });
+  // The customer's profile is looked up live from Firestore by their
+  // verified mobile number (exactly like the driver profile) instead of a
+  // local cache — a local cache doesn't know which mobile it belongs to, so
+  // a second customer verifying on the same device would otherwise see the
+  // first customer's leftover profile. customerChecked distinguishes "we
+  // haven't looked yet" from "we looked, and there's no profile".
+  const [customer, setCustomer] = useState(null);
+  const [customerChecked, setCustomerChecked] = useState(false);
+  useEffect(() => {
+    if (!customerAuth.verified || !customerAuth.mobile) { setCustomer(null); setCustomerChecked(false); return; }
+    if (!firestoreReady) { setCustomer(null); setCustomerChecked(true); return; }
+    setCustomerChecked(false);
+    return subscribeDoc("customers", customerAuth.mobile, (data) => { setCustomer(data); setCustomerChecked(true); });
+  }, [customerAuth.verified, customerAuth.mobile]);
+  const updateCustomerProfile = (patch) => {
+    setCustomer((prev) => {
+      const next = { ...prev, ...patch };
+      if (firestoreReady && customerAuth.mobile) replaceDoc("customers", customerAuth.mobile, { ...next, mobile: customerAuth.mobile }).catch((e) => console.error(e));
+      return next;
+    });
+  };
+  const [driverAuth, setDriverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
+  // Opening the app with ?admin=1 skips the role-choice screen entirely and
+  // goes straight to the Admin login form — no option to pick Customer/Driver.
+  useEffect(() => {
+    if (adminEntry && role === null) setRole("admin");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminEntry]);
+  // Backs the manifest's home-screen shortcuts (?open=customer / ?open=driver)
+  // — jumps straight past the role-choice screen on a fresh load, same as
+  // adminEntry above. Harmless no-op for anyone opening the plain URL.
+  useEffect(() => {
+    const open = new URLSearchParams(window.location.search).get("open");
+    if ((open === "customer" || open === "driver") && role === null) { setRole(open); setApp(open); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // A referral link (?ref=...) must land on the role-choice screen the
+  // FIRST time it's opened, not skip straight into whichever role this
+  // device last used (role is persisted — see sarthi_role above) — the
+  // referred person needs to be free to pick Customer or Driver. But the
+  // ref param stays in the address bar forever after that (nothing strips
+  // it, and CustomerOnboarding/DriverOnboarding read it again later for
+  // referral-bonus attribution, so it can't just be removed from the URL).
+  // Two guards keep it from re-firing on every future load:
+  // - Once EITHER role is actually signed in/verified, never reset again —
+  //   from that point on, the only way back to role selection is Logout,
+  //   same as for anyone who never came in via a referral link at all.
+  // - Before that (still mid-signup, not yet verified), a sessionStorage
+  //   flag keyed by the ref value stops it firing again on a same-tab
+  //   refresh, so an accidental reload doesn't wipe an in-progress form —
+  //   but still lets a genuinely different referral link force the choice
+  //   again within the same tab.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    const alreadySignedIn = customerAuth.verified || driverAuth.verified;
+    if (ref && !alreadySignedIn && sessionStorage.getItem("sarthi_ref_handled") !== ref) {
+      sessionStorage.setItem("sarthi_ref_handled", ref);
+      setRole(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // "Remembered login" is now a real Firebase Auth session (see
+  // customerFirebaseAuth/driverFirebaseAuth in firebaseClient.js) — signing
+  // out below clears it for real, instead of just a locally-stored number.
+  //
+  // One-number-one-app: Customer and Driver can't be active at the same
+  // time — RoleSelect hides whichever one isn't currently verified's
+  // sibling (see showCustomer/showDriver there) while the other is live.
+  // Logging out clears that role's session and returns to the main role
+  // picker (not straight back into that same role's login form), so both
+  // options are visible again for whoever picks up the device next.
+  const logoutRole = (targetRole) => {
+    if (targetRole === "admin") { setAdminAuth(false); if (adminFirebaseAuth) signOut(adminFirebaseAuth).catch((e) => console.error(e)); }
+    if (targetRole === "customer") { setCustomerAuth({ verified: false, mobile: "" }); if (customerFirebaseAuth) signOut(customerFirebaseAuth).catch((e) => console.error(e)); }
+    if (targetRole === "driver") { setDriverAuth({ verified: false, mobile: "" }); if (driverFirebaseAuth) signOut(driverFirebaseAuth).catch((e) => console.error(e)); }
+    setRole(null);
+  };
+  const logout = () => {
+    logoutRole(role);
+  };
+  // Returns to role selection without clearing OTP verification, so tapping
+  // Customer/Driver by mistake and going back doesn't force a re-login.
+  const goHome = () => setRole(null);
+  // Defaults to Hindi — every screen up through signup (role select, OTP,
+  // registration forms) stays in Hindi for a brand-new install. The
+  // LanguageSelect prompt only appears once, right after a genuinely new
+  // Customer/Driver signup completes (see langPromptPending below); a
+  // returning/login user never has this flag set, so they never see it.
+  const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
+  const [langPromptPending, setLangPromptPending] = usePersistedState("sarthi_langPromptPending", false);
+  // Whether this device has already fired the one-time Location +
+  // Notifications priming (see usePrimePermissionsOnce) — global (not
+  // per-role/mobile) since it fires before role selection or login even
+  // happens, the moment the app first loads. Persisted so it's asked once
+  // per device, not on every open; existing users get it the same as
+  // brand-new installs, since the permission system itself is new.
+  const [permsPrimedGlobal, setPermsPrimedGlobal] = usePersistedState("sarthi_permsPrimedGlobal", false);
+  usePrimePermissionsOnce(permsPrimedGlobal, setPermsPrimedGlobal);
+  // Google Places Autocomplete's suggestion language is fixed when its
+  // script loads (see googleMapsContext.jsx) and can't be hot-swapped — so
+  // picking a language reloads the page. localStorage is written directly
+  // (not just via setLang's own effect) so the new value is guaranteed to
+  // be there before the reload happens, regardless of React's effect-flush
+  // timing. There is no in-app toggle to change it afterwards.
+  const chooseLang = (l) => {
+    try { window.localStorage.setItem("sarthi_lang", JSON.stringify(l)); } catch { /* storage unavailable */ }
+    try { window.localStorage.setItem("sarthi_langPromptPending", "false"); } catch { /* storage unavailable */ }
+    setLang(l);
+    setLangPromptPending(false);
+    window.location.reload();
+  };
+  const [showTerms, setShowTerms] = useState(false);
+
+  // ---------------------------------------------------------------------
+  // Shared pilot state — synced live across every tester's device via
+  // Firestore. Each collection is subscribed once on mount; every write
+  // below just fires the Firestore call and lets the subscription flow the
+  // (near-instant, local-first) update back into these mirrors.
+  // ---------------------------------------------------------------------
+  const [vehicleTypes, setVehicleTypesLocal] = useState(DEFAULT_VEHICLES);
+  const [drivers, setDrivers] = useState([]); // every driver, including "me"
+  const [driver, setDriverLocal] = useState(null); // null until my own profile loads
+  const [bookings, setBookings] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
+  const [rechargeRequests, setRechargeRequests] = useState([]);
+  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500, fareTiers: DEFAULT_FARE_TIERS });
+  const commissionPct = settings.commissionPct;
+  const bonusPct = settings.bonusPct;
+  const minWallet = settings.minWallet;
+  // Read-only from here on — Admin no longer has a UI to edit this
+  // (removed from Admin Settings, since Admin's own route+bracket
+  // overrides and driver-submitted averages are the real pricing model
+  // now). This generic per-km formula still runs invisibly as the last
+  // resort for a route with neither, so it stays readable everywhere
+  // resolveFare needs it, just falls back to the code default forever
+  // rather than anything Firestore-editable.
+  const fareTiers = settings.fareTiers || DEFAULT_FARE_TIERS;
+  const setCommissionPct = (v) => patchDoc("settings", "main", { commissionPct: typeof v === "function" ? v(commissionPct) : v }).catch((e) => console.error(e));
+  const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
+  const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
+  // Bumped by hand in Admin Settings each time a new Production release
+  // actually goes out on the Play Console — there's no client-reachable API
+  // that tells the app "what's live in Production" on its own, so this
+  // number IS that source of truth as far as the app is concerned. Left
+  // unset (undefined), the force-update check below has nothing to compare
+  // against and simply never blocks — see the version-check effect.
+  const setLatestVersionCode = (v) => patchDoc("settings", "main", { latestVersionCode: typeof v === "function" ? v(settings.latestVersionCode) : v }).catch((e) => console.error(e));
+  const setUpdateUrl = (v) => patchDoc("settings", "main", { updateUrl: typeof v === "function" ? v(settings.updateUrl) : v }).catch((e) => console.error(e));
+
+  useEffect(() => {
+    if (!firestoreReady) return;
+    seedIfEmpty("vehicleTypes", DEFAULT_VEHICLES, "key").catch((e) => console.error("[seed vehicleTypes]", e));
+    return subscribeCollection("vehicleTypes", setVehicleTypesLocal, null);
+  }, []);
+  // These five collections require real authentication under the current
+  // Firestore rules (isSignedIn()) — the dependency array must include every
+  // auth transition, not just mount ([]) or role alone, otherwise a
+  // subscription that first fires before login finishes gets permanently
+  // denied and never retries once the user actually signs in.
+  const authDeps = [role, customerAuth.verified, driverAuth.verified, adminAuth];
+  useEffect(() => (firestoreReady ? subscribeCollection("drivers", setDrivers, null) : undefined), authDeps);
+  // Crowd-sourced route fares a driver enters via "Set Fare" (see
+  // SetFareForm) for common long-distance routes (Pune-Kolhapur, Pune-
+  // Mumbai, etc.) where a flat capacity-tier ₹/km formula doesn't track
+  // real market rates well — see getRouteAverageFare. Requires sign-in to
+  // read (not public like vehicleTypes) since each entry carries a real
+  // driver phone number in its driverMobile field — writes are further
+  // scoped to the owning driver (or Admin) in firestore.rules.
+  const [routeFares, setRouteFares] = useState([]);
+  useEffect(() => (firestoreReady ? subscribeCollection("routeFares", setRouteFares, null) : undefined), authDeps);
+  // Admin's own route+tier fare overrides (see AdminRateCalculator, opened
+  // from AdminRouteFares) — takes priority over routeFares above whenever
+  // it exists for a given route/tier (see getAdminRouteOverride/
+  // resolveFare). Same sign-in-required read as routeFares; writes are
+  // Admin-only in firestore.rules.
+  //
+  // Debounced deliberately, unlike every other subscription here: the
+  // Maharashtra Rate Card bulk import (see AdminRateCalculator) writes up
+  // to 880 docs to this exact collection in quick succession, and this
+  // same client is subscribed to it — Firestore's onSnapshot fires once
+  // per local write applied to cache and again per server ack, so a raw
+  // subscription re-renders the ENTIRE app (this state lives at the root)
+  // roughly 1,500+ times over the course of one import. On a real phone
+  // that showed up as the whole page going unresponsive and the browser
+  // silently reloading/backing out mid-import. Collapsing bursts into one
+  // update every 400ms keeps the UI responsive during a bulk write while
+  // staying effectively real-time for the normal one-entry-at-a-time case
+  // this collection sees the rest of the time.
+  const [adminRouteFares, setAdminRouteFares] = useState([]);
+  // Surfaced in the Admin Rate Calculator so "the list is empty" and "the
+  // read is actually failing" are never indistinguishable again -- a
+  // permission error here previously just vanished into the console with
+  // adminRouteFares silently stuck at its initial [].
+  const [adminRouteFaresError, setAdminRouteFaresError] = useState(null);
+  useEffect(() => {
+    if (!firestoreReady) return undefined;
+    let timer = null;
+    let latest = null;
+    const unsub = subscribeCollection("adminRouteFares", (data) => {
+      setAdminRouteFaresError(null);
+      latest = data;
+      if (timer) return;
+      timer = setTimeout(() => { setAdminRouteFares(latest); timer = null; }, 400);
+    }, null, (err) => setAdminRouteFaresError(err?.code || err?.message || "unknown error"));
+    return () => { unsub(); if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, authDeps);
+
+  // The daily health check's latest result (see dailyHealthCheckMorning/
+  // Night in functions/index.js) -- public-read on purpose (see
+  // firestore.rules), so this loads even before Admin signs in; only
+  // rendered inside AdminFleet's always-visible status tile though.
+  const [systemHealth, setSystemHealth] = useState(null);
+  useEffect(() => {
+    if (!firestoreReady) return undefined;
+    return subscribeDoc("systemHealth", "heartbeat", setSystemHealth);
+  }, []);
+
+  // One-time backfill for drivers approved before the profile-photo change
+  // (see DriverProfileEdit/DriverKyc) — copies the KYC driver photo into
+  // the top-level photo field for anyone missing it, so their customer-
+  // facing avatar isn't stuck blank until their next KYC resubmission.
+  // Runs opportunistically off this same drivers subscription, from
+  // whichever client happens to have the app open; the ref guards against
+  // re-patching the same driver twice in one session while the write is
+  // still in flight, and it's naturally self-terminating — once a driver's
+  // photo field is set, they never match the condition again.
+  const backfilledPhotoRef = useRef(new Set());
+  useEffect(() => {
+    if (!firestoreReady) return;
+    drivers.forEach((d) => {
+      if (!d.photo && d.docs?.photo && d.mobile && !backfilledPhotoRef.current.has(d.mobile)) {
+        backfilledPhotoRef.current.add(d.mobile);
+        patchDoc("drivers", d.mobile, { photo: d.docs.photo }).catch((e) => console.error("[driver photo backfill]", e));
+      }
+    });
+  }, [drivers, firestoreReady]);
+  // Only Admin needs the full customer list (profile/address oversight).
+  const [allCustomers, setAllCustomers] = useState([]);
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("customers", setAllCustomers, null) : undefined), authDeps);
+  useEffect(() => (firestoreReady ? subscribeCollection("bookings", setBookings) : undefined), authDeps);
+  // Only Admin ever reads this (see AdminAlerts) — matches the Firestore
+  // rule restricting alerts to admin-only reads.
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("alerts", setAlerts) : undefined), authDeps);
+  useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), authDeps);
+  useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), authDeps);
+  // Masked-call audit trail (see functions/index.js: initiateMaskedCall) —
+  // admin-only read, same pattern as alerts above.
+  const [callLogs, setCallLogs] = useState([]);
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("callLogs", setCallLogs) : undefined), authDeps);
+  // Admin "Send Notification" history (see functions/index.js:
+  // sendAdminNotification) — doubles as the announcements list drivers and
+  // customers read in their own "Admin Announcements" inbox (hamburger
+  // menu), not just admin's own Sent Notifications view, so (unlike
+  // callLogs/alerts) this subscribes for every signed-in role, same pattern
+  // as bookings/drivers above.
+  const [adminNotifications, setAdminNotifications] = useState([]);
+  useEffect(() => (firestoreReady ? subscribeCollection("adminNotifications", setAdminNotifications) : undefined), authDeps);
+  // Business expenses — admin-only, same pattern as alerts.
+  const [expenses, setExpenses] = useState([]);
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("expenses", setExpenses) : undefined), authDeps);
+  // Admin's internal Bug Tracker (see AdminBugTracker/AdminFleet) — admin-only,
+  // same pattern as expenses/alerts. Every status change and every bug
+  // added afterward lives only in Firestore; BUG_TRACKER_SEED is just the
+  // running record of audit findings in code, synced in one id at a time
+  // below (NOT seedIfEmpty's whole-collection-or-nothing check, which
+  // would only ever fire once on a totally empty collection and silently
+  // never pick up new entries added to BUG_TRACKER_SEED after that first
+  // seed already happened).
+  const [bugs, setBugs] = useState([]);
+  const bugsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!(firestoreReady && role === "admin" && adminAuth)) return undefined;
+    return subscribeCollection("bugs", (docs) => { bugsLoadedRef.current = true; setBugs(docs); }, null);
+  }, authDeps);
+  useEffect(() => {
+    if (!bugsLoadedRef.current) return;
+    const existingIds = new Set(bugs.map((b) => b.id));
+    BUG_TRACKER_SEED.filter((b) => !existingIds.has(b.id))
+      .forEach((b) => createDoc("bugs", b.id, b).catch((e) => console.error("[seed bug]", e)));
+  }, [bugs]);
+  const setBugStatus = (id, status) => patchDoc("bugs", id, { status, ...(status === "fixed" ? { fixedAt: Date.now() } : {}) }).catch((e) => console.error(e));
+  const addBug = (fields) => createDoc("bugs", genId("BUG"), { ...fields, status: "open", foundAt: new Date().toISOString().slice(0, 10) }).catch((e) => console.error(e));
+  const [expenseCategories, setExpenseCategories] = useState({}); // { hiName: {key, hi, en, icon} }
+  useEffect(() => (firestoreReady && role === "admin" && adminAuth
+    ? subscribeCollection("expenseCategories", (docs) => {
+        const map = {};
+        docs.forEach((d) => { map[d.hi] = d; });
+        setExpenseCategories(map);
+      }, null)
+    : undefined), authDeps);
+  useEffect(() => {
+    if (!firestoreReady) return;
+    // Subscribe first, create-if-missing in the background — awaiting the
+    // create before subscribing would leave everyone stuck on defaults
+    // forever if that one initial call is slow on a flaky connection.
+    const unsub = subscribeDoc("settings", "main", (data) => { if (data) setSettingsLocal(data); });
+    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500, fareTiers: DEFAULT_FARE_TIERS })
+      .catch((e) => console.error("[settings init]", e));
+    return unsub;
+  }, []);
+
+  // Force-update gate — only meaningful on the installed native app (a
+  // browser tab has no "Play Store version" to fall behind). Compares this
+  // install's own versionCode (baked into the .aab at build time — see
+  // android/app/build.gradle) against settings.latestVersionCode, which
+  // admin bumps by hand in Admin Settings each time a new Production
+  // release actually goes out. Checked once on launch and again whenever
+  // the app returns to the foreground, so someone who installs the update
+  // and comes back doesn't stay stuck if they happened to background the
+  // app instead of fully closing it.
+  const [nativeVersionState, setNativeVersionState] = useState({ checked: false, outdated: false });
+  useEffect(() => {
+    if (!isNativeApp) { setNativeVersionState({ checked: true, outdated: false }); return; }
+    let cancelled = false;
+    const check = async () => {
+      const latest = Number(settings.latestVersionCode);
+      if (!latest) { if (!cancelled) setNativeVersionState({ checked: true, outdated: false }); return; }
+      try {
+        const info = await CapacitorApp.getInfo();
+        const mine = Number(info.build);
+        if (!cancelled) setNativeVersionState({ checked: true, outdated: Number.isFinite(mine) && mine < latest });
+      } catch (e) {
+        console.error("[native version check]", e);
+        if (!cancelled) setNativeVersionState({ checked: true, outdated: false });
+      }
+    };
+    check();
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [settings.latestVersionCode]);
+
+  // My own driver profile — created on first driver login (keyed by mobile
+  // number so every tester gets their own real identity), then kept live.
+  useEffect(() => {
+    if (!firestoreReady || !driverAuth.verified || !driverAuth.mobile) { setDriverLocal(null); return; }
+    const unsub = subscribeDoc("drivers", driverAuth.mobile, (data) => setDriverLocal(data));
+    getOrCreateDoc("drivers", driverAuth.mobile, {
+      // kyc stays null (not "Pending") until they actually submit the KYC
+      // form below, so admin's approval queue doesn't fill up with blank
+      // entries for testers who've only logged in so far.
+      name: driverAuth.mobile, mobile: driverAuth.mobile, online: true, kyc: null,
+      wallet: 500, bonus: 0, heldCredit: 0, rating: 4.5, blacklisted: false, docs: null, vehicleSpec: null,
+    }).catch((e) => console.error("[driver init]", e));
+    return unsub;
+  }, [driverAuth.verified, driverAuth.mobile]);
+
+  const setDriver = (updater) => {
+    if (!driver) return;
+    const next = typeof updater === "function" ? updater(driver) : updater;
+    if (firestoreReady && driverAuth.mobile) replaceDoc("drivers", driverAuth.mobile, next).catch((e) => console.error("[driver save]", e));
+  };
+
+  // Every wallet/bonus/heldCredit mutation goes through here instead of
+  // setDriver's full-document replaceDoc — see wallet-full-doc-overwrite-
+  // race in BUG_TRACKER_SEED. A full-document overwrite built from
+  // whatever copy of the driver's profile happens to be sitting in this
+  // client's memory silently clobbers ANY other concurrent write to that
+  // same doc (an admin approving a different recharge, a KYC status
+  // change, this driver's own profile edit landing a moment earlier) —
+  // not just a theoretical race, since driverRespondBooking/cancelBooking
+  // used to call setDriver on every single trip accept/cancel even when
+  // the actual financial delta was zero (commission is currently paused),
+  // meaning the ENTIRE driver document got silently overwritten from a
+  // stale snapshot on two of the most frequent actions in the app. Uses
+  // Firestore's increment() (a patchDoc, touching only these 3 fields) so
+  // concurrent adjustments always commute correctly regardless of order
+  // or how stale either side's local copy is, and skips the write
+  // entirely when there's nothing to actually change. NOTE: increment()
+  // can't clamp a result at a floor of 0 the way the old inline
+  // Math.max(0, ...) did — not a concern for any current caller (all
+  // deltas are 0 while commission is paused, or bounded by the UI before
+  // this is called), but if a future caller needs a guaranteed non-
+  // negative result under concurrent writes, that needs a transaction,
+  // not a plain increment.
+  const adjustDriverWallet = (mobile, { walletDelta = 0, bonusDelta = 0, heldCreditDelta = 0 } = {}) => {
+    if (!firestoreReady || !mobile || (!walletDelta && !bonusDelta && !heldCreditDelta)) return;
+    const patch = {};
+    if (walletDelta) patch.wallet = increment(walletDelta);
+    if (bonusDelta) patch.bonus = increment(bonusDelta);
+    if (heldCreditDelta) patch.heldCredit = increment(heldCreditDelta);
+    patchDoc("drivers", mobile, patch).catch((e) => console.error("[wallet adjust]", e));
+  };
+
+  const [driverResubmitting, setDriverResubmitting] = useState(false);
+  useEffect(() => {
+    if (driver?.kyc !== "Rejected") setDriverResubmitting(false);
+  }, [driver?.kyc]);
+
+  const addVehicleType = (v) => createDoc("vehicleTypes", v.key, v).catch((e) => console.error(e));
+
+  // Admin-side manual registration — lets admin add a customer/driver
+  // straight into the database without them going through OTP signup
+  // themselves. Keyed by mobile (same identity model as self-signup), so
+  // once that number logs in for real it lands on an already-complete
+  // profile instead of the onboarding flow.
+  // Checks Firestore directly for the duplicate-mobile guard, not the
+  // locally subscribed allCustomers/drivers array — that array can briefly
+  // hold an optimistic local write from a rapid double-click before the
+  // server confirms (or rejects) it, which was falsely tripping this check
+  // even when nothing had actually been saved.
+  const addManualCustomer = async (fields) => {
+    const mobile = (fields.mobile || "").trim();
+    if (!mobile) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    const existing = await getDocOnce("customers", mobile);
+    if (existing) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    return replaceDoc("customers", mobile, {
+      mobile, name: fields.name.trim(), email: null, photo: null,
+      address: fields.address || "", area: fields.area || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
+      referredBy: null, referralCredited: false,
+      createdAt: serverTimestamp(),
+    });
+  };
+  const addManualDriver = async (fields) => {
+    const mobile = (fields.mobile || "").trim();
+    if (!mobile) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    const existing = await getDocOnce("drivers", mobile);
+    if (existing) return Promise.reject(new Error("duplicate-or-missing-mobile"));
+    return replaceDoc("drivers", mobile, {
+      mobile, name: fields.name.trim(), online: false, kyc: "Approved", rating: 4.5,
+      wallet: 500, bonus: 0, heldCredit: 0, blacklisted: false, docs: null,
+      address: fields.address || "", city: fields.city || "", state: fields.state || "", pincode: fields.pincode || "",
+      vehicleSpec: { type: fields.vehicleTypeKey, vehicleNumber: fields.vehicleNumber.trim().toUpperCase(), capacityKg: Number(fields.capacityKg) || null },
+      createdAt: serverTimestamp(),
+    });
+  };
+
+  // Trip history is just every booking that's been assigned to a driver —
+  // no separate collection to keep in sync.
+  const tripLog = bookings.filter((b) => b.driverName);
+
+  const requestWithdrawal = (amount) => {
+    if (amount <= 0 || !driver) return;
+    adjustDriverWallet(driver.mobile, { bonusDelta: -amount });
+    createDoc("withdrawals", genId("W"), { role: "driver", driverMobile: driver.mobile, driverName: driver.name, amount, status: "Pending" }).catch((e) => console.error(e));
+  };
+  const approveWithdrawal = (id) => patchDoc("withdrawals", id, { status: "Approved" }).catch((e) => console.error(e));
+
+  // Recharging the main wallet is a request admin must approve (proof of an
+  // outside UPI/cash payment), not an instant self-credit.
+  const requestRecharge = (amount) => {
+    if (amount <= 0 || !driver) return;
+    createDoc("rechargeRequests", genId("R"), { driverMobile: driver.mobile, driverName: driver.name, amount, status: "Pending" }).catch((e) => console.error(e));
+  };
+  const approveRecharge = (id) => {
+    const req = rechargeRequests.find((r) => r.id === id);
+    // Was reading target.wallet from Admin's own local snapshot and
+    // writing back the sum — two approvals for the same driver in quick
+    // succession (before the first patch's remote update propagates back)
+    // could both compute from the same stale base and silently lose one
+    // credit. adjustDriverWallet's increment() commutes correctly
+    // regardless of order or staleness.
+    if (req && req.status === "Pending") adjustDriverWallet(req.driverMobile, { walletDelta: req.amount });
+    patchDoc("rechargeRequests", id, { status: "Approved" }).catch((e) => console.error(e));
+  };
+
+  const createLoad = ({ pickup, drop, vehicle, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng }) => {
+    createDoc("bookings", genId(), {
+      pickup, drop, vehicle, weight, distance, status: "Bidding", bids: [], fare: null,
+      driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
+      pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null, dropLat: dropLat ?? null, dropLng: dropLng ?? null,
+      driverLocation: null,
+    }).catch((e) => console.error(e));
+  };
+
+  // Direct-request booking: the customer picks one specific driver from
+  // the vehicle-picker list instead of posting an open "Bidding" load —
+  // skips straight to "AwaitingDriver" targeting that driver, exactly
+  // like acceptBid does once a customer picks a bid, just without an
+  // actual bid having been placed first. Fare is now a fixed, calculated
+  // number (see calculateFare/fareTiers) shown to the customer before they
+  // book, replacing the old "discuss on call" model — driver commission on
+  // accept is deliberately still held at 0 despite fare being real again
+  // (see driverRespondBooking). Returns an error message string to show the
+  // customer, or null on success.
+  const requestDriverDirectly = ({ pickup, drop, weight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, driverName }) => {
+    const targetDriver = drivers.find((d) => d.name === driverName);
+    if (!targetDriver) {
+      return lang === "en" ? "That driver is no longer available." : lang === "mr" ? "तो ड्रायव्हर आता उपलब्ध नाही." : "वह ड्राइवर अब उपलब्ध नहीं है।";
+    }
+    const bookingId = genId();
+    const conflict = findDriverLoadConflict(targetDriver, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
+    if (conflict) return conflict;
+    const fare = resolveFare(targetDriver, pickup, drop, distance, fareTiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
+    createDoc("bookings", bookingId, {
+      pickup, drop, vehicle: targetDriver.vehicleSpec?.type || null, weight, distance, status: "AwaitingDriver", bids: [], fare,
+      pendingDriverName: driverName, pendingDriverMobile: targetDriver.mobile || null, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
+      driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
+      // Stamped once at booking time (same pattern as driverName/customerMobile
+      // above) since the booking itself has no other link back to the
+      // customer's profile doc — needed for the driver's post-trip invoice-
+      // style summary (see DriverTripSummary) to show a real customer name.
+      customerName: customer?.name || "",
+      pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null, dropLat: dropLat ?? null, dropLng: dropLng ?? null,
+      driverLocation: null,
+    }).catch((e) => console.error(e));
+    return null;
+  };
+
+  // Shared by the 1-minute auto-reassign timeout (see ActiveRide/
+  // reassignAwaitingDriver below) and a driver's manual Reject or
+  // can't-take-it-after-all (see driverRespondBooking) — retargets a
+  // booking at the next eligible driver with a similar-capacity vehicle
+  // instead of leaving it in a dead "Bidding" state that nothing browses
+  // anymore now that pricing/auto-bid is paused. `declinedBy` is every
+  // driver to exclude (already tried + the one just being dropped).
+  // Restarts the 2-minute clock (AWAITING_DRIVER_TIMEOUT_SEC) on success;
+  // falls back to "Bidding" (pendingDriverName cleared) if literally no
+  // one else is eligible — the customer can still Cancel from there.
+  const retargetToNextDriver = (b, declinedBy) => {
+    const loadKg = Number(b.weight) || 0;
+    const next = drivers.find((d) => {
+      if (declinedBy.includes(d.name)) return false;
+      if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+      const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+      if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+      // Fails closed, same fix as eligibleDrivers in CustomerBooking --
+      // don't skip the distance check (and let a nationwide driver
+      // through) just because a coordinate is missing.
+      if (b.pickupLat == null || !d.lastKnownLocation) return false;
+      // Same staleness cutoff as eligibleDrivers -- a stuck-Online driver's
+      // days-old coordinate shouldn't count as "nearby" here either.
+      if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
+      {
+        const maxKm = isFutureAdvance(b.scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+        if (haversineKm(d.lastKnownLocation.lat, d.lastKnownLocation.lng, b.pickupLat, b.pickupLng) > maxKm) return false;
+      }
+      if (findDriverLoadConflict(d, { id: b.id, scheduledFor: b.scheduledFor }, bookings, vehicleTypes, lang)) return false;
+      return true;
+    });
+    if (!next) {
+      patchDoc("bookings", b.id, { status: "Bidding", pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, acceptedAt: null, declinedBy }).catch((e) => console.error(e));
+      return;
+    }
+    patchDoc("bookings", b.id, {
+      status: "AwaitingDriver", pendingDriverName: next.name, pendingDriverMobile: next.mobile || null, pendingBidId: genId("B"),
+      vehicle: next.vehicleSpec?.type || b.vehicle, declinedBy, acceptedAt: serverTimestamp(),
+    }).catch((e) => console.error(e));
+  };
+
+  // Called by ActiveRide's 1-minute countdown (see the AwaitingDriver
+  // branch) when a directly-requested driver hasn't responded in time.
+  // Does nothing if the booking has since moved on (driver already
+  // responded, customer cancelled).
+  const reassignAwaitingDriver = (bookingId) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b || b.status !== "AwaitingDriver") return;
+    retargetToNextDriver(b, [...(b.declinedBy || []), b.pendingDriverName].filter(Boolean));
+  };
+
+  // Authoritative re-check of the auto-bid eligibility rules (proximity,
+  // vehicle-capacity window, commitment conflict) — this is what actually
+  // stops the write, not just the client-side effect that calls it.
+  const addBid = (bookingId, bid) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b) return null;
+    if (b.declinedBy?.includes(bid.driverName)) return "declined";
+    const bidDriver = drivers.find((d) => d.name === bid.driverName);
+    // Proximity: 30 km for a Current load, 50 km for an Advance one.
+    if (b.pickupLat != null && b.pickupLng != null) {
+      const loc = bidDriver?.lastKnownLocation;
+      const distKm = loc ? haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) : null;
+      const maxKm = isFutureAdvance(b.scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+      if (distKm == null || distKm > maxKm) {
+        return lang === "en"
+          ? `⚠️ You are outside the ${maxKm}km bidding radius for this load's pickup point.`
+          : lang === "mr"
+          ? `⚠️ तुम्ही या लोडच्या पिकअप ठिकाणापासून ${maxKm}km च्या बोली परिघाबाहेर आहात.`
+          : `⚠️ आप इस लोड के पिकअप स्थान से ${maxKm}km के बोली दायरे से बाहर हैं।`;
+      }
+    }
+    // Vehicle-capacity window: load weight .. weight + 5 tonnes.
+    const loadKg = Number(b.weight) || 0;
+    const dCap = Number(bidDriver?.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === bidDriver?.vehicleSpec?.type)?.capacityKg || 0;
+    if (loadKg <= 0 || dCap < loadKg || dCap > loadKg + VEHICLE_HEADROOM_KG) {
+      return lang === "en"
+        ? "⚠️ This load is outside your vehicle's capacity range."
+        : lang === "mr"
+        ? "⚠️ हा लोड तुमच्या गाडीच्या क्षमतेच्या मर्यादेबाहेर आहे."
+        : "⚠️ यह लोड आपकी गाड़ी की क्षमता सीमा से बाहर है।";
+    }
+    const conflict = findDriverLoadConflict(bidDriver, { id: b.id, scheduledFor: b.scheduledFor, hours: bid.hours }, bookings, vehicleTypes, lang);
+    if (conflict) return conflict;
+    const rest = (b.bids || []).filter((x) => x.driverName !== bid.driverName);
+    patchDoc("bookings", bookingId, { bids: [...rest, { id: genId("B"), ...bid }] }).catch((e) => console.error(e));
+    return null;
+  };
+
+  const mobileForDriverName = (name) => drivers.find((d) => d.name === name)?.mobile || "";
+
+  const unfreezeDriverName = (driverName) => {
+    if (!driverName) return;
+    const affected = bookings.filter((b) => b.status === "Bidding" && (b.bids || []).some((x) => x.driverName === driverName && x.paused));
+    affected.forEach((b) => {
+      patchDoc("bookings", b.id, { bids: b.bids.map((x) => x.driverName === driverName ? { ...x, paused: false } : x) }).catch((e) => console.error(e));
+    });
+  };
+
+  // Customer picks a bid — this doesn't book the trip yet. It moves the
+  // load to "AwaitingDriver" and waits for that driver to Accept/Reject
+  // (see driverRespondBooking). No commission cut / OTP / freeze until the
+  // driver confirms.
+  const acceptBid = (bookingId, bidId) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    const bid = b?.bids?.find((x) => x.id === bidId);
+    if (!b || !bid) return null;
+    const bidDriver = drivers.find((d) => d.name === bid.driverName);
+    const conflict = findDriverLoadConflict(bidDriver, { id: b.id, scheduledFor: b.scheduledFor, hours: bid.hours }, bookings, vehicleTypes, lang);
+    if (conflict) return conflict;
+    patchDoc("bookings", bookingId, {
+      status: "AwaitingDriver", pendingDriverName: bid.driverName, pendingDriverMobile: bidDriver?.mobile || null, pendingBidId: bidId,
+      fare: bid.amount, hours: bid.hours || 0, extraHourRate: bid.extraHourRate || 0, acceptedAt: serverTimestamp(),
+    }).catch((e) => console.error(e));
+    return null;
+  };
+
+  // Driver's response to a customer-accepted bid (runs on the pending
+  // driver's own device). accept -> Ongoing (+ OTP, commission cut, freeze
+  // their other bids); reject -> retargeted straight at the next eligible
+  // driver (see retargetToNextDriver), not left in "Bidding" for no one
+  // to ever pick up now that pricing/auto-bid is paused.
+  const driverRespondBooking = (bookingId, accept) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b || b.status !== "AwaitingDriver" || b.pendingDriverName !== driver?.name) return null;
+    if (!accept) {
+      retargetToNextDriver(b, [...(b.declinedBy || []), driver.name]);
+      return null;
+    }
+    const conflict = findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor, hours: b.hours }, bookings, vehicleTypes, lang);
+    if (conflict) {
+      // Can't take it after all — retarget it like a reject.
+      retargetToNextDriver(b, [...(b.declinedBy || []), driver.name]);
+      return conflict;
+    }
+    const otp = String(Math.floor(1000 + Math.random() * 9000));
+    // The OTP is deliberately NOT written onto the bookings/{id} doc
+    // itself — that document is broadly readable by every signed-in
+    // driver/customer (the app fetches whole collections and filters
+    // client-side, e.g. every open "Bidding" load), which used to mean
+    // ANY driver's app already had this booking's real OTP sitting in
+    // its own local memory before ever visiting the pickup, defeating
+    // the entire point of asking for it. Written instead to its own
+    // bookingOtps/{id} doc, readable only by that booking's own customer
+    // or Admin (never the assigned driver — see firestore.rules) — the
+    // driver's app verifies a guess via the verifyPickupOtp Cloud
+    // Function (see DriverOtpEntry), which returns pass/fail only and
+    // never the real value. See otp-readable-by-any-driver in
+    // BUG_TRACKER_SEED.
+    createDoc("bookingOtps", bookingId, { otp, customerMobile: b.customerMobile || "" }).catch((e) => console.error("[booking otp]", e));
+    patchDoc("bookings", bookingId, {
+      status: "Ongoing", driverName: driver.name, driverMobile: driver.mobile || mobileForDriverName(driver.name),
+      progress: 0, pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null,
+    }).catch((e) => console.error(e));
+
+    // Commission cut on confirm — held credit from a past cancellation
+    // offsets first; 0% while this driver is still inside their own trial.
+    // Deliberately held at 0 regardless of commissionPct/bonusPct: fare is a
+    // real, fixed, calculated number again (see calculateFare/fareTiers),
+    // but reactivating actual wallet deductions is a separate business
+    // decision that hasn't been made yet — don't let fare-is-real-now
+    // silently reactivate commission as a side effect.
+    const effCommissionPct = 0;
+    const effBonusPct = 0;
+    const commissionAmt = (b.fare || 0) * (effCommissionPct / 100);
+    const bonusAmt = (b.fare || 0) * (effBonusPct / 100);
+    const held = driver.heldCredit || 0;
+    const offset = Math.min(held, commissionAmt);
+    // adjustDriverWallet (not setDriver) — every value here is 0 today
+    // (commission paused), so this call no-ops entirely rather than
+    // forcing a full-document overwrite of this driver's profile on
+    // every single trip accept, one of the most frequent actions in the
+    // app. See wallet-full-doc-overwrite-race in BUG_TRACKER_SEED.
+    adjustDriverWallet(driver.mobile, {
+      walletDelta: -(commissionAmt - offset),
+      bonusDelta: bonusAmt,
+      heldCreditDelta: -offset,
+    });
+
+    // Freeze this driver's pending bids on every other open load — they're
+    // committed now. They come back (unfreeze) on trip end.
+    bookings.filter((x) => x.id !== bookingId && x.status === "Bidding" && (x.bids || []).some((y) => y.driverName === driver.name))
+      .forEach((x) => patchDoc("bookings", x.id, { bids: x.bids.map((y) => y.driverName === driver.name ? { ...y, paused: true } : y) }).catch((e) => console.error(e)));
+    return null;
+  };
+
+  // Once the driver has verified pickup OTP (loadingStartedAt set), the
+  // goods are considered loaded/in transit — cancellation locks out from
+  // here on, for either side, from any entry point (not just the button
+  // itself, which is hidden — this is the actual enforcement point).
+  // Returns an error string when blocked, null when the cancellation went
+  // through.
+  const cancelBooking = (id) => {
+    const b = bookings.find((x) => x.id === id);
+    if (!b) return null;
+    if (b.loadingStartedAt) {
+      return lang === "en"
+        ? "Trip cannot be cancelled! The driver has verified the OTP and the goods are loaded/in transit. This trip will only end once the driver completes it (End Trip). Contact support for any help."
+        : lang === "mr" ? "ट्रिप रद्द केली जाऊ शकत नाही! ड्रायव्हरने ओटीपी (OTP) सत्यापित केला आहे आणि माल लोड/ट्रान्झिटमध्ये आहे. ही ट्रिप फक्त ड्रायव्हरने प्रवास पूर्ण (End Trip) केल्यावरच संपेल. कोणत्याही मदतीसाठी सपोर्टशी संपर्क करा." : "ट्रिप कैंसल नहीं की जा सकती! ड्राइवर द्वारा ओटीपी (OTP) सत्यापित किया जा चुका है और माल लोड/ट्रांजिट में है। यह ट्रिप केवल ड्राइवर द्वारा यात्रा पूरी (End Trip) करने के बाद ही समाप्त होगी। किसी भी सहायता के लिए सपोर्ट से संपर्क करें।";
+    }
+    if (b.status === "Ongoing" && b.driverName === driver?.name && b.fare) {
+      // New cancellation rule: the cut commission/advance is held by admin,
+      // not refunded instantly — it auto-adjusts against the driver's next
+      // accepted trip so the driver isn't out of pocket. Matches whatever
+      // rate actually applied when the commission was cut — hardcoded to 0
+      // here too (see driverRespondBooking/AdminFinance) rather than
+      // isInTrial(...) ? 0 : commissionPct, which used to let this hold
+      // real money against a commission that driverRespondBooking never
+      // actually deducted in the first place (commission is globally off
+      // right now, trial or not).
+      const effCommissionPct = 0;
+      const effBonusPct = 0;
+      const held = b.fare * (effCommissionPct / 100);
+      const bonusReverse = b.fare * (effBonusPct / 100);
+      // adjustDriverWallet, not setDriver — see the same note in
+      // driverRespondBooking above (no-ops today, safe & atomic once
+      // commission is reactivated).
+      adjustDriverWallet(driver.mobile, { heldCreditDelta: held, bonusDelta: -bonusReverse });
+    }
+    if (b.status === "Ongoing" && b.driverName) unfreezeDriverName(b.driverName);
+    patchDoc("bookings", id, { status: "Cancelled" }).catch((e) => console.error(e));
+    return null;
+  };
+  const rateBooking = (id, rating) => patchDoc("bookings", id, { rating }).catch((e) => console.error(e));
+  const completeBooking = (id, extraCharge = 0) => {
+    const b = bookings.find((x) => x.id === id);
+    if (!b) return;
+    if (b.driverName) unfreezeDriverName(b.driverName);
+    patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge, completedAt: Date.now() }).catch((e) => console.error(e));
+    if (b.driverName === driver?.name) setDriver({ ...driver, online: true });
+    // Referral payout (₹200 to whichever driver referred this one, the
+    // first time they complete a real trip — see shareApp) moved into a
+    // Cloud Function: this session can only ever be the *referred*
+    // driver's own, and the payout writes to the *referring* driver's
+    // wallet, a cross-driver write firestore.rules correctly refuses from
+    // here (see functions/index.js: creditDriverReferral). Fire-and-forget
+    // — it already resolves { ok: false, ... } silently on every
+    // not-eligible-yet case (not referred, already credited, etc.), so
+    // there's nothing here worth awaiting or surfacing to the driver.
+    if (b.driverName === driver?.name) creditDriverReferral().catch((e) => console.error("[referral]", e));
+  };
+  const startLoading = (id, adjustMs = 0) => {
+    const b = bookings.find((x) => x.id === id);
+    if (!b) return;
+    const loadingStartedAt = b.loadingStartedAt ? b.loadingStartedAt + adjustMs : Date.now();
+    // travelPausedAt/pausedMs/reachedDropAt back the loading/unloading-time
+    // geofence pause (see LOADING_GEOFENCE_M) — reset alongside the timer
+    // itself whenever it (re)starts.
+    patchDoc("bookings", id, { loadingStartedAt, travelPausedAt: null, pausedMs: 0, reachedDropAt: null }).catch((e) => console.error(e));
+  };
+  const updateDriverKyc = (mobile, status) => patchDoc("drivers", mobile, { kyc: status }).catch((e) => console.error(e));
+  const toggleBlacklist = (mobile) => {
+    // Falls back to matching by doc id too — a driver record with no
+    // mobile field of its own (seen on old hand-seeded "demo driver"
+    // records, see AdminDriverList) would otherwise never be found here,
+    // silently no-op'ing the Block/Unblock button with no error shown.
+    const d = drivers.find((x) => x.mobile === mobile || x.id === mobile);
+    if (!d) return;
+    patchDoc("drivers", mobile, { blacklisted: !d.blacklisted, online: d.blacklisted ? d.online : false }).catch((e) => console.error(e));
+  };
+  const deleteDriver = (mobile) => removeDoc("drivers", mobile).catch((e) => console.error(e));
+  const deleteCustomer = (mobile) => removeDoc("customers", mobile).catch((e) => console.error(e));
+  const raiseAlert = (role, type, note) => createDoc("alerts", genId("A"), { role, type, note: note || null }).catch((e) => console.error(e));
+  const addExpense = ({ id, date, category, amount, note, photoUrl }) =>
+    createDoc("expenses", id, { date, category, amount, note: note || "", photoUrl: photoUrl || null });
+  const addExpenseCategory = (name) => createDoc("expenseCategories", slugify(name), { key: slugify(name), icon: "📦", hi: name, en: name }).catch((e) => console.error(e));
+
+  // Simulated GPS: only the assigned driver's own device advances progress
+  // for their trip, so two devices never race to write the same field.
+  const progressTimer = useRef(null);
+  useEffect(() => {
+    progressTimer.current = setInterval(() => {
+      if (!driver) return;
+      bookings
+        .filter((b) => b.status === "Ongoing" && b.progress < 95 && b.driverName === driver.name)
+        .forEach((b) => patchDoc("bookings", b.id, { progress: b.progress + 5 }).catch((e) => console.error(e)));
+    }, 1200);
+    return () => clearInterval(progressTimer.current);
+  }, [bookings, driver]);
+
+  const isDesktop = role === "admin" && adminAuth;
+  const refreshButton = useRefreshButton();
+
+  // Standalone Driver KYC portal (?driverKyc=1&mobile=...) — entirely
+  // separate from role-select/login (no auth at all, see
+  // firestore.rules), so it takes priority over every other gate below
+  // and doesn't touch role/lang-prompt/connectivity state. Only needs
+  // vehicleTypes (public read, already loading regardless of role) — it
+  // fetches its one driver doc itself, see DriverKycPortal.
+  if (driverKycPortal) {
+    return <DriverKycPortal lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} />;
+  }
+
+  // Blocks absolutely everything else — even the language prompt below —
+  // the moment this installed app's own native version is confirmed older
+  // than what's been published on the Play Console Production track (see
+  // the version-check effect near the settings subscription). Web/browser
+  // visitors never hit this (nativeVersionState.outdated can't go true off
+  // this device) — there's no such thing as a "stale native app" for a tab.
+  // No skip/dismiss option: deliberately a hard stop, not a banner.
+  if (nativeVersionState.outdated) {
+    return (
+      <div className="min-h-screen flex justify-center items-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+        <div className="w-full max-w-sm min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: C.bg }}>
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 shadow-sm" style={{ background: C.navy }}>
+            <Download size={28} color="#FFFFFF" />
+          </div>
+          <p className="text-lg font-black mb-2" style={{ color: C.ink }}>{lang === "en" ? "Update Required" : lang === "mr" ? "अपडेट आवश्यक आहे" : "अपडेट आवश्यक है"}</p>
+          <p className="text-sm font-semibold mb-6" style={{ color: C.inkSoft }}>
+            {lang === "en" ? "A new version of Apna Transport is available on the Play Store. Please update to continue." : lang === "mr" ? "Play Store वर अपना ट्रान्सपोर्टची नवीन आवृत्ती उपलब्ध आहे. सुरू ठेवण्यासाठी कृपया अपडेट करा." : "Play Store पर अपना ट्रांसपोर्ट का नया वर्शन उपलब्ध है। जारी रखने के लिए कृपया अपडेट करें।"}
+          </p>
+          <a href={settings.updateUrl || PLAY_STORE_URL} target="_blank" rel="noopener noreferrer"
+            className="w-full flex items-center justify-center rounded-xl py-4 text-base font-black text-white shadow-lg" style={{ background: C.navy }}>
+            {lang === "en" ? "Update Now" : lang === "mr" ? "आता अपडेट करा" : "अभी अपडेट करें"}
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Shown once, right after a brand-new Customer/Driver signup completes
+  // (langPromptPending is set true there — see onComplete/onFirstSignupComplete
+  // below). Placed ahead of the offline check since picking a language
+  // needs no network.
+  if (langPromptPending) {
+    return (
+      <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+        <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
+          <LanguageSelect onSelect={chooseLang} />
+        </div>
+      </div>
+    );
+  }
+
+  // Nothing else renders until connectivity is actually verified (avoids a
+  // flash of real content — or of the offline screen — before we know for
+  // sure), and offline blocks everything: no cached screen, no role-select,
+  // nothing interactive underneath, just this message until reconnected.
+  if (!connectivityChecked || !isOnline) {
+    return (
+      <div className="min-h-screen flex justify-center items-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+        <div className="w-full max-w-sm min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: C.bg }}>
+          {connectivityChecked ? (
+            <>
+              <span className="text-5xl mb-4">📶</span>
+              <p className="text-base font-black mb-2" style={{ color: C.ink }}>{lang === "en" ? "You're offline" : lang === "mr" ? "तुम्ही ऑफलाइन आहात" : "आप ऑफलाइन हैं"}</p>
+              <p className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Please turn on your mobile data or Wi-Fi to continue." : lang === "mr" ? "सुरू ठेवण्यासाठी कृपया तुमचा मोबाइल डेटा किंवा वाय-फाय चालू करा." : "जारी रखने के लिए कृपया अपना मोबाइल डेटा या वाई-फाई चालू करें।"}</p>
+            </>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+      <button onClick={refreshButton.refresh} disabled={refreshButton.refreshing}
+        className="fixed right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+        style={{ background: C.marigoldDeep, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
+        <RefreshCw size={16} color="#fff" className={refreshButton.refreshing ? "animate-spin" : ""} />
+      </button>
+      <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
+        {role === "admin" && adminAuth && (
+          <div className="px-5 pt-3 text-[10px] text-center" style={{ color: C.inkSoft }}>
+            {lang === "en" ? "Overview & approvals — Customer/Driver registration is not available here" : lang === "mr" ? "ओव्हरव्ह्यू आणि अप्रूव्हल — इथे कस्टमर/ड्रायव्हर रजिस्ट्रेशन उपलब्ध नाही" : "ओवरव्यू और अप्रूवल — यहां कस्टमर/ड्राइवर रजिस्ट्रेशन उपलब्ध नहीं है"}
+          </div>
+        )}
+
+        {role === null && (
+          <RoleSelect lang={lang} onSelect={(r) => { setRole(r); setApp(r); }}
+            customerVerified={customerAuth.verified} driverVerified={driverAuth.verified} adminVerified={adminAuth}
+            onLogoutRole={logoutRole} adminEntry={adminEntry} />
+        )}
+
+        {role === "admin" && !adminAuth && (
+          <AdminLogin lang={lang} onVerified={(viaPassword) => { setAdminAuth(true); setApp("admin"); if (viaPassword) setAdminUnlocked(true); }} onBack={adminEntry ? undefined : goHome} />
+        )}
+
+        {role === "customer" && (!customerAuth.verified || !customerChecked || !customer) && (
+          <CustomerOnboarding lang={lang} authInstance={customerFirebaseAuth}
+            verified={customerAuth.verified} verifiedMobile={customerAuth.mobile} hasProfile={!!customer} checking={customerAuth.verified && !customerChecked}
+            onOtpVerified={(mobile) => setCustomerAuth({ verified: true, mobile })}
+            onLogout={() => (customerAuth.verified ? logoutRole("customer") : goHome())}
+            onComplete={(addr) => {
+              // addr.mobile is the number CustomerOnboarding just verified —
+              // trust it over customerAuth.mobile, which can still be stale
+              // here (see the comment in submitProfile).
+              const signedUpMobile = addr.mobile || customerAuth.mobile;
+              setCustomer({ ...addr, mobile: signedUpMobile });
+              // First-ever creation of this customer's doc — stamp their real
+              // signup date so their own 30-day trial can be calculated from it.
+              if (firestoreReady && signedUpMobile) replaceDoc("customers", signedUpMobile, { ...addr, mobile: signedUpMobile, createdAt: serverTimestamp() }).catch((e) => console.error(e));
+              // Brand-new signup — prompt for a language once, right after.
+              setLangPromptPending(true);
+            }} />
+        )}
+        {role === "customer" && customerAuth.verified && customerChecked && customer && (
+          <CustomerApp bookings={bookings} requestDriverDirectly={requestDriverDirectly} reassignAwaitingDriver={reassignAwaitingDriver} drivers={drivers} vehicleTypes={vehicleTypes}
+            cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
+            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
+            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} />
+        )}
+        {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
+          <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth}
+            verified={driverAuth.verified}
+            onOtpVerified={(mobile) => setDriverAuth({ verified: true, mobile })}
+            onLogout={() => (driverAuth.verified ? logoutRole("driver") : goHome())}
+            driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType}
+            onFirstSignupComplete={() => setLangPromptPending(true)} />
+        )}
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
+          <div className="flex-1 overflow-y-auto">
+            <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} />
+            </button>
+            <div className="mx-5 mt-3 rounded-lg p-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
+              <ShieldCheck size={15} color={C.marigoldDeep} />
+              <span className="text-xs font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Completing KYC is required before opening the home page." : lang === "mr" ? "होम पेज उघडण्यापूर्वी KYC पूर्ण करणे आवश्यक आहे." : "होम पेज खोलने से पहले KYC पूरी करना ज़रूरी है।"}</span>
+            </div>
+            <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
+          </div>
+        )}
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
+            <button onClick={() => logoutRole("driver")} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} />
+            </button>
+            {driver.kyc === "Rejected" ? (
+              <>
+                <XCircle size={40} color={C.safety} className="mb-3" />
+                <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "KYC rejected" : lang === "mr" ? "KYC नाकारले" : "KYC अस्वीकृत"}</h2>
+                <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Your documents were rejected by admin. Please review and resubmit." : lang === "mr" ? "तुमची कागदपत्रे अ‍ॅडमिनने नाकारली आहेत. कृपया पुन्हा तपासून सबमिट करा." : "आपके दस्तावेज़ एडमिन द्वारा अस्वीकृत किए गए हैं। कृपया दोबारा जांच कर सबमिट करें।"}</p>
+                <button onClick={() => setDriverResubmitting(true)} className="rounded-lg px-6 py-3.5 text-base font-bold text-white" style={{ background: C.marigoldDeep }}>
+                  {lang === "en" ? "Resubmit KYC" : lang === "mr" ? "KYC पुन्हा भरा" : "KYC दोबारा भरें"}
+                </button>
+              </>
+            ) : (
+              <>
+                <Clock3 size={40} color={C.marigoldDeep} className="mb-3" />
+                <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "KYC verification pending" : lang === "mr" ? "KYC सत्यापन प्रलंबित आहे" : "KYC सत्यापन लंबित है"}</h2>
+                <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Your documents are under review. The dashboard unlocks once admin approves." : lang === "mr" ? "तुमच्या कागदपत्रांचे पुनरावलोकन होत आहे. अ‍ॅडमिन अप्रूव्हलनंतर डॅशबोर्ड उघडेल." : "आपके दस्तावेज़ों की समीक्षा हो रही है। एडमिन अप्रूवल के बाद डैशबोर्ड खुलेगा।"}</p>
+              </>
+            )}
+          </div>
+        )}
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
+          <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading}
+            tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
+            minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
+            withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
+            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} fareTiers={fareTiers} />
+        )}
+        {role === "admin" && adminAuth && isNativeApp && !adminUnlocked && (
+          <AdminPinLock adminPin={adminPin} setAdminPin={setAdminPin} lang={lang} onUnlocked={() => setAdminUnlocked(true)} onUseFallback={() => logoutRole("admin")} />
+        )}
+        {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
+          <div className="flex-1 overflow-y-auto">
+            <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
+              bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl} fareTiers={fareTiers} lang={lang} onLogout={logout}
+              withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
+              vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
+              expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications}
+              bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} systemHealth={systemHealth} />
+          </div>
+        )}
+      </div>
+      <TermsModal open={showTerms} onClose={() => setShowTerms(false)} commissionPct={commissionPct} bonusPct={bonusPct} lang={lang} role={role} />
+    </div>
+  );
+}

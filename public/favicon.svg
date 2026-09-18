@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ybg" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFD93D"/>
+      <stop offset="100%" stop-color="#FFC300"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="20%" y1="0%" x2="80%" y2="60%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.5"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" fill="url(#ybg)"/>
+  <rect x="0" y="0" width="512" height="512" fill="url(#sheen)"/>
+
+  <!-- scaled/centered up since there's no wordmark band to share the box with -->
+  <g transform="translate(0,20) scale(1.28) translate(-56,-46)">
+    <rect x="70" y="196" width="238" height="120" rx="16" fill="#0B3D91"/>
+    <rect x="90" y="214" width="150" height="30" rx="8" fill="#FFD93D" opacity="0.85"/>
+
+    <path d="M308 224 L392 224 Q414 224 414 246 L414 316 L308 316 Z" fill="#0B3D91"/>
+    <rect x="330" y="240" width="52" height="42" rx="7" fill="#FFD93D" opacity="0.85"/>
+
+    <circle cx="150" cy="330" r="42" fill="#0B3D91"/>
+    <circle cx="150" cy="330" r="16" fill="#FFD93D" opacity="0.85"/>
+    <circle cx="356" cy="330" r="42" fill="#0B3D91"/>
+    <circle cx="356" cy="330" r="16" fill="#FFD93D" opacity="0.85"/>
+  </g>
+</svg>

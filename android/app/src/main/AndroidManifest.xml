@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity>
+
+        <!-- See SettingsBridgeActivity.java and twa/patch-project.js (the
+             TWA build's equivalent) — opens this app's own Notification
+             or Location settings screen directly, reached from the web
+             side via a custom app-specific intent action that Chrome/the
+             WebView won't block, unlike a system "android.settings.*" one. -->
+        <activity android:name=".SettingsBridgeActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="com.apnatransport.app.OPEN_SETTINGS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Without these, navigator.geolocation.getCurrentPosition/
+         watchPosition (see useLocationPermission, LocationBanner, and every
+         live-tracking watchPosition call site in App.jsx) has nothing to
+         request at the OS level. Capacitor's WebView bridge maps that web
+         API straight onto Android's real runtime permission dialog (the
+         same system "While using the app / Only this time / Don't allow"
+         prompt every native app shows), but only if the app is allowed to
+         hold the permission in the first place. Without this, the call just
+         fails immediately with no dialog ever appearing, which is why only
+         this app's own custom in-app banner was ever visible. FINE for GPS
+         accuracy tracking (this app's whole live-location feature depends
+         on real accuracy, not just a coarse city-level fix); COARSE
+         included as the graceful fallback Android itself offers when a user
+         picks "Approximate" in that dialog. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Explicit even though @capacitor/push-notifications' own Android
+         library likely already merges this in; costs nothing to state
+         directly rather than rely on an assumption about plugin manifest
+         merging, and this is exactly the permission behind Android 13+'s
+         own notification permission dialog (see requestNativePushToken in
+         firebaseClient.js, which already correctly calls
+         PushNotifications.requestPermissions()). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+</manifest>

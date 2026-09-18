@@ -1,0 +1,126 @@
+name: Build Play Store package (TWA)
+
+# Manually-triggered only. Builds and signs the Android App Bundle (.aab)
+# that gets uploaded to Play Console, using Bubblewrap directly against the
+# live web manifest instead of PWABuilder's web UI — see twa/generate-project.js
+# for why (it makes the exact host/package baked into the app explicit and
+# reviewable here instead of hidden in a third-party site's session state).
+on:
+  workflow_dispatch:
+    inputs:
+      app_version_code:
+        description: "New versionCode. Must be higher than the current one in Play Console (Release > App bundle explorer)."
+        required: true
+      app_version_name:
+        description: "Version name shown to users (e.g. 1.2.0). Defaults to the version code if left blank."
+        required: false
+
+env:
+  MANIFEST_URL: https://sarthi-transport-74865.web.app/manifest.json
+  PACKAGE_ID: com.apnatransport.app
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Bubblewrap
+        working-directory: twa
+        run: npm install
+
+      - name: Decode signing keystore
+        # Tolerates whatever the secret got encoded with. Windows'
+        # `certutil -encode` wraps its base64 output in "-----BEGIN
+        # CERTIFICATE-----"/"-----END CERTIFICATE-----" lines; those aren't
+        # valid base64, but their letters ARE valid base64 *characters*, so
+        # `-i`/--ignore-garbage alone still corrupts the decode instead of
+        # skipping them cleanly. Strip any line starting with "-----" first,
+        # then drop all remaining whitespace, then decode.
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" \
+            | grep -v '^-----' \
+            | tr -d ' \t\r\n' \
+            | base64 -d -i > "$GITHUB_WORKSPACE/twa/android.keystore"
+          test -s "$GITHUB_WORKSPACE/twa/android.keystore" || { echo "::error::Decoded keystore is empty — ANDROID_KEYSTORE_BASE64 secret is not valid base64 of a keystore file."; exit 1; }
+
+      - name: Verify keystore + alias + password (fails fast with a clear error instead of deep into the build)
+        env:
+          JKS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          JKS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          "$JAVA_HOME/bin/keytool" -list -keystore "$GITHUB_WORKSPACE/twa/android.keystore" \
+            -alias "$JKS_ALIAS" -storepass "$JKS_PASS" > /dev/null
+
+      - name: Point Bubblewrap at the JDK/SDK setup-java and setup-android already installed
+        # Skips Bubblewrap's own interactive "download JDK/SDK?" first-run prompts
+        # entirely by pre-supplying the paths it would otherwise ask for.
+        run: |
+          mkdir -p "$HOME/.bubblewrap"
+          printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
+
+      - name: Generate TWA project
+        working-directory: twa
+        env:
+          KEYSTORE_PATH: android.keystore
+          KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          APP_VERSION_CODE: ${{ inputs.app_version_code }}
+          APP_VERSION_NAME: ${{ inputs.app_version_name }}
+          TARGET_DIR: project
+        run: node generate-project.js
+
+      - name: Add SettingsBridgeActivity (native deep link to Notification/Location settings)
+        # Chrome blocks web content from firing "android.settings.*"
+        # intents directly (confirmed on a real device — see
+        # src/App.jsx's androidSettingsBridgeUrl comment). This patches in
+        # a small native Activity, regenerated fresh here every build
+        # since twa/project itself isn't committed, that opens those
+        # settings screens from trusted app code instead, which has no
+        # such restriction. See twa/patch-project.js.
+        working-directory: twa
+        env:
+          TARGET_DIR: project
+        run: node patch-project.js
+
+      - name: Enable resource shrinking (Bubblewrap's template enables minifyEnabled but not shrinkResources)
+        run: |
+          sed -i 's/minifyEnabled true/minifyEnabled true\n            shrinkResources true/' twa/project/app/build.gradle
+          grep -q 'shrinkResources true' twa/project/app/build.gradle || { echo "::error::Failed to patch in shrinkResources — Bubblewrap's build.gradle template must have changed."; exit 1; }
+
+      - name: Bump androidbrowserhelper to 2.7.3 (Bubblewrap 1.25.0 still defaults to the older 2.6.2)
+        # LauncherActivity -- the class that decides whether to launch as a
+        # real Trusted Web Activity or fall back to a plain Custom Tab (URL
+        # bar/share/menu visible) -- had real changes land in 2.7.0/2.7.1
+        # (edge-to-edge support, "resolve deprecations" in launcher-activity
+        # specifically). Worth testing against a real reported TWA-always-
+        # falls-back-to-browser-chrome symptom even without a matching bug
+        # report, since it's the newest verified stable release.
+        run: |
+          sed -i "s/androidbrowserhelper:androidbrowserhelper:2\.6\.2/androidbrowserhelper:androidbrowserhelper:2.7.3/" twa/project/app/build.gradle
+          grep -q 'androidbrowserhelper:androidbrowserhelper:2.7.3' twa/project/app/build.gradle || { echo "::error::Failed to patch androidbrowserhelper version — Bubblewrap's default dependency version must have changed."; exit 1; }
+
+      - name: Build + sign .aab and .apk
+        working-directory: twa/project
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: "$GITHUB_WORKSPACE/twa/node_modules/.bin/bubblewrap build"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apna-transport-release-${{ inputs.app_version_code }}
+          path: |
+            twa/project/app-release-bundle.aab
+            twa/project/app-release-signed.apk
+          retention-days: 14
