@@ -43,6 +43,15 @@ jobs:
           java-version: "21"
 
       - uses: android-actions/setup-android@v3
+        with:
+          # Google removed the legacy "tools" SDK package from its
+          # repository -- this action requests it by default, and
+          # sdkmanager now fails outright ("Failed to find package
+          # 'tools'") before it ever gets to installing anything this
+          # build actually needs. platform-tools is the one piece this
+          # step must provide; AGP/Gradle fetches whatever build-tools/
+          # platform version it needs on demand during the actual build.
+          packages: "platform-tools"
 
       - uses: actions/setup-node@v4
         with:

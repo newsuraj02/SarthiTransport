@@ -31,6 +31,12 @@ jobs:
           java-version: "17"
 
       - uses: android-actions/setup-android@v3
+        with:
+          # See build-capacitor.yml's copy of this same step -- Google
+          # removed the legacy "tools" SDK package this action requests
+          # by default, breaking sdkmanager outright before the build
+          # even starts.
+          packages: "platform-tools"
 
       - uses: actions/setup-node@v4
         with:
