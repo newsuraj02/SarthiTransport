@@ -79,6 +79,12 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    // Drives the real native "Turn on Location?" system dialog (see
+    // LocationBridgePlugin) -- the same one Google Maps/Uber show, not a
+    // custom in-app banner. Device-wide Location Services being off is
+    // outside what navigator.geolocation (or any web JS) can fix on its
+    // own; this is Google Play Services' own settings-resolution API.
+    implementation "com.google.android.gms:play-services-location:21.3.0"
 }
 
 apply from: 'capacitor.build.gradle'

@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         // Must run before super.onCreate() -- Capacitor registers plugins
         // during the base onCreate(), so registering any later misses it.
         registerPlugin(SettingsBridgePlugin.class);
+        registerPlugin(LocationBridgePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

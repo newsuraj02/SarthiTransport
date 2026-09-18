@@ -596,6 +596,28 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-18",
     fixedAt: "2026-09-18",
   },
+  {
+    id: "changelog-type-badge-hide-when-fixed",
+    title: "Change Log's type badge (Bug/Feature/UI/Config/Security) now hides once an entry is Fixed",
+    severity: "low",
+    status: "fixed",
+    type: "ui",
+    area: "Admin Panel / Settings / Change Log",
+    description: "Per explicit request, the small colored type chip on each Change Log entry now only shows while that entry is genuinely open or resolving -- it disappears once the entry settles as Fixed, and reappears if it's later Reopened.",
+    foundAt: "2026-09-18",
+    fixedAt: "2026-09-18",
+  },
+  {
+    id: "native-location-services-prompt",
+    title: "Added a real native 'Turn on Location?' system prompt, separate from the app's own location permission",
+    severity: "medium",
+    status: "fixed",
+    type: "feature",
+    area: "Android native (LocationBridgePlugin) / usePrimePermissionsOnce",
+    description: "Diagnosed live: a customer's 'nearby drivers' map was silently showing a hardcoded Pune fallback center instead of their real position, even with the app's own location PERMISSION already granted -- root cause was the phone's device-wide Location Services toggle being off entirely, which navigator.geolocation has no way to detect or fix on its own (it just fails/times out the same way a denied permission does). Added a new native Capacitor plugin (LocationBridgePlugin, in both android/ and android-admin/) wrapping Google Play Services' SettingsClient.checkLocationSettings -- this triggers the real system 'Turn on Location?' dialog (the same one Google Maps/Uber show, one tap to enable) rather than a custom in-app banner. Wired into usePrimePermissionsOnce so it fires once at first launch, before the existing permission prompt. Native-only (a plain browser/TWA has no Capacitor bridge to call this through) -- requires a native rebuild (not just `firebase deploy --only hosting`) to actually reach a device, since this is real Java/Gradle code, not web code.",
+    foundAt: "2026-09-18",
+    fixedAt: "2026-09-18",
+  },
 ];
 
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -1651,6 +1673,28 @@ function openNativeSettingsBridge(target) {
   SettingsBridgeNative.open({ target }).catch((e) => console.error("[settingsBridge]", e));
 }
 
+// Triggers Android's real "Turn on Location?" system dialog (Google Play
+// Services' own settings-resolution flow, the same one Maps/Uber show)
+// when device-wide Location Services are off -- see LocationBridgePlugin
+// (android/app + android-admin/app). This is categorically different
+// from the app's own location PERMISSION (granted/denied), which
+// navigator.geolocation already handles fine on its own -- a device with
+// Location Services off entirely will silently fail geolocation for
+// every app, permission or not, and no web API can flip that toggle.
+// Native-only (isNativeApp) since a plain browser/TWA has no Capacitor
+// bridge to call this through; resolves harmlessly to {enabled: null} in
+// that case so callers never need their own isNativeApp check.
+const LocationBridgeNative = registerPlugin("LocationBridge");
+async function ensureLocationServicesOn() {
+  if (!isNativeApp) return { enabled: null };
+  try {
+    return await LocationBridgeNative.ensureEnabled();
+  } catch (e) {
+    console.error("[locationBridge]", e);
+    return { enabled: null };
+  }
+}
+
 // Re-added for the driver "new load posted" push carve-out — see
 // useRideNotifications above. Also used on the Customer side now (see
 // context="customer") so they're told when their driver accepts/starts the
@@ -1725,6 +1769,12 @@ function usePrimePermissionsOnce(permsPrimedGlobal, setPermsPrimedGlobal) {
   useEffect(() => {
     if (permsPrimedGlobal) return;
     (async () => {
+      // Device-wide Location Services first (native app only, no-op
+      // elsewhere) -- fixing this before the permission prompt below
+      // means a driver/customer who's never touched Settings still gets
+      // a real GPS fix on their very first launch, instead of silently
+      // falling back to the map's default center with no explanation.
+      await ensureLocationServicesOn();
       if (location.permission !== "granted") await location.enable();
       if (typeof Notification !== "undefined" && Notification.permission === "default") await requestPushToken();
       setPermsPrimedGlobal(true);

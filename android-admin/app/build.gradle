@@ -81,6 +81,10 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    // See LocationBridgePlugin -- shared with the main app's build.gradle,
+    // kept here too for consistency even though Admin doesn't currently
+    // call it (it never does customer/driver GPS tracking).
+    implementation "com.google.android.gms:play-services-location:21.3.0"
 }
 
 apply from: 'capacitor.build.gradle'
