@@ -17,6 +17,7 @@ import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } 
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, resolveChangeLogEntry } from "./firebaseClient";
 import { registerPlugin } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
+import { Geolocation } from "@capacitor/geolocation";
 
 // Fallback Play Store link for the force-update screen — used whenever
 // admin hasn't set a custom settings.updateUrl (see AdminSettings).
@@ -1632,6 +1633,17 @@ function useReportInstalledVersion(collectionName, docId) {
   }, [collectionName, docId]);
 }
 
+// @capacitor/geolocation's error shape differs by platform: the browser
+// fallback passes the raw GeolocationPositionError (numeric .code, 1 =
+// PERMISSION_DENIED), while the native Android side (Play Services'
+// Fused Location Provider) rejects with its own string codes (see
+// node_modules/@capacitor/geolocation's GeolocationErrors.kt --
+// "OS-PLUG-GLOC-0003" is LOCATION_PERMISSIONS_DENIED). Every watchPosition
+// error handler below needs to recognize "permission denied" either way.
+function isLocationPermissionDeniedError(err) {
+  return err?.code === 1 || err?.code === "OS-PLUG-GLOC-0003";
+}
+
 // Tracks whether the browser's location permission is granted/denied/not
 // yet asked, mirroring useRideNotifications' priming pattern above — a
 // bare getCurrentPosition/watchPosition call otherwise fails completely
@@ -1661,10 +1673,14 @@ function useLocationPermission() {
   // usePrimePermissionsOnce) can await this before firing the next native prompt —
   // browsers only ever show one permission dialog at a time, so firing both
   // at once just silently drops one of them.
-  const enable = () => new Promise((resolve) => {
-    if (!navigator.geolocation) { resolve(); return; }
-    navigator.geolocation.getCurrentPosition(() => { markGranted(); resolve(); }, () => { markDenied(); resolve(); });
-  });
+  const enable = () => {
+    if (!isNativeApp && !navigator.geolocation) return Promise.resolve();
+    // @capacitor/geolocation -- native side is backed by Google Play
+    // Services' Fused Location Provider (see the watchPosition call
+    // sites below for the full "why"); on a plain browser tab it falls
+    // back to navigator.geolocation itself, unchanged from before.
+    return Geolocation.getCurrentPosition({}).then(() => markGranted(), () => markDenied());
+  };
   return { permission, enable, markDenied, markGranted };
 }
 
@@ -2799,13 +2815,14 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
   };
 
   const useMyLocation = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const { latitude, longitude } = pos.coords;
-      placeMarker(latitude, longitude);
-      mapRef.current?.panTo({ lat: latitude, lng: longitude });
-      mapRef.current?.setZoom(16);
-    });
+    Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })
+      .then((pos) => {
+        const { latitude, longitude } = pos.coords;
+        placeMarker(latitude, longitude);
+        mapRef.current?.panTo({ lat: latitude, lng: longitude });
+        mapRef.current?.setZoom(16);
+      })
+      .catch(() => {});
   };
 
   return (
@@ -5263,19 +5280,35 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
   const [customerLocation, setCustomerLocation] = useState(null);
   const lastHomeGpsRef = useRef(0);
   useEffect(() => {
-    if (!navigator.geolocation) return;
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
+    let watchId = null;
+    let cancelled = false;
+    // @capacitor/geolocation -- native side reads Google Play Services'
+    // Fused Location Provider (same mechanism Google Maps uses) instead
+    // of the browser's own navigator.geolocation, which was confirmed
+    // live on a real device to be unreliable inside this app's WebView
+    // (see DriverHome's GPS effect for the full "why"). Falls back to
+    // navigator.geolocation itself on a plain browser tab, unchanged.
+    Geolocation.watchPosition(
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
+      (pos, err) => {
+        if (err) {
+          if (isLocationPermissionDeniedError(err)) locationPermission?.markDenied();
+          return;
+        }
         locationPermission?.markGranted();
         const now = Date.now();
         if (now - lastHomeGpsRef.current < 5000) return;
         lastHomeGpsRef.current = now;
         setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      },
-      (err) => { if (err.code === err.PERMISSION_DENIED) locationPermission?.markDenied(); },
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
+      }
+    ).then((id) => {
+      if (cancelled) Geolocation.clearWatch({ id }).catch(() => {});
+      else watchId = id;
+    }).catch((e) => console.error("[geolocation]", e));
+    return () => {
+      cancelled = true;
+      if (watchId != null) Geolocation.clearWatch({ id: watchId }).catch(() => {});
+    };
   }, []);
 
   // Shows the straight-line estimate immediately (no blank/loading state),
@@ -6301,20 +6334,35 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
   // driver (and the customer's own map) can see both parties together.
   const lastCustomerGpsWriteRef = useRef(0);
   useEffect(() => {
-    if (!ongoingTrip || !navigator.geolocation) return;
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
+    if (!ongoingTrip) return;
+    let watchId = null;
+    let cancelled = false;
+    // @capacitor/geolocation -- see CustomerHome's customerLocation
+    // effect for the full "why" (Fused Location Provider instead of the
+    // browser's own navigator.geolocation).
+    Geolocation.watchPosition(
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 },
+      (pos, err) => {
+        if (err) {
+          console.error("GPS tracking error", err);
+          if (isLocationPermissionDeniedError(err)) locationPermission.markDenied();
+          return;
+        }
         locationPermission.markGranted();
         const now = Date.now();
         if (now - lastCustomerGpsWriteRef.current < 5000) return;
         lastCustomerGpsWriteRef.current = now;
         const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
         patchDoc("bookings", ongoingTrip.id, { customerLocation: location }).catch((e) => console.error(e));
-      },
-      (err) => { console.error("GPS tracking error", err); if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied(); },
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
+      }
+    ).then((id) => {
+      if (cancelled) Geolocation.clearWatch({ id }).catch(() => {});
+      else watchId = id;
+    }).catch((e) => console.error("[geolocation]", e));
+    return () => {
+      cancelled = true;
+      if (watchId != null) Geolocation.clearWatch({ id: watchId }).catch(() => {});
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ongoingTrip?.id]);
 
@@ -6887,83 +6935,80 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // Services both confirmed on) is resolved.
   const [gpsDebug, setGpsDebug] = useState(null);
   useEffect(() => {
-    if ((!myTrip && !driver.online) || !navigator.geolocation) {
-      setGpsDebug(`Watch not started — online=${String(driver.online)}, hasGeolocation=${String(!!navigator.geolocation)} @ ${new Date().toLocaleTimeString()}`);
+    if (!myTrip && !driver.online) {
+      setGpsDebug(`Watch not started — online=${String(driver.online)} @ ${new Date().toLocaleTimeString()}`);
       return;
     }
     setGpsDebug(`Watch started @ ${new Date().toLocaleTimeString()}, waiting for first fix...`);
 
-    const writeFix = (pos, kind) => {
-      locationPermission.markGranted();
-      const now = Date.now();
-      setGpsDebug(`Fix received (${kind}): ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
-      if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
-      lastGpsWriteRef.current = now;
-      const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
-      if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
-      if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
-
-      // Loading/unloading-time geofence — pauses the allowed-hours/waiting
-      // clock (see useTripClock) the moment the driver's straight-line
-      // distance from the pickup point exceeds LOADING_GEOFENCE_M, and
-      // resumes it for good once straight-line distance to the drop point
-      // drops to/below it (or resumes without locking in if they're simply
-      // back near pickup — still loading, never left for real). Only runs
-      // on the accurate fix — the coarse one below can be off by hundreds
-      // of meters, which would trip this geofence falsely.
-      if (kind !== "accurate") return;
-      const trip = myTripRef.current;
-      if (trip?.loadingStartedAt && !trip.reachedDropAt &&
-          trip.pickupLat != null && trip.pickupLng != null && trip.dropLat != null && trip.dropLng != null) {
-        const distPickupM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.pickupLat, trip.pickupLng) * 1000;
-        const distDropM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.dropLat, trip.dropLng) * 1000;
-        if (distDropM <= LOADING_GEOFENCE_M) {
-          const patch = { reachedDropAt: now, travelPausedAt: null, pausedMs: increment(trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
-          patchDoc("bookings", trip.id, patch).catch((e) => console.error(e));
-          myTripRef.current = { ...trip, reachedDropAt: now, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
-        } else if (distPickupM > LOADING_GEOFENCE_M && !trip.travelPausedAt) {
-          patchDoc("bookings", trip.id, { travelPausedAt: now }).catch((e) => console.error(e));
-          myTripRef.current = { ...trip, travelPausedAt: now };
-        } else if (distPickupM <= LOADING_GEOFENCE_M && trip.travelPausedAt) {
-          patchDoc("bookings", trip.id, { travelPausedAt: null, pausedMs: increment(now - trip.travelPausedAt) }).catch((e) => console.error(e));
-          myTripRef.current = { ...trip, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (now - trip.travelPausedAt) };
-        }
-      }
-    };
-
-    // Sequenced, not concurrent -- confirmed live on a real device that
-    // issuing the coarse getCurrentPosition and the accurate watchPosition
-    // at the same time makes BOTH go completely silent (no success, no
-    // error, for 2+ minutes), where the accurate call alone reliably
-    // errored with TIMEOUT at 15s. Whatever this device's WebView does
-    // with geolocation internally, it seems to only tolerate one request
-    // in flight at a time. So: wait for the coarse one to finish (success
-    // or fail) before ever starting the accurate watch.
+    // @capacitor/geolocation -- native side reads Google Play Services'
+    // Fused Location Provider directly (the same mechanism Google Maps
+    // itself uses), bypassing the WebView's own navigator.geolocation
+    // bridge entirely. Confirmed live on a real device that the browser
+    // API is unreliable inside this app's WebView -- a single call
+    // reliably hit TIMEOUT at 15s, and two concurrent calls (an attempted
+    // JS-only workaround) went completely silent for 2+ minutes, despite
+    // Google Maps getting an instant fix on the very same phone, in the
+    // very same spot. Falls back to navigator.geolocation itself on a
+    // plain browser tab, unchanged from before.
     let watchId = null;
     let cancelled = false;
-    const startAccurateWatch = () => {
-      if (cancelled) return;
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => writeFix(pos, "accurate"),
-        (err) => {
+    Geolocation.watchPosition(
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 20000, minimumUpdateInterval: 5000 },
+      (pos, err) => {
+        if (err) {
           console.error("GPS tracking error", err);
-          if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied();
-          const codeLabel = err.code === 1 ? "PERMISSION_DENIED" : err.code === 2 ? "POSITION_UNAVAILABLE" : err.code === 3 ? "TIMEOUT" : `code ${err.code}`;
-          setGpsDebug(`Error: ${codeLabel} — "${err.message}" @ ${new Date().toLocaleTimeString()}`);
-        },
-        // Bumped from 15s -- that was too tight for a cold GPS-only fix.
-        { enableHighAccuracy: true, maximumAge: 4000, timeout: 30000 }
-      );
-    };
-    navigator.geolocation.getCurrentPosition(
-      (pos) => { writeFix(pos, "coarse"); startAccurateWatch(); },
-      (err) => { console.error("GPS coarse-fix error", err); startAccurateWatch(); },
-      { enableHighAccuracy: false, maximumAge: 30000, timeout: 10000 }
-    );
+          if (isLocationPermissionDeniedError(err)) locationPermission.markDenied();
+          setGpsDebug(`Error: ${err.code || "unknown"} — "${err.message}" @ ${new Date().toLocaleTimeString()}`);
+          return;
+        }
+        locationPermission.markGranted();
+        const now = Date.now();
+        setGpsDebug(`Fix received: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
+        if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
+        lastGpsWriteRef.current = now;
+        const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
+        if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
+        if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
+
+        // Loading/unloading-time geofence — pauses the allowed-hours/waiting
+        // clock (see useTripClock) the moment the driver's straight-line
+        // distance from the pickup point exceeds LOADING_GEOFENCE_M, and
+        // resumes it for good once straight-line distance to the drop point
+        // drops to/below it (or resumes without locking in if they're simply
+        // back near pickup — still loading, never left for real). Runs on
+        // the same 5s cadence as the GPS write itself, since haversineKm is
+        // free local math, not an API call. Never surfaced to either side
+        // beyond the plain "paused" note already added to the timer boxes.
+        const trip = myTripRef.current;
+        if (trip?.loadingStartedAt && !trip.reachedDropAt &&
+            trip.pickupLat != null && trip.pickupLng != null && trip.dropLat != null && trip.dropLng != null) {
+          const distPickupM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.pickupLat, trip.pickupLng) * 1000;
+          const distDropM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.dropLat, trip.dropLng) * 1000;
+          if (distDropM <= LOADING_GEOFENCE_M) {
+            const patch = { reachedDropAt: now, travelPausedAt: null, pausedMs: increment(trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+            patchDoc("bookings", trip.id, patch).catch((e) => console.error(e));
+            myTripRef.current = { ...trip, reachedDropAt: now, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+          } else if (distPickupM > LOADING_GEOFENCE_M && !trip.travelPausedAt) {
+            patchDoc("bookings", trip.id, { travelPausedAt: now }).catch((e) => console.error(e));
+            myTripRef.current = { ...trip, travelPausedAt: now };
+          } else if (distPickupM <= LOADING_GEOFENCE_M && trip.travelPausedAt) {
+            patchDoc("bookings", trip.id, { travelPausedAt: null, pausedMs: increment(now - trip.travelPausedAt) }).catch((e) => console.error(e));
+            myTripRef.current = { ...trip, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (now - trip.travelPausedAt) };
+          }
+        }
+      }
+    ).then((id) => {
+      if (cancelled) Geolocation.clearWatch({ id }).catch(() => {});
+      else watchId = id;
+    }).catch((e) => {
+      console.error("[geolocation]", e);
+      setGpsDebug(`Failed to start watch — "${e?.message}" @ ${new Date().toLocaleTimeString()}`);
+    });
 
     return () => {
       cancelled = true;
-      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+      if (watchId != null) Geolocation.clearWatch({ id: watchId }).catch(() => {});
     };
   }, [myTrip?.id, driver.online, driver.mobile]);
 
