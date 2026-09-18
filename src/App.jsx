@@ -6892,51 +6892,70 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       return;
     }
     setGpsDebug(`Watch started @ ${new Date().toLocaleTimeString()}, waiting for first fix...`);
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        locationPermission.markGranted();
-        const now = Date.now();
-        setGpsDebug(`Fix received: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
-        if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
-        lastGpsWriteRef.current = now;
-        const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
-        if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
-        if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
 
-        // Loading/unloading-time geofence — pauses the allowed-hours/waiting
-        // clock (see useTripClock) the moment the driver's straight-line
-        // distance from the pickup point exceeds LOADING_GEOFENCE_M, and
-        // resumes it for good once straight-line distance to the drop point
-        // drops to/below it (or resumes without locking in if they're simply
-        // back near pickup — still loading, never left for real). Runs on
-        // the same 5s cadence as the GPS write itself, since haversineKm is
-        // free local math, not an API call. Never surfaced to either side
-        // beyond the plain "paused" note already added to the timer boxes.
-        const trip = myTripRef.current;
-        if (trip?.loadingStartedAt && !trip.reachedDropAt &&
-            trip.pickupLat != null && trip.pickupLng != null && trip.dropLat != null && trip.dropLng != null) {
-          const distPickupM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.pickupLat, trip.pickupLng) * 1000;
-          const distDropM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.dropLat, trip.dropLng) * 1000;
-          if (distDropM <= LOADING_GEOFENCE_M) {
-            const patch = { reachedDropAt: now, travelPausedAt: null, pausedMs: increment(trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
-            patchDoc("bookings", trip.id, patch).catch((e) => console.error(e));
-            myTripRef.current = { ...trip, reachedDropAt: now, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
-          } else if (distPickupM > LOADING_GEOFENCE_M && !trip.travelPausedAt) {
-            patchDoc("bookings", trip.id, { travelPausedAt: now }).catch((e) => console.error(e));
-            myTripRef.current = { ...trip, travelPausedAt: now };
-          } else if (distPickupM <= LOADING_GEOFENCE_M && trip.travelPausedAt) {
-            patchDoc("bookings", trip.id, { travelPausedAt: null, pausedMs: increment(now - trip.travelPausedAt) }).catch((e) => console.error(e));
-            myTripRef.current = { ...trip, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (now - trip.travelPausedAt) };
-          }
+    const writeFix = (pos, kind) => {
+      locationPermission.markGranted();
+      const now = Date.now();
+      setGpsDebug(`Fix received (${kind}): ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
+      if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
+      lastGpsWriteRef.current = now;
+      const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
+      if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
+      if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
+
+      // Loading/unloading-time geofence — pauses the allowed-hours/waiting
+      // clock (see useTripClock) the moment the driver's straight-line
+      // distance from the pickup point exceeds LOADING_GEOFENCE_M, and
+      // resumes it for good once straight-line distance to the drop point
+      // drops to/below it (or resumes without locking in if they're simply
+      // back near pickup — still loading, never left for real). Only runs
+      // on the accurate fix — the coarse one below can be off by hundreds
+      // of meters, which would trip this geofence falsely.
+      if (kind !== "accurate") return;
+      const trip = myTripRef.current;
+      if (trip?.loadingStartedAt && !trip.reachedDropAt &&
+          trip.pickupLat != null && trip.pickupLng != null && trip.dropLat != null && trip.dropLng != null) {
+        const distPickupM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.pickupLat, trip.pickupLng) * 1000;
+        const distDropM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.dropLat, trip.dropLng) * 1000;
+        if (distDropM <= LOADING_GEOFENCE_M) {
+          const patch = { reachedDropAt: now, travelPausedAt: null, pausedMs: increment(trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+          patchDoc("bookings", trip.id, patch).catch((e) => console.error(e));
+          myTripRef.current = { ...trip, reachedDropAt: now, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+        } else if (distPickupM > LOADING_GEOFENCE_M && !trip.travelPausedAt) {
+          patchDoc("bookings", trip.id, { travelPausedAt: now }).catch((e) => console.error(e));
+          myTripRef.current = { ...trip, travelPausedAt: now };
+        } else if (distPickupM <= LOADING_GEOFENCE_M && trip.travelPausedAt) {
+          patchDoc("bookings", trip.id, { travelPausedAt: null, pausedMs: increment(now - trip.travelPausedAt) }).catch((e) => console.error(e));
+          myTripRef.current = { ...trip, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (now - trip.travelPausedAt) };
         }
-      },
+      }
+    };
+
+    // enableHighAccuracy forces GPS-only, which can take a long time (or
+    // time out outright) indoors or on a cold start — confirmed live on a
+    // real device: this exact watchPosition call was hitting TIMEOUT at
+    // 15s even with Location Services genuinely on. A fast, coarse
+    // (network/cell-based) fix first means Admin's GPS status and the
+    // live map have *something* current within a few seconds, while the
+    // accurate watch below keeps refining it in the background.
+    navigator.geolocation.getCurrentPosition(
+      (pos) => writeFix(pos, "coarse"),
+      (err) => console.error("GPS coarse-fix error", err), // the accurate watch's error handler below is the one that updates gpsDebug
+      { enableHighAccuracy: false, maximumAge: 30000, timeout: 10000 }
+    );
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => writeFix(pos, "accurate"),
       (err) => {
         console.error("GPS tracking error", err);
         if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied();
         const codeLabel = err.code === 1 ? "PERMISSION_DENIED" : err.code === 2 ? "POSITION_UNAVAILABLE" : err.code === 3 ? "TIMEOUT" : `code ${err.code}`;
         setGpsDebug(`Error: ${codeLabel} — "${err.message}" @ ${new Date().toLocaleTimeString()}`);
       },
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
+      // Bumped from 15s -- that was too tight for a cold GPS-only fix; the
+      // coarse fix above already covers the "something now" case, so this
+      // can afford to wait longer for a precise one.
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 30000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, [myTrip?.id, driver.online, driver.mobile]);
