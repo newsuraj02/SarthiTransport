@@ -618,6 +618,26 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-18",
     fixedAt: "2026-09-18",
   },
+  {
+    id: "driver-webview-geolocation-hangs-forever",
+    title: "A driver's GPS watch starts but never receives a fix or an error, on at least one real OPPO/ColorOS device",
+    severity: "high",
+    status: "open",
+    type: "bug",
+    area: "DriverHome watchPosition (Android WebView)",
+    description: "Live investigation, unresolved. A driver's Admin GPS status showed 'Never' despite Online being on. Added a temporary on-screen debug readout (gpsDebug in DriverHome -- see changelog-webview-geolocation-debug-readout) confirming the watchPosition effect itself is correct: it starts exactly when Duty turns on and stops exactly when it turns off (hasGeolocation=true either way). Once started, though, navigator.geolocation.watchPosition never calls back with either a fix OR an error -- not even the TIMEOUT error after the requested 15s, which should fire regardless of GPS availability. Ruled out one by one on the actual device: app location permission (granted), device-wide Location Services (on), Wi-Fi/Bluetooth scanning (on), Improve Location Accuracy (on), battery/background restrictions (foreground allowed, and the app was in foreground throughout), and environment (retested outdoors with clear sky, still hangs). Decisive isolation: Google Maps on the SAME phone gets a location fix immediately -- so this is not a device-wide GPS/Play-Services problem, it's specific to this app's WebView. Capacitor's own source (verified directly, see node_modules/@capacitor/android) already handles WebView geolocation permission correctly by default (BridgeWebChromeClient.onGeolocationPermissionsShowPrompt auto-grants once the Android runtime permission exists; Bridge.java already calls settings.setGeolocationEnabled(true)) -- so the leading theory is that the APK currently installed on that phone predates whichever Capacitor/Android version actually contains that correct behavior, since a native app's WebView behavior is fixed at build time and doesn't update on its own. Explicitly NOT yet tested: sideloading a fresh test build to confirm/rule this out -- deliberately declined for now (this app is Play Store-distributed for Customer/Driver, and a fresh build wasn't wanted at this time). Revisit by building a test APK (same CI pipeline, same signing key, sideloadable without touching the real Play Store listing) and re-running the same debug readout.",
+    foundAt: "2026-09-18",
+  },
+  {
+    id: "changelog-webview-geolocation-debug-readout",
+    title: "Added a temporary on-screen GPS debug readout to DriverHome for live diagnosis",
+    severity: "low",
+    status: "open",
+    type: "feature",
+    area: "DriverHome",
+    description: "Ships with a normal hosting deploy (no APK rebuild needed, since this is plain web code loaded live) -- shows whether the watchPosition effect actually started, each raw GPS fix received, or any geolocation error with its real code and message, right on the Driver Home screen. Deliberately left in place (status kept open, not fixed) until driver-webview-geolocation-hangs-forever above is actually resolved -- remove this readout once that's fixed.",
+    foundAt: "2026-09-18",
+  },
 ];
 
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
