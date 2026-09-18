@@ -70,6 +70,6 @@ public class AppUpdateBridgePlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("started", resultCode == Activity.RESULT_OK);
         call.resolve(result);
-        removeSavedCall();
+        freeSavedCall();
     }
 }

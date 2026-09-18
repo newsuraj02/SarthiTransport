@@ -85,6 +85,6 @@ public class LocationBridgePlugin extends Plugin {
         // either way this resolves the same JS promise, never leaves it hanging.
         result.put("enabled", resultCode == Activity.RESULT_OK);
         call.resolve(result);
-        removeSavedCall();
+        freeSavedCall();
     }
 }

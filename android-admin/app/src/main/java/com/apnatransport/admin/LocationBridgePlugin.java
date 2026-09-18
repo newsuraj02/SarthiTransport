@@ -70,6 +70,6 @@ public class LocationBridgePlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("enabled", resultCode == Activity.RESULT_OK);
         call.resolve(result);
-        removeSavedCall();
+        freeSavedCall();
     }
 }

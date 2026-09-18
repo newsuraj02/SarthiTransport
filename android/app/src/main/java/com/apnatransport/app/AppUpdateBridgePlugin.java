@@ -82,6 +82,6 @@ public class AppUpdateBridgePlugin extends Plugin {
         // check retries this whole flow again.
         result.put("started", resultCode == Activity.RESULT_OK);
         call.resolve(result);
-        removeSavedCall();
+        freeSavedCall();
     }
 }
