@@ -6931,33 +6931,40 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       }
     };
 
-    // enableHighAccuracy forces GPS-only, which can take a long time (or
-    // time out outright) indoors or on a cold start — confirmed live on a
-    // real device: this exact watchPosition call was hitting TIMEOUT at
-    // 15s even with Location Services genuinely on. A fast, coarse
-    // (network/cell-based) fix first means Admin's GPS status and the
-    // live map have *something* current within a few seconds, while the
-    // accurate watch below keeps refining it in the background.
+    // Sequenced, not concurrent -- confirmed live on a real device that
+    // issuing the coarse getCurrentPosition and the accurate watchPosition
+    // at the same time makes BOTH go completely silent (no success, no
+    // error, for 2+ minutes), where the accurate call alone reliably
+    // errored with TIMEOUT at 15s. Whatever this device's WebView does
+    // with geolocation internally, it seems to only tolerate one request
+    // in flight at a time. So: wait for the coarse one to finish (success
+    // or fail) before ever starting the accurate watch.
+    let watchId = null;
+    let cancelled = false;
+    const startAccurateWatch = () => {
+      if (cancelled) return;
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => writeFix(pos, "accurate"),
+        (err) => {
+          console.error("GPS tracking error", err);
+          if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied();
+          const codeLabel = err.code === 1 ? "PERMISSION_DENIED" : err.code === 2 ? "POSITION_UNAVAILABLE" : err.code === 3 ? "TIMEOUT" : `code ${err.code}`;
+          setGpsDebug(`Error: ${codeLabel} — "${err.message}" @ ${new Date().toLocaleTimeString()}`);
+        },
+        // Bumped from 15s -- that was too tight for a cold GPS-only fix.
+        { enableHighAccuracy: true, maximumAge: 4000, timeout: 30000 }
+      );
+    };
     navigator.geolocation.getCurrentPosition(
-      (pos) => writeFix(pos, "coarse"),
-      (err) => console.error("GPS coarse-fix error", err), // the accurate watch's error handler below is the one that updates gpsDebug
+      (pos) => { writeFix(pos, "coarse"); startAccurateWatch(); },
+      (err) => { console.error("GPS coarse-fix error", err); startAccurateWatch(); },
       { enableHighAccuracy: false, maximumAge: 30000, timeout: 10000 }
     );
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => writeFix(pos, "accurate"),
-      (err) => {
-        console.error("GPS tracking error", err);
-        if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied();
-        const codeLabel = err.code === 1 ? "PERMISSION_DENIED" : err.code === 2 ? "POSITION_UNAVAILABLE" : err.code === 3 ? "TIMEOUT" : `code ${err.code}`;
-        setGpsDebug(`Error: ${codeLabel} — "${err.message}" @ ${new Date().toLocaleTimeString()}`);
-      },
-      // Bumped from 15s -- that was too tight for a cold GPS-only fix; the
-      // coarse fix above already covers the "something now" case, so this
-      // can afford to wait longer for a precise one.
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 30000 }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
+    return () => {
+      cancelled = true;
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+    };
   }, [myTrip?.id, driver.online, driver.mobile]);
 
   // A customer has directly requested this driver and is waiting for
