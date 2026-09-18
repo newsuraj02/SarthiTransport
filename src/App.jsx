@@ -6796,12 +6796,25 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // stale closure from whenever that ID last changed.
   const myTripRef = useRef(myTrip);
   useEffect(() => { myTripRef.current = myTrip; }, [myTrip]);
+
+  // TEMPORARY diagnostic -- visible on-screen readout of the GPS watch's
+  // actual success/error state, so a driver reporting "GPS: Never" in
+  // Admin can be diagnosed without needing chrome://inspect/USB debugging
+  // on their specific phone. Remove once the current live investigation
+  // (a driver whose GPS never updates despite permission + Location
+  // Services both confirmed on) is resolved.
+  const [gpsDebug, setGpsDebug] = useState(null);
   useEffect(() => {
-    if ((!myTrip && !driver.online) || !navigator.geolocation) return;
+    if ((!myTrip && !driver.online) || !navigator.geolocation) {
+      setGpsDebug(`Watch not started — online=${String(driver.online)}, hasGeolocation=${String(!!navigator.geolocation)} @ ${new Date().toLocaleTimeString()}`);
+      return;
+    }
+    setGpsDebug(`Watch started @ ${new Date().toLocaleTimeString()}, waiting for first fix...`);
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         locationPermission.markGranted();
         const now = Date.now();
+        setGpsDebug(`Fix received: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
         if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
         lastGpsWriteRef.current = now;
         const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
@@ -6835,7 +6848,12 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
           }
         }
       },
-      (err) => { console.error("GPS tracking error", err); if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied(); },
+      (err) => {
+        console.error("GPS tracking error", err);
+        if (err.code === err.PERMISSION_DENIED) locationPermission.markDenied();
+        const codeLabel = err.code === 1 ? "PERMISSION_DENIED" : err.code === 2 ? "POSITION_UNAVAILABLE" : err.code === 3 ? "TIMEOUT" : `code ${err.code}`;
+        setGpsDebug(`Error: ${codeLabel} — "${err.message}" @ ${new Date().toLocaleTimeString()}`);
+      },
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
@@ -7040,6 +7058,14 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
         <div className="text-center py-10">
           <Truck size={28} color={C.inkSoft} className="mx-auto mb-2" />
           <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : lang === "mr" ? "लोड मिळवण्यासाठी ड्युटी ऑन करा" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
+        </div>
+      )}
+
+      {/* TEMPORARY diagnostic readout -- see gpsDebug above. Remove once
+          the live "driver GPS shows Never" investigation is resolved. */}
+      {gpsDebug && (
+        <div className="rounded-lg p-2 mt-3 text-[10px]" style={{ background: "#FFF3C4", border: `1px solid ${C.marigoldDeep}`, color: C.ink, fontFamily: monoFont }}>
+          [GPS debug] {gpsDebug}
         </div>
       )}
 
