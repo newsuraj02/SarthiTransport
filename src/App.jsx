@@ -648,6 +648,17 @@ const BUG_TRACKER_SEED = [
     description: "The 'Required versionCode' gate in Admin Settings previously only ever blocked someone the next time they opened the app -- a driver/customer who kept it closed would never find out. Two additions: (1) notifyForceUpdate (Cloud Function) fires an FCM push to every driver/customer still behind the required versionCode the moment Admin bumps it, reaching them even with the app fully closed -- targeting uses a new appVersionCode field each install reports once per launch (useReportInstalledVersion). (2) The 'Update Required' block screen now tries Play Core's own in-app 'immediate update' flow (AppUpdateBridgePlugin) first, so a Play Store install updates without ever leaving the app; only falls back to the manual Play Store link if that's unavailable (e.g. Admin's sideloaded APK, which Play Core can't find an update for at all). Status kept open until confirmed on a real device after the next native rebuild -- this is new Java code (new plugin + Play Core dependency), so it needs a real rebuild before either half can be tested; a hosting-only deploy can't reach it.",
     foundAt: "2026-09-18",
   },
+  {
+    id: "gps-whatsapp-reminder-queue",
+    title: "Added a WhatsApp reminder queue for drivers online but with no live GPS",
+    severity: "medium",
+    status: "fixed",
+    type: "feature",
+    area: "AdminDriverList",
+    description: "Same reasoning as AdminKyc's existing KYC WhatsApp reminder queue -- a push notification only reaches a driver who's already granted notification permission, exactly the kind of driver whose location permission/Location Services is also plausibly off, so it was reaching almost no one. Mirrors that same pattern instead: a 'Send next GPS reminder on WhatsApp (N left)' queue button (next to the existing 'Online but no live GPS' filter) walks admin through every online-but-stale-GPS driver one WhatsApp tap at a time, each marked sent for the day so nobody's missed or double-messaged; each driver's own row also gets its own WhatsApp button next to its GPS badge for a one-off nudge. Pure web/JS -- live on a normal hosting deploy, no native rebuild needed.",
+    foundAt: "2026-09-18",
+    fixedAt: "2026-09-18",
+  },
 ];
 
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -10088,6 +10099,27 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   const [gpsOnly, setGpsOnly] = useState(false);
   const onlineNoLiveGps = drivers.filter((d) => d.online && gpsStatus(d, lang).stale);
   const byGps = gpsOnly ? byTrialTab.filter((d) => d.online && gpsStatus(d, lang).stale) : byTrialTab;
+  // Same reasoning as AdminKyc's WhatsApp reminder queue -- a push
+  // notification only reaches a driver who's already granted notification
+  // permission, exactly the kind of driver whose GPS/location permission
+  // is also plausibly off. WhatsApp reaches them regardless. Persisted (not
+  // plain useState) so tapping WhatsApp -- which switches away to the
+  // WhatsApp app -- doesn't lose the "already reminded today" tick if the
+  // tab gets reloaded when admin switches back.
+  const todayStrGps = () => new Date().toISOString().slice(0, 10);
+  const [gpsWhatsappSentMap, setGpsWhatsappSentMap] = usePersistedState("sarthi_gpsWhatsappSent", {});
+  const markGpsWhatsappSent = (mobile) => setGpsWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrGps() }));
+  const sentGpsToday = (mobile) => gpsWhatsappSentMap[mobile] === todayStrGps();
+  const gpsUnsent = onlineNoLiveGps.filter((d) => !sentGpsToday(d.mobile));
+  const nextGpsToRemind = gpsUnsent[0] || null;
+  const gpsWhatsappLink = (mobile) => {
+    const msg = lang === "en"
+      ? "Your GPS/location tracking looks off in our app right now. Please open the app and make sure Location is turned on -- both the phone's Location setting and the app's permission -- otherwise you may not get new loads."
+      : lang === "mr"
+      ? "तुमची GPS/लोकेशन ट्रॅकिंग सध्या आमच्या अ‍ॅपमध्ये बंद दिसत आहे. कृपया अ‍ॅप उघडा आणि Location सुरू करा -- फोनची लोकेशन सेटिंग आणि अ‍ॅपची परमिशन, दोन्ही -- अन्यथा तुम्हाला नवीन लोड मिळणार नाहीत."
+      : "आपकी GPS/लोकेशन ट्रैकिंग अभी हमारे ऐप में बंद दिख रही है। कृपया ऐप खोलें और Location ऑन करें -- फोन की लोकेशन सेटिंग और ऐप की परमिशन, दोनों -- नहीं तो आपको नए लोड नहीं मिल पाएंगे।";
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  };
   const filtered = byGps.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
   const kycMeta = lang === "en"
     ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E5E5E5" } }
@@ -10125,6 +10157,20 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
               : (lang === "en" ? "These drivers say Online but haven't sent a GPS update recently — tap to filter to just them." : lang === "mr" ? "हे ड्रायव्हर ऑनलाइन आहेत पण अलीकडे GPS अपडेट पाठवलेले नाही — फक्त हेच पाहण्यासाठी टॅप करा." : "ये ड्राइवर ऑनलाइन हैं लेकिन हाल में GPS अपडेट नहीं भेजा — सिर्फ इन्हें देखने के लिए टैप करें।")}
           </p>
         </button>
+      )}
+      {onlineNoLiveGps.length > 0 && (
+        nextGpsToRemind ? (
+          <a href={gpsWhatsappLink(nextGpsToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markGpsWhatsappSent(nextGpsToRemind.mobile)}
+            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.success }}>
+            <MessageCircle size={14} />
+            {lang === "en" ? `Send next GPS reminder on WhatsApp (${gpsUnsent.length} left)` : lang === "mr" ? `पुढचा GPS रिमाइंडर WhatsApp वर पाठवा (${gpsUnsent.length} बाकी)` : `अगला GPS रिमाइंडर WhatsApp पर भेजें (${gpsUnsent.length} बाकी)`}
+          </a>
+        ) : (
+          <div className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+            <CheckCircle2 size={14} />
+            {lang === "en" ? "Everyone reminded today" : lang === "mr" ? "आज सर्वांना आठवण दिली" : "आज सभी को याद दिलाया गया"}
+          </div>
+        )
       )}
       {showCall && (() => {
         const callFiltered = drivers.filter((d) => d.name.includes(callQ) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(callQ.toLowerCase()) || (d.mobile || "").includes(callQ));
@@ -10181,6 +10227,16 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5" style={{ color: gps.color, background: gps.bg }} title={lang === "en" ? "GPS status" : lang === "mr" ? "GPS स्थिती" : "GPS स्थिति"}>
                     <MapPin size={9} /> GPS {gps.label}
                   </span>
+                  {d.online && gps.stale && (
+                    sentGpsToday(d.mobile) ? (
+                      <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
+                    ) : (
+                      <a href={gpsWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markGpsWhatsappSent(d.mobile)}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.success }}>
+                        <MessageCircle size={9} /> WhatsApp
+                      </a>
+                    )
+                  )}
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
                   {daysLeft != null ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
