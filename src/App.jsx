@@ -8868,7 +8868,12 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded" style={{ background: CHANGE_TYPE_COLOR[type] || C.inkSoft, color: "#fff" }}>{CHANGE_TYPE_LABEL[type] || type}</span>
+                  {/* Type badge only shows while genuinely open/resolving --
+                      per explicit request, it should disappear once an
+                      entry is Fixed, and reappear if it's Reopened. */}
+                  {!fixed && (
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded" style={{ background: CHANGE_TYPE_COLOR[type] || C.inkSoft, color: "#fff" }}>{CHANGE_TYPE_LABEL[type] || type}</span>
+                  )}
                   {b.area && <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{b.area}</div>}
                 </div>
                 {b.resolutionNote && <p className="text-[10px] italic mt-1" style={{ color: C.inkSoft }}>{b.resolutionNote}</p>}
