@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
         // during the base onCreate(), so registering any later misses it.
         registerPlugin(SettingsBridgePlugin.class);
         registerPlugin(LocationBridgePlugin.class);
+        registerPlugin(AppUpdateBridgePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

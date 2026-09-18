@@ -399,6 +399,57 @@ exports.expireOldAdminNotifications = onSchedule({ schedule: "0 * * * *", timeZo
   await Promise.all(deletions);
 });
 
+// The "Required versionCode" gate in Admin Settings (src/App.jsx's
+// nativeVersionState) only ever blocks someone the next time they actually
+// open the app — a driver/customer who keeps it fully closed would never
+// find out. This reaches them anyway, the same way sendLoadAlert already
+// does for new loads. appVersionCode is written once per launch by
+// useReportInstalledVersion (src/App.jsx); missing entirely (an install
+// from before that existed, or one that's never reported yet) is treated
+// as "old" so it's never skipped by accident.
+exports.notifyForceUpdate = onDocumentWritten("settings/main", async (event) => {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  const latest = Number(after?.latestVersionCode);
+  if (!latest || Number(before?.latestVersionCode) === latest) return;
+
+  for (const collectionName of ["drivers", "customers"]) {
+    const snap = await db.collection(collectionName).get();
+    const tokens = [];
+    snap.forEach((doc) => {
+      const d = doc.data();
+      if (!d.fcmToken) return;
+      const mine = Number(d.appVersionCode);
+      if (!Number.isFinite(mine) || mine < latest) tokens.push(d.fcmToken);
+    });
+
+    for (let i = 0; i < tokens.length; i += 500) {
+      const batch = tokens.slice(i, i + 500);
+      try {
+        await getMessaging().sendEachForMulticast({
+          tokens: batch,
+          notification: {
+            title: "⬆️ नया अपडेट उपलब्ध है",
+            body: "ऐप का नया वर्शन आ गया है। जारी रखने के लिए कृपया अभी अपडेट करें।",
+          },
+          android: {
+            priority: "high",
+            notification: { channelId: "new_load_alerts", priority: "max", visibility: "public", defaultSound: true },
+          },
+          webpush: {
+            headers: { Urgency: "high" },
+            notification: { tag: "force-update", renotify: true },
+            fcmOptions: { link: collectionName === "drivers" ? "/?open=driver" : "/?open=customer" },
+          },
+          data: { type: "force_update" },
+        });
+      } catch (e) {
+        console.error("[push] force-update send failed:", collectionName, e.message);
+      }
+    }
+  }
+});
+
 // bookingOtps (see verifyPickupOtp above) is only ever needed for the
 // brief window between a trip starting and the driver verifying pickup —
 // same unbounded-growth concern as adminNotifications, same fix.

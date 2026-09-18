@@ -638,6 +638,16 @@ const BUG_TRACKER_SEED = [
     description: "Ships with a normal hosting deploy (no APK rebuild needed, since this is plain web code loaded live) -- shows whether the watchPosition effect actually started, each raw GPS fix received, or any geolocation error with its real code and message, right on the Driver Home screen. Deliberately left in place (status kept open, not fixed) until driver-webview-geolocation-hangs-forever above is actually resolved -- remove this readout once that's fixed.",
     foundAt: "2026-09-18",
   },
+  {
+    id: "force-update-push-and-inapp-update",
+    title: "Force-update now reaches closed apps via push, and updates in-app via Play Core instead of only linking out",
+    severity: "medium",
+    status: "open",
+    type: "feature",
+    area: "Android native (AppUpdateBridgePlugin) / notifyForceUpdate / Admin Settings",
+    description: "The 'Required versionCode' gate in Admin Settings previously only ever blocked someone the next time they opened the app -- a driver/customer who kept it closed would never find out. Two additions: (1) notifyForceUpdate (Cloud Function) fires an FCM push to every driver/customer still behind the required versionCode the moment Admin bumps it, reaching them even with the app fully closed -- targeting uses a new appVersionCode field each install reports once per launch (useReportInstalledVersion). (2) The 'Update Required' block screen now tries Play Core's own in-app 'immediate update' flow (AppUpdateBridgePlugin) first, so a Play Store install updates without ever leaving the app; only falls back to the manual Play Store link if that's unavailable (e.g. Admin's sideloaded APK, which Play Core can't find an update for at all). Status kept open until confirmed on a real device after the next native rebuild -- this is new Java code (new plugin + Play Core dependency), so it needs a real rebuild before either half can be tested; a hosting-only deploy can't reach it.",
+    foundAt: "2026-09-18",
+  },
 ];
 
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -1589,6 +1599,28 @@ function useRideNotifications(collectionName, docId, lang) {
   return { permission, enable, toast };
 }
 
+// Lets notifyForceUpdate (functions/index.js) know which native build this
+// driver/customer is actually running, so a force-update push (see the
+// "Required versionCode" field in Admin Settings) only reaches whoever is
+// actually still behind, instead of blasting everyone. Native-only — a
+// browser tab has no "installed build" to report. Written once per mount;
+// the build number can't change without a fresh install, which remounts
+// everything anyway.
+function useReportInstalledVersion(collectionName, docId) {
+  useEffect(() => {
+    if (!isNativeApp || !docId) return;
+    let cancelled = false;
+    CapacitorApp.getInfo()
+      .then((info) => {
+        if (cancelled) return;
+        const mine = Number(info.build);
+        if (Number.isFinite(mine)) patchDoc(collectionName, docId, { appVersionCode: mine }).catch((e) => console.error("[appVersion]", e));
+      })
+      .catch((e) => console.error("[appVersion]", e));
+    return () => { cancelled = true; };
+  }, [collectionName, docId]);
+}
+
 // Tracks whether the browser's location permission is granted/denied/not
 // yet asked, mirroring useRideNotifications' priming pattern above — a
 // bare getCurrentPosition/watchPosition call otherwise fails completely
@@ -1712,6 +1744,24 @@ async function ensureLocationServicesOn() {
   } catch (e) {
     console.error("[locationBridge]", e);
     return { enabled: null };
+  }
+}
+
+// Drives Play Core's own in-app "immediate update" screen (see
+// AppUpdateBridgePlugin) instead of only linking out to the Play Store —
+// the same full-screen update flow Play Store apps show natively, so the
+// driver/customer never leaves the app to update. Only ever finds an
+// update on a Play Store install (Admin's sideloaded APK isn't tracked by
+// Play, so this harmlessly resolves {started:false} there and the caller
+// falls back to the manual "Update Now" link, same as before this existed).
+const AppUpdateBridgeNative = registerPlugin("AppUpdateBridge");
+async function startNativeImmediateUpdate() {
+  if (!isNativeApp) return { started: false };
+  try {
+    return await AppUpdateBridgeNative.startImmediateUpdate();
+  } catch (e) {
+    console.error("[appUpdateBridge]", e);
+    return { started: false };
   }
 }
 
@@ -6233,6 +6283,7 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
   // moment CustomerBooking unmounts for ActiveRide.
   const locationPermission = useLocationPermission();
   const rideNotifications = useRideNotifications("customers", customerMobile, lang);
+  useReportInstalledVersion("customers", customerMobile);
 
   // Real GPS live-tracking, mirroring the driver's own — shares the
   // customer's actual device location while a trip is Ongoing, so the
@@ -8072,6 +8123,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
   // stuck showing a trip that's days away, but still reachable here.
   const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
+  useReportInstalledVersion("drivers", driver.mobile);
   const locationPermission = useLocationPermission();
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver");
 
@@ -11355,6 +11407,20 @@ export default function App() {
     };
   }, [settings.latestVersionCode]);
 
+  // The moment the block screen below would show, try Play Core's own
+  // in-app update flow first (see startNativeImmediateUpdate) instead of
+  // making everyone tap through to Play Store manually. Re-fires whenever
+  // outdated flips true again — including after someone backs out of the
+  // Play Core screen without finishing, since the foreground-resume check
+  // above will re-set outdated=true and this effect re-runs right along
+  // with it. Resolves to {started:false} on Admin's sideloaded install
+  // (Play Core has nothing to find there), leaving the manual link below
+  // as the only path, same as before this existed.
+  useEffect(() => {
+    if (!nativeVersionState.outdated) return;
+    startNativeImmediateUpdate().catch(() => {});
+  }, [nativeVersionState.outdated]);
+
   // My own driver profile — created on first driver login (keyed by mobile
   // number so every tester gets their own real identity), then kept live.
   useEffect(() => {
@@ -11833,10 +11899,14 @@ export default function App() {
           <p className="text-sm font-semibold mb-6" style={{ color: C.inkSoft }}>
             {lang === "en" ? "A new version of Apna Transport is available on the Play Store. Please update to continue." : lang === "mr" ? "Play Store वर अपना ट्रान्सपोर्टची नवीन आवृत्ती उपलब्ध आहे. सुरू ठेवण्यासाठी कृपया अपडेट करा." : "Play Store पर अपना ट्रांसपोर्ट का नया वर्शन उपलब्ध है। जारी रखने के लिए कृपया अपडेट करें।"}
           </p>
-          <a href={settings.updateUrl || PLAY_STORE_URL} target="_blank" rel="noopener noreferrer"
+          <button
+            onClick={async () => {
+              const result = await startNativeImmediateUpdate();
+              if (!result?.started) window.open(settings.updateUrl || PLAY_STORE_URL, "_blank");
+            }}
             className="w-full flex items-center justify-center rounded-xl py-4 text-base font-black text-white shadow-lg" style={{ background: C.navy }}>
             {lang === "en" ? "Update Now" : lang === "mr" ? "आता अपडेट करा" : "अभी अपडेट करें"}
-          </a>
+          </button>
         </div>
       </div>
     );

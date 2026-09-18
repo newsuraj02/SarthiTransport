@@ -85,6 +85,9 @@ dependencies {
     // outside what navigator.geolocation (or any web JS) can fix on its
     // own; this is Google Play Services' own settings-resolution API.
     implementation "com.google.android.gms:play-services-location:21.3.0"
+    // Drives Play Core's own in-app "immediate update" screen (see
+    // AppUpdateBridgePlugin) instead of only linking out to Play Store.
+    implementation "com.google.android.play:app-update:2.1.0"
 }
 
 apply from: 'capacitor.build.gradle'

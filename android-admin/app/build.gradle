@@ -85,6 +85,10 @@ dependencies {
     // kept here too for consistency even though Admin doesn't currently
     // call it (it never does customer/driver GPS tracking).
     implementation "com.google.android.gms:play-services-location:21.3.0"
+    // See AppUpdateBridgePlugin -- kept in step with the main app's
+    // build.gradle for consistency, even though Play Core can't find an
+    // update for this sideloaded (non-Play-Store) install.
+    implementation "com.google.android.play:app-update:2.1.0"
 }
 
 apply from: 'capacitor.build.gradle'
