@@ -19,6 +19,31 @@ function col(name) {
   return collection(getDb(), name);
 }
 
+// Retries a single Firestore read/write on a transient network blip (the
+// exact "internet went slow/dropped for a second" case) instead of letting
+// it surface as a silent .catch(console.error) failure at whichever of the
+// hundreds of App.jsx call sites happened to invoke it. Deliberately does
+// NOT retry a real error (permission-denied, not-found, invalid-argument,
+// etc.) -- retrying those just delays the same failure for no benefit.
+// Every exported write/read helper below routes through this, so this is
+// the one place that needed to change for every caller to benefit.
+const RETRY_TRANSIENT_CODES = new Set(["unavailable", "deadline-exceeded", "cancelled", "internal", "aborted", "resource-exhausted"]);
+const RETRY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 500;
+function isTransientFirestoreError(err) {
+  return RETRY_TRANSIENT_CODES.has(err?.code);
+}
+async function withRetry(fn) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= RETRY_ATTEMPTS || !isTransientFirestoreError(err)) throw err;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)));
+    }
+  }
+}
+
 // orderByField is optional — Firestore's orderBy silently excludes any
 // document missing that field, so collections without a createdAt on every
 // doc (e.g. seeded vehicleTypes, driver profiles) must pass orderByField=null.
@@ -53,7 +78,7 @@ export function subscribeDoc(name, id, onChange) {
 export async function getDocOnce(name, id) {
   const db = getDb();
   if (!db) return null;
-  const snap = await getDoc(doc(db, name, id));
+  const snap = await withRetry(() => getDoc(doc(db, name, id)));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
@@ -61,36 +86,36 @@ export async function getDocOnce(name, id) {
 // driver's or customer's first login, or the singleton settings doc).
 export async function getOrCreateDoc(name, id, defaults) {
   const ref = doc(getDb(), name, id);
-  const snap = await getDoc(ref);
+  const snap = await withRetry(() => getDoc(ref));
   if (snap.exists()) return { id: snap.id, ...snap.data() };
   const data = { ...defaults, createdAt: serverTimestamp() };
-  await setDoc(ref, data);
+  await withRetry(() => setDoc(ref, data));
   return { id, ...data };
 }
 
 // Creates a brand-new doc (a fresh booking, alert, withdrawal, recharge
 // request) — always stamps createdAt so newest-first ordering works.
 export async function createDoc(name, id, data) {
-  await setDoc(doc(getDb(), name, id), { ...data, createdAt: serverTimestamp() });
+  await withRetry(() => setDoc(doc(getDb(), name, id), { ...data, createdAt: serverTimestamp() }));
 }
 
 // Overwrites a doc's fields with a fully-computed next state (used for
 // driver/customer profiles, where callers already merge {...prev, ...patch}
 // themselves) without disturbing the original createdAt.
 export async function replaceDoc(name, id, data) {
-  await setDoc(doc(getDb(), name, id), data);
+  await withRetry(() => setDoc(doc(getDb(), name, id), data));
 }
 
 // Updates only the given fields, leaving everything else (incl. createdAt)
 // untouched — used for status flips like "Pending" -> "Approved".
 export async function patchDoc(name, id, patch) {
-  await updateDoc(doc(getDb(), name, id), patch);
+  await withRetry(() => updateDoc(doc(getDb(), name, id), patch));
 }
 
 // Permanently removes a doc (e.g. an admin deleting a driver/customer
 // profile entirely, not just blocking them).
 export async function removeDoc(name, id) {
-  await deleteDoc(doc(getDb(), name, id));
+  await withRetry(() => deleteDoc(doc(getDb(), name, id)));
 }
 
 // Patches many docs in one go (e.g. a diesel-price adjustment nudging
@@ -109,12 +134,12 @@ export async function bulkUpdateDocs(name, updates) {
     updates.slice(i, i + BATCH_CHUNK_SIZE).forEach(({ id, patch }) => {
       batch.update(doc(db, name, id), patch);
     });
-    await batch.commit();
+    await withRetry(() => batch.commit());
   }
 }
 
 export async function seedIfEmpty(name, items, idField) {
-  const snap = await getDoc(doc(getDb(), name, items[0][idField]));
+  const snap = await withRetry(() => getDoc(doc(getDb(), name, items[0][idField])));
   if (snap.exists()) return; // assume the collection is already seeded
-  await Promise.all(items.map((item) => setDoc(doc(getDb(), name, item[idField]), item)));
+  await Promise.all(items.map((item) => withRetry(() => setDoc(doc(getDb(), name, item[idField]), item))));
 }

@@ -574,6 +574,28 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-17",
     fixedAt: "2026-09-17",
   },
+  {
+    id: "firestore-retry-on-transient-network-error",
+    title: "Added automatic retry-with-backoff for Firestore reads/writes on a transient network blip",
+    severity: "low",
+    status: "fixed",
+    type: "feature",
+    area: "firestoreStore.js (every Firestore read/write helper)",
+    description: "Per explicit developer-checklist request. Every read/write helper (createDoc, replaceDoc, patchDoc, removeDoc, getDocOnce, getOrCreateDoc, bulkUpdateDocs, seedIfEmpty) now retries up to 3 times with exponential backoff (500ms/1s/2s) on a transient error (unavailable, deadline-exceeded, cancelled, internal, aborted, resource-exhausted) -- exactly the 'internet went slow for a second' case. A real error (permission-denied, not-found, invalid-argument) is never retried, since retrying those just delays the same failure. Fixed at the one central chokepoint in firestoreStore.js rather than touching the hundreds of call sites across App.jsx that already do their own .catch(console.error) -- every existing caller benefits automatically with no other code change.",
+    foundAt: "2026-09-18",
+    fixedAt: "2026-09-18",
+  },
+  {
+    id: "changelog-resolve-manual-fallback",
+    title: "Added a manual 'mark fixed' fallback for when the automated Resolve (Claude verification) itself fails",
+    severity: "low",
+    status: "fixed",
+    type: "feature",
+    area: "Admin Panel / Settings / Change Log",
+    description: "Reported live: clicking Resolve on an open entry got stuck showing 'Automated resolution failed (API error) -- try again or resolve manually', with no actual manual option to fall back to -- confirming Claude IS wired into the Resolve flow (that message only appears when the Anthropic API call itself gets rejected), but leaving the admin with no way to clear an entry they already know is fine while that API call is failing. Added a 'Mark fixed manually' text link next to Resolve (shown only on an open, non-resolving entry) that flips status straight to fixed with a resolutionNote noting it was a manual override, bypassing the Claude call entirely. The underlying API failure itself still needs the actual Cloud Function logs to diagnose (bad/missing ANTHROPIC_API_KEY, an invalid model id, or no billing on the Anthropic account are the likely causes) -- this only unblocks the admin in the meantime.",
+    foundAt: "2026-09-18",
+    fixedAt: "2026-09-18",
+  },
 ];
 
 function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -8854,13 +8876,28 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
                   <span className="text-[10px]" style={{ color: C.inkSoft }}>
                     {lang === "en" ? "Found" : lang === "mr" ? "सापडले" : "मिला"} {b.foundAt || "—"}{fixed && b.fixedAt ? ` · ${lang === "en" ? "Fixed" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड"} ${typeof b.fixedAt === "number" ? new Date(b.fixedAt).toISOString().slice(0, 10) : b.fixedAt}` : ""}
                   </span>
-                  <button onClick={() => fixed ? setBugStatus(b.id, "open") : resolve(b)} disabled={resolving} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: fixed ? C.paper : C.metallicGreen, color: fixed ? C.inkSoft : "#FFFFFF", border: fixed ? `1px solid ${C.line}` : "none", opacity: resolving ? 0.6 : 1 }}>
-                    {resolving
-                      ? (lang === "en" ? "Resolving…" : lang === "mr" ? "सोडवत आहे…" : "हल हो रहा है…")
-                      : fixed
-                      ? (lang === "en" ? "Reopen" : lang === "mr" ? "पुन्हा उघडा" : "फिर से खोलें")
-                      : (lang === "en" ? "Resolve" : lang === "mr" ? "सोडवा" : "हल करें")}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Manual fallback -- only shown when not fixed and not
+                        mid-resolve, for exactly the case where the automated
+                        Resolve (resolveChangeLogEntry -> Claude) is broken
+                        (e.g. the ANTHROPIC_API_KEY/model call itself failing)
+                        and the admin already knows this is genuinely fine and
+                        just wants to clear it, same as before Resolve called
+                        Claude at all. */}
+                    {!fixed && !resolving && (
+                      <button onClick={() => setBugStatus(b.id, "fixed", lang === "en" ? "Marked fixed manually by admin (automated check unavailable)." : lang === "mr" ? "अ‍ॅडमिनने मॅन्युअली फिक्स्ड मार्क केले (ऑटोमेटेड चेक उपलब्ध नाही)." : "एडमिन द्वारा मैन्युअली फिक्स्ड मार्क किया गया (ऑटोमेटेड चेक उपलब्ध नहीं)।")}
+                        className="text-[10px] font-semibold underline" style={{ color: C.inkSoft }}>
+                        {lang === "en" ? "Mark fixed manually" : lang === "mr" ? "मॅन्युअली फिक्स्ड मार्क करा" : "मैन्युअली फिक्स्ड मार्क करें"}
+                      </button>
+                    )}
+                    <button onClick={() => fixed ? setBugStatus(b.id, "open") : resolve(b)} disabled={resolving} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: fixed ? C.paper : C.metallicGreen, color: fixed ? C.inkSoft : "#FFFFFF", border: fixed ? `1px solid ${C.line}` : "none", opacity: resolving ? 0.6 : 1 }}>
+                      {resolving
+                        ? (lang === "en" ? "Resolving…" : lang === "mr" ? "सोडवत आहे…" : "हल हो रहा है…")
+                        : fixed
+                        ? (lang === "en" ? "Reopen" : lang === "mr" ? "पुन्हा उघडा" : "फिर से खोलें")
+                        : (lang === "en" ? "Resolve" : lang === "mr" ? "सोडवा" : "हल करें")}
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -11162,7 +11199,7 @@ export default function App() {
     BUG_TRACKER_SEED.filter((b) => !existingIds.has(b.id))
       .forEach((b) => createDoc("bugs", b.id, b).catch((e) => console.error("[seed bug]", e)));
   }, [bugs]);
-  const setBugStatus = (id, status) => patchDoc("bugs", id, { status, ...(status === "fixed" ? { fixedAt: Date.now() } : {}) }).catch((e) => console.error(e));
+  const setBugStatus = (id, status, note) => patchDoc("bugs", id, { status, ...(status === "fixed" ? { fixedAt: Date.now() } : {}), ...(note !== undefined ? { resolutionNote: note } : {}) }).catch((e) => console.error(e));
   const addBug = (fields) => createDoc("bugs", genId("BUG"), { ...fields, status: "open", foundAt: new Date().toISOString().slice(0, 10) }).catch((e) => console.error(e));
   const [expenseCategories, setExpenseCategories] = useState({}); // { hiName: {key, hi, en, icon} }
   useEffect(() => (firestoreReady && role === "admin" && adminAuth
