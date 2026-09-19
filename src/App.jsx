@@ -6964,6 +6964,15 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // lastKnownLocation stays fresh for the 100km bid-radius check below —
   // otherwise an idle online driver would have no location on file at all.
   const lastGpsWriteRef = useRef(0);
+  // Raw counters, independent of the throttled/overwritten message below --
+  // lets us tell definitively whether the native->JS callback is firing at
+  // all, even if something else is resetting gpsDebug's text before it can
+  // be seen. watchStartCount increments every time this effect (re)starts a
+  // watch; callbackFireCount increments on every single invocation of the
+  // watchPositionCompat callback, success or error, before anything else
+  // runs. Both persist across effect reruns (refs, not state).
+  const watchStartCountRef = useRef(0);
+  const callbackFireCountRef = useRef(0);
   // The watch below only resubscribes when the trip ID changes (see its own
   // dependency array) — kept in sync separately here so the GPS callback
   // always reads this trip's current pause-tracking fields instead of a
@@ -6983,7 +6992,8 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       setGpsDebug(`Watch not started — online=${String(driver.online)} @ ${new Date().toLocaleTimeString()}`);
       return;
     }
-    setGpsDebug(`Watch started @ ${new Date().toLocaleTimeString()}, waiting for first fix...`);
+    watchStartCountRef.current += 1;
+    setGpsDebug(`Watch started (#${watchStartCountRef.current}, cb=${callbackFireCountRef.current}) @ ${new Date().toLocaleTimeString()}, waiting for first fix...`);
 
     // @capacitor/geolocation -- native side reads Google Play Services'
     // Fused Location Provider directly (the same mechanism Google Maps
@@ -7000,15 +7010,16 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     watchPositionCompat(
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 20000, minimumUpdateInterval: 5000 },
       (pos, err) => {
+        callbackFireCountRef.current += 1;
         if (err) {
           console.error("GPS tracking error", err);
           if (isLocationPermissionDeniedError(err)) locationPermission.markDenied();
-          setGpsDebug(`Error: ${err.code || "unknown"} — "${err.message}" @ ${new Date().toLocaleTimeString()}`);
+          setGpsDebug(`Error (cb=${callbackFireCountRef.current}): ${err.code || "unknown"} — "${err.message}" @ ${new Date().toLocaleTimeString()}`);
           return;
         }
         locationPermission.markGranted();
         const now = Date.now();
-        setGpsDebug(`Fix received: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
+        setGpsDebug(`Fix received (cb=${callbackFireCountRef.current}): ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
         if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
         lastGpsWriteRef.current = now;
         const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
