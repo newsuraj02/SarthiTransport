@@ -15,9 +15,42 @@ import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, resolveChangeLogEntry } from "./firebaseClient";
-import { registerPlugin } from "@capacitor/core";
+import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Geolocation } from "@capacitor/geolocation";
+
+// Guards every Geolocation call behind whether THIS installed app actually
+// has @capacitor/geolocation's native code compiled in -- true on a browser
+// tab (its web fallback is always registered) and on a native build that was
+// actually rebuilt with the plugin, false on every native build shipped
+// before that. This check matters a great deal: hosting deploys reach every
+// installed app instantly (remote-URL mode), but a brand-new native plugin
+// does not -- that only ships on the next real Play Store release. Calling
+// Geolocation.* directly on an old install rejects immediately with "plugin
+// is not implemented", which several call sites below don't even surface,
+// silently breaking GPS for every real driver/customer still on the old
+// build until their app is updated. Falling through to navigator.geolocation
+// in that case restores exactly the old (imperfect, but working) behavior
+// instead of getting nothing at all.
+const geolocationPluginAvailable = Capacitor.isPluginAvailable("Geolocation");
+function watchPositionCompat(options, callback) {
+  if (geolocationPluginAvailable) return Geolocation.watchPosition(options, callback);
+  if (!navigator.geolocation) return Promise.reject(new Error("Geolocation not supported"));
+  const id = navigator.geolocation.watchPosition((pos) => callback(pos, undefined), (err) => callback(null, err), options);
+  return Promise.resolve(String(id));
+}
+function clearWatchCompat(id) {
+  if (geolocationPluginAvailable) return Geolocation.clearWatch({ id });
+  if (navigator.geolocation) navigator.geolocation.clearWatch(parseInt(id, 10));
+  return Promise.resolve();
+}
+function getCurrentPositionCompat(options) {
+  if (geolocationPluginAvailable) return Geolocation.getCurrentPosition(options);
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error("Geolocation not supported")); return; }
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
 
 // Fallback Play Store link for the force-update screen — used whenever
 // admin hasn't set a custom settings.updateUrl (see AdminSettings).
@@ -1679,7 +1712,7 @@ function useLocationPermission() {
     // Services' Fused Location Provider (see the watchPosition call
     // sites below for the full "why"); on a plain browser tab it falls
     // back to navigator.geolocation itself, unchanged from before.
-    return Geolocation.getCurrentPosition({}).then(() => markGranted(), () => markDenied());
+    return getCurrentPositionCompat({}).then(() => markGranted(), () => markDenied());
   };
   return { permission, enable, markDenied, markGranted };
 }
@@ -2815,7 +2848,7 @@ function GoogleLocationPicker({ onConfirm, onClose, lang = "hi" }) {
   };
 
   const useMyLocation = () => {
-    Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })
+    getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000 })
       .then((pos) => {
         const { latitude, longitude } = pos.coords;
         placeMarker(latitude, longitude);
@@ -5288,7 +5321,7 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
     // live on a real device to be unreliable inside this app's WebView
     // (see DriverHome's GPS effect for the full "why"). Falls back to
     // navigator.geolocation itself on a plain browser tab, unchanged.
-    Geolocation.watchPosition(
+    watchPositionCompat(
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
       (pos, err) => {
         if (err) {
@@ -5302,12 +5335,12 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
         setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       }
     ).then((id) => {
-      if (cancelled) Geolocation.clearWatch({ id }).catch(() => {});
+      if (cancelled) clearWatchCompat(id).catch(() => {});
       else watchId = id;
     }).catch((e) => console.error("[geolocation]", e));
     return () => {
       cancelled = true;
-      if (watchId != null) Geolocation.clearWatch({ id: watchId }).catch(() => {});
+      if (watchId != null) clearWatchCompat(watchId).catch(() => {});
     };
   }, []);
 
@@ -6340,7 +6373,7 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
     // @capacitor/geolocation -- see CustomerHome's customerLocation
     // effect for the full "why" (Fused Location Provider instead of the
     // browser's own navigator.geolocation).
-    Geolocation.watchPosition(
+    watchPositionCompat(
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 },
       (pos, err) => {
         if (err) {
@@ -6356,12 +6389,12 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
         patchDoc("bookings", ongoingTrip.id, { customerLocation: location }).catch((e) => console.error(e));
       }
     ).then((id) => {
-      if (cancelled) Geolocation.clearWatch({ id }).catch(() => {});
+      if (cancelled) clearWatchCompat(id).catch(() => {});
       else watchId = id;
     }).catch((e) => console.error("[geolocation]", e));
     return () => {
       cancelled = true;
-      if (watchId != null) Geolocation.clearWatch({ id: watchId }).catch(() => {});
+      if (watchId != null) clearWatchCompat(watchId).catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ongoingTrip?.id]);
@@ -6953,7 +6986,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     // plain browser tab, unchanged from before.
     let watchId = null;
     let cancelled = false;
-    Geolocation.watchPosition(
+    watchPositionCompat(
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 20000, minimumUpdateInterval: 5000 },
       (pos, err) => {
         if (err) {
@@ -6999,7 +7032,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
         }
       }
     ).then((id) => {
-      if (cancelled) Geolocation.clearWatch({ id }).catch(() => {});
+      if (cancelled) clearWatchCompat(id).catch(() => {});
       else watchId = id;
     }).catch((e) => {
       console.error("[geolocation]", e);
@@ -7008,7 +7041,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 
     return () => {
       cancelled = true;
-      if (watchId != null) Geolocation.clearWatch({ id: watchId }).catch(() => {});
+      if (watchId != null) clearWatchCompat(watchId).catch(() => {});
     };
   }, [myTrip?.id, driver.online, driver.mobile]);
 
