@@ -17,35 +17,46 @@ import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } 
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, resolveChangeLogEntry } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
-import { Geolocation } from "@capacitor/geolocation";
 
-// Guards every Geolocation call behind whether THIS installed app actually
-// has @capacitor/geolocation's native code compiled in -- true on a browser
-// tab (its web fallback is always registered) and on a native build that was
-// actually rebuilt with the plugin, false on every native build shipped
-// before that. This check matters a great deal: hosting deploys reach every
-// installed app instantly (remote-URL mode), but a brand-new native plugin
-// does not -- that only ships on the next real Play Store release. Calling
-// Geolocation.* directly on an old install rejects immediately with "plugin
-// is not implemented", which several call sites below don't even surface,
-// silently breaking GPS for every real driver/customer still on the old
-// build until their app is updated. Falling through to navigator.geolocation
-// in that case restores exactly the old (imperfect, but working) behavior
-// instead of getting nothing at all.
-const geolocationPluginAvailable = Capacitor.isPluginAvailable("Geolocation");
+// Custom native plugin (android/app + android-admin/app:
+// FusedLocationBridgePlugin) -- replaces @capacitor/geolocation after a
+// live device bug report caught a real bug in it: Play Services WAS
+// delivering location fixes to the app's process, but the plugin's
+// coroutine/Flow-based callback fired on a background/binder thread
+// instead of the main thread, and Android's WebView silently discards any
+// call made from the wrong thread ("A WebView method was called on
+// thread 'binder:...'") instead of crashing -- so it just looked like the
+// location call hung forever. This plugin explicitly requests updates on
+// Looper.getMainLooper(), closing that off entirely.
+const FusedLocationBridgeNative = registerPlugin("FusedLocationBridge");
+
+// Guards every call behind whether THIS installed app actually has the
+// native plugin compiled in -- true only on a native build that was
+// actually rebuilt with it, false on every native build shipped before
+// that (and always false on a plain browser tab, which has no native
+// plugin at all). This matters a great deal: hosting deploys reach every
+// installed app instantly (remote-URL mode), but new native plugin code
+// does not -- that only ships on the next real Play Store release.
+// Calling a native-only plugin method on an install that doesn't have it
+// rejects immediately with "plugin is not implemented", which several
+// call sites below don't even surface, silently breaking GPS for every
+// real driver/customer still on the old build until their app updates.
+// Falling through to navigator.geolocation in that case restores exactly
+// the old (imperfect, but working) behavior instead of getting nothing.
+const geolocationPluginAvailable = Capacitor.isPluginAvailable("FusedLocationBridge");
 function watchPositionCompat(options, callback) {
-  if (geolocationPluginAvailable) return Geolocation.watchPosition(options, callback);
+  if (geolocationPluginAvailable) return FusedLocationBridgeNative.watchPosition(options, callback);
   if (!navigator.geolocation) return Promise.reject(new Error("Geolocation not supported"));
   const id = navigator.geolocation.watchPosition((pos) => callback(pos, undefined), (err) => callback(null, err), options);
   return Promise.resolve(String(id));
 }
 function clearWatchCompat(id) {
-  if (geolocationPluginAvailable) return Geolocation.clearWatch({ id });
+  if (geolocationPluginAvailable) return FusedLocationBridgeNative.clearWatch({ id });
   if (navigator.geolocation) navigator.geolocation.clearWatch(parseInt(id, 10));
   return Promise.resolve();
 }
 function getCurrentPositionCompat(options) {
-  if (geolocationPluginAvailable) return Geolocation.getCurrentPosition(options);
+  if (geolocationPluginAvailable) return FusedLocationBridgeNative.getCurrentPosition(options);
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) { reject(new Error("Geolocation not supported")); return; }
     navigator.geolocation.getCurrentPosition(resolve, reject, options);

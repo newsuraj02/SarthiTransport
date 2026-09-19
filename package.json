@@ -15,7 +15,6 @@
   "dependencies": {
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.1",
-    "@capacitor/geolocation": "^8.2.2",
     "@capacitor/push-notifications": "^8.1.2",
     "@react-google-maps/api": "^2.20.8",
     "firebase": "^12.16.0",
