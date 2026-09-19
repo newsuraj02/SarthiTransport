@@ -1916,7 +1916,19 @@ function usePrimePermissionsOnce(permsPrimedGlobal, setPermsPrimedGlobal) {
       // a real GPS fix on their very first launch, instead of silently
       // falling back to the map's default center with no explanation.
       await ensureLocationServicesOn();
-      if (location.permission !== "granted") await location.enable();
+      // Native: skip this separate priming request entirely -- it used to
+      // exist only to trigger the OS permission dialog early, but
+      // FusedLocationBridgePlugin already requests permission itself the
+      // first time DriverHome/CustomerHome actually calls watchPosition,
+      // no separate call needed. Removed because it was firing an extra,
+      // overlapping one-shot location request on every app launch right
+      // before the real continuous watch starts -- confirmed live on a
+      // real device that Play Services' underlying GPS radio was being
+      // toggled on/off repeatedly even within a single watch session,
+      // which can prevent it from ever completing a satellite lock.
+      // Browser tab: no dedicated native permission flow exists, so this
+      // real getCurrentPosition call is still how a browser first prompts.
+      if (!isNativeApp && location.permission !== "granted") await location.enable();
       if (typeof Notification !== "undefined" && Notification.permission === "default") await requestPushToken();
       setPermsPrimedGlobal(true);
     })();
