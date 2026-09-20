@@ -44,17 +44,6 @@ const FusedLocationBridgeNative = registerPlugin("FusedLocationBridge");
 // Falling through to navigator.geolocation in that case restores exactly
 // the old (imperfect, but working) behavior instead of getting nothing.
 const geolocationPluginAvailable = Capacitor.isPluginAvailable("FusedLocationBridge");
-function watchPositionCompat(options, callback) {
-  if (geolocationPluginAvailable) return FusedLocationBridgeNative.watchPosition(options, callback);
-  if (!navigator.geolocation) return Promise.reject(new Error("Geolocation not supported"));
-  const id = navigator.geolocation.watchPosition((pos) => callback(pos, undefined), (err) => callback(null, err), options);
-  return Promise.resolve(String(id));
-}
-function clearWatchCompat(id) {
-  if (geolocationPluginAvailable) return FusedLocationBridgeNative.clearWatch({ id });
-  if (navigator.geolocation) navigator.geolocation.clearWatch(parseInt(id, 10));
-  return Promise.resolve();
-}
 function getCurrentPositionCompat(options) {
   if (geolocationPluginAvailable) return FusedLocationBridgeNative.getCurrentPosition(options);
   return new Promise((resolve, reject) => {
@@ -5329,41 +5318,39 @@ function CustomerBooking({ requestDriverDirectly, vehicleTypes, recentPickups, l
   }, [drop, dropCoords, mapsReady]);
 
   // Customer's own live position for the nearby-vehicles map at the top of
-  // this page — watched (throttled to one write every 5s, same as the
-  // driver/trip GPS effects elsewhere) for as long as this booking screen
-  // is mounted (i.e. until there's an active booking and CustomerApp swaps
-  // this out for ActiveRide).
+  // this page — polled every 5s (repeated one-shot getCurrentPosition,
+  // not a single long-lived watchPosition subscription) for as long as
+  // this booking screen is mounted (i.e. until there's an active booking
+  // and CustomerApp swaps this out for ActiveRide). Native side reads
+  // Google Play Services' Fused Location Provider (same mechanism Google
+  // Maps uses) instead of the browser's own navigator.geolocation, which
+  // was confirmed live on a real device to be unreliable inside this
+  // app's WebView. Polling instead of watching is deliberate too --
+  // confirmed live that a long-lived watchPosition subscription can go
+  // completely silent on a real device (Play Services delivers fixes at
+  // the native level, but the JS callback never fires even once), while
+  // independent one-shot calls reliably complete. Falls back to
+  // navigator.geolocation itself on a plain browser tab, unchanged.
   const [customerLocation, setCustomerLocation] = useState(null);
-  const lastHomeGpsRef = useRef(0);
   useEffect(() => {
-    let watchId = null;
     let cancelled = false;
-    // @capacitor/geolocation -- native side reads Google Play Services'
-    // Fused Location Provider (same mechanism Google Maps uses) instead
-    // of the browser's own navigator.geolocation, which was confirmed
-    // live on a real device to be unreliable inside this app's WebView
-    // (see DriverHome's GPS effect for the full "why"). Falls back to
-    // navigator.geolocation itself on a plain browser tab, unchanged.
-    watchPositionCompat(
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
-      (pos, err) => {
-        if (err) {
+    const poll = () => {
+      getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
+        .then((pos) => {
+          if (cancelled) return;
+          locationPermission?.markGranted();
+          setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        })
+        .catch((err) => {
+          if (cancelled) return;
           if (isLocationPermissionDeniedError(err)) locationPermission?.markDenied();
-          return;
-        }
-        locationPermission?.markGranted();
-        const now = Date.now();
-        if (now - lastHomeGpsRef.current < 5000) return;
-        lastHomeGpsRef.current = now;
-        setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      }
-    ).then((id) => {
-      if (cancelled) clearWatchCompat(id).catch(() => {});
-      else watchId = id;
-    }).catch((e) => console.error("[geolocation]", e));
+        });
+    };
+    poll();
+    const intervalId = setInterval(poll, 5000);
     return () => {
       cancelled = true;
-      if (watchId != null) clearWatchCompat(watchId).catch(() => {});
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -6388,36 +6375,33 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
   // Real GPS live-tracking, mirroring the driver's own — shares the
   // customer's actual device location while a trip is Ongoing, so the
   // driver (and the customer's own map) can see both parties together.
-  const lastCustomerGpsWriteRef = useRef(0);
   useEffect(() => {
     if (!ongoingTrip) return;
-    let watchId = null;
+    // Polling (repeated one-shot getCurrentPosition, every 5s) instead of
+    // a single long-lived watchPosition subscription -- see CustomerHome's
+    // customerLocation effect for the full "why". Native side still reads
+    // Google Play Services' Fused Location Provider (FusedLocationBridgePlugin).
     let cancelled = false;
-    // @capacitor/geolocation -- see CustomerHome's customerLocation
-    // effect for the full "why" (Fused Location Provider instead of the
-    // browser's own navigator.geolocation).
-    watchPositionCompat(
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 15000 },
-      (pos, err) => {
-        if (err) {
+    const poll = () => {
+      getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
+        .then((pos) => {
+          if (cancelled) return;
+          locationPermission.markGranted();
+          const now = Date.now();
+          const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
+          patchDoc("bookings", ongoingTrip.id, { customerLocation: location }).catch((e) => console.error(e));
+        })
+        .catch((err) => {
+          if (cancelled) return;
           console.error("GPS tracking error", err);
           if (isLocationPermissionDeniedError(err)) locationPermission.markDenied();
-          return;
-        }
-        locationPermission.markGranted();
-        const now = Date.now();
-        if (now - lastCustomerGpsWriteRef.current < 5000) return;
-        lastCustomerGpsWriteRef.current = now;
-        const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
-        patchDoc("bookings", ongoingTrip.id, { customerLocation: location }).catch((e) => console.error(e));
-      }
-    ).then((id) => {
-      if (cancelled) clearWatchCompat(id).catch(() => {});
-      else watchId = id;
-    }).catch((e) => console.error("[geolocation]", e));
+        });
+    };
+    poll();
+    const intervalId = setInterval(poll, 5000);
     return () => {
       cancelled = true;
-      if (watchId != null) clearWatchCompat(watchId).catch(() => {});
+      clearInterval(intervalId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ongoingTrip?.id]);
@@ -6979,10 +6963,10 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // Raw counters, independent of the throttled/overwritten message below --
   // lets us tell definitively whether the native->JS callback is firing at
   // all, even if something else is resetting gpsDebug's text before it can
-  // be seen. watchStartCount increments every time this effect (re)starts a
-  // watch; callbackFireCount increments on every single invocation of the
-  // watchPositionCompat callback, success or error, before anything else
-  // runs. Both persist across effect reruns (refs, not state).
+  // be seen. watchStartCount increments every time this effect (re)starts
+  // the poll loop; callbackFireCount increments on every completed poll,
+  // success or error, before anything else runs. Both persist across
+  // effect reruns (refs, not state).
   const watchStartCountRef = useRef(0);
   const callbackFireCountRef = useRef(0);
   // The watch below only resubscribes when the trip ID changes (see its own
