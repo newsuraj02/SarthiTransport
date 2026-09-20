@@ -6942,7 +6942,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, lang, onOpenWallet }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, lang, onOpenWallet, locationPermission }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
@@ -8486,7 +8486,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} onOpenWallet={() => setTab("wallet")} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
