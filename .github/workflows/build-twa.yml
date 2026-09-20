@@ -72,9 +72,31 @@ jobs:
       - name: Point Bubblewrap at the JDK/SDK setup-java and setup-android already installed
         # Skips Bubblewrap's own interactive "download JDK/SDK?" first-run prompts
         # entirely by pre-supplying the paths it would otherwise ask for.
+        # android-actions/setup-android@v3 exports the SDK path as
+        # ANDROID_SDK_ROOT, not ANDROID_HOME (which this step used to read
+        # -- always empty, so Bubblewrap rejected the config with "The
+        # provided androidSdk isn't correct").
         run: |
+          SDK_PATH="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+
+          if [ -z "$SDK_PATH" ] || [ ! -d "$SDK_PATH" ]; then
+            echo "::error::Android SDK directory was not found."
+            echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+            echo "ANDROID_HOME=$ANDROID_HOME"
+            exit 1
+          fi
+
+          if [ ! -d "$JAVA_HOME" ]; then
+            echo "::error::JDK directory was not found: $JAVA_HOME"
+            exit 1
+          fi
+
           mkdir -p "$HOME/.bubblewrap"
-          printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
+          printf '{"jdkPath":"%s","androidSdkPath":"%s"}\n' \
+            "$JAVA_HOME" "$SDK_PATH" \
+            > "$HOME/.bubblewrap/config.json"
+
+          cat "$HOME/.bubblewrap/config.json"
 
       - name: Generate TWA project
         working-directory: twa
