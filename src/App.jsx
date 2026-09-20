@@ -7001,81 +7001,83 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   const [gpsDebug, setGpsDebug] = useState(null);
   useEffect(() => {
     if (!myTrip && !driver.online) {
-      setGpsDebug(`Watch not started — online=${String(driver.online)} @ ${new Date().toLocaleTimeString()}`);
+      setGpsDebug(`Poll not started — online=${String(driver.online)} @ ${new Date().toLocaleTimeString()}`);
       return;
     }
     watchStartCountRef.current += 1;
-    setGpsDebug(`Watch started (#${watchStartCountRef.current}, cb=${callbackFireCountRef.current}) @ ${new Date().toLocaleTimeString()}, waiting for first fix...`);
+    setGpsDebug(`Poll started (#${watchStartCountRef.current}, cb=${callbackFireCountRef.current}) @ ${new Date().toLocaleTimeString()}, waiting for first fix...`);
 
-    // @capacitor/geolocation -- native side reads Google Play Services'
-    // Fused Location Provider directly (the same mechanism Google Maps
-    // itself uses), bypassing the WebView's own navigator.geolocation
-    // bridge entirely. Confirmed live on a real device that the browser
-    // API is unreliable inside this app's WebView -- a single call
-    // reliably hit TIMEOUT at 15s, and two concurrent calls (an attempted
-    // JS-only workaround) went completely silent for 2+ minutes, despite
-    // Google Maps getting an instant fix on the very same phone, in the
-    // very same spot. Falls back to navigator.geolocation itself on a
-    // plain browser tab, unchanged from before.
-    let watchId = null;
-    let cancelled = false;
-    watchPositionCompat(
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 20000, minimumUpdateInterval: 5000 },
-      (pos, err) => {
-        callbackFireCountRef.current += 1;
-        if (err) {
-          console.error("GPS tracking error", err);
-          if (isLocationPermissionDeniedError(err)) locationPermission.markDenied();
-          setGpsDebug(`Error (cb=${callbackFireCountRef.current}): ${err.code || "unknown"} — "${err.message}" @ ${new Date().toLocaleTimeString()}`);
-          return;
-        }
-        locationPermission.markGranted();
-        const now = Date.now();
-        setGpsDebug(`Fix received (cb=${callbackFireCountRef.current}): ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
-        if (now - lastGpsWriteRef.current < 5000) return; // throttle Firestore writes
-        lastGpsWriteRef.current = now;
-        const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
-        if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
-        if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
+    // Polling (repeated one-shot getCurrentPosition, every 5s) instead of a
+    // single long-lived watchPosition subscription -- swapped in as a live
+    // test of a real, structural difference: watchPosition keeps one
+    // PluginCall alive and resolves it over and over as fixes arrive, while
+    // this fires an independent, self-contained register/resolve/done cycle
+    // every tick. Confirmed live on a real device that Play Services WAS
+    // delivering fixes to a watchPosition-style registration while the
+    // JS-side callback never fired even once -- a pattern specific to a
+    // long-lived, repeatedly-resolved call. A one-shot call only ever
+    // resolves once, so if this same bug is specific to the repeated-resolve
+    // path, this sidesteps it entirely. Native side still reads Google Play
+    // Services' Fused Location Provider directly (see FusedLocationBridgePlugin);
+    // falls back to navigator.geolocation on a plain browser tab, unchanged.
+    const writeFix = (pos) => {
+      locationPermission.markGranted();
+      const now = Date.now();
+      setGpsDebug(`Fix received (cb=${callbackFireCountRef.current}): ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
+      lastGpsWriteRef.current = now;
+      const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
+      if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
+      if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
 
-        // Loading/unloading-time geofence — pauses the allowed-hours/waiting
-        // clock (see useTripClock) the moment the driver's straight-line
-        // distance from the pickup point exceeds LOADING_GEOFENCE_M, and
-        // resumes it for good once straight-line distance to the drop point
-        // drops to/below it (or resumes without locking in if they're simply
-        // back near pickup — still loading, never left for real). Runs on
-        // the same 5s cadence as the GPS write itself, since haversineKm is
-        // free local math, not an API call. Never surfaced to either side
-        // beyond the plain "paused" note already added to the timer boxes.
-        const trip = myTripRef.current;
-        if (trip?.loadingStartedAt && !trip.reachedDropAt &&
-            trip.pickupLat != null && trip.pickupLng != null && trip.dropLat != null && trip.dropLng != null) {
-          const distPickupM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.pickupLat, trip.pickupLng) * 1000;
-          const distDropM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.dropLat, trip.dropLng) * 1000;
-          if (distDropM <= LOADING_GEOFENCE_M) {
-            const patch = { reachedDropAt: now, travelPausedAt: null, pausedMs: increment(trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
-            patchDoc("bookings", trip.id, patch).catch((e) => console.error(e));
-            myTripRef.current = { ...trip, reachedDropAt: now, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
-          } else if (distPickupM > LOADING_GEOFENCE_M && !trip.travelPausedAt) {
-            patchDoc("bookings", trip.id, { travelPausedAt: now }).catch((e) => console.error(e));
-            myTripRef.current = { ...trip, travelPausedAt: now };
-          } else if (distPickupM <= LOADING_GEOFENCE_M && trip.travelPausedAt) {
-            patchDoc("bookings", trip.id, { travelPausedAt: null, pausedMs: increment(now - trip.travelPausedAt) }).catch((e) => console.error(e));
-            myTripRef.current = { ...trip, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (now - trip.travelPausedAt) };
-          }
+      // Loading/unloading-time geofence — pauses the allowed-hours/waiting
+      // clock (see useTripClock) the moment the driver's straight-line
+      // distance from the pickup point exceeds LOADING_GEOFENCE_M, and
+      // resumes it for good once straight-line distance to the drop point
+      // drops to/below it (or resumes without locking in if they're simply
+      // back near pickup — still loading, never left for real). Never
+      // surfaced to either side beyond the plain "paused" note already
+      // added to the timer boxes.
+      const trip = myTripRef.current;
+      if (trip?.loadingStartedAt && !trip.reachedDropAt &&
+          trip.pickupLat != null && trip.pickupLng != null && trip.dropLat != null && trip.dropLng != null) {
+        const distPickupM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.pickupLat, trip.pickupLng) * 1000;
+        const distDropM = haversineKm(pos.coords.latitude, pos.coords.longitude, trip.dropLat, trip.dropLng) * 1000;
+        if (distDropM <= LOADING_GEOFENCE_M) {
+          const patch = { reachedDropAt: now, travelPausedAt: null, pausedMs: increment(trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+          patchDoc("bookings", trip.id, patch).catch((e) => console.error(e));
+          myTripRef.current = { ...trip, reachedDropAt: now, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (trip.travelPausedAt ? now - trip.travelPausedAt : 0) };
+        } else if (distPickupM > LOADING_GEOFENCE_M && !trip.travelPausedAt) {
+          patchDoc("bookings", trip.id, { travelPausedAt: now }).catch((e) => console.error(e));
+          myTripRef.current = { ...trip, travelPausedAt: now };
+        } else if (distPickupM <= LOADING_GEOFENCE_M && trip.travelPausedAt) {
+          patchDoc("bookings", trip.id, { travelPausedAt: null, pausedMs: increment(now - trip.travelPausedAt) }).catch((e) => console.error(e));
+          myTripRef.current = { ...trip, travelPausedAt: null, pausedMs: (trip.pausedMs || 0) + (now - trip.travelPausedAt) };
         }
       }
-    ).then((id) => {
-      if (cancelled) clearWatchCompat(id).catch(() => {});
-      else watchId = id;
-    }).catch((e) => {
-      console.error("[geolocation]", e);
-      setGpsDebug(`Failed to start watch — "${e?.message}" @ ${new Date().toLocaleTimeString()}`);
-    });
+    };
+
+    let cancelled = false;
+    const poll = () => {
+      getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
+        .then((pos) => {
+          if (cancelled) return;
+          callbackFireCountRef.current += 1;
+          writeFix(pos);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          callbackFireCountRef.current += 1;
+          console.error("GPS tracking error", err);
+          if (isLocationPermissionDeniedError(err)) locationPermission.markDenied();
+          setGpsDebug(`Error (cb=${callbackFireCountRef.current}): ${err?.code || "unknown"} — "${err?.message}" @ ${new Date().toLocaleTimeString()}`);
+        });
+    };
+    poll(); // immediate first attempt, don't wait for the first interval tick
+    const intervalId = setInterval(poll, 5000);
 
     return () => {
       cancelled = true;
-      if (watchId != null) clearWatchCompat(watchId).catch(() => {});
+      clearInterval(intervalId);
     };
   }, [myTrip?.id, driver.online, driver.mobile]);
 
