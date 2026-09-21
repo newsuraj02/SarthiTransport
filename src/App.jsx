@@ -10641,19 +10641,19 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
   );
 }
 
-function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, bugs, setBugStatus, addBug, lang }) {
+function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, bugs, setBugStatus, addBug, lang }) {
   // Commission/bonus/min-wallet are edited as a draft and only written to
   // Firestore on Save, instead of firing a write on every keystroke. Stays
   // in sync with the live values as long as there's no unsaved edit, so an
   // external change (e.g. trial mode toggling commission to 0) still shows
   // up immediately.
-  const [draft, setDraft] = useState({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
+  const [draft, setDraft] = useState({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
-    if (!dirty) setDraft({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "" });
+    if (!dirty) setDraft({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commissionPct, bonusPct, minWallet, latestVersionCode, updateUrl, dirty]);
+  }, [commissionPct, bonusPct, minWallet, latestVersionCode, updateUrl, latestAdminVersionCode, adminUpdateUrl, dirty]);
   const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
   const saveSettings = () => {
     setCommissionPct(draft.commissionPct);
@@ -10661,6 +10661,8 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
     setMinWallet(draft.minWallet);
     setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
     setUpdateUrl(draft.updateUrl.trim());
+    setLatestAdminVersionCode(draft.latestAdminVersionCode === "" ? null : Number(draft.latestAdminVersionCode));
+    setAdminUpdateUrl(draft.adminUpdateUrl.trim());
     setDirty(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -10719,6 +10721,21 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
         </div>
         <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Play Store link (optional)" : lang === "mr" ? "Play Store लिंक (ऐच्छिक)" : "Play Store लिंक (वैकल्पिक)"}</div>
         <input type="text" placeholder={PLAY_STORE_URL} value={draft.updateUrl} onChange={(e) => updateDraft({ updateUrl: e.target.value })}
+          className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
+      </div>
+
+      <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Force Update (Admin app)" : lang === "mr" ? "फोर्स अपडेट (Admin अ‍ॅप)" : "फोर्स अपडेट (Admin ऐप)"}</div>
+        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Separate from the field above — this is a completely different install (its own versionCode, sideloaded rather than Play Store). Set this only when you've actually sideloaded the new Admin APK somewhere admins can reach it, and paste that link below. Leave blank to turn off." : lang === "mr" ? "वरच्या फील्डपेक्षा वेगळे — ही एक वेगळी इन्स्टॉल आहे (स्वतःचा versionCode, Play Store नाही तर साइडलोड). नवीन Admin APK प्रत्यक्ष साइडलोड करून अ‍ॅडमिन्सना उपलब्ध करून दिल्यावरच हे सेट करा, आणि खाली तो लिंक टाका. बंद करण्यासाठी रिकामे ठेवा." : "ऊपर वाले फील्ड से अलग — यह एक बिल्कुल अलग इंस्टॉल है (अपना versionCode, Play Store नहीं बल्कि साइडलोड)। नया Admin APK असल में साइडलोड करके एडमिन तक पहुंचाने के बाद ही इसे सेट करें, और नीचे वह लिंक डालें। बंद करने के लिए खाली छोड़ें।"}
+        </div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Required versionCode" : lang === "mr" ? "आवश्यक versionCode" : "आवश्यक versionCode"}</div>
+          <input type="number" placeholder={lang === "en" ? "Off" : lang === "mr" ? "बंद" : "बंद"} value={draft.latestAdminVersionCode} onChange={(e) => updateDraft({ latestAdminVersionCode: e.target.value })}
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+        </div>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "APK download link" : lang === "mr" ? "APK डाउनलोड लिंक" : "APK डाउनलोड लिंक"}</div>
+        <input type="text" placeholder="https://..." value={draft.adminUpdateUrl} onChange={(e) => updateDraft({ adminUpdateUrl: e.target.value })}
           className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
       </div>
 
@@ -11011,7 +11028,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review now lives inside
   // the Live Dashboard's "New Registrations" tile (see AdminFleet's
@@ -11039,7 +11056,7 @@ function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tri
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
-      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
+      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
@@ -11399,6 +11416,15 @@ export default function App() {
   // against and simply never blocks — see the version-check effect.
   const setLatestVersionCode = (v) => patchDoc("settings", "main", { latestVersionCode: typeof v === "function" ? v(settings.latestVersionCode) : v }).catch((e) => console.error(e));
   const setUpdateUrl = (v) => patchDoc("settings", "main", { updateUrl: typeof v === "function" ? v(settings.updateUrl) : v }).catch((e) => console.error(e));
+  // Separate from latestVersionCode/updateUrl above — the Admin app is a
+  // completely different native install (its own applicationId, its own
+  // versionCode sequence, sideloaded rather than Play Store) running the
+  // exact same JS bundle. A single shared gate meant setting the
+  // Driver/Customer required version also blocked Admin outright, sending
+  // it to a Play Store listing it isn't even on -- confirmed live the
+  // first time this was actually used for a real release.
+  const setLatestAdminVersionCode = (v) => patchDoc("settings", "main", { latestAdminVersionCode: typeof v === "function" ? v(settings.latestAdminVersionCode) : v }).catch((e) => console.error(e));
+  const setAdminUpdateUrl = (v) => patchDoc("settings", "main", { adminUpdateUrl: typeof v === "function" ? v(settings.adminUpdateUrl) : v }).catch((e) => console.error(e));
 
   useEffect(() => {
     if (!firestoreReady) return;
@@ -11556,18 +11582,23 @@ export default function App() {
   // Force-update gate — only meaningful on the installed native app (a
   // browser tab has no "Play Store version" to fall behind). Compares this
   // install's own versionCode (baked into the .aab at build time — see
-  // android/app/build.gradle) against settings.latestVersionCode, which
-  // admin bumps by hand in Admin Settings each time a new Production
-  // release actually goes out. Checked once on launch and again whenever
-  // the app returns to the foreground, so someone who installs the update
-  // and comes back doesn't stay stuck if they happened to background the
-  // app instead of fully closing it.
+  // android/app/build.gradle) against settings.latestVersionCode (Driver/
+  // Customer) or settings.latestAdminVersionCode (Admin, a completely
+  // separate native install/versionCode sequence — see the comment by
+  // setLatestAdminVersionCode above for why these can't share one field).
+  // adminEntry (the ?admin=1 query param) is what the Admin build's URL
+  // always carries, so it's the same signal already used elsewhere to
+  // detect "this is the Admin app". Checked once on launch and again
+  // whenever the app returns to the foreground, so someone who installs
+  // the update and comes back doesn't stay stuck if they happened to
+  // background the app instead of fully closing it.
   const [nativeVersionState, setNativeVersionState] = useState({ checked: false, outdated: false });
+  const relevantLatestVersionCode = adminEntry ? settings.latestAdminVersionCode : settings.latestVersionCode;
   useEffect(() => {
     if (!isNativeApp) { setNativeVersionState({ checked: true, outdated: false }); return; }
     let cancelled = false;
     const check = async () => {
-      const latest = Number(settings.latestVersionCode);
+      const latest = Number(relevantLatestVersionCode);
       if (!latest) { if (!cancelled) setNativeVersionState({ checked: true, outdated: false }); return; }
       try {
         const info = await CapacitorApp.getInfo();
@@ -11585,7 +11616,7 @@ export default function App() {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [settings.latestVersionCode]);
+  }, [relevantLatestVersionCode]);
 
   // The moment the block screen below would show, try Play Core's own
   // in-app update flow first (see startNativeImmediateUpdate) instead of
@@ -12077,10 +12108,16 @@ export default function App() {
           </div>
           <p className="text-lg font-black mb-2" style={{ color: C.ink }}>{lang === "en" ? "Update Required" : lang === "mr" ? "अपडेट आवश्यक आहे" : "अपडेट आवश्यक है"}</p>
           <p className="text-sm font-semibold mb-6" style={{ color: C.inkSoft }}>
-            {lang === "en" ? "A new version of Apna Transport is available on the Play Store. Please update to continue." : lang === "mr" ? "Play Store वर अपना ट्रान्सपोर्टची नवीन आवृत्ती उपलब्ध आहे. सुरू ठेवण्यासाठी कृपया अपडेट करा." : "Play Store पर अपना ट्रांसपोर्ट का नया वर्शन उपलब्ध है। जारी रखने के लिए कृपया अपडेट करें।"}
+            {adminEntry
+              ? (lang === "en" ? "A new version of the Admin app is available. Please install the latest APK to continue." : lang === "mr" ? "Admin अ‍ॅपची नवीन आवृत्ती उपलब्ध आहे. सुरू ठेवण्यासाठी कृपया नवीनतम APK इंस्टॉल करा." : "Admin ऐप का नया वर्शन उपलब्ध है। जारी रखने के लिए कृपया नवीनतम APK इंस्टॉल करें।")
+              : (lang === "en" ? "A new version of Apna Transport is available on the Play Store. Please update to continue." : lang === "mr" ? "Play Store वर अपना ट्रान्सपोर्टची नवीन आवृत्ती उपलब्ध आहे. सुरू ठेवण्यासाठी कृपया अपडेट करा." : "Play Store पर अपना ट्रांसपोर्ट का नया वर्शन उपलब्ध है। जारी रखने के लिए कृपया अपडेट करें।")}
           </p>
           <button
             onClick={async () => {
+              if (adminEntry) {
+                if (settings.adminUpdateUrl) window.open(settings.adminUpdateUrl, "_blank");
+                return;
+              }
               const result = await startNativeImmediateUpdate();
               if (!result?.started) window.open(settings.updateUrl || PLAY_STORE_URL, "_blank");
             }}
@@ -12231,7 +12268,9 @@ export default function App() {
           <div className="flex-1 overflow-y-auto">
             <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
               commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
-              bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl} fareTiers={fareTiers} lang={lang} onLogout={logout}
+              bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
+              latestAdminVersionCode={settings.latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={settings.adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl}
+              fareTiers={fareTiers} lang={lang} onLogout={logout}
               withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
               vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
               expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications}
