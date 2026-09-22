@@ -7175,6 +7175,12 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // call per trip start/end is negligible, and startTracking already
   // covers everything updateTrip would, so there's no separate call to
   // keep in sync.
+  // TEMPORARY diagnostic, same reasoning as gpsDebug below -- a visible
+  // on-screen readout of the mint-token/start-service chain, so a report
+  // of "no tracking notification" can be diagnosed from a screenshot
+  // alone, without adb/chrome://inspect. Remove once background tracking
+  // is confirmed reliably starting across real test devices.
+  const [trackerDebug, setTrackerDebug] = useState(null);
   useEffect(() => {
     if (!locationTrackerAvailable || !driver.mobile) return;
     let cancelled = false;
@@ -7187,17 +7193,26 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       // once and background tracking silently never started at all, even
       // once signal came back, since nothing here ever tried again.
       const attemptStart = () => {
+        setTrackerDebug(`Minting token… @ ${new Date().toLocaleTimeString()}`);
         mintLocationServiceToken().then(({ token }) => {
           if (cancelled) return;
           if (!token) {
+            setTrackerDebug(`Mint failed (no token) — retrying in 20s @ ${new Date().toLocaleTimeString()}`);
             retryTimer = setTimeout(attemptStart, 20000);
             return;
           }
-          LocationTrackerNative.startTracking({ mobile: driver.mobile, token, tripId: myTrip?.id || null }).catch((e) => console.error("startTracking failed", e));
+          setTrackerDebug(`Token minted, calling startTracking… @ ${new Date().toLocaleTimeString()}`);
+          LocationTrackerNative.startTracking({ mobile: driver.mobile, token, tripId: myTrip?.id || null })
+            .then(() => setTrackerDebug(`startTracking resolved @ ${new Date().toLocaleTimeString()}`))
+            .catch((e) => {
+              console.error("startTracking failed", e);
+              setTrackerDebug(`startTracking FAILED: ${e?.message || e} @ ${new Date().toLocaleTimeString()}`);
+            });
         });
       };
       attemptStart();
     } else {
+      setTrackerDebug(`Offline, no trip — stopTracking @ ${new Date().toLocaleTimeString()}`);
       LocationTrackerNative.stopTracking().catch((e) => console.error("stopTracking failed", e));
     }
     return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
@@ -7678,6 +7693,14 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       {gpsDebug && (
         <div className="rounded-lg p-2 mt-3 text-[10px]" style={{ background: "#FFF3C4", border: `1px solid ${C.marigoldDeep}`, color: C.ink, fontFamily: monoFont }}>
           [GPS debug] {gpsDebug}
+        </div>
+      )}
+
+      {/* TEMPORARY diagnostic readout -- see trackerDebug above. Remove
+          once background tracking is confirmed reliably starting. */}
+      {trackerDebug && (
+        <div className="rounded-lg p-2 mt-2 text-[10px]" style={{ background: "#E5F0FF", border: `1px solid ${C.navy}`, color: C.ink, fontFamily: monoFont }}>
+          [Tracker debug] {trackerDebug}
         </div>
       )}
 
