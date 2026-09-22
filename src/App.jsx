@@ -14,7 +14,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, resolveChangeLogEntry } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, resolveChangeLogEntry, mintLocationServiceToken } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -51,6 +51,17 @@ function getCurrentPositionCompat(options) {
     navigator.geolocation.getCurrentPosition(resolve, reject, options);
   });
 }
+
+// Controls LocationTrackerService (see LocationTrackerService.java /
+// LocationTrackerPlugin.java) -- a real Android foreground service that
+// keeps writing the driver's GPS fix to Firestore even once the app is
+// minimized, which the JS polling loop below (DriverHome's tracking
+// effect) cannot do on its own once the WebView is backgrounded and its
+// timers get throttled. Only present on a native build actually rebuilt
+// with this plugin -- Capacitor.isPluginAvailable guards every call site
+// exactly like geolocationPluginAvailable above, same reasoning.
+const LocationTrackerNative = registerPlugin("LocationTracker");
+const locationTrackerAvailable = Capacitor.isPluginAvailable("LocationTracker");
 
 // Fallback Play Store link for the force-update screen — used whenever
 // admin hasn't set a custom settings.updateUrl (see AdminSettings).
@@ -854,6 +865,14 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 // Straight-line (haversineKm), not road distance — free, instant, computed
 // entirely from coordinates already on the device/booking, no API call.
 const LOADING_GEOFENCE_M = 100;
+
+// Write-side throttle for lastKnownLocation/driverLocation Firestore writes
+// on a non-native (or pre-LocationTracker-update) build — see writeFix in
+// DriverHome. Kept in sync with LocationTrackerService.java's own
+// MIN_DISPLACEMENT_M/MIN_HEARTBEAT_MS constants so both paths behave the
+// same regardless of which one is actually writing for a given driver.
+const MIN_LOCATION_DISPLACEMENT_M = 25;
+const MIN_LOCATION_HEARTBEAT_MS = 30000;
 
 // For a current (non-advance) booking, only drivers within this straight-line
 // radius of the pickup point can see/bid on the load — keeps bids realistic
@@ -2715,6 +2734,79 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
         {countLabel}
       </div>
       <OpenInMapsButton />
+    </div>
+  );
+}
+
+// Admin's "Live Map" — every driver with a lastKnownLocation on file,
+// plotted at once (not just ones near a particular customer, unlike
+// NearbyVehiclesMap above, which this otherwise mirrors closely — same
+// icons, same schematic no-Maps-key fallback). Purely a read of the
+// already-live `drivers` prop (kept fresh by the same Firestore
+// subscription every other Admin screen uses) — this re-renders on its
+// own the moment any driver's lastKnownLocation changes, no polling of its
+// own needed here.
+function AdminLiveMap({ drivers, lang = "hi" }) {
+  const { isLoaded, hasKey } = useGoogleMaps();
+  const [mapInstance, setMapInstance] = useState(null);
+  const located = (drivers || []).filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null && !d.blacklisted);
+  const online = located.filter((d) => d.online);
+  const offline = located.filter((d) => !d.online);
+  const center = online[0]?.lastKnownLocation || offline[0]?.lastKnownLocation || NEARBY_MAP_DEFAULT_CENTER;
+
+  useEffect(() => {
+    if (!mapInstance || !window.google?.maps || located.length === 0) return;
+    const bounds = new window.google.maps.LatLngBounds();
+    located.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
+    mapInstance.fitBounds(bounds, 48);
+  }, [mapInstance, located.length, located.map((d) => `${d.lastKnownLocation.lat},${d.lastKnownLocation.lng}`).join("|")]);
+
+  const staleMinutes = (d) => Math.round((Date.now() - (d.lastKnownLocation?.updatedAt || 0)) / 60000);
+  const markerTitle = (d) => `${d.name || d.mobile} · ${staleMinutes(d)}${lang === "en" ? "m ago" : " मिनट पहले"}`;
+
+  if (!hasKey || !isLoaded) {
+    const scale = 900;
+    const toXY = (lat, lng) => ({ x: 50 + (lng - center.lng) * scale, y: 50 - (lat - center.lat) * scale });
+    return (
+      <div className="relative overflow-hidden rounded-lg" style={{ height: "60vh", background: "#E5E5E5" }}>
+        <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+          {Array.from({ length: 8 }).map((_, i) => <line key={"h" + i} x1="0" y1={i * 14} x2="100" y2={i * 14} stroke="#D8D8D8" strokeWidth="0.4" />)}
+          {Array.from({ length: 8 }).map((_, i) => <line key={"v" + i} x1={i * 14} y1="0" x2={i * 14} y2="100" stroke="#D8D8D8" strokeWidth="0.4" />)}
+          {offline.map((d) => {
+            const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+            if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
+            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill="#9AA3B0" stroke="#fff" strokeWidth="0.6" />;
+          })}
+          {online.map((d) => {
+            const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+            if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
+            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill={C.navy} stroke="#fff" strokeWidth="0.6" />;
+          })}
+        </svg>
+        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+          {online.length} {lang === "en" ? "online" : "ऑनलाइन"}{offline.length > 0 ? ` · ${offline.length} ${lang === "en" ? "offline" : "ऑफलाइन"}` : ""}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative rounded-lg overflow-hidden" style={{ height: "60vh" }}>
+      <GoogleMap
+        mapContainerStyle={{ width: "100%", height: "100%" }}
+        onLoad={setMapInstance}
+        options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: true, clickableIcons: false }}
+      >
+        {offline.map((d) => (
+          <MarkerF key={d.mobile || d.id} position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }} icon={driverTruckIconInactive()} title={markerTitle(d)} />
+        ))}
+        {online.map((d) => (
+          <MarkerF key={d.mobile || d.id} position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }} icon={driverTruckIcon()} title={markerTitle(d)} />
+        ))}
+      </GoogleMap>
+      <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+        {online.length} {lang === "en" ? "online" : "ऑनलाइन"}{offline.length > 0 ? ` · ${offline.length} ${lang === "en" ? "offline" : "ऑफलाइन"}` : ""}
+      </div>
     </div>
   );
 }
@@ -6375,12 +6467,18 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
   // Real GPS live-tracking, mirroring the driver's own — shares the
   // customer's actual device location while a trip is Ongoing, so the
   // driver (and the customer's own map) can see both parties together.
+  const lastCustomerGpsWriteRef = useRef(0);
+  const lastWrittenCustomerLocationRef = useRef(null);
   useEffect(() => {
     if (!ongoingTrip) return;
     // Polling (repeated one-shot getCurrentPosition, every 5s) instead of
     // a single long-lived watchPosition subscription -- see CustomerHome's
     // customerLocation effect for the full "why". Native side still reads
     // Google Play Services' Fused Location Provider (FusedLocationBridgePlugin).
+    // The Firestore WRITE itself is throttled separately (25m moved, or a
+    // 30s heartbeat otherwise — see LocationTrackerService.java's driver-side
+    // equivalent) so this doesn't push a bookings write, and everything
+    // subscribed to it (the driver's map, admin's fleet view), every 5s.
     let cancelled = false;
     const poll = () => {
       getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
@@ -6389,6 +6487,12 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
           locationPermission.markGranted();
           const now = Date.now();
           const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
+          const moved = !lastWrittenCustomerLocationRef.current ||
+            haversineKm(lastWrittenCustomerLocationRef.current.lat, lastWrittenCustomerLocationRef.current.lng, location.lat, location.lng) * 1000 >= MIN_LOCATION_DISPLACEMENT_M;
+          const dueForHeartbeat = now - lastCustomerGpsWriteRef.current >= MIN_LOCATION_HEARTBEAT_MS;
+          if (!moved && !dueForHeartbeat) return;
+          lastWrittenCustomerLocationRef.current = { lat: location.lat, lng: location.lng };
+          lastCustomerGpsWriteRef.current = now;
           patchDoc("bookings", ongoingTrip.id, { customerLocation: location }).catch((e) => console.error(e));
         })
         .catch((err) => {
@@ -6954,12 +7058,41 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     return Date.now() >= lockStart && Date.now() < scheduled.getTime();
   });
 
+  // Starts/stops LocationTrackerService (native foreground service — see
+  // its own file for why) so GPS sharing survives the driver minimizing
+  // the app, the same online-or-on-a-trip condition as the JS polling
+  // effect below. Only runs on a native build that actually has the
+  // plugin; older installs and plain browser tabs keep relying solely on
+  // the JS polling effect's own Firestore writes (see writeFix below).
+  // Re-mints a token and re-calls startTracking (rather than a lighter
+  // updateTrip) on every trip-id change too -- one extra Cloud Function
+  // call per trip start/end is negligible, and startTracking already
+  // covers everything updateTrip would, so there's no separate call to
+  // keep in sync.
+  useEffect(() => {
+    if (!locationTrackerAvailable || !driver.mobile) return;
+    let cancelled = false;
+    if (myTrip || driver.online) {
+      mintLocationServiceToken().then(({ token }) => {
+        if (cancelled || !token) return;
+        LocationTrackerNative.startTracking({ mobile: driver.mobile, token, tripId: myTrip?.id || null }).catch((e) => console.error("startTracking failed", e));
+      });
+    } else {
+      LocationTrackerNative.stopTracking().catch((e) => console.error("stopTracking failed", e));
+    }
+    return () => { cancelled = true; };
+  }, [driver.mobile, driver.online, myTrip?.id]);
+
   // Real GPS live-tracking: while this driver has an active trip, share their
   // actual device location so the customer (and admin fleet map) see it live.
   // Also runs whenever the driver is simply Online (not on a trip) so
   // lastKnownLocation stays fresh for the 100km bid-radius check below —
   // otherwise an idle online driver would have no location on file at all.
   const lastGpsWriteRef = useRef(0);
+  // Last lat/lng actually WRITTEN to Firestore (not just fetched) — the
+  // other half of the write-side throttle in writeFix below, alongside
+  // lastGpsWriteRef's timestamp.
+  const lastWrittenLocationRef = useRef(null);
   // Raw counters, independent of the throttled/overwritten message below --
   // lets us tell definitively whether the native->JS callback is firing at
   // all, even if something else is resetting gpsDebug's text before it can
@@ -7008,10 +7141,29 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       locationPermission.markGranted();
       const now = Date.now();
       setGpsDebug(`Fix received (cb=${callbackFireCountRef.current}): ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
-      lastGpsWriteRef.current = now;
       const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
-      if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
-      if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
+
+      // Writes to Firestore itself are gated separately from the 5s GPS
+      // poll above: on a native build, LocationTrackerService is already
+      // writing lastKnownLocation/driverLocation with its own throttling
+      // (25m moved, or a 30s heartbeat otherwise — see that file), so this
+      // skips writing again to avoid two independent writers racing each
+      // other on the same fields. On an older/non-native build with no
+      // background service, this applies the exact same throttle itself
+      // instead of writing on every single 5s poll — a document write (and
+      // every listener it fans out to — the customer's live map, Admin's
+      // fleet view) every 5s was the "5s is too much" churn this replaces.
+      if (!locationTrackerAvailable) {
+        const moved = !lastWrittenLocationRef.current ||
+          haversineKm(lastWrittenLocationRef.current.lat, lastWrittenLocationRef.current.lng, location.lat, location.lng) * 1000 >= MIN_LOCATION_DISPLACEMENT_M;
+        const dueForHeartbeat = now - lastGpsWriteRef.current >= MIN_LOCATION_HEARTBEAT_MS;
+        if (moved || dueForHeartbeat) {
+          lastWrittenLocationRef.current = { lat: location.lat, lng: location.lng };
+          lastGpsWriteRef.current = now;
+          if (myTrip) patchDoc("bookings", myTrip.id, { driverLocation: location }).catch((e) => console.error(e));
+          if (driver.mobile) patchDoc("drivers", driver.mobile, { lastKnownLocation: location }).catch((e) => console.error(e));
+        }
+      }
 
       // Loading/unloading-time geofence — pauses the allowed-hours/waiting
       // clock (see useTripClock) the moment the driver's straight-line
@@ -8800,6 +8952,18 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // workflow as-is (Incomplete/Complete tabs, Approve/Block, WhatsApp
   // nudge) — covering every driver still needing review, not just today's
   // signups, since that's the whole point of consolidating KYC here.
+  if (detailView === "liveMap") {
+    return (
+      <div>
+        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"}</h2>
+        <AdminLiveMap drivers={drivers} lang={lang} />
+      </div>
+    );
+  }
+
   if (detailView === "newRegistrations") {
     return (
       <div>
@@ -8961,6 +9125,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
         <StatTile label={lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
+        <StatTile label={lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"} value={readyOnlineDrivers.length} color={C.navy} onClick={() => setDetailView("liveMap")} />
         <StatTile label={lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी"} value={offDutyDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("offDuty")} />
         <StatTile label={lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)"} value={uninstalledDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
         <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />

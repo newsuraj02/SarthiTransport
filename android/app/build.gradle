@@ -88,6 +88,16 @@ dependencies {
     // Drives Play Core's own in-app "immediate update" screen (see
     // AppUpdateBridgePlugin) instead of only linking out to Play Store.
     implementation "com.google.android.play:app-update:2.1.0"
+    // LocationTrackerService writes GPS fixes to Firestore directly from
+    // native code (not via the WebView/JS), since JS execution can't be
+    // relied on to keep running once the app is backgrounded -- the BOM
+    // pins every com.google.firebase:* artifact to compatible versions,
+    // same google-services.json this app already uses for FCM.
+    implementation platform("com.google.firebase:firebase-bom:33.5.1")
+    implementation "com.google.firebase:firebase-firestore"
+    // signInWithCustomToken() for the token minted by mintLocationServiceToken
+    // (functions/index.js) -- see LocationTrackerService.java.
+    implementation "com.google.firebase:firebase-auth"
 }
 
 apply from: 'capacitor.build.gradle'

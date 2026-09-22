@@ -257,6 +257,26 @@ export async function verifyPickupOtp(bookingId, otp) {
   }
 }
 
+// Mints a Firebase custom token (see functions/index.js:
+// mintLocationServiceToken) for LocationTrackerService's own native
+// signInWithCustomToken() session — the foreground service writes to
+// Firestore from Java, outside the WebView, so it can't reuse this JS SDK's
+// session. Called once, right before starting the service (see
+// DriverHome's tracking-plugin effect in App.jsx). Resolves { token: null }
+// (never throws) on any failure.
+export async function mintLocationServiceToken() {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { token: null };
+  try {
+    const call = httpsCallable(functions, "mintLocationServiceToken");
+    const result = await call({});
+    return result.data;
+  } catch (e) {
+    console.error("[mintLocationServiceToken] callable failed", e);
+    return { token: null };
+  }
+}
+
 // Runs a Change Log entry's "Resolve" click server-side (see
 // functions/index.js: resolveChangeLogEntry and AdminBugTracker in
 // App.jsx) instead of the browser flipping status itself — the function

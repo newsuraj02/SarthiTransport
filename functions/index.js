@@ -492,6 +492,23 @@ exports.verifyPickupOtp = onCall({ region: "asia-south1" }, async (request) => {
   return { valid };
 });
 
+// Mints a Firebase custom token for LocationTrackerService (see
+// android/app/src/main/java/com/apnatransport/app/LocationTrackerService.java)
+// to sign into. The foreground service writes GPS fixes to Firestore from
+// native Java code, outside the WebView, so it can't reuse the JS Firebase
+// Auth SDK's session (they're entirely separate SDK instances/processes) --
+// it needs its own signInWithCustomToken() session. request.auth here is
+// still the normal PIN-based session the WebView is already signed into
+// (Capacitor plugin calls carry the calling page's auth context), so this
+// just mints a token for that SAME uid rather than trusting any uid the
+// native side might ask for.
+exports.mintLocationServiceToken = onCall({ region: "asia-south1" }, async (request) => {
+  const callerPhone = callerPhoneFromAuth(request.auth?.token);
+  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
+  const token = await getAuth().createCustomToken(request.auth.uid);
+  return { token };
+});
+
 // ---------------- KYC photo classification (Gemini) ----------------
 // Catches drivers uploading a front or diagonal shot for the vehicle's
 // "Side" photo tile (found by spot-checking submitted KYC), and the same
