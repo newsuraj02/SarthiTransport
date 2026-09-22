@@ -48,7 +48,7 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- See LocationTrackerService.java -- keeps driver GPS tracking
+        <!-- See LocationTrackerService.java, which keeps driver GPS tracking
              running (with a persistent notification, as Android 8+ requires
              for any foreground service) even after the driver minimizes the
              app, which the WebView's own JS timers cannot do on their own
@@ -82,9 +82,9 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Required for LocationTrackerService (see below) to legally keep
          tracking once the app is backgrounded. FOREGROUND_SERVICE alone is
-         no longer enough as of Android 14 (API 34) -- the specific
+         no longer enough as of Android 14 (API 34); the specific
          "location" type below must also be declared, matching the
-         <service> element's android:foregroundServiceType. -->
+         service element's android:foregroundServiceType. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Explicit even though @capacitor/push-notifications' own Android
