@@ -10629,17 +10629,16 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   // were ever missed. The Cloud Function on the backend does the same
   // computation independently, only for sending the one-time "trial
   // ended" push notification (see functions/index.js).
-  const [trialTab, setTrialTab] = useState("all"); // 'all' | 'trial' | 'main'
-  const trialCount = drivers.filter((d) => isInTrial(d.createdAt)).length;
-  const byTrialTab = trialTab === "all" ? drivers : drivers.filter((d) => (trialTab === "trial" ? isInTrial(d.createdAt) : !isInTrial(d.createdAt)));
-  // "Total Drivers" (the badge below) reports the installed-drivers count
-  // (see installedDrivers) -- how many actually still have the app on
-  // their phone, not just how many driver docs have ever been created.
-  // The searchable list itself deliberately still shows/manages EVERY
-  // record (uninstalled or blacklisted included) so admin never loses the
-  // ability to look up or unblacklist someone just because they're not
-  // currently counted as "installed".
+  // "Total Drivers" and every tab/count below it all report the SAME
+  // installed-drivers population (see installedDrivers) -- how many
+  // actually still have the app on their phone, not how many driver docs
+  // have ever been created. Deliberately the single shared base for
+  // every number on this screen so none of them can read differently
+  // from each other again.
   const totalInstalled = installedDrivers(drivers);
+  const [trialTab, setTrialTab] = useState("all"); // 'all' | 'trial' | 'main'
+  const trialCount = totalInstalled.filter((d) => isInTrial(d.createdAt)).length;
+  const byTrialTab = trialTab === "all" ? totalInstalled : totalInstalled.filter((d) => (trialTab === "trial" ? isInTrial(d.createdAt) : !isInTrial(d.createdAt)));
   // GPS diagnostic (see gpsStatus) -- an Online driver whose lastKnownLocation
   // is stale/missing is the exact "is this actually tracking?" question,
   // made visible per-driver instead of guessed at from Online status alone.
@@ -10670,7 +10669,14 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
       : "आपकी GPS/लोकेशन ट्रैकिंग अभी हमारे ऐप में बंद दिख रही है। लोड मिलते रहने के लिए इसे ऑन करना ज़रूरी है -- कृपया अपने फोन में ये दो चीज़ें चेक करें:\n1) Settings → Location → ऑन करें\n2) Settings → Apps → Apna Transport → Permissions → Location → Allow करें\nफिर हमारा ऐप फिर से खोलें।";
     return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
   };
-  const filtered = byGps.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
+  // Typing an actual search query reaches EVERY driver record (uninstalled
+  // or blacklisted included), not just the installed ones the tabs/counts
+  // above default to -- otherwise admin would have no way to ever find
+  // and unblacklist someone once they're not counted as "installed"
+  // anymore. The default (empty query) view stays scoped to byGps/
+  // byTrialTab so every number on this screen agrees with each other.
+  const searchBase = q.trim() ? drivers : byGps;
+  const filtered = searchBase.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
   const kycMeta = lang === "en"
     ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E5E5E5" } }
     : lang === "mr"
@@ -10747,9 +10753,9 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
       })()}
       <div className="grid grid-cols-3 gap-1.5 mb-3">
         {[
-          ["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी", drivers.length],
+          ["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी", totalInstalled.length],
           ["trial", lang === "en" ? "Free Trial" : lang === "mr" ? "फ्री ट्रायल" : "फ्री ट्रायल", trialCount],
-          ["main", lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन", drivers.length - trialCount],
+          ["main", lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन", totalInstalled.length - trialCount],
         ].map(([key, label, count]) => (
           <button key={key} onClick={() => setTrialTab(key)} className="rounded-lg py-3 text-sm font-bold text-center"
             style={{ background: trialTab === key ? C.marigoldDeep : C.bg, color: trialTab === key ? "#fff" : C.inkSoft, border: `1px solid ${trialTab === key ? C.marigoldDeep : C.line}` }}>
