@@ -2214,6 +2214,22 @@ const isLikelyUninstalled = (driver) => {
   return (Date.now() - ts.toMillis()) >= UNINSTALL_INACTIVE_DAYS * DAY_MS;
 };
 
+// Single source of truth for "which of the three buckets is this driver
+// in" -- returns exactly one of "installed" | "uninstalled" | "blacklisted"
+// for every driver, never more than one and never none, by construction
+// (an if/else chain, not several independently-combined booleans that
+// could theoretically overlap or leave a gap if edited separately later).
+// Every count/filter anywhere in Admin that answers "how many drivers are
+// X" should derive from this function, not re-implement the same
+// !isLikelyUninstalled/!blacklisted logic inline again -- that
+// duplication is exactly what caused the Total Drivers/tabs/Live
+// Map/uninstalled-tile numbers to disagree with each other earlier.
+function driverInstallStatus(driver) {
+  if (driver?.blacklisted) return "blacklisted";
+  if (isLikelyUninstalled(driver)) return "uninstalled";
+  return "installed";
+}
+
 // The base population for every "how many drivers" count across Admin
 // (AdminDriverList's total, its GPS-status split, AdminFleet's Live Map
 // tile and the map itself) -- "has the app installed" (the inverse of
@@ -2221,7 +2237,32 @@ const isLikelyUninstalled = (driver) => {
 // screens can't drift back into showing different numbers for what's
 // supposed to be the same underlying question again.
 function installedDrivers(drivers) {
-  return (drivers || []).filter((d) => !isLikelyUninstalled(d) && !d.blacklisted);
+  return (drivers || []).filter((d) => driverInstallStatus(d) === "installed");
+}
+
+// Partitions every driver into the three mutually-exclusive, exhaustive
+// buckets driverInstallStatus defines, plus a self-check: since every
+// driver falls into EXACTLY one bucket by construction, the three
+// lengths must always sum to the input length. If they ever don't, that
+// means something upstream handed this a driver object
+// driverInstallStatus can't classify (e.g. null/undefined slipped into
+// the array) -- surfaced loudly here instead of quietly under/over-
+// counting somewhere, which is exactly the bug class this exists to
+// catch before it ships confusing numbers again.
+function partitionDriversByInstallStatus(drivers) {
+  const list = drivers || [];
+  const installed = [], uninstalled = [], blacklisted = [];
+  list.forEach((d) => {
+    const bucket = driverInstallStatus(d);
+    (bucket === "installed" ? installed : bucket === "uninstalled" ? uninstalled : blacklisted).push(d);
+  });
+  if (installed.length + uninstalled.length + blacklisted.length !== list.length) {
+    console.error(
+      "[driverInstallStatus] partition mismatch -- installed/uninstalled/blacklisted counts don't sum to the total driver count. This should be impossible; check for a null/undefined entry in the drivers array.",
+      { total: list.length, installed: installed.length, uninstalled: uninstalled.length, blacklisted: blacklisted.length }
+    );
+  }
+  return { installed, uninstalled, blacklisted };
 }
 
 // GPS status diagnostic (see AdminDriverList) -- lastKnownLocation.updatedAt
@@ -8980,26 +9021,25 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // other trip-based tiles below.
   const bookedTodayList = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t));
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
+  // Single partition, used for every installed/uninstalled/blacklisted
+  // count on this dashboard (see partitionDriversByInstallStatus) -- these
+  // three groups are guaranteed to sum to drivers.length by construction,
+  // with a loud console.error if that's ever somehow not true. Nothing
+  // below should re-derive "uninstalled"/"installed" with its own
+  // separate filter again -- that duplication is exactly what caused the
+  // Total Drivers/tabs/Live Map/uninstalled-tile numbers to disagree
+  // before.
+  const { installed: installedDriversList, uninstalled: uninstalledDrivers } = partitionDriversByInstallStatus(drivers);
   // Matches AdminLiveMap's own "located" count exactly (installed,
   // non-blacklisted, has a lastKnownLocation) -- this tile's number and
   // what the map shows after tapping it must never diverge again.
-  const liveMapLocatedCount = installedDrivers(drivers).filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null).length;
+  const liveMapLocatedCount = installedDriversList.filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null).length;
   // Everyone else approved-but-not-online, split by isLikelyUninstalled
   // (see its own comment) so admin can tell "toggled off, still around" from
   // "gone quiet long enough to probably not have the app anymore" instead of
   // one undifferentiated "not online" bucket.
   const notReadyApprovedDrivers = drivers.filter((d) => !d.online && d.kyc === "Approved" && !d.blacklisted);
   const offDutyDrivers = notReadyApprovedDrivers.filter((d) => !isLikelyUninstalled(d));
-  // "App uninstalled (likely)" -- the exact drivers who make up the gap
-  // between "every driver doc ever created" and installedDrivers()'s
-  // count elsewhere on this dashboard (the "Total Drivers"/Live Map
-  // funnel), minus blacklisted ones (banned drivers aren't the "have they
-  // gone quiet" concern this tile exists for). Deliberately NOT restricted
-  // to notReadyApprovedDrivers above (offline + KYC-Approved) anymore --
-  // that excluded plenty of genuinely-uninstalled drivers who happened to
-  // be Online-but-stale, KYC-Pending, or KYC-Rejected, none of which
-  // should have made them invisible to this count.
-  const uninstalledDrivers = drivers.filter((d) => !d.blacklisted && isLikelyUninstalled(d));
   const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
   const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet);
   // New customer signups today, and drivers still inside their 30-day free
