@@ -35,6 +35,23 @@ function callerPhoneFromAuth(token) {
   return match ? `+91${match[1]}` : null;
 }
 
+// Exotel account credentials, shared by every Exotel-backed feature in
+// this file (masked calling below, and sendDirectRequestAlert's SMS).
+// Secrets set via `firebase functions:secrets:set NAME`, never hardcoded
+// or committed. EXOTEL_SMS_SENDER_ID is separate from EXOTEL_CALLER_ID
+// (the ExoPhone used for masked voice calls) -- Indian carriers require a
+// DLT-registered Sender ID for transactional SMS, which is typically a
+// different identifier than a voice ExoPhone number and needs its own
+// DLT template registration with Exotel/the telecom operator before any
+// message using it will actually deliver, independent of this code being
+// correct. Until all the secrets a given feature needs are set, that
+// feature returns reason: "not_configured" rather than throwing.
+const EXOTEL_SID = defineSecret("EXOTEL_SID");
+const EXOTEL_API_KEY = defineSecret("EXOTEL_API_KEY");
+const EXOTEL_API_TOKEN = defineSecret("EXOTEL_API_TOKEN");
+const EXOTEL_CALLER_ID = defineSecret("EXOTEL_CALLER_ID");
+const EXOTEL_SMS_SENDER_ID = defineSecret("EXOTEL_SMS_SENDER_ID");
+
 // New-load alerts to drivers only — re-added per explicit request after the
 // broader push-notification removal; every other push type (bid accepted,
 // trip completed, new bid, invoice received, trial ended, load removed)
@@ -218,42 +235,41 @@ exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event
   await Promise.all(sends);
 });
 
-// A loud, high-priority alert to one specific driver — reused for both a
-// fresh direct request and the 1-minute auto-reassign/manual-reject
-// retarget moving the same booking to the next driver (see
-// retargetToNextDriver in src/App.jsx). Reuses the exact same channel/
-// pattern as sendLoadAlert above (already proven to reach a closed app)
-// rather than a new, unregistered notification channel.
-async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
-  if (!token) return;
+// A loud, urgent alert to one specific driver -- reused for both a fresh
+// direct request and the 2-minute auto-reassign/manual-reject retarget
+// moving the same booking to the next driver (see retargetToNextDriver in
+// src/App.jsx). Sent as a real SMS via Exotel rather than an FCM push --
+// push notifications for this exact alert proved unreliable in practice
+// (stale/unregistered device tokens, OEM battery/notification-channel
+// restrictions, none of which SMS depends on at all: it's delivered by
+// the driver's carrier directly, regardless of the app's install/process
+// state, notification permission, or any device battery setting).
+// sendLoadAlert above (the general open-load broadcast, far less
+// time-critical than a 2-minute-window direct request) deliberately
+// stays on push -- SMS costs money per message via Exotel, worth paying
+// only for the alert that actually needs to be reliable.
+async function sendDirectRequestAlert(driverMobile, load, bookingId) {
+  if (!driverMobile) return;
+  const sid = EXOTEL_SID.value(), apiKey = EXOTEL_API_KEY.value(), apiToken = EXOTEL_API_TOKEN.value(), senderId = EXOTEL_SMS_SENDER_ID.value();
+  if (!sid || !apiKey || !apiToken || !senderId) {
+    console.error("[sms] direct-request alert skipped: Exotel SMS not configured.");
+    return;
+  }
+  const body = new URLSearchParams({
+    From: senderId,
+    To: `+91${driverMobile}`,
+    Body: `🚨 आपके लिए सीधी बुकिंग रिक्वेस्ट!\nलोडिंग: ${load.pickup}\nअनलोडिंग: ${load.drop}${load.weight ? ` · ${load.weight}kg` : ""}\nApna Transport खोलें और 120 सेकंड में जवाब दें।`,
+  });
   try {
-    await getMessaging().send({
-      token,
-      notification: {
-        title: "🚨 आपके लिए सीधी बुकिंग रिक्वेस्ट!",
-        body: `📍 लोडिंग: ${load.pickup}\n🏁 अनलोडिंग: ${load.drop}${load.weight ? `\n⚖️ ${load.weight}kg` : ""}\n⏱️ 60 सेकंड में जवाब दें`,
-      },
-      android: {
-        priority: "high",
-        notification: {
-          channelId: "new_load_alerts",
-          priority: "max",
-          visibility: "public",
-          defaultSound: true,
-          defaultVibrateTimings: false,
-          vibrateTimingsMillis: [0, 500, 200, 500, 200, 500, 200, 500],
-        },
-      },
-      webpush: {
-        headers: { Urgency: "high" },
-        notification: { requireInteraction: true, vibrate: [500, 200, 500, 200, 500, 200, 500], tag: "direct-request", renotify: true },
-        fcmOptions: { link: "/?open=driver" },
-      },
-      data: { type: "direct_request", bookingId },
+    const basicAuth = Buffer.from(`${apiKey}:${apiToken}`).toString("base64");
+    const res = await fetch(`https://api.exotel.com/v1/Accounts/${sid}/Sms/send.json`, {
+      method: "POST",
+      headers: { Authorization: `Basic ${basicAuth}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body,
     });
+    if (!res.ok) console.error("[sms] direct-request alert rejected by Exotel:", await res.text());
   } catch (e) {
-    console.error("[push] direct-request alert send failed:", e.message);
-    await clearStaleFcmTokenOnFailure("drivers", driverMobile, e);
+    console.error("[sms] direct-request alert send failed:", e.message);
   }
 }
 
@@ -261,28 +277,31 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // "AwaitingDriver" — a fresh direct request from CustomerBooking's driver
 // picker, or a retarget after the previous driver timed out/rejected.
 // Reaches the newly-targeted driver even if their app is fully closed,
-// same as onNewLoadPosted above. Only fires on a real change of who's
-// pending, not on unrelated field updates to the same booking (e.g. the
-// customer's live GPS ticking during a still-Bidding wait elsewhere).
-exports.onDirectRequestAssigned = onDocumentWritten("bookings/{bookingId}", async (event) => {
-  const before = event.data?.before?.data();
-  const after = event.data?.after?.data();
-  if (!after || after.status !== "AwaitingDriver" || !after.pendingDriverName) return;
-  if (before?.status === "AwaitingDriver" && before?.pendingDriverName === after.pendingDriverName) return;
+// via SMS (see sendDirectRequestAlert above), not push. Only fires on a
+// real change of who's pending, not on unrelated field updates to the
+// same booking (e.g. the customer's live GPS ticking during a still-
+// Bidding wait elsewhere).
+exports.onDirectRequestAssigned = onDocumentWritten(
+  { document: "bookings/{bookingId}", secrets: [EXOTEL_SID, EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_SMS_SENDER_ID] },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!after || after.status !== "AwaitingDriver" || !after.pendingDriverName) return;
+    if (before?.status === "AwaitingDriver" && before?.pendingDriverName === after.pendingDriverName) return;
 
-  // pendingDriverMobile (the doc id, guaranteed unique) is preferred over a
-  // name lookup -- two drivers can share the same free-text display name
-  // (no uniqueness enforced at signup), which used to let this resolve to
-  // the WRONG same-named driver's fcmToken. Falls back to the old
-  // name-based query only for a booking written before this field existed.
-  const driverDoc = after.pendingDriverMobile
-    ? await db.collection("drivers").doc(after.pendingDriverMobile).get()
-    : (await db.collection("drivers").where("name", "==", after.pendingDriverName).limit(1).get()).docs[0];
-  const driver = driverDoc?.data();
-  if (!driver?.fcmToken) return;
+    // pendingDriverMobile (the doc id, guaranteed unique) is preferred over
+    // a name lookup -- two drivers can share the same free-text display
+    // name (no uniqueness enforced at signup), which used to let this
+    // resolve to the WRONG same-named driver. Falls back to the old
+    // name-based query only for a booking written before this field
+    // existed.
+    const driverMobile = after.pendingDriverMobile
+      || (await db.collection("drivers").where("name", "==", after.pendingDriverName).limit(1).get()).docs[0]?.id;
+    if (!driverMobile) return;
 
-  await sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId, driverDoc.id);
-});
+    await sendDirectRequestAlert(driverMobile, after, event.params.bookingId);
+  }
+);
 
 // Customer-side equivalent of sendDirectRequestAlert/sendLoadAlert above —
 // reaches the customer even with the app fully closed, for the two moments
@@ -816,16 +835,12 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
 // after their first trip, keep personal numbers private, make the call
 // recognizable, and leave a call log tied to the booking for disputes.
 //
-// Secrets (set via `firebase functions:secrets:set NAME`, never hardcoded
-// or committed): EXOTEL_SID/API_KEY/API_TOKEN from the Exotel dashboard,
-// EXOTEL_CALLER_ID is the ExoPhone (virtual number) provisioned for
-// masking. Until all four are set, this returns reason: "not_configured"
-// instead of throwing -- the client falls back to a plain tel: link so
-// calling keeps working while Exotel is still being set up.
-const EXOTEL_SID = defineSecret("EXOTEL_SID");
-const EXOTEL_API_KEY = defineSecret("EXOTEL_API_KEY");
-const EXOTEL_API_TOKEN = defineSecret("EXOTEL_API_TOKEN");
-const EXOTEL_CALLER_ID = defineSecret("EXOTEL_CALLER_ID");
+// EXOTEL_CALLER_ID (the ExoPhone provisioned for masking) is the one
+// secret this feature needs beyond the shared SID/API_KEY/API_TOKEN
+// declared near the top of this file. Until all four are set, this
+// returns reason: "not_configured" instead of throwing -- the client
+// falls back to a plain tel: link so calling keeps working while Exotel
+// is still being set up.
 
 exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [EXOTEL_SID, EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_CALLER_ID] }, async (request) => {
   const { bookingId } = request.data || {};
