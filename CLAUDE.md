@@ -34,3 +34,23 @@ it is and work around it, rather than folding it into the same edit.
 If the user reports a NEW bug in this area later, that itself is
 permission to investigate and fix it — "frozen" means no unsolicited
 changes, not that bug reports here should be ignored.
+
+## Don't trigger a new native build/versionCode unless it's mandatory
+
+The user has explicitly said too many versionCodes were built in a short
+span and it became impossible to track which one had which fix. Native
+Android code changes (Java/Kotlin, AndroidManifest.xml, build.gradle,
+capacitor.config.ts) require a real CI build + reinstall to test at all
+— that part is unavoidable. But:
+
+- Don't reflexively trigger `build-capacitor.yml` after every single
+  native edit. Where reasonable, batch multiple native fixes together
+  and build once, rather than once per fix.
+- Before triggering a build, say plainly why it's needed (what native
+  change requires it) rather than doing it silently.
+- JS-only changes (`src/App.jsx`, `src/firebaseClient.js`, most of
+  `functions/index.js`) never need a new native build/versionCode at
+  all — `npm run build && firebase deploy --only hosting` (or
+  `firebase deploy --only functions`) is enough, since this app runs in
+  remote-URL mode. Don't confuse the two or bump a versionCode for a
+  JS-only change.
