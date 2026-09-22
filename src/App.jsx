@@ -7178,15 +7178,29 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   useEffect(() => {
     if (!locationTrackerAvailable || !driver.mobile) return;
     let cancelled = false;
+    let retryTimer = null;
     if (myTrip || driver.online) {
-      mintLocationServiceToken().then(({ token }) => {
-        if (cancelled || !token) return;
-        LocationTrackerNative.startTracking({ mobile: driver.mobile, token, tripId: myTrip?.id || null }).catch((e) => console.error("startTracking failed", e));
-      });
+      // Retries rather than giving up for the rest of this online session
+      // on a failed mint -- confirmed live that a driver toggling Online
+      // at a moment with no signal (a real, common situation on a
+      // highway) meant mintLocationServiceToken's network call failed
+      // once and background tracking silently never started at all, even
+      // once signal came back, since nothing here ever tried again.
+      const attemptStart = () => {
+        mintLocationServiceToken().then(({ token }) => {
+          if (cancelled) return;
+          if (!token) {
+            retryTimer = setTimeout(attemptStart, 20000);
+            return;
+          }
+          LocationTrackerNative.startTracking({ mobile: driver.mobile, token, tripId: myTrip?.id || null }).catch((e) => console.error("startTracking failed", e));
+        });
+      };
+      attemptStart();
     } else {
       LocationTrackerNative.stopTracking().catch((e) => console.error("stopTracking failed", e));
     }
-    return () => { cancelled = true; };
+    return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
   }, [driver.mobile, driver.online, myTrip?.id]);
 
   // Battery-optimization exemption (see PowerBridgePlugin.java) — the real
