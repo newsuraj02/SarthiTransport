@@ -9036,6 +9036,25 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // a separate screen, not an inline panel on the dashboard itself.
   const [detailView, setDetailView] = useState(null);
 
+  // Retention nudge for "App uninstalled (likely)" -- same queue pattern as
+  // AdminDriverList's GPS WhatsApp reminder (send-next-one-at-a-time,
+  // persisted "already reminded today" per driver so switching away to
+  // WhatsApp and back doesn't lose track or double-message anyone).
+  const todayStrUninstalled = () => new Date().toISOString().slice(0, 10);
+  const [uninstalledWhatsappSentMap, setUninstalledWhatsappSentMap] = usePersistedState("sarthi_uninstalledWhatsappSent", {});
+  const markUninstalledWhatsappSent = (mobile) => setUninstalledWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
+  const sentUninstalledToday = (mobile) => uninstalledWhatsappSentMap[mobile] === todayStrUninstalled();
+  const uninstalledWhatsappLink = (mobile) => {
+    const msg = lang === "en"
+      ? "We miss you! It's been a while since you opened Apna Transport, and new loads keep coming in every day. Reopen the app to see what's nearby: https://sarthi-transport-74865.web.app"
+      : lang === "mr"
+      ? "आम्हाला तुमची आठवण येते! तुम्ही Apna Transport बऱ्याच दिवसांपासून उघडलेले नाही, आणि रोज नवीन लोड येत आहेत. जवळचे लोड पाहण्यासाठी अ‍ॅप पुन्हा उघडा: https://sarthi-transport-74865.web.app"
+      : "हमें आपकी याद आती है! आपने Apna Transport काफी दिनों से नहीं खोला है, और हर दिन नए लोड आ रहे हैं। आसपास के लोड देखने के लिए ऐप फिर से खोलें: https://sarthi-transport-74865.web.app";
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  };
+  const uninstalledUnsent = uninstalledDrivers.filter((d) => !sentUninstalledToday(d.mobile));
+  const nextUninstalledToRemind = uninstalledUnsent[0] || null;
+
   // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) by
   // ₹1/km per +/- tap, up or down. Driver-submitted quotes (routeFares)
   // are untouched by this since commit ae40cb4 dropped them as a
@@ -9132,13 +9151,34 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
       title: lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)",
       emptyMsg: lang === "en" ? "No driver has gone quiet this long." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है।",
       items: uninstalledDrivers,
+      // Retention queue -- same "send next one, one tap at a time" pattern
+      // as AdminDriverList's GPS reminder, so admin can work through the
+      // whole list without hunting for who's already been messaged today.
+      headerExtra: uninstalledDrivers.length > 0 && (
+        nextUninstalledToRemind ? (
+          <a href={uninstalledWhatsappLink(nextUninstalledToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markUninstalledWhatsappSent(nextUninstalledToRemind.mobile)}
+            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.success }}>
+            <MessageCircle size={14} />
+            {lang === "en" ? `Send next retention message on WhatsApp (${uninstalledUnsent.length} left)` : lang === "mr" ? `पुढचा रिटेंशन मेसेज WhatsApp वर पाठवा (${uninstalledUnsent.length} बाकी)` : `अगला रिटेंशन मेसेज WhatsApp पर भेजें (${uninstalledUnsent.length} बाकी)`}
+          </a>
+        ) : (
+          <div className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+            <CheckCircle2 size={14} />
+            {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
+          </div>
+        )
+      ),
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div>
             <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
             <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+            <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
           </div>
-          <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+          <a href={uninstalledWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markUninstalledWhatsappSent(d.mobile)}
+            className="shrink-0 p-2 rounded-full" style={{ background: sentUninstalledToday(d.mobile) ? "#E0E0E0" : C.success }}>
+            <MessageCircle size={14} color={sentUninstalledToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
+          </a>
         </div>
       ),
     },
@@ -9300,6 +9340,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{page.title}</h2>
+        {page.headerExtra}
         {page.items.length === 0 ? (
           <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{page.emptyMsg}</p>
         ) : (
