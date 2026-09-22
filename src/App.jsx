@@ -7175,12 +7175,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // call per trip start/end is negligible, and startTracking already
   // covers everything updateTrip would, so there's no separate call to
   // keep in sync.
-  // TEMPORARY diagnostic, same reasoning as gpsDebug below -- a visible
-  // on-screen readout of the mint-token/start-service chain, so a report
-  // of "no tracking notification" can be diagnosed from a screenshot
-  // alone, without adb/chrome://inspect. Remove once background tracking
-  // is confirmed reliably starting across real test devices.
-  const [trackerDebug, setTrackerDebug] = useState(null);
   useEffect(() => {
     if (!locationTrackerAvailable || !driver.mobile) return;
     let cancelled = false;
@@ -7193,26 +7187,17 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       // once and background tracking silently never started at all, even
       // once signal came back, since nothing here ever tried again.
       const attemptStart = () => {
-        setTrackerDebug(`Minting token… @ ${new Date().toLocaleTimeString()}`);
-        mintLocationServiceToken().then(({ token, error }) => {
+        mintLocationServiceToken().then(({ token }) => {
           if (cancelled) return;
           if (!token) {
-            setTrackerDebug(`Mint failed (${error || "unknown"}) — retrying in 20s @ ${new Date().toLocaleTimeString()}`);
             retryTimer = setTimeout(attemptStart, 20000);
             return;
           }
-          setTrackerDebug(`Token minted, calling startTracking… @ ${new Date().toLocaleTimeString()}`);
-          LocationTrackerNative.startTracking({ mobile: driver.mobile, token, tripId: myTrip?.id || null })
-            .then(() => setTrackerDebug(`startTracking resolved @ ${new Date().toLocaleTimeString()}`))
-            .catch((e) => {
-              console.error("startTracking failed", e);
-              setTrackerDebug(`startTracking FAILED: ${e?.message || e} @ ${new Date().toLocaleTimeString()}`);
-            });
+          LocationTrackerNative.startTracking({ mobile: driver.mobile, token, tripId: myTrip?.id || null }).catch((e) => console.error("startTracking failed", e));
         });
       };
       attemptStart();
     } else {
-      setTrackerDebug(`Offline, no trip — stopTracking @ ${new Date().toLocaleTimeString()}`);
       LocationTrackerNative.stopTracking().catch((e) => console.error("stopTracking failed", e));
     }
     return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
@@ -7280,15 +7265,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // other half of the write-side throttle in writeFix below, alongside
   // lastGpsWriteRef's timestamp.
   const lastWrittenLocationRef = useRef(null);
-  // Raw counters, independent of the throttled/overwritten message below --
-  // lets us tell definitively whether the native->JS callback is firing at
-  // all, even if something else is resetting gpsDebug's text before it can
-  // be seen. watchStartCount increments every time this effect (re)starts
-  // the poll loop; callbackFireCount increments on every completed poll,
-  // success or error, before anything else runs. Both persist across
-  // effect reruns (refs, not state).
-  const watchStartCountRef = useRef(0);
-  const callbackFireCountRef = useRef(0);
   // The watch below only resubscribes when the trip ID changes (see its own
   // dependency array) — kept in sync separately here so the GPS callback
   // always reads this trip's current pause-tracking fields instead of a
@@ -7296,20 +7272,8 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   const myTripRef = useRef(myTrip);
   useEffect(() => { myTripRef.current = myTrip; }, [myTrip]);
 
-  // TEMPORARY diagnostic -- visible on-screen readout of the GPS watch's
-  // actual success/error state, so a driver reporting "GPS: Never" in
-  // Admin can be diagnosed without needing chrome://inspect/USB debugging
-  // on their specific phone. Remove once the current live investigation
-  // (a driver whose GPS never updates despite permission + Location
-  // Services both confirmed on) is resolved.
-  const [gpsDebug, setGpsDebug] = useState(null);
   useEffect(() => {
-    if (!myTrip && !driver.online) {
-      setGpsDebug(`Poll not started — online=${String(driver.online)} @ ${new Date().toLocaleTimeString()}`);
-      return;
-    }
-    watchStartCountRef.current += 1;
-    setGpsDebug(`Poll started (#${watchStartCountRef.current}, cb=${callbackFireCountRef.current}) @ ${new Date().toLocaleTimeString()}, waiting for first fix...`);
+    if (!myTrip && !driver.online) return;
 
     // Polling (repeated one-shot getCurrentPosition, every 5s) instead of a
     // single long-lived watchPosition subscription -- swapped in as a live
@@ -7327,7 +7291,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     const writeFix = (pos) => {
       locationPermission.markGranted();
       const now = Date.now();
-      setGpsDebug(`Fix received (cb=${callbackFireCountRef.current}): ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)} (±${Math.round(pos.coords.accuracy)}m) @ ${new Date(now).toLocaleTimeString()}`);
       const location = { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: now };
 
       // Writes to Firestore itself are gated separately from the 5s GPS
@@ -7384,15 +7347,12 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
         .then((pos) => {
           if (cancelled) return;
-          callbackFireCountRef.current += 1;
           writeFix(pos);
         })
         .catch((err) => {
           if (cancelled) return;
-          callbackFireCountRef.current += 1;
           console.error("GPS tracking error", err);
           if (isLocationPermissionDeniedError(err)) locationPermission.markDenied();
-          setGpsDebug(`Error (cb=${callbackFireCountRef.current}): ${err?.code || "unknown"} — "${err?.message}" @ ${new Date().toLocaleTimeString()}`);
         });
     };
     poll(); // immediate first attempt, don't wait for the first interval tick
@@ -7688,21 +7648,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
         </div>
       )}
 
-      {/* TEMPORARY diagnostic readout -- see gpsDebug above. Remove once
-          the live "driver GPS shows Never" investigation is resolved. */}
-      {gpsDebug && (
-        <div className="rounded-lg p-2 mt-3 text-[10px]" style={{ background: "#FFF3C4", border: `1px solid ${C.marigoldDeep}`, color: C.ink, fontFamily: monoFont }}>
-          [GPS debug] {gpsDebug}
-        </div>
-      )}
-
-      {/* TEMPORARY diagnostic readout -- see trackerDebug above. Remove
-          once background tracking is confirmed reliably starting. */}
-      {trackerDebug && (
-        <div className="rounded-lg p-2 mt-2 text-[10px]" style={{ background: "#E5F0FF", border: `1px solid ${C.navy}`, color: C.ink, fontFamily: monoFont }}>
-          [Tracker debug] {trackerDebug}
-        </div>
-      )}
 
       {/* My Wallet + Driver Duty switch — moved down here from the header
           row above DriverHome (see DriverApp) so the Get Estimate card can
