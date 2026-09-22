@@ -2214,6 +2214,16 @@ const isLikelyUninstalled = (driver) => {
   return (Date.now() - ts.toMillis()) >= UNINSTALL_INACTIVE_DAYS * DAY_MS;
 };
 
+// The base population for every "how many drivers" count across Admin
+// (AdminDriverList's total, its GPS-status split, AdminFleet's Live Map
+// tile and the map itself) -- "has the app installed" (the inverse of
+// isLikelyUninstalled above), minus blacklisted, consistently, so these
+// screens can't drift back into showing different numbers for what's
+// supposed to be the same underlying question again.
+function installedDrivers(drivers) {
+  return (drivers || []).filter((d) => !isLikelyUninstalled(d) && !d.blacklisted);
+}
+
 // GPS status diagnostic (see AdminDriverList) -- lastKnownLocation.updatedAt
 // is written by DriverApp's own watchPosition effect while a driver is
 // Online (throttled to one write every 5s -- see the useEffect near
@@ -2844,18 +2854,23 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
   );
 }
 
-// Admin's "Live Map" — every driver with a lastKnownLocation on file,
-// plotted at once (not just ones near a particular customer, unlike
-// NearbyVehiclesMap above, which this otherwise mirrors closely — same
-// icons, same schematic no-Maps-key fallback). Purely a read of the
-// already-live `drivers` prop (kept fresh by the same Firestore
-// subscription every other Admin screen uses) — this re-renders on its
-// own the moment any driver's lastKnownLocation changes, no polling of its
-// own needed here.
+// Admin's "Live Map" — every installed driver (see installedDrivers) with
+// a lastKnownLocation on file, plotted at once (not just ones near a
+// particular customer, unlike NearbyVehiclesMap above, which this
+// otherwise mirrors closely — same icons, same schematic no-Maps-key
+// fallback). An installed driver with NO location ever recorded can't be
+// plotted at all (there's no coordinate to put a pin at) -- counted
+// separately instead of silently dropped, see neverLocated below. Purely
+// a read of the already-live `drivers` prop (kept fresh by the same
+// Firestore subscription every other Admin screen uses) — this re-renders
+// on its own the moment any driver's lastKnownLocation changes, no
+// polling of its own needed here.
 function AdminLiveMap({ drivers, lang = "hi" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const [mapInstance, setMapInstance] = useState(null);
-  const located = (drivers || []).filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null && !d.blacklisted);
+  const installed = installedDrivers(drivers);
+  const located = installed.filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null);
+  const neverLocated = installed.filter((d) => d.lastKnownLocation?.lat == null || d.lastKnownLocation?.lng == null);
   const online = located.filter((d) => d.online);
   const offline = located.filter((d) => !d.online);
   const center = online[0]?.lastKnownLocation || offline[0]?.lastKnownLocation || NEARBY_MAP_DEFAULT_CENTER;
@@ -2869,6 +2884,15 @@ function AdminLiveMap({ drivers, lang = "hi" }) {
 
   const staleMinutes = (d) => Math.round((Date.now() - (d.lastKnownLocation?.updatedAt || 0)) / 60000);
   const markerTitle = (d) => `${d.name || d.mobile} · ${staleMinutes(d)}${lang === "en" ? "m ago" : " मिनट पहले"}`;
+
+  // Shared by both render branches below so the two never drift apart
+  // again the way the tile/map mismatch did before. neverLocated is
+  // called out separately since those drivers have no pin on this map at
+  // all -- there's nothing to plot without a coordinate.
+  const mapSummaryLabel =
+    `${online.length} ${lang === "en" ? "online" : "ऑनलाइन"}` +
+    (offline.length > 0 ? ` · ${offline.length} ${lang === "en" ? "offline" : "ऑफलाइन"}` : "") +
+    (neverLocated.length > 0 ? ` · ${neverLocated.length} ${lang === "en" ? "no location yet" : "अभी तक लोकेशन नहीं"}` : "");
 
   if (!hasKey || !isLoaded) {
     const scale = 900;
@@ -2890,7 +2914,7 @@ function AdminLiveMap({ drivers, lang = "hi" }) {
           })}
         </svg>
         <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
-          {online.length} {lang === "en" ? "online" : "ऑनलाइन"}{offline.length > 0 ? ` · ${offline.length} ${lang === "en" ? "offline" : "ऑफलाइन"}` : ""}
+          {mapSummaryLabel}
         </div>
       </div>
     );
@@ -2911,7 +2935,7 @@ function AdminLiveMap({ drivers, lang = "hi" }) {
         ))}
       </GoogleMap>
       <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
-        {online.length} {lang === "en" ? "online" : "ऑनलाइन"}{offline.length > 0 ? ` · ${offline.length} ${lang === "en" ? "offline" : "ऑफलाइन"}` : ""}
+        {mapSummaryLabel}
       </div>
     </div>
   );
@@ -8956,6 +8980,10 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // other trip-based tiles below.
   const bookedTodayList = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t));
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
+  // Matches AdminLiveMap's own "located" count exactly (installed,
+  // non-blacklisted, has a lastKnownLocation) -- this tile's number and
+  // what the map shows after tapping it must never diverge again.
+  const liveMapLocatedCount = installedDrivers(drivers).filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null).length;
   // Everyone else approved-but-not-online, split by isLikelyUninstalled
   // (see its own comment) so admin can tell "toggled off, still around" from
   // "gone quiet long enough to probably not have the app anymore" instead of
@@ -9347,7 +9375,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
         <StatTile label={lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
-        <StatTile label={lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"} value={readyOnlineDrivers.length} color={C.navy} onClick={() => setDetailView("liveMap")} />
+        <StatTile label={lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"} value={liveMapLocatedCount} color={C.navy} onClick={() => setDetailView("liveMap")} />
         <StatTile label={lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी"} value={offDutyDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("offDuty")} />
         <StatTile label={lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)"} value={uninstalledDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
         <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
@@ -10604,11 +10632,22 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   const [trialTab, setTrialTab] = useState("all"); // 'all' | 'trial' | 'main'
   const trialCount = drivers.filter((d) => isInTrial(d.createdAt)).length;
   const byTrialTab = trialTab === "all" ? drivers : drivers.filter((d) => (trialTab === "trial" ? isInTrial(d.createdAt) : !isInTrial(d.createdAt)));
+  // "Total Drivers" (the badge below) reports the installed-drivers count
+  // (see installedDrivers) -- how many actually still have the app on
+  // their phone, not just how many driver docs have ever been created.
+  // The searchable list itself deliberately still shows/manages EVERY
+  // record (uninstalled or blacklisted included) so admin never loses the
+  // ability to look up or unblacklist someone just because they're not
+  // currently counted as "installed".
+  const totalInstalled = installedDrivers(drivers);
   // GPS diagnostic (see gpsStatus) -- an Online driver whose lastKnownLocation
   // is stale/missing is the exact "is this actually tracking?" question,
   // made visible per-driver instead of guessed at from Online status alone.
+  // Scoped to installed, non-blacklisted drivers only -- a blacklisted
+  // driver's GPS status isn't actionable, and an uninstalled driver isn't
+  // the one this WhatsApp-reminder flow below is meant to reach anyway.
   const [gpsOnly, setGpsOnly] = useState(false);
-  const onlineNoLiveGps = drivers.filter((d) => d.online && gpsStatus(d, lang).stale);
+  const onlineNoLiveGps = totalInstalled.filter((d) => d.online && gpsStatus(d, lang).stale);
   const byGps = gpsOnly ? byTrialTab.filter((d) => d.online && gpsStatus(d, lang).stale) : byTrialTab;
   // Same reasoning as AdminKyc's WhatsApp reminder queue -- a push
   // notification only reaches a driver who's already granted notification
@@ -10648,7 +10687,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
           <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"}
-          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{drivers.length}</span>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{totalInstalled.length}</span>
         </div>
         <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
           {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : lang === "mr" ? "ड्रायव्हरला कॉल करा" : "ड्राइवर को कॉल करें"}</>}
