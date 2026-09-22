@@ -3436,12 +3436,12 @@ function BackgroundAlertsGuide({ lang }) {
   );
 }
 
-function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
+function SosScreen({ role = "customer", raiseAlert, lang, tripLocked, mobile }) {
   const [complaint, setComplaint] = useState("");
   const [sent, setSent] = useState(false);
   const submitComplaint = () => {
     if (!complaint.trim()) return;
-    raiseAlert?.(role, "शिकायत", complaint.trim());
+    raiseAlert?.(role, "शिकायत", complaint.trim(), mobile);
     setComplaint("");
     setSent(true);
     setTimeout(() => setSent(false), 3000);
@@ -3460,15 +3460,15 @@ function SosScreen({ role = "customer", raiseAlert, lang, tripLocked }) {
         </div>
       )}
       <div className="space-y-3">
-        <a href="tel:100" onClick={() => raiseAlert?.(role, "पुलिस सहायता")}
+        <a href="tel:100" onClick={() => raiseAlert?.(role, "पुलिस सहायता", null, mobile)}
           className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: "#000000" }}>
           <Siren size={16} /> {lang === "en" ? "Police Help (100)" : lang === "mr" ? "पोलीस मदत (100)" : "पुलिस सहायता (100)"}
         </a>
-        <a href={`tel:${ADMIN_PHONE}`} onClick={() => raiseAlert?.(role, "इमरजेंसी कॉल")}
+        <a href={`tel:${ADMIN_PHONE}`} onClick={() => raiseAlert?.(role, "इमरजेंसी कॉल", null, mobile)}
           className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white" style={{ background: C.safety }}>
           <Phone size={16} /> {lang === "en" ? "Call Admin" : lang === "mr" ? "अ‍ॅडमिनला कॉल करा" : "एडमिन को कॉल करें"}
         </a>
-        <a href={`https://wa.me/${ADMIN_WHATSAPP}`} target="_blank" rel="noreferrer" onClick={() => raiseAlert?.(role, "व्हाट्सएप सपोर्ट")}
+        <a href={`https://wa.me/${ADMIN_WHATSAPP}`} target="_blank" rel="noreferrer" onClick={() => raiseAlert?.(role, "व्हाट्सएप सपोर्ट", null, mobile)}
           className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2 text-white shadow-lg" style={{ background: C.metallicGreen }}>
           <MessageCircle size={16} /> {lang === "en" ? "WhatsApp Support" : lang === "mr" ? "व्हॉट्सअ‍ॅप सपोर्ट" : "व्हाट्सएप सपोर्ट"}
         </a>
@@ -6709,7 +6709,7 @@ function CustomerApp({ bookings, requestDriverDirectly, reassignAwaitingDriver, 
             <ChevronLeft size={18} strokeWidth={3} />
           </button>
         </div>
-        {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} />}
+        {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} mobile={customerMobile} />}
         {settingsView === "profile" && (
           <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} />
         )}
@@ -8756,7 +8756,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
           </button>
         </div>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
-        {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} />}
+        {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} mobile={driver.mobile} />}
         {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
         {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} onOpen={announcementAlerts.markSeen} />}
         {settingsView === "batteryGuide" && <BackgroundAlertsGuide lang={lang} />}
@@ -10655,6 +10655,18 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
                     <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(a.createdAt)}</span>
                   </div>
                   {a.note && <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{a.note}</div>}
+                  {/* Complaints filed before this shipped have no mobile on
+                      file at all -- nothing to reply to, so the button is
+                      simply omitted for those instead of linking nowhere. */}
+                  {a.mobile && (
+                    <a
+                      href={`https://wa.me/91${a.mobile}?text=${encodeURIComponent(`${lang === "en" ? "Re" : "जवाब"}: "${a.note || ""}"\n\n`)}`}
+                      target="_blank" rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full text-white"
+                      style={{ background: C.metallicGreen }}>
+                      <MessageCircle size={12} /> {lang === "en" ? "Reply on WhatsApp" : lang === "mr" ? "WhatsApp वर उत्तर द्या" : "WhatsApp पर जवाब दें"}
+                    </a>
+                  )}
                 </div>
               ))}
             </div>
@@ -12583,7 +12595,10 @@ export default function App() {
   };
   const deleteDriver = (mobile) => removeDoc("drivers", mobile).catch((e) => console.error(e));
   const deleteCustomer = (mobile) => removeDoc("customers", mobile).catch((e) => console.error(e));
-  const raiseAlert = (role, type, note) => createDoc("alerts", genId("A"), { role, type, note: note || null }).catch((e) => console.error(e));
+  // mobile is threaded through from SosScreen so AdminAlerts can actually
+  // reply to whoever raised this -- alerts previously carried no way to
+  // identify who sent them at all.
+  const raiseAlert = (role, type, note, mobile) => createDoc("alerts", genId("A"), { role, type, note: note || null, mobile: mobile || null }).catch((e) => console.error(e));
   const addExpense = ({ id, date, category, amount, note, photoUrl }) =>
     createDoc("expenses", id, { date, category, amount, note: note || "", photoUrl: photoUrl || null });
   const addExpenseCategory = (name) => createDoc("expenseCategories", slugify(name), { key: slugify(name), icon: "📦", hi: name, en: name }).catch((e) => console.error(e));
