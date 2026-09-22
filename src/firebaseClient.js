@@ -266,14 +266,18 @@ export async function verifyPickupOtp(bookingId, otp) {
 // (never throws) on any failure.
 export async function mintLocationServiceToken() {
   const functions = functionsByRole[activeRole];
-  if (!functions) return { token: null };
+  if (!functions) return { token: null, error: "no-functions-instance" };
   try {
     const call = httpsCallable(functions, "mintLocationServiceToken");
     const result = await call({});
     return result.data;
   } catch (e) {
     console.error("[mintLocationServiceToken] callable failed", e);
-    return { token: null };
+    // e.code (e.g. "functions/unauthenticated", "functions/permission-denied",
+    // "functions/internal") is the one thing that actually tells DriverHome's
+    // on-screen tracker debug readout WHY this failed, instead of every
+    // failure looking identical from the caller's side.
+    return { token: null, error: e?.code || e?.message || String(e) };
   }
 }
 

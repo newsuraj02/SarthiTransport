@@ -7194,10 +7194,10 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       // once signal came back, since nothing here ever tried again.
       const attemptStart = () => {
         setTrackerDebug(`Minting token… @ ${new Date().toLocaleTimeString()}`);
-        mintLocationServiceToken().then(({ token }) => {
+        mintLocationServiceToken().then(({ token, error }) => {
           if (cancelled) return;
           if (!token) {
-            setTrackerDebug(`Mint failed (no token) — retrying in 20s @ ${new Date().toLocaleTimeString()}`);
+            setTrackerDebug(`Mint failed (${error || "unknown"}) — retrying in 20s @ ${new Date().toLocaleTimeString()}`);
             retryTimer = setTimeout(attemptStart, 20000);
             return;
           }
