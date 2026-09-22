@@ -142,24 +142,41 @@ public class PowerBridgePlugin extends Plugin {
         }
 
         for (Intent intent : candidates) {
-            if (intent != null && intent.resolveActivity(context.getPackageManager()) != null) {
+            if (intent == null || intent.resolveActivity(context.getPackageManager()) == null) continue;
+            // resolveActivity() only confirms something CLAIMS to handle this
+            // component -- several OEMs (confirmed live: crashed this whole
+            // app on a real device) lock their autostart screen down as
+            // protected/system-only, so it resolves fine but actually
+            // launching it throws SecurityException at runtime. Falling
+            // through to the next candidate (and ultimately the fallback
+            // below) instead of letting that propagate and take the app down.
+            try {
                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 context.startActivity(intent);
                 JSObject result = new JSObject();
                 result.put("opened", true);
                 call.resolve(result);
                 return;
+            } catch (Exception e) {
+                // try the next candidate, or the fallback below
             }
         }
 
         // Fallback: this app's own details screen -- battery/background
         // usage controls live somewhere on it on every OEM even when the
-        // dedicated autostart screen above can't be found.
+        // dedicated autostart screen above can't be found (or throws).
         Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
         fallback.setData(Uri.fromParts("package", context.getPackageName(), null));
         fallback.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        boolean opened = fallback.resolveActivity(context.getPackageManager()) != null;
-        if (opened) context.startActivity(fallback);
+        boolean opened = false;
+        try {
+            if (fallback.resolveActivity(context.getPackageManager()) != null) {
+                context.startActivity(fallback);
+                opened = true;
+            }
+        } catch (Exception e) {
+            opened = false;
+        }
         JSObject result = new JSObject();
         result.put("opened", opened);
         call.resolve(result);
