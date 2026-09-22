@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppUpdateBridgePlugin.class);
         registerPlugin(FusedLocationBridgePlugin.class);
         registerPlugin(LocationTrackerPlugin.class);
+        registerPlugin(PowerBridgePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

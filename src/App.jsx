@@ -1844,6 +1844,42 @@ async function startNativeImmediateUpdate() {
   }
 }
 
+// See PowerBridgePlugin.java -- the real fix for LocationTrackerService
+// getting killed on an idle phone: a battery-optimization exemption (a
+// genuine one-tap system dialog) plus, on the worst OEMs, a best-effort
+// deep link to their own separate "autostart"/background-activity screen.
+// Only ever called once per driver device (see DriverHome's
+// primeBackgroundTracking effect) -- not on every app open, matching this
+// app's existing "ask once up front, never nag" permission philosophy.
+const PowerBridgeNative = registerPlugin("PowerBridge");
+async function requestBatteryOptimizationExemption() {
+  if (!isNativeApp) return { granted: null };
+  try {
+    return await PowerBridgeNative.requestIgnoreBatteryOptimizations();
+  } catch (e) {
+    console.error("[powerBridge]", e);
+    return { granted: null };
+  }
+}
+async function openAutoStartSettings() {
+  if (!isNativeApp) return { opened: false };
+  try {
+    return await PowerBridgeNative.openAutoStartSettings();
+  } catch (e) {
+    console.error("[powerBridge]", e);
+    return { opened: false };
+  }
+}
+async function needsAutoStartSettings() {
+  if (!isNativeApp) return { needed: false };
+  try {
+    return await PowerBridgeNative.needsAutoStartSettings();
+  } catch (e) {
+    console.error("[powerBridge]", e);
+    return { needed: false };
+  }
+}
+
 // Re-added for the driver "new load posted" push carve-out — see
 // useRideNotifications above. Also used on the Customer side now (see
 // context="customer") so they're told when their driver accepts/starts the
@@ -7083,6 +7119,36 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     return () => { cancelled = true; };
   }, [driver.mobile, driver.online, myTrip?.id]);
 
+  // Battery-optimization exemption (see PowerBridgePlugin.java) — the real
+  // fix for LocationTrackerService getting killed once the phone decides
+  // the app is idle, which LOCATION permission alone does nothing to
+  // prevent. Asked exactly once per device (localStorage, not per driver
+  // account — it's a device/OS-level setting), the moment this screen
+  // first mounts, matching usePrimePermissionsOnce's "ask once up front,
+  // never nag again" pattern rather than adding a persistent banner.
+  const [batteryOptPrimed, setBatteryOptPrimed] = usePersistedState("sarthi_batteryOptPrimed", false);
+  useEffect(() => {
+    if (!locationTrackerAvailable || batteryOptPrimed) return;
+    requestBatteryOptimizationExemption().finally(() => setBatteryOptPrimed(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationTrackerAvailable, batteryOptPrimed]);
+
+  // OEM "autostart"/background-activity toggle — unlike the battery
+  // exemption above, there's no real system dialog for this on
+  // OPPO/Xiaomi/Vivo/Huawei, only their own Settings screen (see
+  // openAutoStartSettings), so it needs an actual in-app explanation
+  // before jumping the driver there rather than firing silently. Shown at
+  // most once ever per device, and only on a manufacturer that actually
+  // needs it — every other OEM never sees this card at all.
+  const [autoStartCardDismissed, setAutoStartCardDismissed] = usePersistedState("sarthi_autoStartCardDismissed", false);
+  const [showAutoStartCard, setShowAutoStartCard] = useState(false);
+  useEffect(() => {
+    if (!locationTrackerAvailable || autoStartCardDismissed) return;
+    let cancelled = false;
+    needsAutoStartSettings().then(({ needed }) => { if (!cancelled && needed) setShowAutoStartCard(true); });
+    return () => { cancelled = true; };
+  }, [locationTrackerAvailable, autoStartCardDismissed]);
+
   // Real GPS live-tracking: while this driver has an active trip, share their
   // actual device location so the customer (and admin fleet map) see it live.
   // Also runs whenever the driver is simply Online (not on a trip) so
@@ -7364,6 +7430,35 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 
   return (
     <div className="px-5 pt-5 pb-5">
+      {showAutoStartCard && (
+        <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#EAF1FF", border: `1.5px solid ${C.navy}` }}>
+          <div className="text-xs font-bold mb-1" style={{ color: C.navy }}>
+            {lang === "en" ? "Keep getting loads while your phone is locked" : lang === "mr" ? "फोन लॉक असतानाही लोड मिळत राहण्यासाठी" : "फोन लॉक होने पर भी लोड मिलते रहें"}
+          </div>
+          <div className="text-xs mb-2.5" style={{ color: C.inkSoft }}>
+            {lang === "en"
+              ? "Your phone's maker may stop this app's location sharing when it's not open. Turn on \"Autostart\" / \"Allow background activity\" for Apna Transport so you don't miss loads."
+              : lang === "mr"
+              ? "अ‍ॅप उघडे नसताना तुमचा फोन लोकेशन शेअरिंग थांबवू शकतो. लोड चुकू नयेत म्हणून Apna Transport साठी \"Autostart\" / \"Background activity\" सुरू करा."
+              : "ऐप बंद रहने पर आपका फोन लोकेशन शेयरिंग बंद कर सकता है। लोड न छूटें, इसलिए Apna Transport के लिए \"Autostart\" / \"Background activity\" चालू करें।"}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { openAutoStartSettings(); setShowAutoStartCard(false); setAutoStartCardDismissed(true); }}
+              className="flex-1 rounded-lg py-2 text-xs font-black"
+              style={{ background: C.navy, color: "#fff" }}>
+              {lang === "en" ? "Enable" : lang === "mr" ? "सुरू करा" : "चालू करें"}
+            </button>
+            <button
+              onClick={() => { setShowAutoStartCard(false); setAutoStartCardDismissed(true); }}
+              className="px-3 rounded-lg py-2 text-xs font-bold"
+              style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+              {lang === "en" ? "Later" : lang === "mr" ? "नंतर" : "बाद में"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {notificationsLocked && (
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.metallicGold }}>
           <Clock3 size={14} color="#000000" />

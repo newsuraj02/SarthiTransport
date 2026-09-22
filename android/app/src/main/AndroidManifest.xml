@@ -87,6 +87,12 @@
          service element's android:foregroundServiceType. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- See PowerBridgePlugin.java, which lets this app ASK (a real system
+         dialog, not silently grant itself) to be exempted from Android's
+         own battery-optimization killing, which is the actual reason a
+         foreground service can still get killed on an idle phone even
+         with FOREGROUND_SERVICE_LOCATION declared above. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Explicit even though @capacitor/push-notifications' own Android
          library likely already merges this in; costs nothing to state
          directly rather than rely on an assumption about plugin manifest
