@@ -39,7 +39,29 @@ function callerPhoneFromAuth(token) {
 // broader push-notification removal; every other push type (bid accepted,
 // trip completed, new bid, invoice received, trial ended, load removed)
 // stays removed.
-async function sendLoadAlert(token, load, bookingId) {
+// FCM permanently invalidates a device's registration token on certain
+// events (a fresh reinstall being by far the most common in practice --
+// confirmed live via Cloud Logging: repeated "[push] ... send failed:
+// Device unregistered." entries for the exact driver a test kept
+// reinstalling a new build onto). Firebase's own docs explicitly
+// recommend removing a token once it fails with this specific error, so
+// it doesn't just sit there silently failing forever -- the next time
+// that driver/customer's app runs its own token-registration effect
+// (useRideNotifications in App.jsx), a fresh valid token gets written
+// cleanly instead of never overwriting the dead one.
+async function clearStaleFcmTokenOnFailure(collectionName, docId, error) {
+  if (!docId) return;
+  const isUnregistered = error?.code === "messaging/registration-token-not-registered"
+    || /unregistered/i.test(error?.message || "");
+  if (!isUnregistered) return;
+  try {
+    await db.collection(collectionName).doc(docId).update({ fcmToken: null });
+  } catch (e) {
+    console.error(`[push] failed to clear stale token for ${collectionName}/${docId}:`, e.message);
+  }
+}
+
+async function sendLoadAlert(token, load, bookingId, driverMobile) {
   if (!token) return;
   try {
     await getMessaging().send({
@@ -68,6 +90,7 @@ async function sendLoadAlert(token, load, bookingId) {
     });
   } catch (e) {
     console.error("[push] load-alert send failed:", e.message);
+    await clearStaleFcmTokenOnFailure("drivers", driverMobile, e);
   }
 }
 
@@ -189,7 +212,7 @@ exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event
     const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
     if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) return;
 
-    sends.push(sendLoadAlert(driver.fcmToken, load, event.params.bookingId));
+    sends.push(sendLoadAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
   });
 
   await Promise.all(sends);
@@ -201,7 +224,7 @@ exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event
 // retargetToNextDriver in src/App.jsx). Reuses the exact same channel/
 // pattern as sendLoadAlert above (already proven to reach a closed app)
 // rather than a new, unregistered notification channel.
-async function sendDirectRequestAlert(token, load, bookingId) {
+async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
   if (!token) return;
   try {
     await getMessaging().send({
@@ -230,6 +253,7 @@ async function sendDirectRequestAlert(token, load, bookingId) {
     });
   } catch (e) {
     console.error("[push] direct-request alert send failed:", e.message);
+    await clearStaleFcmTokenOnFailure("drivers", driverMobile, e);
   }
 }
 
@@ -251,12 +275,13 @@ exports.onDirectRequestAssigned = onDocumentWritten("bookings/{bookingId}", asyn
   // (no uniqueness enforced at signup), which used to let this resolve to
   // the WRONG same-named driver's fcmToken. Falls back to the old
   // name-based query only for a booking written before this field existed.
-  const driver = after.pendingDriverMobile
-    ? (await db.collection("drivers").doc(after.pendingDriverMobile).get()).data()
-    : (await db.collection("drivers").where("name", "==", after.pendingDriverName).limit(1).get()).docs[0]?.data();
+  const driverDoc = after.pendingDriverMobile
+    ? await db.collection("drivers").doc(after.pendingDriverMobile).get()
+    : (await db.collection("drivers").where("name", "==", after.pendingDriverName).limit(1).get()).docs[0];
+  const driver = driverDoc?.data();
   if (!driver?.fcmToken) return;
 
-  await sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId);
+  await sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId, driverDoc.id);
 });
 
 // Customer-side equivalent of sendDirectRequestAlert/sendLoadAlert above —
@@ -265,7 +290,7 @@ exports.onDirectRequestAssigned = onDocumentWritten("bookings/{bookingId}", asyn
 // (status -> Ongoing) and the trip finishing (status -> Completed). Reuses
 // the same "new_load_alerts" channel already proven to reach a closed app,
 // rather than registering a new, unproven one.
-async function sendCustomerBookingAlert(token, booking, bookingId, kind) {
+async function sendCustomerBookingAlert(token, booking, bookingId, kind, customerMobile) {
   if (!token) return;
   try {
     await getMessaging().send({
@@ -286,6 +311,7 @@ async function sendCustomerBookingAlert(token, booking, bookingId, kind) {
     });
   } catch (e) {
     console.error(`[push] customer ${kind} alert send failed:`, e.message);
+    await clearStaleFcmTokenOnFailure("customers", customerMobile, e);
   }
 }
 
@@ -304,7 +330,7 @@ exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", asyn
   const token = customerSnap.data()?.fcmToken;
   if (!token) return;
 
-  await sendCustomerBookingAlert(token, after, event.params.bookingId, becameOngoing ? "accepted" : "completed");
+  await sendCustomerBookingAlert(token, after, event.params.bookingId, becameOngoing ? "accepted" : "completed", after.customerMobile);
 });
 
 // Runs hourly. A customer's load that has sat in "Bidding" for 6+ hours
