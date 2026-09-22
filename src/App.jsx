@@ -63,6 +63,30 @@ function getCurrentPositionCompat(options) {
 const LocationTrackerNative = registerPlugin("LocationTracker");
 const locationTrackerAvailable = Capacitor.isPluginAvailable("LocationTracker");
 
+// "Allow all the time" location -- see FusedLocationBridgePlugin.java's
+// requestBackgroundLocation/checkBackgroundLocation. Only ever called
+// after BackgroundLocationDisclosure (below) has shown Google Play's
+// required prominent in-app disclosure -- calling this without that
+// screen first is a Play Store policy violation, not just bad UX.
+async function requestBackgroundLocationPermission() {
+  if (!geolocationPluginAvailable) return { granted: false };
+  try {
+    return await FusedLocationBridgeNative.requestBackgroundLocation();
+  } catch (e) {
+    console.error("[backgroundLocation]", e);
+    return { granted: false };
+  }
+}
+async function checkBackgroundLocationPermission() {
+  if (!geolocationPluginAvailable) return { granted: false };
+  try {
+    return await FusedLocationBridgeNative.checkBackgroundLocation();
+  } catch (e) {
+    console.error("[backgroundLocation]", e);
+    return { granted: false };
+  }
+}
+
 // Fallback Play Store link for the force-update screen — used whenever
 // admin hasn't set a custom settings.updateUrl (see AdminSettings).
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.apnatransport.app";
@@ -1878,6 +1902,52 @@ async function needsAutoStartSettings() {
     console.error("[powerBridge]", e);
     return { needed: false };
   }
+}
+
+// Google Play's required "prominent in-app disclosure" -- a standalone
+// screen, not buried in Settings/Privacy Policy, that must clearly state
+// what location data is collected, that it's collected in the BACKGROUND
+// (even when the app is closed/not in use), and why, BEFORE the app is
+// allowed to trigger the real "Allow all the time" runtime request (see
+// requestBackgroundLocationPermission above). Every large driver-tracking
+// app (Porter, Uber, Ola) shows an equivalent screen for this same reason
+// -- it's a Play Store policy requirement, not a design choice either app
+// gets to skip. Shown as a full-screen takeover (not a dismissible corner
+// card) so it's unmistakably "prominent," but always skippable ("Not
+// now") -- Play policy requires the ask be declinable, never forced.
+function BackgroundLocationDisclosure({ lang, onContinue, onDismiss }) {
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col px-6 py-10">
+      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto" style={{ background: "#EAF1FF" }}>
+        <MapPin size={30} color={C.navy} />
+      </div>
+      <p className="text-lg font-black text-center mb-4" style={{ color: C.ink }}>
+        {lang === "en" ? "Share your location in the background" : lang === "mr" ? "बॅकग्राउंडमध्ये तुमचे लोकेशन शेअर करा" : "बैकग्राउंड में अपनी लोकेशन शेयर करें"}
+      </p>
+      <div className="rounded-xl p-4 mb-6" style={{ background: C.paper, border: `1.5px solid ${C.line}` }}>
+        <p className="text-sm mb-3" style={{ color: C.inkSoft }}>
+          {lang === "en"
+            ? "Apna Transport collects your precise GPS location continuously while you are Online or on a trip — including when the app is closed or you're not looking at it."
+            : lang === "mr"
+            ? "तुम्ही ऑनलाइन असताना किंवा ट्रिपवर असताना Apna Transport सतत तुमचे अचूक GPS लोकेशन गोळा करते — अ‍ॅप बंद असतानाही किंवा तुम्ही ते बघत नसतानाही."
+            : "जब भी आप ऑनलाइन हों या ट्रिप पर हों, Apna Transport लगातार आपकी सटीक GPS लोकेशन लेता है — भले ही ऐप बंद हो या आप उसे न देख रहे हों।"}
+        </p>
+        <p className="text-sm" style={{ color: C.inkSoft }}>
+          {lang === "en"
+            ? "This is used only to match you with nearby loads and let customers and admin see your live location during a trip, so you don't miss a load just because the app was minimized."
+            : lang === "mr"
+            ? "याचा वापर फक्त तुम्हाला जवळचे लोड दाखवण्यासाठी आणि ट्रिपदरम्यान ग्राहक व अ‍ॅडमिनला तुमचे लाइव्ह लोकेशन दाखवण्यासाठी केला जातो, जेणेकरून अ‍ॅप मिनिमाइझ असल्याने तुमचा लोड चुकू नये."
+            : "इसका इस्तेमाल सिर्फ आपको आसपास के लोड से मिलाने और ट्रिप के दौरान ग्राहक व एडमिन को आपकी लाइव लोकेशन दिखाने के लिए होता है, ताकि ऐप मिनिमाइज़ होने पर भी आपका लोड न छूटे।"}
+        </p>
+      </div>
+      <button onClick={onContinue} className="w-full rounded-2xl p-4 mb-3 text-center font-black" style={{ background: C.navy, color: "#fff" }}>
+        {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "जारी रखें"}
+      </button>
+      <button onClick={onDismiss} className="w-full text-center text-sm font-bold py-2" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "Not now" : lang === "mr" ? "आत्ता नाही" : "अभी नहीं"}
+      </button>
+    </div>
+  );
 }
 
 // Re-added for the driver "new load posted" push carve-out — see
@@ -7149,6 +7219,28 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     return () => { cancelled = true; };
   }, [locationTrackerAvailable, autoStartCardDismissed]);
 
+  // "Allow all the time" background location -- see
+  // BackgroundLocationDisclosure and requestBackgroundLocationPermission
+  // above. Shown at most once ever per device (never re-nagged, same as
+  // every other permission ask in this app), and only once this driver
+  // has actually gone Online at least once with foreground location
+  // already granted -- Play Store policy requires this be asked "in
+  // context," not at first launch before the driver has any reason to
+  // understand why it matters.
+  const [bgLocationDisclosureShown, setBgLocationDisclosureShown] = usePersistedState("sarthi_bgLocationDisclosureShown", false);
+  const [showBgLocationDisclosure, setShowBgLocationDisclosure] = useState(false);
+  // Follow-up nudge, shown once, if the "Continue" tap above didn't
+  // actually land a grant -- see that button's own comment for why this
+  // is frequently the only real path to "Allow all the time" on API 30+.
+  const [showBgLocationSettingsNudge, setShowBgLocationSettingsNudge] = useState(false);
+  useEffect(() => {
+    if (!locationTrackerAvailable || bgLocationDisclosureShown || !driver.online) return;
+    if (locationPermission.permission !== "granted") return;
+    let cancelled = false;
+    checkBackgroundLocationPermission().then(({ granted }) => { if (!cancelled && !granted) setShowBgLocationDisclosure(true); });
+    return () => { cancelled = true; };
+  }, [locationTrackerAvailable, bgLocationDisclosureShown, driver.online, locationPermission.permission]);
+
   // Real GPS live-tracking: while this driver has an active trip, share their
   // actual device location so the customer (and admin fleet map) see it live.
   // Also runs whenever the driver is simply Online (not on a trip) so
@@ -7304,6 +7396,30 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     return () => clearInterval(id);
   }, [awaitingBooking?.id]);
 
+  if (showBgLocationDisclosure) {
+    return (
+      <BackgroundLocationDisclosure
+        lang={lang}
+        onContinue={() => {
+          setBgLocationDisclosureShown(true);
+          setShowBgLocationDisclosure(false);
+          // Many OEMs/Android versions don't actually surface an in-app
+          // "Allow all the time" dialog here at all (see
+          // requestBackgroundLocation's own comment) -- if this doesn't
+          // come back granted, the settings nudge card below is the only
+          // remaining way for the driver to actually finish this, same as
+          // the autostart card exists for the same class of "no real
+          // dialog for this" gap.
+          requestBackgroundLocationPermission().then(({ granted }) => { if (!granted) setShowBgLocationSettingsNudge(true); });
+        }}
+        onDismiss={() => {
+          setBgLocationDisclosureShown(true);
+          setShowBgLocationDisclosure(false);
+        }}
+      />
+    );
+  }
+
   if (completedTrip) {
     return (
       <div className="px-5 pt-5 pb-5">
@@ -7451,6 +7567,35 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
             </button>
             <button
               onClick={() => { setShowAutoStartCard(false); setAutoStartCardDismissed(true); }}
+              className="px-3 rounded-lg py-2 text-xs font-bold"
+              style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+              {lang === "en" ? "Later" : lang === "mr" ? "नंतर" : "बाद में"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showBgLocationSettingsNudge && (
+        <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#EAF1FF", border: `1.5px solid ${C.navy}` }}>
+          <div className="text-xs font-bold mb-1" style={{ color: C.navy }}>
+            {lang === "en" ? "One more step for background location" : lang === "mr" ? "बॅकग्राउंड लोकेशनसाठी आणखी एक पायरी" : "बैकग्राउंड लोकेशन के लिए एक और कदम"}
+          </div>
+          <div className="text-xs mb-2.5" style={{ color: C.inkSoft }}>
+            {lang === "en"
+              ? "Open Location permission settings and choose \"Allow all the time\" for Apna Transport."
+              : lang === "mr"
+              ? "लोकेशन परमिशन सेटिंग्ज उघडा आणि Apna Transport साठी \"Allow all the time\" निवडा."
+              : "लोकेशन परमिशन सेटिंग्स खोलें और Apna Transport के लिए \"Allow all the time\" चुनें।"}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { openNativeSettingsBridge("location"); setShowBgLocationSettingsNudge(false); }}
+              className="flex-1 rounded-lg py-2 text-xs font-black"
+              style={{ background: C.navy, color: "#fff" }}>
+              {lang === "en" ? "Open Settings" : lang === "mr" ? "सेटिंग्ज उघडा" : "सेटिंग्स खोलें"}
+            </button>
+            <button
+              onClick={() => setShowBgLocationSettingsNudge(false)}
               className="px-3 rounded-lg py-2 text-xs font-bold"
               style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>
               {lang === "en" ? "Later" : lang === "mr" ? "नंतर" : "बाद में"}

@@ -2,6 +2,7 @@ package com.apnatransport.app;
 
 import android.Manifest;
 import android.location.Location;
+import android.os.Build;
 import android.os.Looper;
 import androidx.annotation.NonNull;
 import com.getcapacitor.JSObject;
@@ -38,7 +39,16 @@ import java.util.Map;
 // on the main thread, closing off that exact failure mode.
 @CapacitorPlugin(
     name = "FusedLocationBridge",
-    permissions = { @Permission(strings = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION }, alias = "location") }
+    permissions = {
+        @Permission(strings = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION }, alias = "location"),
+        // Its own alias, requested separately via requestBackgroundLocation
+        // below, never bundled with "location" above. Android refuses to
+        // grant ACCESS_BACKGROUND_LOCATION as part of the same request as
+        // foreground location on API 30+ -- it must be asked for on its
+        // own, after foreground is already granted, or the OS silently
+        // drops it from the dialog entirely.
+        @Permission(strings = { Manifest.permission.ACCESS_BACKGROUND_LOCATION }, alias = "backgroundLocation"),
+    }
 )
 public class FusedLocationBridgePlugin extends Plugin {
     private FusedLocationProviderClient fusedClient;
@@ -122,6 +132,57 @@ public class FusedLocationBridgePlugin extends Plugin {
         LocationCallback callback = id != null ? activeWatches.remove(id) : null;
         if (callback != null) fusedClient.removeLocationUpdates(callback);
         call.resolve();
+    }
+
+    // "Allow all the time" -- see the JS-side disclosure screen this is
+    // only ever called from (BackgroundLocationDisclosure in App.jsx),
+    // which shows Google Play's required "prominent in-app disclosure"
+    // BEFORE this fires, same as this app's larger driver-app competitors
+    // (Porter, Uber, Ola) all do. Below API 29, there's no separate
+    // background permission at all -- foreground already covers it, so
+    // this resolves granted:true immediately with no dialog.
+    @PluginMethod
+    public void requestBackgroundLocation(PluginCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            JSObject result = new JSObject();
+            result.put("granted", getPermissionState("location") == PermissionState.GRANTED);
+            call.resolve(result);
+            return;
+        }
+        if (getPermissionState("location") != PermissionState.GRANTED) {
+            call.reject("Foreground location permission must already be granted.");
+            return;
+        }
+        if (getPermissionState("backgroundLocation") == PermissionState.GRANTED) {
+            JSObject result = new JSObject();
+            result.put("granted", true);
+            call.resolve(result);
+            return;
+        }
+        requestPermissionForAlias("backgroundLocation", call, "backgroundLocationPermsCallback");
+    }
+
+    @PermissionCallback
+    private void backgroundLocationPermsCallback(PluginCall call) {
+        // On API 30+ this system request frequently doesn't grant directly
+        // even on a genuine tap -- some OEMs route it straight to a
+        // Settings screen instead of an in-dialog "Allow all the time"
+        // button. Either way, reading the real state afterward (rather
+        // than trusting a result code) is the only reliable signal, same
+        // reasoning as PowerBridgePlugin's battery-optimization callback.
+        JSObject result = new JSObject();
+        result.put("granted", getPermissionState("backgroundLocation") == PermissionState.GRANTED);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void checkBackgroundLocation(PluginCall call) {
+        JSObject result = new JSObject();
+        boolean granted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+            ? getPermissionState("location") == PermissionState.GRANTED
+            : getPermissionState("backgroundLocation") == PermissionState.GRANTED;
+        result.put("granted", granted);
+        call.resolve(result);
     }
 
     private LocationRequest buildRequest(PluginCall call) {

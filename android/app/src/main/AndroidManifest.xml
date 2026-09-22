@@ -80,6 +80,15 @@
          picks "Approximate" in that dialog. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- See FusedLocationBridgePlugin.java's requestBackgroundLocation,
+         only ever called after the JS-side BackgroundLocationDisclosure
+         screen (App.jsx) has shown Google Play's required prominent
+         in-app disclosure. Must be requested as its own separate runtime
+         permission, only after ACCESS_FINE_LOCATION above is already
+         granted; Android refuses to grant it bundled with foreground
+         location on API 30+, the same rule every driver-tracking app
+         (Porter, Uber, Ola) is bound by too. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- Required for LocationTrackerService (see below) to legally keep
          tracking once the app is backgrounded. FOREGROUND_SERVICE alone is
          no longer enough as of Android 14 (API 34); the specific
