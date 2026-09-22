@@ -8990,7 +8990,16 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // one undifferentiated "not online" bucket.
   const notReadyApprovedDrivers = drivers.filter((d) => !d.online && d.kyc === "Approved" && !d.blacklisted);
   const offDutyDrivers = notReadyApprovedDrivers.filter((d) => !isLikelyUninstalled(d));
-  const uninstalledDrivers = notReadyApprovedDrivers.filter((d) => isLikelyUninstalled(d));
+  // "App uninstalled (likely)" -- the exact drivers who make up the gap
+  // between "every driver doc ever created" and installedDrivers()'s
+  // count elsewhere on this dashboard (the "Total Drivers"/Live Map
+  // funnel), minus blacklisted ones (banned drivers aren't the "have they
+  // gone quiet" concern this tile exists for). Deliberately NOT restricted
+  // to notReadyApprovedDrivers above (offline + KYC-Approved) anymore --
+  // that excluded plenty of genuinely-uninstalled drivers who happened to
+  // be Online-but-stale, KYC-Pending, or KYC-Rejected, none of which
+  // should have made them invisible to this count.
+  const uninstalledDrivers = drivers.filter((d) => !d.blacklisted && isLikelyUninstalled(d));
   const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
   const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet);
   // New customer signups today, and drivers still inside their 30-day free
@@ -9121,7 +9130,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
     },
     uninstalled: {
       title: lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)",
-      emptyMsg: lang === "en" ? "No approved driver has gone quiet this long." : lang === "mr" ? "कोणताही अप्रूव्ह्ड ड्रायव्हर इतका काळ गप्प नाही." : "कोई भी अप्रूव्ड ड्राइवर इतने दिन से खामोश नहीं है।",
+      emptyMsg: lang === "en" ? "No driver has gone quiet this long." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है।",
       items: uninstalledDrivers,
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
