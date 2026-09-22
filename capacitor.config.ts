@@ -30,6 +30,26 @@ const config: CapacitorConfig = {
   // see android/variables.gradle (minSdkVersion) for where the matching
   // floor is actually enforced on this side; nothing here needs to repeat
   // that number, just noting the two should stay in step if either changes.
+  plugins: {
+    // Confirmed against @capacitor/push-notifications' own Android source
+    // (PushNotificationsPlugin.java) -- it only actually calls
+    // notificationManager.notify(...) to show a REAL system-tray
+    // notification for a backgrounded/killed app if this array contains
+    // "alert" ("banner"/"list" map to the same Android behavior; "badge"
+    // is iOS-only). Left unset (the default), which is exactly why
+    // sendDirectRequestAlert/sendLoadAlert (functions/index.js) were being
+    // sent and received successfully, but nothing ever appeared on the
+    // device outside the foreground in-app toast (ForegroundToast in
+    // App.jsx, a completely separate JS-only code path that doesn't touch
+    // the system notification tray at all). This is a config read from
+    // this file at BUILD time (bundled into the APK's own
+    // capacitor.config.json, unrelated to server.url's remote-URL JS) --
+    // changing it needs a new native build + reinstall, not a hosting
+    // deploy.
+    PushNotifications: {
+      presentationOptions: ["sound", "alert"],
+    },
+  },
 };
 
 export default config;
