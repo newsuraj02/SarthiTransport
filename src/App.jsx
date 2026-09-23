@@ -8229,12 +8229,26 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
 // Whether a load is one this driver's app would auto-bid on — shared by the
 // auto-bid effect and the read-only "nearby loads" overview on DriverHome.
 // (Doesn't check "already bid" / rate-card presence — callers handle those.)
+//
+// A category-dispatched booking (see requestByCategory/retargetToNextDriver)
+// that exhausts DISPATCH_MAX_PASSES falls back to this open-bidding path —
+// load.tierMaxKg is set on every such booking, and matching it EXACTLY
+// (via findFareTier, same as the dispatch engine) rather than the older
+// capacity-window check keeps the category the customer was actually
+// quoted intact even on that fallback path. A load with no tierMaxKg is an
+// older booking from before categories existed (or the legacy createLoad/
+// weight-only broadcast) -- the capacity-window check is kept for those so
+// they don't just stop matching anyone.
 function loadEligibleForDriver(driver, load, bookings, vehicleTypes, lang) {
   if (load.status !== "Bidding") return false;
   if (load.declinedBy?.includes(driver.name)) return false;
   const dCapKg = Number(driver.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type)?.capacityKg || 0;
-  const loadKg = Number(load.weight) || 0;
-  if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+  if (load.tierMaxKg != null) {
+    if (findFareTier(dCapKg).maxKg !== load.tierMaxKg) return false;
+  } else {
+    const loadKg = Number(load.weight) || 0;
+    if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+  }
   if (load.pickupLat != null && load.pickupLng != null) {
     const loc = driver.lastKnownLocation;
     const maxKm = isFutureAdvance(load.scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
@@ -12271,10 +12285,20 @@ export default function App() {
           : `⚠️ आप इस लोड के पिकअप स्थान से ${maxKm}km के बोली दायरे से बाहर हैं।`;
       }
     }
-    // Vehicle-capacity window: load weight .. weight + 5 tonnes.
-    const loadKg = Number(b.weight) || 0;
+    // A category-dispatched booking that fell back to open Bidding (see
+    // loadEligibleForDriver's comment) keeps its exact category via
+    // tierMaxKg -- matching that exactly here too, not the older weight
+    // window, so a bid can't land from a driver whose vehicle isn't
+    // really the category the customer was quoted. Only a booking with no
+    // tierMaxKg at all (older/legacy, pre-category) uses the window.
     const dCap = Number(bidDriver?.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === bidDriver?.vehicleSpec?.type)?.capacityKg || 0;
-    if (loadKg <= 0 || dCap < loadKg || dCap > loadKg + VEHICLE_HEADROOM_KG) {
+    const capacityMismatch = b.tierMaxKg != null
+      ? findFareTier(dCap).maxKg !== b.tierMaxKg
+      : (() => {
+          const loadKg = Number(b.weight) || 0;
+          return loadKg <= 0 || dCap < loadKg || dCap > loadKg + VEHICLE_HEADROOM_KG;
+        })();
+    if (capacityMismatch) {
       return lang === "en"
         ? "⚠️ This load is outside your vehicle's capacity range."
         : lang === "mr"
