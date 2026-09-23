@@ -5633,6 +5633,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   const [pickupSelected, setPickupSelected] = useState(false);
   const [dropSelected, setDropSelected] = useState(false);
   const [distance, setDistance] = useState(null);
+  const [weight, setWeight] = useState("");
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -5727,7 +5728,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropSelected(true); };
 
   const resetFields = () => {
-    setPickup(""); setDrop("");
+    setPickup(""); setDrop(""); setWeight("");
     setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
   };
   const [bookingError, setBookingError] = useState("");
@@ -5743,26 +5744,32 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // button before the request actually fires, instead of it firing the
   // instant they tap the card. Keyed the same way as each card's own key.
   const [selectedDriverKey, setSelectedDriverKey] = useState(null);
-  const canBook = !!(pickup.trim() && drop.trim());
+  const canBook = !!(pickup.trim() && drop.trim() && weight.trim());
   const isScheduling = advanceOpen && !!advanceDate && !!advanceTime;
   const scheduledForValue = isScheduling ? `${advanceDate} ${advanceTime}` : null;
 
   // Every real, currently online/approved/non-blacklisted driver within
-  // the request radius of Pickup, each carrying their own KYC vehicle
-  // photo and category — the customer picks a specific vehicle by its
-  // actual photo now, not an anonymous category card. Same eligibility
-  // rules as before (fails closed on a missing/stale coordinate, same
-  // 92%-of-real-fleet staleness cutoff), just returning the driver list
-  // instead of a per-category boolean. This is still a display-time
-  // snapshot, not a lock — requestByCategory re-validates the specific
-  // driver tapped (still online, no load conflict) before booking, so a
-  // driver that goes offline between render and tap fails gracefully
-  // there rather than here. Sorted by category (lightest first) and then
-  // nearest-first within a category, matching the order the fare tiers
-  // and the dispatch engine already use elsewhere.
+  // the request radius of Pickup AND whose own vehicle can actually carry
+  // the declared weight (capacity between the load and load+headroom,
+  // same window the old weight-based flow used), each carrying their own
+  // KYC vehicle photo and category — the customer picks a specific
+  // vehicle by its actual photo now, not an anonymous category card. Same
+  // eligibility rules as before otherwise (fails closed on a missing/
+  // stale coordinate, same 92%-of-real-fleet staleness cutoff), just
+  // returning the driver list instead of a per-category boolean. This is
+  // still a display-time snapshot, not a lock — requestByCategory
+  // re-validates the specific driver tapped (still online, no load
+  // conflict) before booking, so a driver that goes offline between
+  // render and tap fails gracefully there rather than here. Sorted by
+  // category (lightest first) and then nearest-first within a category,
+  // matching the order the fare tiers and the dispatch engine already use
+  // elsewhere.
+  const loadKg = Number(weight) || 0;
   const nearbyDrivers = drivers
     .filter((d) => {
       if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+      const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+      if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
       if (!pickupCoords || !d.lastKnownLocation) return false;
       if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
       const maxKm = isScheduling ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
@@ -5885,11 +5892,14 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           onFocus={() => setActiveField("drop")}
         />
 
-        <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
-          <Navigation size={16} color={C.inkSoft} className="shrink-0" />
-          <span className="truncate">
-            {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
-          </span>
+        <div className="grid grid-cols-2 gap-3">
+          <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
+            <Navigation size={16} color={C.inkSoft} className="shrink-0" />
+            <span className="truncate">
+              {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
+            </span>
+          </div>
+          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
         </div>
 
         <button onClick={() => setChoosingCategory(true)} disabled={!canBook} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
