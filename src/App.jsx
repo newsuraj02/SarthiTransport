@@ -5737,6 +5737,12 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // replaced) so the customer commits to booking before seeing prices,
   // rather than the list appearing as a side effect of just typing.
   const [choosingCategory, setChoosingCategory] = useState(false);
+  // Which driver's card is tapped/highlighted in the sheet — a separate
+  // step from actually booking them (see bookDriver below), so the
+  // customer gets a chance to see the highlight + "Book this vehicle"
+  // button before the request actually fires, instead of it firing the
+  // instant they tap the card. Keyed the same way as each card's own key.
+  const [selectedDriverKey, setSelectedDriverKey] = useState(null);
   const canBook = !!(pickup.trim() && drop.trim());
   const isScheduling = advanceOpen && !!advanceDate && !!advanceTime;
   const scheduledForValue = isScheduling ? `${advanceDate} ${advanceTime}` : null;
@@ -5802,6 +5808,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
     if (err) { setBookingError(err); return; }
     resetFields();
     setChoosingCategory(false);
+    setSelectedDriverKey(null);
     if (isScheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
   };
 
@@ -5901,11 +5908,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           since pricing is per-category, but each is its own bookable
           card because each is a real, different vehicle. */}
       {choosingCategory && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setChoosingCategory(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => { setChoosingCategory(false); setSelectedDriverKey(null); }}>
           <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[80vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
               <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}</h3>
-              <button onClick={() => setChoosingCategory(false)} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+              <button onClick={() => { setChoosingCategory(false); setSelectedDriverKey(null); }} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
             </div>
             <div className="p-4 space-y-2 overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>
               {bookingError && (
@@ -5916,24 +5923,33 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                   {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
                 </p>
               ) : nearbyDrivers.map((entry) => {
+                const key = entry.driver.mobile || entry.driver.id;
+                const isSelected = selectedDriverKey === key;
                 const fare = resolveFareForTier(entry.tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
                 return (
-                  <button key={entry.driver.mobile || entry.driver.id} onClick={() => bookDriver(entry)}
-                    className="w-full flex items-center gap-3 rounded-xl p-3 text-left"
-                    style={{ border: `1.5px solid ${C.line}`, background: "transparent" }}>
-                    <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
-                      <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                        <VehicleCategoryIcon tierIndex={entry.tierIndex} />
+                  <div key={key}>
+                    <button onClick={() => setSelectedDriverKey(key)}
+                      className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
+                      style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : "transparent" }}>
+                      <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
+                        <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                          <VehicleCategoryIcon tierIndex={entry.tierIndex} />
+                        </div>
+                      } />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
+                        <div className="text-[11px]" style={{ color: C.inkSoft }}>
+                          {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
+                        </div>
                       </div>
-                    } />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
-                      <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                        {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
-                      </div>
-                    </div>
-                    <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
-                  </button>
+                      <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
+                    </button>
+                    {isSelected && (
+                      <button onClick={() => bookDriver(entry)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5" style={{ background: C.success }}>
+                        {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
