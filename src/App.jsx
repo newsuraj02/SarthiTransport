@@ -5702,6 +5702,13 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
     setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
   };
   const [bookingError, setBookingError] = useState("");
+  // Book Now opens the category sheet rather than showing the category
+  // list inline the moment Pickup/Drop are filled — a deliberate
+  // confirmation step (matching the old "choose a driver" sheet this
+  // replaced) so the customer commits to booking before seeing prices,
+  // rather than the list appearing as a side effect of just typing.
+  const [choosingCategory, setChoosingCategory] = useState(false);
+  const canBook = !!(pickup.trim() && drop.trim());
   const isScheduling = advanceOpen && !!advanceDate && !!advanceTime;
   const scheduledForValue = isScheduling ? `${advanceDate} ${advanceTime}` : null;
 
@@ -5757,6 +5764,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
     });
     if (err) { setBookingError(err); return; }
     resetFields();
+    setChoosingCategory(false);
     if (isScheduling) { setAdvanceDate(""); setAdvanceTime(""); setAdvanceOpen(false); }
   };
 
@@ -5840,46 +5848,54 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           </span>
         </div>
 
-        {bookingError && (
-          <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
-        )}
-
-        {/* Category list, Porter-style: pick a vehicle category card
-            directly instead of typing a weight and browsing individual
-            driver profiles (see bookCategory/requestByCategory) -- one
-            flat fare per category for this exact trip, and the system
-            dispatches to the nearest eligible driver in that category on
-            its own once tapped. */}
-        {!pickup.trim() || !drop.trim() ? (
-          <p className="text-sm text-center py-6" style={{ color: C.inkSoft }}>
-            {lang === "en" ? "Enter Pickup and Drop to see vehicles and prices." : lang === "mr" ? "वाहने आणि किंमती पाहण्यासाठी पिकअप आणि ड्रॉप टाका." : "वाहन और कीमतें देखने के लिए पिकअप और ड्रॉप डालें।"}
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {DEFAULT_FARE_TIERS.map((tier) => {
-              const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
-              const available = tierHasEligibleDriver(tier.maxKg);
-              return (
-                <button key={tier.maxKg} onClick={() => bookCategory(tier)} disabled={!available}
-                  className="w-full flex items-center gap-3 rounded-xl p-3 text-left"
-                  style={{ border: `1.5px solid ${C.line}`, background: "transparent", opacity: available ? 1 : 0.45 }}>
-                  <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                    <Truck size={26} color={C.marigoldDeep} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold" style={{ color: C.ink }}>{tier.label}</div>
-                    <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                      {tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : lang === "mr" ? "7+ टन" : "7+ टन") : `${tier.maxKg}kg`}
-                      {!available ? (lang === "en" ? " · no driver nearby" : lang === "mr" ? " · जवळ ड्रायव्हर नाही" : " · पास में ड्राइवर नहीं") : ""}
-                    </div>
-                  </div>
-                  <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <button onClick={() => setChoosingCategory(true)} disabled={!canBook} className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
+          style={{ background: canBook ? C.success : "#E0E0E0", color: canBook ? "#fff" : "#9AA3B0" }}>
+          🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
+        </button>
       </div>
+
+      {/* Category sheet, Porter-style: opened by Book Now rather than
+          shown inline -- pick a vehicle category card directly instead of
+          typing a weight and browsing individual driver profiles (see
+          bookCategory/requestByCategory) -- one flat fare per category
+          for this exact trip, and the system dispatches to the nearest
+          eligible driver in that category on its own once tapped. */}
+      {choosingCategory && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setChoosingCategory(false)}>
+          <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[80vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
+              <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}</h3>
+              <button onClick={() => setChoosingCategory(false)} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+            </div>
+            <div className="p-4 space-y-2 overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>
+              {bookingError && (
+                <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
+              )}
+              {DEFAULT_FARE_TIERS.map((tier) => {
+                const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+                const available = tierHasEligibleDriver(tier.maxKg);
+                return (
+                  <button key={tier.maxKg} onClick={() => bookCategory(tier)} disabled={!available}
+                    className="w-full flex items-center gap-3 rounded-xl p-3 text-left"
+                    style={{ border: `1.5px solid ${C.line}`, background: "transparent", opacity: available ? 1 : 0.45 }}>
+                    <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                      <Truck size={26} color={C.marigoldDeep} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold" style={{ color: C.ink }}>{tier.label}</div>
+                      <div className="text-[11px]" style={{ color: C.inkSoft }}>
+                        {tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : lang === "mr" ? "7+ टन" : "7+ टन") : `${tier.maxKg}kg`}
+                        {!available ? (lang === "en" ? " · no driver nearby" : lang === "mr" ? " · जवळ ड्रायव्हर नाही" : " · पास में ड्राइवर नहीं") : ""}
+                      </div>
+                    </div>
+                    <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
