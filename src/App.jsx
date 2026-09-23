@@ -5766,7 +5766,19 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   return (
     <div className="pt-0 pb-8">
       {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
-      <NearbyVehiclesMap drivers={drivers} customerLocation={customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} showOpenInMaps={!!(pickup.trim() && drop.trim())} />
+      {/* Centers on the typed Pickup once it's resolved, not the
+          customer's own live position — a customer booking a load for a
+          different part of town (or a different city) needs to see
+          vehicles near the load's actual pickup point, not near
+          themselves. Falls back to customerLocation (device GPS) only
+          before Pickup has been entered/geocoded, same as before.
+          nearbyOnlineDrivers/nearbyOfflineDrivers (inside
+          NearbyVehiclesMap) already take a generic {lat,lng} reference
+          point and sort/filter by distance from it, so this is the only
+          change needed here -- the actual booking dispatch
+          (nearestEligibleDriverInTier) was already Pickup-based, never
+          the customer's own GPS. */}
+      <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} showOpenInMaps={!!(pickup.trim() && drop.trim())} />
       <div className="px-5 pt-4 space-y-4">
         {advanceOpen && (
           <div className="space-y-3">
