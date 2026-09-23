@@ -2851,6 +2851,35 @@ function driverTruckIconInactive() {
   };
 }
 
+// Original silhouette (not any reference app's artwork) for the category
+// booking sheet — cab + cargo box + wheels, same flat-icon language as
+// driverTruckIcon above but rendered as real JSX (not a Maps marker icon,
+// so this can just be an <svg> straight in the card) and in the app's own
+// yellow rather than navy. Box width and rear-axle count scale with
+// tierIndex (the category's position in DEFAULT_FARE_TIERS, 0 = smallest)
+// so a heavier category visibly reads as "bigger vehicle" at a glance
+// instead of every card showing the same generic truck glyph.
+function VehicleCategoryIcon({ tierIndex, size = 40 }) {
+  const boxWidth = 16 + tierIndex * 5;
+  const cabWidth = 12;
+  const bodyHeight = 16;
+  const y = 4;
+  const wheelY = y + bodyHeight + 3;
+  const rearAxleX = cabWidth + 2 + boxWidth * 0.72;
+  const dualRear = tierIndex >= 5;
+  const vbWidth = cabWidth + boxWidth + 14;
+  return (
+    <svg width={size} height={size * 0.6} viewBox={`0 0 ${vbWidth} 32`} style={{ overflow: "visible" }}>
+      <rect x="1" y={y + 4} width={cabWidth} height={bodyHeight - 4} rx="2" fill={C.marigoldDeep} />
+      <rect x="4" y={y + 6} width={cabWidth - 6} height="6" rx="1" fill="#FFFFFF" opacity="0.55" />
+      <rect x={cabWidth + 2} y={y} width={boxWidth} height={bodyHeight} rx="2" fill={C.marigoldDeep} />
+      <circle cx={cabWidth * 0.5 + 1} cy={wheelY} r="3.4" fill={C.navy} />
+      <circle cx={rearAxleX} cy={wheelY} r="3.4" fill={C.navy} />
+      {dualRear && <circle cx={rearAxleX + 7} cy={wheelY} r="3.4" fill={C.navy} />}
+    </svg>
+  );
+}
+
 function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick, showOpenInMaps = true }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const nearby = nearbyOnlineDrivers(drivers, customerLocation);
@@ -5890,12 +5919,13 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                 }
                 return availableTiers.map((tier) => {
                 const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+                const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
                 return (
                   <button key={tier.maxKg} onClick={() => bookCategory(tier)}
                     className="w-full flex items-center gap-3 rounded-xl p-3 text-left"
                     style={{ border: `1.5px solid ${C.line}`, background: "transparent" }}>
                     <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                      <Truck size={26} color={C.marigoldDeep} />
+                      <VehicleCategoryIcon tierIndex={tierIndex} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold" style={{ color: C.ink }}>{tier.label}</div>
