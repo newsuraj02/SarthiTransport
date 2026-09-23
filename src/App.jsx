@@ -5741,41 +5741,49 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   const isScheduling = advanceOpen && !!advanceDate && !!advanceTime;
   const scheduledForValue = isScheduling ? `${advanceDate} ${advanceTime}` : null;
 
-  // Whether at least one online, approved, non-blacklisted driver in this
-  // EXACT vehicle category (not just "big enough to carry it" — see the
-  // fare-tier rework) is within the request radius right now. Same
-  // eligibility rules as before (fails closed on a missing/stale
-  // coordinate, same 92%-of-real-fleet staleness cutoff — see the old
-  // eligibleDrivers this replaced), just scoped by category instead of a
-  // raw capacity window. This is a display-only best-effort hint (doesn't
-  // also re-check load conflicts the way the real dispatch does in
-  // requestByCategory/nearestEligibleDriverInTier) so a category can
-  // occasionally show as available and still come back with an error on
-  // tap — acceptable since that's the same fallback path either way.
-  const tierHasEligibleDriver = (tierMaxKg) => drivers.some((d) => {
-    if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
-    const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-    if (findFareTier(dCapKg, fareTiers).maxKg !== tierMaxKg) return false;
-    if (!pickupCoords || !d.lastKnownLocation) return false;
-    if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-    const maxKm = isScheduling ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
-    return haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) <= maxKm;
-  });
+  // Every real, currently online/approved/non-blacklisted driver within
+  // the request radius of Pickup, each carrying their own KYC vehicle
+  // photo and category — the customer picks a specific vehicle by its
+  // actual photo now, not an anonymous category card. Same eligibility
+  // rules as before (fails closed on a missing/stale coordinate, same
+  // 92%-of-real-fleet staleness cutoff), just returning the driver list
+  // instead of a per-category boolean. This is still a display-time
+  // snapshot, not a lock — requestByCategory re-validates the specific
+  // driver tapped (still online, no load conflict) before booking, so a
+  // driver that goes offline between render and tap fails gracefully
+  // there rather than here. Sorted by category (lightest first) and then
+  // nearest-first within a category, matching the order the fare tiers
+  // and the dispatch engine already use elsewhere.
+  const nearbyDrivers = drivers
+    .filter((d) => {
+      if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+      if (!pickupCoords || !d.lastKnownLocation) return false;
+      if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
+      const maxKm = isScheduling ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+      return haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) <= maxKm;
+    })
+    .map((d) => {
+      const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+      const tier = findFareTier(capacityKg, fareTiers);
+      const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
+      const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+      return { driver: d, capacityKg, tier, tierIndex, km };
+    })
+    .sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km);
 
-  // Tapping a category card books it directly — there's no intermediate
-  // "choose a driver" step anymore (see requestByCategory: the system
-  // dispatches to the nearest eligible driver in this category on its
-  // own, cycling through the rest of the category and looping up to
-  // DISPATCH_MAX_PASSES times if nobody accepts, all invisible to the
-  // customer). The advance-notice lead-time check (same rule as before,
-  // scaled by the category's own capacity now instead of a typed weight)
-  // happens here rather than blocking every card up front, since it only
-  // matters once a specific category has actually been picked.
-  const bookCategory = (tier) => {
+  // Tapping a specific driver's card books them directly — the system no
+  // longer picks who to dispatch to first, the customer just did by
+  // choosing this photo (see requestByCategory's driverName param). If
+  // THIS driver doesn't respond within the timeout, retargetToNextDriver
+  // still takes over automatically from there, same as it always has.
+  // The advance-notice lead-time check (same rule as before, scaled by
+  // the driver's own category) happens here rather than blocking every
+  // card up front, since it only matters once a specific one is tapped.
+  const bookDriver = (entry) => {
     setBookingError("");
     if (isScheduling) {
       const scheduled = parseScheduledFor(`${advanceDate} ${advanceTime}`);
-      const minHours = minAdvanceNoticeHours(tier.maxKg);
+      const minHours = minAdvanceNoticeHours(entry.tier.maxKg);
       const hoursUntil = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
       if (hoursUntil < minHours) {
         setBookingError(lang === "en"
@@ -5787,7 +5795,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
       }
     }
     const err = requestByCategory({
-      pickup, drop, tierMaxKg: tier.maxKg, distance, scheduledFor: scheduledForValue,
+      pickup, drop, tierMaxKg: entry.tier.maxKg, driverName: entry.driver.name, distance, scheduledFor: scheduledForValue,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
@@ -5883,12 +5891,15 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
         </button>
       </div>
 
-      {/* Category sheet, Porter-style: opened by Book Now rather than
-          shown inline -- pick a vehicle category card directly instead of
-          typing a weight and browsing individual driver profiles (see
-          bookCategory/requestByCategory) -- one flat fare per category
-          for this exact trip, and the system dispatches to the nearest
-          eligible driver in that category on its own once tapped. */}
+      {/* Vehicle sheet, opened by Book Now rather than shown inline --
+          every real, currently eligible driver near Pickup is listed
+          individually with their own KYC vehicle photo, category label,
+          capacity, and fare (see nearbyDrivers/bookDriver), so the
+          customer picks by looking at the actual vehicle rather than an
+          anonymous category card. Several drivers can share a category
+          (e.g. three separate 17ft entries) -- they share the same fare,
+          since pricing is per-category, but each is its own bookable
+          card because each is a real, different vehicle. */}
       {choosingCategory && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setChoosingCategory(false)}>
           <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[80vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -5900,44 +5911,31 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               {bookingError && (
                 <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
               )}
-              {/* Only categories with at least one online, in-range driver
-                  right now are shown at all -- tierHasEligibleDriver is
-                  still just a live-at-render-time hint (the real
-                  eligibility/conflict check happens in requestByCategory
-                  when a card is actually tapped, and could still come
-                  back with nobody if things changed in between), but
-                  there's no point showing a category the customer almost
-                  certainly can't book right now. */}
-              {(() => {
-                const availableTiers = DEFAULT_FARE_TIERS.filter((tier) => tierHasEligibleDriver(tier.maxKg));
-                if (availableTiers.length === 0) {
-                  return (
-                    <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
-                      {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
-                    </p>
-                  );
-                }
-                return availableTiers.map((tier) => {
-                const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
-                const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
+              {nearbyDrivers.length === 0 ? (
+                <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
+                  {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
+                </p>
+              ) : nearbyDrivers.map((entry) => {
+                const fare = resolveFareForTier(entry.tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
                 return (
-                  <button key={tier.maxKg} onClick={() => bookCategory(tier)}
+                  <button key={entry.driver.mobile || entry.driver.id} onClick={() => bookDriver(entry)}
                     className="w-full flex items-center gap-3 rounded-xl p-3 text-left"
                     style={{ border: `1.5px solid ${C.line}`, background: "transparent" }}>
-                    <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                      <VehicleCategoryIcon tierIndex={tierIndex} />
-                    </div>
+                    <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
+                      <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                        <VehicleCategoryIcon tierIndex={entry.tierIndex} />
+                      </div>
+                    } />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold" style={{ color: C.ink }}>{tier.label}</div>
+                      <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
                       <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                        {tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : lang === "mr" ? "7+ टन" : "7+ टन") : `${tier.maxKg}kg`}
+                        {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
                       </div>
                     </div>
                     <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
                   </button>
                 );
-                });
-              })()}
+              })}
             </div>
           </div>
         </div>
@@ -12386,8 +12384,8 @@ export default function App() {
       // version -- don't skip the distance check (and let a nationwide
       // driver through) just because a coordinate is missing.
       if (pickupLat == null || !d.lastKnownLocation) return false;
-      // Same staleness cutoff as CustomerBooking's tierHasEligibleDriver --
-      // a stuck-Online driver's days-old coordinate shouldn't count as
+      // Same staleness cutoff as CustomerBooking's nearbyDrivers -- a
+      // stuck-Online driver's days-old coordinate shouldn't count as
       // "nearby" here either.
       if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
       const maxKm = isFutureAdvance(scheduledFor) ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
@@ -12399,20 +12397,36 @@ export default function App() {
     return candidates[0] || null;
   };
 
-  // Category-based booking: the customer picks a vehicle category card
-  // (see CustomerBooking's category list) rather than browsing individual
-  // driver profiles — the system dispatches to the nearest eligible driver
-  // in that exact category on its own (see retargetToNextDriver for what
-  // happens if that driver doesn't respond in time). Fare is resolved from
-  // the category itself (resolveFareForTier), not any specific driver, so
-  // it's the same number regardless of which driver in the category
-  // eventually gets it. Returns an error message string to show the
-  // customer, or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng }) => {
+  // Category-based booking: the customer sees every real, currently
+  // eligible driver in a category individually (see CustomerBooking's
+  // driver list — KYC photo, that category's label, capacity, fare) and
+  // picks the specific one they want, rather than the system silently
+  // auto-picking the nearest. `driverName` is that choice; if it's no
+  // longer eligible by the time this runs (went offline, took another
+  // load), this fails rather than silently substituting a driver the
+  // customer never saw or chose. Omitting driverName falls back to
+  // nearest-in-tier (kept for any caller that still wants pure
+  // auto-dispatch). Either way, if THIS driver doesn't respond in time,
+  // retargetToNextDriver takes over automatically — nearest-first,
+  // cycling through the rest of the category and looping up to
+  // DISPATCH_MAX_PASSES times — exactly as if the customer's pick had
+  // been the "nearest" one to begin with. Fare is resolved from the
+  // category itself (resolveFareForTier), not the specific driver, so
+  // it's the same number for every driver shown in that category. Returns
+  // an error message string to show the customer, or null on success.
+  const requestByCategory = ({ pickup, drop, tierMaxKg, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, driverName }) => {
     const bookingId = genId();
-    const nearest = nearestEligibleDriverInTier(tierMaxKg, pickupLat, pickupLng, scheduledFor, [], bookingId);
+    let nearest;
+    if (driverName) {
+      const chosen = drivers.find((d) => d.name === driverName);
+      const stillEligible = chosen && chosen.online && chosen.kyc === "Approved" && !chosen.blacklisted
+        && !findDriverLoadConflict(chosen, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
+      nearest = stillEligible ? chosen : null;
+    } else {
+      nearest = nearestEligibleDriverInTier(tierMaxKg, pickupLat, pickupLng, scheduledFor, [], bookingId);
+    }
     if (!nearest) {
-      return lang === "en" ? "No driver in this category is available right now." : lang === "mr" ? "सध्या या श्रेणीत कोणताही ड्रायव्हर उपलब्ध नाही." : "अभी इस श्रेणी में कोई ड्राइवर उपलब्ध नहीं है।";
+      return lang === "en" ? "That vehicle is no longer available — please pick another." : lang === "mr" ? "ते वाहन आता उपलब्ध नाही — कृपया दुसरे निवडा." : "वह वाहन अब उपलब्ध नहीं है — कृपया दूसरा चुनें।";
     }
     const fare = resolveFareForTier(tierMaxKg, pickup, drop, distance, fareTiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
     createDoc("bookings", bookingId, {
