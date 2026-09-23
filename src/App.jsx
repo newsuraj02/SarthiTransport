@@ -5871,18 +5871,25 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               {bookingError && (
                 <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
               )}
-              {DEFAULT_FARE_TIERS.map((tier) => {
+              {/* Only categories with at least one online, in-range driver
+                  right now are shown at all -- tierHasEligibleDriver is
+                  still just a live-at-render-time hint (the real
+                  eligibility/conflict check happens in requestByCategory
+                  when a card is actually tapped, and could still come
+                  back with nobody if things changed in between), but
+                  there's no point showing a category the customer almost
+                  certainly can't book right now. */}
+              {(() => {
+                const availableTiers = DEFAULT_FARE_TIERS.filter((tier) => tierHasEligibleDriver(tier.maxKg));
+                if (availableTiers.length === 0) {
+                  return (
+                    <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
+                      {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
+                    </p>
+                  );
+                }
+                return availableTiers.map((tier) => {
                 const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
-                // tierHasEligibleDriver is a live-at-render-time hint, not
-                // a hard gate -- it can say "no one nearby" while an
-                // actual driver is still reachable (e.g. just came online,
-                // or the real dispatch check in requestByCategory looks at
-                // a slightly different moment than this render did). Every
-                // card stays tappable regardless; if requestByCategory
-                // genuinely finds nobody, that's what surfaces the real
-                // "no driver available" error, not a pre-emptive block
-                // here that could stop a booking that would have worked.
-                const available = tierHasEligibleDriver(tier.maxKg);
                 return (
                   <button key={tier.maxKg} onClick={() => bookCategory(tier)}
                     className="w-full flex items-center gap-3 rounded-xl p-3 text-left"
@@ -5894,13 +5901,13 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                       <div className="text-sm font-bold" style={{ color: C.ink }}>{tier.label}</div>
                       <div className="text-[11px]" style={{ color: C.inkSoft }}>
                         {tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : lang === "mr" ? "7+ टन" : "7+ टन") : `${tier.maxKg}kg`}
-                        {!available ? (lang === "en" ? " · no driver nearby right now" : lang === "mr" ? " · सध्या जवळ ड्रायव्हर नाही" : " · अभी पास में ड्राइवर नहीं") : ""}
                       </div>
                     </div>
                     <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
                   </button>
                 );
-              })}
+                });
+              })()}
             </div>
           </div>
         </div>
