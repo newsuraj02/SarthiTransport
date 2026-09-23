@@ -10,6 +10,8 @@
     "cap:sync": "cap sync android",
     "import:mh-rates": "node scripts/importMaharashtraDefaults.mjs",
     "verify:mh-rates": "node scripts/importMaharashtraDefaults.mjs --verify",
+    "migrate:fare-tiers": "node scripts/migrateFareTierBoundaries.mjs",
+    "verify:fare-tiers": "node scripts/migrateFareTierBoundaries.mjs --verify",
     "revert:diesel-driver-rates": "node scripts/revertDieselDriverRates.mjs"
   },
   "dependencies": {

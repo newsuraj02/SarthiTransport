@@ -923,82 +923,123 @@ const ROAD_DISTANCE_FACTOR = 1.35;
 
 // Fixed, calculated fare — replaces the old "discuss on call" model with an
 // upfront price shown before booking, same idea as Porter's per-vehicle
-// pricing. Keyed by CAPACITY, not by vehicle-type identity: vehicle "types"
-// here aren't a fixed catalog (a driver just types their vehicle's name
-// during KYC — see resolveVehicleTypeKey in DriverKyc — and a new
-// vehicleTypes doc gets created on the fly if it doesn't match one that
-// already exists), so there's no small stable set of types to hang a rate
-// table off. capacityKg is the one thing every driver reliably has, so a
-// band lookup by capacity applies uniformly regardless of what a driver
-// happened to type their vehicle in as.
-// Ordered ascending by capacity; the last entry (maxKg: Infinity) is the
-// catch-all for anything bigger than 7 tonnes (19ft, 6-wheeler, 10-wheeler...).
+// pricing. Keyed by CAPACITY (same reasoning as before: drivers free-type
+// their vehicle name in KYC, so there's no fixed catalog to key on directly —
+// see resolveVehicleTypeKey in DriverKyc), but each bracket is now named
+// after the real vehicle category it represents (3-Wheeler, Tata Ace,
+// Pickup 8ft/9ft, Tata 407, 14ft, 17ft, 19ft) instead of being an anonymous
+// weight band, and within-city vs outstation are two deliberately DIFFERENT
+// pricing models, not one formula stretched across both:
 //
-// Every tier is priced at Porter's own number + ₹1, on both baseFare and
-// perKmRate — deliberately just ABOVE Porter rather than undercutting it.
-// Porter's own reference points (their site, city listings, Sep 2026) —
-// solid for the four small tiers (an actual published base fare and
-// per-km rate for the closest matching vehicle), thinner above 1,500kg
-// (1,500-2,500kg's per-km is from a comparable operator, not Porter's own
-// figure) and thinnest of all above 2,500kg, where Porter publishes only
-// a single base fare (14ft Canter) and nothing else — the per-km and the
-// three largest base fares are extrapolated by continuing Porter's own
-// step-up pattern between tiers, not sourced. Revisit those three
-// (2,500-5,000 / 5,000-7,000 / 7,000+) if better data on Porter's
-// larger-vehicle pricing turns up:
-//   0-500kg    -> 3-wheeler/Tempo  (base ~₹170,  ~₹16/km)
-//   500-750kg  -> Tata Ace         (base ~₹223,  ~₹19/km)
-//   750-1000kg -> Pickup 8ft       (base ~₹315,  ~₹20/km)
-//   1000-1500kg-> Pickup 8ft/Dost+ (base ~₹330,  ~₹22/km)
-//   1500-2500kg-> Tata 407         (base ~₹682,  ~₹42/km — per-km from a
-//                                   comparable operator; Porter doesn't
-//                                   publish its own 407 per-km rate)
-//   2500-5000kg-> Canter 14ft      (base ~₹1,120, ~₹69/km — per-km extrapolated)
-//   5000-7000kg-> larger Canter    (base ~₹1,680, ~₹97/km — both extrapolated)
-//   7000kg+    -> largest trucks   (base ~₹2,280, ~₹126/km — both extrapolated)
-// The catch-all last tier used to carry maxKg: Infinity, but Firestore
-// can't store that value (this table still lives in the settings doc as
-// `fareTiers`, read-only now — see the root component) — a plain large
-// number works exactly the same way here since findFareTier already
-// falls back to the last tier for anything past every threshold
-// regardless of what that threshold actually is.
+// WITHIN-CITY (distanceKm < OUTSTATION_THRESHOLD_KM): baseFare + perKmRate ×
+// distance, same shape as before. Every category's baseFare/perKmRate was
+// re-derived from a real local competitor's handwritten rate card (3 routes,
+// 4 distances, Sep 2026) rather than guessed, then clamped to within ±20% of
+// Porter's own published rate for that vehicle (Porter's real number, not
+// "Porter+1" — see git history for the pre-clamp figures if that's ever
+// needed) so no single category jumps further from Porter than a 20% band
+// in either direction. Two categories (17ft, 19ft) have no real competitor
+// or Porter data at all — Porter's own number was itself extrapolated by
+// continuing its step-up pattern, so those two are unchanged from before and
+// should be revisited first if better data ever turns up.
+//
+// OUTSTATION (distanceKm >= OUTSTATION_THRESHOLD_KM): pure per-km, NO fixed
+// base at all — outstationPerKmRate × distance × the same long-haul discount
+// curve the Maharashtra Rate Card import already uses (see
+// scripts/importMaharashtraDefaults.mjs's maharashtraLongHaulDiscountPct,
+// duplicated here as longHaulDiscountPct so calculateFare doesn't need a
+// network round-trip to apply it). This isn't a coincidence — the
+// outstationPerKmRate values ARE the Maharashtra Rate Card's own per-band
+// mid-rates, so this fallback formula and Admin's ~880 researched hub-route
+// overrides are now the same model, not two disagreeing ones. A separate
+// base+perKm taper was tried first and rejected: it only agreed with the
+// Maharashtra numbers at the one distance it was fitted to, and overshot by
+// 30-50%+ at every other distance tested (route comparisons, Sep 2026) —
+// because a formula with a large fixed base can't track a pure-proportional
+// one across a range of distances, only at a single point.
+//
+// A toll estimate is folded silently into the outstation total (never a
+// separate line item — the customer just sees one number, same as today):
+// plazas ≈ round(distanceKm / 70) (NHAI's own ~60-70km plaza-spacing policy),
+// each charged at TOLL_PLAZA_RATE_BY_CLASS for the tier's vehicle class.
+// Within-city never adds a toll — real quotes on every local route checked
+// never carried one, so there's nothing to add there.
+//
+// Surge/dynamic pricing (Porter's third pricing lever, alongside base+perKm)
+// is intentionally NOT implemented here — parked on standby pending a
+// decision on how "demand" would even be detected at this fleet's scale.
+//
+// Ordered ascending by capacity; the last entry (maxKg: FARE_TIER_MAX_KG_UNCAPPED)
+// is the catch-all for anything bigger than 7 tonnes.
 const FARE_TIER_MAX_KG_UNCAPPED = 999999;
+const OUTSTATION_THRESHOLD_KM = 40;
+// NHAI toll plazas are spaced roughly every 60-70km on national highways —
+// this estimates how many a trip crosses rather than trying to model exact
+// plaza locations per route, which would need live route/toll data we don't
+// have. Deliberately conservative (rounds rather than always rounding up).
+const TOLL_PLAZA_SPACING_KM = 70;
+const TOLL_PLAZA_RATE_BY_CLASS = { lcv: 275, truck: 400, heavyTruck: 580 };
 const DEFAULT_FARE_TIERS = [
-  { maxKg: 500, baseFare: 171, perKmRate: 17 },
-  { maxKg: 750, baseFare: 224, perKmRate: 20 },
-  { maxKg: 1000, baseFare: 316, perKmRate: 21 },
-  { maxKg: 1500, baseFare: 331, perKmRate: 23 },
-  { maxKg: 2500, baseFare: 683, perKmRate: 43 },
-  { maxKg: 5000, baseFare: 1121, perKmRate: 70 },
-  { maxKg: 7000, baseFare: 1681, perKmRate: 98 },
-  { maxKg: FARE_TIER_MAX_KG_UNCAPPED, baseFare: 2281, perKmRate: 127 },
+  { maxKg: 500, label: "3-Wheeler/Tempo", baseFare: 204, perKmRate: 19, outstationPerKmRate: 22, tollClass: "lcv" },
+  { maxKg: 850, label: "Tata Ace/Chhota Hathi", baseFare: 242, perKmRate: 23, outstationPerKmRate: 24.5, tollClass: "lcv" },
+  { maxKg: 1200, label: "Pickup 8ft", baseFare: 354, perKmRate: 26, outstationPerKmRate: 30, tollClass: "lcv" },
+  { maxKg: 1700, label: "Pickup 9ft", baseFare: 546, perKmRate: 37, outstationPerKmRate: 38.5, tollClass: "lcv" },
+  { maxKg: 2500, label: "Tata 407", baseFare: 818, perKmRate: 50, outstationPerKmRate: 38.5, tollClass: "truck" },
+  { maxKg: 4500, label: "14ft", baseFare: 1344, perKmRate: 63, outstationPerKmRate: 50, tollClass: "truck" },
+  { maxKg: 7000, label: "17ft", baseFare: 1681, perKmRate: 98, outstationPerKmRate: 56.5, tollClass: "heavyTruck" },
+  { maxKg: FARE_TIER_MAX_KG_UNCAPPED, label: "19ft/Large Truck", baseFare: 2281, perKmRate: 127, outstationPerKmRate: 71.5, tollClass: "heavyTruck" },
 ];
 
 // distanceKm may be null (coords never resolved — canPost doesn't require a
 // resolved distance, see CustomerBooking) — falls back to just the base
-// fare rather than blocking the booking over it. `tiers` is settings.fareTiers
-// (see the root component) — every caller passes it through explicitly
-// rather than reading a fixed constant, though there is no UI left that
-// ever changes it from DEFAULT_FARE_TIERS; this whole formula is now a
-// silent last resort inside resolveFare for a route with neither an Admin
-// override nor a driver-submitted average, not something Admin tunes.
+// fare rather than blocking the booking over it. `tiers` is passed through
+// explicitly by every caller (historically so an Admin-edited Firestore copy
+// could override the code default — that edit path no longer exists, see
+// calculateFare's caller in the root component) rather than reading a fixed
+// constant; this whole formula is now a silent last resort inside
+// resolveFare for a route with neither an Admin override nor a driver-
+// submitted average, not something Admin tunes.
 function findFareTier(capacityKg, tiers = DEFAULT_FARE_TIERS) {
   // Falls back to the code default for anything that isn't a real,
   // non-empty tier list — not just when the argument is missing (the
-  // default parameter above only covers that one case). Since fareTiers
-  // now comes from a Firestore doc an admin edits by hand, an empty array
-  // or a corrupted value is a real possibility, not just a theoretical
-  // one — without this, `tiers[tiers.length - 1]` would be undefined and
-  // calculateFare's `tier.baseFare` would throw, crashing the booking
-  // screen for every customer and driver at once.
+  // default parameter above only covers that one case), since a caller
+  // could still pass null/[] explicitly. Without this, `tiers[tiers.length
+  // - 1]` would be undefined and calculateFare's `tier.baseFare` would
+  // throw, crashing the booking screen for every customer and driver at once.
   const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
   return list.find((t) => (capacityKg || 0) <= t.maxKg) || list[list.length - 1];
 }
 
+// Same sqrt taper scripts/importMaharashtraDefaults.mjs's
+// maharashtraLongHaulDiscountPct applies when building the Rate Card, kept
+// in step here deliberately (see the big comment above DEFAULT_FARE_TIERS)
+// so the live outstation formula and that import agree beyond 300km too,
+// not just on the per-km rate.
+function longHaulDiscountPct(km) {
+  if (km <= 300) return 0;
+  return Math.min(16, 16 * Math.sqrt((km - 300) / 500));
+}
+
+// Rounds rather than always rounding up — see TOLL_PLAZA_SPACING_KM — but
+// never below 1: any genuine outstation trip crosses at least one plaza.
+function estimatedTollPlazas(outstationKm) {
+  return Math.max(1, Math.round(outstationKm / TOLL_PLAZA_SPACING_KM));
+}
+
 function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS) {
   const tier = findFareTier(capacityKg, tiers);
-  const distancePart = distanceKm != null ? distanceKm * tier.perKmRate : 0;
-  return Math.round(tier.baseFare + distancePart);
+  const km = distanceKm || 0;
+  if (km < OUTSTATION_THRESHOLD_KM) {
+    return Math.round(tier.baseFare + tier.perKmRate * km);
+  }
+  // Outstation: pure per-km, no fixed base at all (see the design note
+  // above) — the toll is added silently into this same total, never shown
+  // to the customer as a separate amount.
+  const discountFactor = 1 - longHaulDiscountPct(km) / 100;
+  const distanceFare = km * (tier.outstationPerKmRate ?? tier.perKmRate) * discountFactor;
+  const tollPerPlaza = TOLL_PLAZA_RATE_BY_CLASS[tier.tollClass] ?? TOLL_PLAZA_RATE_BY_CLASS.lcv;
+  const toll = estimatedTollPlazas(km) * tollPerPlaza;
+  return Math.round(distanceFare + toll);
 }
 
 // Route fares are matched by loose substring containment rather than exact
@@ -11927,18 +11968,22 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
-  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500, fareTiers: DEFAULT_FARE_TIERS });
+  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500 });
   const commissionPct = settings.commissionPct;
   const bonusPct = settings.bonusPct;
   const minWallet = settings.minWallet;
-  // Read-only from here on — Admin no longer has a UI to edit this
-  // (removed from Admin Settings, since Admin's own route+bracket
-  // overrides and driver-submitted averages are the real pricing model
-  // now). This generic per-km formula still runs invisibly as the last
-  // resort for a route with neither, so it stays readable everywhere
-  // resolveFare needs it, just falls back to the code default forever
-  // rather than anything Firestore-editable.
-  const fareTiers = settings.fareTiers || DEFAULT_FARE_TIERS;
+  // Always the code constant now, never settings.fareTiers — Admin has no
+  // UI to edit this (removed from Admin Settings, since Admin's own
+  // route+bracket overrides and driver-submitted averages are the real
+  // pricing model now), and reading it from Firestore was a real landmine:
+  // getOrCreateDoc only seeds `fareTiers` into settings/main the FIRST time
+  // that doc is ever created, so on an already-live install it's stuck
+  // holding whatever DEFAULT_FARE_TIERS looked like back then, forever —
+  // editing this file would silently do nothing in production. This generic
+  // per-km formula still runs invisibly as the last resort for a route with
+  // neither an Admin override nor a driver-submitted average, so it stays
+  // readable everywhere resolveFare needs it, just always from code now.
+  const fareTiers = DEFAULT_FARE_TIERS;
   const setCommissionPct = (v) => patchDoc("settings", "main", { commissionPct: typeof v === "function" ? v(commissionPct) : v }).catch((e) => console.error(e));
   const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
   const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
@@ -12108,7 +12153,7 @@ export default function App() {
     // create before subscribing would leave everyone stuck on defaults
     // forever if that one initial call is slow on a flaky connection.
     const unsub = subscribeDoc("settings", "main", (data) => { if (data) setSettingsLocal(data); });
-    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500, fareTiers: DEFAULT_FARE_TIERS })
+    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500 })
       .catch((e) => console.error("[settings init]", e));
     return unsub;
   }, []);
