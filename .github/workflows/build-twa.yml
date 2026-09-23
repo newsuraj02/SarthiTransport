@@ -76,6 +76,22 @@ jobs:
         # ANDROID_SDK_ROOT, not ANDROID_HOME (which this step used to read
         # -- always empty, so Bubblewrap rejected the config with "The
         # provided androidSdk isn't correct").
+        #
+        # That error can also come from a second, unrelated cause even once
+        # the path itself is right: @bubblewrap/core's AndroidSdkTools.
+        # validatePath() (see node_modules/@bubblewrap/core/dist/lib/
+        # androidSdk/AndroidSdkTools.js) does nothing more than check for a
+        # `tools/` or `bin/` folder directly at the SDK root -- no content
+        # validation beyond that. The "setup-android fails on removed
+        # 'tools' package" fix (limiting packages: to "platform-tools"
+        # above) fixed sdkmanager, but it also means nothing ever creates a
+        # top-level tools/ or bin/ folder any more, so this check now fails
+        # unconditionally regardless of which env var it reads. Symlinking
+        # bin/ to the versioned cmdline-tools bin/ folder setup-android
+        # already installed (to use the real tools, not a placeholder) is
+        # what actually fixes it; falling back to an empty bin/ only if
+        # that's somehow missing, since validatePath itself never checks
+        # what's inside.
         run: |
           SDK_PATH="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
 
@@ -89,6 +105,17 @@ jobs:
           if [ ! -d "$JAVA_HOME" ]; then
             echo "::error::JDK directory was not found: $JAVA_HOME"
             exit 1
+          fi
+
+          if [ ! -d "$SDK_PATH/tools" ] && [ ! -d "$SDK_PATH/bin" ]; then
+            CMDLINE_BIN=$(find "$SDK_PATH/cmdline-tools" -maxdepth 2 -type d -name bin 2>/dev/null | head -1)
+            if [ -n "$CMDLINE_BIN" ]; then
+              ln -s "$CMDLINE_BIN" "$SDK_PATH/bin"
+              echo "Symlinked $SDK_PATH/bin -> $CMDLINE_BIN"
+            else
+              mkdir -p "$SDK_PATH/bin"
+              echo "::warning::No cmdline-tools bin/ found under $SDK_PATH -- created an empty $SDK_PATH/bin instead, just to satisfy Bubblewrap's existence check."
+            fi
           fi
 
           mkdir -p "$HOME/.bubblewrap"
