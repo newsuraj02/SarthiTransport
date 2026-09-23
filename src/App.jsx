@@ -5873,11 +5873,20 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               )}
               {DEFAULT_FARE_TIERS.map((tier) => {
                 const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+                // tierHasEligibleDriver is a live-at-render-time hint, not
+                // a hard gate -- it can say "no one nearby" while an
+                // actual driver is still reachable (e.g. just came online,
+                // or the real dispatch check in requestByCategory looks at
+                // a slightly different moment than this render did). Every
+                // card stays tappable regardless; if requestByCategory
+                // genuinely finds nobody, that's what surfaces the real
+                // "no driver available" error, not a pre-emptive block
+                // here that could stop a booking that would have worked.
                 const available = tierHasEligibleDriver(tier.maxKg);
                 return (
-                  <button key={tier.maxKg} onClick={() => bookCategory(tier)} disabled={!available}
+                  <button key={tier.maxKg} onClick={() => bookCategory(tier)}
                     className="w-full flex items-center gap-3 rounded-xl p-3 text-left"
-                    style={{ border: `1.5px solid ${C.line}`, background: "transparent", opacity: available ? 1 : 0.45 }}>
+                    style={{ border: `1.5px solid ${C.line}`, background: "transparent" }}>
                     <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
                       <Truck size={26} color={C.marigoldDeep} />
                     </div>
@@ -5885,7 +5894,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                       <div className="text-sm font-bold" style={{ color: C.ink }}>{tier.label}</div>
                       <div className="text-[11px]" style={{ color: C.inkSoft }}>
                         {tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : lang === "mr" ? "7+ टन" : "7+ टन") : `${tier.maxKg}kg`}
-                        {!available ? (lang === "en" ? " · no driver nearby" : lang === "mr" ? " · जवळ ड्रायव्हर नाही" : " · पास में ड्राइवर नहीं") : ""}
+                        {!available ? (lang === "en" ? " · no driver nearby right now" : lang === "mr" ? " · सध्या जवळ ड्रायव्हर नाही" : " · अभी पास में ड्राइवर नहीं") : ""}
                       </div>
                     </div>
                     <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
