@@ -9781,6 +9781,7 @@ export default function App() {
   };
   const deleteDriver = (mobile) => removeDoc("drivers", mobile).catch((e) => console.error(e));
   const deleteCustomer = (mobile) => removeDoc("customers", mobile).catch((e) => console.error(e));
+  const deleteAdminNotification = (id) => removeDoc("adminNotifications", id).catch((e) => console.error(e));
   // mobile is threaded through from SosScreen so AdminAlerts can actually
   // reply to whoever raised this -- alerts previously carried no way to
   // identify who sent them at all.
@@ -10001,7 +10002,7 @@ export default function App() {
                 fareTiers={fareTiers} lang={lang} onLogout={logout}
                 withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
                 vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
-                expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications}
+                expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification}
                 bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} systemHealth={systemHealth} />
             </Suspense>
           </div>

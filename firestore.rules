@@ -235,6 +235,11 @@ service cloud.firestore {
         || (resource.data.target is string && isOwnPhone(resource.data.target))
         || (resource.data.targetEmails is list && request.auth.token.email in resource.data.targetEmails)
         || (resource.data.targetPhones is list && request.auth.token.phone_number in resource.data.targetPhones);
+      // Written only by sendAdminNotification (Cloud Function, Admin SDK --
+      // bypasses these rules entirely), never directly by a client, so no
+      // create/update rule is needed here. Delete is admin-only, for the
+      // "delete this past announcement" button in AdminNotify.
+      allow delete: if isAdmin();
     }
 
     // Business expense tracking (Admin's "Expenses" tab) — admin-only,

@@ -2319,13 +2319,18 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   );
 }
 
-function AdminNotify({ drivers, customers, adminNotifications, lang }) {
+function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotification, lang }) {
   const [audience, setAudience] = useState("driver"); // 'driver' | 'customer'
   const [target, setTarget] = useState("all");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const audiencePeople = audience === "driver" ? (drivers || []) : (customers || []);
+  // Each audience gets its own section of the sent-notifications list below
+  // (older ones have no toRole at all -- those only ever went to drivers,
+  // back before the customer audience existed, so they fall under "driver").
+  const audienceNotifications = (adminNotifications || []).filter((n) => (n.toRole || "driver") === audience);
   const allLabel = lang === "en"
     ? (audience === "driver" ? "All Drivers" : "All Customers")
     : lang === "mr"
@@ -2370,10 +2375,14 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
       <button onClick={send} disabled={!message.trim() || sending} className="w-full rounded-lg py-3.5 font-bold text-base mb-4" style={{ background: message.trim() && !sending ? C.marigold : "#E0E0E0", color: message.trim() && !sending ? "#000000" : "#9AA3B0" }}>
         {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send" : lang === "mr" ? "पाठवा" : "भेजें")}
       </button>
-      <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Sent Notifications" : lang === "mr" ? "पाठवलेल्या सूचना" : "भेजी गई सूचनाएं"}</div>
+      <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>
+        {audience === "driver"
+          ? (lang === "en" ? "Sent Notifications — Drivers" : lang === "mr" ? "पाठवलेल्या सूचना — ड्रायव्हर" : "भेजी गई सूचनाएं — ड्राइवर")
+          : (lang === "en" ? "Sent Notifications — Customers" : lang === "mr" ? "पाठवलेल्या सूचना — कस्टमर" : "भेजी गई सूचनाएं — कस्टमर")}
+      </div>
       <div className="space-y-2">
-        {(adminNotifications || []).length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No notifications sent yet." : lang === "mr" ? "अजून कोणतीही सूचना पाठवली गेली नाही." : "अभी कोई सूचना नहीं भेजी गई।"}</p>}
-        {(adminNotifications || []).map((n) => (
+        {audienceNotifications.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No notifications sent yet." : lang === "mr" ? "अजून कोणतीही सूचना पाठवली गेली नाही." : "अभी कोई सूचना नहीं भेजी गई।"}</p>}
+        {audienceNotifications.map((n) => (
           <div key={n.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-bold" style={{ color: C.ink }}>
@@ -2385,10 +2394,27 @@ function AdminNotify({ drivers, customers, adminNotifications, lang }) {
               <span className="text-[10px] shrink-0" style={{ color: C.inkSoft }}>{formatTime(n.createdAt)}</span>
             </div>
             <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>{n.message}</div>
-            <div className="text-[10px] mt-0.5" style={{ color: n.recipientCount > 0 ? C.success : C.safety }}>
-              {n.recipientCount > 0
-                ? (lang === "en" ? `Delivered to ${n.recipientCount} device${n.recipientCount > 1 ? "s" : ""}` : lang === "mr" ? `${n.recipientCount} डिव्हाइसवर पोहोचली` : `${n.recipientCount} डिवाइस पर पहुंची`)
-                : (lang === "en" ? "No device had notifications enabled" : lang === "mr" ? "कोणत्याही डिव्हाइसवर नोटिफिकेशन चालू नव्हते" : "किसी डिवाइस पर नोटिफिकेशन चालू नहीं था")}
+            <div className="flex items-center justify-between gap-2 mt-0.5">
+              <div className="text-[10px]" style={{ color: n.recipientCount > 0 ? C.success : C.safety }}>
+                {n.recipientCount > 0
+                  ? (lang === "en" ? `Delivered to ${n.recipientCount} device${n.recipientCount > 1 ? "s" : ""}` : lang === "mr" ? `${n.recipientCount} डिव्हाइसवर पोहोचली` : `${n.recipientCount} डिवाइस पर पहुंची`)
+                  : (lang === "en" ? "No device had notifications enabled" : lang === "mr" ? "कोणत्याही डिव्हाइसवर नोटिफिकेशन चालू नव्हते" : "किसी डिवाइस पर नोटिफिकेशन चालू नहीं था")}
+              </div>
+              {confirmDeleteId === n.id ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete?" : lang === "mr" ? "काढायचे?" : "हटाएं?"}</span>
+                  <button onClick={() => { deleteAdminNotification?.(n.id); setConfirmDeleteId(null); }} className="text-[10px] font-bold px-2 py-1 rounded-md" style={{ color: "#fff", background: C.safety }}>
+                    {lang === "en" ? "Yes" : lang === "mr" ? "हो" : "हां"}
+                  </button>
+                  <button onClick={() => setConfirmDeleteId(null)} className="text-[10px] font-bold px-2 py-1 rounded-md" style={{ color: C.inkSoft, background: C.bg }}>
+                    {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirmDeleteId(n.id)} className="text-[10px] font-bold px-2 py-1 rounded-md shrink-0" style={{ color: C.safety, background: C.paper, border: `1px solid ${C.safety}` }}>
+                  {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -2784,7 +2810,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+export function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review now lives inside
   // the Live Dashboard's "New Registrations" tile (see AdminFleet's
@@ -2814,7 +2840,7 @@ export function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookin
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
-      {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} lang={lang} />}
+      {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
     </div>
