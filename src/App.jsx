@@ -2261,6 +2261,10 @@ function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang, onOpen
   return (
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"}</h2>
+      {/* TEMPORARY debug line -- remove once the "messages not arriving" issue is diagnosed. */}
+      <p className="text-[10px] mb-3" style={{ color: C.safety, fontFamily: monoFont }}>
+        DEBUG: total received = {(adminNotifications || []).length}, myMobile = "{myMobile}", toRole = "{toRole}"
+      </p>
       {mine.length === 0 ? (
         <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No announcements yet." : lang === "mr" ? "अजून कोणतीही सूचना नाही." : "अभी तक कोई सूचना नहीं।"}</p>
       ) : (
