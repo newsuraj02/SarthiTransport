@@ -747,7 +747,7 @@ const BUG_TRACKER_SEED = [
     status: "fixed",
     type: "bug",
     area: "firestore.rules / retargetToNextDriver",
-    description: "bookings/{id}'s pre-assignment update rule requires every changed field to be in a fixed allowlist, but that allowlist never included dispatchPass even though retargetToNextDriver has always written it. The 2-minute auto-timeout retarget (reassignAwaitingDriver, called from the CUSTOMER's own ActiveRide countdown) still worked because it runs under isOwnPhone(customerMobile), which bypasses the allowlist entirely -- but a DRIVER tapping Reject runs the identical retargetToNextDriver call under the driver's own session, which does go through the allowlist, so that write was silently denied (permission-denied, swallowed by the existing .catch) and the booking never actually moved to the next driver. Found while adding tier-climbing to the same function (dispatchTierOffset/dispatchCycle, see requestByCategory's escalation ladder) -- fixed by adding all three dispatch-tracking fields to the allowlist.",
+    description: "bookings/{id}'s pre-assignment update rule requires every changed field to be in a fixed allowlist, but that allowlist never included dispatchPass even though retargetToNextDriver has always written it. The 2-minute auto-timeout retarget (reassignAwaitingDriver, called from the CUSTOMER's own ActiveRide countdown) still worked because it runs under isOwnPhone(customerMobile), which bypasses the allowlist entirely -- but a DRIVER tapping Reject runs the identical retargetToNextDriver call under the driver's own session, which does go through the allowlist, so that write was silently denied (permission-denied, swallowed by the existing .catch) and the booking never actually moved to the next driver. Found while adding tier-climbing to the same function (dispatchTierOffset, see requestByCategory's escalation ladder) -- fixed by adding both dispatch-tracking fields to the allowlist.",
     foundAt: "2026-09-24",
     fixedAt: "2026-09-24",
   },
@@ -9498,35 +9498,29 @@ export default function App() {
   // bidding is paused. `declinedBy` is every driver to exclude (already
   // tried + the one just being dropped).
   //
-  // Escalation ladder (dispatchPass / dispatchTierOffset / dispatchCycle on
-  // the booking track where we are in it):
-  //   1. Stay in the customer's own chosen category, nearest-first, for up
-  //      to DISPATCH_MAX_PASSES full passes (unchanged from before) --
-  //      exhausting a pass clears declinedBy and starts that same category
-  //      over from the nearest driver again.
-  //   2. Once that category is truly exhausted, climb one bracket up
-  //      (larger-capacity vehicles), one pass; then climb again, up to
-  //      DISPATCH_MAX_TIER_CLIMB brackets above the original.
-  //   3. If even the top of that climb is empty, wrap back to the
-  //      customer's original category and repeat the whole ladder, up to
-  //      DISPATCH_MAX_PASSES full ladder cycles, before finally falling
-  //      back to "Bidding" (open broadcast) so the booking doesn't loop
-  //      forever if every category is genuinely empty today.
+  // Escalation ladder, tracked on the booking via dispatchTierOffset
+  // (0/1/2 — which category this PASS is currently trying) and dispatchPass
+  // (which full pass through the whole ladder we're on):
+  //   Within one pass: try the customer's own chosen category first; the
+  //   moment it's exhausted, climb one bracket up (larger-capacity
+  //   vehicles) and try that; if that's also exhausted, climb once more,
+  //   up to DISPATCH_MAX_TIER_CLIMB brackets above the original.
+  //   Once the whole ladder (original + both climbs) comes up empty, THAT's
+  //   when a pass ends — start over from the original category's nearest
+  //   driver again for the next pass, up to DISPATCH_MAX_PASSES full passes,
+  //   before finally falling back to "Bidding" (open broadcast) so the
+  //   booking doesn't loop forever if every category is genuinely empty.
   const retargetToNextDriver = (b, declinedBy) => {
     const baseTierMaxKg = b.tierMaxKg ?? findFareTier(Number(b.weight) || 0, fareTiers).maxKg;
     let pass = b.dispatchPass || 1;
     let tierOffset = b.dispatchTierOffset || 0;
-    let cycle = b.dispatchCycle || 1;
     let nextDeclinedBy = declinedBy;
     let next = nearestEligibleDriverInTier(tierMaxKgAbove(baseTierMaxKg, tierOffset, fareTiers), b.pickupLat, b.pickupLng, b.scheduledFor, nextDeclinedBy, b.id);
     while (!next) {
-      if (tierOffset === 0 && pass < DISPATCH_MAX_PASSES) {
-        pass += 1;
-      } else if (tierOffset < DISPATCH_MAX_TIER_CLIMB) {
+      if (tierOffset < DISPATCH_MAX_TIER_CLIMB) {
         tierOffset += 1;
-      } else if (cycle < DISPATCH_MAX_PASSES) {
-        cycle += 1;
-        pass = 1;
+      } else if (pass < DISPATCH_MAX_PASSES) {
+        pass += 1;
         tierOffset = 0;
       } else {
         break;
@@ -9535,12 +9529,12 @@ export default function App() {
       next = nearestEligibleDriverInTier(tierMaxKgAbove(baseTierMaxKg, tierOffset, fareTiers), b.pickupLat, b.pickupLng, b.scheduledFor, nextDeclinedBy, b.id);
     }
     if (!next) {
-      patchDoc("bookings", b.id, { status: "Bidding", pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, acceptedAt: null, declinedBy: nextDeclinedBy, dispatchPass: pass, dispatchTierOffset: tierOffset, dispatchCycle: cycle }).catch((e) => console.error(e));
+      patchDoc("bookings", b.id, { status: "Bidding", pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, acceptedAt: null, declinedBy: nextDeclinedBy, dispatchPass: pass, dispatchTierOffset: tierOffset }).catch((e) => console.error(e));
       return;
     }
     patchDoc("bookings", b.id, {
       status: "AwaitingDriver", pendingDriverName: next.name, pendingDriverMobile: next.mobile || null, pendingBidId: genId("B"),
-      vehicle: next.vehicleSpec?.type || b.vehicle, declinedBy: nextDeclinedBy, dispatchPass: pass, dispatchTierOffset: tierOffset, dispatchCycle: cycle, acceptedAt: serverTimestamp(),
+      vehicle: next.vehicleSpec?.type || b.vehicle, declinedBy: nextDeclinedBy, dispatchPass: pass, dispatchTierOffset: tierOffset, acceptedAt: serverTimestamp(),
     }).catch((e) => console.error(e));
   };
 

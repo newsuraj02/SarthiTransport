@@ -148,7 +148,7 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'bids', 'status', 'pendingDriverName', 'pendingDriverMobile', 'pendingBidId', 'acceptedAt',
               'declinedBy', 'vehicle', 'driverName', 'driverMobile', 'progress',
-              'dispatchPass', 'dispatchTierOffset', 'dispatchCycle'
+              'dispatchPass', 'dispatchTierOffset'
             ]))
         || (resource.data.get('driverMobile', null) != null && isOwnPhone(resource.data.driverMobile));
       allow delete: if isAdmin();
