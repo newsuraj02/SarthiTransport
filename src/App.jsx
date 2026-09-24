@@ -740,6 +740,17 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-18",
     fixedAt: "2026-09-18",
   },
+  {
+    id: "dispatch-tracking-fields-missing-from-rules-allowlist",
+    title: "A driver's own Reject silently failed to retarget the booking because dispatchPass wasn't in firestore.rules' write allowlist",
+    severity: "medium",
+    status: "fixed",
+    type: "bug",
+    area: "firestore.rules / retargetToNextDriver",
+    description: "bookings/{id}'s pre-assignment update rule requires every changed field to be in a fixed allowlist, but that allowlist never included dispatchPass even though retargetToNextDriver has always written it. The 2-minute auto-timeout retarget (reassignAwaitingDriver, called from the CUSTOMER's own ActiveRide countdown) still worked because it runs under isOwnPhone(customerMobile), which bypasses the allowlist entirely -- but a DRIVER tapping Reject runs the identical retargetToNextDriver call under the driver's own session, which does go through the allowlist, so that write was silently denied (permission-denied, swallowed by the existing .catch) and the booking never actually moved to the next driver. Found while adding tier-climbing to the same function (dispatchTierOffset/dispatchCycle, see requestByCategory's escalation ladder) -- fixed by adding all three dispatch-tracking fields to the allowlist.",
+    foundAt: "2026-09-24",
+    fixedAt: "2026-09-24",
+  },
 ];
 
 export function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -935,6 +946,14 @@ const AWAITING_DRIVER_TIMEOUT_SEC = 120;
 // the booking falls back to "Bidding" (open broadcast) instead of looping
 // silently with the customer just watching a spinner.
 const DISPATCH_MAX_PASSES = 3;
+// Once the customer's own chosen category has been fully exhausted
+// (DISPATCH_MAX_PASSES full passes with nobody accepting), retargetToNextDriver
+// climbs to larger-capacity categories rather than giving up immediately —
+// a 6000kg load stuck in an empty 7000kg-tier queue should still reach a
+// 14ft/19ft driver rather than sit there. Capped at this many brackets
+// above the original so a small load never lands on a wildly oversized
+// (and pricier-feeling) vehicle after climbing indefinitely.
+const DISPATCH_MAX_TIER_CLIMB = 2;
 
 // Roads aren't a straight line, so straight-line distance is scaled up by a
 // fixed factor as a stand-in for real road distance — typical for Indian
@@ -1029,6 +1048,17 @@ export function findFareTier(capacityKg, tiers = DEFAULT_FARE_TIERS) {
   // throw, crashing the booking screen for every customer and driver at once.
   const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
   return list.find((t) => (capacityKg || 0) <= t.maxKg) || list[list.length - 1];
+}
+
+// Climbs `offset` brackets above `tierMaxKg` (capacity-wise) — used by
+// retargetToNextDriver once a category's own driver pool is exhausted, so
+// a load can reach a larger-vehicle category instead of sitting stuck.
+// Capped at the heaviest tier rather than going out of bounds; offset 0
+// just returns the tier unchanged.
+function tierMaxKgAbove(tierMaxKg, offset, tiers = DEFAULT_FARE_TIERS) {
+  const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
+  const baseIdx = Math.max(0, list.findIndex((t) => t.maxKg === tierMaxKg));
+  return list[Math.min(baseIdx + offset, list.length - 1)].maxKg;
 }
 
 // Same sqrt taper scripts/importMaharashtraDefaults.mjs's
@@ -7023,7 +7053,18 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // unconditionally (not just after the completedTrip early return below)
   // purely so the ringtone effect right after it — a hook — can be called
   // unconditionally too, same reasoning as myTripRef above.
-  const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && b.pendingDriverName === driver.name);
+  //
+  // Stays showing for every driver this booking has ever reached
+  // (declinedBy), not just whoever the dispatch ladder currently has it
+  // pointed at — a driver who missed their own 2-minute window can still
+  // come back and grab it late instead of it just vanishing off their
+  // screen the moment retargetToNextDriver moves on to someone else.
+  // Rejecting a request that's already moved past this driver has nothing
+  // left to change server-side (see driverRespondBooking), so it's hidden
+  // locally instead via this dismissed-ids list.
+  const [dismissedAwaitingIds, setDismissedAwaitingIds] = usePersistedState(`sarthi_dismissedAwaiting_${driver.mobile || driver.name}`, []);
+  const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && !dismissedAwaitingIds.includes(b.id)
+    && (b.pendingDriverName === driver.name || (b.declinedBy || []).includes(driver.name)));
   // Ringtone-style repeating strong beep while this screen is up — the
   // background push (see functions/index.js: onDirectRequestAssigned) is
   // what actually reaches the driver if the app is closed; this is the
@@ -7103,7 +7144,15 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => driverRespondBooking?.(ab.id, false)}
+            <button type="button" onClick={() => {
+              // Only the driver the dispatch ladder currently has it
+              // pointed at can actually retarget it away -- a driver
+              // seeing this because it already passed them earlier has
+              // nothing left to reject server-side, so their tap just
+              // clears it off their own screen instead.
+              if (ab.pendingDriverName === driver.name) driverRespondBooking?.(ab.id, false);
+              else setDismissedAwaitingIds((ids) => (ids.includes(ab.id) ? ids : [...ids, ab.id]));
+            }}
               className="rounded-lg py-3.5 text-base font-black" style={{ background: C.paper, border: `2px solid ${C.safety}`, color: C.safety }}>
               {lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "अस्वीकार"}
             </button>
@@ -9444,37 +9493,54 @@ export default function App() {
   // Shared by the 2-minute auto-reassign timeout (see ActiveRide/
   // reassignAwaitingDriver below) and a driver's manual Reject or
   // can't-take-it-after-all (see driverRespondBooking) — retargets a
-  // booking at the nearest remaining eligible driver in the SAME category
-  // (nearestEligibleDriverInTier) instead of leaving it in a dead
-  // "Bidding" state that nothing browses anymore now that open bidding is
-  // paused. `declinedBy` is every driver to exclude (already tried + the
-  // one just being dropped). Restarts the 2-minute clock
-  // (AWAITING_DRIVER_TIMEOUT_SEC) on success. Once the whole category has
-  // been tried with no acceptance, this doesn't give up after one pass --
-  // it clears declinedBy and starts over from the nearest driver again,
-  // up to DISPATCH_MAX_PASSES times (the customer sees no difference
-  // except the same driver names potentially recurring), before finally
-  // falling back to "Bidding" (open broadcast) so the booking doesn't
-  // loop forever if the category is genuinely empty today.
+  // booking at the nearest remaining eligible driver instead of leaving it
+  // in a dead "Bidding" state that nothing browses anymore now that open
+  // bidding is paused. `declinedBy` is every driver to exclude (already
+  // tried + the one just being dropped).
+  //
+  // Escalation ladder (dispatchPass / dispatchTierOffset / dispatchCycle on
+  // the booking track where we are in it):
+  //   1. Stay in the customer's own chosen category, nearest-first, for up
+  //      to DISPATCH_MAX_PASSES full passes (unchanged from before) --
+  //      exhausting a pass clears declinedBy and starts that same category
+  //      over from the nearest driver again.
+  //   2. Once that category is truly exhausted, climb one bracket up
+  //      (larger-capacity vehicles), one pass; then climb again, up to
+  //      DISPATCH_MAX_TIER_CLIMB brackets above the original.
+  //   3. If even the top of that climb is empty, wrap back to the
+  //      customer's original category and repeat the whole ladder, up to
+  //      DISPATCH_MAX_PASSES full ladder cycles, before finally falling
+  //      back to "Bidding" (open broadcast) so the booking doesn't loop
+  //      forever if every category is genuinely empty today.
   const retargetToNextDriver = (b, declinedBy) => {
-    const tierMaxKg = b.tierMaxKg ?? findFareTier(Number(b.weight) || 0, fareTiers).maxKg;
-    let next = nearestEligibleDriverInTier(tierMaxKg, b.pickupLat, b.pickupLng, b.scheduledFor, declinedBy, b.id);
+    const baseTierMaxKg = b.tierMaxKg ?? findFareTier(Number(b.weight) || 0, fareTiers).maxKg;
     let pass = b.dispatchPass || 1;
+    let tierOffset = b.dispatchTierOffset || 0;
+    let cycle = b.dispatchCycle || 1;
     let nextDeclinedBy = declinedBy;
-    // Exhausted this pass -- try again from the top (nearest, nobody
-    // excluded) rather than giving up immediately, up to the pass cap.
-    while (!next && pass < DISPATCH_MAX_PASSES) {
-      pass += 1;
+    let next = nearestEligibleDriverInTier(tierMaxKgAbove(baseTierMaxKg, tierOffset, fareTiers), b.pickupLat, b.pickupLng, b.scheduledFor, nextDeclinedBy, b.id);
+    while (!next) {
+      if (tierOffset === 0 && pass < DISPATCH_MAX_PASSES) {
+        pass += 1;
+      } else if (tierOffset < DISPATCH_MAX_TIER_CLIMB) {
+        tierOffset += 1;
+      } else if (cycle < DISPATCH_MAX_PASSES) {
+        cycle += 1;
+        pass = 1;
+        tierOffset = 0;
+      } else {
+        break;
+      }
       nextDeclinedBy = [];
-      next = nearestEligibleDriverInTier(tierMaxKg, b.pickupLat, b.pickupLng, b.scheduledFor, nextDeclinedBy, b.id);
+      next = nearestEligibleDriverInTier(tierMaxKgAbove(baseTierMaxKg, tierOffset, fareTiers), b.pickupLat, b.pickupLng, b.scheduledFor, nextDeclinedBy, b.id);
     }
     if (!next) {
-      patchDoc("bookings", b.id, { status: "Bidding", pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, acceptedAt: null, declinedBy: nextDeclinedBy, dispatchPass: pass }).catch((e) => console.error(e));
+      patchDoc("bookings", b.id, { status: "Bidding", pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, acceptedAt: null, declinedBy: nextDeclinedBy, dispatchPass: pass, dispatchTierOffset: tierOffset, dispatchCycle: cycle }).catch((e) => console.error(e));
       return;
     }
     patchDoc("bookings", b.id, {
       status: "AwaitingDriver", pendingDriverName: next.name, pendingDriverMobile: next.mobile || null, pendingBidId: genId("B"),
-      vehicle: next.vehicleSpec?.type || b.vehicle, declinedBy: nextDeclinedBy, dispatchPass: pass, acceptedAt: serverTimestamp(),
+      vehicle: next.vehicleSpec?.type || b.vehicle, declinedBy: nextDeclinedBy, dispatchPass: pass, dispatchTierOffset: tierOffset, dispatchCycle: cycle, acceptedAt: serverTimestamp(),
     }).catch((e) => console.error(e));
   };
 
@@ -9571,15 +9637,27 @@ export default function App() {
   // to ever pick up now that pricing/auto-bid is paused.
   const driverRespondBooking = (bookingId, accept) => {
     const b = bookings.find((x) => x.id === bookingId);
-    if (!b || b.status !== "AwaitingDriver" || b.pendingDriverName !== driver?.name) return null;
+    // Accept is allowed from any driver this booking has ever reached
+    // (the dispatch ladder's current target OR someone it already passed
+    // over — see awaitingBooking's "stays visible" comment), so a driver
+    // who missed their own turn can still grab it late as long as nobody
+    // else has accepted yet. Reject only makes sense from whoever the
+    // ladder currently has it pointed at — a stale driver's reject is
+    // handled client-side only (see DriverHome's Reject button).
+    const wasOffered = b && (b.pendingDriverName === driver?.name || (b.declinedBy || []).includes(driver?.name));
+    if (!b || b.status !== "AwaitingDriver" || !wasOffered) return null;
     if (!accept) {
+      if (b.pendingDriverName !== driver.name) return null;
       retargetToNextDriver(b, [...(b.declinedBy || []), driver.name]);
       return null;
     }
     const conflict = findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor, hours: b.hours }, bookings, vehicleTypes, lang);
     if (conflict) {
-      // Can't take it after all — retarget it like a reject.
-      retargetToNextDriver(b, [...(b.declinedBy || []), driver.name]);
+      // Can't take it after all — retarget it like a reject, but only if
+      // this driver is who the ladder currently has it pointed at; a
+      // stale/late accept attempt that hits a conflict just fails for
+      // that driver without touching whoever's actually still pending.
+      if (b.pendingDriverName === driver.name) retargetToNextDriver(b, [...(b.declinedBy || []), driver.name]);
       return conflict;
     }
     const otp = String(Math.floor(1000 + Math.random() * 9000));
