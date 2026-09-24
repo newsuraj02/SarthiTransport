@@ -5310,7 +5310,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
       }
     }
     const err = requestByCategory({
-      pickup, drop, tierMaxKg: entry.tier.maxKg, driverName: entry.driver.name, distance, scheduledFor: scheduledForValue,
+      pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: scheduledForValue,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
@@ -9405,7 +9405,7 @@ export default function App() {
   // category itself (resolveFareForTier), not the specific driver, so
   // it's the same number for every driver shown in that category. Returns
   // an error message string to show the customer, or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, driverName }) => {
+  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, driverName }) => {
     const bookingId = genId();
     let nearest;
     if (driverName) {
@@ -9421,13 +9421,12 @@ export default function App() {
     }
     const fare = resolveFareForTier(tierMaxKg, pickup, drop, distance, fareTiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
     createDoc("bookings", bookingId, {
-      // weight mirrors tierMaxKg (same convention as the Maharashtra Rate
-      // Card import) purely so every existing "{b.weight}kg" display
-      // across driver/admin screens keeps working unchanged for a
-      // category-dispatched booking -- tierMaxKg is the source of truth
-      // for dispatch/eligibility (see nearestEligibleDriverInTier), weight
-      // here is just for backward-compatible display.
-      pickup, drop, vehicle: nearest.vehicleSpec?.type || null, tierMaxKg, weight: tierMaxKg, distance, status: "AwaitingDriver", bids: [], fare,
+      // tierMaxKg is the source of truth for dispatch/eligibility (see
+      // nearestEligibleDriverInTier) -- weight is only ever shown to
+      // drivers/admin, so it holds the customer's actual entered weight
+      // (falling back to the category ceiling if a caller doesn't have
+      // one) rather than the category ceiling itself.
+      pickup, drop, vehicle: nearest.vehicleSpec?.type || null, tierMaxKg, weight: customerWeight ?? tierMaxKg, distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: nearest.name, pendingDriverMobile: nearest.mobile || null, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
       declinedBy: [], dispatchPass: 1,
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
