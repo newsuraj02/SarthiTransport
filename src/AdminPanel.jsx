@@ -993,12 +993,66 @@ function findMatchingDefaultRate(entry, capacityKg, adminRouteFares, fareTiers) 
 }
 
 function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, lang }) {
+  const [rateCalcOpen, setRateCalcOpen] = useState(false);
+  // Entry to pre-load the calculator with -- set when "Saved Routes"'
+  // edit action on an Admin rate reopens this instead of editing inline.
+  const [calcPrefill, setCalcPrefill] = useState(null);
+  const [savedRoutesOpen, setSavedRoutesOpen] = useState(false);
+
+  const openCalculator = (prefillEntry) => {
+    setCalcPrefill(prefillEntry || null);
+    setSavedRoutesOpen(false);
+    setRateCalcOpen(true);
+  };
+
+  const totalSavedCount = (routeFares || []).length + (adminRouteFares || []).length;
+
+  return (
+    <div>
+      <div className="flex items-stretch gap-2 mb-3">
+        <button onClick={() => openCalculator(null)} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-3 rounded-lg" style={{ background: C.navy, color: "#fff" }}>
+          <Calculator size={14} /> {lang === "en" ? "Admin Rate Calculator" : lang === "mr" ? "अ‍ॅडमिन दर कॅल्क्युलेटर" : "एडमिन रेट कैलकुलेटर"}
+        </button>
+        <button onClick={() => setSavedRoutesOpen(true)} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-3 rounded-lg" style={{ background: C.marigold, color: "#1a1200" }}>
+          <ClipboardList size={14} /> {lang === "en" ? "Saved Routes" : lang === "mr" ? "सेव्ह केलेले रूट्स" : "सेव किए गए रूट्स"} ({totalSavedCount})
+        </button>
+      </div>
+      {adminRouteFaresError && (
+        <div className="rounded-lg p-3 mb-3 text-xs font-bold" style={{ background: C.safety, color: "#fff" }}>
+          {lang === "en"
+            ? `Couldn't load Admin default rates (${adminRouteFaresError}). Whatever's in Firestore may be fine — this is a read failure on this device, not proof the data is missing.`
+            : lang === "mr"
+            ? `अ‍ॅडमिन डिफॉल्ट दर लोड होऊ शकले नाहीत (${adminRouteFaresError}). Firestore मध्ये डेटा असू शकतो — हे या डिव्हाइसवरील रीड फेल्युअर आहे, डेटा गहाळ असल्याचा पुरावा नाही.`
+            : `एडमिन डिफ़ॉल्ट दर लोड नहीं हो सके (${adminRouteFaresError})। Firestore में डेटा ठीक हो सकता है — यह इस डिवाइस पर रीड फेल्योर है, डेटा गायब होने का सबूत नहीं।`}
+        </div>
+      )}
+      {rateCalcOpen && (
+        <AdminRateCalculator adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} lang={lang}
+          prefill={calcPrefill} onClose={() => setRateCalcOpen(false)} />
+      )}
+      {savedRoutesOpen && (
+        <AdminSavedRoutes routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} drivers={drivers} fareTiers={fareTiers} lang={lang}
+          onEditAdminRate={openCalculator} onClose={() => setSavedRoutesOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+// Unified view combining Admin's own fixed-rate overrides (adminRouteFares)
+// and driver-submitted route fare entries (routeFares, see SetFareForm) in
+// one place, each tagged by which part they belong to -- these used to
+// live in two separate, easy-to-miss screens (this one's own driver-entry
+// list, and a list buried inside AdminRateCalculator). Editing an Admin
+// rate reopens AdminRateCalculator pre-filled (onEditAdminRate) -- that's
+// still the only place the actual save happens -- while a driver entry's
+// total fare is still adjusted inline here exactly as before.
+function AdminSavedRoutes({ routeFares, adminRouteFares, adminRouteFaresError, drivers, fareTiers, lang, onEditAdminRate, onClose }) {
   const [editingId, setEditingId] = useState(null);
   const [editingEstimatedKm, setEditingEstimatedKm] = useState(null);
   const [draftTotalFare, setDraftTotalFare] = useState("");
   const [saving, setSaving] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [rateCalcOpen, setRateCalcOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null); // driver entries
+  const [confirmDeleteAdminId, setConfirmDeleteAdminId] = useState(null); // admin rate entries
 
   const groups = {};
   (routeFares || []).forEach((r) => {
@@ -1026,145 +1080,216 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
     setSaving(false);
   };
   const deleteEntry = (id) => { removeDoc("routeFares", id).catch((e) => console.error(e)); setConfirmDeleteId(null); };
+  const deleteAdminRate = (id) => { removeDoc("adminRouteFares", id).catch((e) => console.error(e)); setConfirmDeleteAdminId(null); };
+
+  const sortedAdminRates = [...(adminRouteFares || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"}</h2>
-        <button onClick={() => setRateCalcOpen(true)} className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg" style={{ background: C.navy, color: "#fff" }}>
-          <Calculator size={14} /> {lang === "en" ? "Admin Rate Calculator" : lang === "mr" ? "अ‍ॅडमिन दर कॅल्क्युलेटर" : "एडमिन रेट कैलकुलेटर"}
-        </button>
-      </div>
-      <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>
-        {lang === "en"
-          ? "Reference only — what drivers say they charge for a route no longer affects the fare a customer is actually quoted. Only an Admin rate (Rate Calculator) or the default formula does."
-          : lang === "mr"
-          ? "फक्त संदर्भासाठी — ड्रायव्हर एखाद्या रूटसाठी काय आकारतो हे आता ग्राहकाला दाखवल्या जाणाऱ्या दरावर परिणाम करत नाही. फक्त अ‍ॅडमिन दर (रेट कॅल्क्युलेटर) किंवा डिफॉल्ट फॉर्म्युला दर ठरवते."
-          : "केवल संदर्भ के लिए — ड्राइवर किसी रूट के लिए क्या चार्ज करता है, इसका अब ग्राहक को दिखाए जाने वाले दर पर कोई असर नहीं है। केवल एडमिन दर (रेट कैलकुलेटर) या डिफ़ॉल्ट फॉर्मूला ही दर तय करता है।"}
-      </div>
-      {adminRouteFaresError && (
-        <div className="rounded-lg p-3 mb-3 text-xs font-bold" style={{ background: C.safety, color: "#fff" }}>
-          {lang === "en"
-            ? `Couldn't load Admin default rates (${adminRouteFaresError}). Whatever's in Firestore may be fine — this is a read failure on this device, not proof the data is missing.`
-            : lang === "mr"
-            ? `अ‍ॅडमिन डिफॉल्ट दर लोड होऊ शकले नाहीत (${adminRouteFaresError}). Firestore मध्ये डेटा असू शकतो — हे या डिव्हाइसवरील रीड फेल्युअर आहे, डेटा गहाळ असल्याचा पुरावा नाही.`
-            : `एडमिन डिफ़ॉल्ट दर लोड नहीं हो सके (${adminRouteFaresError})। Firestore में डेटा ठीक हो सकता है — यह इस डिवाइस पर रीड फेल्योर है, डेटा गायब होने का सबूत नहीं।`}
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
+          <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Saved Routes" : lang === "mr" ? "सेव्ह केलेले रूट्स" : "सेव किए गए रूट्स"}</h3>
+          <button onClick={onClose} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
         </div>
-      )}
-      {rateCalcOpen && <AdminRateCalculator adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} lang={lang} onClose={() => setRateCalcOpen(false)} />}
-      {groupList.length === 0 ? (
-        <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver has set a route fare yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरने रूट भाडे सेट केलेले नाही." : "अभी तक किसी ड्राइवर ने रूट किराया सेट नहीं किया।"}</p>
-      ) : (
-        <div className="space-y-3">
-          {groupList.map((g, gi) => {
-            const avgTotal = Math.round(g.entries.reduce((s, r) => s + (Number(r.totalFare) || 0), 0) / g.entries.length);
-            // Matches each entry to the Admin default for its own driver's
-            // capacity bracket, then averages just the entries that found
-            // one — a route with no matching Admin default anywhere shows
-            // no badge rather than a misleading comparison.
-            const defaultMatches = g.entries
-              // Prefer the capacity the driver actually had ON RECORD when
-              // they quoted (stored directly on the entry now) over a live
-              // lookup in the current drivers list, which only exists for
-              // entries saved before that field was captured.
-              .map((r) => findMatchingDefaultRate(r, r.capacityKg ?? (drivers || []).find((d) => d.mobile === r.driverMobile)?.vehicleSpec?.capacityKg, adminRouteFares, fareTiers))
-              .filter((v) => v != null);
-            const avgDefault = defaultMatches.length ? Math.round(defaultMatches.reduce((s, v) => s + v, 0) / defaultMatches.length) : null;
-            const diffPct = avgDefault ? Math.round(((avgTotal - avgDefault) / avgDefault) * 100) : null;
-            return (
-              <div key={gi} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                <div className="flex items-start justify-between mb-2 gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{g.pickupName}</div>
-                    <div className="text-sm font-bold truncate" style={{ color: C.ink }}>→ {g.dropName}</div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Avg" : lang === "mr" ? "सरासरी" : "औसत"}: {fmt(avgTotal)}</div>
-                    {avgDefault != null && (
-                      <div className="text-[10px] font-bold mt-0.5" style={{ color: Math.abs(diffPct) > 15 ? C.safety : C.inkSoft }}>
-                        {lang === "en" ? "Default" : lang === "mr" ? "डिफॉल्ट" : "डिफ़ॉल्ट"}: {fmt(avgDefault)} ({diffPct > 0 ? "+" : ""}{diffPct}%)
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  {g.entries.map((r) => {
-                    // Older entries saved before capacityKg was captured on
-                    // the routeFares doc itself don't have it — fall back to
-                    // the driver's current KYC record so the badge still
-                    // shows the real number instead of "unknown".
-                    const entryCapacityKg = r.capacityKg ?? (drivers || []).find((d) => d.mobile === r.driverMobile)?.vehicleSpec?.capacityKg ?? null;
-                    return (
-                    <div key={r.id} className="rounded-lg p-2.5 flex items-center gap-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-bold flex items-center gap-1.5" style={{ color: C.ink, fontFamily: monoFont }}>
-                          {r.driverMobile}
-                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#1a1200" }}>
-                            {entryCapacityKg != null ? `${entryCapacityKg}kg` : (lang === "en" ? "capacity unknown" : lang === "mr" ? "क्षमता अज्ञात" : "क्षमता अज्ञात")}
+        <div className="p-4 overflow-y-auto space-y-4">
+          {adminRouteFaresError && (
+            <div className="rounded-lg p-2.5 text-[11px] font-bold" style={{ background: C.safety, color: "#fff" }}>
+              {lang === "en"
+                ? `Can't load saved rates right now (${adminRouteFaresError}) — this list may be showing nothing even though entries exist.`
+                : lang === "mr"
+                ? `सेव्ह केलेले दर आत्ता लोड होऊ शकत नाहीत (${adminRouteFaresError}) — एंट्री असूनही ही यादी काहीही दाखवत नसेल.`
+                : `सेव किए गए दर अभी लोड नहीं हो सकते (${adminRouteFaresError}) — एंट्री होने के बावजूद यह लिस्ट कुछ नहीं दिखा सकती।`}
+            </div>
+          )}
+
+          {/* Admin Rates section */}
+          <div>
+            <div className="flex items-center justify-between mb-2 gap-2">
+              <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Rates" : lang === "mr" ? "अ‍ॅडमिन दर" : "एडमिन दर"}</div>
+              <div className="text-xs font-black" style={{ color: C.navy }}>{sortedAdminRates.length}</div>
+            </div>
+            {sortedAdminRates.length === 0 ? (
+              <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No Admin rate saved yet." : lang === "mr" ? "अजून कोणताही अ‍ॅडमिन दर सेव्ह केलेला नाही." : "अभी तक कोई एडमिन दर सेव नहीं किया गया।"}</p>
+            ) : (
+              <div className="space-y-1.5">
+                {sortedAdminRates.map((r) => (
+                  <div key={r.id} className="rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                    <button onClick={() => onEditAdminRate(r)} className="w-full text-left">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: C.navy, color: "#fff" }}>
+                          {lang === "en" ? "ADMIN RATE" : lang === "mr" ? "अ‍ॅडमिन दर" : "एडमिन दर"}
+                        </span>
+                        {r.source === "maharashtraDefault" && (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#000" }}>
+                            {lang === "en" ? "DEFAULT" : lang === "mr" ? "डिफॉल्ट" : "डिफ़ॉल्ट"}
                           </span>
-                        </div>
-                        {editingId === r.id ? (
-                          <div className="mt-1">
-                            <input type="number" inputMode="numeric" value={draftTotalFare} onChange={(e) => setDraftTotalFare(e.target.value)}
-                              className="w-24 rounded p-1.5 text-xs font-bold outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "Total" : "कुल"} />
-                            <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>
-                              {lang === "en" ? "1-5km (25%, auto)" : "1-5किमी (25%, स्वतः)"}: {fmt(draftTier1to5Fare)}
-                              {draftPerKmRate != null && <> · {fmt(draftPerKmRate)}/km</>}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
-                            {lang === "en" ? "1-5km" : "1-5किमी"}: {fmt(r.tier1to5Fare)} · {lang === "en" ? "Total" : lang === "mr" ? "एकूण" : "कुल"}: {fmt(r.totalFare)}
-                            {r.estimatedKm != null && <> · {formatDistanceExact(r.estimatedKm, lang)}</>}
-                            {r.perKmRate != null && <> · {fmt(r.perKmRate)}/km</>}
-                          </div>
-                        )}
-                        {/* Raw saved coordinates -- lets this exact entry's
-                            pickup/drop point be compared directly against
-                            whatever a customer's typed address resolves
-                            to, when a route-match mismatch needs tracing. */}
-                        {r.pickupLat != null && (
-                          <div className="text-[9px] mt-0.5 leading-tight" style={{ color: C.inkSoft, fontFamily: monoFont }}>
-                            P: {r.pickupLat.toFixed(4)},{r.pickupLng.toFixed(4)} · D: {r.dropLat.toFixed(4)},{r.dropLng.toFixed(4)}
-                          </div>
                         )}
                       </div>
-                      {editingId === r.id ? (
-                        <div className="flex items-center gap-4 shrink-0">
-                          <button onClick={() => saveEdit(r.id)} disabled={saving} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.success }}>
-                            <CheckCircle2 size={17} color="#fff" />
-                          </button>
-                          <button onClick={cancelEdit} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.inkSoft }}>
-                            <X size={17} color="#fff" strokeWidth={3} />
-                          </button>
-                        </div>
-                      ) : confirmDeleteId === r.id ? (
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button onClick={() => deleteEntry(r.id)} className="text-xs font-bold px-3 py-2.5 rounded-lg" style={{ color: "#fff", background: C.safety }}>
-                            {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
-                          </button>
-                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold px-3 py-2.5 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
-                            {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-4 shrink-0">
-                          <button onClick={() => startEdit(r)} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.navy }}>
-                            <Settings2 size={16} color="#fff" />
-                          </button>
-                          <button onClick={() => setConfirmDeleteId(r.id)} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.safety }}>
-                            <X size={17} color="#fff" strokeWidth={3} />
-                          </button>
+                      <div className="text-xs font-bold truncate mt-1" style={{ color: C.ink }}>{r.pickupName}</div>
+                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
+                        {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {fmt(r.totalFare)}
+                      </div>
+                      {isLongHaulSmallLoad(r.estimatedKm, r.tierMaxKg) && (
+                        <div className="text-[9.5px] font-bold mt-1" style={{ color: C.safety }}>
+                          ⚠ {lang === "en" ? "Small load, long haul — a shared/LTL truck is likely cheaper for the customer" : lang === "mr" ? "लहान लोड, लांब पल्ला — ग्राहकासाठी शेअर्ड/LTL ट्रक स्वस्त पडण्याची शक्यता आहे" : "छोटा लोड, लंबी दूरी — ग्राहक के लिए शेयर्ड/LTL ट्रक सस्ता पड़ सकता है"}
                         </div>
                       )}
+                    </button>
+                    <div className="flex items-center justify-end gap-4 mt-2">
+                      {confirmDeleteAdminId === r.id ? (
+                        <>
+                          <button onClick={() => deleteAdminRate(r.id)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                            {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                          </button>
+                          <button onClick={() => setConfirmDeleteAdminId(null)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
+                            {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => setConfirmDeleteAdminId(r.id)} className="text-[11px] font-bold px-3 py-2 rounded-lg" style={{ color: C.safety, background: C.paper, border: `1px solid ${C.safety}` }}>
+                          {lang === "en" ? "Remove" : lang === "mr" ? "काढा" : "हटाएं"}
+                        </button>
+                      )}
                     </div>
-                  );})}
-                </div>
+                  </div>
+                ))}
               </div>
-            );
-          })}
+            )}
+          </div>
+
+          {/* Driver Entries section */}
+          <div className="pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+            <div className="flex items-center justify-between mb-2 gap-2">
+              <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Entries" : lang === "mr" ? "ड्रायव्हर एंट्री" : "ड्राइवर एंट्री"}</div>
+              <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{(routeFares || []).length}</div>
+            </div>
+            <div className="rounded-lg p-2.5 mb-3 text-[11px] font-semibold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+              {lang === "en"
+                ? "Reference only — what drivers say they charge for a route no longer affects the fare a customer is actually quoted. Only an Admin rate above or the default formula does."
+                : lang === "mr"
+                ? "फक्त संदर्भासाठी — ड्रायव्हर एखाद्या रूटसाठी काय आकारतो हे आता ग्राहकाला दाखवल्या जाणाऱ्या दरावर परिणाम करत नाही. फक्त वरचा अ‍ॅडमिन दर किंवा डिफॉल्ट फॉर्म्युला दर ठरवते."
+                : "केवल संदर्भ के लिए — ड्राइवर किसी रूट के लिए क्या चार्ज करता है, इसका अब ग्राहक को दिखाए जाने वाले दर पर कोई असर नहीं है। केवल ऊपर का एडमिन दर या डिफ़ॉल्ट फॉर्मूला ही दर तय करता है।"}
+            </div>
+            {groupList.length === 0 ? (
+              <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver has set a route fare yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरने रूट भाडे सेट केलेले नाही." : "अभी तक किसी ड्राइवर ने रूट किराया सेट नहीं किया।"}</p>
+            ) : (
+              <div className="space-y-3">
+                {groupList.map((g, gi) => {
+                  const avgTotal = Math.round(g.entries.reduce((s, r) => s + (Number(r.totalFare) || 0), 0) / g.entries.length);
+                  // Matches each entry to the Admin default for its own driver's
+                  // capacity bracket, then averages just the entries that found
+                  // one — a route with no matching Admin default anywhere shows
+                  // no badge rather than a misleading comparison.
+                  const defaultMatches = g.entries
+                    // Prefer the capacity the driver actually had ON RECORD when
+                    // they quoted (stored directly on the entry now) over a live
+                    // lookup in the current drivers list, which only exists for
+                    // entries saved before that field was captured.
+                    .map((r) => findMatchingDefaultRate(r, r.capacityKg ?? (drivers || []).find((d) => d.mobile === r.driverMobile)?.vehicleSpec?.capacityKg, adminRouteFares, fareTiers))
+                    .filter((v) => v != null);
+                  const avgDefault = defaultMatches.length ? Math.round(defaultMatches.reduce((s, v) => s + v, 0) / defaultMatches.length) : null;
+                  const diffPct = avgDefault ? Math.round(((avgTotal - avgDefault) / avgDefault) * 100) : null;
+                  return (
+                    <div key={gi} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                      <div className="flex items-start justify-between mb-2 gap-2">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: C.marigoldDeep, color: "#fff" }}>
+                            {lang === "en" ? "DRIVER ENTRY" : lang === "mr" ? "ड्रायव्हर एंट्री" : "ड्राइवर एंट्री"}
+                          </span>
+                          <div className="text-sm font-bold truncate mt-1" style={{ color: C.ink }}>{g.pickupName}</div>
+                          <div className="text-sm font-bold truncate" style={{ color: C.ink }}>→ {g.dropName}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Avg" : lang === "mr" ? "सरासरी" : "औसत"}: {fmt(avgTotal)}</div>
+                          {avgDefault != null && (
+                            <div className="text-[10px] font-bold mt-0.5" style={{ color: Math.abs(diffPct) > 15 ? C.safety : C.inkSoft }}>
+                              {lang === "en" ? "Default" : lang === "mr" ? "डिफॉल्ट" : "डिफ़ॉल्ट"}: {fmt(avgDefault)} ({diffPct > 0 ? "+" : ""}{diffPct}%)
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        {g.entries.map((r) => {
+                          // Older entries saved before capacityKg was captured on
+                          // the routeFares doc itself don't have it — fall back to
+                          // the driver's current KYC record so the badge still
+                          // shows the real number instead of "unknown".
+                          const entryCapacityKg = r.capacityKg ?? (drivers || []).find((d) => d.mobile === r.driverMobile)?.vehicleSpec?.capacityKg ?? null;
+                          return (
+                          <div key={r.id} className="rounded-lg p-2.5 flex items-center gap-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[11px] font-bold flex items-center gap-1.5" style={{ color: C.ink, fontFamily: monoFont }}>
+                                {r.driverMobile}
+                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#1a1200" }}>
+                                  {entryCapacityKg != null ? `${entryCapacityKg}kg` : (lang === "en" ? "capacity unknown" : lang === "mr" ? "क्षमता अज्ञात" : "क्षमता अज्ञात")}
+                                </span>
+                              </div>
+                              {editingId === r.id ? (
+                                <div className="mt-1">
+                                  <input type="number" inputMode="numeric" value={draftTotalFare} onChange={(e) => setDraftTotalFare(e.target.value)}
+                                    className="w-24 rounded p-1.5 text-xs font-bold outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "Total" : "कुल"} />
+                                  <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>
+                                    {lang === "en" ? "1-5km (25%, auto)" : "1-5किमी (25%, स्वतः)"}: {fmt(draftTier1to5Fare)}
+                                    {draftPerKmRate != null && <> · {fmt(draftPerKmRate)}/km</>}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
+                                  {lang === "en" ? "1-5km" : "1-5किमी"}: {fmt(r.tier1to5Fare)} · {lang === "en" ? "Total" : lang === "mr" ? "एकूण" : "कुल"}: {fmt(r.totalFare)}
+                                  {r.estimatedKm != null && <> · {formatDistanceExact(r.estimatedKm, lang)}</>}
+                                  {r.perKmRate != null && <> · {fmt(r.perKmRate)}/km</>}
+                                </div>
+                              )}
+                              {/* Raw saved coordinates -- lets this exact entry's
+                                  pickup/drop point be compared directly against
+                                  whatever a customer's typed address resolves
+                                  to, when a route-match mismatch needs tracing. */}
+                              {r.pickupLat != null && (
+                                <div className="text-[9px] mt-0.5 leading-tight" style={{ color: C.inkSoft, fontFamily: monoFont }}>
+                                  P: {r.pickupLat.toFixed(4)},{r.pickupLng.toFixed(4)} · D: {r.dropLat.toFixed(4)},{r.dropLng.toFixed(4)}
+                                </div>
+                              )}
+                            </div>
+                            {editingId === r.id ? (
+                              <div className="flex items-center gap-4 shrink-0">
+                                <button onClick={() => saveEdit(r.id)} disabled={saving} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                                  <CheckCircle2 size={17} color="#fff" />
+                                </button>
+                                <button onClick={cancelEdit} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.inkSoft }}>
+                                  <X size={17} color="#fff" strokeWidth={3} />
+                                </button>
+                              </div>
+                            ) : confirmDeleteId === r.id ? (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button onClick={() => deleteEntry(r.id)} className="text-xs font-bold px-3 py-2.5 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                                  {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                                </button>
+                                <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold px-3 py-2.5 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
+                                  {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-4 shrink-0">
+                                <button onClick={() => startEdit(r)} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.navy }}>
+                                  <Settings2 size={16} color="#fff" />
+                                </button>
+                                <button onClick={() => setConfirmDeleteId(r.id)} className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.safety }}>
+                                  <X size={17} color="#fff" strokeWidth={3} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );})}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -1181,7 +1306,7 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
 // than creating a duplicate; a different weight bracket on the identical
 // route creates a separate entry (see the "Different rates per weight
 // bracket" design decision this was built to).
-function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, lang, onClose }) {
+function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, lang, prefill, onClose }) {
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null);
@@ -1194,7 +1319,6 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -1262,7 +1386,12 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     setSavedFlash(false);
   };
 
-  const deleteEntry = (id) => { removeDoc("adminRouteFares", id).catch((e) => console.error(e)); setConfirmDeleteId(null); if (editingId === id) resetForm(); };
+  // Pre-loads whichever Admin rate "Saved Routes" was asked to open this
+  // for -- the saved-rate list itself now lives entirely there, not here.
+  useEffect(() => {
+    if (prefill) editEntry(prefill);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Same reasoning as SetFareForm's own locationResolved check: an Admin
   // override that saves before geocoding catches up would only ever match
@@ -1306,15 +1435,6 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     }
     setSaving(false);
   };
-
-  const sorted = [...(adminRouteFares || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  // A real count to check against, instead of scrolling a list of
-  // hundreds and losing track -- e.g. after the Maharashtra bulk import,
-  // this is the only in-app way to confirm "yes, all 880 are really here"
-  // without opening Firestore or running a script.
-  const defaultCount = sorted.filter((r) => r.source === "maharashtraDefault").length;
-  const handEditedCount = sorted.length - defaultCount;
-
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
@@ -1395,62 +1515,10 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
           {adminRouteFaresError && (
             <div className="rounded-lg p-2.5 text-[11px] font-bold" style={{ background: C.safety, color: "#fff" }}>
               {lang === "en"
-                ? `Can't load saved rates right now (${adminRouteFaresError}) — this list may be showing nothing even though entries exist. Try closing and reopening the app.`
+                ? `Can't load saved rates right now (${adminRouteFaresError}) — the "already live as an Admin rate" suggestion above may be wrong. Try closing and reopening the app.`
                 : lang === "mr"
-                ? `सेव्ह केलेले दर आत्ता लोड होऊ शकत नाहीत (${adminRouteFaresError}) — एंट्री असूनही ही यादी काहीही दाखवत नसेल. अ‍ॅप बंद करून पुन्हा उघडून पहा.`
-                : `सेव किए गए दर अभी लोड नहीं हो सकते (${adminRouteFaresError}) — एंट्री होने के बावजूद यह लिस्ट कुछ नहीं दिखा सकती। ऐप बंद करके फिर से खोलें।`}
-            </div>
-          )}
-          {sorted.length > 0 && (
-            <div className="pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-              <div className="flex items-center justify-between mb-2 gap-2">
-                <div className="text-xs font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Saved Admin rates" : lang === "mr" ? "सेव्ह केलेले अ‍ॅडमिन दर" : "सेव किए गए एडमिन दर"}</div>
-                <div className="text-xs font-black shrink-0" style={{ color: C.navy }}>{sorted.length}</div>
-              </div>
-              <div className="text-[10.5px] font-semibold mb-2" style={{ color: C.inkSoft }}>
-                {lang === "en" ? `${defaultCount} imported default${handEditedCount ? ` · ${handEditedCount} hand-typed/edited` : ""}` : lang === "mr" ? `${defaultCount} इम्पोर्ट केलेले डिफॉल्ट${handEditedCount ? ` · ${handEditedCount} हाताने टाइप/एडिट केलेले` : ""}` : `${defaultCount} इम्पोर्ट किए गए डिफ़ॉल्ट${handEditedCount ? ` · ${handEditedCount} हाथ से टाइप/एडिट किए गए` : ""}`}
-              </div>
-              <div className="space-y-1.5">
-                {sorted.map((r) => (
-                  <div key={r.id} className="rounded-lg p-2.5" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-                    <button onClick={() => editEntry(r)} className="w-full text-left">
-                      <div className="flex items-center gap-1.5">
-                        <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName}</div>
-                        {r.source === "maharashtraDefault" && (
-                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: C.marigold, color: "#000" }}>
-                            {lang === "en" ? "DEFAULT" : lang === "mr" ? "डिफॉल्ट" : "डिफ़ॉल्ट"}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
-                      <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
-                        {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {fmt(r.totalFare)}
-                      </div>
-                      {isLongHaulSmallLoad(r.estimatedKm, r.tierMaxKg) && (
-                        <div className="text-[9.5px] font-bold mt-1" style={{ color: C.safety }}>
-                          ⚠ {lang === "en" ? "Small load, long haul — a shared/LTL truck is likely cheaper for the customer" : lang === "mr" ? "लहान लोड, लांब पल्ला — ग्राहकासाठी शेअर्ड/LTL ट्रक स्वस्त पडण्याची शक्यता आहे" : "छोटा लोड, लंबी दूरी — ग्राहक के लिए शेयर्ड/LTL ट्रक सस्ता पड़ सकता है"}
-                        </div>
-                      )}
-                    </button>
-                    <div className="flex items-center justify-end gap-4 mt-2">
-                      {confirmDeleteId === r.id ? (
-                        <>
-                          <button onClick={() => deleteEntry(r.id)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
-                            {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
-                          </button>
-                          <button onClick={() => setConfirmDeleteId(null)} className="text-xs font-bold px-3 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.paper, border: `1px solid ${C.line}` }}>
-                            {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
-                          </button>
-                        </>
-                      ) : (
-                        <button onClick={() => setConfirmDeleteId(r.id)} className="text-[11px] font-bold px-3 py-2 rounded-lg" style={{ color: C.safety, background: C.paper, border: `1px solid ${C.safety}` }}>
-                          {lang === "en" ? "Remove" : lang === "mr" ? "काढा" : "हटाएं"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                ? `सेव्ह केलेले दर आत्ता लोड होऊ शकत नाहीत (${adminRouteFaresError}) — वरचे सुचवलेले दर चुकीचे असू शकते. अ‍ॅप बंद करून पुन्हा उघडून पहा.`
+                : `सेव किए गए दर अभी लोड नहीं हो सकते (${adminRouteFaresError}) — ऊपर सुझाई गई दर गलत हो सकती है। ऐप बंद करके फिर से खोलें।`}
             </div>
           )}
         </div>
