@@ -219,22 +219,28 @@ service cloud.firestore {
     // sendAdminNotification) — written only by that Cloud Function via the
     // Admin SDK, no client write path needed or allowed here. Doubles as
     // the actual announcements drivers/customers read in their own "Admin
-    // Announcements" inbox, not just admin's own sent-history view, so
-    // read is scoped per-document to who the message was actually for:
-    // "all" is visible to any signed-in user (matches its own meaning),
-    // a single-recipient message (target is one mobile string) is visible
-    // only to Admin or that one recipient, and a batch send to a specific
-    // LIST of recipients checks the caller's own identity (either shape a
-    // session can carry -- PIN-login's synthetic email or a real Phone
-    // Auth phone_number) against targetEmails/targetPhones, precomputed
-    // server-side at send time since rules can't reformat
-    // request.auth.token itself to match against the raw mobile list.
+    // Announcements" inbox (AnnouncementsInbox/useAnnouncementAlerts in
+    // App.jsx), which subscribes with one broad, unconstrained query
+    // (orderBy(createdAt), no where clause) and filters to "mine" in JS --
+    // same bulk-fetch-and-filter pattern this file's own header comment
+    // already documents for drivers/bookings/withdrawals/rechargeRequests.
+    //
+    // A per-document read restriction (checking resource.data.target
+    // against the caller's own identity) was tried here once and reverted
+    // -- see admin-notification-read-restriction-broke-list-queries in
+    // BUG_TRACKER_SEED. Firestore only evaluates a list/query's security
+    // rule against the QUERY ITSELF, not per returned document; a rule
+    // that depends on resource.data with no matching `where` clause on the
+    // client's query can't be verified query-side, so Firestore rejects
+    // the ENTIRE list request for anyone not covered by a document-
+    // independent clause (here, only isAdmin() qualifies) -- every
+    // customer/driver's subscription silently returned zero documents,
+    // every time, regardless of target. Broad isSignedIn() read is the
+    // only option that actually works for an unscoped list query; real
+    // privacy for a single-recipient message would need the client's own
+    // query rewritten to a scoped where() per role, not a rules change.
     match /adminNotifications/{id} {
-      allow read: if isAdmin()
-        || resource.data.target == "all"
-        || (resource.data.target is string && isOwnPhone(resource.data.target))
-        || (resource.data.targetEmails is list && request.auth.token.email in resource.data.targetEmails)
-        || (resource.data.targetPhones is list && request.auth.token.phone_number in resource.data.targetPhones);
+      allow read: if isSignedIn();
       // Written only by sendAdminNotification (Cloud Function, Admin SDK --
       // bypasses these rules entirely), never directly by a client, so no
       // create/update rule is needed here. Delete is admin-only, for the

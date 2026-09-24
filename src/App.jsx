@@ -751,6 +751,17 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-24",
     fixedAt: "2026-09-24",
   },
+  {
+    id: "admin-notification-read-restriction-broke-list-queries",
+    title: "Admin Announcements silently stopped reaching every customer/driver — Firestore doesn't support per-document read rules on an unscoped list query",
+    severity: "high",
+    status: "fixed",
+    type: "bug",
+    area: "firestore.rules / AnnouncementsInbox",
+    description: "A prior fix (see admin-notification-single-target-broad-read / admin-notification-batch-target-broad-read) scoped adminNotifications' read rule to isAdmin() || target==\"all\" || isOwnPhone(target) || ... -- correct in isolation, but AnnouncementsInbox/useAnnouncementAlerts subscribe with one broad, unconstrained query (orderBy(createdAt), no where clause), same bulk-fetch-and-filter pattern as drivers/bookings elsewhere in this file. Firestore only evaluates a list/query's security rule against the query itself, not per returned document -- a rule depending on resource.data with no matching where() clause on the client's query can't be verified query-side, so Firestore rejects the ENTIRE list request for anyone not covered by a document-independent clause. Only isAdmin() qualifies as document-independent here, so every customer/driver's subscription silently returned zero documents from that point on, permission-denied logged only to the console (subscribeCollection's onSnapshot error callback), completely invisible in the UI -- Admin's own Sent Notifications list kept working throughout (isAdmin() alone makes the whole query trivially valid), which is what made this look like a send-side or targeting bug at first. Confirmed live: a correctly-written Firestore doc (toRole/target all correct) never reached the intended customer even after fresh reloads, functions/rules redeploys, and identity verification -- only a temporary debug line printing the raw received count (0) on the actual device exposed it. Fixed by reverting adminNotifications' read rule to isSignedIn() -- the same broad-read-plus-client-filter trade-off this file's own header already documents as accepted for drivers/bookings/withdrawals/rechargeRequests, and the only option that actually works for an unscoped list query.",
+    foundAt: "2026-09-24",
+    fixedAt: "2026-09-24",
+  },
 ];
 
 export function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -2261,10 +2272,6 @@ function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang, onOpen
   return (
     <div className="px-5 py-5">
       <h2 className="text-base font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} color={C.marigoldDeep} /> {lang === "en" ? "Admin Announcements" : lang === "mr" ? "अ‍ॅडमिन सूचना" : "एडमिन सूचनाएं"}</h2>
-      {/* TEMPORARY debug line -- remove once the "messages not arriving" issue is diagnosed. */}
-      <p className="text-[10px] mb-3" style={{ color: C.safety, fontFamily: monoFont }}>
-        DEBUG: total received = {(adminNotifications || []).length}, myMobile = "{myMobile}", toRole = "{toRole}"
-      </p>
       {mine.length === 0 ? (
         <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No announcements yet." : lang === "mr" ? "अजून कोणतीही सूचना नाही." : "अभी तक कोई सूचना नहीं।"}</p>
       ) : (
