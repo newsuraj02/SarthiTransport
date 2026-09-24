@@ -2326,7 +2326,11 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [search, setSearch] = useState("");
   const audiencePeople = audience === "driver" ? (drivers || []) : (customers || []);
+  const searchedPeople = search.trim()
+    ? audiencePeople.filter((p) => (p.name || "").toLowerCase().includes(search.trim().toLowerCase()))
+    : audiencePeople;
   // Each audience gets its own section of the sent-notifications list below
   // (older ones have no toRole at all -- those only ever went to drivers,
   // back before the customer audience existed, so they fall under "driver").
@@ -2359,17 +2363,23 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> {lang === "en" ? "Send Notification" : lang === "mr" ? "सूचना पाठवा" : "सूचना भेजें"}</div>
       <div className="flex gap-2 mb-3">
         {["driver", "customer"].map((a) => (
-          <button key={a} onClick={() => { setAudience(a); setTarget("all"); }} className="flex-1 rounded-lg py-3 text-base font-bold"
+          <button key={a} onClick={() => { setAudience(a); setTarget("all"); setSearch(""); }} className="flex-1 rounded-lg py-3 text-base font-bold"
             style={{ background: audience === a ? C.navy : C.paper, color: audience === a ? "#fff" : C.inkSoft, border: `1.5px solid ${audience === a ? C.navy : C.line}` }}>
             {a === "driver" ? (lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर") : (lang === "en" ? "Customers" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
           </button>
         ))}
       </div>
       <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Send to" : lang === "mr" ? "कोणाला पाठवायचे" : "किसे भेजें"}</label>
-      <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+      <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+        placeholder={lang === "en" ? "Search by name..." : lang === "mr" ? "नावाने शोधा..." : "नाम से खोजें..."}
+        className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-1.5" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+      <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
         <option value="all">{allLabel}</option>
-        {audiencePeople.map((p) => <option key={p.mobile} value={p.mobile}>{p.name}</option>)}
+        {searchedPeople.map((p) => <option key={p.mobile} value={p.mobile}>{p.name}</option>)}
       </select>
+      <div className="text-[10px] mb-2 mt-1" style={{ color: C.inkSoft, minHeight: 14 }}>
+        {search.trim() && (lang === "en" ? `${searchedPeople.length} match${searchedPeople.length === 1 ? "" : "es"}` : lang === "mr" ? `${searchedPeople.length} जुळले` : `${searchedPeople.length} मैच मिले`)}
+      </div>
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : lang === "mr" ? "संदेश लिहा..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
       {error && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
       <button onClick={send} disabled={!message.trim() || sending} className="w-full rounded-lg py-3.5 font-bold text-base mb-4" style={{ background: message.trim() && !sending ? C.marigold : "#E0E0E0", color: message.trim() && !sending ? "#000000" : "#9AA3B0" }}>
