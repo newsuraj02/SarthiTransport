@@ -2327,6 +2327,7 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
   const [error, setError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [search, setSearch] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const audiencePeople = audience === "driver" ? (drivers || []) : (customers || []);
   const searchedPeople = search.trim()
     ? audiencePeople.filter((p) => (p.name || "").toLowerCase().includes(search.trim().toLowerCase()))
@@ -2363,22 +2364,38 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
       <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Bell size={16} /> {lang === "en" ? "Send Notification" : lang === "mr" ? "सूचना पाठवा" : "सूचना भेजें"}</div>
       <div className="flex gap-2 mb-3">
         {["driver", "customer"].map((a) => (
-          <button key={a} onClick={() => { setAudience(a); setTarget("all"); setSearch(""); }} className="flex-1 rounded-lg py-3 text-base font-bold"
+          <button key={a} onClick={() => { setAudience(a); setTarget("all"); setSearch(""); setPickerOpen(false); }} className="flex-1 rounded-lg py-3 text-base font-bold"
             style={{ background: audience === a ? C.navy : C.paper, color: audience === a ? "#fff" : C.inkSoft, border: `1.5px solid ${audience === a ? C.navy : C.line}` }}>
             {a === "driver" ? (lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर") : (lang === "en" ? "Customers" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
           </button>
         ))}
       </div>
       <label className="text-[11px] font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Send to" : lang === "mr" ? "कोणाला पाठवायचे" : "किसे भेजें"}</label>
-      <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-        placeholder={lang === "en" ? "Search by name..." : lang === "mr" ? "नावाने शोधा..." : "नाम से खोजें..."}
-        className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-1.5" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
-      <select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
-        <option value="all">{allLabel}</option>
-        {searchedPeople.map((p) => <option key={p.mobile} value={p.mobile}>{p.name}</option>)}
-      </select>
-      <div className="text-[10px] mb-2 mt-1" style={{ color: C.inkSoft, minHeight: 14 }}>
-        {search.trim() && (lang === "en" ? `${searchedPeople.length} match${searchedPeople.length === 1 ? "" : "es"}` : lang === "mr" ? `${searchedPeople.length} जुळले` : `${searchedPeople.length} मैच मिले`)}
+      <div className="relative mb-2">
+        <input type="text" value={search}
+          onFocus={() => setPickerOpen(true)}
+          onBlur={() => setPickerOpen(false)}
+          onChange={(e) => { setSearch(e.target.value); setPickerOpen(true); }}
+          placeholder={allLabel}
+          className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+        {pickerOpen && (
+          <div className="absolute left-0 right-0 mt-1 rounded-lg shadow-lg overflow-y-auto z-10" style={{ background: C.paper, border: `1px solid ${C.line}`, maxHeight: 200 }}>
+            <div onMouseDown={() => { setTarget("all"); setSearch(""); setPickerOpen(false); }}
+              className="px-3 py-2 text-xs font-bold cursor-pointer" style={{ color: C.navy, borderBottom: `1px solid ${C.line}` }}>
+              {allLabel}
+            </div>
+            {searchedPeople.length === 0 ? (
+              <div className="px-3 py-2 text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No matches" : lang === "mr" ? "जुळणारे काही नाही" : "कोई मैच नहीं"}</div>
+            ) : (
+              searchedPeople.map((p) => (
+                <div key={p.mobile} onMouseDown={() => { setTarget(p.mobile); setSearch(p.name); setPickerOpen(false); }}
+                  className="px-3 py-2 text-xs cursor-pointer" style={{ color: C.ink }}>
+                  {p.name}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : lang === "mr" ? "संदेश लिहा..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
       {error && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
