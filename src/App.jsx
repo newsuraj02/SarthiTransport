@@ -9795,7 +9795,12 @@ export default function App() {
       adjustDriverWallet(driver.mobile, { heldCreditDelta: held, bonusDelta: -bonusReverse });
     }
     if (b.status === "Ongoing" && b.driverName) unfreezeDriverName(b.driverName);
-    patchDoc("bookings", id, { status: "Cancelled" }).catch((e) => console.error(e));
+    // cancelledAt (not just status) -- AdminFleet's "Cancelled today" tile
+    // needs to know WHEN this was cancelled, not when it was originally
+    // booked. Without this it was checking the booking's own createdAt,
+    // so a booking placed yesterday and cancelled today silently never
+    // counted as cancelled "today" at all.
+    patchDoc("bookings", id, { status: "Cancelled", cancelledAt: serverTimestamp() }).catch((e) => console.error(e));
     return null;
   };
   const rateBooking = (id, rating) => patchDoc("bookings", id, { rating }).catch((e) => console.error(e));

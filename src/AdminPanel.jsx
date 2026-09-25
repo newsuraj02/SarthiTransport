@@ -278,8 +278,13 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
 }
 
 function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
-  const isToday = (b) => {
-    const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
+  // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
+  // pick the field that actually answers "did this happen today" for that
+  // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
+  // createdAt) for a cancellation, since a booking placed yesterday and
+  // cancelled today is "cancelled today", not "cancelled yesterday".
+  const isToday = (ts) => {
+    const d = ts?.toDate ? ts.toDate() : null;
     if (!d) return false;
     const now = new Date();
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
@@ -287,7 +292,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // "Booked today" previously counted every Ongoing/Completed trip ever
   // logged (no date filter) despite the label — scope it to today like the
   // other trip-based tiles below.
-  const bookedTodayList = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t));
+  const bookedTodayList = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t.createdAt));
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
   // Single partition, used for every installed/uninstalled/blacklisted
   // count on this dashboard (see partitionDriversByInstallStatus) -- these
@@ -313,7 +318,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // New customer signups today, and drivers still inside their 30-day free
   // trial — both derived live from createdAt, same source of truth as
   // everywhere else trial/signup timing is used in the app.
-  const newCustomersToday = (customers || []).filter(isToday);
+  const newCustomersToday = (customers || []).filter((c) => isToday(c.createdAt));
   // Today's new driver signups — separate from pendingApprovals below.
   // pendingApprovals only counts drivers still sitting in "Pending" KYC,
   // but a driver signing up inside their own 30-day trial gets
@@ -323,7 +328,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // ever paused in Pending long enough to be counted. This tracks actual
   // signup volume instead, same createdAt-based approach as
   // newCustomersToday above.
-  const newDriversToday = drivers.filter(isToday);
+  const newDriversToday = drivers.filter((d) => isToday(d.createdAt));
   // isInTrial alone also matched drivers who just verified their phone
   // and never went any further (no name, no KYC) — cluttering this list
   // with abandoned signups nobody can actually act on. Only count a
@@ -334,7 +339,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // dropped along with pricing (see backup-before-pricing-removal).
   const trialDrivers = drivers.filter((d) => isInTrial(d.createdAt) && d.name && d.name !== d.mobile && d.kyc === "Approved");
 
-  const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b));
+  const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b.cancelledAt));
   // Any not-yet-finished booking scheduled for a future date, regardless of
   // whether it's still awaiting bids or already has a driver assigned.
   const advanceBookingsList = (bookings || []).filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed");
