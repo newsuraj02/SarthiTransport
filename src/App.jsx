@@ -3047,7 +3047,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
 // on its own the moment any driver's lastKnownLocation changes, no
 // polling of its own needed here.
 
-// Calls the other party in a booking through Exotel's number-masking
+// Calls the other party in a booking through Kaleyra's number-masking
 // bridge (see initiateMaskedCall in firebaseClient.js / functions/index.js)
 // instead of a plain tel: link that would show either side's real number
 // to the other -- neither party's number is displayed here either, since

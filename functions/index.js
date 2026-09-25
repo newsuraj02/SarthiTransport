@@ -257,6 +257,69 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
   }
 }
 
+// WhatsApp alert for the exact same 2-minute-window direct request/
+// retarget sendDirectRequestAlert (push) already covers -- sent
+// ALONGSIDE push, not instead of it. An earlier attempt fully replaced
+// push with Exotel SMS for this alert and was reverted; this keeps push
+// as the free, always-on channel and adds WhatsApp as a second, more
+// reliable path -- WhatsApp already has de-facto OEM battery-
+// optimization whitelisting on virtually every Indian Android device, so
+// the actual failure mode push had here (stale/unregistered FCM tokens,
+// missing notification channel, OEM battery/autostart restrictions)
+// doesn't apply to it.
+//
+// Needs KALEYRA_DIRECT_REQUEST_TEMPLATE: the EXACT name of a WhatsApp
+// message template already created AND approved by Meta on Kaleyra's
+// WhatsApp Template dashboard, with 3 body variables in this order --
+// {{1}} pickup, {{2}} drop, {{3}} weight -- e.g. a template body of:
+//   "🚨 आपके लिए सीधी बुकिंग रिक्वेस्ट!
+//    लोडिंग: {{1}}
+//    अनलोडिंग: {{2}}
+//    वज़न: {{3}} किग्रा
+//    Apna Transport खोलें और 120 सेकंड में जवाब दें।"
+// Template approval is a manual step outside this code, same as Exotel
+// SMS's DLT registration was for the earlier, reverted attempt -- until
+// this and the other two secrets below are set, this just logs and
+// returns rather than throwing, so push keeps working on its own either way.
+const KALEYRA_WHATSAPP_SID = defineSecret("KALEYRA_WHATSAPP_SID");
+const KALEYRA_WHATSAPP_NUMBER = defineSecret("KALEYRA_WHATSAPP_NUMBER");
+const KALEYRA_DIRECT_REQUEST_TEMPLATE = defineSecret("KALEYRA_DIRECT_REQUEST_TEMPLATE");
+async function sendDirectRequestWhatsApp(driverMobile, load) {
+  const sid = KALEYRA_WHATSAPP_SID.value(), apiKey = KALEYRA_API_KEY.value(),
+    fromNumber = KALEYRA_WHATSAPP_NUMBER.value(), template = KALEYRA_DIRECT_REQUEST_TEMPLATE.value();
+  if (!sid || !apiKey || !fromNumber || !template) {
+    console.error("[whatsapp] direct-request alert skipped: Kaleyra WhatsApp not configured.");
+    return;
+  }
+  try {
+    const res = await fetch(`https://api.in.kaleyra.io/v2/${sid}/whatsapp/${fromNumber}/messages`, {
+      method: "POST",
+      headers: { "api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: `+91${driverMobile}`,
+        type: "template",
+        template: {
+          name: template,
+          language: { code: "en" },
+          components: [{
+            type: "body",
+            parameters: [
+              { type: "text", text: load.pickup || "-" },
+              { type: "text", text: load.drop || "-" },
+              { type: "text", text: load.weight ? String(load.weight) : "-" },
+            ],
+          }],
+        },
+      }),
+    });
+    if (!res.ok) console.error("[whatsapp] direct-request alert rejected by Kaleyra:", await res.text());
+  } catch (e) {
+    console.error("[whatsapp] direct-request alert send failed:", e.message);
+  }
+}
+
 // Fires whenever a booking becomes (or stays, but with a different driver)
 // "AwaitingDriver" — a fresh direct request from CustomerBooking's driver
 // picker, or a retarget after the previous driver timed out/rejected.
@@ -264,25 +327,32 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // same as onNewLoadPosted above. Only fires on a real change of who's
 // pending, not on unrelated field updates to the same booking (e.g. the
 // customer's live GPS ticking during a still-Bidding wait elsewhere).
-exports.onDirectRequestAssigned = onDocumentWritten("bookings/{bookingId}", async (event) => {
-  const before = event.data?.before?.data();
-  const after = event.data?.after?.data();
-  if (!after || after.status !== "AwaitingDriver" || !after.pendingDriverName) return;
-  if (before?.status === "AwaitingDriver" && before?.pendingDriverName === after.pendingDriverName) return;
+exports.onDirectRequestAssigned = onDocumentWritten(
+  { document: "bookings/{bookingId}", secrets: [KALEYRA_API_KEY, KALEYRA_WHATSAPP_SID, KALEYRA_WHATSAPP_NUMBER, KALEYRA_DIRECT_REQUEST_TEMPLATE] },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!after || after.status !== "AwaitingDriver" || !after.pendingDriverName) return;
+    if (before?.status === "AwaitingDriver" && before?.pendingDriverName === after.pendingDriverName) return;
 
-  // pendingDriverMobile (the doc id, guaranteed unique) is preferred over a
-  // name lookup -- two drivers can share the same free-text display name
-  // (no uniqueness enforced at signup), which used to let this resolve to
-  // the WRONG same-named driver's fcmToken. Falls back to the old
-  // name-based query only for a booking written before this field existed.
-  const driverDoc = after.pendingDriverMobile
-    ? await db.collection("drivers").doc(after.pendingDriverMobile).get()
-    : (await db.collection("drivers").where("name", "==", after.pendingDriverName).limit(1).get()).docs[0];
-  const driver = driverDoc?.data();
-  if (!driver?.fcmToken) return;
+    // pendingDriverMobile (the doc id, guaranteed unique) is preferred over
+    // a name lookup -- two drivers can share the same free-text display
+    // name (no uniqueness enforced at signup), which used to let this
+    // resolve to the WRONG same-named driver's fcmToken. Falls back to the
+    // old name-based query only for a booking written before this field
+    // existed.
+    const driverDoc = after.pendingDriverMobile
+      ? await db.collection("drivers").doc(after.pendingDriverMobile).get()
+      : (await db.collection("drivers").where("name", "==", after.pendingDriverName).limit(1).get()).docs[0];
+    const driver = driverDoc?.data();
+    if (!driver) return;
 
-  await sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId, driverDoc.id);
-});
+    await Promise.all([
+      driver.fcmToken ? sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId, driverDoc.id) : Promise.resolve(),
+      sendDirectRequestWhatsApp(driverDoc.id, after),
+    ]);
+  }
+);
 
 // Customer-side equivalent of sendDirectRequestAlert/sendLoadAlert above —
 // reaches the customer even with the app fully closed, for the two moments
@@ -710,7 +780,7 @@ const RESOLVE_ACTIONS = {
 
 // Anthropic API key (set via `firebase functions:secrets:set ANTHROPIC_API_KEY`,
 // never hardcoded or committed) — same not_configured fallback pattern as
-// GEMINI_API_KEY/EXOTEL_* above: until it's set, this returns reason:
+// GEMINI_API_KEY/KALEYRA_* above: until it's set, this returns reason:
 // "not_configured" instead of throwing.
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
@@ -807,27 +877,39 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
   }
 });
 
-// ---------------- Number masking (Exotel) ----------------
-// Bridges a call between a booking's customer and driver through Exotel's
-// Connect API instead of exposing either side's real number to the other:
-// Exotel rings the caller's own phone first, then on answer connects them
-// to the other party with Exotel's number as the caller ID both sides see.
-// Requested specifically to stop customer/driver going direct off-platform
-// after their first trip, keep personal numbers private, make the call
-// recognizable, and leave a call log tied to the booking for disputes.
+// ---------------- Number masking + WhatsApp (Kaleyra) ----------------
+// Replaces Exotel (both the masked-calling below and the WhatsApp
+// direct-request alert further down use this same Kaleyra account) --
+// Kaleyra was picked specifically because it offers both a Voice
+// click-to-call/bridge API AND an official (Meta BSP) WhatsApp Business
+// API under one account, instead of needing two separate vendors.
 //
 // Secrets (set via `firebase functions:secrets:set NAME`, never hardcoded
-// or committed): EXOTEL_SID/API_KEY/API_TOKEN from the Exotel dashboard,
-// EXOTEL_CALLER_ID is the ExoPhone (virtual number) provisioned for
-// masking. Until all four are set, this returns reason: "not_configured"
-// instead of throwing -- the client falls back to a plain tel: link so
-// calling keeps working while Exotel is still being set up.
-const EXOTEL_SID = defineSecret("EXOTEL_SID");
-const EXOTEL_API_KEY = defineSecret("EXOTEL_API_KEY");
-const EXOTEL_API_TOKEN = defineSecret("EXOTEL_API_TOKEN");
-const EXOTEL_CALLER_ID = defineSecret("EXOTEL_CALLER_ID");
+// or committed):
+//   KALEYRA_API_KEY        -- the account's api-key (shared by Voice and
+//                             WhatsApp both, see developers.kaleyra.io).
+//   KALEYRA_VOICE_SID      -- the Voice product's SID (masked calling).
+//   KALEYRA_CALLER_ID      -- the bridge/masking number provisioned on
+//                             Kaleyra's Voice dashboard for this account.
+//   KALEYRA_WHATSAPP_SID   -- the WhatsApp product's SID (different from
+//                             the Voice SID -- see sendDirectRequestWhatsApp).
+//   KALEYRA_WHATSAPP_NUMBER -- your registered WhatsApp Business number
+//                             (the API's "from", in "+91XXXXXXXXXX" form).
+//   KALEYRA_DIRECT_REQUEST_TEMPLATE -- the exact template name Meta has
+//                             approved for the direct-request alert (see
+//                             sendDirectRequestWhatsApp's own comment --
+//                             this is WhatsApp's equivalent of Exotel
+//                             SMS's DLT template registration: a manual
+//                             approval step, not something fixable here).
+// Until the secrets a given feature needs are set, that feature returns
+// reason: "not_configured" (masked calling: the client falls back to a
+// plain tel: link) or just logs and returns (the WhatsApp alert: push
+// stays the only channel) instead of throwing.
+const KALEYRA_API_KEY = defineSecret("KALEYRA_API_KEY");
+const KALEYRA_VOICE_SID = defineSecret("KALEYRA_VOICE_SID");
+const KALEYRA_CALLER_ID = defineSecret("KALEYRA_CALLER_ID");
 
-exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [EXOTEL_SID, EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_CALLER_ID] }, async (request) => {
+exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [KALEYRA_API_KEY, KALEYRA_VOICE_SID, KALEYRA_CALLER_ID] }, async (request) => {
   const { bookingId } = request.data || {};
   // Real Firebase Phone Auth sessions carry the verified number as
   // request.auth.token.phone_number automatically (e.g. "+919876543210").
@@ -849,24 +931,27 @@ exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [EXOTEL_SI
   const otherMobile = isCustomer ? booking.driverMobile : booking.customerMobile;
   if (!otherMobile) return { ok: false, reason: "no_other_party" };
 
-  const sid = EXOTEL_SID.value(), apiKey = EXOTEL_API_KEY.value(), apiToken = EXOTEL_API_TOKEN.value(), callerId = EXOTEL_CALLER_ID.value();
-  if (!sid || !apiKey || !apiToken || !callerId) return { ok: false, reason: "not_configured" };
+  const sid = KALEYRA_VOICE_SID.value(), apiKey = KALEYRA_API_KEY.value(), bridge = KALEYRA_CALLER_ID.value();
+  if (!sid || !apiKey || !bridge) return { ok: false, reason: "not_configured" };
 
-  const basicAuth = Buffer.from(`${apiKey}:${apiToken}`).toString("base64");
-  const body = new URLSearchParams({ From: callerPhone, To: `+91${otherMobile}`, CallerId: callerId, CallType: "trans" });
-  let exotelCallSid = null;
+  // Kaleyra's click-to-call: `from` is rung first, then on answer `to` is
+  // dialed and the two are bridged together through `bridge` (the masking
+  // number both sides see as caller ID) -- see
+  // developers.kaleyra.io/docs/click-to-call-api.
+  const body = new URLSearchParams({ from: callerPhone, to: `+91${otherMobile}`, bridge });
+  let kaleyraCallId = null;
   try {
-    const res = await fetch(`https://api.exotel.com/v1/Accounts/${sid}/Calls/connect.json`, {
+    const res = await fetch(`https://api.in.kaleyra.io/v1/${sid}/voice/click-to-call`, {
       method: "POST",
-      headers: { Authorization: `Basic ${basicAuth}`, "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { "api-key": apiKey, "Content-Type": "application/x-www-form-urlencoded" },
       body,
     });
     const data = await res.json();
-    if (!res.ok) { console.error("[maskedCall] Exotel rejected the request:", data); return { ok: false, reason: "exotel_error" }; }
-    exotelCallSid = data?.Call?.Sid || null;
+    if (!res.ok) { console.error("[maskedCall] Kaleyra rejected the request:", data); return { ok: false, reason: "kaleyra_error" }; }
+    kaleyraCallId = data?.id || data?.data?.id || null;
   } catch (e) {
-    console.error("[maskedCall] Exotel request failed:", e.message);
-    return { ok: false, reason: "exotel_error" };
+    console.error("[maskedCall] Kaleyra request failed:", e.message);
+    return { ok: false, reason: "kaleyra_error" };
   }
 
   // Audit trail for dispute resolution -- which booking, who initiated,
@@ -875,7 +960,7 @@ exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [EXOTEL_SI
   await db.collection("callLogs").add({
     bookingId,
     initiatedBy: isCustomer ? "customer" : "driver",
-    exotelCallSid,
+    kaleyraCallId,
     createdAt: FieldValue.serverTimestamp(),
   });
 
