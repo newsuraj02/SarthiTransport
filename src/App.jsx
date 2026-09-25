@@ -3239,7 +3239,7 @@ function BackgroundAlertsGuide({ lang }) {
   );
 }
 
-function SosScreen({ role = "customer", raiseAlert, lang, tripLocked, mobile }) {
+function SosScreen({ role = "customer", raiseAlert, alerts, lang, tripLocked, mobile }) {
   const [complaint, setComplaint] = useState("");
   const [sent, setSent] = useState(false);
   const submitComplaint = () => {
@@ -3249,6 +3249,10 @@ function SosScreen({ role = "customer", raiseAlert, lang, tripLocked, mobile }) 
     setSent(true);
     setTimeout(() => setSent(false), 3000);
   };
+  // alerts is newest-first (see subscribeCollection's default createdAt-desc
+  // ordering), so no re-sort needed here.
+  const myComplaints = (alerts || []).filter((a) => a.type === "शिकायत" && a.role === role && a.mobile === mobile);
+  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   return (
     <div className="px-5 py-5">
       <div className="rounded-xl p-5 text-center mb-5" style={{ background: C.safety }}>
@@ -3292,6 +3296,29 @@ function SosScreen({ role = "customer", raiseAlert, lang, tripLocked, mobile }) 
         <button onClick={submitComplaint} disabled={!complaint.trim()} className="w-full rounded-lg py-3.5 font-bold text-base"
           style={{ background: complaint.trim() ? "#0052CC" : "#E0E0E0", color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : lang === "mr" ? "तक्रार पाठवा" : "शिकायत भेजें"}</button>
       </div>
+      {myComplaints.length > 0 && (
+        <div className="rounded-xl p-4 mt-5 shadow-sm" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{lang === "en" ? "My Complaints" : lang === "mr" ? "माझ्या तक्रारी" : "मेरी शिकायतें"}</div>
+          <div className="space-y-2">
+            {myComplaints.map((a) => (
+              <div key={a.id} className="rounded-lg p-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px]" style={{ color: C.ink }}>{a.note}</span>
+                  <span className="text-[10px] whitespace-nowrap ml-2" style={{ color: C.inkSoft }}>{formatTime(a.createdAt)}</span>
+                </div>
+                {a.adminReply ? (
+                  <div className="mt-2 rounded-lg p-2" style={{ background: C.metallicGreen + "22" }}>
+                    <div className="text-[10px] font-bold mb-0.5" style={{ color: C.metallicGreen }}>{lang === "en" ? "Admin's reply" : lang === "mr" ? "अ‍ॅडमिनचे उत्तर" : "एडमिन का जवाब"}</div>
+                    <div className="text-[11px]" style={{ color: C.ink }}>{a.adminReply}</div>
+                  </div>
+                ) : (
+                  <div className="text-[10px] mt-1.5 italic" style={{ color: C.inkSoft }}>{lang === "en" ? "Awaiting admin's reply" : lang === "mr" ? "अ‍ॅडमिनच्या उत्तराची वाट पाहत आहे" : "एडमिन के जवाब का इंतजार है"}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -6166,7 +6193,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, requestByCategory, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares }) {
+function CustomerApp({ bookings, requestByCategory, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, alerts, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -6339,7 +6366,7 @@ function CustomerApp({ bookings, requestByCategory, reassignAwaitingDriver, driv
             <ChevronLeft size={18} strokeWidth={3} />
           </button>
         </div>
-        {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} mobile={customerMobile} />}
+        {settingsView === "helpline" && <SosScreen role="customer" raiseAlert={raiseAlert} alerts={alerts} lang={lang} tripLocked={!!ongoingTrip?.loadingStartedAt} mobile={customerMobile} />}
         {settingsView === "profile" && (
           <CustomerProfileEdit customerProfile={customerProfile} customerMobile={customerMobile} onSave={onUpdateProfile} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} />
         )}
@@ -8331,7 +8358,7 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, fareTiers }) {
+function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, fareTiers }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [setFareOpen, setSetFareOpen] = useState(false);
@@ -8421,7 +8448,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
           </button>
         </div>
         {settingsView === "kyc" && <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />}
-        {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} lang={lang} mobile={driver.mobile} />}
+        {settingsView === "helpline" && <SosScreen role="driver" raiseAlert={raiseAlert} alerts={alerts} lang={lang} mobile={driver.mobile} />}
         {settingsView === "profile" && <DriverProfileEdit driver={driver} setDriver={setDriver} lang={lang} onChangeLang={onChangeLang} onLogout={onLogout} onEditDocuments={() => setSettingsView("kyc")} />}
         {settingsView === "messages" && <AnnouncementsInbox adminNotifications={adminNotifications} myMobile={driver.mobile} toRole="driver" lang={lang} onOpen={announcementAlerts.markSeen} />}
         {settingsView === "batteryGuide" && <BackgroundAlertsGuide lang={lang} />}
@@ -9179,9 +9206,14 @@ export default function App() {
   const [allCustomers, setAllCustomers] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("customers", setAllCustomers, null) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("bookings", setBookings) : undefined), authDeps);
-  // Only Admin ever reads this (see AdminAlerts) — matches the Firestore
-  // rule restricting alerts to admin-only reads.
-  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("alerts", setAlerts) : undefined), authDeps);
+  // Admin reads every alert (see AdminAlerts); customers/drivers now also
+  // subscribe so SosScreen's "My Complaints" list can show their own
+  // filed complaints and any admin reply — filtered to "mine" in JS, same
+  // broad-read-plus-client-filter pattern as adminNotifications/bookings
+  // above, not a scoped where() query (see firestore.rules's own header
+  // comment on why a per-document-scoped rule silently broke
+  // adminNotifications for exactly this shape of unscoped subscription).
+  useEffect(() => (firestoreReady ? subscribeCollection("alerts", setAlerts) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), authDeps);
   // Masked-call audit trail (see functions/index.js: initiateMaskedCall) —
@@ -9797,6 +9829,13 @@ export default function App() {
   // reply to whoever raised this -- alerts previously carried no way to
   // identify who sent them at all.
   const raiseAlert = (role, type, note, mobile) => createDoc("alerts", genId("A"), { role, type, note: note || null, mobile: mobile || null }).catch((e) => console.error(e));
+  // Admin's in-app reply to a complaint (see AdminAlerts) -- for a
+  // complaint with a mobile on file, this is what SosScreen's "My
+  // Complaints" list shows back to that customer/driver. For a complaint
+  // filed before mobile was captured (mobile is null), there's no one to
+  // deliver it to; it's saved the same way but only ever visible again
+  // inside AdminAlerts itself, as an internal record.
+  const replyToAlert = (id, adminReply) => patchDoc("alerts", id, { adminReply, adminReplyAt: serverTimestamp() }).catch((e) => console.error(e));
   const addExpense = ({ id, date, category, amount, note, photoUrl }) =>
     createDoc("expenses", id, { date, category, amount, note: note || "", photoUrl: photoUrl || null });
   const addExpenseCategory = (name) => createDoc("expenseCategories", slugify(name), { key: slugify(name), icon: "📦", hi: name, en: name }).catch((e) => console.error(e));
@@ -9945,7 +9984,7 @@ export default function App() {
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
           <CustomerApp bookings={bookings} requestByCategory={requestByCategory} reassignAwaitingDriver={reassignAwaitingDriver} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
-            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} onOpenTerms={() => setShowTerms(true)}
+            customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} alerts={alerts} onOpenTerms={() => setShowTerms(true)}
             adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
@@ -9993,7 +10032,7 @@ export default function App() {
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} addBid={addBid} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading}
-            tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert}
+            tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert} alerts={alerts}
             minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
             onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} fareTiers={fareTiers} />
@@ -10006,7 +10045,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
                 latestAdminVersionCode={settings.latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={settings.adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl}

@@ -19,8 +19,13 @@
 // - customers is the one collection where the app never does a broad
 //   query except from Admin, so list access is admin-only while get
 //   (single-doc) access still works for the owning customer.
-// - alerts (SOS/complaints) are admin-only to read — only the Admin
-//   Portal ever displays them.
+// - alerts (SOS/complaints) are readable by any signed-in user, same
+//   broad-read-plus-client-filter trade-off as bookings/withdrawals/
+//   rechargeRequests/adminNotifications above — SosScreen's "My
+//   Complaints" list needs to show a customer/driver their own filed
+//   complaints and any admin reply, filtered to "mine" in JS from an
+//   unscoped subscribeCollection("alerts", ...), not a scoped where()
+//   query. Only Admin can write adminReply (or anything else on the doc).
 
 rules_version = '2';
 
@@ -201,7 +206,7 @@ service cloud.firestore {
     }
 
     match /alerts/{id} {
-      allow read: if isAdmin();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }

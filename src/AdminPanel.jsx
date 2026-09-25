@@ -1899,8 +1899,19 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   );
 }
 
-function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
+function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
+  // Draft reply text per complaint id, so opening one complaint's reply box
+  // doesn't touch any other's. Prefilled with the existing adminReply (if
+  // any) so re-opening shows what was already sent, editable in place.
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [openReplyId, setOpenReplyId] = useState(null);
+  const sendReply = (a) => {
+    const text = (replyDrafts[a.id] ?? a.adminReply ?? "").trim();
+    if (!text) return;
+    replyToAlert?.(a.id, text);
+    setOpenReplyId(null);
+  };
   const pendingWithdrawals = (withdrawals || []).filter((w) => w.status === "Pending");
   const pendingRecharges = (rechargeRequests || []).filter((r) => r.status === "Pending");
   // Docs only ever get a createdAt (server timestamp) — there's no separate
@@ -1988,17 +1999,58 @@ function AdminAlerts({ alerts, withdrawals, approveWithdrawal, rechargeRequests,
                     <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(a.createdAt)}</span>
                   </div>
                   {a.note && <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{a.note}</div>}
-                  {/* Complaints filed before this shipped have no mobile on
-                      file at all -- nothing to reply to, so the button is
-                      simply omitted for those instead of linking nowhere. */}
-                  {a.mobile && (
-                    <a
-                      href={`https://wa.me/91${a.mobile}?text=${encodeURIComponent(`${lang === "en" ? "Re" : "जवाब"}: "${a.note || ""}"\n\n`)}`}
-                      target="_blank" rel="noreferrer"
-                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full text-white"
-                      style={{ background: C.metallicGreen }}>
-                      <MessageCircle size={12} /> {lang === "en" ? "Reply on WhatsApp" : lang === "mr" ? "WhatsApp वर उत्तर द्या" : "WhatsApp पर जवाब दें"}
-                    </a>
+                  {a.adminReply && openReplyId !== a.id && (
+                    <div className="mt-2 rounded-lg p-2" style={{ background: C.metallicGreen + "22" }}>
+                      <div className="text-[10px] font-bold mb-0.5" style={{ color: C.metallicGreen }}>
+                        {a.mobile
+                          ? (lang === "en" ? "Your reply (shown in their app)" : lang === "mr" ? "तुमचे उत्तर (त्यांच्या अ‍ॅपमध्ये दिसते)" : "आपका जवाब (उनके ऐप में दिखता है)")
+                          : (lang === "en" ? "Internal note (no mobile on file to deliver to)" : lang === "mr" ? "अंतर्गत नोंद (पाठवण्यासाठी मोबाइल उपलब्ध नाही)" : "आंतरिक नोट (भेजने के लिए मोबाइल उपलब्ध नहीं)")}
+                      </div>
+                      <div className="text-[11px]" style={{ color: C.ink }}>{a.adminReply}</div>
+                    </div>
+                  )}
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    {/* Complaints filed before this shipped have no mobile on
+                        file at all -- nothing to WhatsApp, so this button is
+                        simply omitted for those instead of linking nowhere.
+                        The in-app reply below still works either way. */}
+                    {a.mobile && (
+                      <a
+                        href={`https://wa.me/91${a.mobile}?text=${encodeURIComponent(`${lang === "en" ? "Re" : "जवाब"}: "${a.note || ""}"\n\n`)}`}
+                        target="_blank" rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full text-white"
+                        style={{ background: C.metallicGreen }}>
+                        <MessageCircle size={12} /> {lang === "en" ? "Reply on WhatsApp" : lang === "mr" ? "WhatsApp वर उत्तर द्या" : "WhatsApp पर जवाब दें"}
+                      </a>
+                    )}
+                    <button
+                      onClick={() => setOpenReplyId(openReplyId === a.id ? null : a.id)}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full"
+                      style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}>
+                      <Bell size={12} /> {a.adminReply
+                        ? (lang === "en" ? "Edit Reply" : lang === "mr" ? "उत्तर संपादित करा" : "जवाब संपादित करें")
+                        : (lang === "en" ? "Reply in App" : lang === "mr" ? "अ‍ॅपमध्ये उत्तर द्या" : "ऐप में जवाब दें")}
+                    </button>
+                  </div>
+                  {openReplyId === a.id && (
+                    <div className="mt-2">
+                      {!a.mobile && (
+                        <p className="text-[10px] mb-1" style={{ color: C.inkSoft }}>
+                          {lang === "en" ? "This complaint has no mobile on file, so this reply is saved as an internal note only — it can't be delivered to anyone." : lang === "mr" ? "या तक्रारीसाठी मोबाइल उपलब्ध नाही, त्यामुळे हे उत्तर फक्त अंतर्गत नोंद म्हणून जतन होईल — ते कोणालाही पाठवले जाणार नाही." : "इस शिकायत के लिए मोबाइल उपलब्ध नहीं है, इसलिए यह जवाब केवल आंतरिक नोट के रूप में सेव होगा — यह किसी को नहीं भेजा जाएगा।"}
+                        </p>
+                      )}
+                      <textarea
+                        value={replyDrafts[a.id] ?? a.adminReply ?? ""}
+                        onChange={(e) => setReplyDrafts((d) => ({ ...d, [a.id]: e.target.value }))}
+                        rows={2}
+                        placeholder={lang === "en" ? "Type your reply..." : lang === "mr" ? "तुमचे उत्तर टाइप करा..." : "अपना जवाब टाइप करें..."}
+                        className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+                      <button onClick={() => sendReply(a)} disabled={!(replyDrafts[a.id] ?? a.adminReply ?? "").trim()}
+                        className="text-xs font-bold px-3 py-1.5 rounded-full text-white"
+                        style={{ background: (replyDrafts[a.id] ?? a.adminReply ?? "").trim() ? C.navy : "#B0B6BF" }}>
+                        {lang === "en" ? "Save Reply" : lang === "mr" ? "उत्तर जतन करा" : "जवाब सेव करें"}
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -2949,7 +3001,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+export function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review now lives inside
   // the Live Dashboard's "New Registrations" tile (see AdminFleet's
@@ -2980,7 +3032,7 @@ export function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookin
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
-      {tab === "alerts" && <AdminAlerts alerts={alerts} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
+      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
     </div>
   );
