@@ -1446,7 +1446,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                 placeholder={lang === "en" ? "e.g. 250" : "उदा. 250"} />
             </div>
             <div className="flex flex-col">
-              <div className="text-[11px] font-bold mb-1 min-h-[28px] flex items-end" style={{ color: C.inkSoft }}>{lang === "en" ? "Rate beyond estimate (per km)" : lang === "mr" ? "अंदाजापेक्षा जास्त दर (प्रति किमी)" : "अनुमान से ज़्यादा पर दर (प्रति किमी)"}</div>
+              <div className="text-[11px] font-bold mb-1 min-h-[28px] flex items-end" style={{ color: C.inkSoft }}>{lang === "en" ? "Extra Rate/km" : lang === "mr" ? "जास्त दर/किमी" : "एक्स्ट्रा दर/किमी"}</div>
               <input type="number" inputMode="numeric" value={perKmRate}
                 onChange={(e) => { setPerKmRate(e.target.value); setPerKmTouched(true); setSavedFlash(false); setSaveError(""); }}
                 className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
