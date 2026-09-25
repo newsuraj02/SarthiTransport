@@ -2172,13 +2172,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showCall, setShowCall] = useState(false);
   const [callQ, setCallQ] = useState("");
-  // Free Trial vs Main Routine is computed live from each driver's own
-  // createdAt (see isInTrial/trialDaysLeft) instead of a stored status
-  // field — a driver moves the instant their 30 days are up, on every
-  // render, with nothing that can fall out of sync if a scheduled check
-  // were ever missed. The Cloud Function on the backend does the same
-  // computation independently, only for sending the one-time "trial
-  // ended" push notification (see functions/index.js).
   // "Total Drivers" and every tab/count below it all report the SAME
   // installed-drivers population (see installedDrivers) -- how many
   // actually still have the app on their phone, not how many driver docs
@@ -2186,9 +2179,14 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   // every number on this screen so none of them can read differently
   // from each other again.
   const totalInstalled = installedDrivers(drivers);
-  const [trialTab, setTrialTab] = useState("all"); // 'all' | 'trial' | 'main'
-  const trialCount = totalInstalled.filter((d) => isInTrial(d.createdAt)).length;
-  const byTrialTab = trialTab === "all" ? totalInstalled : totalInstalled.filter((d) => (trialTab === "trial" ? isInTrial(d.createdAt) : !isInTrial(d.createdAt)));
+  // GPS ON vs GPS OFF split, computed live from the same gpsStatus
+  // diagnostic as each driver's own "GPS {label}" badge below (!stale ==
+  // reported a location within the last 2 minutes) -- replaces the old
+  // Free Trial/Main Routine split. "All" always shows every installed
+  // driver regardless of tab, same as before.
+  const [gpsTab, setGpsTab] = useState("all"); // 'all' | 'on' | 'off'
+  const gpsOnCount = totalInstalled.filter((d) => !gpsStatus(d, lang).stale).length;
+  const byGpsTab = gpsTab === "all" ? totalInstalled : totalInstalled.filter((d) => (gpsTab === "on" ? !gpsStatus(d, lang).stale : gpsStatus(d, lang).stale));
   // GPS diagnostic (see gpsStatus) -- an Online driver whose lastKnownLocation
   // is stale/missing is the exact "is this actually tracking?" question,
   // made visible per-driver instead of guessed at from Online status alone.
@@ -2197,7 +2195,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   // the one this WhatsApp-reminder flow below is meant to reach anyway.
   const [gpsOnly, setGpsOnly] = useState(false);
   const onlineNoLiveGps = totalInstalled.filter((d) => d.online && gpsStatus(d, lang).stale);
-  const byGps = gpsOnly ? byTrialTab.filter((d) => d.online && gpsStatus(d, lang).stale) : byTrialTab;
+  const byGps = gpsOnly ? byGpsTab.filter((d) => d.online && gpsStatus(d, lang).stale) : byGpsTab;
   // Same reasoning as AdminKyc's WhatsApp reminder queue -- a push
   // notification only reaches a driver who's already granted notification
   // permission, exactly the kind of driver whose GPS/location permission
@@ -2224,7 +2222,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   // above default to -- otherwise admin would have no way to ever find
   // and unblacklist someone once they're not counted as "installed"
   // anymore. The default (empty query) view stays scoped to byGps/
-  // byTrialTab so every number on this screen agrees with each other.
+  // byGpsTab so every number on this screen agrees with each other.
   const searchBase = q.trim() ? drivers : byGps;
   const filtered = searchBase.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
   const kycMeta = lang === "en"
@@ -2304,11 +2302,11 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
       <div className="grid grid-cols-3 gap-1.5 mb-3">
         {[
           ["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी", totalInstalled.length],
-          ["trial", lang === "en" ? "Free Trial" : lang === "mr" ? "फ्री ट्रायल" : "फ्री ट्रायल", trialCount],
-          ["main", lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन", totalInstalled.length - trialCount],
+          ["on", lang === "en" ? "GPS ON" : lang === "mr" ? "GPS ऑन" : "GPS ऑन", gpsOnCount],
+          ["off", lang === "en" ? "GPS OFF" : lang === "mr" ? "GPS ऑफ" : "GPS ऑफ", totalInstalled.length - gpsOnCount],
         ].map(([key, label, count]) => (
-          <button key={key} onClick={() => setTrialTab(key)} className="rounded-lg py-3 text-sm font-bold text-center"
-            style={{ background: trialTab === key ? C.marigoldDeep : C.bg, color: trialTab === key ? "#fff" : C.inkSoft, border: `1px solid ${trialTab === key ? C.marigoldDeep : C.line}` }}>
+          <button key={key} onClick={() => setGpsTab(key)} className="rounded-lg py-3 text-sm font-bold text-center"
+            style={{ background: gpsTab === key ? C.marigoldDeep : C.bg, color: gpsTab === key ? "#fff" : C.inkSoft, border: `1px solid ${gpsTab === key ? C.marigoldDeep : C.line}` }}>
             {label} ({count})
           </button>
         ))}
