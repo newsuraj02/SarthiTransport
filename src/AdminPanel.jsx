@@ -1148,6 +1148,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   const [driverDraftTotalFare, setDriverDraftTotalFare] = useState("");
   const [driverSaving, setDriverSaving] = useState(false);
   const [driverConfirmDeleteId, setDriverConfirmDeleteId] = useState(null);
+  const [driverSaveError, setDriverSaveError] = useState("");
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -1242,14 +1243,49 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   const driverDraftTier1to5Fare = driverDraftTotalFare !== "" ? Math.round((Number(driverDraftTotalFare) || 0) * 0.25) : 0;
   const driverDraftPerKmRate = driverEditingEstimatedKm != null && driverEditingEstimatedKm > 5 && driverDraftTotalFare !== ""
     ? Math.round((Number(driverDraftTotalFare) - driverDraftTier1to5Fare) / (driverEditingEstimatedKm - 5)) : null;
-  const startDriverEdit = (r) => { setDriverEditingId(r.id); setDriverEditingEstimatedKm(r.estimatedKm ?? null); setDriverDraftTotalFare(String(r.totalFare ?? "")); };
-  const cancelDriverEdit = () => setDriverEditingId(null);
-  const saveDriverEdit = async (id) => {
+  const startDriverEdit = (r) => { setDriverEditingId(r.id); setDriverEditingEstimatedKm(r.estimatedKm ?? null); setDriverDraftTotalFare(String(r.totalFare ?? "")); setDriverSaveError(""); };
+  const cancelDriverEdit = () => { setDriverEditingId(null); setDriverSaveError(""); };
+  // Admin confirming a number here isn't just correcting the driver's own
+  // reference entry anymore -- it PROMOTES it into a real Admin rate
+  // override for that route+bracket (same route+tier upsert scheme the
+  // form above uses, so re-editing the same route/bracket later edits
+  // this one instead of creating a duplicate), which is why it then
+  // disappears from here and shows up in Saved Routes instead. Needs a
+  // known capacity/tier to do that; falls back to just correcting the
+  // number in place if this driver's vehicle capacity was never on record.
+  const saveDriverEdit = async (r) => {
     setDriverSaving(true);
+    setDriverSaveError("");
+    const capacityKg = r.capacityKg ?? (drivers || []).find((d) => d.mobile === r.driverMobile)?.vehicleSpec?.capacityKg ?? null;
+    const tier = capacityKg != null ? findFareTier(capacityKg, fareTiers) : null;
     try {
-      await patchDoc("routeFares", id, { tier1to5Fare: driverDraftTier1to5Fare, totalFare: Number(driverDraftTotalFare) || 0, perKmRate: driverDraftPerKmRate });
+      if (tier && r.pickupName && r.dropName) {
+        const docId = `${sanitizeForDocId(r.pickupName)}__${sanitizeForDocId(r.dropName)}__${tier.maxKg}`;
+        await createDoc("adminRouteFares", docId, {
+          pickupName: r.pickupName, dropName: r.dropName,
+          pickupKey: normalizeRouteText(r.pickupName), dropKey: normalizeRouteText(r.dropName),
+          pickupLat: r.pickupLat ?? null, pickupLng: r.pickupLng ?? null,
+          dropLat: r.dropLat ?? null, dropLng: r.dropLng ?? null,
+          estimatedKm: r.estimatedKm ?? null,
+          weight: capacityKg,
+          tierMaxKg: tier.maxKg,
+          totalFare: Number(driverDraftTotalFare) || 0,
+          updatedAt: Date.now(),
+        });
+        await removeDoc("routeFares", r.id).catch((e) => console.error("[promote driver entry cleanup]", e));
+      } else {
+        await patchDoc("routeFares", r.id, { tier1to5Fare: driverDraftTier1to5Fare, totalFare: Number(driverDraftTotalFare) || 0, perKmRate: driverDraftPerKmRate });
+        setDriverSaveError(lang === "en"
+          ? "Saved, but couldn't move to Saved Routes — this driver's vehicle capacity isn't on record."
+          : lang === "mr"
+          ? "सेव्ह झाले, पण Saved Routes मध्ये हलवता आले नाही — या ड्रायव्हरच्या गाडीची क्षमता नोंदीत नाही."
+          : "सेव हो गया, लेकिन Saved Routes में नहीं जा सका — इस ड्राइवर की गाड़ी की क्षमता रिकॉर्ड में नहीं है।");
+      }
       setDriverEditingId(null);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setDriverSaveError(describeAdminRateSaveError(e, lang));
+    }
     setDriverSaving(false);
   };
   const deleteDriverEntry = (id) => { removeDoc("routeFares", id).catch((e) => console.error(e)); setDriverConfirmDeleteId(null); };
@@ -1473,6 +1509,10 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                                     {lang === "en" ? "1-5km (25%, auto)" : "1-5किमी (25%, स्वतः)"}: {fmt(driverDraftTier1to5Fare)}
                                     {driverDraftPerKmRate != null && <> · {fmt(driverDraftPerKmRate)}/km</>}
                                   </div>
+                                  <div className="text-[10px] mt-1 font-bold" style={{ color: C.marigoldDeep }}>
+                                    {lang === "en" ? "Saving moves this to Saved Routes as an Admin rate" : lang === "mr" ? "सेव्ह केल्यास हे Saved Routes मध्ये अ‍ॅडमिन दर म्हणून जाईल" : "सेव करने पर यह Saved Routes में एडमिन दर के रूप में चला जाएगा"}
+                                  </div>
+                                  {driverSaveError && <div className="text-[10px] mt-1 font-bold" style={{ color: C.safety }}>{driverSaveError}</div>}
                                 </div>
                               ) : (
                                 <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
@@ -1489,7 +1529,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                             </div>
                             {driverEditingId === r.id ? (
                               <div className="flex items-center gap-3 shrink-0">
-                                <button onClick={() => saveDriverEdit(r.id)} disabled={driverSaving} className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                                <button onClick={() => saveDriverEdit(r)} disabled={driverSaving} className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.success }}>
                                   <CheckCircle2 size={16} color="#fff" />
                                 </button>
                                 <button onClick={cancelDriverEdit} className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style={{ background: C.inkSoft }}>
