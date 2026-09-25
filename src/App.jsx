@@ -1194,7 +1194,15 @@ function getRouteAverageFare(pickup, drop, routeFares, pickupLat, pickupLng, dro
 // override somehow matches (two overlapping entries within 25km), the
 // most recently saved one wins, since these are meant to be one
 // authoritative decision, not something to average together.
-export function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers) {
+//
+// distanceKm (the actual customer's own routed pickup->drop distance, not
+// just whatever this override's own saved estimatedKm was) is optional
+// only so every existing caller before this param existed keeps working —
+// when it's given and comes out longer than this override's estimatedKm,
+// the excess is charged at the override's own perKmRate on top of the
+// flat totalFare, instead of always charging exactly totalFare regardless
+// of how much farther this specific trip actually turns out to be.
+export function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm) {
   if (!Array.isArray(adminRouteFares) || adminRouteFares.length === 0) return null;
   const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
   if (!p || !d) return null;
@@ -1213,7 +1221,12 @@ export function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares,
   });
   if (matches.length === 0) return null;
   matches.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  return Number(matches[0].totalFare) || 0;
+  const best = matches[0];
+  const base = Number(best.totalFare) || 0;
+  if (distanceKm != null && best.estimatedKm != null && best.perKmRate != null && distanceKm > best.estimatedKm) {
+    return Math.round(base + (distanceKm - best.estimatedKm) * Number(best.perKmRate));
+  }
+  return base;
 }
 // Single entry point every booking-fare display/write goes through, so the
 // driver-picker list and the actual booking write always agree on the same
@@ -1229,7 +1242,7 @@ export function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares,
 // Driver Ride Entries still shows it — it's just reference data now, with
 // zero effect on what a customer is actually quoted.
 function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares) {
-  const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers);
+  const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm);
   if (adminOverride != null) return adminOverride;
   return calculateFare(capacityKg, distanceKm, tiers);
 }

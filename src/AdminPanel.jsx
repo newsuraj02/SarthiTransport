@@ -1136,6 +1136,16 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   const [weight, setWeight] = useState("");
   const [totalFare, setTotalFare] = useState("");
   const [fareTouched, setFareTouched] = useState(false);
+  // Both start as a suggested default (25% of totalFare for the fixed
+  // rate, the remaining fare spread evenly over the km beyond 5 for the
+  // per-km rate -- same split SetFareForm derives for a driver's own
+  // quote) but, unlike that read-only driver-side number, Admin can freely
+  // type over either one here -- the whole point of adding them ("...which
+  // is again adjustable").
+  const [tier1to5Fare, setTier1to5Fare] = useState("");
+  const [tier1to5Touched, setTier1to5Touched] = useState(false);
+  const [perKmRate, setPerKmRate] = useState("");
+  const [perKmTouched, setPerKmTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -1188,7 +1198,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   // starting point since Admin has to type something into Save Rate, but
   // always editable: typing over it (fareTouched) stops it auto-updating.
   const existingOverride = tier != null && pickup.trim() && drop.trim()
-    ? getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, fareTiers)
+    ? getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, fareTiers, distance)
     : null;
   const suggestedFare = existingOverride != null ? existingOverride
     : (tier != null ? calculateFare(capacityKg, distance, fareTiers) : null);
@@ -1198,9 +1208,25 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     setTotalFare(suggestedFare != null ? String(suggestedFare) : "");
   }, [suggestedFare, fareTouched]);
 
+  // Same 25%-of-total / remaining-spread-over-(km beyond 5) split
+  // SetFareForm suggests for a driver's own quote, just editable here.
+  const suggestedTier1to5Fare = totalFare !== "" ? Math.round((Number(totalFare) || 0) * 0.25) : 0;
+  const suggestedPerKmRate = distance != null && distance > 5 && totalFare !== ""
+    ? Math.round(((Number(totalFare) || 0) - suggestedTier1to5Fare) / (distance - 5)) : null;
+  useEffect(() => {
+    if (tier1to5Touched) return;
+    setTier1to5Fare(totalFare !== "" ? String(suggestedTier1to5Fare) : "");
+  }, [suggestedTier1to5Fare, totalFare, tier1to5Touched]);
+  useEffect(() => {
+    if (perKmTouched) return;
+    setPerKmRate(suggestedPerKmRate != null ? String(suggestedPerKmRate) : "");
+  }, [suggestedPerKmRate, perKmTouched]);
+
   const resetForm = () => {
     setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
-    setWeight(""); setTotalFare(""); setFareTouched(false); setEditingId(null); setSaveError("");
+    setWeight(""); setTotalFare(""); setFareTouched(false);
+    setTier1to5Fare(""); setTier1to5Touched(false); setPerKmRate(""); setPerKmTouched(false);
+    setEditingId(null); setSaveError("");
   };
 
   const editEntry = (r) => {
@@ -1212,6 +1238,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     setWeight(r.weight != null ? String(r.weight) : "");
     setTotalFare(r.totalFare != null ? String(r.totalFare) : "");
     setFareTouched(true);
+    setTier1to5Fare(r.tier1to5Fare != null ? String(r.tier1to5Fare) : ""); setTier1to5Touched(true);
+    setPerKmRate(r.perKmRate != null ? String(r.perKmRate) : ""); setPerKmTouched(true);
     setEditingId(r.id);
     setSavedFlash(false);
   };
@@ -1311,6 +1339,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
         weight: capacityKg,
         tierMaxKg: tier.maxKg,
         totalFare: Number(totalFare) || 0,
+        tier1to5Fare: tier1to5Fare !== "" ? Number(tier1to5Fare) || 0 : 0,
+        perKmRate: perKmRate !== "" ? Number(perKmRate) || 0 : null,
         updatedAt: Date.now(),
       });
       // docId is derived fresh from the CURRENT pickup/drop/tier -- if
@@ -1402,6 +1432,30 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
               placeholder={lang === "en" ? "Fill rate" : lang === "mr" ? "दर भरा" : "दर भरें"} />
           </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "1–5 km Fixed Rate" : lang === "mr" ? "1–5 किमी फिक्स्ड दर" : "1–5 किमी फिक्स्ड दर"}</div>
+              <input type="number" inputMode="numeric" value={tier1to5Fare}
+                onChange={(e) => { setTier1to5Fare(e.target.value); setTier1to5Touched(true); setSavedFlash(false); setSaveError(""); }}
+                className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
+                placeholder={lang === "en" ? "e.g. 250" : "उदा. 250"} />
+            </div>
+            <div>
+              <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Rate beyond estimate (per km)" : lang === "mr" ? "अंदाजापेक्षा जास्त दर (प्रति किमी)" : "अनुमान से ज़्यादा पर दर (प्रति किमी)"}</div>
+              <input type="number" inputMode="numeric" value={perKmRate}
+                onChange={(e) => { setPerKmRate(e.target.value); setPerKmTouched(true); setSavedFlash(false); setSaveError(""); }}
+                className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
+                placeholder={lang === "en" ? "e.g. 25" : "उदा. 25"} />
+            </div>
+          </div>
+          <p className="text-[10px] leading-snug" style={{ color: C.inkSoft }}>
+            {lang === "en"
+              ? "If a customer's actual distance for this route comes out longer than the Estimated distance above, the extra km are charged at this per-km rate on top of the flat Rate for this route -- the total goes up automatically."
+              : lang === "mr"
+              ? "जर एखाद्या कस्टमरचे या रूटवरील प्रत्यक्ष अंतर वरील अंदाजे अंतरापेक्षा जास्त असेल, तर जास्तीचे किमी या प्रति-किमी दराने वरील फिक्स्ड दरावर अ‍ॅड होतील -- एकूण रक्कम आपोआप वाढेल."
+              : "अगर किसी कस्टमर की इस रूट पर वास्तविक दूरी ऊपर दिए अनुमानित दूरी से ज़्यादा निकलती है, तो अतिरिक्त किमी इस प्रति-किमी दर से ऊपर दिए फ्लैट दर पर जोड़ दिए जाएंगे -- कुल राशि अपने आप बढ़ जाएगी।"}
+          </p>
 
           {editingId && (
             <button onClick={resetForm} className="w-full text-center text-xs font-bold py-1" style={{ color: C.inkSoft }}>
