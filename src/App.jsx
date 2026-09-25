@@ -9938,13 +9938,25 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+    // h-full (not min-h-screen/100vh) -- #root already reserves
+    // env(safe-area-inset-top/bottom) as its own padding (see index.css),
+    // so its content box is already shorter than 100vh on a device with
+    // real system-bar insets. A min-height:100vh child ignores that
+    // shrunk box and demands the full 100vh on top of it, overflowing
+    // #root by exactly the inset amount -- on a real Android 15+
+    // edge-to-edge device this pushed real content (e.g. the "Book Now"
+    // button below CustomerHome's map) down into, or past, the system
+    // navigation bar instead of stopping above it. height:100% has no
+    // such problem: every screen below already scrolls its own content
+    // via an inner flex-1 overflow-y-auto region (see CustomerHome/
+    // DriverHome/AdminPanel), not by growing this outer shell.
+    <div className="h-full flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
       <button onClick={refreshButton.refresh} disabled={refreshButton.refreshing}
         className="fixed right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
         style={{ background: C.marigoldDeep, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
         <RefreshCw size={16} color="#fff" className={refreshButton.refreshing ? "animate-spin" : ""} />
       </button>
-      <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
+      <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} h-full flex flex-col`} style={{ background: C.bg }}>
         {role === "admin" && adminAuth && (
           <div className="px-5 pt-3 text-[10px] text-center" style={{ color: C.inkSoft }}>
             {lang === "en" ? "Overview & approvals — Customer/Driver registration is not available here" : lang === "mr" ? "ओव्हरव्ह्यू आणि अप्रूव्हल — इथे कस्टमर/ड्रायव्हर रजिस्ट्रेशन उपलब्ध नाही" : "ओवरव्यू और अप्रूवल — यहां कस्टमर/ड्राइवर रजिस्ट्रेशन उपलब्ध नहीं है"}
