@@ -7883,11 +7883,12 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // anything a customer actually sees.
   const kycStepCompleted = [!!photo, !!dl, !!vehicleNumber.trim(), capacityKgValid, !!vehicleTypeName.trim(), !!vehiclePhotoSide];
   const { stepProps: kycStepProps } = useGuidedSteps(kycStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
-  // First-time submission within this driver's own 30-day trial (from
-  // their own signup date) skips the admin approval wait entirely — a
-  // driver who's already been reviewed before (kyc isn't null, e.g.
-  // resubmitting after a rejection or editing an approved profile) still
-  // goes back through the normal Pending review either way.
+  // A first-time submission within this driver's own 30-day trial used to
+  // skip the admin approval wait entirely (straight to "Approved") --
+  // dropped after that let real drivers through with invalid vehicle
+  // info nobody had actually checked. Every submission, first or a
+  // resubmit after rejection, now always lands in Pending for admin to
+  // review (see AdminKyc's Incomplete tab).
   const isFirstSubmission = driver.kyc == null;
   const submit = () => {
     if (!canSubmit) return;
@@ -7895,7 +7896,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       // The KYC driver photo doubles as the profile photo (see
       // DriverProfileEdit) — kept in sync here every time KYC is
       // submitted/resubmitted, rather than letting the two drift apart.
-      ...driver, kyc: isInTrial(driver.createdAt) && isFirstSubmission ? "Approved" : "Pending", photo, docs: { dl, photo },
+      ...driver, kyc: "Pending", photo, docs: { dl, photo },
       vehicleSpec: {
         type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
         // canSubmit already guarantees Number(capacityKg) > 0 by this point
@@ -10014,6 +10015,18 @@ export default function App() {
     patchDoc("bookings", id, { loadingStartedAt, travelPausedAt: null, pausedMs: 0, reachedDropAt: null }).catch((e) => console.error(e));
   };
   const updateDriverKyc = (mobile, status) => patchDoc("drivers", mobile, { kyc: status }).catch((e) => console.error(e));
+  // Lets admin correct a driver's own vehicle KYC fields (vehicle number,
+  // capacity, dimensions, type) before approving -- added alongside
+  // removing the trial auto-approve above, since admin now actually
+  // reviews every submission and needs a way to fix bad data instead of
+  // only being able to Approve/Block it as-is. Dot-notation keys so this
+  // only touches the specific vehicleSpec fields being edited, not a
+  // full-document overwrite that could race with something else touching
+  // this driver at the same time (e.g. their own lastKnownLocation ticking).
+  const updateDriverVehicleSpec = (mobile, patch) => {
+    const dotted = Object.fromEntries(Object.entries(patch).map(([k, v]) => [`vehicleSpec.${k}`, v]));
+    return patchDoc("drivers", mobile, dotted).catch((e) => console.error(e));
+  };
   const toggleBlacklist = (mobile) => {
     // Falls back to matching by doc id too — a driver record with no
     // mobile field of its own (seen on old hand-seeded "demo driver"
@@ -10258,7 +10271,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} bookings={bookings} tripLog={tripLog} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
                 latestAdminVersionCode={settings.latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={settings.adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl}

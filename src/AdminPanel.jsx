@@ -277,7 +277,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
   );
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, updateDriverVehicleSpec, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
   // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
   // pick the field that actually answers "did this happen today" for that
   // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
@@ -607,7 +607,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
             </div>
           )
         ) : (
-          <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} lang={lang} />
+          <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} />
         )}
       </div>
     );
@@ -1661,7 +1661,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
 // ignore a plain <a download> on cross-origin links.
 
 
-function AdminKyc({ drivers, updateDriverKyc, lang }) {
+function AdminKyc({ drivers, updateDriverKyc, updateDriverVehicleSpec, lang }) {
   // "Incomplete" = still needs admin's attention — either never
   // submitted any KYC documents, or submitted and is sitting in Pending
   // review (the Approve button on that row only actually does anything
@@ -1669,7 +1669,12 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   // (Approved or Rejected/Blocked) — nothing left to do, so it's
   // view-only there.
   const notSubmitted = drivers.filter((d) => !d.vehicleSpec);
-  const incomplete = drivers.filter((d) => !d.vehicleSpec || d.kyc === "Pending");
+  // Submitted-and-waiting-on-approval sorted ahead of not-yet-submitted --
+  // those actually need admin action (Approve/Block/Edit) right now, while
+  // a not-yet-submitted driver only has a WhatsApp reminder to send, so
+  // they shouldn't bury the ones sitting in the approval queue below them.
+  const incomplete = drivers.filter((d) => !d.vehicleSpec || d.kyc === "Pending")
+    .sort((a, b) => (b.vehicleSpec ? 1 : 0) - (a.vehicleSpec ? 1 : 0));
   const complete = drivers.filter((d) => d.vehicleSpec && d.kyc !== "Pending");
   // A separate, disjoint concern from notSubmitted/incomplete above: these
   // drivers DID submit KYC (photos, license, vehicle number all on file)
@@ -1683,6 +1688,39 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
   const missingCapacity = drivers.filter((d) => d.vehicleSpec && !d.vehicleSpec.capacityKg);
   const [view, setView] = useState("incomplete"); // 'incomplete' | 'complete' | 'capacity'
   const [expandedId, setExpandedId] = useState(null);
+  // Lets admin correct a driver's own vehicle KYC fields before approving
+  // -- added because the trial auto-approve that used to wave through a
+  // driver's first submission unreviewed let real, invalid vehicle data
+  // (typo'd numbers, wrong capacity) straight through with no way to fix
+  // it short of Blocking the driver outright and starting over.
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
+  const [editError, setEditError] = useState("");
+  const startEdit = (d) => {
+    setEditingId(d.id);
+    setEditDraft({
+      vehicleNumber: d.vehicleSpec?.vehicleNumber || "",
+      capacityKg: d.vehicleSpec?.capacityKg != null ? String(d.vehicleSpec.capacityKg) : "",
+      length: d.vehicleSpec?.length || "",
+      width: d.vehicleSpec?.width || "",
+      height: d.vehicleSpec?.height || "",
+    });
+    setEditError("");
+  };
+  const cancelEdit = () => { setEditingId(null); setEditDraft(null); setEditError(""); };
+  const saveEdit = async (d) => {
+    const capacityKg = Number(editDraft.capacityKg);
+    if (!editDraft.vehicleNumber.trim() || !capacityKg || capacityKg <= 0) {
+      setEditError(lang === "en" ? "Vehicle number and a valid capacity are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
+      return;
+    }
+    await updateDriverVehicleSpec(d.id, {
+      vehicleNumber: editDraft.vehicleNumber.trim().toUpperCase(),
+      capacityKg,
+      length: editDraft.length.trim(), width: editDraft.width.trim(), height: editDraft.height.trim(),
+    });
+    cancelEdit();
+  };
   const [sendingCapacity, setSendingCapacity] = useState(false);
   const [sendResultCapacity, setSendResultCapacity] = useState(null);
   // Persisted (not just in-memory) because tapping WhatsApp on a phone
@@ -1837,8 +1875,9 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
             <div className="space-y-1.5">
               {incomplete.map((d) => {
                 if (d.vehicleSpec) {
-                  // Submitted, awaiting review — Approve/Block are live here.
+                  // Submitted, awaiting review — Approve/Block/Edit are live here.
                   const expanded = expandedId === d.id;
+                  const editing = editingId === d.id;
                   return (
                     <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
                       <div className="flex items-center justify-between gap-2">
@@ -1848,11 +1887,46 @@ function AdminKyc({ drivers, updateDriverKyc, lang }) {
                           <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
                         </button>
                         <div className="flex gap-2 shrink-0">
+                          <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>{editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}</button>
                           <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें"}</button>
                           <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
                         </div>
                       </div>
-                      {expanded && docSection(d)}
+                      {editing ? (
+                        <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
+                              <input value={editDraft.vehicleNumber} onChange={(e) => setEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
+                              <input type="number" value={editDraft.capacityKg} onChange={(e) => setEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
+                              <input value={editDraft.length} onChange={(e) => setEditDraft((p) => ({ ...p, length: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
+                              <input value={editDraft.width} onChange={(e) => setEditDraft((p) => ({ ...p, width: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
+                              <input value={editDraft.height} onChange={(e) => setEditDraft((p) => ({ ...p, height: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                          </div>
+                          {editError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{editError}</p>}
+                          <button onClick={() => saveEdit(d)} className="w-full rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
+                            {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
+                          </button>
+                        </div>
+                      ) : expanded && docSection(d)}
                     </div>
                   );
                 }
@@ -3062,7 +3136,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+export function AdminPanel({ drivers, customers, driver, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review now lives inside
   // the Live Dashboard's "New Registrations" tile (see AdminFleet's
@@ -3086,7 +3160,7 @@ export function AdminPanel({ drivers, customers, driver, updateDriverKyc, bookin
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
