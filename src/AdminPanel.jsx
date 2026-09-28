@@ -1976,6 +1976,16 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
   const [gpsOnly, setGpsOnly] = useState(false);
   const onlineNoLiveGps = totalInstalled.filter((d) => d.online && gpsStatus(d, lang).stale);
   const byGps = gpsOnly ? byGpsTab.filter((d) => d.online && gpsStatus(d, lang).stale) : byGpsTab;
+  // Incomplete vs Complete split, independent of the GPS tab above (both
+  // apply together -- e.g. "GPS OFF" + "Incomplete" narrows to exactly
+  // those). Same definitions AdminKyc used before it got folded in here:
+  // Incomplete = still needs admin's attention (never submitted, or
+  // submitted and sitting in Pending review); Complete = resolved either
+  // way (Approved or Rejected/Blocked).
+  const [kycTab, setKycTab] = useState("all"); // 'all' | 'incomplete' | 'complete'
+  const isIncompleteKyc = (d) => !d.vehicleSpec || d.kyc === "Pending";
+  const incompleteKycCount = totalInstalled.filter(isIncompleteKyc).length;
+  const byKycTab = kycTab === "all" ? byGps : byGps.filter((d) => (kycTab === "incomplete" ? isIncompleteKyc(d) : !isIncompleteKyc(d)));
   // Same reasoning as AdminKyc's WhatsApp reminder queue -- a push
   // notification only reaches a driver who's already granted notification
   // permission, exactly the kind of driver whose GPS/location permission
@@ -2001,9 +2011,10 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
   // or blacklisted included), not just the installed ones the tabs/counts
   // above default to -- otherwise admin would have no way to ever find
   // and unblacklist someone once they're not counted as "installed"
-  // anymore. The default (empty query) view stays scoped to byGps/
-  // byGpsTab so every number on this screen agrees with each other.
-  const searchBase = q.trim() ? drivers : byGps;
+  // anymore. The default (empty query) view stays scoped to byKycTab (GPS
+  // tab + KYC tab both applied) so every number on this screen agrees
+  // with each other.
+  const searchBase = q.trim() ? drivers : byKycTab;
   // Needs-your-action rows (submitted and awaiting KYC approval) float to
   // the top regardless of which GPS tab/search is active -- those are the
   // ones actually waiting on admin right now, not just a status to glance at.
@@ -2091,7 +2102,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
           </div>
         );
       })()}
-      <div className="grid grid-cols-3 gap-1.5 mb-3">
+      <div className="grid grid-cols-3 gap-1.5 mb-2">
         {[
           ["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी", totalInstalled.length],
           ["on", lang === "en" ? "GPS ON" : lang === "mr" ? "GPS ऑन" : "GPS ऑन", gpsOnCount],
@@ -2099,6 +2110,18 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
         ].map(([key, label, count]) => (
           <button key={key} onClick={() => setGpsTab(key)} className="rounded-lg py-3 text-sm font-bold text-center"
             style={{ background: gpsTab === key ? C.marigoldDeep : C.bg, color: gpsTab === key ? "#fff" : C.inkSoft, border: `1px solid ${gpsTab === key ? C.marigoldDeep : C.line}` }}>
+            {label} ({count})
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-1.5 mb-3">
+        {[
+          ["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी", totalInstalled.length],
+          ["incomplete", lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरी", incompleteKycCount],
+          ["complete", lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी", totalInstalled.length - incompleteKycCount],
+        ].map(([key, label, count]) => (
+          <button key={key} onClick={() => setKycTab(key)} className="rounded-lg py-3 text-sm font-bold text-center"
+            style={{ background: kycTab === key ? C.navy : C.bg, color: kycTab === key ? "#fff" : C.inkSoft, border: `1px solid ${kycTab === key ? C.navy : C.line}` }}>
             {label} ({count})
           </button>
         ))}
