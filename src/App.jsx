@@ -1500,29 +1500,6 @@ export function usePersistedState(key, initialValue) {
   return [value, setValue];
 }
 
-// Like usePersistedState, but backed by sessionStorage instead of
-// localStorage — survives a same-session reload (a manual pull-to-refresh,
-// or window.location.reload()) but resets the moment the tab/WebView
-// itself is actually closed and a new one opens, unlike localStorage which
-// survives that too. Used for AdminBiometricLock/AdminPinLock's unlocked
-// flag: a deliberate in-app refresh shouldn't force re-entering the PIN
-// (nothing about the device changed hands), but a genuine fresh app
-// launch should.
-function useSessionState(key, initialValue) {
-  const [value, setValue] = useState(() => {
-    try {
-      const raw = window.sessionStorage.getItem(key);
-      return raw !== null ? JSON.parse(raw) : initialValue;
-    } catch {
-      return initialValue;
-    }
-  });
-  useEffect(() => {
-    try { window.sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
-  }, [key, value]);
-  return [value, setValue];
-}
-
 // Like usePersistedState, but for {name, url} photo values specifically —
 // skips writing to localStorage when `url` is a base64 data: URI (the
 // fallback uploadPhoto uses when Firebase Storage isn't reachable/
@@ -9091,31 +9068,36 @@ export default function App() {
   // AdminPinLock) — plain string in localStorage, never sent anywhere;
   // it's a quick convenience lock, not a credential of its own.
   const [adminPin, setAdminPin] = usePersistedState("sarthi_adminPin", "");
-  // Gates the Admin dashboard behind AdminPinLock on the native Admin app
-  // — sessionStorage-backed (see useSessionState) rather than plain
-  // useState, so a deliberate in-app refresh (pull-to-refresh, the manual
-  // refresh button) doesn't re-trigger the PIN screen: that's a full
-  // window.location.reload(), indistinguishable from a cold app launch to
-  // a plain in-memory flag, even though nothing about who's holding the
-  // device changed. Starts false on a genuine fresh launch (new
-  // WebView/session — sessionStorage doesn't carry over) so a silently-
-  // restored Firebase session, see AdminLogin, still has to pass the PIN
-  // check, flips true once either the PIN is entered correctly or the
+  // Re-locking on EVERY single background/foreground cycle (even a few
+  // seconds switching to another app) was too aggressive in practice --
+  // asked to only re-prompt the PIN if the admin genuinely hasn't touched
+  // the app in a while. localStorage (not sessionStorage) so this also
+  // covers a full app close+reopen within the window, not just staying
+  // backgrounded within the same process.
+  const ADMIN_PIN_RELOCK_MS = 2 * 60 * 60 * 1000; // 2 hours
+  const [adminLastActiveAt, setAdminLastActiveAt] = usePersistedState("sarthi_adminLastActiveAt", 0);
+  // Mirrors adminLastActiveAt for the appStateChange listener below, which
+  // only re-subscribes on [role, adminAuth] -- without this it would keep
+  // closing over whatever adminLastActiveAt was at mount time forever.
+  const adminLastActiveAtRef = useRef(adminLastActiveAt);
+  useEffect(() => { adminLastActiveAtRef.current = adminLastActiveAt; }, [adminLastActiveAt]);
+  // Gates the Admin dashboard behind AdminPinLock on the native Admin app.
+  // Starts unlocked if the admin was last active within ADMIN_PIN_RELOCK_MS
+  // (covers both "just backgrounded briefly" and "closed and reopened the
+  // app a few minutes later" the same way), otherwise starts locked so a
+  // silently-restored Firebase session (see AdminLogin) still has to pass
+  // the PIN check. Flips true once the PIN is entered correctly or the
   // admin types their password THIS visit (see onVerified below), and
-  // flips back to false every time the app actually returns from
-  // background (see the appStateChange listener a few lines down) so it
-  // still re-locks on that, exactly as asked.
-  const [adminUnlocked, setAdminUnlocked] = useSessionState("sarthi_adminUnlocked", false);
-  const adminWasBackgroundedRef = useRef(false);
+  // flips back to false on returning from background only once the gap
+  // since last active has actually exceeded the window (see the
+  // appStateChange listener a few lines down).
+  const [adminUnlocked, setAdminUnlocked] = useState(() => Date.now() - adminLastActiveAt < ADMIN_PIN_RELOCK_MS);
   useEffect(() => {
     if (!isNativeApp || role !== "admin" || !adminAuth) return;
     let handle;
     CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-      if (!isActive) { adminWasBackgroundedRef.current = true; return; }
-      if (adminWasBackgroundedRef.current) {
-        adminWasBackgroundedRef.current = false;
-        setAdminUnlocked(false);
-      }
+      if (!isActive) { setAdminLastActiveAt(Date.now()); return; }
+      if (Date.now() - adminLastActiveAtRef.current > ADMIN_PIN_RELOCK_MS) setAdminUnlocked(false);
     }).then((h) => { handle = h; }).catch((e) => console.error("[admin lock] appStateChange", e));
     return () => { if (handle) handle.remove(); };
   }, [role, adminAuth]);
@@ -10190,7 +10172,7 @@ export default function App() {
 
         {role === "admin" && !adminAuth && (
           <Suspense fallback={<AdminLoadingFallback />}>
-            <AdminLogin lang={lang} onVerified={(viaPassword) => { setAdminAuth(true); setApp("admin"); if (viaPassword) setAdminUnlocked(true); }} onBack={adminEntry ? undefined : goHome} />
+            <AdminLogin lang={lang} onVerified={(viaPassword) => { setAdminAuth(true); setApp("admin"); if (viaPassword) { setAdminUnlocked(true); setAdminLastActiveAt(Date.now()); } }} onBack={adminEntry ? undefined : goHome} />
           </Suspense>
         )}
 
@@ -10270,7 +10252,7 @@ export default function App() {
         )}
         {role === "admin" && adminAuth && isNativeApp && !adminUnlocked && (
           <Suspense fallback={<AdminLoadingFallback />}>
-            <AdminPinLock adminPin={adminPin} setAdminPin={setAdminPin} lang={lang} onUnlocked={() => setAdminUnlocked(true)} onUseFallback={() => logoutRole("admin")} />
+            <AdminPinLock adminPin={adminPin} setAdminPin={setAdminPin} lang={lang} onUnlocked={() => { setAdminUnlocked(true); setAdminLastActiveAt(Date.now()); }} onUseFallback={() => logoutRole("admin")} />
           </Suspense>
         )}
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
