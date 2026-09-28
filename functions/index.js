@@ -284,6 +284,15 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 const KALEYRA_WHATSAPP_SID = defineSecret("KALEYRA_WHATSAPP_SID");
 const KALEYRA_WHATSAPP_NUMBER = defineSecret("KALEYRA_WHATSAPP_NUMBER");
 const KALEYRA_DIRECT_REQUEST_TEMPLATE = defineSecret("KALEYRA_DIRECT_REQUEST_TEMPLATE");
+// KALEYRA_API_KEY is shared with sendDirectRequestWhatsApp/onDirectRequestAssigned/
+// onDirectRequestBroadcast below (all reference it in their eagerly-evaluated
+// `secrets: [...]` option, at module-load time) -- declared here, ahead of
+// them, rather than down by initiateMaskedCall/KALEYRA_VOICE_SID/
+// KALEYRA_CALLER_ID (its usual home, see the Kaleyra secrets comment further
+// down) purely to avoid a `const` temporal-dead-zone ReferenceError on
+// deploy. KALEYRA_VOICE_SID/KALEYRA_CALLER_ID don't need to move -- nothing
+// above them references those two.
+const KALEYRA_API_KEY = defineSecret("KALEYRA_API_KEY");
 async function sendDirectRequestWhatsApp(driverMobile, load) {
   const sid = KALEYRA_WHATSAPP_SID.value(), apiKey = KALEYRA_API_KEY.value(),
     fromNumber = KALEYRA_WHATSAPP_NUMBER.value(), template = KALEYRA_DIRECT_REQUEST_TEMPLATE.value();
@@ -985,7 +994,8 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
 // reason: "not_configured" (masked calling: the client falls back to a
 // plain tel: link) or just logs and returns (the WhatsApp/SMS alerts:
 // push stays the only channel) instead of throwing.
-const KALEYRA_API_KEY = defineSecret("KALEYRA_API_KEY");
+// (KALEYRA_API_KEY itself is declared earlier, alongside the WhatsApp
+// secrets -- see the comment there.)
 const KALEYRA_VOICE_SID = defineSecret("KALEYRA_VOICE_SID");
 const KALEYRA_CALLER_ID = defineSecret("KALEYRA_CALLER_ID");
 
