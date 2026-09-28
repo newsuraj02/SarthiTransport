@@ -155,9 +155,9 @@ const functionsByRole = {
 };
 
 // Bridges a call between this booking's customer and driver through
-// Exotel (see functions/index.js) so neither side sees the other's real
+// Kaleyra (see functions/index.js) so neither side sees the other's real
 // number. Always resolves (never throws) with { ok, reason? } — reason
-// "not_configured" means Exotel's secrets haven't been set on the backend
+// "not_configured" means Kaleyra's secrets haven't been set on the backend
 // yet, which callers should treat as "fall back to a plain tel: link",
 // not as an error to surface to the user.
 export async function initiateMaskedCall(bookingId) {
