@@ -277,7 +277,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
   );
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, updateDriverKyc, updateDriverVehicleSpec, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
   // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
   // pick the field that actually answers "did this happen today" for that
   // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
@@ -313,21 +313,16 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // one undifferentiated "not online" bucket.
   const notReadyApprovedDrivers = drivers.filter((d) => !d.online && d.kyc === "Approved" && !d.blacklisted);
   const offDutyDrivers = notReadyApprovedDrivers.filter((d) => !isLikelyUninstalled(d));
-  const pendingApprovals = drivers.filter((d) => d.kyc === "Pending").length;
   const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && d.wallet < minWallet);
   // New customer signups today, and drivers still inside their 30-day free
   // trial — both derived live from createdAt, same source of truth as
   // everywhere else trial/signup timing is used in the app.
   const newCustomersToday = (customers || []).filter((c) => isToday(c.createdAt));
-  // Today's new driver signups — separate from pendingApprovals below.
-  // pendingApprovals only counts drivers still sitting in "Pending" KYC,
-  // but a driver signing up inside their own 30-day trial gets
-  // auto-approved instantly (see DriverKyc's submit()), skipping "Pending"
-  // entirely — so during this pilot, the "New Registrations" tile could
-  // read 0 even with a steady stream of real signups, since none of them
-  // ever paused in Pending long enough to be counted. This tracks actual
-  // signup volume instead, same createdAt-based approach as
-  // newCustomersToday above.
+  // Today's new driver signups. "New Registrations" is deliberately just
+  // a today's-signup-volume counter, same createdAt-based approach as
+  // newCustomersToday -- actually
+  // reviewing/approving those signups now happens entirely in the
+  // Drivers tab (see AdminDriverList), not through this tile.
   const newDriversToday = drivers.filter((d) => isToday(d.createdAt));
   // isInTrial alone also matched drivers who just verified their phone
   // and never went any further (no name, no KYC) — cluttering this list
@@ -557,13 +552,15 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
     },
   };
 
-  // Merged "New Registrations" screen — replaces the old separate "Pending
-  // KYC approvals" tile/tab. Customer side is a plain informational list
-  // (a customer registration has no pending/incomplete state, so "today"
-  // is the only meaningful scope); Driver side embeds the full AdminKyc
-  // workflow as-is (Incomplete/Complete tabs, Approve/Block, WhatsApp
-  // nudge) — covering every driver still needing review, not just today's
-  // signups, since that's the whole point of consolidating KYC here.
+  // "New Registrations" is a plain informational, today-only screen for
+  // both sides now — a customer registration has no pending/incomplete
+  // state, so "today" was always the only meaningful scope there; Driver
+  // used to embed the full KYC review workflow (Approve/Reject/Edit,
+  // WhatsApp nudges) here instead, covering the whole backlog rather than
+  // just today's signups, which is exactly the "too many separate driver
+  // screens" duplication that got folded into the Drivers tab (see
+  // AdminDriverList) -- reviewing/approving a driver's KYC now happens
+  // there, not through this tile.
   if (detailView === "liveMap") {
     return (
       <div>
@@ -590,7 +587,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
           </button>
           <button onClick={() => setNewRegTab("driver")} className="flex-1 rounded-lg py-3 text-sm font-bold"
             style={{ background: newRegTab === "driver" ? C.navy : C.paper, color: newRegTab === "driver" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "driver" ? C.navy : C.line}` }}>
-            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{pendingApprovals > 0 ? ` (${pendingApprovals})` : ""}
+            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{newDriversToday.length > 0 ? ` (${newDriversToday.length})` : ""}
           </button>
         </div>
         {newRegTab === "customer" ? (
@@ -606,8 +603,20 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
               ))}
             </div>
           )
+        ) : newDriversToday.length === 0 ? (
+          <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No new driver signups today yet." : lang === "mr" ? "आज अद्याप कोणताही नवीन ड्रायव्हर साइनअप झाला नाही." : "आज तक कोई नया ड्राइवर साइनअप नहीं हुआ।"}</p>
         ) : (
-          <AdminKyc drivers={drivers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} />
+          <div className="space-y-1.5">
+            {newDriversToday.map((d) => (
+              <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+              </div>
+            ))}
+            <button onClick={() => { setDetailView(null); onNavigate("drivers"); }} className="w-full rounded-lg py-3 text-sm font-bold text-white mt-2" style={{ background: C.navy }}>
+              {lang === "en" ? "Review their KYC in Drivers" : lang === "mr" ? "Drivers मध्ये KYC पहा" : "Drivers में KYC देखें"}
+            </button>
+          </div>
         )}
       </div>
     );
@@ -724,16 +733,17 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         </button>
       )}
       {/* Most to least important: New Registrations (today's total
-          Customer+Driver signups — see newCustomersToday/newDriversToday
-          above for why this isn't just pendingApprovals) comes first, then
-          today's health signals (at-risk wallets, cancellations, earnings,
-          bookings, capacity), then pipeline (advance bookings), then
-          growth metrics (trial) last — those are useful context, not
-          something to act on today. Still flags red via pendingApprovals
-          when there's an actual KYC backlog to act on, independent of how
-          many signups happened today. */}
+          Customer+Driver signups, see newCustomersToday/newDriversToday
+          above) comes first, then today's health signals (at-risk
+          wallets, cancellations, earnings, bookings, capacity), then
+          pipeline (advance bookings), then growth metrics (trial) last —
+          those are useful context, not something to act on today. A
+          plain today's-signups counter, not a KYC-backlog alert --
+          reviewing/approving a driver's KYC lives in the Drivers tab now,
+          so this stays a fixed color instead of flagging red off however
+          many are still Pending. */}
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <StatTile label={lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"} value={newCustomersToday.length + newDriversToday.length} color={pendingApprovals > 0 ? C.safety : C.success} onClick={() => setDetailView("newRegistrations")} />
+        <StatTile label={lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"} value={newCustomersToday.length + newDriversToday.length} color={C.pimpri} onClick={() => setDetailView("newRegistrations")} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
         <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
@@ -1660,382 +1670,6 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
 // to it — Firebase Storage download URLs are cross-origin, and browsers
 // ignore a plain <a download> on cross-origin links.
 
-
-function AdminKyc({ drivers, updateDriverKyc, updateDriverVehicleSpec, lang }) {
-  // "Incomplete" = still needs admin's attention — either never
-  // submitted any KYC documents, or submitted and is sitting in Pending
-  // review (the Approve button on that row only actually does anything
-  // once the driver has submitted). "Complete" = fully resolved
-  // (Approved or Rejected/Blocked) — nothing left to do, so it's
-  // view-only there.
-  const notSubmitted = drivers.filter((d) => !d.vehicleSpec);
-  // Submitted-and-waiting-on-approval sorted ahead of not-yet-submitted --
-  // those actually need admin action (Approve/Block/Edit) right now, while
-  // a not-yet-submitted driver only has a WhatsApp reminder to send, so
-  // they shouldn't bury the ones sitting in the approval queue below them.
-  const incomplete = drivers.filter((d) => !d.vehicleSpec || d.kyc === "Pending")
-    .sort((a, b) => (b.vehicleSpec ? 1 : 0) - (a.vehicleSpec ? 1 : 0));
-  const complete = drivers.filter((d) => d.vehicleSpec && d.kyc !== "Pending");
-  // A separate, disjoint concern from notSubmitted/incomplete above: these
-  // drivers DID submit KYC (photos, license, vehicle number all on file)
-  // but a since-fixed validation gap (typing "0" for capacity used to pass
-  // the form's own check yet get discarded as undefined on save) left
-  // vehicleSpec.capacityKg empty — which quietly excludes them from the
-  // fixed-fare tiers below (findFareTier/calculateFare need a real
-  // capacityKg), so they show no fare and can't be booked against by
-  // weight. Fixing the validation gap stops new occurrences; this list is
-  // the backlog of drivers already caught by the old bug.
-  const missingCapacity = drivers.filter((d) => d.vehicleSpec && !d.vehicleSpec.capacityKg);
-  const [view, setView] = useState("incomplete"); // 'incomplete' | 'complete' | 'capacity'
-  const [expandedId, setExpandedId] = useState(null);
-  // Lets admin correct a driver's own vehicle KYC fields before approving
-  // -- added because the trial auto-approve that used to wave through a
-  // driver's first submission unreviewed let real, invalid vehicle data
-  // (typo'd numbers, wrong capacity) straight through with no way to fix
-  // it short of Blocking the driver outright and starting over.
-  const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState(null);
-  const [editError, setEditError] = useState("");
-  const startEdit = (d) => {
-    setEditingId(d.id);
-    setEditDraft({
-      vehicleNumber: d.vehicleSpec?.vehicleNumber || "",
-      capacityKg: d.vehicleSpec?.capacityKg != null ? String(d.vehicleSpec.capacityKg) : "",
-      length: d.vehicleSpec?.length || "",
-      width: d.vehicleSpec?.width || "",
-      height: d.vehicleSpec?.height || "",
-    });
-    setEditError("");
-  };
-  const cancelEdit = () => { setEditingId(null); setEditDraft(null); setEditError(""); };
-  const saveEdit = async (d) => {
-    const capacityKg = Number(editDraft.capacityKg);
-    if (!editDraft.vehicleNumber.trim() || !capacityKg || capacityKg <= 0) {
-      setEditError(lang === "en" ? "Vehicle number and a valid capacity are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
-      return;
-    }
-    await updateDriverVehicleSpec(d.id, {
-      vehicleNumber: editDraft.vehicleNumber.trim().toUpperCase(),
-      capacityKg,
-      length: editDraft.length.trim(), width: editDraft.width.trim(), height: editDraft.height.trim(),
-    });
-    cancelEdit();
-  };
-  const [sendingCapacity, setSendingCapacity] = useState(false);
-  const [sendResultCapacity, setSendResultCapacity] = useState(null);
-  // Persisted (not just in-memory) because tapping WhatsApp on a phone
-  // switches away to the WhatsApp app — mobile browsers/TWAs routinely
-  // discard or reload a backgrounded tab like that, which would silently
-  // wipe a plain useState the moment admin switches back. Keyed by
-  // mobile -> the date it was tapped, so the tick clears itself the next
-  // day instead of accumulating forever (opening WhatsApp still doesn't
-  // guarantee the message was actually sent from there, just that admin
-  // already nudged this driver today).
-  const todayStr = () => new Date().toISOString().slice(0, 10);
-  const [whatsappSentMap, setWhatsappSentMap] = usePersistedState("sarthi_kycWhatsappSent", {});
-  const markWhatsappSent = (mobile) => setWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStr() }));
-  const sentToday = (mobile) => whatsappSentMap[mobile] === todayStr();
-  const docLabels = lang === "en"
-    ? { photo: "Driver Photo", dl: "Driving License" }
-    : lang === "mr"
-    ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
-    : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
-  const statusMeta = {
-    Approved: { label: lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित", bg: C.success },
-    Pending: { label: lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित", bg: C.marigoldDeep },
-    Rejected: { label: lang === "en" ? "Blocked" : lang === "mr" ? "ब्लॉक्ड" : "ब्लॉक्ड", bg: C.safety },
-  };
-
-  // "Send KYC reminder to all" used to fire a single sendAdminNotification
-  // push broadcast — but push relies on the driver already having granted
-  // notification permission at some point, exactly the kind of thing a
-  // driver who never finished KYC usually hasn't done, so in practice it
-  // reached almost no one and admin never saw an actual WhatsApp go out.
-  // WhatsApp needs none of that: it opens a chat straight to the driver's
-  // number with a personalized link (?driverKyc=1&mobile=...) prefilled.
-  // A browser can't fire off many wa.me opens at once from one tap (each
-  // is a real navigation, and popup blockers kill anything beyond the
-  // first), so this button instead walks admin through the not-yet-
-  // reminded drivers one at a time: tap it, WhatsApp opens for the next
-  // driver in line and that driver drops off the list (via sentToday
-  // below), tap again for the one after — same real <a> mechanism as each
-  // row's own WhatsApp button, just queued instead of one-by-one hunting
-  // through the list.
-  const notSubmittedUnsent = notSubmitted.filter((d) => !sentToday(d.mobile));
-  const nextToRemind = notSubmittedUnsent[0] || null;
-  const whatsappLink = (mobile) => {
-    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
-    const msg = lang === "en"
-      ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}\nIf you're unable to fill the form yourself, share it on this WhatsApp number instead — reply here with: Phone number, Driver photo, Driving license, Vehicle side photo, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height — and we'll complete it for you.`
-      : lang === "mr"
-      ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}\nजर तुम्हाला स्वतः फॉर्म भरता येत नसेल, तर त्याऐवजी याच व्हॉट्सअॅप नंबरवर पाठवा — इथे उत्तर द्या: फोन नंबर, ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडीचा साइडचा फोटो, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची — आम्ही तुमच्या वतीने पूर्ण करू.`
-      : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}\nअगर आप खुद फॉर्म नहीं भर पा रहे हैं, तो इसके बजाय इसी व्हाट्सएप नंबर पर भेजें — यहां जवाब दें: फोन नंबर, ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी की साइड फोटो, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई — और हम आपकी ओर से पूरा कर देंगे।`;
-    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
-  };
-
-  // Capacity-only nudge — unlike reminderMessage/whatsappLink above, these
-  // drivers already have every other document on file, so the message (and
-  // the portal link's DriverKycPortal gate, changed to key off
-  // vehicleSpec.capacityKg instead of vehicleSpec presence) sends them
-  // straight to the KYC form pre-filled with what they already submitted,
-  // just missing capacity.
-  const capacityMessage = lang === "en"
-    ? "Your vehicle's carrying capacity is missing from your KYC — please add it so you can be matched and paid the right fare for loads. It only takes a moment."
-    : lang === "mr"
-    ? "तुमच्या KYC मध्ये गाडीची क्षमता (कॅपॅसिटी) नमूद केलेली नाही — योग्य लोड आणि योग्य भाडे मिळण्यासाठी कृपया ती भरा. यासाठी फक्त एक क्षण लागेल."
-    : "आपकी KYC में गाड़ी की क्षमता (कैपेसिटी) दर्ज नहीं है — सही लोड और सही भाड़ा पाने के लिए कृपया इसे भरें। इसमें बस एक पल लगेगा।";
-  const sendToMissingCapacity = async () => {
-    if (sendingCapacity || missingCapacity.length === 0) return;
-    setSendingCapacity(true);
-    setSendResultCapacity(null);
-    const result = await sendAdminNotification(missingCapacity.map((d) => d.mobile), capacityMessage, "driver");
-    setSendingCapacity(false);
-    setSendResultCapacity(result);
-  };
-  const capacityWhatsappLink = (mobile) => {
-    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
-    const msg = lang === "en"
-      ? `Your vehicle's carrying capacity is missing from your KYC — please add it here so you can be matched and paid the right fare for loads: ${portalLink}\nYour photo, license and vehicle details are already saved — you'll just need to fill in the capacity.`
-      : lang === "mr"
-      ? `तुमच्या KYC मध्ये गाडीची क्षमता (कॅपॅसिटी) नमूद केलेली नाही — योग्य लोड आणि भाडे मिळण्यासाठी कृपया इथे भरा: ${portalLink}\nतुमचा फोटो, लायसन्स आणि गाडीची माहिती आधीच सेव्ह आहे — फक्त क्षमता भरायची आहे.`
-      : `आपकी KYC में गाड़ी की क्षमता (कैपेसिटी) दर्ज नहीं है — सही लोड और भाड़ा पाने के लिए कृपया यहां भरें: ${portalLink}\nआपका फोटो, लाइसेंस और गाड़ी की जानकारी पहले से सेव है — बस क्षमता भरनी है।`;
-    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
-  };
-
-  const docSection = (d) => (
-    <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
-      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        {Object.entries(docLabels).map(([key, label]) => {
-          const doc = d.docs?.[key];
-          return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
-        })}
-      </div>
-      {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
-        <>
-          <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} height="h-28" />}
-            {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} height="h-28" />}
-          </div>
-        </>
-      )}
-      {d.vehicleSpec && (
-        <div className="text-[11px] mb-2" style={{ color: C.ink }}>
-          <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
-          <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} ·{" "}
-          {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
-        </div>
-      )}
-      {!d.vehicleSpec && !d.docs && (
-        <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>
-      )}
-    </div>
-  );
-
-  return (
-    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => setView("incomplete")} className="flex-1 rounded-lg py-3 text-sm font-bold flex items-center justify-center gap-1.5"
-          style={{ background: view === "incomplete" ? C.navy : C.paper, color: view === "incomplete" ? "#fff" : C.inkSoft, border: `1.5px solid ${view === "incomplete" ? C.navy : C.line}` }}>
-          <XCircle size={14} /> {lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरी"} ({incomplete.length})
-        </button>
-        <button onClick={() => setView("complete")} className="flex-1 rounded-lg py-3 text-sm font-bold flex items-center justify-center gap-1.5"
-          style={{ background: view === "complete" ? C.navy : C.paper, color: view === "complete" ? "#fff" : C.inkSoft, border: `1.5px solid ${view === "complete" ? C.navy : C.line}` }}>
-          <Users size={14} /> {lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी"} ({complete.length})
-        </button>
-      </div>
-      {missingCapacity.length > 0 && (
-        <button onClick={() => setView("capacity")} className="w-full rounded-lg py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 mb-4"
-          style={{ background: view === "capacity" ? C.navy : C.paper, color: view === "capacity" ? "#fff" : C.safety, border: `1.5px solid ${view === "capacity" ? C.navy : C.safety}` }}>
-          <Weight size={13} /> {lang === "en" ? `Missing vehicle capacity (${missingCapacity.length})` : lang === "mr" ? `गाडीची क्षमता नमूद नाही (${missingCapacity.length})` : `गाड़ी की क्षमता दर्ज नहीं (${missingCapacity.length})`}
-        </button>
-      )}
-
-      {view === "incomplete" ? (
-        <div>
-          <p className="text-[11px] mb-3" style={{ color: C.inkSoft }}>
-            {lang === "en" ? "Some haven't submitted KYC yet; others are submitted and waiting on your approval." : lang === "mr" ? "काहींनी अजून KYC जमा केलेली नाही; इतरांनी जमा केली आहे आणि तुमच्या अप्रूव्हलची वाट पाहत आहेत." : "कुछ ने अभी तक KYC जमा नहीं की; बाकी जमा हो चुकी है और आपके अप्रूवल का इंतज़ार कर रही है।"}
-          </p>
-          {notSubmitted.length === 0 ? null : nextToRemind ? (
-            <a href={whatsappLink(nextToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(nextToRemind.mobile)}
-              className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.success }}>
-              <MessageCircle size={14} />
-              {lang === "en" ? `Send next KYC reminder on WhatsApp (${notSubmittedUnsent.length} left)` : lang === "mr" ? `पुढचा KYC रिमाइंडर WhatsApp वर पाठवा (${notSubmittedUnsent.length} बाकी)` : `अगला KYC रिमाइंडर WhatsApp पर भेजें (${notSubmittedUnsent.length} बाकी)`}
-            </a>
-          ) : (
-            <div className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
-              <CheckCircle2 size={14} />
-              {lang === "en" ? "Everyone reminded today" : lang === "mr" ? "आज सर्वांना आठवण दिली" : "आज सभी को याद दिलाया गया"}
-            </div>
-          )}
-          {incomplete.length === 0 ? (
-            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver's KYC is resolved." : lang === "mr" ? "सर्व ड्रायव्हरांची KYC निकाली काढली आहे." : "सभी ड्राइवरों की KYC निपटा दी गई है।"}</p>
-          ) : (
-            <div className="space-y-1.5">
-              {incomplete.map((d) => {
-                if (d.vehicleSpec) {
-                  // Submitted, awaiting review — Approve/Block/Edit are live here.
-                  const expanded = expandedId === d.id;
-                  const editing = editingId === d.id;
-                  return (
-                    <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
-                      <div className="flex items-center justify-between gap-2">
-                        <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1 min-w-0">
-                          <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                          <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
-                          <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
-                        </button>
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>{editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}</button>
-                          <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-base font-semibold px-4 py-2.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें"}</button>
-                          <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-base font-semibold px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
-                        </div>
-                      </div>
-                      {editing ? (
-                        <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
-                          <div className="grid grid-cols-2 gap-2 mb-2">
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
-                              <input value={editDraft.vehicleNumber} onChange={(e) => setEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
-                              <input type="number" value={editDraft.capacityKg} onChange={(e) => setEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
-                              <input value={editDraft.length} onChange={(e) => setEditDraft((p) => ({ ...p, length: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
-                              <input value={editDraft.width} onChange={(e) => setEditDraft((p) => ({ ...p, width: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
-                              <input value={editDraft.height} onChange={(e) => setEditDraft((p) => ({ ...p, height: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                          </div>
-                          {editError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{editError}</p>}
-                          <button onClick={() => saveEdit(d)} className="w-full rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
-                            {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
-                          </button>
-                        </div>
-                      ) : expanded && docSection(d)}
-                    </div>
-                  );
-                }
-                // Not submitted yet — Approve is shown but disabled since
-                // there's nothing to review; WhatsApp is the live action.
-                return (
-                  <div key={d.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                      <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <div className="flex gap-2">
-                        <button disabled title={lang === "en" ? "Approve unlocks once this driver submits KYC" : lang === "mr" ? "ड्रायव्हरने KYC जमा केल्यावरच अप्रूव्ह करता येईल" : "ड्राइवर के KYC जमा करने के बाद ही अप्रूव कर सकते हैं"}
-                          className="rounded-lg px-3 py-2 text-xs font-bold" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
-                          {lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}
-                        </button>
-                        <a href={whatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(d.mobile)}
-                          className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
-                          <MessageCircle size={14} /> WhatsApp
-                        </a>
-                      </div>
-                      {sentToday(d.mobile) && (
-                        <span className="text-[10px] font-semibold" style={{ color: C.navy }}>
-                          ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ) : view === "capacity" ? (
-        <div>
-          <p className="text-[11px] mb-3" style={{ color: C.inkSoft }}>
-            {lang === "en" ? "These drivers already submitted KYC (photo, license, vehicle number) but their vehicle capacity is missing — without it, they get no fare shown and can't be matched to loads by weight." : lang === "mr" ? "या ड्रायव्हरांनी KYC (फोटो, लायसन्स, गाडी नंबर) आधीच जमा केली आहे, पण त्यांची गाडीची क्षमता नमूद नाही — त्याशिवाय त्यांना भाडे दिसत नाही आणि वजनानुसार लोड जुळत नाही." : "इन ड्राइवरों ने KYC (फोटो, लाइसेंस, गाड़ी नंबर) पहले ही जमा कर दी है, लेकिन उनकी गाड़ी की क्षमता दर्ज नहीं है — इसके बिना उन्हें भाड़ा नहीं दिखता और वजन के हिसाब से लोड नहीं मिल पाते।"}
-          </p>
-          <button onClick={sendToMissingCapacity} disabled={missingCapacity.length === 0 || sendingCapacity}
-            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5"
-            style={{ background: missingCapacity.length && !sendingCapacity ? C.marigold : "#E0E0E0", color: missingCapacity.length && !sendingCapacity ? "#000000" : "#9AA3B0" }}>
-            <Bell size={14} />
-            {sendingCapacity
-              ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...")
-              : (lang === "en" ? `Send capacity reminder to all (${missingCapacity.length})` : lang === "mr" ? `सर्वांना क्षमता रिमाइंडर पाठवा (${missingCapacity.length})` : `सभी को क्षमता रिमाइंडर भेजें (${missingCapacity.length})`)}
-          </button>
-          {sendResultCapacity && (
-            <div className="text-[11px] font-semibold mb-3" style={{ color: sendResultCapacity.ok ? C.success : C.safety }}>
-              {sendResultCapacity.ok
-                ? (lang === "en" ? `Sent — delivered to ${sendResultCapacity.sentCount || 0} device(s).` : lang === "mr" ? `पाठवले — ${sendResultCapacity.sentCount || 0} डिव्हाइसवर पोहोचले.` : `भेज दिया — ${sendResultCapacity.sentCount || 0} डिवाइस पर पहुंचा।`)
-                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।")}
-            </div>
-          )}
-          {missingCapacity.length === 0 ? (
-            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver's vehicle capacity is on file." : lang === "mr" ? "सर्व ड्रायव्हरांची गाडी क्षमता नोंदवलेली आहे." : "सभी ड्राइवरों की गाड़ी क्षमता दर्ज है।"}</p>
-          ) : (
-            <div className="space-y-1.5">
-              {missingCapacity.map((d) => (
-                <div key={d.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ border: `1px solid ${C.line}` }}>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                    <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <a href={capacityWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markWhatsappSent(d.mobile)}
-                      className="rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold text-white" style={{ background: C.success }}>
-                      <MessageCircle size={14} /> WhatsApp
-                    </a>
-                    {sentToday(d.mobile) && (
-                      <span className="text-[10px] font-semibold" style={{ color: C.navy }}>
-                        ✓ {lang === "en" ? "Message sent" : lang === "mr" ? "संदेश पाठवला" : "संदेश भेजा गया"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div>
-          {complete.length === 0 ? <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver's KYC has been resolved yet." : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरची KYC निकाली निघालेली नाही." : "अभी तक किसी ड्राइवर की KYC निपटाई नहीं गई है।"}</p> : (
-            <div className="space-y-2">
-              {complete.map((d) => {
-                const expanded = expandedId === d.id;
-                const meta = statusMeta[d.kyc] || statusMeta.Approved;
-                return (
-                  <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
-                    <div className="flex items-center justify-between gap-2">
-                      <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-left flex-1 min-w-0">
-                        <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                        <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
-                        <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{expanded ? (lang === "en" ? "▲ Hide details" : lang === "mr" ? "▲ डिटेल लपवा" : "▲ डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}</div>
-                      </button>
-                      <span className="text-[10px] font-bold px-2.5 py-1.5 rounded-full text-white shrink-0" style={{ background: meta.bg }}>{meta.label}</span>
-                    </div>
-                    {expanded && docSection(d)}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
   // Draft reply text per complaint id, so opening one complaint's reply box
@@ -2241,12 +1875,81 @@ function AdminCallLogs({ callLogs, bookings, lang }) {
   );
 }
 
-function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
+// Single home for everything about a driver -- used to be split across
+// this list (GPS/online/wallet, blacklist/delete, KYC shown read-only)
+// and a separate AdminKyc screen (Approve/Reject/Edit, WhatsApp nudges)
+// only reachable via the Live Dashboard's "New Registrations" tile.
+// Merged so every action for a given driver lives on that driver's own
+// row here, instead of admin having to jump between two different
+// screens to finish reviewing one signup.
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverKyc, updateDriverVehicleSpec, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showCall, setShowCall] = useState(false);
   const [callQ, setCallQ] = useState("");
+  // Editing a submitted driver's vehicle KYC fields (see AdminKyc's old
+  // Edit -- lets admin fix a typo'd vehicle number or wrong capacity
+  // before approving, instead of only being able to Block-or-accept-as-is).
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
+  const [editError, setEditError] = useState("");
+  const startEdit = (d) => {
+    setEditingId(d.id);
+    setEditDraft({
+      vehicleNumber: d.vehicleSpec?.vehicleNumber || "",
+      capacityKg: d.vehicleSpec?.capacityKg != null ? String(d.vehicleSpec.capacityKg) : "",
+      length: d.vehicleSpec?.length || "",
+      width: d.vehicleSpec?.width || "",
+      height: d.vehicleSpec?.height || "",
+    });
+    setEditError("");
+  };
+  const cancelEdit = () => { setEditingId(null); setEditDraft(null); setEditError(""); };
+  const saveEdit = async (d) => {
+    const capacityKg = Number(editDraft.capacityKg);
+    if (!editDraft.vehicleNumber.trim() || !capacityKg || capacityKg <= 0) {
+      setEditError(lang === "en" ? "Vehicle number and a valid capacity are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
+      return;
+    }
+    await updateDriverVehicleSpec(d.id, {
+      vehicleNumber: editDraft.vehicleNumber.trim().toUpperCase(),
+      capacityKg,
+      length: editDraft.length.trim(), width: editDraft.width.trim(), height: editDraft.height.trim(),
+    });
+    cancelEdit();
+  };
+  // Not-yet-submitted / submitted-but-missing-capacity WhatsApp nudges
+  // (see AdminKyc's old whatsappLink/capacityWhatsappLink) -- one shared
+  // sent-today tracker for both since a driver can only ever be in one
+  // of these two states at once (missingCapacity requires vehicleSpec,
+  // notSubmittedKyc requires its absence).
+  const notSubmittedKyc = drivers.filter((d) => !d.vehicleSpec);
+  const missingCapacity = drivers.filter((d) => d.vehicleSpec && !d.vehicleSpec.capacityKg);
+  const todayStrKyc = () => new Date().toISOString().slice(0, 10);
+  const [kycWhatsappSentMap, setKycWhatsappSentMap] = usePersistedState("sarthi_kycWhatsappSent", {});
+  const markKycWhatsappSent = (mobile) => setKycWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrKyc() }));
+  const sentKycToday = (mobile) => kycWhatsappSentMap[mobile] === todayStrKyc();
+  const notSubmittedUnsent = notSubmittedKyc.filter((d) => !sentKycToday(d.mobile));
+  const nextKycToRemind = notSubmittedUnsent[0] || null;
+  const kycWhatsappLink = (mobile) => {
+    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
+    const msg = lang === "en"
+      ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}\nIf you're unable to fill the form yourself, share it on this WhatsApp number instead — reply here with: Phone number, Driver photo, Driving license, Vehicle side photo, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height — and we'll complete it for you.`
+      : lang === "mr"
+      ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}\nजर तुम्हाला स्वतः फॉर्म भरता येत नसेल, तर त्याऐवजी याच व्हॉट्सअॅप नंबरवर पाठवा — इथे उत्तर द्या: फोन नंबर, ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडीचा साइडचा फोटो, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची — आम्ही तुमच्या वतीने पूर्ण करू.`
+      : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}\nअगर आप खुद फॉर्म नहीं भर पा रहे हैं, तो इसके बजाय इसी व्हाट्सएप नंबर पर भेजें — यहां जवाब दें: फोन नंबर, ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी की साइड फोटो, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई — और हम आपकी ओर से पूरा कर देंगे।`;
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  };
+  const capacityWhatsappLink = (mobile) => {
+    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
+    const msg = lang === "en"
+      ? `Your vehicle's carrying capacity is missing from your KYC — please add it here so you can be matched and paid the right fare for loads: ${portalLink}\nYour photo, license and vehicle details are already saved — you'll just need to fill in the capacity.`
+      : lang === "mr"
+      ? `तुमच्या KYC मध्ये गाडीची क्षमता (कॅपॅसिटी) नमूद केलेली नाही — योग्य लोड आणि भाडे मिळण्यासाठी कृपया इथे भरा: ${portalLink}\nतुमचा फोटो, लायसन्स आणि गाडीची माहिती आधीच सेव्ह आहे — फक्त क्षमता भरायची आहे.`
+      : `आपकी KYC में गाड़ी की क्षमता (कैपेसिटी) दर्ज नहीं है — सही लोड और भाड़ा पाने के लिए कृपया यहां भरें: ${portalLink}\nआपका फोटो, लाइसेंस और गाड़ी की जानकारी पहले से सेव है — बस क्षमता भरनी है।`;
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  };
   // "Total Drivers" and every tab/count below it all report the SAME
   // installed-drivers population (see installedDrivers) -- how many
   // actually still have the app on their phone, not how many driver docs
@@ -2299,7 +2002,12 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
   // anymore. The default (empty query) view stays scoped to byGps/
   // byGpsTab so every number on this screen agrees with each other.
   const searchBase = q.trim() ? drivers : byGps;
-  const filtered = searchBase.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q));
+  // Needs-your-action rows (submitted and awaiting KYC approval) float to
+  // the top regardless of which GPS tab/search is active -- those are the
+  // ones actually waiting on admin right now, not just a status to glance at.
+  const actionRank = (d) => (d.vehicleSpec && d.kyc === "Pending" ? 0 : !d.vehicleSpec ? 1 : 2);
+  const filtered = searchBase.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q))
+    .sort((a, b) => actionRank(a) - actionRank(b));
   const kycMeta = lang === "en"
     ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E5E5E5" } }
     : lang === "mr"
@@ -2351,6 +2059,13 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
           </div>
         )
       )}
+      {notSubmittedKyc.length > 0 && nextKycToRemind && (
+        <a href={kycWhatsappLink(nextKycToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markKycWhatsappSent(nextKycToRemind.mobile)}
+          className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.marigoldDeep }}>
+          <XCircle size={14} />
+          {lang === "en" ? `Send next KYC reminder on WhatsApp (${notSubmittedUnsent.length} left)` : lang === "mr" ? `पुढचा KYC रिमाइंडर WhatsApp वर पाठवा (${notSubmittedUnsent.length} बाकी)` : `अगला KYC रिमाइंडर WhatsApp पर भेजें (${notSubmittedUnsent.length} बाकी)`}
+        </a>
+      )}
       {showCall && (() => {
         const callFiltered = drivers.filter((d) => d.name.includes(callQ) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(callQ.toLowerCase()) || (d.mobile || "").includes(callQ));
         return (
@@ -2392,8 +2107,12 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
         {filtered.map((d) => {
           const km = kycMeta[d.kyc] || kycMeta.none;
           const expanded = expandedId === d.id;
+          const editing = editingId === d.id;
           const daysLeft = trialDaysLeft(d.createdAt);
           const gps = gpsStatus(d, lang);
+          const pendingReview = !!d.vehicleSpec && d.kyc === "Pending";
+          const notSubmitted = !d.vehicleSpec;
+          const needsCapacity = !!d.vehicleSpec && !d.vehicleSpec.capacityKg;
           return (
             <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper }}>
               <div className="flex items-center justify-between">
@@ -2417,6 +2136,18 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
                     )
                   )}
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
+                  {(notSubmitted || needsCapacity) && (
+                    sentKycToday(d.mobile) ? (
+                      <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
+                    ) : (
+                      <a href={notSubmitted ? kycWhatsappLink(d.mobile) : capacityWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markKycWhatsappSent(d.mobile)}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.marigoldDeep }}>
+                        <MessageCircle size={9} /> {notSubmitted
+                          ? (lang === "en" ? "KYC WhatsApp" : lang === "mr" ? "KYC व्हॉट्सअ‍ॅप" : "KYC व्हाट्सएप")
+                          : (lang === "en" ? "Capacity WhatsApp" : lang === "mr" ? "क्षमता व्हॉट्सअ‍ॅप" : "क्षमता व्हाट्सएप")}
+                      </a>
+                    )
+                  )}
                   {daysLeft != null ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
                       {lang === "en" ? `Trial · ${daysLeft}d left` : lang === "mr" ? `ट्रायल · ${daysLeft} दिवस बाकी` : `ट्रायल · ${daysLeft} दिन बाकी`}
@@ -2427,10 +2158,55 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, lang }) {
                 </div>
               </div>
 
-              <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-sm font-bold mt-2" style={{ color: C.marigoldDeep }}>
-                {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
-              </button>
-              {expanded && (
+              <div className="flex items-center justify-between mt-2">
+                <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>
+                  {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
+                </button>
+                {pendingReview && (
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
+                      {editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}
+                    </button>
+                    <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "नकारें"}</button>
+                    <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                  </div>
+                )}
+              </div>
+              {editing ? (
+                <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <label className="text-[11px]">
+                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
+                      <input value={editDraft.vehicleNumber} onChange={(e) => setEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
+                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                    </label>
+                    <label className="text-[11px]">
+                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
+                      <input type="number" value={editDraft.capacityKg} onChange={(e) => setEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
+                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                    </label>
+                    <label className="text-[11px]">
+                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
+                      <input value={editDraft.length} onChange={(e) => setEditDraft((p) => ({ ...p, length: e.target.value }))}
+                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                    </label>
+                    <label className="text-[11px]">
+                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
+                      <input value={editDraft.width} onChange={(e) => setEditDraft((p) => ({ ...p, width: e.target.value }))}
+                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                    </label>
+                    <label className="text-[11px]">
+                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
+                      <input value={editDraft.height} onChange={(e) => setEditDraft((p) => ({ ...p, height: e.target.value }))}
+                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                    </label>
+                  </div>
+                  {editError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{editError}</p>}
+                  <button onClick={() => saveEdit(d)} className="w-full rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
+                    {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
+                  </button>
+                </div>
+              ) : expanded && (
                 <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
                   <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
                   <div className="grid grid-cols-2 gap-2 mb-2">
@@ -3138,10 +2914,9 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
 
 export function AdminPanel({ drivers, customers, driver, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
   const [tab, setTab] = useState("fleet");
-  // "kyc" is deliberately not in this list -- KYC review now lives inside
-  // the Live Dashboard's "New Registrations" tile (see AdminFleet's
-  // detailView === "newRegistrations", Driver tab) instead of its own
-  // top-level tab or a separate "Pending KYC approvals" tile.
+  // "kyc" is deliberately not in this list -- KYC review lives inside the
+  // "drivers" tab now (see AdminDriverList), not its own top-level tab or
+  // a separate "Pending KYC approvals" tile.
   const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren], ["callLogs", "कॉल लॉग्स", PhoneCall]];
   return (
     <div className="p-5">
@@ -3160,8 +2935,8 @@ export function AdminPanel({ drivers, customers, driver, updateDriverKyc, update
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
-      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}

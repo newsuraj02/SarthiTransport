@@ -4420,8 +4420,9 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
 
 // =====================================================================
 // DRIVER KYC PORTAL — a standalone route (?driverKyc=1&mobile=...),
-// reached only via the "Send" button/WhatsApp link on Admin's KYC desk
-// (AdminKyc), separate from the normal role-select/app flow entirely.
+// reached only via the per-driver WhatsApp reminder link on Admin's
+// Drivers tab (AdminDriverList), separate from the normal role-select/app
+// flow entirely.
 // No login or OTP step at all — the link is personalized per driver (the
 // mobile is right there in the URL), and Firestore's rules allow reading
 // and writing that one driver's doc without any auth as long as their
@@ -7888,7 +7889,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // dropped after that let real drivers through with invalid vehicle
   // info nobody had actually checked. Every submission, first or a
   // resubmit after rejection, now always lands in Pending for admin to
-  // review (see AdminKyc's Incomplete tab).
+  // review (see AdminDriverList in AdminPanel.jsx).
   const isFirstSubmission = driver.kyc == null;
   const submit = () => {
     if (!canSubmit) return;
