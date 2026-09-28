@@ -1980,13 +1980,11 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
   const gpsOffSectionAll = totalInstalled.filter((d) => gpsStatus(d, lang).stale);
   // GPS diagnostic (see gpsStatus) -- an Online driver whose lastKnownLocation
   // is stale/missing is the exact "is this actually tracking?" question,
-  // made visible per-driver instead of guessed at from Online status alone.
-  // Scoped to installed, non-blacklisted drivers only -- a blacklisted
-  // driver's GPS status isn't actionable, and an uninstalled driver isn't
-  // the one this WhatsApp-reminder flow below is meant to reach anyway.
-  const [gpsOnly, setGpsOnly] = useState(false);
+  // used below for the WhatsApp reminder queue (the GPS OFF section itself
+  // already covers seeing these drivers, so there's no separate filter
+  // toggle for them here).
   const onlineNoLiveGps = totalInstalled.filter((d) => d.online && gpsStatus(d, lang).stale);
-  const gpsOffSection = bySection(gpsOnly ? gpsOffSectionAll.filter((d) => d.online) : gpsOffSectionAll);
+  const gpsOffSection = bySection(gpsOffSectionAll);
   // Incomplete vs Complete, independent of the GPS split above -- a driver
   // shows up in one of these AND one of the GPS sections. Same
   // definitions AdminKyc used before it got folded in here: Incomplete =
@@ -2239,21 +2237,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
           {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : lang === "mr" ? "ड्रायव्हरला कॉल करा" : "ड्राइवर को कॉल करें"}</>}
         </button>
       </div>
-      {onlineNoLiveGps.length > 0 && (
-        <button onClick={() => { setGpsOnly((v) => !v); setExpandedSections((prev) => ({ ...prev, gpsOff: true })); }} className="w-full rounded-lg p-3 mb-3 text-left" style={{ background: gpsOnly ? C.safety : "#FFF3F3", border: `1.5px solid ${C.safety}` }}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: gpsOnly ? "#FFFFFF" : C.safety }}>
-              <MapPin size={14} /> {lang === "en" ? "Online but no live GPS" : lang === "mr" ? "ऑनलाइन पण लाइव्ह GPS नाही" : "ऑनलाइन लेकिन लाइव GPS नहीं"}
-            </span>
-            <span className="text-xs font-black px-2 py-0.5 rounded-full" style={{ background: gpsOnly ? "#FFFFFF" : C.safety, color: gpsOnly ? C.safety : "#FFFFFF" }}>{onlineNoLiveGps.length}</span>
-          </div>
-          <p className="text-[10px] font-semibold mt-1" style={{ color: gpsOnly ? "#FFFFFF" : C.safety }}>
-            {gpsOnly
-              ? (lang === "en" ? "Showing only these — tap again to show everyone." : lang === "mr" ? "फक्त हेच दाखवत आहे — पुन्हा टॅप करून सर्व पहा." : "सिर्फ यही दिखा रहा है — फिर टैप करके सभी देखें।")
-              : (lang === "en" ? "These drivers say Online but haven't sent a GPS update recently — tap to filter to just them." : lang === "mr" ? "हे ड्रायव्हर ऑनलाइन आहेत पण अलीकडे GPS अपडेट पाठवलेले नाही — फक्त हेच पाहण्यासाठी टॅप करा." : "ये ड्राइवर ऑनलाइन हैं लेकिन हाल में GPS अपडेट नहीं भेजा — सिर्फ इन्हें देखने के लिए टैप करें।")}
-          </p>
-        </button>
-      )}
       {onlineNoLiveGps.length > 0 && (
         nextGpsToRemind ? (
           <a href={gpsWhatsappLink(nextGpsToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markGpsWhatsappSent(nextGpsToRemind.mobile)}
