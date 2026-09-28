@@ -1959,14 +1959,25 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
   // every number on this screen so none of them can read differently
   // from each other again.
   const totalInstalled = installedDrivers(drivers);
-  // GPS ON vs GPS OFF split, computed live from the same gpsStatus
-  // diagnostic as each driver's own "GPS {label}" badge below (!stale ==
-  // reported a location within the last 2 minutes) -- replaces the old
-  // Free Trial/Main Routine split. "All" always shows every installed
-  // driver regardless of tab, same as before.
-  const [gpsTab, setGpsTab] = useState("all"); // 'all' | 'on' | 'off'
-  const gpsOnCount = totalInstalled.filter((d) => !gpsStatus(d, lang).stale).length;
-  const byGpsTab = gpsTab === "all" ? totalInstalled : totalInstalled.filter((d) => (gpsTab === "on" ? !gpsStatus(d, lang).stale : gpsStatus(d, lang).stale));
+  // Four segregated sections instead of one list gated behind tabs -- GPS
+  // ON/OFF and Incomplete/Complete are independent dimensions, so a driver
+  // belongs to exactly one of each pair and shows up in both of its
+  // sections (once under whichever GPS section, once under whichever KYC
+  // section) rather than being hidden by whichever single tab was picked.
+  // Each section is its own collapsible accordion (see expandedSections)
+  // instead of a click-to-switch tab, so admin can open more than one at
+  // once, or none, without losing the others' place.
+  const [expandedSections, setExpandedSections] = useState({ gpsOn: false, gpsOff: false, incomplete: true, complete: false });
+  const toggleSection = (key) => setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const allSectionsExpanded = Object.values(expandedSections).every(Boolean);
+  const actionRank = (d) => (d.vehicleSpec && d.kyc === "Pending" ? 0 : !d.vehicleSpec ? 1 : 2);
+  const bySection = (arr) => [...arr].sort((a, b) => actionRank(a) - actionRank(b));
+  // GPS ON vs GPS OFF, computed live from the same gpsStatus diagnostic as
+  // each driver's own "GPS {label}" badge below (!stale == reported a
+  // location within the last 2 minutes) -- replaces the old Free Trial/
+  // Main Routine split.
+  const gpsOnSection = bySection(totalInstalled.filter((d) => !gpsStatus(d, lang).stale));
+  const gpsOffSectionAll = totalInstalled.filter((d) => gpsStatus(d, lang).stale);
   // GPS diagnostic (see gpsStatus) -- an Online driver whose lastKnownLocation
   // is stale/missing is the exact "is this actually tracking?" question,
   // made visible per-driver instead of guessed at from Online status alone.
@@ -1975,17 +1986,16 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
   // the one this WhatsApp-reminder flow below is meant to reach anyway.
   const [gpsOnly, setGpsOnly] = useState(false);
   const onlineNoLiveGps = totalInstalled.filter((d) => d.online && gpsStatus(d, lang).stale);
-  const byGps = gpsOnly ? byGpsTab.filter((d) => d.online && gpsStatus(d, lang).stale) : byGpsTab;
-  // Incomplete vs Complete split, independent of the GPS tab above (both
-  // apply together -- e.g. "GPS OFF" + "Incomplete" narrows to exactly
-  // those). Same definitions AdminKyc used before it got folded in here:
-  // Incomplete = still needs admin's attention (never submitted, or
-  // submitted and sitting in Pending review); Complete = resolved either
-  // way (Approved or Rejected/Blocked).
-  const [kycTab, setKycTab] = useState("all"); // 'all' | 'incomplete' | 'complete'
+  const gpsOffSection = bySection(gpsOnly ? gpsOffSectionAll.filter((d) => d.online) : gpsOffSectionAll);
+  // Incomplete vs Complete, independent of the GPS split above -- a driver
+  // shows up in one of these AND one of the GPS sections. Same
+  // definitions AdminKyc used before it got folded in here: Incomplete =
+  // still needs admin's attention (never submitted, or submitted and
+  // sitting in Pending review); Complete = resolved either way (Approved
+  // or Rejected/Blocked).
   const isIncompleteKyc = (d) => !d.vehicleSpec || d.kyc === "Pending";
-  const incompleteKycCount = totalInstalled.filter(isIncompleteKyc).length;
-  const byKycTab = kycTab === "all" ? byGps : byGps.filter((d) => (kycTab === "incomplete" ? isIncompleteKyc(d) : !isIncompleteKyc(d)));
+  const incompleteSection = bySection(totalInstalled.filter(isIncompleteKyc));
+  const completeSection = bySection(totalInstalled.filter((d) => !isIncompleteKyc(d)));
   // Same reasoning as AdminKyc's WhatsApp reminder queue -- a push
   // notification only reaches a driver who's already granted notification
   // permission, exactly the kind of driver whose GPS/location permission
@@ -2008,19 +2018,15 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
     return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
   };
   // Typing an actual search query reaches EVERY driver record (uninstalled
-  // or blacklisted included), not just the installed ones the tabs/counts
-  // above default to -- otherwise admin would have no way to ever find
+  // or blacklisted included), not just the installed ones the sections
+  // above are scoped to -- otherwise admin would have no way to ever find
   // and unblacklist someone once they're not counted as "installed"
-  // anymore. The default (empty query) view stays scoped to byKycTab (GPS
-  // tab + KYC tab both applied) so every number on this screen agrees
-  // with each other.
-  const searchBase = q.trim() ? drivers : byKycTab;
-  // Needs-your-action rows (submitted and awaiting KYC approval) float to
-  // the top regardless of which GPS tab/search is active -- those are the
-  // ones actually waiting on admin right now, not just a status to glance at.
-  const actionRank = (d) => (d.vehicleSpec && d.kyc === "Pending" ? 0 : !d.vehicleSpec ? 1 : 2);
-  const filtered = searchBase.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q))
-    .sort((a, b) => actionRank(a) - actionRank(b));
+  // anymore. A search collapses the 4 sections into one flat result list
+  // (see the render below); with an empty query there's nothing to search
+  // and the sections render instead.
+  const searchResults = q.trim()
+    ? bySection(drivers.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q)))
+    : [];
   const kycMeta = lang === "en"
     ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E5E5E5" } }
     : lang === "mr"
@@ -2032,27 +2038,209 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
     ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
 
+  // One driver's full card -- shared by every section below and by the
+  // flat search-results list, instead of five copies of the same ~170
+  // lines of JSX.
+  const renderRow = (d) => {
+    const km = kycMeta[d.kyc] || kycMeta.none;
+    const expanded = expandedId === d.id;
+    const editing = editingId === d.id;
+    const daysLeft = trialDaysLeft(d.createdAt);
+    const gps = gpsStatus(d, lang);
+    const pendingReview = !!d.vehicleSpec && d.kyc === "Pending";
+    const notSubmitted = !d.vehicleSpec;
+    const needsCapacity = !!d.vehicleSpec && !d.vehicleSpec.capacityKg;
+    return (
+      <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
+            <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"} {fmt(d.wallet)}</div>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: d.online ? C.success : C.marigoldDeep }}>{d.online ? (lang === "en" ? "Online" : lang === "mr" ? "ऑनलाइन" : "ऑनलाइन") : (lang === "en" ? "Offline" : lang === "mr" ? "ऑफलाइन" : "ऑफलाइन")}</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5" style={{ color: gps.color, background: gps.bg }} title={lang === "en" ? "GPS status" : lang === "mr" ? "GPS स्थिती" : "GPS स्थिति"}>
+              <MapPin size={9} /> GPS {gps.label}
+            </span>
+            {d.online && gps.stale && (
+              sentGpsToday(d.mobile) ? (
+                <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
+              ) : (
+                <a href={gpsWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markGpsWhatsappSent(d.mobile)}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.success }}>
+                  <MessageCircle size={9} /> WhatsApp
+                </a>
+              )
+            )}
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
+            {(notSubmitted || needsCapacity) && (
+              sentKycToday(d.mobile) ? (
+                <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
+              ) : (
+                <a href={notSubmitted ? kycWhatsappLink(d.mobile) : capacityWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markKycWhatsappSent(d.mobile)}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.marigoldDeep }}>
+                  <MessageCircle size={9} /> {notSubmitted
+                    ? (lang === "en" ? "KYC WhatsApp" : lang === "mr" ? "KYC व्हॉट्सअ‍ॅप" : "KYC व्हाट्सएप")
+                    : (lang === "en" ? "Capacity WhatsApp" : lang === "mr" ? "क्षमता व्हॉट्सअ‍ॅप" : "क्षमता व्हाट्सएप")}
+                </a>
+              )
+            )}
+            {daysLeft != null ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
+                {lang === "en" ? `Trial · ${daysLeft}d left` : lang === "mr" ? `ट्रायल · ${daysLeft} दिवस बाकी` : `ट्रायल · ${daysLeft} दिन बाकी`}
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.inkSoft, background: "#E5E5E5" }}>{lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन"}</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mt-2">
+          <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>
+            {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
+          </button>
+          {d.vehicleSpec && (
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
+                {editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}
+              </button>
+              {pendingReview && (
+                <>
+                  <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "नकारें"}</button>
+                  <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        {editing ? (
+          <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <label className="text-[11px] col-span-2">
+                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle type" : lang === "mr" ? "गाडीचा प्रकार" : "गाड़ी का प्रकार"}</span>
+                <select value={editDraft.type} onChange={(e) => setEditDraft((p) => ({ ...p, type: e.target.value }))}
+                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
+                  {!vehicleTypes.some((v) => v.key === editDraft.type) && <option value={editDraft.type}>{editDraft.type || "—"}</option>}
+                  {vehicleTypes.map((v) => <option key={v.key} value={v.key}>{lang === "en" ? (v.labelEn || v.label) : v.label}</option>)}
+                </select>
+              </label>
+              <label className="text-[11px]">
+                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
+                <input value={editDraft.vehicleNumber} onChange={(e) => setEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
+                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+              </label>
+              <label className="text-[11px]">
+                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
+                <input type="number" value={editDraft.capacityKg} onChange={(e) => setEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
+                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+              </label>
+              <label className="text-[11px]">
+                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
+                <input value={editDraft.length} onChange={(e) => setEditDraft((p) => ({ ...p, length: e.target.value }))}
+                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+              </label>
+              <label className="text-[11px]">
+                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
+                <input value={editDraft.width} onChange={(e) => setEditDraft((p) => ({ ...p, width: e.target.value }))}
+                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+              </label>
+              <label className="text-[11px]">
+                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
+                <input value={editDraft.height} onChange={(e) => setEditDraft((p) => ({ ...p, height: e.target.value }))}
+                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+              </label>
+            </div>
+            {editError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{editError}</p>}
+            <div className="flex justify-end">
+              <button onClick={() => saveEdit(d)} className="rounded-lg px-5 py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
+                {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
+              </button>
+            </div>
+          </div>
+        ) : expanded && (
+          <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+            <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {Object.entries(docLabels).map(([key, label]) => {
+                const doc = d.docs?.[key];
+                return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
+              })}
+            </div>
+            {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
+              <>
+                <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} />}
+                  {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} />}
+                </div>
+              </>
+            )}
+            {d.vehicleSpec && (
+              <div className="text-[11px] mb-2" style={{ color: C.ink }}>
+                <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
+                <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
+              </div>
+            )}
+            {!d.vehicleSpec && !d.docs && <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+          {d.blacklisted ? <span className="text-[11px] font-bold" style={{ color: C.safety }}>⛔ {lang === "en" ? "Blocked — won't get bookings" : lang === "mr" ? "ब्लॉक्ड — बुकिंग मिळणार नाही" : "ब्लॉक्ड — बुकिंग नहीं मिलेगी"}</span> : <span />}
+          <div className="flex items-center gap-2">
+            {confirmDeleteId === d.id ? (
+              <>
+                <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : lang === "mr" ? "कायमचे काढून टाकायचे?" : "हमेशा के लिए हटाएं?"}</span>
+                <button onClick={() => { deleteDriver(d.mobile || d.id); setConfirmDeleteId(null); }} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
+                  {lang === "en" ? "Yes, delete" : lang === "mr" ? "हो, काढा" : "हां, हटाएं"}
+                </button>
+                <button onClick={() => setConfirmDeleteId(null)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
+                  {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#FFFFFF", background: d.blacklisted ? C.success : C.safety }}>
+                  {d.blacklisted ? (lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें") : (lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें")}
+                </button>
+                <button onClick={() => setConfirmDeleteId(d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
+                  {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  // Section metadata for the 4 accordions below -- a driver naturally
+  // belongs to exactly one GPS section and one KYC section, so it can
+  // appear in up to 2 of these 4 lists at once (see the big comment above
+  // expandedSections).
+  const sections = [
+    { key: "gpsOn", label: lang === "en" ? "GPS ON" : lang === "mr" ? "GPS ऑन" : "GPS ऑन", list: gpsOnSection },
+    { key: "gpsOff", label: lang === "en" ? "GPS OFF" : lang === "mr" ? "GPS ऑफ" : "GPS ऑफ", list: gpsOffSection },
+    { key: "incomplete", label: lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरी", list: incompleteSection },
+    { key: "complete", label: lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी", list: completeSection },
+  ];
+
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
-          <Users size={16} /> {lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Replaces the old separate "All" tab in both filter rows below
-              -- one button that resets GPS + KYC tabs together, kept next
-              to Call Driver instead of a third tab option in each row. */}
-          <button onClick={() => { setGpsTab("all"); setKycTab("all"); }} className="text-sm font-bold px-4 py-2.5 rounded-lg"
-            style={{ background: gpsTab === "all" && kycTab === "all" ? C.navy : C.bg, color: gpsTab === "all" && kycTab === "all" ? "#fff" : C.inkSoft, border: `1px solid ${gpsTab === "all" && kycTab === "all" ? C.navy : C.line}` }}>
-            {lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी"} ({totalInstalled.length})
-          </button>
-          <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
-            {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : lang === "mr" ? "ड्रायव्हरला कॉल करा" : "ड्राइवर को कॉल करें"}</>}
-          </button>
-        </div>
+        {/* One single, complete button (not a plain label plus a separate
+            reset button) -- with sections replacing tabs below, its job is
+            now to open or close every section at once, in place of the old
+            "reset both tabs to all" action. */}
+        <button onClick={() => { const next = !allSectionsExpanded; setExpandedSections({ gpsOn: next, gpsOff: next, incomplete: next, complete: next }); }}
+          className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: allSectionsExpanded ? C.navy : C.bg, color: allSectionsExpanded ? "#fff" : C.ink, border: `1px solid ${allSectionsExpanded ? C.navy : C.line}` }}>
+          <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"} ({totalInstalled.length})
+        </button>
+        <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
+          {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : lang === "mr" ? "ड्रायव्हरला कॉल करा" : "ड्राइवर को कॉल करें"}</>}
+        </button>
       </div>
       {onlineNoLiveGps.length > 0 && (
-        <button onClick={() => setGpsOnly((v) => !v)} className="w-full rounded-lg p-3 mb-3 text-left" style={{ background: gpsOnly ? C.safety : "#FFF3F3", border: `1.5px solid ${C.safety}` }}>
+        <button onClick={() => { setGpsOnly((v) => !v); setExpandedSections((prev) => ({ ...prev, gpsOff: true })); }} className="w-full rounded-lg p-3 mb-3 text-left" style={{ background: gpsOnly ? C.safety : "#FFF3F3", border: `1.5px solid ${C.safety}` }}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: gpsOnly ? "#FFFFFF" : C.safety }}>
               <MapPin size={14} /> {lang === "en" ? "Online but no live GPS" : lang === "mr" ? "ऑनलाइन पण लाइव्ह GPS नाही" : "ऑनलाइन लेकिन लाइव GPS नहीं"}
@@ -2110,204 +2298,31 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
           </div>
         );
       })()}
-      <div className="grid grid-cols-2 gap-1.5 mb-2">
-        {[
-          ["on", lang === "en" ? "GPS ON" : lang === "mr" ? "GPS ऑन" : "GPS ऑन", gpsOnCount],
-          ["off", lang === "en" ? "GPS OFF" : lang === "mr" ? "GPS ऑफ" : "GPS ऑफ", totalInstalled.length - gpsOnCount],
-        ].map(([key, label, count]) => (
-          <button key={key} onClick={() => setGpsTab(gpsTab === key ? "all" : key)} className="rounded-lg py-3 text-sm font-bold text-center"
-            style={{ background: gpsTab === key ? C.marigoldDeep : C.bg, color: gpsTab === key ? "#fff" : C.inkSoft, border: `1px solid ${gpsTab === key ? C.marigoldDeep : C.line}` }}>
-            {label} ({count})
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-2 gap-1.5 mb-3">
-        {[
-          ["incomplete", lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरी", incompleteKycCount],
-          ["complete", lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी", totalInstalled.length - incompleteKycCount],
-        ].map(([key, label, count]) => (
-          <button key={key} onClick={() => setKycTab(kycTab === key ? "all" : key)} className="rounded-lg py-3 text-sm font-bold text-center"
-            style={{ background: kycTab === key ? C.navy : C.bg, color: kycTab === key ? "#fff" : C.inkSoft, border: `1px solid ${kycTab === key ? C.navy : C.line}` }}>
-            {label} ({count})
-          </button>
-        ))}
-      </div>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : lang === "mr" ? "नाव, गाडी नंबर किंवा मोबाइलने शोधा..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
-      <div className="space-y-2">
-        {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : lang === "mr" ? "कोणताही ड्रायव्हर सापडला नाही." : "कोई ड्राइवर नहीं मिला।"}</p>}
-        {filtered.map((d) => {
-          const km = kycMeta[d.kyc] || kycMeta.none;
-          const expanded = expandedId === d.id;
-          const editing = editingId === d.id;
-          const daysLeft = trialDaysLeft(d.createdAt);
-          const gps = gpsStatus(d, lang);
-          const pendingReview = !!d.vehicleSpec && d.kyc === "Pending";
-          const notSubmitted = !d.vehicleSpec;
-          const needsCapacity = !!d.vehicleSpec && !d.vehicleSpec.capacityKg;
-          return (
-            <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper }}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
-                  <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"} {fmt(d.wallet)}</div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: d.online ? C.success : C.marigoldDeep }}>{d.online ? (lang === "en" ? "Online" : lang === "mr" ? "ऑनलाइन" : "ऑनलाइन") : (lang === "en" ? "Offline" : lang === "mr" ? "ऑफलाइन" : "ऑफलाइन")}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5" style={{ color: gps.color, background: gps.bg }} title={lang === "en" ? "GPS status" : lang === "mr" ? "GPS स्थिती" : "GPS स्थिति"}>
-                    <MapPin size={9} /> GPS {gps.label}
-                  </span>
-                  {d.online && gps.stale && (
-                    sentGpsToday(d.mobile) ? (
-                      <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
-                    ) : (
-                      <a href={gpsWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markGpsWhatsappSent(d.mobile)}
-                        className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.success }}>
-                        <MessageCircle size={9} /> WhatsApp
-                      </a>
-                    )
-                  )}
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
-                  {(notSubmitted || needsCapacity) && (
-                    sentKycToday(d.mobile) ? (
-                      <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
-                    ) : (
-                      <a href={notSubmitted ? kycWhatsappLink(d.mobile) : capacityWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markKycWhatsappSent(d.mobile)}
-                        className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.marigoldDeep }}>
-                        <MessageCircle size={9} /> {notSubmitted
-                          ? (lang === "en" ? "KYC WhatsApp" : lang === "mr" ? "KYC व्हॉट्सअ‍ॅप" : "KYC व्हाट्सएप")
-                          : (lang === "en" ? "Capacity WhatsApp" : lang === "mr" ? "क्षमता व्हॉट्सअ‍ॅप" : "क्षमता व्हाट्सएप")}
-                      </a>
-                    )
-                  )}
-                  {daysLeft != null ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-                      {lang === "en" ? `Trial · ${daysLeft}d left` : lang === "mr" ? `ट्रायल · ${daysLeft} दिवस बाकी` : `ट्रायल · ${daysLeft} दिन बाकी`}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.inkSoft, background: "#E5E5E5" }}>{lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन"}</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between mt-2">
-                <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>
-                  {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
-                </button>
-                {d.vehicleSpec && (
-                  <div className="flex gap-2 shrink-0">
-                    <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
-                      {editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}
-                    </button>
-                    {pendingReview && (
-                      <>
-                        <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "नकारें"}</button>
-                        <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-              {editing ? (
-                <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <label className="text-[11px] col-span-2">
-                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle type" : lang === "mr" ? "गाडीचा प्रकार" : "गाड़ी का प्रकार"}</span>
-                      <select value={editDraft.type} onChange={(e) => setEditDraft((p) => ({ ...p, type: e.target.value }))}
-                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
-                        {!vehicleTypes.some((v) => v.key === editDraft.type) && <option value={editDraft.type}>{editDraft.type || "—"}</option>}
-                        {vehicleTypes.map((v) => <option key={v.key} value={v.key}>{lang === "en" ? (v.labelEn || v.label) : v.label}</option>)}
-                      </select>
-                    </label>
-                    <label className="text-[11px]">
-                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
-                      <input value={editDraft.vehicleNumber} onChange={(e) => setEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
-                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                    </label>
-                    <label className="text-[11px]">
-                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
-                      <input type="number" value={editDraft.capacityKg} onChange={(e) => setEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
-                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                    </label>
-                    <label className="text-[11px]">
-                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
-                      <input value={editDraft.length} onChange={(e) => setEditDraft((p) => ({ ...p, length: e.target.value }))}
-                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                    </label>
-                    <label className="text-[11px]">
-                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
-                      <input value={editDraft.width} onChange={(e) => setEditDraft((p) => ({ ...p, width: e.target.value }))}
-                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                    </label>
-                    <label className="text-[11px]">
-                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
-                      <input value={editDraft.height} onChange={(e) => setEditDraft((p) => ({ ...p, height: e.target.value }))}
-                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                    </label>
-                  </div>
-                  {editError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{editError}</p>}
-                  <div className="flex justify-end">
-                    <button onClick={() => saveEdit(d)} className="rounded-lg px-5 py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
-                      {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
-                    </button>
-                  </div>
-                </div>
-              ) : expanded && (
-                <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                  <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    {Object.entries(docLabels).map(([key, label]) => {
-                      const doc = d.docs?.[key];
-                      return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
-                    })}
-                  </div>
-                  {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
-                    <>
-                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
-                      <div className="grid grid-cols-2 gap-2 mb-2">
-                        {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} />}
-                        {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} />}
-                      </div>
-                    </>
-                  )}
-                  {d.vehicleSpec && (
-                    <div className="text-[11px] mb-2" style={{ color: C.ink }}>
-                      <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
-                      <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
-                    </div>
-                  )}
-                  {!d.vehicleSpec && !d.docs && <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>}
+      {q.trim() ? (
+        <div className="space-y-2">
+          {searchResults.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : lang === "mr" ? "कोणताही ड्रायव्हर सापडला नाही." : "कोई ड्राइवर नहीं मिला।"}</p>}
+          {searchResults.map(renderRow)}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sections.map(({ key, label, list }) => (
+            <div key={key} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
+              <button onClick={() => toggleSection(key)} className="w-full flex items-center justify-between px-3 py-3" style={{ background: expandedSections[key] ? C.bg : C.paper }}>
+                <span className="text-sm font-bold" style={{ color: C.ink }}>{label} ({list.length})</span>
+                <span className="text-sm font-bold" style={{ color: C.marigoldDeep }}>{expandedSections[key] ? "▲" : "▼"}</span>
+              </button>
+              {expandedSections[key] && (
+                <div className="px-3 pb-3 pt-1 space-y-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                  {list.length === 0
+                    ? <p className="text-xs pt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver here." : lang === "mr" ? "इथे कोणताही ड्रायव्हर नाही." : "यहां कोई ड्राइवर नहीं है।"}</p>
+                    : list.map(renderRow)}
                 </div>
               )}
-
-              <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                {d.blacklisted ? <span className="text-[11px] font-bold" style={{ color: C.safety }}>⛔ {lang === "en" ? "Blocked — won't get bookings" : lang === "mr" ? "ब्लॉक्ड — बुकिंग मिळणार नाही" : "ब्लॉक्ड — बुकिंग नहीं मिलेगी"}</span> : <span />}
-                <div className="flex items-center gap-2">
-                  {confirmDeleteId === d.id ? (
-                    <>
-                      <span className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Delete permanently?" : lang === "mr" ? "कायमचे काढून टाकायचे?" : "हमेशा के लिए हटाएं?"}</span>
-                      <button onClick={() => { deleteDriver(d.mobile || d.id); setConfirmDeleteId(null); }} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#fff", background: C.safety }}>
-                        {lang === "en" ? "Yes, delete" : lang === "mr" ? "हो, काढा" : "हां, हटाएं"}
-                      </button>
-                      <button onClick={() => setConfirmDeleteId(null)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg }}>
-                        {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: "#FFFFFF", background: d.blacklisted ? C.success : C.safety }}>
-                        {d.blacklisted ? (lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें") : (lang === "en" ? "Block" : lang === "mr" ? "ब्लॉक करा" : "ब्लॉक करें")}
-                      </button>
-                      <button onClick={() => setConfirmDeleteId(d.id)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
-                        {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
