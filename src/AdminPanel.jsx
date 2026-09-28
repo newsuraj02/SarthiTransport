@@ -1921,13 +1921,14 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
     });
     cancelEdit();
   };
-  // Not-yet-submitted / submitted-but-missing-capacity WhatsApp nudges
-  // (see AdminKyc's old whatsappLink/capacityWhatsappLink) -- one shared
-  // sent-today tracker for both since a driver can only ever be in one
-  // of these two states at once (missingCapacity requires vehicleSpec,
-  // notSubmittedKyc requires its absence).
-  const notSubmittedKyc = drivers.filter((d) => !d.vehicleSpec);
-  const missingCapacity = drivers.filter((d) => d.vehicleSpec && !d.vehicleSpec.capacityKg);
+  // Not-yet-submitted WhatsApp nudge queue (see AdminKyc's old
+  // whatsappLink/capacityWhatsappLink). Scoped to installedDrivers(drivers)
+  // (same population the sections above use), NOT the raw drivers array --
+  // that mismatch is exactly what made this queue's count disagree with
+  // the Incomplete section's count (a driver who's long gone quiet/
+  // uninstalled, or blacklisted, was still being counted and re-nudged
+  // here forever, on top of never showing up in Incomplete at all).
+  const notSubmittedKyc = installedDrivers(drivers).filter((d) => !d.vehicleSpec);
   const todayStrKyc = () => new Date().toISOString().slice(0, 10);
   const [kycWhatsappSentMap, setKycWhatsappSentMap] = usePersistedState("sarthi_kycWhatsappSent", {});
   const markKycWhatsappSent = (mobile) => setKycWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrKyc() }));
