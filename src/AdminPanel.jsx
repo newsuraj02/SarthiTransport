@@ -2036,12 +2036,20 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
-          <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"}
-          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{totalInstalled.length}</span>
+          <Users size={16} /> {lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}
         </div>
-        <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
-          {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : lang === "mr" ? "ड्रायव्हरला कॉल करा" : "ड्राइवर को कॉल करें"}</>}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Replaces the old separate "All" tab in both filter rows below
+              -- one button that resets GPS + KYC tabs together, kept next
+              to Call Driver instead of a third tab option in each row. */}
+          <button onClick={() => { setGpsTab("all"); setKycTab("all"); }} className="text-sm font-bold px-4 py-2.5 rounded-lg"
+            style={{ background: gpsTab === "all" && kycTab === "all" ? C.navy : C.bg, color: gpsTab === "all" && kycTab === "all" ? "#fff" : C.inkSoft, border: `1px solid ${gpsTab === "all" && kycTab === "all" ? C.navy : C.line}` }}>
+            {lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी"} ({totalInstalled.length})
+          </button>
+          <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
+            {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : lang === "mr" ? "ड्रायव्हरला कॉल करा" : "ड्राइवर को कॉल करें"}</>}
+          </button>
+        </div>
       </div>
       {onlineNoLiveGps.length > 0 && (
         <button onClick={() => setGpsOnly((v) => !v)} className="w-full rounded-lg p-3 mb-3 text-left" style={{ background: gpsOnly ? C.safety : "#FFF3F3", border: `1.5px solid ${C.safety}` }}>
@@ -2102,25 +2110,23 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
           </div>
         );
       })()}
-      <div className="grid grid-cols-3 gap-1.5 mb-2">
+      <div className="grid grid-cols-2 gap-1.5 mb-2">
         {[
-          ["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी", totalInstalled.length],
           ["on", lang === "en" ? "GPS ON" : lang === "mr" ? "GPS ऑन" : "GPS ऑन", gpsOnCount],
           ["off", lang === "en" ? "GPS OFF" : lang === "mr" ? "GPS ऑफ" : "GPS ऑफ", totalInstalled.length - gpsOnCount],
         ].map(([key, label, count]) => (
-          <button key={key} onClick={() => setGpsTab(key)} className="rounded-lg py-3 text-sm font-bold text-center"
+          <button key={key} onClick={() => setGpsTab(gpsTab === key ? "all" : key)} className="rounded-lg py-3 text-sm font-bold text-center"
             style={{ background: gpsTab === key ? C.marigoldDeep : C.bg, color: gpsTab === key ? "#fff" : C.inkSoft, border: `1px solid ${gpsTab === key ? C.marigoldDeep : C.line}` }}>
             {label} ({count})
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-1.5 mb-3">
+      <div className="grid grid-cols-2 gap-1.5 mb-3">
         {[
-          ["all", lang === "en" ? "All" : lang === "mr" ? "सर्व" : "सभी", totalInstalled.length],
           ["incomplete", lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरी", incompleteKycCount],
           ["complete", lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी", totalInstalled.length - incompleteKycCount],
         ].map(([key, label, count]) => (
-          <button key={key} onClick={() => setKycTab(key)} className="rounded-lg py-3 text-sm font-bold text-center"
+          <button key={key} onClick={() => setKycTab(kycTab === key ? "all" : key)} className="rounded-lg py-3 text-sm font-bold text-center"
             style={{ background: kycTab === key ? C.navy : C.bg, color: kycTab === key ? "#fff" : C.inkSoft, border: `1px solid ${kycTab === key ? C.navy : C.line}` }}>
             {label} ({count})
           </button>
