@@ -320,48 +320,6 @@ async function sendDirectRequestWhatsApp(driverMobile, load) {
   }
 }
 
-// Third channel for the exact same alert, sent ALONGSIDE push and
-// WhatsApp, not instead of either -- a driver whose WhatsApp number
-// somehow doesn't match their app login, or who's uninstalled WhatsApp
-// entirely, still gets a plain SMS. Indian SMS is regulated by TRAI's DLT
-// (Distributed Ledger Technology) platform: the sender ID and the message
-// body BOTH have to be pre-registered and approved there, and the body
-// sent here must match the registered template's wording EXACTLY
-// (including punctuation and variable order) or the telecom operator's
-// gateway silently drops it -- same class of manual approval step as the
-// WhatsApp template above, just a different portal (DLT, not Meta).
-// Needs KALEYRA_SMS_SID (SMS product's own SID, separate from Voice/
-// WhatsApp), KALEYRA_SMS_SENDER_ID (the approved 6-character DLT Sender
-// ID, e.g. "APNATR"), and KALEYRA_SMS_TEMPLATE_ID (the DLT-approved
-// template's id) -- until all three and KALEYRA_API_KEY are set, this
-// just logs and returns, same not_configured-style fallback as WhatsApp.
-const KALEYRA_SMS_SID = defineSecret("KALEYRA_SMS_SID");
-const KALEYRA_SMS_SENDER_ID = defineSecret("KALEYRA_SMS_SENDER_ID");
-const KALEYRA_SMS_TEMPLATE_ID = defineSecret("KALEYRA_SMS_TEMPLATE_ID");
-async function sendDirectRequestSms(driverMobile, load) {
-  const sid = KALEYRA_SMS_SID.value(), apiKey = KALEYRA_API_KEY.value(),
-    sender = KALEYRA_SMS_SENDER_ID.value(), templateId = KALEYRA_SMS_TEMPLATE_ID.value();
-  if (!sid || !apiKey || !sender || !templateId) {
-    console.error("[sms] direct-request alert skipped: Kaleyra SMS not configured.");
-    return;
-  }
-  // This exact wording (pickup, drop, weight, in this order) is what must
-  // be registered on the DLT platform against templateId -- changing this
-  // string without updating the DLT template first will get every SMS
-  // silently rejected.
-  const body = `New direct booking request! Pickup: ${load.pickup || "-"}, Drop: ${load.drop || "-"}, Weight: ${load.weight || "-"}kg. Open Apna Transport and respond within 120 seconds.`;
-  try {
-    const res = await fetch(`https://api.in.kaleyra.io/v1/${sid}/sms`, {
-      method: "POST",
-      headers: { "api-key": apiKey, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ to: `+91${driverMobile}`, type: "TXN", sender, body, template_id: templateId }),
-    });
-    if (!res.ok) console.error("[sms] direct-request alert rejected by Kaleyra:", await res.text());
-  } catch (e) {
-    console.error("[sms] direct-request alert send failed:", e.message);
-  }
-}
-
 // Fires whenever a booking becomes (or stays, but with a different driver)
 // "AwaitingDriver" — a fresh direct request from CustomerBooking's driver
 // picker, or a retarget after the previous driver timed out/rejected.
@@ -370,10 +328,7 @@ async function sendDirectRequestSms(driverMobile, load) {
 // pending, not on unrelated field updates to the same booking (e.g. the
 // customer's live GPS ticking during a still-Bidding wait elsewhere).
 exports.onDirectRequestAssigned = onDocumentWritten(
-  { document: "bookings/{bookingId}", secrets: [
-    KALEYRA_API_KEY, KALEYRA_WHATSAPP_SID, KALEYRA_WHATSAPP_NUMBER, KALEYRA_DIRECT_REQUEST_TEMPLATE,
-    KALEYRA_SMS_SID, KALEYRA_SMS_SENDER_ID, KALEYRA_SMS_TEMPLATE_ID,
-  ] },
+  { document: "bookings/{bookingId}", secrets: [KALEYRA_API_KEY, KALEYRA_WHATSAPP_SID, KALEYRA_WHATSAPP_NUMBER, KALEYRA_DIRECT_REQUEST_TEMPLATE] },
   async (event) => {
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
@@ -395,7 +350,6 @@ exports.onDirectRequestAssigned = onDocumentWritten(
     await Promise.all([
       driver.fcmToken ? sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId, driverDoc.id) : Promise.resolve(),
       sendDirectRequestWhatsApp(driverDoc.id, after),
-      sendDirectRequestSms(driverDoc.id, after),
     ]);
   }
 );
@@ -923,17 +877,24 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
   }
 });
 
-// ---------------- Number masking + WhatsApp + SMS (Kaleyra) ----------------
-// Replaces Exotel (the masked-calling below, and the WhatsApp/SMS
-// direct-request alerts further down, all use this same Kaleyra account)
+// ---------------- Number masking + WhatsApp (Kaleyra) ----------------
+// Replaces Exotel (the masked-calling below, and the WhatsApp
+// direct-request alert further down, both use this same Kaleyra account)
 // -- Kaleyra was picked specifically because it offers a Voice
-// click-to-call/bridge API, an official (Meta BSP) WhatsApp Business API,
-// AND SMS under one account, instead of needing several separate vendors.
+// click-to-call/bridge API AND an official (Meta BSP) WhatsApp Business
+// API under one account, instead of needing separate vendors. (An SMS
+// channel via Kaleyra was also built and shipped here briefly, then
+// removed -- India's TRAI DLT entity/sender/template registration turned
+// out to be more setup than wanted right now. Separately, the WhatsApp
+// channel itself is in the process of moving from Kaleyra to MSG91 --
+// sendDirectRequestWhatsApp below still targets Kaleyra's API until that
+// migration's account setup (MSG91 AuthKey, WhatsApp number, approved
+// template) is finished and this function gets rewritten against it.)
 //
 // Secrets (set via `firebase functions:secrets:set NAME`, never hardcoded
 // or committed):
-//   KALEYRA_API_KEY        -- the account's api-key (shared by Voice,
-//                             WhatsApp and SMS all, see developers.kaleyra.io).
+//   KALEYRA_API_KEY        -- the account's api-key (shared by Voice and
+//                             WhatsApp both, see developers.kaleyra.io).
 //   KALEYRA_VOICE_SID      -- the Voice product's SID (masked calling).
 //   KALEYRA_CALLER_ID      -- the bridge/masking number provisioned on
 //                             Kaleyra's Voice dashboard for this account.
@@ -944,15 +905,8 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
 //   KALEYRA_DIRECT_REQUEST_TEMPLATE -- the exact template name Meta has
 //                             approved for the direct-request alert (see
 //                             sendDirectRequestWhatsApp's own comment --
-//                             this is WhatsApp's equivalent of the SMS
-//                             DLT template registration below: a manual
-//                             approval step, not something fixable here).
-//   KALEYRA_SMS_SID        -- the SMS product's own SID (see
-//                             sendDirectRequestSms).
-//   KALEYRA_SMS_SENDER_ID  -- the approved 6-character DLT Sender ID.
-//   KALEYRA_SMS_TEMPLATE_ID -- the DLT-approved template id whose
-//                             registered wording sendDirectRequestSms's
-//                             body string must match exactly.
+//                             a manual approval step, not something
+//                             fixable here).
 // Until the secrets a given feature needs are set, that feature returns
 // reason: "not_configured" (masked calling: the client falls back to a
 // plain tel: link) or just logs and returns (the WhatsApp/SMS alerts:
