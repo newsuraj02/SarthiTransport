@@ -1253,3 +1253,95 @@ exports.dailyHealthCheckMorning = onSchedule({ schedule: "0 9 * * *", timeZone: 
 exports.dailyHealthCheckNight = onSchedule({ schedule: "0 23 * * *", timeZone: "Asia/Kolkata", region: "asia-south1" }, async () => {
   await runDailyHealthCheck("lastNightRun");
 });
+
+// Daily business snapshot -- a frozen copy of every KPI tile on
+// AdminFleet's Live Dashboard (src/App.jsx), written once a day so admin
+// has a real day-by-day record of how the business is trending instead
+// of only ever seeing "right now" numbers that can't be compared across
+// days once they change. Runs just after midnight IST, so by the time it
+// fires the previous day (targetDate below) is fully over -- no risk of
+// capturing a partial day the way running at 23:55 or earlier would.
+//
+// Mirrors the dashboard's own logic (isLikelyUninstalled/driverInstallStatus,
+// isInTrial, isFutureAdvance, isToday) by hand -- same manual-sync-required
+// duplication as FARE_TIER_MAX_KGS/haversineKm elsewhere in this file,
+// since Cloud Functions can't import src/App.jsx directly. If any of those
+// definitions change on the client, this needs the same change made here.
+const SNAPSHOT_UNINSTALL_INACTIVE_DAYS = 14;
+const SNAPSHOT_TRIAL_DAYS = 30;
+const SNAPSHOT_DAY_MS = 24 * 60 * 60 * 1000;
+function snapshotIsLikelyUninstalled(driver) {
+  const ts = driver.lastActiveAt?.toMillis ? driver.lastActiveAt : driver.createdAt;
+  if (!ts?.toMillis) return false;
+  return (Date.now() - ts.toMillis()) >= SNAPSHOT_UNINSTALL_INACTIVE_DAYS * SNAPSHOT_DAY_MS;
+}
+function snapshotIsInTrial(createdAt) {
+  return createdAt?.toMillis ? (Date.now() - createdAt.toMillis()) < SNAPSHOT_TRIAL_DAYS * SNAPSHOT_DAY_MS : true;
+}
+// scheduledFor is stored as "YYYY-MM-DD HH:MM" -- matches isFutureAdvance's
+// own plain string comparison against a UTC ISO date exactly (see its
+// comment in App.jsx for why this doesn't need timezone math), not the IST
+// dates used everywhere else in this function, to stay faithful to what
+// the live dashboard itself actually shows admin today.
+function snapshotIsFutureAdvance(scheduledFor, utcTodayStr) {
+  if (!scheduledFor) return false;
+  return scheduledFor.split(" ")[0] > utcTodayStr;
+}
+// India has no DST, so this is a safe, simple way to get a Firestore
+// Timestamp's calendar date in the business's own timezone -- "en-CA"
+// purely because that locale's date format is already "YYYY-MM-DD".
+function istDateStr(date) {
+  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+exports.dailyAdminSnapshot = onSchedule({ schedule: "5 0 * * *", timeZone: "Asia/Kolkata", region: "asia-south1" }, async () => {
+  const targetDate = istDateStr(new Date(Date.now() - SNAPSHOT_DAY_MS)); // "yesterday", now fully over
+  const utcTodayStr = new Date().toISOString().slice(0, 10);
+
+  const [driversSnap, customersSnap, bookingsSnap, settingsSnap] = await Promise.all([
+    db.collection("drivers").get(),
+    db.collection("customers").get(),
+    db.collection("bookings").get(),
+    db.collection("settings").doc("main").get(),
+  ]);
+  const drivers = driversSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const customers = customersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const bookings = bookingsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const minWallet = settingsSnap.data()?.minWallet ?? 500;
+
+  const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
+  const notReadyApprovedDrivers = drivers.filter((d) => !d.online && d.kyc === "Approved" && !d.blacklisted);
+  const offDutyDrivers = notReadyApprovedDrivers.filter((d) => !snapshotIsLikelyUninstalled(d));
+  const uninstalledDrivers = drivers.filter((d) => !d.blacklisted && snapshotIsLikelyUninstalled(d));
+  const blacklistedDrivers = drivers.filter((d) => d.blacklisted);
+  const installedDrivers = drivers.filter((d) => !d.blacklisted && !snapshotIsLikelyUninstalled(d));
+  const liveMapLocatedCount = installedDrivers.filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null).length;
+  const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && (d.wallet || 0) < minWallet);
+  const newCustomersToday = customers.filter((c) => c.createdAt?.toDate && istDateStr(c.createdAt.toDate()) === targetDate);
+  const newDriversToday = drivers.filter((d) => d.createdAt?.toDate && istDateStr(d.createdAt.toDate()) === targetDate);
+  const trialDrivers = drivers.filter((d) => snapshotIsInTrial(d.createdAt) && d.name && d.name !== d.mobile && d.kyc === "Approved");
+  const cancelledTodayList = bookings.filter((b) => b.status === "Cancelled" && b.cancelledAt?.toDate && istDateStr(b.cancelledAt.toDate()) === targetDate);
+  const bookedTodayList = bookings.filter((b) => (b.status === "Ongoing" || b.status === "Completed") && b.createdAt?.toDate && istDateStr(b.createdAt.toDate()) === targetDate);
+  const advanceBookingsList = bookings.filter((b) => snapshotIsFutureAdvance(b.scheduledFor, utcTodayStr) && b.status !== "Cancelled" && b.status !== "Completed");
+
+  await db.collection("dailyAdminSnapshots").doc(targetDate).set({
+    date: targetDate,
+    generatedAt: FieldValue.serverTimestamp(),
+    newRegistrations: newCustomersToday.length + newDriversToday.length,
+    newCustomers: newCustomersToday.length,
+    newDrivers: newDriversToday.length,
+    lowWalletOnlineDrivers: lowWalletDrivers.length,
+    cancelledToday: cancelledTodayList.length,
+    bookedToday: bookedTodayList.length,
+    onlineReadyDrivers: readyOnlineDrivers.length,
+    liveMapLocatedDrivers: liveMapLocatedCount,
+    offDutyDrivers: offDutyDrivers.length,
+    uninstalledDrivers: uninstalledDrivers.length,
+    blacklistedDrivers: blacklistedDrivers.length,
+    uninstalledOrBlockedDrivers: uninstalledDrivers.length + blacklistedDrivers.length,
+    advanceBookings: advanceBookingsList.length,
+    trialDrivers: trialDrivers.length,
+    totalDrivers: drivers.length,
+    totalInstalledDrivers: installedDrivers.length,
+    totalCustomers: customers.length,
+  });
+});
