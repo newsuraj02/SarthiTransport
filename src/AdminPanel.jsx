@@ -1882,7 +1882,7 @@ function AdminCallLogs({ callLogs, bookings, lang }) {
 // Merged so every action for a given driver lives on that driver's own
 // row here, instead of admin having to jump between two different
 // screens to finish reviewing one signup.
-function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverKyc, updateDriverVehicleSpec, lang }) {
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -1897,6 +1897,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
   const startEdit = (d) => {
     setEditingId(d.id);
     setEditDraft({
+      type: d.vehicleSpec?.type || "",
       vehicleNumber: d.vehicleSpec?.vehicleNumber || "",
       capacityKg: d.vehicleSpec?.capacityKg != null ? String(d.vehicleSpec.capacityKg) : "",
       length: d.vehicleSpec?.length || "",
@@ -1913,6 +1914,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
       return;
     }
     await updateDriverVehicleSpec(d.id, {
+      type: editDraft.type,
       vehicleNumber: editDraft.vehicleNumber.trim().toUpperCase(),
       capacityKg,
       length: editDraft.length.trim(), width: editDraft.width.trim(), height: editDraft.height.trim(),
@@ -2162,19 +2164,31 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
                 <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>
                   {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
                 </button>
-                {pendingReview && (
+                {d.vehicleSpec && (
                   <div className="flex gap-2 shrink-0">
                     <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
                       {editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}
                     </button>
-                    <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "नकारें"}</button>
-                    <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                    {pendingReview && (
+                      <>
+                        <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "नकारें"}</button>
+                        <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
               {editing ? (
                 <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
                   <div className="grid grid-cols-2 gap-2 mb-2">
+                    <label className="text-[11px] col-span-2">
+                      <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle type" : lang === "mr" ? "गाडीचा प्रकार" : "गाड़ी का प्रकार"}</span>
+                      <select value={editDraft.type} onChange={(e) => setEditDraft((p) => ({ ...p, type: e.target.value }))}
+                        className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
+                        {!vehicleTypes.some((v) => v.key === editDraft.type) && <option value={editDraft.type}>{editDraft.type || "—"}</option>}
+                        {vehicleTypes.map((v) => <option key={v.key} value={v.key}>{lang === "en" ? (v.labelEn || v.label) : v.label}</option>)}
+                      </select>
+                    </label>
                     <label className="text-[11px]">
                       <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
                       <input value={editDraft.vehicleNumber} onChange={(e) => setEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
@@ -2202,9 +2216,11 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
                     </label>
                   </div>
                   {editError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{editError}</p>}
-                  <button onClick={() => saveEdit(d)} className="w-full rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
-                    {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
-                  </button>
+                  <div className="flex justify-end">
+                    <button onClick={() => saveEdit(d)} className="rounded-lg px-5 py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
+                      {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
+                    </button>
+                  </div>
                 </div>
               ) : expanded && (
                 <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
