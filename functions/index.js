@@ -320,6 +320,77 @@ async function sendDirectRequestWhatsApp(driverMobile, load) {
   }
 }
 
+// TEMPORARY broadcast-dispatch experiment (see src/App.jsx:
+// requestByCategory/isDriverBroadcastEligible) — a fresh category-based
+// request created with nobody individually targeted (pendingDriverName
+// null) alerts every eligible driver at once (push + WhatsApp), not just
+// the single nearest one onDirectRequestAssigned below still handles for
+// the separate Bidding-accept flow. onDocumentCreated (not Written) since
+// this should fire exactly once, at creation -- a later update to the
+// same still-open booking (e.g. addDeclinedBy adding one more name to
+// declinedBy) must NOT re-blast everyone who already got it.
+//
+// Capacity/tier matching mirrors isDriverBroadcastEligible's own bracket
+// logic. FARE_TIER_MAX_KGS/DISPATCH_MAX_TIER_CLIMB are duplicated here --
+// same manual-sync-required pattern as notificationLockHours/haversineKm
+// above, since Cloud Functions can't import client code -- and safe to
+// hardcode since these are fixed code constants on the client too, never
+// Admin-editable (see App.jsx's own "Always the code constant now, never
+// settings.fareTiers" comment).
+const DIRECT_REQUEST_RADIUS_KM = 30;
+const DISPATCH_MAX_TIER_CLIMB = 2;
+const FARE_TIER_MAX_KGS = [500, 850, 1200, 1700, 2500, 4500, 7000, 999999];
+function fareTierMaxKgFor(capacityKg) {
+  return FARE_TIER_MAX_KGS.find((maxKg) => (capacityKg || 0) <= maxKg) ?? FARE_TIER_MAX_KGS[FARE_TIER_MAX_KGS.length - 1];
+}
+function tierMaxKgAboveServer(tierMaxKg, offset) {
+  const baseIdx = Math.max(0, FARE_TIER_MAX_KGS.indexOf(tierMaxKg));
+  return FARE_TIER_MAX_KGS[Math.min(baseIdx + offset, FARE_TIER_MAX_KGS.length - 1)];
+}
+exports.onDirectRequestBroadcast = onDocumentCreated(
+  { document: "bookings/{bookingId}", secrets: [KALEYRA_API_KEY, KALEYRA_WHATSAPP_SID, KALEYRA_WHATSAPP_NUMBER, KALEYRA_DIRECT_REQUEST_TEMPLATE] },
+  async (event) => {
+    const load = event.data?.data();
+    if (!load || load.status !== "AwaitingDriver" || load.pendingDriverName) return;
+
+    const [driversSnap, ongoingSnap] = await Promise.all([
+      db.collection("drivers").get(),
+      db.collection("bookings").where("status", "==", "Ongoing").get(),
+    ]);
+    const ongoingByDriver = {};
+    ongoingSnap.forEach((doc) => {
+      const b = doc.data();
+      if (!b.driverName) return;
+      (ongoingByDriver[b.driverName] ||= []).push(b);
+    });
+
+    const sends = [];
+    driversSnap.forEach((doc) => {
+      const driver = doc.data();
+      if (!driver.online || driver.kyc !== "Approved" || driver.blacklisted) return;
+
+      const capacityKg = Number(driver.vehicleSpec?.capacityKg) || 0;
+      const driverTierMaxKg = fareTierMaxKgFor(capacityKg);
+      let tierMatch = false;
+      for (let offset = 0; offset <= DISPATCH_MAX_TIER_CLIMB; offset++) {
+        if (driverTierMaxKg === tierMaxKgAboveServer(load.tierMaxKg, offset)) { tierMatch = true; break; }
+      }
+      if (!tierMatch) return;
+
+      if (load.pickupLat == null || !driver.lastKnownLocation) return;
+      if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > DRIVER_LOCATION_STALE_MS) return;
+      if (haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng) > DIRECT_REQUEST_RADIUS_KM) return;
+
+      const lockHours = notificationLockHours(capacityKg);
+      if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) return;
+
+      if (driver.fcmToken) sends.push(sendDirectRequestAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
+      sends.push(sendDirectRequestWhatsApp(doc.id, load));
+    });
+    await Promise.all(sends);
+  }
+);
+
 // Fires whenever a booking becomes (or stays, but with a different driver)
 // "AwaitingDriver" — a fresh direct request from CustomerBooking's driver
 // picker, or a retarget after the previous driver timed out/rejected.
@@ -327,6 +398,9 @@ async function sendDirectRequestWhatsApp(driverMobile, load) {
 // same as onNewLoadPosted above. Only fires on a real change of who's
 // pending, not on unrelated field updates to the same booking (e.g. the
 // customer's live GPS ticking during a still-Bidding wait elsewhere).
+// (Doesn't overlap with onDirectRequestBroadcast above: that only fires
+// for a broadcast booking's creation, no pendingDriverName; this only
+// fires once one gets set, i.e. the Bidding-accept flow.)
 exports.onDirectRequestAssigned = onDocumentWritten(
   { document: "bookings/{bookingId}", secrets: [KALEYRA_API_KEY, KALEYRA_WHATSAPP_SID, KALEYRA_WHATSAPP_NUMBER, KALEYRA_DIRECT_REQUEST_TEMPLATE] },
   async (event) => {

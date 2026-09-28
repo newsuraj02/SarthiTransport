@@ -1,5 +1,6 @@
 import {
   collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc, query, orderBy, serverTimestamp, writeBatch,
+  runTransaction, arrayUnion,
 } from "firebase/firestore";
 import { getDb, hasConfig } from "./firebaseClient";
 
@@ -116,6 +117,40 @@ export async function patchDoc(name, id, patch) {
 // profile entirely, not just blocking them).
 export async function removeDoc(name, id) {
   await withRetry(() => deleteDoc(doc(getDb(), name, id)));
+}
+
+// Atomically claims an open ("AwaitingDriver", not yet assigned) booking --
+// used by broadcast dispatch, where several drivers can see and tap Accept
+// on the same load at once. A plain patchDoc gated by the caller's own
+// locally-cached booking state (the old single-target-driver pattern) is
+// NOT safe here: two drivers' clients could both read "still open" from
+// stale cache and both write, with Firestore's last-write-wins silently
+// handing the job to whoever wrote second while the first driver's own app
+// still thinks they got it. A transaction re-reads the doc from the server
+// at commit time and only applies `patch` if it's still actually open,
+// so exactly one caller ever gets { ok: true } for a given booking.
+export async function claimBooking(id, patch) {
+  const db = getDb();
+  return withRetry(() => runTransaction(db, async (tx) => {
+    const ref = doc(db, "bookings", id);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return { ok: false, reason: "not-found" };
+    const data = snap.data();
+    if (data.status !== "AwaitingDriver" || data.driverMobile) return { ok: false, reason: "taken" };
+    tx.update(ref, patch);
+    return { ok: true };
+  }));
+}
+
+// Adds one name to a booking's declinedBy array without needing to read
+// the current array first -- a plain patchDoc with a locally-computed
+// [...prev, name] can lose another concurrent decline the same way
+// claimBooking's comment describes for accepts (lower stakes here since
+// nothing is wrongly "won", but still worth doing correctly now that
+// broadcast dispatch means concurrent declines on the same booking are
+// common instead of rare).
+export async function addDeclinedBy(name, id, driverName) {
+  await withRetry(() => updateDoc(doc(getDb(), name, id), { declinedBy: arrayUnion(driverName) }));
 }
 
 // Patches many docs in one go (e.g. a diesel-price adjustment nudging

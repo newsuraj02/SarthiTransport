@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs,
+  claimBooking, addDeclinedBy,
 } from "./firestoreStore";
 import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
@@ -1070,6 +1071,44 @@ function tierMaxKgAbove(tierMaxKg, offset, tiers = DEFAULT_FARE_TIERS) {
   const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
   const baseIdx = Math.max(0, list.findIndex((t) => t.maxKg === tierMaxKg));
   return list[Math.min(baseIdx + offset, list.length - 1)].maxKg;
+}
+
+// Broadcast dispatch radius for a fresh category-based request (see
+// requestByCategory) — every eligible driver within this distance of
+// pickup, in the customer's own category or up to DISPATCH_MAX_TIER_CLIMB
+// brackets above it, sees the request at once (no single nearest-first
+// target, no per-driver timeout) and whoever accepts first gets it. A
+// temporary experiment requested in place of the old one-driver-at-a-time
+// + retarget-on-timeout ladder (still used unchanged for the separate
+// Bidding-accept flow — see driverRespondBooking/ActiveRide branching on
+// whether pendingDriverName is set).
+const DIRECT_REQUEST_RADIUS_KM = 30;
+
+// Whether driver d currently qualifies to see/accept broadcast booking b:
+// online, KYC-approved, not blacklisted; own vehicle capacity resolves to
+// b's own category or up to DISPATCH_MAX_TIER_CLIMB brackets above it;
+// hasn't already declined it; has a fresh GPS fix within
+// DIRECT_REQUEST_RADIUS_KM of pickup (same staleness cutoff as every other
+// live-location check in this file); and has no scheduling conflict.
+// Pure/explicit-args like findDriverLoadConflict/tierMaxKgAbove above, so
+// both requestByCategory (checking "does anyone qualify at all") and
+// DriverHome (building each driver's own list of open requests) share the
+// exact same notion of "eligible" and can never drift apart.
+function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang) {
+  if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+  if ((b.declinedBy || []).includes(d.name)) return false;
+  const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+  const dTierMaxKg = findFareTier(dCapKg, fareTiers).maxKg;
+  let tierMatch = false;
+  for (let offset = 0; offset <= DISPATCH_MAX_TIER_CLIMB; offset++) {
+    if (dTierMaxKg === tierMaxKgAbove(b.tierMaxKg, offset, fareTiers)) { tierMatch = true; break; }
+  }
+  if (!tierMatch) return false;
+  if (b.pickupLat == null || !d.lastKnownLocation) return false;
+  if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
+  if (haversineKm(d.lastKnownLocation.lat, d.lastKnownLocation.lng, b.pickupLat, b.pickupLng) > DIRECT_REQUEST_RADIUS_KM) return false;
+  if (findDriverLoadConflict(d, b, bookings, vehicleTypes, lang)) return false;
+  return true;
 }
 
 // Same sqrt taper scripts/importMaharashtraDefaults.mjs's
@@ -5635,16 +5674,20 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
   const bidsListRef = useRef(null);
   useFlipListAnimation(bidsListRef, displayBids.map((x) => x.id));
 
-  // 2-minute countdown while waiting on a category-dispatched driver (see
-  // the AwaitingDriver branch below, where it's shown inside the clock
-  // icon) — once it hits 0, reassignAwaitingDriver retargets the booking
-  // at the next eligible driver in the same vehicle category and this
-  // restarts (looping back through the category up to DISPATCH_MAX_PASSES
-  // times before giving up — see retargetToNextDriver). Computed
+  // 2-minute countdown while waiting on a customer-accepted BID's specific
+  // driver (b.pendingDriverName set) — once it hits 0, reassignAwaitingDriver
+  // retargets the booking at the next eligible driver in the same vehicle
+  // category and this restarts (looping back through the category up to
+  // DISPATCH_MAX_PASSES times before giving up — see retargetToNextDriver).
+  // Does NOT apply to a broadcast request from requestByCategory
+  // (pendingDriverName null, TEMPORARY experiment — see
+  // DIRECT_REQUEST_RADIUS_KM) -- there's no single driver to time out on,
+  // every eligible driver already sees it at once (see the AwaitingDriver
+  // branch below, which shows a different screen for that case). Computed
   // unconditionally, same reasoning as sortedBids above, so this hook is
   // always called in the same order regardless of which branch below
   // actually renders.
-  const isAwaiting = b.status === "AwaitingDriver";
+  const isAwaiting = b.status === "AwaitingDriver" && !!b.pendingDriverName;
   const [secondsLeft, setSecondsLeft] = useState(AWAITING_DRIVER_TIMEOUT_SEC);
   const reassignedForRef = useRef(null);
   useEffect(() => {
@@ -5673,7 +5716,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
-  if (b.status === "AwaitingDriver") {
+  if (b.status === "AwaitingDriver" && b.pendingDriverName) {
     const pd = drivers.find((d) => d.name === b.pendingDriverName);
     const pdVeh = VEHICLES.find((vt) => vt.key === pd?.vehicleSpec?.type);
     return (
@@ -5690,6 +5733,33 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
           </div>
           <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for Driver's Confirmation" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
           <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{pdVeh ? `${vehicleLabel(pdVeh, lang)} · ${b.pendingDriverName}` : b.pendingDriverName}{b.fare ? ` · ${fmt(b.fare)}` : ""}</div>
+        </div>
+        <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: "#8B0000" }}>
+          {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+        </button>
+      </div>
+    );
+  }
+
+  // Broadcast request, nobody individually targeted yet (TEMPORARY
+  // experiment — see DIRECT_REQUEST_RADIUS_KM/requestByCategory) — no
+  // countdown (no single driver to time out on; every eligible driver
+  // within the radius already sees it at once, see DriverHome's list).
+  if (b.status === "AwaitingDriver") {
+    return (
+      <div className="min-h-full flex flex-col justify-between px-5 py-5">
+        <div className="rounded-xl p-4 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+          {b.scheduledFor && (
+            <div className="rounded-lg p-2 mb-3 flex items-center justify-center gap-1.5 shadow-lg" style={{ background: C.marigoldDeep }}>
+              <Clock3 size={12} color="#FFFFFF" />
+              <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
+            </div>
+          )}
+          <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2 guided-submit-ready" style={{ background: C.navy }}>
+            <Truck size={20} color="#FFFFFF" />
+          </div>
+          <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Notifying Nearby Drivers" : lang === "mr" ? "जवळच्या ड्रायव्हर्सना कळवत आहोत" : "आस-पास के ड्राइवरों को सूचित किया जा रहा है"}</div>
+          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{b.fare ? fmt(b.fare) : ""}</div>
         </div>
         <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: "#8B0000" }}>
           {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
@@ -6871,7 +6941,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, lang, onOpenWallet, locationPermission }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, fareTiers, lang, onOpenWallet, locationPermission }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
@@ -7114,8 +7184,37 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // left to change server-side (see driverRespondBooking), so it's hidden
   // locally instead via this dismissed-ids list.
   const [dismissedAwaitingIds, setDismissedAwaitingIds] = usePersistedState(`sarthi_dismissedAwaiting_${driver.mobile || driver.name}`, []);
-  const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && !dismissedAwaitingIds.includes(b.id)
+  // b.pendingDriverName required (not just declinedBy) so a broadcast
+  // booking (TEMPORARY experiment — see DIRECT_REQUEST_RADIUS_KM above,
+  // where pendingDriverName is always null) never matches here just
+  // because this driver declined it -- that would resurface it through
+  // this single-target ladder's card (wrong copy, and no protection
+  // against re-accepting something already declined) instead of simply
+  // staying gone, which is what broadcastBookings' own declinedBy check
+  // below already guarantees for the broadcast case.
+  const awaitingBooking = bookings.find((b) => b.status === "AwaitingDriver" && b.pendingDriverName && !dismissedAwaitingIds.includes(b.id)
     && (b.pendingDriverName === driver.name || (b.declinedBy || []).includes(driver.name)));
+  // Broadcast requests (TEMPORARY experiment — see DIRECT_REQUEST_RADIUS_KM):
+  // every currently-open, nobody-individually-targeted booking (pendingDriverName
+  // null) this driver qualifies for, nearest-pickup-first. Declining one
+  // (addDeclinedBy, see driverRespondBooking) naturally drops it out of
+  // this list on the next render via isDriverBroadcastEligible's own
+  // declinedBy check — no separate local dismiss list needed here, unlike
+  // awaitingBooking above.
+  const broadcastBookings = bookings
+    .filter((b) => b.status === "AwaitingDriver" && !b.pendingDriverName && isDriverBroadcastEligible(driver, b, vehicleTypes, bookings, fareTiers, lang))
+    .sort((a, b) => haversineKm(driver.lastKnownLocation?.lat, driver.lastKnownLocation?.lng, a.pickupLat, a.pickupLng)
+      - haversineKm(driver.lastKnownLocation?.lat, driver.lastKnownLocation?.lng, b.pickupLat, b.pickupLng));
+  const [respondingBroadcastId, setRespondingBroadcastId] = useState(null);
+  const [broadcastError, setBroadcastError] = useState("");
+  const respondToBroadcast = (bookingId, accept) => {
+    setBroadcastError("");
+    setRespondingBroadcastId(bookingId);
+    Promise.resolve(driverRespondBooking?.(bookingId, accept)).then((err) => {
+      setRespondingBroadcastId(null);
+      if (err) setBroadcastError(err);
+    });
+  };
   // Ringtone-style repeating strong beep while this screen is up — the
   // background push (see functions/index.js: onDirectRequestAssigned) is
   // what actually reaches the driver if the app is closed; this is the
@@ -7124,12 +7223,13 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // beep is harder to miss while the driver isn't necessarily looking at
   // the screen, and won't overlap/garble mid-sentence the way stacking a
   // spoken phrase at a 1s interval would.
+  const nearestBroadcastId = broadcastBookings[0]?.id;
   useEffect(() => {
-    if (!awaitingBooking) return;
+    if (!awaitingBooking && !nearestBroadcastId) return;
     playStrongBeep();
     const id = setInterval(playStrongBeep, 1000);
     return () => clearInterval(id);
-  }, [awaitingBooking?.id]);
+  }, [awaitingBooking?.id, nearestBroadcastId]);
 
   if (showBgLocationDisclosure) {
     return (
@@ -7212,6 +7312,62 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
               {lang === "en" ? "Accept" : lang === "mr" ? "स्वीकारा" : "स्वीकार"}
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Broadcast requests list (TEMPORARY experiment — see broadcastBookings
+  // above) — takes over the screen the same way the single bid-accept card
+  // above does, but as a scrollable list since several can be open to this
+  // driver at once, nearest pickup first. Each card acts independently
+  // (respondingBroadcastId disables only the card actually being tapped,
+  // not the whole list) since accepting one doesn't affect the others.
+  if (broadcastBookings.length > 0 && !myTrip) {
+    return (
+      <div className="px-5 pt-5 pb-5">
+        <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.success }}>
+          <CheckCircle2 size={16} color="#FFFFFF" />
+          <span className="text-sm font-black text-white">
+            {lang === "en" ? `${broadcastBookings.length} new load${broadcastBookings.length > 1 ? "s" : ""} near you` : lang === "mr" ? `तुमच्या जवळ ${broadcastBookings.length} नवीन लोड` : `आपके पास ${broadcastBookings.length} नए लोड`}
+          </span>
+        </div>
+        {broadcastError && (
+          <div className="rounded-lg p-2.5 mb-3 text-xs font-bold text-center text-white" style={{ background: C.safety }}>{broadcastError}</div>
+        )}
+        <div className="space-y-3">
+          {broadcastBookings.map((b) => {
+            const responding = respondingBroadcastId === b.id;
+            return (
+              <div key={b.id} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
+                <RideTypeBanner booking={b} lang={lang} />
+                <div className="mb-2">
+                  <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
+                  <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{b.distance} {lang === "en" ? "km" : "किमी"}</span>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{b.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+                </div>
+                {b.fare != null && (
+                  <div className="text-center rounded-lg py-2.5 mb-3" style={{ background: C.metallicGold }}>
+                    <div className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Your fare" : lang === "mr" ? "तुमचे भाडे" : "आपका भाड़ा"}</div>
+                    <div className="text-2xl font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(b.fare)}</div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" disabled={responding} onClick={() => respondToBroadcast(b.id, false)}
+                    className="rounded-lg py-3.5 text-base font-black" style={{ background: C.paper, border: `2px solid ${C.safety}`, color: C.safety, opacity: responding ? 0.5 : 1 }}>
+                    {lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "अस्वीकार"}
+                  </button>
+                  <button type="button" disabled={responding} onClick={() => respondToBroadcast(b.id, true)}
+                    className="rounded-lg py-3.5 text-base font-black text-white guided-submit-ready" style={{ background: C.metallicGreen, opacity: responding ? 0.5 : 1 }}>
+                    {responding ? "…" : (lang === "en" ? "Accept" : lang === "mr" ? "स्वीकारा" : "स्वीकार")}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -8614,7 +8770,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
@@ -9493,47 +9649,43 @@ export default function App() {
     return candidates[0] || null;
   };
 
-  // Category-based booking: the customer sees every real, currently
-  // eligible driver in a category individually (see CustomerBooking's
-  // driver list — KYC photo, that category's label, capacity, fare) and
-  // picks the specific one they want, rather than the system silently
-  // auto-picking the nearest. `driverName` is that choice; if it's no
-  // longer eligible by the time this runs (went offline, took another
-  // load), this fails rather than silently substituting a driver the
-  // customer never saw or chose. Omitting driverName falls back to
-  // nearest-in-tier (kept for any caller that still wants pure
-  // auto-dispatch). Either way, if THIS driver doesn't respond in time,
-  // retargetToNextDriver takes over automatically — nearest-first,
-  // cycling through the rest of the category and looping up to
-  // DISPATCH_MAX_PASSES times — exactly as if the customer's pick had
-  // been the "nearest" one to begin with. Fare is resolved from the
-  // category itself (resolveFareForTier), not the specific driver, so
-  // it's the same number for every driver shown in that category. Returns
-  // an error message string to show the customer, or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, driverName }) => {
+  // Category-based booking (TEMPORARY broadcast experiment — see
+  // DIRECT_REQUEST_RADIUS_KM/isDriverBroadcastEligible): every driver
+  // within DIRECT_REQUEST_RADIUS_KM of pickup whose capacity falls in the
+  // customer's chosen category or up to DISPATCH_MAX_TIER_CLIMB brackets
+  // above it sees this request at once (see DriverHome's broadcast list) —
+  // whoever accepts first gets it (driverRespondBooking's claimBooking
+  // transaction). A specific driver tapped in CustomerBooking's list
+  // (`driverName`, now unused here) no longer pins the request to just
+  // them — there's no meaningful difference anymore between "customer
+  // picked someone" and "system auto-picked nearest" once nobody is
+  // individually targeted. This only replaces the FRESH-request path;
+  // acceptBid's own single-target AwaitingDriver (a customer accepting one
+  // specific bid) is untouched, still handled by the old
+  // retargetToNextDriver ladder — see driverRespondBooking/ActiveRide
+  // branching on whether pendingDriverName is set. Fare is resolved from
+  // the category itself (resolveFareForTier), not any specific driver.
+  // Returns an error message string to show the customer (nobody eligible
+  // at all right now), or null on success.
+  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng }) => {
     const bookingId = genId();
-    let nearest;
-    if (driverName) {
-      const chosen = drivers.find((d) => d.name === driverName);
-      const stillEligible = chosen && chosen.online && chosen.kyc === "Approved" && !chosen.blacklisted
-        && !findDriverLoadConflict(chosen, { id: bookingId, scheduledFor }, bookings, vehicleTypes, lang);
-      nearest = stillEligible ? chosen : null;
-    } else {
-      nearest = nearestEligibleDriverInTier(tierMaxKg, pickupLat, pickupLng, scheduledFor, [], bookingId);
-    }
-    if (!nearest) {
-      return lang === "en" ? "That vehicle is no longer available — please pick another." : lang === "mr" ? "ते वाहन आता उपलब्ध नाही — कृपया दुसरे निवडा." : "वह वाहन अब उपलब्ध नहीं है — कृपया दूसरा चुनें।";
+    const draftBooking = { id: bookingId, tierMaxKg, pickupLat, pickupLng, scheduledFor, declinedBy: [] };
+    const anyEligible = drivers.some((d) => isDriverBroadcastEligible(d, draftBooking, vehicleTypes, bookings, fareTiers, lang));
+    if (!anyEligible) {
+      return lang === "en" ? "No vehicles available nearby right now — please try again shortly." : lang === "mr" ? "सध्या जवळपास कोणतेही वाहन उपलब्ध नाही — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "अभी आसपास कोई वाहन उपलब्ध नहीं है — कृपया थोड़ी देर बाद फिर कोशिश करें।";
     }
     const fare = resolveFareForTier(tierMaxKg, pickup, drop, distance, fareTiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
     createDoc("bookings", bookingId, {
       // tierMaxKg is the source of truth for dispatch/eligibility (see
-      // nearestEligibleDriverInTier) -- weight is only ever shown to
+      // isDriverBroadcastEligible) -- weight is only ever shown to
       // drivers/admin, so it holds the customer's actual entered weight
       // (falling back to the category ceiling if a caller doesn't have
-      // one) rather than the category ceiling itself.
-      pickup, drop, vehicle: nearest.vehicleSpec?.type || null, tierMaxKg, weight: customerWeight ?? tierMaxKg, distance, status: "AwaitingDriver", bids: [], fare,
-      pendingDriverName: nearest.name, pendingDriverMobile: nearest.mobile || null, pendingBidId: genId("B"), hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
-      declinedBy: [], dispatchPass: 1,
+      // one) rather than the category ceiling itself. vehicle stays null
+      // until someone actually accepts (driverRespondBooking) -- unlike
+      // the old single-target model, nobody specific is chosen yet.
+      pickup, drop, vehicle: null, tierMaxKg, weight: customerWeight ?? tierMaxKg, distance, status: "AwaitingDriver", bids: [], fare,
+      pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
+      declinedBy: [],
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
       // Stamped once at booking time (same pattern as driverName/customerMobile
       // above) since the booking itself has no other link back to the
@@ -9680,13 +9832,90 @@ export default function App() {
     return null;
   };
 
-  // Driver's response to a customer-accepted bid (runs on the pending
-  // driver's own device). accept -> Ongoing (+ OTP, commission cut, freeze
-  // their other bids); reject -> retargeted straight at the next eligible
-  // driver (see retargetToNextDriver), not left in "Bidding" for no one
-  // to ever pick up now that pricing/auto-bid is paused.
-  const driverRespondBooking = (bookingId, accept) => {
+  // Commission cut + freeze-other-bids on any confirmed accept, whichever
+  // path got there (bid-accept or broadcast) — split out of
+  // driverRespondBooking so both branches share exactly one copy instead
+  // of drifting apart.
+  const finishAcceptSideEffects = (b, bookingId) => {
+    // Commission cut on confirm — held credit from a past cancellation
+    // offsets first; 0% while this driver is still inside their own trial.
+    // Deliberately held at 0 regardless of commissionPct/bonusPct: fare is a
+    // real, fixed, calculated number again (see calculateFare/fareTiers),
+    // but reactivating actual wallet deductions is a separate business
+    // decision that hasn't been made yet — don't let fare-is-real-now
+    // silently reactivate commission as a side effect.
+    const effCommissionPct = 0;
+    const effBonusPct = 0;
+    const commissionAmt = (b.fare || 0) * (effCommissionPct / 100);
+    const bonusAmt = (b.fare || 0) * (effBonusPct / 100);
+    const held = driver.heldCredit || 0;
+    const offset = Math.min(held, commissionAmt);
+    // adjustDriverWallet (not setDriver) — every value here is 0 today
+    // (commission paused), so this call no-ops entirely rather than
+    // forcing a full-document overwrite of this driver's profile on
+    // every single trip accept, one of the most frequent actions in the
+    // app. See wallet-full-doc-overwrite-race in BUG_TRACKER_SEED.
+    adjustDriverWallet(driver.mobile, {
+      walletDelta: -(commissionAmt - offset),
+      bonusDelta: bonusAmt,
+      heldCreditDelta: -offset,
+    });
+
+    // Freeze this driver's pending bids on every other open load — they're
+    // committed now. They come back (unfreeze) on trip end.
+    bookings.filter((x) => x.id !== bookingId && x.status === "Bidding" && (x.bids || []).some((y) => y.driverName === driver.name))
+      .forEach((x) => patchDoc("bookings", x.id, { bids: x.bids.map((y) => y.driverName === driver.name ? { ...y, paused: true } : y) }).catch((e) => console.error(e)));
+  };
+
+  // Driver's response to an AwaitingDriver booking, one of two shapes:
+  // (a) a customer-accepted bid, single-target via pendingDriverName —
+  //     unchanged: reject retargets through the old ladder (see
+  //     retargetToNextDriver), only the currently-pointed-at driver can
+  //     act.
+  // (b) a broadcast request from requestByCategory (pendingDriverName is
+  //     null, TEMPORARY experiment — see DIRECT_REQUEST_RADIUS_KM) —
+  //     several drivers can be looking at the same booking at once, so
+  //     accept has to be atomic (claimBooking, a Firestore transaction)
+  //     instead of a plain patchDoc: whoever's transaction commits first
+  //     wins, everyone else gets a "someone else already took it" result
+  //     instead of silently overwriting the winner. Reject just adds this
+  //     driver to declinedBy (addDeclinedBy) — there's no single "next"
+  //     driver to retarget to, everyone else already eligible keeps
+  //     seeing it.
+  // Returns a Promise resolving to an error message string to show the
+  // driver, or null on success.
+  const driverRespondBooking = async (bookingId, accept) => {
     const b = bookings.find((x) => x.id === bookingId);
+    if (!b || b.status !== "AwaitingDriver") return null;
+
+    if (!b.pendingDriverName) {
+      if (!accept) {
+        addDeclinedBy("bookings", bookingId, driver.name).catch((e) => console.error(e));
+        return null;
+      }
+      const conflict = findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor, hours: b.hours }, bookings, vehicleTypes, lang);
+      if (conflict) return conflict;
+      const otp = String(Math.floor(1000 + Math.random() * 9000));
+      let result;
+      try {
+        result = await claimBooking(bookingId, {
+          status: "Ongoing", driverName: driver.name, driverMobile: driver.mobile || mobileForDriverName(driver.name),
+          vehicle: driver.vehicleSpec?.type || null, progress: 0,
+        });
+      } catch (e) {
+        console.error(e);
+        return lang === "en" ? "Couldn't accept — please try again." : lang === "mr" ? "स्वीकार करता आले नाही — कृपया पुन्हा प्रयत्न करा." : "स्वीकार नहीं हो सका — कृपया फिर कोशिश करें।";
+      }
+      if (!result.ok) {
+        return lang === "en" ? "This load has already been taken by another driver." : lang === "mr" ? "हा लोड आधीच दुसऱ्या ड्रायव्हरने घेतला आहे." : "यह लोड पहले ही दूसरे ड्राइवर द्वारा ले लिया गया है।";
+      }
+      // See otp-readable-by-any-driver in BUG_TRACKER_SEED for why this
+      // is its own document instead of a field on the booking itself.
+      createDoc("bookingOtps", bookingId, { otp, customerMobile: b.customerMobile || "" }).catch((e) => console.error("[booking otp]", e));
+      finishAcceptSideEffects(b, bookingId);
+      return null;
+    }
+
     // Accept is allowed from any driver this booking has ever reached
     // (the dispatch ladder's current target OR someone it already passed
     // over — see awaitingBooking's "stays visible" comment), so a driver
@@ -9694,8 +9923,8 @@ export default function App() {
     // else has accepted yet. Reject only makes sense from whoever the
     // ladder currently has it pointed at — a stale driver's reject is
     // handled client-side only (see DriverHome's Reject button).
-    const wasOffered = b && (b.pendingDriverName === driver?.name || (b.declinedBy || []).includes(driver?.name));
-    if (!b || b.status !== "AwaitingDriver" || !wasOffered) return null;
+    const wasOffered = b.pendingDriverName === driver?.name || (b.declinedBy || []).includes(driver?.name);
+    if (!wasOffered) return null;
     if (!accept) {
       if (b.pendingDriverName !== driver.name) return null;
       retargetToNextDriver(b, [...(b.declinedBy || []), driver.name]);
@@ -9727,37 +9956,9 @@ export default function App() {
     createDoc("bookingOtps", bookingId, { otp, customerMobile: b.customerMobile || "" }).catch((e) => console.error("[booking otp]", e));
     patchDoc("bookings", bookingId, {
       status: "Ongoing", driverName: driver.name, driverMobile: driver.mobile || mobileForDriverName(driver.name),
-      progress: 0, pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null,
+      vehicle: driver.vehicleSpec?.type || null, progress: 0, pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null,
     }).catch((e) => console.error(e));
-
-    // Commission cut on confirm — held credit from a past cancellation
-    // offsets first; 0% while this driver is still inside their own trial.
-    // Deliberately held at 0 regardless of commissionPct/bonusPct: fare is a
-    // real, fixed, calculated number again (see calculateFare/fareTiers),
-    // but reactivating actual wallet deductions is a separate business
-    // decision that hasn't been made yet — don't let fare-is-real-now
-    // silently reactivate commission as a side effect.
-    const effCommissionPct = 0;
-    const effBonusPct = 0;
-    const commissionAmt = (b.fare || 0) * (effCommissionPct / 100);
-    const bonusAmt = (b.fare || 0) * (effBonusPct / 100);
-    const held = driver.heldCredit || 0;
-    const offset = Math.min(held, commissionAmt);
-    // adjustDriverWallet (not setDriver) — every value here is 0 today
-    // (commission paused), so this call no-ops entirely rather than
-    // forcing a full-document overwrite of this driver's profile on
-    // every single trip accept, one of the most frequent actions in the
-    // app. See wallet-full-doc-overwrite-race in BUG_TRACKER_SEED.
-    adjustDriverWallet(driver.mobile, {
-      walletDelta: -(commissionAmt - offset),
-      bonusDelta: bonusAmt,
-      heldCreditDelta: -offset,
-    });
-
-    // Freeze this driver's pending bids on every other open load — they're
-    // committed now. They come back (unfreeze) on trip end.
-    bookings.filter((x) => x.id !== bookingId && x.status === "Bidding" && (x.bids || []).some((y) => y.driverName === driver.name))
-      .forEach((x) => patchDoc("bookings", x.id, { bids: x.bids.map((y) => y.driverName === driver.name ? { ...y, paused: true } : y) }).catch((e) => console.error(e)));
+    finishAcceptSideEffects(b, bookingId);
     return null;
   };
 
