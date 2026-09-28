@@ -277,7 +277,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
   );
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
   // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
   // pick the field that actually answers "did this happen today" for that
   // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
@@ -302,7 +302,13 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // separate filter again -- that duplication is exactly what caused the
   // Total Drivers/tabs/Live Map/uninstalled-tile numbers to disagree
   // before.
-  const { installed: installedDriversList, uninstalled: uninstalledDrivers } = partitionDriversByInstallStatus(drivers);
+  const { installed: installedDriversList, uninstalled: uninstalledDrivers, blacklisted: blacklistedDrivers } = partitionDriversByInstallStatus(drivers);
+  // Blacklisted drivers are folded into the same "Uninstalled" KPI/page as
+  // likely-uninstalled ones -- with AdminDriverList (and its search) now
+  // strictly installed-only, this tile is the only place left to even see
+  // a blacklisted driver again, let alone Unblock them, so it can't be
+  // left out of that list.
+  const inactiveDrivers = [...uninstalledDrivers, ...blacklistedDrivers];
   // Matches AdminLiveMap's own "located" count exactly (installed,
   // non-blacklisted, has a lastKnownLocation) -- this tile's number and
   // what the map shows after tapping it must never diverge again.
@@ -456,12 +462,18 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
       ),
     },
     uninstalled: {
-      title: lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)",
-      emptyMsg: lang === "en" ? "No driver has gone quiet this long." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है।",
-      items: uninstalledDrivers,
+      title: lang === "en" ? "Uninstalled / Blocked" : lang === "mr" ? "अनइन्स्टॉल्ड / ब्लॉक्ड" : "अनइंस्टॉल्ड / ब्लॉक्ड",
+      emptyMsg: lang === "en" ? "No driver has gone quiet this long, and none are blocked." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही, आणि कोणीही ब्लॉक्ड नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है, और कोई ब्लॉक्ड नहीं है।",
+      // Blacklisted drivers folded in alongside likely-uninstalled ones --
+      // see inactiveDrivers above for why (AdminDriverList is installed-
+      // only now, so this is their only remaining home).
+      items: inactiveDrivers,
       // Retention queue -- same "send next one, one tap at a time" pattern
       // as AdminDriverList's GPS reminder, so admin can work through the
       // whole list without hunting for who's already been messaged today.
+      // Scoped to uninstalledDrivers only (not blacklisted) -- "we miss
+      // you, come back" makes no sense to send someone who was blocked on
+      // purpose, not someone who just went quiet.
       headerExtra: uninstalledDrivers.length > 0 && (
         nextUninstalledToRemind ? (
           <a href={uninstalledWhatsappLink(nextUninstalledToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markUninstalledWhatsappSent(nextUninstalledToRemind.mobile)}
@@ -477,16 +489,22 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         )
       ),
       renderItem: (d) => (
-        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}` }}>
           <div>
             <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
             <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
             <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
           </div>
-          <a href={uninstalledWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markUninstalledWhatsappSent(d.mobile)}
-            className="shrink-0 p-2 rounded-full" style={{ background: sentUninstalledToday(d.mobile) ? "#E0E0E0" : C.success }}>
-            <MessageCircle size={14} color={sentUninstalledToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
-          </a>
+          {d.blacklisted ? (
+            <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white" style={{ background: C.success }}>
+              {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
+            </button>
+          ) : (
+            <a href={uninstalledWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markUninstalledWhatsappSent(d.mobile)}
+              className="shrink-0 p-2 rounded-full" style={{ background: sentUninstalledToday(d.mobile) ? "#E0E0E0" : C.success }}>
+              <MessageCircle size={14} color={sentUninstalledToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
+            </a>
+          )}
         </div>
       ),
     },
@@ -750,7 +768,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <StatTile label={lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
         <StatTile label={lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"} value={liveMapLocatedCount} color={C.navy} onClick={() => setDetailView("liveMap")} />
         <StatTile label={lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी"} value={offDutyDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("offDuty")} />
-        <StatTile label={lang === "en" ? "App uninstalled (likely)" : lang === "mr" ? "अ‍ॅप अनइन्स्टॉल केलेले (शक्यतो)" : "ऐप अनइंस्टॉल किया हुआ (संभावित)"} value={uninstalledDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
+        <StatTile label={lang === "en" ? "Uninstalled / Blocked" : lang === "mr" ? "अनइन्स्टॉल्ड / ब्लॉक्ड" : "अनइंस्टॉल्ड / ब्लॉक्ड"} value={inactiveDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
         <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
         <StatTile label={lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
         <StatTile label={lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"} value={(routeFares || []).length} color={C.pimpri} onClick={() => setDetailView("routeFares")} />
@@ -2016,15 +2034,16 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
       : "आपकी GPS/लोकेशन ट्रैकिंग अभी हमारे ऐप में बंद दिख रही है। लोड मिलते रहने के लिए इसे ऑन करना ज़रूरी है -- कृपया अपने फोन में ये दो चीज़ें चेक करें:\n1) Settings → Location → ऑन करें\n2) Settings → Apps → Apna Transport → Permissions → Location → Allow करें\nफिर हमारा ऐप फिर से खोलें।";
     return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
   };
-  // Typing an actual search query reaches EVERY driver record (uninstalled
-  // or blacklisted included), not just the installed ones the sections
-  // above are scoped to -- otherwise admin would have no way to ever find
-  // and unblacklist someone once they're not counted as "installed"
-  // anymore. A search collapses the 4 sections into one flat result list
-  // (see the render below); with an empty query there's nothing to search
-  // and the sections render instead.
+  // Scoped to totalInstalled, same as the 4 sections above -- only active,
+  // installed drivers are ever listed here, full stop. A blacklisted or
+  // likely-uninstalled driver isn't findable from this screen at all
+  // anymore (search included); the Live Dashboard's "Uninstalled /
+  // Blocked" KPI is their only remaining home, Unblock button included.
+  // A search collapses the 4 sections into one flat result list (see the
+  // render below); with an empty query there's nothing to search and the
+  // sections render instead.
   const searchResults = q.trim()
-    ? bySection(drivers.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q)))
+    ? bySection(totalInstalled.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q)))
     : [];
   const kycMeta = lang === "en"
     ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E5E5E5" } }
@@ -2260,7 +2279,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
         </a>
       )}
       {showCall && (() => {
-        const callFiltered = drivers.filter((d) => d.name.includes(callQ) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(callQ.toLowerCase()) || (d.mobile || "").includes(callQ));
+        const callFiltered = totalInstalled.filter((d) => d.name.includes(callQ) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(callQ.toLowerCase()) || (d.mobile || "").includes(callQ));
         return (
           <div className="rounded-lg p-2 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
             <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : lang === "mr" ? "नाव, गाडी नंबर किंवा मोबाइलने शोधा..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."}
@@ -2979,7 +2998,7 @@ export function AdminPanel({ drivers, customers, driver, updateDriverKyc, update
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
