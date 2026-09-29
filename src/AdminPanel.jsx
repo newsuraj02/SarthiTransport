@@ -351,14 +351,16 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   const [detailView, setDetailView] = useState(null);
 
   // KYC approval queue for "New Registrations" -> Driver (see
-  // detailView === "newRegistrations" below) -- every driver still
-  // awaiting a decision, not just today's signups, since a driver who
-  // signed up yesterday and is still Pending needs this exactly as much
-  // as one who signed up an hour ago. Approve/Reject/Edit live only here
-  // now; the Drivers tab (AdminDriverList) keeps Edit alone.
-  const approvalQueue = drivers
-    .filter((d) => !d.vehicleSpec || d.kyc === "Pending")
-    .sort((a, b) => (a.vehicleSpec && a.kyc === "Pending" ? 0 : 1) - (b.vehicleSpec && b.kyc === "Pending" ? 0 : 1));
+  // detailView === "newRegistrations" below) -- only drivers who've
+  // actually submitted and are sitting in Pending, waiting on a decision.
+  // Deliberately NOT drivers who haven't submitted at all yet -- there's
+  // nothing to approve/reject for those, and they'd just be noise here;
+  // the WhatsApp reminder for them still lives in the Drivers tab's
+  // Incomplete section. Not just today's Pending signups either, since a
+  // driver who signed up yesterday and is still Pending needs this
+  // exactly as much as one who signed up an hour ago. Approve/Reject/Edit
+  // live only here now; the Drivers tab (AdminDriverList) keeps Edit alone.
+  const approvalQueue = drivers.filter((d) => d.vehicleSpec && d.kyc === "Pending");
   const [approvalExpandedId, setApprovalExpandedId] = useState(null);
   const [approvalEditingId, setApprovalEditingId] = useState(null);
   const [approvalEditDraft, setApprovalEditDraft] = useState(null);
@@ -668,7 +670,6 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         ) : (
           <div className="space-y-1.5">
             {approvalQueue.map((d) => {
-              const submitted = !!d.vehicleSpec;
               const expanded = approvalExpandedId === d.id;
               const editing = approvalEditingId === d.id;
               return (
@@ -678,13 +679,11 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
                       <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
                       <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
                     </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: "#FFFFFF", background: submitted ? C.marigoldDeep : C.inkSoft }}>
-                      {submitted ? (lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित") : (lang === "en" ? "Not submitted" : lang === "mr" ? "सबमिट झाले नाही" : "सबमिट नहीं हुआ")}
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
+                      {lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित"}
                     </span>
                   </div>
-                  {submitted && (
-                    <>
-                      <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center justify-between mt-2">
                         <button onClick={() => setApprovalExpandedId(expanded ? null : d.id)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>
                           {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
                         </button>
@@ -764,8 +763,6 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
                           </div>
                         </div>
                       )}
-                    </>
-                  )}
                 </div>
               );
             })}
