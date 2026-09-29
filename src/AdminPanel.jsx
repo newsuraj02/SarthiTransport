@@ -23,7 +23,7 @@ import {
   describeAdminRateSaveError, driverTruckIcon, driverTruckIconInactive, estimateDistanceKm,
   fetchRoadDistanceKm, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
   getAdminRouteOverride, gpsStatus, greetingWord, haversineKm, installedDrivers,
-  isFutureAdvance, isInTrial, isLikelyUninstalled, isLongHaulSmallLoad, locationsNear,
+  isFutureAdvance, isLikelyUninstalled, isLongHaulSmallLoad, locationsNear,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, routeMatchRadiusKm,
   sanitizeForDocId, trialDaysLeft, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, SafeImage, StatTile,
@@ -330,15 +330,6 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // reviewing/approving those signups now happens entirely in the
   // Drivers tab (see AdminDriverList), not through this tile.
   const newDriversToday = drivers.filter((d) => isToday(d.createdAt));
-  // isInTrial alone also matched drivers who just verified their phone
-  // and never went any further (no name, no KYC) — cluttering this list
-  // with abandoned signups nobody can actually act on. Only count a
-  // driver as "in trial" here once they've completed every step that
-  // actually lets them take loads: basic details (name set, not just the
-  // placeholder-name-equals-mobile a fresh signup starts with) and KYC
-  // approved. Rate setup used to be a third required step here too —
-  // dropped along with pricing (see backup-before-pricing-removal).
-  const trialDrivers = drivers.filter((d) => isInTrial(d.createdAt) && d.name && d.name !== d.mobile && d.kyc === "Approved");
 
   const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b.cancelledAt));
   // Any not-yet-finished booking scheduled for a future date, regardless of
@@ -416,6 +407,26 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   };
   const uninstalledUnsent = uninstalledDrivers.filter((d) => !sentUninstalledToday(d.mobile));
   const nextUninstalledToRemind = uninstalledUnsent[0] || null;
+
+  // Same one-tap "send next, track who's already been messaged today"
+  // pattern as the uninstalled-driver retention nudge above, but for
+  // approved drivers who still have the app and just haven't toggled
+  // online -- a distinct message and a separate sent-today map since
+  // these are two different asks (come back vs. go online) and a driver
+  // could plausibly need both reminders on the same day.
+  const [offDutyWhatsappSentMap, setOffDutyWhatsappSentMap] = usePersistedState("sarthi_offDutyWhatsappSent", {});
+  const markOffDutyWhatsappSent = (mobile) => setOffDutyWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
+  const sentOffDutyToday = (mobile) => offDutyWhatsappSentMap[mobile] === todayStrUninstalled();
+  const offDutyWhatsappLink = (mobile) => {
+    const msg = lang === "en"
+      ? "You're off duty on Apna Transport right now, and there are loads waiting nearby. Turn your duty ON in the app to start getting ride requests: https://sarthi-transport-74865.web.app"
+      : lang === "mr"
+      ? "तुम्ही सध्या Apna Transport वर ऑफ ड्युटी आहात, आणि जवळ लोड्स वाट पाहत आहेत. राइड्स मिळवण्यासाठी अ‍ॅपमध्ये तुमची ड्युटी ऑन करा: https://sarthi-transport-74865.web.app"
+      : "आप अभी Apna Transport पर ऑफ ड्यूटी हैं, और आसपास लोड्स इंतज़ार कर रहे हैं। राइड रिक्वेस्ट पाने के लिए ऐप में अपनी ड्यूटी ऑन करें: https://sarthi-transport-74865.web.app";
+    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  };
+  const offDutyUnsent = offDutyDrivers.filter((d) => !sentOffDutyToday(d.mobile));
+  const nextOffDutyToRemind = offDutyUnsent[0] || null;
 
   // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) by
   // ₹1/km per +/- tap, up or down. Driver-submitted quotes (routeFares)
@@ -502,10 +513,30 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
       title: lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी",
       emptyMsg: lang === "en" ? "No approved driver is currently off duty." : lang === "mr" ? "सध्या कोणताही अप्रूव्ह्ड ड्रायव्हर ऑफ ड्युटीवर नाही." : "फिलहाल कोई अप्रूव्ड ड्राइवर ऑफ ड्यूटी पर नहीं है।",
       items: offDutyDrivers,
+      headerExtra: offDutyDrivers.length > 0 && (
+        nextOffDutyToRemind ? (
+          <a href={offDutyWhatsappLink(nextOffDutyToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markOffDutyWhatsappSent(nextOffDutyToRemind.mobile)}
+            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.success }}>
+            <MessageCircle size={14} />
+            {lang === "en" ? `Send next "go online" message on WhatsApp (${offDutyUnsent.length} left)` : lang === "mr" ? `पुढचा "ऑनलाइन व्हा" मेसेज WhatsApp वर पाठवा (${offDutyUnsent.length} बाकी)` : `अगला "ऑनलाइन जाएं" मेसेज WhatsApp पर भेजें (${offDutyUnsent.length} बाकी)`}
+          </a>
+        ) : (
+          <div className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+            <CheckCircle2 size={14} />
+            {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
+          </div>
+        )
+      ),
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-          <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+          <div>
+            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+            <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+          </div>
+          <a href={offDutyWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markOffDutyWhatsappSent(d.mobile)}
+            className="shrink-0 p-2 rounded-full" style={{ background: sentOffDutyToday(d.mobile) ? "#E0E0E0" : C.success }}>
+            <MessageCircle size={14} color={sentOffDutyToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
+          </a>
         </div>
       ),
     },
@@ -597,22 +628,6 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
           <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}</div>
-        </div>
-      ),
-    },
-    trial: {
-      title: lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर",
-      emptyMsg: lang === "en" ? "No driver is currently in their free trial." : lang === "mr" ? "सध्या कोणताही ड्रायव्हर फ्री ट्रायलमध्ये नाही." : "फिलहाल कोई भी ड्राइवर फ्री ट्रायल में नहीं है।",
-      items: trialDrivers,
-      renderItem: (d) => (
-        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <div>
-            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
-          </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-            {lang === "en" ? `${trialDaysLeft(d.createdAt)}d left` : lang === "mr" ? `${trialDaysLeft(d.createdAt)} दिवस बाकी` : `${trialDaysLeft(d.createdAt)} दिन बाकी`}
-          </span>
         </div>
       ),
     },
@@ -902,7 +917,6 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         <StatTile label={lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी"} value={offDutyDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("offDuty")} />
         <StatTile label={lang === "en" ? "Uninstalled / Blocked" : lang === "mr" ? "अनइन्स्टॉल्ड / ब्लॉक्ड" : "अनइंस्टॉल्ड / ब्लॉक्ड"} value={inactiveDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
         <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
-        <StatTile label={lang === "en" ? "Drivers in free trial" : lang === "mr" ? "फ्री ट्रायलमधील ड्रायव्हर" : "फ्री ट्रायल में ड्राइवर"} value={trialDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("trial")} />
         <StatTile label={lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"} value={(routeFares || []).length} color={C.pimpri} onClick={() => setDetailView("routeFares")} />
       </div>
 
