@@ -268,10 +268,11 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // missing notification channel, OEM battery/autostart restrictions)
 // doesn't apply to it.
 //
-// Needs KALEYRA_DIRECT_REQUEST_TEMPLATE: the EXACT name of a WhatsApp
-// message template already created AND approved by Meta on Kaleyra's
-// WhatsApp Template dashboard, with 3 body variables in this order --
-// {{1}} pickup, {{2}} drop, {{3}} weight -- e.g. a template body of:
+// Needs MSG91_DIRECT_REQUEST_TEMPLATE: the EXACT name of a WhatsApp
+// message template already created AND approved by Meta on MSG91's
+// WhatsApp Template dashboard ("direct_booking_request", Hindi, UTILITY),
+// with 3 body variables in this order -- {{1}} pickup, {{2}} drop,
+// {{3}} weight -- e.g. a template body of:
 //   "🚨 आपके लिए सीधी बुकिंग रिक्वेस्ट!
 //    लोडिंग: {{1}}
 //    अनलोडिंग: {{2}}
@@ -279,51 +280,60 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 //    Apna Transport खोलें और 120 सेकंड में जवाब दें।"
 // Template approval is a manual step outside this code, same as Exotel
 // SMS's DLT registration was for the earlier, reverted attempt -- until
-// this and the other two secrets below are set, this just logs and
-// returns rather than throwing, so push keeps working on its own either way.
-const KALEYRA_WHATSAPP_SID = defineSecret("KALEYRA_WHATSAPP_SID");
-const KALEYRA_WHATSAPP_NUMBER = defineSecret("KALEYRA_WHATSAPP_NUMBER");
-const KALEYRA_DIRECT_REQUEST_TEMPLATE = defineSecret("KALEYRA_DIRECT_REQUEST_TEMPLATE");
-// KALEYRA_API_KEY is shared with sendDirectRequestWhatsApp/onDirectRequestAssigned/
-// onDirectRequestBroadcast below (all reference it in their eagerly-evaluated
-// `secrets: [...]` option, at module-load time) -- declared here, ahead of
-// them, rather than down by initiateMaskedCall/KALEYRA_VOICE_SID/
-// KALEYRA_CALLER_ID (its usual home, see the Kaleyra secrets comment further
-// down) purely to avoid a `const` temporal-dead-zone ReferenceError on
-// deploy. KALEYRA_VOICE_SID/KALEYRA_CALLER_ID don't need to move -- nothing
-// above them references those two.
-const KALEYRA_API_KEY = defineSecret("KALEYRA_API_KEY");
+// this and the other secrets below are set, this just logs and returns
+// rather than throwing, so push keeps working on its own either way.
+// WhatsApp channel: MSG91, not Kaleyra -- see the migration note further
+// down by KALEYRA_VOICE_SID (masked calling stayed on Kaleyra; only
+// WhatsApp moved, once MSG91's account setup -- AuthKey, WhatsApp number,
+// namespace, approved "direct_booking_request" template -- was finished).
+// Declared here, ahead of sendDirectRequestWhatsApp/onDirectRequestAssigned/
+// onDirectRequestBroadcast below (all reference these in their eagerly-
+// evaluated `secrets: [...]` option, at module-load time), same
+// avoid-a-TDZ-ReferenceError-on-deploy reasoning as the old KALEYRA_API_KEY
+// placement had.
+const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
+const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
+const MSG91_DIRECT_REQUEST_TEMPLATE = defineSecret("MSG91_DIRECT_REQUEST_TEMPLATE");
+const MSG91_WHATSAPP_NAMESPACE = defineSecret("MSG91_WHATSAPP_NAMESPACE");
 async function sendDirectRequestWhatsApp(driverMobile, load) {
-  const sid = KALEYRA_WHATSAPP_SID.value(), apiKey = KALEYRA_API_KEY.value(),
-    fromNumber = KALEYRA_WHATSAPP_NUMBER.value(), template = KALEYRA_DIRECT_REQUEST_TEMPLATE.value();
-  if (!sid || !apiKey || !fromNumber || !template) {
-    console.error("[whatsapp] direct-request alert skipped: Kaleyra WhatsApp not configured.");
+  const authKey = MSG91_AUTH_KEY.value(), fromNumber = MSG91_WHATSAPP_NUMBER.value(),
+    template = MSG91_DIRECT_REQUEST_TEMPLATE.value(), namespace = MSG91_WHATSAPP_NAMESPACE.value();
+  if (!authKey || !fromNumber || !template || !namespace) {
+    console.error("[whatsapp] direct-request alert skipped: MSG91 WhatsApp not configured.");
     return;
   }
   try {
-    const res = await fetch(`https://api.in.kaleyra.io/v2/${sid}/whatsapp/${fromNumber}/messages`, {
+    // "direct_booking_request" is an approved Hindi-language template with
+    // 3 body variables (pickup, drop, weight) -- language/variable count
+    // are fixed by the approved template itself, not admin-configurable,
+    // so hardcoded here rather than pulled from a secret like the account
+    // identifiers above.
+    const res = await fetch("https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/", {
       method: "POST",
-      headers: { "api-key": apiKey, "Content-Type": "application/json" },
+      headers: { authkey: authKey, "Content-Type": "application/json" },
       body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: `+91${driverMobile}`,
-        type: "template",
-        template: {
-          name: template,
-          language: { code: "en" },
-          components: [{
-            type: "body",
-            parameters: [
-              { type: "text", text: load.pickup || "-" },
-              { type: "text", text: load.drop || "-" },
-              { type: "text", text: load.weight ? String(load.weight) : "-" },
-            ],
-          }],
+        integrated_number: fromNumber,
+        content_type: "template",
+        payload: {
+          messaging_product: "whatsapp",
+          type: "template",
+          template: {
+            name: template,
+            language: { code: "hi", policy: "deterministic" },
+            namespace,
+            to_and_components: [{
+              to: [`91${driverMobile}`],
+              components: {
+                body_1: { type: "text", value: load.pickup || "-" },
+                body_2: { type: "text", value: load.drop || "-" },
+                body_3: { type: "text", value: load.weight ? String(load.weight) : "-" },
+              },
+            }],
+          },
         },
       }),
     });
-    if (!res.ok) console.error("[whatsapp] direct-request alert rejected by Kaleyra:", await res.text());
+    if (!res.ok) console.error("[whatsapp] direct-request alert rejected by MSG91:", await res.text());
   } catch (e) {
     console.error("[whatsapp] direct-request alert send failed:", e.message);
   }
@@ -357,7 +367,7 @@ function tierMaxKgAboveServer(tierMaxKg, offset) {
   return FARE_TIER_MAX_KGS[Math.min(baseIdx + offset, FARE_TIER_MAX_KGS.length - 1)];
 }
 exports.onDirectRequestBroadcast = onDocumentCreated(
-  { document: "bookings/{bookingId}", secrets: [KALEYRA_API_KEY, KALEYRA_WHATSAPP_SID, KALEYRA_WHATSAPP_NUMBER, KALEYRA_DIRECT_REQUEST_TEMPLATE] },
+  { document: "bookings/{bookingId}", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_DIRECT_REQUEST_TEMPLATE, MSG91_WHATSAPP_NAMESPACE] },
   async (event) => {
     const load = event.data?.data();
     if (!load || load.status !== "AwaitingDriver" || load.pendingDriverName) return;
@@ -411,7 +421,7 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
 // for a broadcast booking's creation, no pendingDriverName; this only
 // fires once one gets set, i.e. the Bidding-accept flow.)
 exports.onDirectRequestAssigned = onDocumentWritten(
-  { document: "bookings/{bookingId}", secrets: [KALEYRA_API_KEY, KALEYRA_WHATSAPP_SID, KALEYRA_WHATSAPP_NUMBER, KALEYRA_DIRECT_REQUEST_TEMPLATE] },
+  { document: "bookings/{bookingId}", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_DIRECT_REQUEST_TEMPLATE, MSG91_WHATSAPP_NAMESPACE] },
   async (event) => {
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
@@ -960,42 +970,29 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
   }
 });
 
-// ---------------- Number masking + WhatsApp (Kaleyra) ----------------
-// Replaces Exotel (the masked-calling below, and the WhatsApp
-// direct-request alert further down, both use this same Kaleyra account)
-// -- Kaleyra was picked specifically because it offers a Voice
-// click-to-call/bridge API AND an official (Meta BSP) WhatsApp Business
-// API under one account, instead of needing separate vendors. (An SMS
+// ---------------- Number masking (Kaleyra) + WhatsApp (MSG91) ----------------
+// Replaces Exotel for masked calling below -- Kaleyra was picked
+// specifically because it offers a Voice click-to-call/bridge API. (An SMS
 // channel via Kaleyra was also built and shipped here briefly, then
 // removed -- India's TRAI DLT entity/sender/template registration turned
-// out to be more setup than wanted right now. Separately, the WhatsApp
-// channel itself is in the process of moving from Kaleyra to MSG91 --
-// sendDirectRequestWhatsApp below still targets Kaleyra's API until that
-// migration's account setup (MSG91 AuthKey, WhatsApp number, approved
-// template) is finished and this function gets rewritten against it.)
+// out to be more setup than wanted right now. The WhatsApp direct-request
+// alert further up has since moved off Kaleyra entirely, onto MSG91 --
+// see the MSG91_* secrets and sendDirectRequestWhatsApp above -- once
+// Kaleyra's WhatsApp product accounted for both Voice and WhatsApp under
+// one vendor; now only Voice/masked-calling still uses Kaleyra.)
 //
 // Secrets (set via `firebase functions:secrets:set NAME`, never hardcoded
 // or committed):
-//   KALEYRA_API_KEY        -- the account's api-key (shared by Voice and
-//                             WhatsApp both, see developers.kaleyra.io).
+//   KALEYRA_API_KEY        -- the account's api-key (see developers.kaleyra.io).
 //   KALEYRA_VOICE_SID      -- the Voice product's SID (masked calling).
 //   KALEYRA_CALLER_ID      -- the bridge/masking number provisioned on
 //                             Kaleyra's Voice dashboard for this account.
-//   KALEYRA_WHATSAPP_SID   -- the WhatsApp product's SID (different from
-//                             the Voice SID -- see sendDirectRequestWhatsApp).
-//   KALEYRA_WHATSAPP_NUMBER -- your registered WhatsApp Business number
-//                             (the API's "from", in "+91XXXXXXXXXX" form).
-//   KALEYRA_DIRECT_REQUEST_TEMPLATE -- the exact template name Meta has
-//                             approved for the direct-request alert (see
-//                             sendDirectRequestWhatsApp's own comment --
-//                             a manual approval step, not something
-//                             fixable here).
-// Until the secrets a given feature needs are set, that feature returns
-// reason: "not_configured" (masked calling: the client falls back to a
-// plain tel: link) or just logs and returns (the WhatsApp/SMS alerts:
-// push stays the only channel) instead of throwing.
-// (KALEYRA_API_KEY itself is declared earlier, alongside the WhatsApp
-// secrets -- see the comment there.)
+// Until these are set, initiateMaskedCall returns reason: "not_configured"
+// and the client falls back to a plain tel: link, instead of throwing.
+// (MSG91_AUTH_KEY/MSG91_WHATSAPP_NUMBER/MSG91_DIRECT_REQUEST_TEMPLATE/
+// MSG91_WHATSAPP_NAMESPACE are declared earlier, alongside
+// sendDirectRequestWhatsApp -- see the comment there.)
+const KALEYRA_API_KEY = defineSecret("KALEYRA_API_KEY");
 const KALEYRA_VOICE_SID = defineSecret("KALEYRA_VOICE_SID");
 const KALEYRA_CALLER_ID = defineSecret("KALEYRA_CALLER_ID");
 
