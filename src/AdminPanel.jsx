@@ -428,33 +428,53 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   const offDutyUnsent = offDutyDrivers.filter((d) => !sentOffDutyToday(d.mobile));
   const nextOffDutyToRemind = offDutyUnsent[0] || null;
 
-  // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) by
-  // ₹1/km per +/- tap, up or down. Driver-submitted quotes (routeFares)
-  // are untouched by this since commit ae40cb4 dropped them as a
-  // customer-pricing layer entirely -- Diesel has no reason to move a
+  // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) when
+  // the diesel price per litre changes, up or down. Driver-submitted quotes
+  // (routeFares) are untouched by this since commit ae40cb4 dropped them as
+  // a customer-pricing layer entirely -- Diesel has no reason to move a
   // number that no longer affects what anyone is charged.
-  // Deliberately a flat totalFare += delta*estimatedKm rather than
-  // nudging a displayed per-km rate and rebuilding Total from it, which
-  // was tried first: that approach amplifies any per-km change by
-  // dividing it by 0.75 (the first 5km is a fixed 25% SLICE of the
-  // total, not a flat rupee amount) -- a real bug: "+₹1/km" on a 201km
-  // entry landed as +₹271, not +₹201. Entries with no usable distance
-  // are left untouched -- there's no per-km rate to move.
   //
-  // Tapping +/- only ever changes dieselPending (an in-memory net count,
-  // no network at all) so repeated taps are instant -- nothing actually
-  // writes to Firestore until "Save Diesel Rate" commits the accumulated
-  // net change in a single pass, using bulkUpdateDocs (chunked Firestore
-  // batches) rather than one write per document, since a several-hundred-
-  // doc bulk operation from a mobile browser is exactly the kind of long-
-  // running write that kept failing halfway during the Maharashtra import.
-  const [dieselPending, setDieselPending] = useState(0);
+  // Per-tier, not a flat ₹/km for everyone -- a heavier vehicle burns more
+  // diesel per km, so the same price-per-litre move should shift its rate
+  // more than a tempo's. DIESEL_MILEAGE_BY_TIER_MAX_KG (km/litre, admin-
+  // reviewed reference figures) converts a ₹/litre change into each tier's
+  // own ₹/km delta: perKmDelta = priceDelta / mileage. These are fuel-cost
+  // mileage figures only, not the tier's actual perKmRate (DEFAULT_FARE_TIERS)
+  // -- that already bakes in driver earnings + margin on top of fuel, so
+  // this formula only sizes the ADJUSTMENT, it never replaces the rate.
+  //
+  // Still a flat totalFare += perKmDelta*estimatedKm rather than nudging a
+  // displayed per-km rate and rebuilding Total from it, which was tried
+  // first: that approach amplifies any per-km change by dividing it by 0.75
+  // (the first 5km is a fixed 25% SLICE of the total, not a flat rupee
+  // amount) -- a real bug: "+₹1/km" on a 201km entry landed as +₹271, not
+  // +₹201. Entries with no usable distance are left untouched -- there's no
+  // per-km rate to move. Entries missing/with an unrecognized tierMaxKg fall
+  // back to the heaviest tier's mileage -- the smallest, most conservative
+  // per-km move.
+  //
+  // Tapping +/- only ever changes dieselStagedPrice (in-memory, no network)
+  // so repeated taps are instant -- nothing actually writes to Firestore
+  // until "Save Diesel Rate" commits the accumulated change in a single
+  // pass, using bulkUpdateDocs (chunked Firestore batches) rather than one
+  // write per document, since a several-hundred-doc bulk operation from a
+  // mobile browser is exactly the kind of long-running write that kept
+  // failing halfway during the Maharashtra import.
+  const DIESEL_MILEAGE_BY_TIER_MAX_KG = {
+    500: 18, 850: 15.2, 1200: 13, 1700: 11, 2500: 9, 4500: 6.5, 7000: 5.4,
+    [FARE_TIER_MAX_KG_UNCAPPED]: 4.5,
+  };
+  const [dieselPricePerLitre, setDieselPricePerLitre] = usePersistedState("sarthi_dieselPricePerLitre", 90);
+  const [dieselStagedPrice, setDieselStagedPrice] = useState(null);
+  const dieselDisplayPrice = dieselStagedPrice ?? dieselPricePerLitre;
+  const dieselPending = dieselStagedPrice != null ? dieselStagedPrice - dieselPricePerLitre : 0;
   const [dieselAdjusting, setDieselAdjusting] = useState(false);
   const [dieselFlash, setDieselFlash] = useState("");
   const [dieselError, setDieselError] = useState("");
   const saveDiesel = async () => {
     if (dieselAdjusting || dieselPending === 0) return;
-    const delta = dieselPending;
+    const oldPrice = dieselPricePerLitre;
+    const newPrice = dieselStagedPrice;
     setDieselAdjusting(true);
     setDieselFlash("");
     setDieselError("");
@@ -463,14 +483,19 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
       // no longer feed into customer pricing at all -- see resolveFare.
       const adminUpdates = (adminRouteFares || [])
         .filter((r) => r.estimatedKm > 0)
-        .map((r) => ({
-          id: r.id,
-          patch: { totalFare: Math.max(1, Math.round((Number(r.totalFare) || 0) + delta * r.estimatedKm)) },
-        }));
+        .map((r) => {
+          const mileage = DIESEL_MILEAGE_BY_TIER_MAX_KG[r.tierMaxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED];
+          const perKmDelta = (newPrice - oldPrice) / mileage;
+          return {
+            id: r.id,
+            patch: { totalFare: Math.max(1, Math.round((Number(r.totalFare) || 0) + perKmDelta * r.estimatedKm)) },
+          };
+        });
       await bulkUpdateDocs("adminRouteFares", adminUpdates);
       const count = adminUpdates.length;
-      setDieselFlash(lang === "en" ? `Adjusted ${count} rates by ${delta > 0 ? "+" : ""}₹${delta}/km.` : lang === "mr" ? `${count} दर ${delta > 0 ? "+" : ""}₹${delta}/किमी ने बदलले.` : `${count} दरों को ${delta > 0 ? "+" : ""}₹${delta}/किमी से बदला गया।`);
-      setDieselPending(0);
+      setDieselPricePerLitre(newPrice);
+      setDieselStagedPrice(null);
+      setDieselFlash(lang === "en" ? `Adjusted ${count} rates for diesel ₹${oldPrice} → ₹${newPrice}/L.` : lang === "mr" ? `डिझेल ₹${oldPrice} → ₹${newPrice}/L साठी ${count} दर बदलले.` : `डीज़ल ₹${oldPrice} → ₹${newPrice}/L के लिए ${count} दरों को बदला गया।`);
     } catch (e) {
       console.error(e);
       setDieselError(lang === "en" ? "Couldn't adjust rates -- try again." : lang === "mr" ? "दर बदलता आले नाहीत — पुन्हा प्रयत्न करा." : "दर बदले नहीं जा सके — फिर कोशिश करें।");
@@ -795,18 +820,18 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
             <ChevronLeft size={18} strokeWidth={3} />
           </button>
           <div className="flex-1 grid grid-cols-3 gap-2">
-            <button onClick={() => setDieselPending((p) => p - 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.safety, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>−</button>
+            <button onClick={() => setDieselStagedPrice((p) => (p ?? dieselPricePerLitre) - 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.safety, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>−</button>
             <div className="h-11 rounded-lg flex items-center justify-center text-sm font-bold" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}>
-              {lang === "en" ? "Diesel" : lang === "mr" ? "डिझेल" : "डीज़ल"}{dieselPending !== 0 && ` (${dieselPending > 0 ? "+" : ""}${dieselPending})`}
+              {lang === "en" ? "Diesel" : lang === "mr" ? "डिझेल" : "डीज़ल"} ₹{dieselDisplayPrice}/L
             </div>
-            <button onClick={() => setDieselPending((p) => p + 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.success, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>+</button>
+            <button onClick={() => setDieselStagedPrice((p) => (p ?? dieselPricePerLitre) + 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.success, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>+</button>
           </div>
         </div>
         {dieselPending !== 0 && (
           <button onClick={saveDiesel} disabled={dieselAdjusting} className="w-full rounded-lg py-2.5 mb-2 text-sm font-bold" style={{ background: dieselAdjusting ? "#E0E0E0" : C.navy, color: dieselAdjusting ? "#9AA3B0" : "#fff" }}>
             {dieselAdjusting
               ? "…"
-              : (lang === "en" ? `Save Diesel Rate (${dieselPending > 0 ? "+" : ""}${dieselPending})` : lang === "mr" ? `डिझेल दर सेव्ह करा (${dieselPending > 0 ? "+" : ""}${dieselPending})` : `डीज़ल दर सेव करें (${dieselPending > 0 ? "+" : ""}${dieselPending})`)}
+              : (lang === "en" ? `Save Diesel Rate (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)` : lang === "mr" ? `डिझेल दर सेव्ह करा (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)` : `डीज़ल दर सेव करें (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)`)}
           </button>
         )}
         {(dieselFlash || dieselError) && (
