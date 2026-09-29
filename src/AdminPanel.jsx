@@ -277,7 +277,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
   );
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
   // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
   // pick the field that actually answers "did this happen today" for that
   // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
@@ -349,6 +349,52 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // its own Back button) showing the live record list behind that count —
   // a separate screen, not an inline panel on the dashboard itself.
   const [detailView, setDetailView] = useState(null);
+
+  // KYC approval queue for "New Registrations" -> Driver (see
+  // detailView === "newRegistrations" below) -- every driver still
+  // awaiting a decision, not just today's signups, since a driver who
+  // signed up yesterday and is still Pending needs this exactly as much
+  // as one who signed up an hour ago. Approve/Reject/Edit live only here
+  // now; the Drivers tab (AdminDriverList) keeps Edit alone.
+  const approvalQueue = drivers
+    .filter((d) => !d.vehicleSpec || d.kyc === "Pending")
+    .sort((a, b) => (a.vehicleSpec && a.kyc === "Pending" ? 0 : 1) - (b.vehicleSpec && b.kyc === "Pending" ? 0 : 1));
+  const [approvalExpandedId, setApprovalExpandedId] = useState(null);
+  const [approvalEditingId, setApprovalEditingId] = useState(null);
+  const [approvalEditDraft, setApprovalEditDraft] = useState(null);
+  const [approvalEditError, setApprovalEditError] = useState("");
+  const startApprovalEdit = (d) => {
+    setApprovalEditingId(d.id);
+    setApprovalEditDraft({
+      type: d.vehicleSpec?.type || "",
+      vehicleNumber: d.vehicleSpec?.vehicleNumber || "",
+      capacityKg: d.vehicleSpec?.capacityKg != null ? String(d.vehicleSpec.capacityKg) : "",
+      length: d.vehicleSpec?.length || "",
+      width: d.vehicleSpec?.width || "",
+      height: d.vehicleSpec?.height || "",
+    });
+    setApprovalEditError("");
+  };
+  const cancelApprovalEdit = () => { setApprovalEditingId(null); setApprovalEditDraft(null); setApprovalEditError(""); };
+  const saveApprovalEdit = async (d) => {
+    const capacityKg = Number(approvalEditDraft.capacityKg);
+    if (!approvalEditDraft.vehicleNumber.trim() || !capacityKg || capacityKg <= 0) {
+      setApprovalEditError(lang === "en" ? "Vehicle number and a valid capacity are required." : lang === "mr" ? "गाडी नंबर आणि योग्य क्षमता आवश्यक आहे." : "गाड़ी नंबर और सही क्षमता आवश्यक है।");
+      return;
+    }
+    await updateDriverVehicleSpec(d.id, {
+      type: approvalEditDraft.type,
+      vehicleNumber: approvalEditDraft.vehicleNumber.trim().toUpperCase(),
+      capacityKg,
+      length: approvalEditDraft.length.trim(), width: approvalEditDraft.width.trim(), height: approvalEditDraft.height.trim(),
+    });
+    cancelApprovalEdit();
+  };
+  const approvalDocLabels = lang === "en"
+    ? { photo: "Driver Photo", dl: "Driving License" }
+    : lang === "mr"
+    ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
+    : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
 
   // Retention nudge for "App uninstalled (likely)" -- same queue pattern as
   // AdminDriverList's GPS WhatsApp reminder (send-next-one-at-a-time,
@@ -570,15 +616,11 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
     },
   };
 
-  // "New Registrations" is a plain informational, today-only screen for
-  // both sides now — a customer registration has no pending/incomplete
-  // state, so "today" was always the only meaningful scope there; Driver
-  // used to embed the full KYC review workflow (Approve/Reject/Edit,
-  // WhatsApp nudges) here instead, covering the whole backlog rather than
-  // just today's signups, which is exactly the "too many separate driver
-  // screens" duplication that got folded into the Drivers tab (see
-  // AdminDriverList) -- reviewing/approving a driver's KYC now happens
-  // there, not through this tile.
+  // "New Registrations" -> Customer stays a plain informational,
+  // today-only list (a customer registration has no pending/incomplete
+  // state, so "today" is the only meaningful scope there). Driver is the
+  // KYC approval queue (see approvalQueue above) -- Approve/Reject/Edit
+  // live here now, not in the Drivers tab.
   if (detailView === "liveMap") {
     return (
       <div>
@@ -605,7 +647,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
           </button>
           <button onClick={() => setNewRegTab("driver")} className="flex-1 rounded-lg py-3 text-sm font-bold"
             style={{ background: newRegTab === "driver" ? C.navy : C.paper, color: newRegTab === "driver" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "driver" ? C.navy : C.line}` }}>
-            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{newDriversToday.length > 0 ? ` (${newDriversToday.length})` : ""}
+            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{approvalQueue.length > 0 ? ` (${approvalQueue.length})` : ""}
           </button>
         </div>
         {newRegTab === "customer" ? (
@@ -621,19 +663,112 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
               ))}
             </div>
           )
-        ) : newDriversToday.length === 0 ? (
-          <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No new driver signups today yet." : lang === "mr" ? "आज अद्याप कोणताही नवीन ड्रायव्हर साइनअप झाला नाही." : "आज तक कोई नया ड्राइवर साइनअप नहीं हुआ।"}</p>
+        ) : approvalQueue.length === 0 ? (
+          <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver's KYC is resolved." : lang === "mr" ? "सर्व ड्रायव्हरांची KYC निकाली काढली आहे." : "सभी ड्राइवरों की KYC निपटा दी गई है।"}</p>
         ) : (
           <div className="space-y-1.5">
-            {newDriversToday.map((d) => (
-              <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-              </div>
-            ))}
-            <button onClick={() => { setDetailView(null); onNavigate("drivers"); }} className="w-full rounded-lg py-3 text-sm font-bold text-white mt-2" style={{ background: C.navy }}>
-              {lang === "en" ? "Review their KYC in Drivers" : lang === "mr" ? "Drivers मध्ये KYC पहा" : "Drivers में KYC देखें"}
-            </button>
+            {approvalQueue.map((d) => {
+              const submitted = !!d.vehicleSpec;
+              const expanded = approvalExpandedId === d.id;
+              const editing = approvalEditingId === d.id;
+              return (
+                <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
+                      <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: "#FFFFFF", background: submitted ? C.marigoldDeep : C.inkSoft }}>
+                      {submitted ? (lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित") : (lang === "en" ? "Not submitted" : lang === "mr" ? "सबमिट झाले नाही" : "सबमिट नहीं हुआ")}
+                    </span>
+                  </div>
+                  {submitted && (
+                    <>
+                      <div className="flex items-center justify-between mt-2">
+                        <button onClick={() => setApprovalExpandedId(expanded ? null : d.id)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>
+                          {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
+                        </button>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => (editing ? cancelApprovalEdit() : startApprovalEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
+                            {editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}
+                          </button>
+                          <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "नकारें"}</button>
+                          <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
+                        </div>
+                      </div>
+                      {editing ? (
+                        <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            <label className="text-[11px] col-span-2">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle type" : lang === "mr" ? "गाडीचा प्रकार" : "गाड़ी का प्रकार"}</span>
+                              <select value={approvalEditDraft.type} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, type: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
+                                {!vehicleTypes.some((v) => v.key === approvalEditDraft.type) && <option value={approvalEditDraft.type}>{approvalEditDraft.type || "—"}</option>}
+                                {vehicleTypes.map((v) => <option key={v.key} value={v.key}>{lang === "en" ? (v.labelEn || v.label) : v.label}</option>)}
+                              </select>
+                            </label>
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
+                              <input value={approvalEditDraft.vehicleNumber} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
+                              <input type="number" value={approvalEditDraft.capacityKg} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
+                              <input value={approvalEditDraft.length} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, length: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
+                              <input value={approvalEditDraft.width} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, width: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                            <label className="text-[11px]">
+                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
+                              <input value={approvalEditDraft.height} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, height: e.target.value }))}
+                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                            </label>
+                          </div>
+                          {approvalEditError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{approvalEditError}</p>}
+                          <div className="flex justify-end">
+                            <button onClick={() => saveApprovalEdit(d)} className="rounded-lg px-5 py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
+                              {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : expanded && (
+                        <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                          <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            {Object.entries(approvalDocLabels).map(([key, label]) => {
+                              const doc = d.docs?.[key];
+                              return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
+                            })}
+                          </div>
+                          {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
+                            <>
+                              <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
+                              <div className="grid grid-cols-2 gap-2 mb-2">
+                                {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} />}
+                                {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} />}
+                              </div>
+                            </>
+                          )}
+                          <div className="text-[11px]" style={{ color: C.ink }}>
+                            <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
+                            <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1900,7 +2035,7 @@ function AdminCallLogs({ callLogs, bookings, lang }) {
 // Merged so every action for a given driver lives on that driver's own
 // row here, instead of admin having to jump between two different
 // screens to finish reviewing one signup.
-function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, lang }) {
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverVehicleSpec, vehicleTypes, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -2065,7 +2200,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
     const editing = editingId === d.id;
     const daysLeft = trialDaysLeft(d.createdAt);
     const gps = gpsStatus(d, lang);
-    const pendingReview = !!d.vehicleSpec && d.kyc === "Pending";
     const notSubmitted = !d.vehicleSpec;
     const needsCapacity = !!d.vehicleSpec && !d.vehicleSpec.capacityKg;
     return (
@@ -2117,17 +2251,15 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverK
           <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>
             {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
           </button>
+          {/* Approve/Reject moved to the Live Dashboard's "New Registrations"
+              approval queue (see AdminFleet) -- this screen keeps Edit only,
+              for fixing bad vehicle data on a driver regardless of KYC
+              status, not for making the approval decision itself. */}
           {d.vehicleSpec && (
             <div className="flex gap-2 shrink-0">
               <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
                 {editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}
               </button>
-              {pendingReview && (
-                <>
-                  <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "नकारें"}</button>
-                  <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
-                </>
-              )}
             </div>
           )}
         </div>
@@ -2998,8 +3130,8 @@ export function AdminPanel({ drivers, customers, driver, updateDriverKyc, update
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
-      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
