@@ -352,16 +352,23 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // exactly as much as one who signed up an hour ago. Approve/Reject/Edit
   // live only here now; the Drivers tab (AdminDriverList) keeps Edit alone.
   const approvalQueue = drivers.filter((d) => d.vehicleSpec && d.kyc === "Pending");
-  // A driver who signed up today but hasn't submitted the KYC form yet has
-  // nothing to approve/reject -- but hiding them completely from today's
-  // list made a same-day signup look like it vanished/got silently
-  // auto-approved (real confusion this caused once). Scoped to TODAY only,
-  // not every incomplete signup ever, so this doesn't turn back into the
-  // unbounded "not submitted" noise approvalQueue above deliberately
-  // excludes -- an incomplete signup from last week still belongs only in
-  // the Drivers tab's Incomplete section/WhatsApp reminder, not here.
-  const notSubmittedTodayList = drivers.filter((d) => !d.vehicleSpec && isToday(d.createdAt));
-  const driverRegistrations = [...approvalQueue, ...notSubmittedTodayList];
+  // A driver who signed up but hasn't submitted the KYC form yet has
+  // nothing to approve/reject -- but hiding them completely made a fresh
+  // signup look like it vanished/got silently auto-approved (real confusion
+  // this caused once). Kept visible for a few days so Admin has a real
+  // window to actively follow up and ask them to finish the form, not just
+  // a single day -- but still bounded, not every incomplete signup ever, so
+  // this doesn't turn back into the unbounded "not submitted" noise
+  // approvalQueue above deliberately excludes -- a signup from weeks ago
+  // still belongs only in the Drivers tab's Incomplete section/WhatsApp
+  // reminder, not here.
+  const NOT_SUBMITTED_VISIBLE_DAYS = 3;
+  const isWithinLastDays = (ts, days) => {
+    const d = ts?.toDate ? ts.toDate() : null;
+    return !!d && Date.now() - d.getTime() <= days * 24 * 60 * 60 * 1000;
+  };
+  const notSubmittedRecentList = drivers.filter((d) => !d.vehicleSpec && isWithinLastDays(d.createdAt, NOT_SUBMITTED_VISIBLE_DAYS));
+  const driverRegistrations = [...approvalQueue, ...notSubmittedRecentList];
   const [approvalExpandedId, setApprovalExpandedId] = useState(null);
   const [approvalEditingId, setApprovalEditingId] = useState(null);
   const [approvalEditDraft, setApprovalEditDraft] = useState(null);
@@ -720,10 +727,10 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
         ) : (
           <div className="space-y-1.5">
             {driverRegistrations.map((d) => {
-              // Not yet submitted (signed up today, no vehicleSpec) --
-              // nothing to approve/reject/edit here, just a today-only
+              // Not yet submitted (signed up within the last few days, no
+              // vehicleSpec) -- nothing to approve/reject/edit here, just a
               // visibility row so a fresh signup never looks like it
-              // silently disappeared. See notSubmittedTodayList above.
+              // silently disappeared. See notSubmittedRecentList above.
               if (!d.vehicleSpec) {
                 return (
                   <div key={d.id} className="rounded-lg p-3 flex items-center justify-between gap-2" style={{ border: `1px solid ${C.line}`, background: C.bg }}>
