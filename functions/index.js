@@ -339,6 +339,83 @@ async function sendDirectRequestWhatsApp(driverMobile, load) {
   }
 }
 
+// Bulk WhatsApp sends for Admin's retention/reminder tiles (Uninstalled/
+// Blocked, Off duty, and AdminDriverList's Incomplete-KYC and GPS-off
+// sections) -- replaces the old "open wa.me, admin taps send, one driver at
+// a time" queue with a single real API call reaching every matching driver
+// at once. MSG91's own bulk endpoint takes an ARRAY of recipients
+// (to_and_components) in one request, so this is genuinely one send, not a
+// loop of individual ones -- same endpoint/account as sendDirectRequestWhatsApp
+// above, no new secrets needed. Each template's own approved name and
+// variable shape (see the 4 templates submitted/approved on MSG91's
+// dashboard -- driver_reinstall_offer, driver_kyc_incomplete, driver_gps_off,
+// driver_off_duty) is fixed by what Meta actually approved, not
+// admin-configurable, so hardcoded here the same way direct_booking_request's
+// is above.
+const MSG91_BULK_TEMPLATES = {
+  reinstall: { name: "driver_reinstall_offer", vars: () => ({}) },
+  kycIncomplete: {
+    name: "driver_kyc_incomplete",
+    // The one template with a real variable -- each driver's own KYC
+    // portal deep link (see kycWhatsappLink in AdminPanel.jsx, which this
+    // mirrors), not shared across recipients.
+    vars: (mobile) => ({ body_1: `https://sarthi-transport-74865.web.app/?driverKyc=1&mobile=${mobile}` }),
+  },
+  gpsOff: { name: "driver_gps_off", vars: () => ({}) },
+  offDuty: { name: "driver_off_duty", vars: () => ({}) },
+};
+// MSG91's own limit on recipients per bulk call isn't documented anywhere
+// public -- chunking defensively rather than assuming an unbounded array is
+// safe, same reasoning bulkUpdateDocs already applies to Firestore writes
+// (a several-hundred-entry single request is exactly the kind of thing that
+// silently fails partway on a flaky connection).
+const MSG91_BULK_CHUNK_SIZE = 100;
+exports.sendBulkDriverWhatsApp = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_WHATSAPP_NAMESPACE] }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const { kind, mobiles } = request.data || {};
+  const template = MSG91_BULK_TEMPLATES[kind];
+  if (!template) throw new HttpsError("invalid-argument", "Unknown template kind.");
+  const list = Array.isArray(mobiles) ? mobiles.filter(Boolean) : [];
+  if (list.length === 0) throw new HttpsError("invalid-argument", "mobiles is required.");
+
+  const authKey = MSG91_AUTH_KEY.value(), fromNumber = MSG91_WHATSAPP_NUMBER.value(), namespace = MSG91_WHATSAPP_NAMESPACE.value();
+  if (!authKey || !fromNumber || !namespace) throw new HttpsError("failed-precondition", "MSG91 WhatsApp not configured.");
+
+  const chunks = [];
+  for (let i = 0; i < list.length; i += MSG91_BULK_CHUNK_SIZE) chunks.push(list.slice(i, i + MSG91_BULK_CHUNK_SIZE));
+
+  let sent = 0;
+  for (const chunk of chunks) {
+    const to_and_components = chunk.map((mobile) => ({
+      to: [`91${mobile}`],
+      components: Object.fromEntries(Object.entries(template.vars(mobile)).map(([key, value]) => [key, { type: "text", value }])),
+    }));
+    try {
+      const res = await fetch("https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/", {
+        method: "POST",
+        headers: { authkey: authKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          integrated_number: fromNumber,
+          content_type: "template",
+          payload: {
+            messaging_product: "whatsapp",
+            type: "template",
+            template: { name: template.name, language: { code: "hi", policy: "deterministic" }, namespace, to_and_components },
+          },
+        }),
+      });
+      if (!res.ok) {
+        console.error(`[whatsapp bulk:${kind}] rejected by MSG91:`, await res.text());
+        continue;
+      }
+      sent += chunk.length;
+    } catch (e) {
+      console.error(`[whatsapp bulk:${kind}] send failed:`, e.message);
+    }
+  }
+  return { ok: sent > 0, sent, requested: list.length };
+});
+
 // Full-screen "incoming call" ring alert -- see AppFirebaseMessagingService.java/
 // RingingBookingActivity.java on the Android side. Deliberately sent as a
 // SEPARATE message from sendDirectRequestAlert above, not a replacement for

@@ -15,7 +15,7 @@ import {
 import { GoogleMap, MarkerF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry } from "./firebaseClient";
+import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp } from "./firebaseClient";
 import { createDoc, patchDoc, removeDoc, bulkUpdateDocs } from "./firestoreStore";
 import {
   C, DEFAULT_EXPENSE_CATEGORIES, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
@@ -445,6 +445,29 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   const offDutyUnsent = offDutyDrivers.filter((d) => !sentOffDutyToday(d.mobile));
   const nextOffDutyToRemind = offDutyUnsent[0] || null;
 
+  // Real bulk send (see sendBulkDriverWhatsApp in functions/index.js) --
+  // replaces the old "open wa.me, admin taps send, one driver at a time"
+  // queue above with one MSG91 API call reaching every not-yet-messaged-
+  // today driver at once. Only one bulk send can run at a time from this
+  // screen (bulkSendingKind), which is fine -- these are rare, deliberate
+  // admin actions, not something fired off in parallel. markSent is
+  // whichever per-kind "already sent today" setter applies (e.g.
+  // markUninstalledWhatsappSent) so a successful bulk send updates the same
+  // persisted map the per-row individual button already uses -- either path
+  // correctly marks a driver as reminded for the day.
+  const [bulkSendingKind, setBulkSendingKind] = useState(null);
+  const [bulkSendResult, setBulkSendResult] = useState(null);
+  const sendBulkWhatsAppNow = async (kind, targets, markSent) => {
+    if (bulkSendingKind) return;
+    setBulkSendingKind(kind);
+    setBulkSendResult(null);
+    const mobiles = targets.map((d) => d.mobile).filter(Boolean);
+    const result = await sendBulkDriverWhatsApp(kind, mobiles);
+    if (result.ok) targets.forEach((d) => markSent(d.mobile));
+    setBulkSendResult({ kind, ...result });
+    setBulkSendingKind(null);
+  };
+
   // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) when
   // the diesel price per litre changes, up or down. Driver-submitted quotes
   // (routeFares) are untouched by this since commit ae40cb4 dropped them as
@@ -556,18 +579,29 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
       emptyMsg: lang === "en" ? "No approved driver is currently off duty." : lang === "mr" ? "सध्या कोणताही अप्रूव्ह्ड ड्रायव्हर ऑफ ड्युटीवर नाही." : "फिलहाल कोई अप्रूव्ड ड्राइवर ऑफ ड्यूटी पर नहीं है।",
       items: offDutyDrivers,
       headerExtra: offDutyDrivers.length > 0 && (
-        nextOffDutyToRemind ? (
-          <a href={offDutyWhatsappLink(nextOffDutyToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markOffDutyWhatsappSent(nextOffDutyToRemind.mobile)}
-            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.success }}>
-            <MessageCircle size={14} />
-            {lang === "en" ? `Send next "go online" message on WhatsApp (${offDutyUnsent.length} left)` : lang === "mr" ? `पुढचा "ऑनलाइन व्हा" मेसेज WhatsApp वर पाठवा (${offDutyUnsent.length} बाकी)` : `अगला "ऑनलाइन जाएं" मेसेज WhatsApp पर भेजें (${offDutyUnsent.length} बाकी)`}
-          </a>
-        ) : (
-          <div className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
-            <CheckCircle2 size={14} />
-            {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
-          </div>
-        )
+        <>
+          {offDutyUnsent.length > 0 ? (
+            <button onClick={() => sendBulkWhatsAppNow("offDuty", offDutyUnsent, markOffDutyWhatsappSent)} disabled={!!bulkSendingKind}
+              className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.success, opacity: bulkSendingKind && bulkSendingKind !== "offDuty" ? 0.6 : 1 }}>
+              <MessageCircle size={14} />
+              {bulkSendingKind === "offDuty"
+                ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
+                : (lang === "en" ? `Send WhatsApp to all ${offDutyUnsent.length} off-duty drivers now` : lang === "mr" ? `सर्व ${offDutyUnsent.length} ऑफ ड्युटी ड्रायव्हर्सना आत्ता WhatsApp पाठवा` : `सभी ${offDutyUnsent.length} ऑफ ड्यूटी ड्राइवरों को अभी WhatsApp भेजें`)}
+            </button>
+          ) : (
+            <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+              <CheckCircle2 size={14} />
+              {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
+            </div>
+          )}
+          {bulkSendResult?.kind === "offDuty" && (
+            <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
+              {bulkSendResult.ok
+                ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
+                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
+            </div>
+          )}
+        </>
       ),
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -596,18 +630,29 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
       // you, come back" makes no sense to send someone who was blocked on
       // purpose, not someone who just went quiet.
       headerExtra: uninstalledDrivers.length > 0 && (
-        nextUninstalledToRemind ? (
-          <a href={uninstalledWhatsappLink(nextUninstalledToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markUninstalledWhatsappSent(nextUninstalledToRemind.mobile)}
-            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.success }}>
-            <MessageCircle size={14} />
-            {lang === "en" ? `Send next retention message on WhatsApp (${uninstalledUnsent.length} left)` : lang === "mr" ? `पुढचा रिटेंशन मेसेज WhatsApp वर पाठवा (${uninstalledUnsent.length} बाकी)` : `अगला रिटेंशन मेसेज WhatsApp पर भेजें (${uninstalledUnsent.length} बाकी)`}
-          </a>
-        ) : (
-          <div className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
-            <CheckCircle2 size={14} />
-            {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
-          </div>
-        )
+        <>
+          {uninstalledUnsent.length > 0 ? (
+            <button onClick={() => sendBulkWhatsAppNow("reinstall", uninstalledUnsent, markUninstalledWhatsappSent)} disabled={!!bulkSendingKind}
+              className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.success, opacity: bulkSendingKind && bulkSendingKind !== "reinstall" ? 0.6 : 1 }}>
+              <MessageCircle size={14} />
+              {bulkSendingKind === "reinstall"
+                ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
+                : (lang === "en" ? `Send WhatsApp to all ${uninstalledUnsent.length} drivers now` : lang === "mr" ? `सर्व ${uninstalledUnsent.length} ड्रायव्हर्सना आत्ता WhatsApp पाठवा` : `सभी ${uninstalledUnsent.length} ड्राइवरों को अभी WhatsApp भेजें`)}
+            </button>
+          ) : (
+            <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+              <CheckCircle2 size={14} />
+              {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
+            </div>
+          )}
+          {bulkSendResult?.kind === "reinstall" && (
+            <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
+              {bulkSendResult.ok
+                ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
+                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
+            </div>
+          )}
+        </>
       ),
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}` }}>
@@ -2260,6 +2305,23 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const sentGpsToday = (mobile) => gpsWhatsappSentMap[mobile] === todayStrGps();
   const gpsUnsent = onlineNoLiveGps.filter((d) => !sentGpsToday(d.mobile));
   const nextGpsToRemind = gpsUnsent[0] || null;
+
+  // Real bulk send (see sendBulkDriverWhatsApp in functions/index.js) --
+  // same reasoning/shape as AdminFleet's own copy of this (Off duty,
+  // Uninstalled/Blocked) -- a separate component instance needs its own
+  // copy of this state, not shared, but the logic is identical.
+  const [bulkSendingKind, setBulkSendingKind] = useState(null);
+  const [bulkSendResult, setBulkSendResult] = useState(null);
+  const sendBulkWhatsAppNow = async (kind, targets, markSent) => {
+    if (bulkSendingKind) return;
+    setBulkSendingKind(kind);
+    setBulkSendResult(null);
+    const mobiles = targets.map((d) => d.mobile).filter(Boolean);
+    const result = await sendBulkDriverWhatsApp(kind, mobiles);
+    if (result.ok) targets.forEach((d) => markSent(d.mobile));
+    setBulkSendResult({ kind, ...result });
+    setBulkSendingKind(null);
+  };
   const gpsWhatsappLink = (mobile) => {
     const msg = lang === "en"
       ? "Your GPS/location tracking looks off in our app right now. To keep getting loads, you must turn it on -- please check these two things on your phone:\n1) Settings → Location → turn ON\n2) Settings → Apps → Apna Transport → Permissions → Location → Allow\nThen reopen our app."
@@ -2489,25 +2551,50 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
         </button>
       </div>
       {onlineNoLiveGps.length > 0 && (
-        nextGpsToRemind ? (
-          <a href={gpsWhatsappLink(nextGpsToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markGpsWhatsappSent(nextGpsToRemind.mobile)}
-            className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.success }}>
+        gpsUnsent.length > 0 ? (
+          <button onClick={() => sendBulkWhatsAppNow("gpsOff", gpsUnsent, markGpsWhatsappSent)} disabled={!!bulkSendingKind}
+            className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.success, opacity: bulkSendingKind && bulkSendingKind !== "gpsOff" ? 0.6 : 1 }}>
             <MessageCircle size={14} />
-            {lang === "en" ? `Send next GPS reminder on WhatsApp (${gpsUnsent.length} left)` : lang === "mr" ? `पुढचा GPS रिमाइंडर WhatsApp वर पाठवा (${gpsUnsent.length} बाकी)` : `अगला GPS रिमाइंडर WhatsApp पर भेजें (${gpsUnsent.length} बाकी)`}
-          </a>
+            {bulkSendingKind === "gpsOff"
+              ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
+              : (lang === "en" ? `Send GPS reminder on WhatsApp to all ${gpsUnsent.length} now` : lang === "mr" ? `सर्व ${gpsUnsent.length} GPS रिमाइंडर आत्ता WhatsApp वर पाठवा` : `सभी ${gpsUnsent.length} को GPS रिमाइंडर अभी WhatsApp पर भेजें`)}
+          </button>
         ) : (
-          <div className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+          <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
             <CheckCircle2 size={14} />
             {lang === "en" ? "Everyone reminded today" : lang === "mr" ? "आज सर्वांना आठवण दिली" : "आज सभी को याद दिलाया गया"}
           </div>
         )
       )}
-      {notSubmittedKyc.length > 0 && nextKycToRemind && (
-        <a href={kycWhatsappLink(nextKycToRemind.mobile)} target="_blank" rel="noreferrer" onClick={() => markKycWhatsappSent(nextKycToRemind.mobile)}
-          className="w-full rounded-lg py-3 font-bold text-sm mb-3 flex items-center justify-center gap-1.5 text-white" style={{ background: C.marigoldDeep }}>
-          <XCircle size={14} />
-          {lang === "en" ? `Send next KYC reminder on WhatsApp (${notSubmittedUnsent.length} left)` : lang === "mr" ? `पुढचा KYC रिमाइंडर WhatsApp वर पाठवा (${notSubmittedUnsent.length} बाकी)` : `अगला KYC रिमाइंडर WhatsApp पर भेजें (${notSubmittedUnsent.length} बाकी)`}
-        </a>
+      {bulkSendResult?.kind === "gpsOff" && (
+        <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
+          {bulkSendResult.ok
+            ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
+            : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
+        </div>
+      )}
+      {notSubmittedKyc.length > 0 && (
+        notSubmittedUnsent.length > 0 ? (
+          <button onClick={() => sendBulkWhatsAppNow("kycIncomplete", notSubmittedUnsent, markKycWhatsappSent)} disabled={!!bulkSendingKind}
+            className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.marigoldDeep, opacity: bulkSendingKind && bulkSendingKind !== "kycIncomplete" ? 0.6 : 1 }}>
+            <XCircle size={14} />
+            {bulkSendingKind === "kycIncomplete"
+              ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
+              : (lang === "en" ? `Send KYC reminder on WhatsApp to all ${notSubmittedUnsent.length} now` : lang === "mr" ? `सर्व ${notSubmittedUnsent.length} KYC रिमाइंडर आत्ता WhatsApp वर पाठवा` : `सभी ${notSubmittedUnsent.length} को KYC रिमाइंडर अभी WhatsApp पर भेजें`)}
+          </button>
+        ) : (
+          <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+            <CheckCircle2 size={14} />
+            {lang === "en" ? "Everyone reminded today" : lang === "mr" ? "आज सर्वांना आठवण दिली" : "आज सभी को याद दिलाया गया"}
+          </div>
+        )
+      )}
+      {bulkSendResult?.kind === "kycIncomplete" && (
+        <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
+          {bulkSendResult.ok
+            ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
+            : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
+        </div>
       )}
       {showCall && (() => {
         const callFiltered = totalInstalled.filter((d) => d.name.includes(callQ) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(callQ.toLowerCase()) || (d.mobile || "").includes(callQ));

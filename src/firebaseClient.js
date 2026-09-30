@@ -193,6 +193,24 @@ export async function sendAdminNotification(target, message, audience = "driver"
   }
 }
 
+// One real MSG91 API call reaching every driver in `mobiles` at once (see
+// functions/index.js: sendBulkDriverWhatsApp) -- kind is one of "reinstall"
+// (Uninstalled/Blocked), "kycIncomplete", "gpsOff", or "offDuty", matching
+// that function's own template map. Always resolves (never throws) with
+// { ok, sent?, requested?, reason? }.
+export async function sendBulkDriverWhatsApp(kind, mobiles) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "sendBulkDriverWhatsApp");
+    const result = await call({ kind, mobiles });
+    return result.data;
+  } catch (e) {
+    console.error("[bulkWhatsApp] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
 // Checks a KYC photo actually shows what its tile claims before it's
 // uploaded (see functions/index.js: classifyKycPhoto and DriverKyc's
 // startPhotoUpload) -- docType is "vehicleSide" (rejects front/diagonal
