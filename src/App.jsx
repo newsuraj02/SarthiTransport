@@ -1143,6 +1143,60 @@ export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS
   return Math.round(distanceFare + toll);
 }
 
+// Flags a fare that's wildly out of line with its OWN sibling tiers on the
+// same route -- not a fixed rupee/percentage threshold, since a real fare
+// legitimately varies a lot by distance and vehicle size. Instead compares
+// each entry's ratio to what the plain distance formula alone would say
+// (calculateFare) against the MEDIAN of that same ratio across every other
+// tier sharing this route -- a real admin override is usually a fairly
+// consistent multiple of the formula (drivers/admin price routes at a
+// discount or premium to the generic rate, but roughly consistently), so
+// one tier sitting at 2x+ or 0.5x- that consistent multiple is almost
+// certainly a data-entry mistake (a stray digit, a mixed-up route), not a
+// genuine pricing decision. Needs at least 3 entries total (2 "others" to
+// judge against) -- can't call anything an outlier against a group of one.
+// `entries`: [{ id, tierMaxKg, totalFare, estimatedKm }]: works equally for
+// raw adminRouteFares docs (Admin's Saved Routes flag) and for a
+// CustomerBooking vehicle-picker's live per-tier fares (the interpolation
+// fix), each entry's own estimatedKm/distance used for its own ratio.
+const FARE_OUTLIER_RATIO_MULTIPLE = 1.8;
+export function findFareOutliers(entries, tiers = DEFAULT_FARE_TIERS) {
+  const valid = (entries || []).filter((e) => e.totalFare > 0 && e.estimatedKm > 0);
+  if (valid.length < 3) return new Set();
+  const withRatio = valid.map((e) => ({ ...e, ratio: e.totalFare / Math.max(1, calculateFare(e.tierMaxKg, e.estimatedKm, tiers)) }));
+  const outliers = new Set();
+  withRatio.forEach((e) => {
+    const others = withRatio.filter((o) => o.id !== e.id).map((o) => o.ratio).sort((a, b) => a - b);
+    const mid = Math.floor(others.length / 2);
+    const median = others.length % 2 === 0 ? (others[mid - 1] + others[mid]) / 2 : others[mid];
+    if (median <= 0) return;
+    if (e.ratio > median * FARE_OUTLIER_RATIO_MULTIPLE || e.ratio < median / FARE_OUTLIER_RATIO_MULTIPLE) outliers.add(e.id);
+  });
+  return outliers;
+}
+
+// Customer-facing repair for a flagged outlier (see findFareOutliers) --
+// interpolates between the nearest non-outlier tiers by capacity instead of
+// showing the raw broken number. Never touches the underlying saved
+// adminRouteFares document -- this is display-only, so the bad entry still
+// shows up for Admin to actually fix (see the Saved Routes warning flag).
+// `sorted` must already exclude `entry` and be ascending by tierMaxKg.
+export function interpolateOutlierFare(entry, sorted, distanceKm, tiers = DEFAULT_FARE_TIERS) {
+  const below = [...sorted].reverse().find((x) => x.tierMaxKg < entry.tierMaxKg);
+  const above = sorted.find((x) => x.tierMaxKg > entry.tierMaxKg);
+  if (below && above) {
+    const frac = (entry.tierMaxKg - below.tierMaxKg) / (above.tierMaxKg - below.tierMaxKg);
+    return Math.round(below.fare + (above.fare - below.fare) * frac);
+  }
+  // Only one side available -- scale proportionally to it rather than
+  // interpolate (nothing to interpolate between), still far closer to
+  // reality than the raw broken value.
+  if (below) return Math.round(below.fare * (entry.tierMaxKg / below.tierMaxKg));
+  if (above) return Math.round(above.fare * (entry.tierMaxKg / above.tierMaxKg));
+  // No usable sibling at all -- fall back to the plain formula.
+  return calculateFare(entry.tierMaxKg, distanceKm, tiers);
+}
+
 // Route fares are matched by loose substring containment rather than exact
 // equality: a driver typing "Kolhapur" into Set Fare should match a
 // customer's fully resolved pickup address like "MG Road, Kolhapur,
@@ -5382,24 +5436,45 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // matching the order the fare tiers and the dispatch engine already use
   // elsewhere.
   const loadKg = Number(weight) || 0;
-  const nearbyDrivers = drivers
-    .filter((d) => {
-      if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
-      const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-      if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
-      if (!pickupCoords || !d.lastKnownLocation) return false;
-      if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-      const maxKm = isScheduling ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
-      return haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) <= maxKm;
-    })
-    .map((d) => {
-      const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-      const tier = findFareTier(capacityKg, fareTiers);
-      const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
-      const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
-      return { driver: d, capacityKg, tier, tierIndex, km };
-    })
-    .sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km);
+  const nearbyDrivers = (() => {
+    const withFare = drivers
+      .filter((d) => {
+        if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+        const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+        if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+        if (!pickupCoords || !d.lastKnownLocation) return false;
+        if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
+        const maxKm = isScheduling ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
+        return haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) <= maxKm;
+      })
+      .map((d) => {
+        const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+        const tier = findFareTier(capacityKg, fareTiers);
+        const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
+        const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+        const id = d.mobile || d.id;
+        const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+        return { driver: d, capacityKg, tier, tierIndex, km, id, fare };
+      })
+      .sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km);
+
+    // A bad Admin override for just one tier on this route (a stray digit,
+    // a mixed-up route -- see findFareOutliers) would otherwise show the
+    // customer a fare wildly out of line with every other vehicle size in
+    // THIS exact list. Corrects only what's displayed here -- the
+    // underlying adminRouteFares document is untouched; Admin's Saved
+    // Routes screen flags the same entry so it actually gets fixed at the
+    // source, not just papered over for whoever books next.
+    const outlierIds = findFareOutliers(
+      withFare.map((e) => ({ id: e.id, tierMaxKg: e.tier.maxKg, totalFare: e.fare, estimatedKm: distance })),
+      fareTiers
+    );
+    if (outlierIds.size === 0) return withFare;
+    const clean = withFare.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tier.maxKg, fare: e.fare }));
+    return withFare.map((e) => outlierIds.has(e.id)
+      ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers) }
+      : e);
+  })();
 
   // Tapping a specific driver's card books them directly — the system no
   // longer picks who to dispatch to first, the customer just did by
@@ -5428,6 +5503,12 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
       pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: scheduledForValue,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+      // The exact fare already shown on this card (outlier-corrected, see
+      // nearbyDrivers above) -- passed through rather than letting
+      // requestByCategory re-resolve it independently, so a booking can
+      // never charge something different from what the customer actually
+      // saw and tapped to accept.
+      fare: entry.fare,
     });
     if (err) { setBookingError(err); return; }
     resetFields();
@@ -5552,7 +5633,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               ) : nearbyDrivers.map((entry) => {
                 const key = entry.driver.mobile || entry.driver.id;
                 const isSelected = selectedDriverKey === key;
-                const fare = resolveFareForTier(entry.tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+                // Already resolved (and outlier-corrected, see nearbyDrivers
+                // above) -- not recomputed here, so the card shown and the
+                // fare bookDriver actually sends never disagree.
+                const fare = entry.fare;
                 return (
                   <div key={key}>
                     <button onClick={() => setSelectedDriverKey(key)}
@@ -9668,14 +9752,19 @@ export default function App() {
   // the category itself (resolveFareForTier), not any specific driver.
   // Returns an error message string to show the customer (nobody eligible
   // at all right now), or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng }) => {
+  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, fare: fareOverride }) => {
     const bookingId = genId();
     const draftBooking = { id: bookingId, tierMaxKg, pickupLat, pickupLng, scheduledFor, declinedBy: [] };
     const anyEligible = drivers.some((d) => isDriverBroadcastEligible(d, draftBooking, vehicleTypes, bookings, fareTiers, lang));
     if (!anyEligible) {
       return lang === "en" ? "No vehicles available nearby right now — please try again shortly." : lang === "mr" ? "सध्या जवळपास कोणतेही वाहन उपलब्ध नाही — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "अभी आसपास कोई वाहन उपलब्ध नहीं है — कृपया थोड़ी देर बाद फिर कोशिश करें।";
     }
-    const fare = resolveFareForTier(tierMaxKg, pickup, drop, distance, fareTiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
+    // fareOverride (set by CustomerBooking's driver picker -- see bookDriver)
+    // is the exact, already outlier-corrected fare the customer was actually
+    // shown and tapped to accept. Only re-resolved here for a caller with no
+    // specific card shown (there currently isn't one, but this keeps the
+    // function safe to call without one).
+    const fare = fareOverride ?? resolveFareForTier(tierMaxKg, pickup, drop, distance, fareTiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
     createDoc("bookings", bookingId, {
       // tierMaxKg is the source of truth for dispatch/eligibility (see
       // isDriverBroadcastEligible) -- weight is only ever shown to

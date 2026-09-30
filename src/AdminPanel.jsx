@@ -21,7 +21,7 @@ import {
   C, DEFAULT_EXPENSE_CATEGORIES, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError, driverTruckIcon, driverTruckIconInactive, estimateDistanceKm,
-  fetchRoadDistanceKm, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
+  fetchRoadDistanceKm, findFareOutliers, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
   getAdminRouteOverride, gpsStatus, greetingWord, haversineKm, installedDrivers,
   isFutureAdvance, isLikelyUninstalled, isLongHaulSmallLoad, locationsNear,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, routeMatchRadiusKm,
@@ -1249,6 +1249,30 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
   // actually hand-set/edited one at a time.
   const handSetRates = (adminRouteFares || []).filter((r) => r.source !== "maharashtraDefault");
 
+  // Flags a Saved Routes entry whose fare is wildly out of line with the
+  // OTHER tiers on the exact same route (see findFareOutliers in App.jsx --
+  // e.g. a 1700kg tier accidentally priced above the 3500kg tier on the
+  // same route, almost certainly a stray-digit typo rather than a real
+  // pricing decision). Grouped across every adminRouteFares entry for that
+  // route (including Maharashtra-default tiers, for the most accurate
+  // baseline of "what's normal here"), even though only hand-set ones ever
+  // show a badge, since Saved Routes only lists those.
+  const routeFareOutlierIds = (() => {
+    const groups = {};
+    (adminRouteFares || []).forEach((r) => {
+      const key = `${r.pickupKey || ""}→${r.dropKey || ""}`;
+      (groups[key] ||= []).push(r);
+    });
+    const ids = new Set();
+    Object.values(groups).forEach((group) => {
+      findFareOutliers(
+        group.map((r) => ({ id: r.id, tierMaxKg: r.tierMaxKg, totalFare: r.totalFare, estimatedKm: r.estimatedKm })),
+        fareTiers
+      ).forEach((id) => ids.add(id));
+    });
+    return ids;
+  })();
+
   return (
     <div>
       <div className="flex items-stretch gap-2 mb-3">
@@ -1273,7 +1297,7 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
           prefill={calcPrefill} onClose={() => setRateCalcOpen(false)} />
       )}
       {savedRoutesOpen && (
-        <AdminSavedRoutes handSetRates={handSetRates} adminRouteFaresError={adminRouteFaresError} lang={lang}
+        <AdminSavedRoutes handSetRates={handSetRates} outlierIds={routeFareOutlierIds} adminRouteFaresError={adminRouteFaresError} lang={lang}
           onEditAdminRate={openCalculator} onClose={() => setSavedRoutesOpen(false)} />
       )}
     </div>
@@ -1286,7 +1310,7 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
 // now, see its own comment). Editing one reopens AdminRateCalculator
 // pre-filled (onEditAdminRate) -- that's still the only place the actual
 // save happens.
-function AdminSavedRoutes({ handSetRates, adminRouteFaresError, lang, onEditAdminRate, onClose }) {
+function AdminSavedRoutes({ handSetRates, outlierIds, adminRouteFaresError, lang, onEditAdminRate, onClose }) {
   const [confirmDeleteAdminId, setConfirmDeleteAdminId] = useState(null);
   const deleteAdminRate = (id) => { removeDoc("adminRouteFares", id).catch((e) => console.error(e)); setConfirmDeleteAdminId(null); };
   const sorted = [...(handSetRates || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -1325,6 +1349,11 @@ function AdminSavedRoutes({ handSetRates, adminRouteFaresError, lang, onEditAdmi
                   {isLongHaulSmallLoad(r.estimatedKm, r.tierMaxKg) && (
                     <div className="text-[9.5px] font-bold mt-1" style={{ color: C.safety }}>
                       ⚠ {lang === "en" ? "Small load, long haul — a shared/LTL truck is likely cheaper for the customer" : lang === "mr" ? "लहान लोड, लांब पल्ला — ग्राहकासाठी शेअर्ड/LTL ट्रक स्वस्त पडण्याची शक्यता आहे" : "छोटा लोड, लंबी दूरी — ग्राहक के लिए शेयर्ड/LTL ट्रक सस्ता पड़ सकता है"}
+                    </div>
+                  )}
+                  {outlierIds?.has(r.id) && (
+                    <div className="text-[9.5px] font-bold mt-1" style={{ color: C.safety }}>
+                      ⚠ {lang === "en" ? "This fare looks way off compared to other vehicle sizes on this same route — check for a typo." : lang === "mr" ? "याच रूटवरील इतर गाडी आकारांच्या तुलनेत हा दर खूपच वेगळा वाटतो — टायपो तपासा." : "इसी रूट पर बाकी गाड़ी साइज़ों की तुलना में यह दर बहुत अलग लग रही है — टाइपो चेक करें।"}
                     </div>
                   )}
                 </button>
