@@ -339,6 +339,41 @@ async function sendDirectRequestWhatsApp(driverMobile, load) {
   }
 }
 
+// Full-screen "incoming call" ring alert -- see AppFirebaseMessagingService.java/
+// RingingBookingActivity.java on the Android side. Deliberately sent as a
+// SEPARATE message from sendDirectRequestAlert above, not a replacement for
+// it: this one carries NO top-level `notification` field at all (data-only),
+// which is the one thing that actually matters here -- Android only invokes
+// a custom FirebaseMessagingService's onMessageReceived while the app is
+// backgrounded/killed when the message has no `notification` payload; the
+// instant one is present (as sendDirectRequestAlert's is), the OS displays
+// it itself and the app's own code never runs at all. Sending this
+// ALONGSIDE the existing notification-payload alert, rather than converting
+// that one to data-only, means a driver still on an older app build (before
+// this feature shipped) is completely unaffected -- their app just quietly
+// ignores this extra data message the same way it always would have, and
+// keeps getting the original alert exactly as before. Only once a driver's
+// app has actually updated does this second message start doing anything.
+async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile) {
+  if (!token) return;
+  try {
+    await getMessaging().send({
+      token,
+      android: { priority: "high" },
+      data: {
+        type: "direct_request_ring",
+        bookingId,
+        pickup: load.pickup || "-",
+        drop: load.drop || "-",
+        weight: load.weight ? String(load.weight) : "-",
+      },
+    });
+  } catch (e) {
+    console.error("[push] direct-request ring alert send failed:", e.message);
+    await clearStaleFcmTokenOnFailure("drivers", driverMobile, e);
+  }
+}
+
 // TEMPORARY broadcast-dispatch experiment (see src/App.jsx:
 // requestByCategory/isDriverBroadcastEligible) — a fresh category-based
 // request created with nobody individually targeted (pendingDriverName
@@ -403,7 +438,10 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       const lockHours = notificationLockHours(capacityKg);
       if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) return;
 
-      if (driver.fcmToken) sends.push(sendDirectRequestAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
+      if (driver.fcmToken) {
+        sends.push(sendDirectRequestAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
+        sends.push(sendDirectRequestRingAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
+      }
       sends.push(sendDirectRequestWhatsApp(doc.id, load));
     });
     await Promise.all(sends);
@@ -442,6 +480,7 @@ exports.onDirectRequestAssigned = onDocumentWritten(
 
     await Promise.all([
       driver.fcmToken ? sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId, driverDoc.id) : Promise.resolve(),
+      driver.fcmToken ? sendDirectRequestRingAlert(driver.fcmToken, after, event.params.bookingId, driverDoc.id) : Promise.resolve(),
       sendDirectRequestWhatsApp(driverDoc.id, after),
     ]);
   }

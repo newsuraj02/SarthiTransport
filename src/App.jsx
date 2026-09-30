@@ -2008,6 +2008,23 @@ async function startNativeImmediateUpdate() {
   }
 }
 
+// See RingingBridgePlugin.java -- reads back whatever Accept/Reject
+// decision RingingBookingActivity's full-screen ringing screen most
+// recently launched MainActivity with (see functions/index.js:
+// sendDirectRequestRingAlert and AppFirebaseMessagingService.java on the
+// native side). Resolves { action: null, bookingId: null } when nothing's
+// pending -- every caller below already treats that as a no-op.
+const RingingBridgeNative = registerPlugin("RingingBridge");
+async function consumePendingRingAction() {
+  if (!isNativeApp) return { action: null, bookingId: null };
+  try {
+    return await RingingBridgeNative.consumePendingAction();
+  } catch (e) {
+    console.error("[ringingBridge]", e);
+    return { action: null, bookingId: null };
+  }
+}
+
 // See PowerBridgePlugin.java -- the real fix for LocationTrackerService
 // getting killed on an idle phone: a battery-optimization exemption (a
 // genuine one-tap system dialog) plus, on the worst OEMs, a best-effort
@@ -9945,6 +9962,39 @@ export default function App() {
     finishAcceptSideEffects(b, bookingId);
     return null;
   };
+
+  // Always-latest ref, not a dependency-array re-subscribe -- driverRespondBooking
+  // closes over bookings/driver, both of which change far more often than
+  // this effect should be tearing down and re-registering a native
+  // appStateChange listener for. Updated after every render (no deps array)
+  // so the effect below never calls a stale closure.
+  const driverRespondBookingRef = useRef(driverRespondBooking);
+  useEffect(() => { driverRespondBookingRef.current = driverRespondBooking; });
+
+  // Picks up an Accept/Reject made from the native full-screen ringing
+  // screen (see RingingBookingActivity.java) and feeds it into the exact
+  // same driverRespondBooking above that the in-app Accept/Reject buttons
+  // use -- reuses all of its existing race-condition/conflict handling
+  // rather than re-implementing any of that natively. Checked once on
+  // driver login/mount (covers a cold start: the app was fully killed, and
+  // tapping Accept/Reject on the ringing screen is what launched it fresh)
+  // and again on every foreground resume (covers the app merely having
+  // been backgrounded, not killed, when that tap happened).
+  useEffect(() => {
+    if (!isNativeApp || role !== "driver" || !driverAuth.verified) return;
+    const check = () => {
+      consumePendingRingAction().then(({ action, bookingId }) => {
+        if (!bookingId || (action !== "acceptBooking" && action !== "rejectBooking")) return;
+        driverRespondBookingRef.current(bookingId, action === "acceptBooking").catch((e) => console.error("[ringingBridge] respond", e));
+      });
+    };
+    check();
+    let handle;
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => { if (isActive) check(); })
+      .then((h) => { handle = h; })
+      .catch((e) => console.error("[ringingBridge] appStateChange", e));
+    return () => { if (handle) handle.remove(); };
+  }, [role, driverAuth.verified]);
 
   // Once the driver has verified pickup OTP (loadingStartedAt set), the
   // goods are considered loaded/in transit — cancellation locks out from

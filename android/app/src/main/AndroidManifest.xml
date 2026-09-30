@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -37,6 +38,37 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- See RingingBookingActivity.java -- the full-screen "incoming
+             call" screen for a direct booking request. showWhenLocked/
+             turnScreenOn here cover API 27+ declaratively; the Activity's
+             own onCreate() also sets them programmatically (and falls back
+             to legacy window flags) to cover this app's real floor of API
+             24 -- see android/variables.gradle. -->
+        <activity android:name=".RingingBookingActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true" />
+
+        <!-- Subclasses (not duplicates) Capacitor's own FCM service -- see
+             AppFirebaseMessagingService.java's class comment for why a
+             second, independent <service> declaring the same
+             MESSAGING_EVENT intent-filter alongside Capacitor's own would
+             be a real bug (Firebase only delivers to one). tools:node
+             ="remove" strips the push-notifications plugin's original
+             entry out of the merged manifest; this replaces it. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".AppFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -110,4 +142,15 @@
          firebaseClient.js, which already correctly calls
          PushNotifications.requestPermissions()). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- See AppFirebaseMessagingService.java/RingingBookingActivity.java --
+         required to actually launch a full-screen Activity from a posted
+         notification while the screen is off/locked. On Android 14+ (API
+         34), declaring this alone is no longer enough to auto-grant it for
+         a fresh install -- the driver may also need to explicitly allow it
+         under Settings > Apps > Apna Transport > "Full screen notifications",
+         same one-time caveat as battery-optimization exemption already is
+         for GPS tracking. Without it granted, AppFirebaseMessagingService's
+         notification still posts normally (heads-up banner + sound), it
+         just won't force the screen on/over the lock screen by itself. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 </manifest>

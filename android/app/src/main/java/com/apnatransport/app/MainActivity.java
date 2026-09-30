@@ -2,6 +2,7 @@ package com.apnatransport.app;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.os.Build;
@@ -19,8 +20,22 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(FusedLocationBridgePlugin.class);
         registerPlugin(LocationTrackerPlugin.class);
         registerPlugin(PowerBridgePlugin.class);
+        registerPlugin(RingingBridgePlugin.class);
         super.onCreate(savedInstanceState);
         createLoadAlertNotificationChannel();
+    }
+
+    // singleTask (see AndroidManifest.xml) means a launch while this
+    // Activity is already running (e.g. RingingBookingActivity's
+    // Accept/Reject buttons bringing the WebView back to the front) calls
+    // this instead of a fresh onCreate() -- without overriding it,
+    // getIntent() would keep returning the ORIGINAL launch intent forever,
+    // and RingingBridgePlugin.consumePendingAction would never see the new
+    // ringAction/ringBookingId extras.
+    @Override
+    public void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
     }
 
     // Every push this app sends for a new/direct load (see functions/index.js:
