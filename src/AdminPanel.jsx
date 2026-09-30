@@ -586,7 +586,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
               <MessageCircle size={14} />
               {bulkSendingKind === "offDuty"
                 ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-                : (lang === "en" ? `Send WhatsApp to all ${offDutyUnsent.length} off-duty drivers now` : lang === "mr" ? `सर्व ${offDutyUnsent.length} ऑफ ड्युटी ड्रायव्हर्सना आत्ता WhatsApp पाठवा` : `सभी ${offDutyUnsent.length} ऑफ ड्यूटी ड्राइवरों को अभी WhatsApp भेजें`)}
+                : (lang === "en" ? `Bulk WhatsApp to all ${offDutyUnsent.length} off-duty drivers at once` : lang === "mr" ? `सर्व ${offDutyUnsent.length} ऑफ ड्युटी ड्रायव्हर्सना एका साथ बल्क WhatsApp पाठवा` : `सभी ${offDutyUnsent.length} ऑफ ड्यूटी ड्राइवरों को एक साथ बल्क WhatsApp भेजें`)}
             </button>
           ) : (
             <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
@@ -637,7 +637,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
               <MessageCircle size={14} />
               {bulkSendingKind === "reinstall"
                 ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-                : (lang === "en" ? `Send WhatsApp to all ${uninstalledUnsent.length} drivers now` : lang === "mr" ? `सर्व ${uninstalledUnsent.length} ड्रायव्हर्सना आत्ता WhatsApp पाठवा` : `सभी ${uninstalledUnsent.length} ड्राइवरों को अभी WhatsApp भेजें`)}
+                : (lang === "en" ? `Bulk WhatsApp to all ${uninstalledUnsent.length} drivers at once` : lang === "mr" ? `सर्व ${uninstalledUnsent.length} ड्रायव्हर्सना एका साथ बल्क WhatsApp पाठवा` : `सभी ${uninstalledUnsent.length} ड्राइवरों को एक साथ बल्क WhatsApp भेजें`)}
             </button>
           ) : (
             <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
@@ -2557,7 +2557,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             <MessageCircle size={14} />
             {bulkSendingKind === "gpsOff"
               ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-              : (lang === "en" ? `Send GPS reminder on WhatsApp to all ${gpsUnsent.length} now` : lang === "mr" ? `सर्व ${gpsUnsent.length} GPS रिमाइंडर आत्ता WhatsApp वर पाठवा` : `सभी ${gpsUnsent.length} को GPS रिमाइंडर अभी WhatsApp पर भेजें`)}
+              : (lang === "en" ? `Bulk GPS reminder on WhatsApp to all ${gpsUnsent.length} at once` : lang === "mr" ? `सर्व ${gpsUnsent.length} ना GPS रिमाइंडरचा बल्क WhatsApp एका साथ पाठवा` : `सभी ${gpsUnsent.length} को GPS रिमाइंडर का बल्क WhatsApp एक साथ भेजें`)}
           </button>
         ) : (
           <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
@@ -2580,7 +2580,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             <XCircle size={14} />
             {bulkSendingKind === "kycIncomplete"
               ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-              : (lang === "en" ? `Send KYC reminder on WhatsApp to all ${notSubmittedUnsent.length} now` : lang === "mr" ? `सर्व ${notSubmittedUnsent.length} KYC रिमाइंडर आत्ता WhatsApp वर पाठवा` : `सभी ${notSubmittedUnsent.length} को KYC रिमाइंडर अभी WhatsApp पर भेजें`)}
+              : (lang === "en" ? `Bulk KYC reminder on WhatsApp to all ${notSubmittedUnsent.length} at once` : lang === "mr" ? `सर्व ${notSubmittedUnsent.length} ना KYC रिमाइंडरचा बल्क WhatsApp एका साथ पाठवा` : `सभी ${notSubmittedUnsent.length} को KYC रिमाइंडर का बल्क WhatsApp एक साथ भेजें`)}
           </button>
         ) : (
           <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
