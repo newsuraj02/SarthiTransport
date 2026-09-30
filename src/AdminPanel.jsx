@@ -352,6 +352,16 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // exactly as much as one who signed up an hour ago. Approve/Reject/Edit
   // live only here now; the Drivers tab (AdminDriverList) keeps Edit alone.
   const approvalQueue = drivers.filter((d) => d.vehicleSpec && d.kyc === "Pending");
+  // A driver who signed up today but hasn't submitted the KYC form yet has
+  // nothing to approve/reject -- but hiding them completely from today's
+  // list made a same-day signup look like it vanished/got silently
+  // auto-approved (real confusion this caused once). Scoped to TODAY only,
+  // not every incomplete signup ever, so this doesn't turn back into the
+  // unbounded "not submitted" noise approvalQueue above deliberately
+  // excludes -- an incomplete signup from last week still belongs only in
+  // the Drivers tab's Incomplete section/WhatsApp reminder, not here.
+  const notSubmittedTodayList = drivers.filter((d) => !d.vehicleSpec && isToday(d.createdAt));
+  const driverRegistrations = [...approvalQueue, ...notSubmittedTodayList];
   const [approvalExpandedId, setApprovalExpandedId] = useState(null);
   const [approvalEditingId, setApprovalEditingId] = useState(null);
   const [approvalEditDraft, setApprovalEditDraft] = useState(null);
@@ -689,7 +699,7 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
           </button>
           <button onClick={() => setNewRegTab("driver")} className="flex-1 rounded-lg py-3 text-sm font-bold"
             style={{ background: newRegTab === "driver" ? C.navy : C.paper, color: newRegTab === "driver" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "driver" ? C.navy : C.line}` }}>
-            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{approvalQueue.length > 0 ? ` (${approvalQueue.length})` : ""}
+            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{driverRegistrations.length > 0 ? ` (${driverRegistrations.length})` : ""}
           </button>
         </div>
         {newRegTab === "customer" ? (
@@ -705,11 +715,28 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
               ))}
             </div>
           )
-        ) : approvalQueue.length === 0 ? (
+        ) : driverRegistrations.length === 0 ? (
           <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver's KYC is resolved." : lang === "mr" ? "सर्व ड्रायव्हरांची KYC निकाली काढली आहे." : "सभी ड्राइवरों की KYC निपटा दी गई है।"}</p>
         ) : (
           <div className="space-y-1.5">
-            {approvalQueue.map((d) => {
+            {driverRegistrations.map((d) => {
+              // Not yet submitted (signed up today, no vehicleSpec) --
+              // nothing to approve/reject/edit here, just a today-only
+              // visibility row so a fresh signup never looks like it
+              // silently disappeared. See notSubmittedTodayList above.
+              if (!d.vehicleSpec) {
+                return (
+                  <div key={d.id} className="rounded-lg p-3 flex items-center justify-between gap-2" style={{ border: `1px solid ${C.line}`, background: C.bg }}>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
+                      <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: C.inkSoft, background: "#E0E0E0" }}>
+                      {lang === "en" ? "Form not submitted yet" : lang === "mr" ? "फॉर्म अद्याप भरलेला नाही" : "फॉर्म अभी भरा नहीं गया"}
+                    </span>
+                  </div>
+                );
+              }
               const expanded = approvalExpandedId === d.id;
               const editing = approvalEditingId === d.id;
               return (
