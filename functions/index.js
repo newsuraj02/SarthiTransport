@@ -357,8 +357,7 @@ const MSG91_BULK_TEMPLATES = {
   kycIncomplete: {
     name: "driver_kyc_incomplete",
     // The one template with a real variable -- each driver's own KYC
-    // portal deep link (see kycWhatsappLink in AdminPanel.jsx, which this
-    // mirrors), not shared across recipients.
+    // portal deep link, not shared across recipients.
     vars: (mobile) => ({ body_1: `https://sarthi-transport-74865.web.app/?driverKyc=1&mobile=${mobile}` }),
   },
   gpsOff: { name: "driver_gps_off", vars: () => ({}) },

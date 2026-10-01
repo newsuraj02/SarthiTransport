@@ -2241,8 +2241,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     });
     cancelEdit();
   };
-  // Not-yet-submitted WhatsApp nudge queue (see AdminKyc's old
-  // whatsappLink/capacityWhatsappLink). Scoped to installedDrivers(drivers)
+  // Not-yet-submitted WhatsApp nudge queue. Scoped to installedDrivers(drivers)
   // (same population the sections above use), NOT the raw drivers array --
   // that mismatch is exactly what made this queue's count disagree with
   // the Incomplete section's count (a driver who's long gone quiet/
