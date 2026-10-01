@@ -13,10 +13,10 @@ function AdminLoadingFallback() {
 }
 import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
-  Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
-  Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
-  ClipboardList, MapPinned, Siren, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2, RefreshCw,
-  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, AlertTriangle,
+  Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
+  Settings2, Download, IndianRupee,
+  ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Plus, Loader2, RefreshCw,
+  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs,
@@ -25,9 +25,9 @@ import {
 import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
-import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider, onAuthStateChanged } from "firebase/auth";
+import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, resolveChangeLogEntry, mintLocationServiceToken } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -339,8 +339,6 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
 }
 const ALERT_TYPE_LABELS_EN = { "पुलिस सहायता": "Police Help", "इमरजेंसी कॉल": "Emergency Call", "व्हाट्सएप सपोर्ट": "WhatsApp Support", "शिकायत": "Complaint" };
 export const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_EN[t]) ? ALERT_TYPE_LABELS_EN[t] : t;
-
-const CITY_COLORS = ["#FF6600", "#00A854", "#0052CC", "#FF2A2A", "#FFCC00", "#00A854"];
 
 export const EN_LABELS = {
   book: "Book Now", rides: "My Rides", home: "Home", wallet: "Wallet", history: "History",
@@ -5280,8 +5278,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null); // {lat,lng} | null
   const [dropCoords, setDropCoords] = useState(null);
-  const [pickupSelected, setPickupSelected] = useState(false);
-  const [dropSelected, setDropSelected] = useState(false);
   const [distance, setDistance] = useState(null);
   const [weight, setWeight] = useState("");
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
@@ -5299,8 +5295,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field) return;
     const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setPickupSelected(true); }
-    else { setDrop(name); setDropCoords({ lat, lng }); setDropSelected(true); }
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); }
+    else { setDrop(name); setDropCoords({ lat, lng }); }
   };
 
   // If the customer typed Pickup/Drop by hand without tapping an
@@ -5374,12 +5370,12 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
       .catch((e) => console.error("[distance matrix]", e));
   }, [pickupCoords, dropCoords, mapsReady]);
 
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupSelected(true); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropSelected(true); };
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); };
 
   const resetFields = () => {
     setPickup(""); setDrop(""); setWeight("");
-    setPickupCoords(null); setDropCoords(null); setPickupSelected(false); setDropSelected(false);
+    setPickupCoords(null); setDropCoords(null);
   };
   const [bookingError, setBookingError] = useState("");
   // Book Now opens the category sheet rather than showing the category
@@ -5547,12 +5543,12 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
         <LocationField
           lang={lang}
           value={pickup}
-          onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupSelected(false); }}
+          onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
           onPlaceSelected={onPickupPlaceSelected}
           mapsReady={mapsReady}
           placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
           suggestions={suggestAreas(pickup)}
-          onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); setPickupSelected(false); }}
+          onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
           onFocus={() => setActiveField("pickup")}
           recentItems={recentPickups}
         />
@@ -5560,12 +5556,12 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
         <LocationField
           lang={lang}
           value={drop}
-          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropSelected(false); }}
+          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
           onPlaceSelected={onDropPlaceSelected}
           mapsReady={mapsReady}
           placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
           suggestions={suggestAreas(drop)}
-          onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); setDropSelected(false); }}
+          onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
           onFocus={() => setActiveField("drop")}
         />
 
@@ -8929,6 +8925,11 @@ export function StatTile({ label, value, color, onClick }) {
   return <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${color}` }}>{content}</div>;
 }
 
+// Renders one KYC/vehicle document thumbnail with View (opens full-size in
+// a new tab) and Download buttons. Download fetches the image as a blob
+// first so the browser actually saves the file instead of just navigating
+// to it — Firebase Storage download URLs are cross-origin, and browsers
+// ignore a plain <a download> on cross-origin links.
 export function KycDocThumb({ url, label, lang, fileName, height = "h-24" }) {
   const handleDownload = async (e) => {
     e.stopPropagation();
@@ -9627,6 +9628,10 @@ export default function App() {
   // hold an optimistic local write from a rapid double-click before the
   // server confirms (or rejects) it, which was falsely tripping this check
   // even when nothing had actually been saved.
+  // Currently unwired on the Admin side — unlike addManualDriver below,
+  // nothing in AdminPanel.jsx calls this (no "Add Customer Manually" UI
+  // exists yet). Left in place rather than deleted in case that screen
+  // still gets built; not dead code to clean up without confirming first.
   const addManualCustomer = async (fields) => {
     const mobile = (fields.mobile || "").trim();
     if (!mobile) return Promise.reject(new Error("duplicate-or-missing-mobile"));
@@ -10390,13 +10395,13 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel drivers={drivers} customers={allCustomers} driver={driver} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
                 latestAdminVersionCode={settings.latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={settings.adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl}
                 fareTiers={fareTiers} lang={lang} onLogout={logout}
                 withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
-                vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualCustomer={addManualCustomer} addManualDriver={addManualDriver}
+                vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver}
                 expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification}
                 bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} systemHealth={systemHealth} />
             </Suspense>

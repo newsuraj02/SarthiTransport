@@ -277,7 +277,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
   );
 }
 
-function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
   // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
   // pick the field that actually answers "did this happen today" for that
   // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
@@ -1984,12 +1984,6 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   );
 }
 
-// Renders one KYC/vehicle document thumbnail with View (opens full-size in
-// a new tab) and Download buttons. Download fetches the image as a blob
-// first so the browser actually saves the file instead of just navigating
-// to it — Firebase Storage download URLs are cross-origin, and browsers
-// ignore a plain <a download> on cross-origin links.
-
 function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
   // Draft reply text per complaint id, so opening one complaint's reply box
@@ -3062,7 +3056,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
   );
 }
 
-function AdminFinance({ tripLog, commissionPct, lang }) {
+function AdminFinance({ tripLog, lang }) {
   // Commission is deliberately held at 0 here too (see driverRespondBooking)
   // — fare is a real, fixed, calculated number again, but this report
   // shouldn't show non-zero "would-be" commission while actual wallet
@@ -3340,7 +3334,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, driver, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualCustomer, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -3363,12 +3357,12 @@ export function AdminPanel({ drivers, customers, driver, updateDriverKyc, update
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} driver={driver} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
-      {tab === "finance" && <AdminFinance tripLog={tripLog} commissionPct={commissionPct} lang={lang} />}
+      {tab === "finance" && <AdminFinance tripLog={tripLog} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
