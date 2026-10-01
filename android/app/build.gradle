@@ -98,6 +98,13 @@ dependencies {
     // signInWithCustomToken() for the token minted by mintLocationServiceToken
     // (functions/index.js) -- see LocationTrackerService.java.
     implementation "com.google.firebase:firebase-auth"
+    // AppFirebaseMessagingService.java extends FirebaseMessagingService and
+    // uses RemoteMessage directly. @capacitor/push-notifications already
+    // pulls this in for its own module, but only as that module's own
+    // "implementation" dependency, which doesn't expose it to :app's own
+    // compile classpath -- this app's own FCM subclass needs it declared
+    // here too. Version comes from the firebase-bom platform() above.
+    implementation "com.google.firebase:firebase-messaging"
 }
 
 apply from: 'capacitor.build.gradle'

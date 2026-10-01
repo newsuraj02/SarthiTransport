@@ -1,7 +1,6 @@
 package com.apnatransport.app;
 
 import android.app.NotificationManager;
-import android.app.VibratorManager;
 import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
@@ -10,6 +9,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.os.VibratorManager;
 import android.view.WindowManager;
 import android.widget.TextView;
 import androidx.annotation.Nullable;
