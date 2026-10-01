@@ -455,11 +455,21 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
   // Play Store listing) whenever admin messaged a single driver instead of
   // everyone -- a real bug caught by the admin testing it on themselves.
   const [singleSendingMobile, setSingleSendingMobile] = useState(null);
+  // Surfaced next to the row's own button (see renderItem below) -- the
+  // old wa.me link at least visibly opened WhatsApp, so a failed send was
+  // obvious. This one sends silently in the background, so without some
+  // visible result an admin has no way to tell a failure from a success;
+  // that silence is very likely what was actually behind the repeated
+  // "still shows the old message" reports -- the call may have simply
+  // been failing every time, with no new message ever sent at all.
+  const [singleSendResult, setSingleSendResult] = useState(null);
   const sendSingleWhatsAppNow = async (kind, d, markSent) => {
     if (bulkSendingKind || singleSendingMobile) return;
     setSingleSendingMobile(d.mobile);
+    setSingleSendResult(null);
     const result = await sendBulkDriverWhatsApp(kind, [d.mobile]);
     if (result.ok) markSent(d.mobile);
+    setSingleSendResult({ mobile: d.mobile, kind, ok: result.ok, reason: result.reason });
     setSingleSendingMobile(null);
   };
 
@@ -604,10 +614,19 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
             <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
             <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
           </div>
-          <button onClick={() => sendSingleWhatsAppNow("offDuty", d, markOffDutyWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
-            className="shrink-0 p-2 rounded-full" style={{ background: sentOffDutyToday(d.mobile) ? "#E0E0E0" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
-            <MessageCircle size={14} color={sentOffDutyToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
-          </button>
+          <div className="shrink-0 flex flex-col items-end gap-0.5">
+            <button onClick={() => sendSingleWhatsAppNow("offDuty", d, markOffDutyWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
+              className="p-2 rounded-full" style={{ background: sentOffDutyToday(d.mobile) ? "#E0E0E0" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
+              <MessageCircle size={14} color={sentOffDutyToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
+            </button>
+            {singleSendResult?.mobile === d.mobile && (
+              <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : singleSendResult.reason}>
+                {singleSendResult.ok
+                  ? (lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया")
+                  : (lang === "en" ? "Failed" : lang === "mr" ? "अयशस्वी" : "विफल")}
+              </span>
+            )}
+          </div>
         </div>
       ),
     },
@@ -661,10 +680,19 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
               {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
             </button>
           ) : (
-            <button onClick={() => sendSingleWhatsAppNow("reinstall", d, markUninstalledWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
-              className="shrink-0 p-2 rounded-full" style={{ background: sentUninstalledToday(d.mobile) ? "#E0E0E0" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
-              <MessageCircle size={14} color={sentUninstalledToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
-            </button>
+            <div className="shrink-0 flex flex-col items-end gap-0.5">
+              <button onClick={() => sendSingleWhatsAppNow("reinstall", d, markUninstalledWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
+                className="p-2 rounded-full" style={{ background: sentUninstalledToday(d.mobile) ? "#E0E0E0" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
+                <MessageCircle size={14} color={sentUninstalledToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
+              </button>
+              {singleSendResult?.mobile === d.mobile && (
+                <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : singleSendResult.reason}>
+                  {singleSendResult.ok
+                    ? (lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया")
+                    : (lang === "en" ? "Failed" : lang === "mr" ? "अयशस्वी" : "विफल")}
+                </span>
+              )}
+            </div>
           )}
         </div>
       ),
@@ -2316,11 +2344,19 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // "needsCapacity" KYC case below has no approved template yet, so it
   // keeps its original wa.me link.
   const [singleSendingMobile, setSingleSendingMobile] = useState(null);
+  // Surfaced next to the row's own button (see renderRow below) -- see
+  // AdminFleet's copy of this same state for why: a failed silent send
+  // and a successful one otherwise look identical, which is very likely
+  // what was actually behind the repeated "still shows the old message"
+  // reports on this feature.
+  const [singleSendResult, setSingleSendResult] = useState(null);
   const sendSingleWhatsAppNow = async (kind, d, markSent) => {
     if (bulkSendingKind || singleSendingMobile) return;
     setSingleSendingMobile(d.mobile);
+    setSingleSendResult(null);
     const result = await sendBulkDriverWhatsApp(kind, [d.mobile]);
     if (result.ok) markSent(d.mobile);
+    setSingleSendResult({ mobile: d.mobile, kind, ok: result.ok, reason: result.reason });
     setSingleSendingMobile(null);
   };
   // Scoped to totalInstalled, same as the 4 sections above -- only active,
@@ -2378,6 +2414,13 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                 </button>
               )
             )}
+            {singleSendResult?.mobile === d.mobile && singleSendResult.kind === "gpsOff" && (
+              <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : singleSendResult.reason}>
+                {singleSendResult.ok
+                  ? (lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया")
+                  : (lang === "en" ? "Failed" : lang === "mr" ? "अयशस्वी" : "विफल")}
+              </span>
+            )}
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
             {(notSubmitted || needsCapacity) && (
               sentKycToday(d.mobile) ? (
@@ -2395,6 +2438,13 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                   </a>
                 )
               )
+            )}
+            {singleSendResult?.mobile === d.mobile && singleSendResult.kind === "kycIncomplete" && (
+              <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : singleSendResult.reason}>
+                {singleSendResult.ok
+                  ? (lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया")
+                  : (lang === "en" ? "Failed" : lang === "mr" ? "अयशस्वी" : "विफल")}
+              </span>
             )}
             {daysLeft != null ? (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
