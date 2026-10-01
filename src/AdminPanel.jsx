@@ -406,55 +406,34 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
     ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
 
-  // Retention nudge for "App uninstalled (likely)" -- same queue pattern as
-  // AdminDriverList's GPS WhatsApp reminder (send-next-one-at-a-time,
-  // persisted "already reminded today" per driver so switching away to
-  // WhatsApp and back doesn't lose track or double-message anyone).
+  // Retention nudge for "App uninstalled (likely)" -- "already reminded
+  // today" tracked per driver so switching away to WhatsApp and back
+  // doesn't lose track or double-message anyone.
   const todayStrUninstalled = () => new Date().toISOString().slice(0, 10);
   const [uninstalledWhatsappSentMap, setUninstalledWhatsappSentMap] = usePersistedState("sarthi_uninstalledWhatsappSent", {});
   const markUninstalledWhatsappSent = (mobile) => setUninstalledWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
   const sentUninstalledToday = (mobile) => uninstalledWhatsappSentMap[mobile] === todayStrUninstalled();
-  const uninstalledWhatsappLink = (mobile) => {
-    const msg = lang === "en"
-      ? "We miss you! It's been a while since you opened Apna Transport, and new loads keep coming in every day. Reopen the app to see what's nearby: https://sarthi-transport-74865.web.app"
-      : lang === "mr"
-      ? "आम्हाला तुमची आठवण येते! तुम्ही Apna Transport बऱ्याच दिवसांपासून उघडलेले नाही, आणि रोज नवीन लोड येत आहेत. जवळचे लोड पाहण्यासाठी अ‍ॅप पुन्हा उघडा: https://sarthi-transport-74865.web.app"
-      : "हमें आपकी याद आती है! आपने Apna Transport काफी दिनों से नहीं खोला है, और हर दिन नए लोड आ रहे हैं। आसपास के लोड देखने के लिए ऐप फिर से खोलें: https://sarthi-transport-74865.web.app";
-    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
-  };
   const uninstalledUnsent = uninstalledDrivers.filter((d) => !sentUninstalledToday(d.mobile));
-  const nextUninstalledToRemind = uninstalledUnsent[0] || null;
 
-  // Same one-tap "send next, track who's already been messaged today"
-  // pattern as the uninstalled-driver retention nudge above, but for
-  // approved drivers who still have the app and just haven't toggled
-  // online -- a distinct message and a separate sent-today map since
-  // these are two different asks (come back vs. go online) and a driver
-  // could plausibly need both reminders on the same day.
+  // Same "already messaged today" tracking as the uninstalled-driver
+  // retention nudge above, but for approved drivers who still have the app
+  // and just haven't toggled online -- a distinct message and a separate
+  // sent-today map since these are two different asks (come back vs. go
+  // online) and a driver could plausibly need both reminders on the same day.
   const [offDutyWhatsappSentMap, setOffDutyWhatsappSentMap] = usePersistedState("sarthi_offDutyWhatsappSent", {});
   const markOffDutyWhatsappSent = (mobile) => setOffDutyWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
   const sentOffDutyToday = (mobile) => offDutyWhatsappSentMap[mobile] === todayStrUninstalled();
-  const offDutyWhatsappLink = (mobile) => {
-    const msg = lang === "en"
-      ? "You're off duty on Apna Transport right now, and there are loads waiting nearby. Turn your duty ON in the app to start getting ride requests: https://sarthi-transport-74865.web.app"
-      : lang === "mr"
-      ? "तुम्ही सध्या Apna Transport वर ऑफ ड्युटी आहात, आणि जवळ लोड्स वाट पाहत आहेत. राइड्स मिळवण्यासाठी अ‍ॅपमध्ये तुमची ड्युटी ऑन करा: https://sarthi-transport-74865.web.app"
-      : "आप अभी Apna Transport पर ऑफ ड्यूटी हैं, और आसपास लोड्स इंतज़ार कर रहे हैं। राइड रिक्वेस्ट पाने के लिए ऐप में अपनी ड्यूटी ऑन करें: https://sarthi-transport-74865.web.app";
-    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
-  };
   const offDutyUnsent = offDutyDrivers.filter((d) => !sentOffDutyToday(d.mobile));
-  const nextOffDutyToRemind = offDutyUnsent[0] || null;
 
   // Real bulk send (see sendBulkDriverWhatsApp in functions/index.js) --
-  // replaces the old "open wa.me, admin taps send, one driver at a time"
-  // queue above with one MSG91 API call reaching every not-yet-messaged-
-  // today driver at once. Only one bulk send can run at a time from this
-  // screen (bulkSendingKind), which is fine -- these are rare, deliberate
-  // admin actions, not something fired off in parallel. markSent is
-  // whichever per-kind "already sent today" setter applies (e.g.
+  // one MSG91 API call reaching every not-yet-messaged-today driver at
+  // once. Only one bulk send can run at a time from this screen
+  // (bulkSendingKind), which is fine -- these are rare, deliberate admin
+  // actions, not something fired off in parallel. markSent is whichever
+  // per-kind "already sent today" setter applies (e.g.
   // markUninstalledWhatsappSent) so a successful bulk send updates the same
-  // persisted map the per-row individual button already uses -- either path
-  // correctly marks a driver as reminded for the day.
+  // persisted map the per-row individual button below also uses -- either
+  // path correctly marks a driver as reminded for the day.
   const [bulkSendingKind, setBulkSendingKind] = useState(null);
   const [bulkSendResult, setBulkSendResult] = useState(null);
   const sendBulkWhatsAppNow = async (kind, targets, markSent) => {
@@ -466,6 +445,22 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
     if (result.ok) targets.forEach((d) => markSent(d.mobile));
     setBulkSendResult({ kind, ...result });
     setBulkSendingKind(null);
+  };
+
+  // Per-row "message just this one driver" -- same MSG91 template as the
+  // bulk button above (a bulk send of one), not the old wa.me plain-text
+  // link this replaces. That old link was never actually removed when the
+  // bulk button was added, so it kept firing an unreviewed, outdated
+  // message (still pointing at the Firebase hosting URL instead of the
+  // Play Store listing) whenever admin messaged a single driver instead of
+  // everyone -- a real bug caught by the admin testing it on themselves.
+  const [singleSendingMobile, setSingleSendingMobile] = useState(null);
+  const sendSingleWhatsAppNow = async (kind, d, markSent) => {
+    if (bulkSendingKind || singleSendingMobile) return;
+    setSingleSendingMobile(d.mobile);
+    const result = await sendBulkDriverWhatsApp(kind, [d.mobile]);
+    if (result.ok) markSent(d.mobile);
+    setSingleSendingMobile(null);
   };
 
   // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) when
@@ -609,10 +604,10 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
             <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
             <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
           </div>
-          <a href={offDutyWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markOffDutyWhatsappSent(d.mobile)}
-            className="shrink-0 p-2 rounded-full" style={{ background: sentOffDutyToday(d.mobile) ? "#E0E0E0" : C.success }}>
+          <button onClick={() => sendSingleWhatsAppNow("offDuty", d, markOffDutyWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
+            className="shrink-0 p-2 rounded-full" style={{ background: sentOffDutyToday(d.mobile) ? "#E0E0E0" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
             <MessageCircle size={14} color={sentOffDutyToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
-          </a>
+          </button>
         </div>
       ),
     },
@@ -666,10 +661,10 @@ function AdminFleet({ drivers, customers, driver, bookings, tripLog, minWallet, 
               {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
             </button>
           ) : (
-            <a href={uninstalledWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markUninstalledWhatsappSent(d.mobile)}
-              className="shrink-0 p-2 rounded-full" style={{ background: sentUninstalledToday(d.mobile) ? "#E0E0E0" : C.success }}>
+            <button onClick={() => sendSingleWhatsAppNow("reinstall", d, markUninstalledWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
+              className="shrink-0 p-2 rounded-full" style={{ background: sentUninstalledToday(d.mobile) ? "#E0E0E0" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
               <MessageCircle size={14} color={sentUninstalledToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
-            </a>
+            </button>
           )}
         </div>
       ),
@@ -2231,16 +2226,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const markKycWhatsappSent = (mobile) => setKycWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrKyc() }));
   const sentKycToday = (mobile) => kycWhatsappSentMap[mobile] === todayStrKyc();
   const notSubmittedUnsent = notSubmittedKyc.filter((d) => !sentKycToday(d.mobile));
-  const nextKycToRemind = notSubmittedUnsent[0] || null;
-  const kycWhatsappLink = (mobile) => {
-    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
-    const msg = lang === "en"
-      ? `Your KYC is incomplete — completing it is mandatory to receive new loads. Please fill it in here: ${portalLink}\nIf you're unable to fill the form yourself, share it on this WhatsApp number instead — reply here with: Phone number, Driver photo, Driving license, Vehicle side photo, Vehicle number, Vehicle model name, Capacity, Length, Breadth, and Height — and we'll complete it for you.`
-      : lang === "mr"
-      ? `तुमची KYC अपूर्ण आहे — नवीन लोड मिळवण्यासाठी ती पूर्ण करणे अनिवार्य आहे. कृपया इथे भरा: ${portalLink}\nजर तुम्हाला स्वतः फॉर्म भरता येत नसेल, तर त्याऐवजी याच व्हॉट्सअॅप नंबरवर पाठवा — इथे उत्तर द्या: फोन नंबर, ड्रायव्हर फोटो, ड्रायव्हिंग लायसन्स, गाडीचा साइडचा फोटो, गाडी नंबर, गाडी मॉडेलचे नाव, क्षमता, लांबी, रुंदी आणि उंची — आम्ही तुमच्या वतीने पूर्ण करू.`
-      : `आपकी KYC अधूरी है — नए लोड पाने के लिए इसे पूरा करना अनिवार्य है। कृपया यहां भरें: ${portalLink}\nअगर आप खुद फॉर्म नहीं भर पा रहे हैं, तो इसके बजाय इसी व्हाट्सएप नंबर पर भेजें — यहां जवाब दें: फोन नंबर, ड्राइवर फोटो, ड्राइविंग लाइसेंस, गाड़ी की साइड फोटो, गाड़ी नंबर, गाड़ी मॉडल का नाम, क्षमता, लंबाई, चौड़ाई और ऊंचाई — और हम आपकी ओर से पूरा कर देंगे।`;
-    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
-  };
   const capacityWhatsappLink = (mobile) => {
     const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
     const msg = lang === "en"
@@ -2304,7 +2289,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const markGpsWhatsappSent = (mobile) => setGpsWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrGps() }));
   const sentGpsToday = (mobile) => gpsWhatsappSentMap[mobile] === todayStrGps();
   const gpsUnsent = onlineNoLiveGps.filter((d) => !sentGpsToday(d.mobile));
-  const nextGpsToRemind = gpsUnsent[0] || null;
 
   // Real bulk send (see sendBulkDriverWhatsApp in functions/index.js) --
   // same reasoning/shape as AdminFleet's own copy of this (Off duty,
@@ -2322,13 +2306,22 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     setBulkSendResult({ kind, ...result });
     setBulkSendingKind(null);
   };
-  const gpsWhatsappLink = (mobile) => {
-    const msg = lang === "en"
-      ? "Your GPS/location tracking looks off in our app right now. To keep getting loads, you must turn it on -- please check these two things on your phone:\n1) Settings → Location → turn ON\n2) Settings → Apps → Apna Transport → Permissions → Location → Allow\nThen reopen our app."
-      : lang === "mr"
-      ? "तुमची GPS/लोकेशन ट्रॅकिंग सध्या आमच्या अ‍ॅपमध्ये बंद दिसत आहे. लोड मिळत राहण्यासाठी ती सुरू करणे आवश्यक आहे -- कृपया तुमच्या फोनमध्ये या दोन गोष्टी तपासा:\n1) Settings → Location → सुरू करा\n2) Settings → Apps → Apna Transport → Permissions → Location → Allow करा\nमग आमचे अ‍ॅप पुन्हा उघडा."
-      : "आपकी GPS/लोकेशन ट्रैकिंग अभी हमारे ऐप में बंद दिख रही है। लोड मिलते रहने के लिए इसे ऑन करना ज़रूरी है -- कृपया अपने फोन में ये दो चीज़ें चेक करें:\n1) Settings → Location → ऑन करें\n2) Settings → Apps → Apna Transport → Permissions → Location → Allow करें\nफिर हमारा ऐप फिर से खोलें।";
-    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
+  // Per-row "message just this one driver" -- same MSG91 template as the
+  // bulk button above (a bulk send of one), not the old wa.me plain-text
+  // links this replaces for the GPS-off and not-submitted-KYC cases (the
+  // two that have an approved MSG91 template). The old links were never
+  // actually removed when the bulk buttons were added, so messaging a
+  // single driver here kept firing an unreviewed, outdated message instead
+  // -- a real bug caught by the admin testing it on themselves. The
+  // "needsCapacity" KYC case below has no approved template yet, so it
+  // keeps its original wa.me link.
+  const [singleSendingMobile, setSingleSendingMobile] = useState(null);
+  const sendSingleWhatsAppNow = async (kind, d, markSent) => {
+    if (bulkSendingKind || singleSendingMobile) return;
+    setSingleSendingMobile(d.mobile);
+    const result = await sendBulkDriverWhatsApp(kind, [d.mobile]);
+    if (result.ok) markSent(d.mobile);
+    setSingleSendingMobile(null);
   };
   // Scoped to totalInstalled, same as the 4 sections above -- only active,
   // installed drivers are ever listed here, full stop. A blacklisted or
@@ -2379,10 +2372,10 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
               sentGpsToday(d.mobile) ? (
                 <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
               ) : (
-                <a href={gpsWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markGpsWhatsappSent(d.mobile)}
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.success }}>
+                <button onClick={() => sendSingleWhatsAppNow("gpsOff", d, markGpsWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
                   <MessageCircle size={9} /> WhatsApp
-                </a>
+                </button>
               )
             )}
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
@@ -2390,12 +2383,17 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
               sentKycToday(d.mobile) ? (
                 <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
               ) : (
-                <a href={notSubmitted ? kycWhatsappLink(d.mobile) : capacityWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markKycWhatsappSent(d.mobile)}
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.marigoldDeep }}>
-                  <MessageCircle size={9} /> {notSubmitted
-                    ? (lang === "en" ? "KYC WhatsApp" : lang === "mr" ? "KYC व्हॉट्सअ‍ॅप" : "KYC व्हाट्सएप")
-                    : (lang === "en" ? "Capacity WhatsApp" : lang === "mr" ? "क्षमता व्हॉट्सअ‍ॅप" : "क्षमता व्हाट्सएप")}
-                </a>
+                notSubmitted ? (
+                  <button onClick={() => sendSingleWhatsAppNow("kycIncomplete", d, markKycWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.marigoldDeep, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
+                    <MessageCircle size={9} /> {lang === "en" ? "KYC WhatsApp" : lang === "mr" ? "KYC व्हॉट्सअ‍ॅप" : "KYC व्हाट्सएप"}
+                  </button>
+                ) : (
+                  <a href={capacityWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markKycWhatsappSent(d.mobile)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.marigoldDeep }}>
+                    <MessageCircle size={9} /> {lang === "en" ? "Capacity WhatsApp" : lang === "mr" ? "क्षमता व्हॉट्सअ‍ॅप" : "क्षमता व्हाट्सएप"}
+                  </a>
+                )
               )
             )}
             {daysLeft != null ? (
