@@ -16,7 +16,7 @@ import {
   Phone, PhoneCall, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Users, BarChart3, Settings2, Download, IndianRupee, LayoutDashboard,
   ClipboardList, MapPinned, Siren, Menu, ChevronLeft, ChevronDown, Eye, EyeOff, Plus, Loader2, RefreshCw,
-  FileText, X, Upload, ArrowRight, IdCard, UserCheck, Languages, CalendarClock, Smartphone, Weight, Calculator, AlertTriangle,
+  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, AlertTriangle,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs,
@@ -3449,36 +3449,17 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
   const bothShown = showCustomer && showDriver;
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center px-5 py-8">
-      {anyVerified ? (
-        <p className="text-sm text-center mb-6" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "Continue where you left off, or logout to switch" : lang === "mr" ? "जिथून सोडले होते तिथून सुरू ठेवा, किंवा स्विच करण्यासाठी लॉगआउट करा" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें"}
-        </p>
-      ) : (
-        <div className="w-full rounded-2xl p-4 mb-5 text-center" style={{ background: "#FFF3C4", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <p className="text-base font-bold leading-relaxed" style={{ color: C.ink }}>
-            {lang === "en"
-              ? <>Are you a driver? If you want fare/loads, choose the <span className="font-black" style={{ color: C.navy }}>Driver App</span>.</>
-              : lang === "mr"
-              ? <>तुम्ही कोण आहात? ड्रायव्हर आहात? तुम्हाला भाडे/लोड हवे असतील तर तुम्ही <span className="font-black" style={{ color: C.navy }}>ड्रायव्हर अ‍ॅप</span> निवडा.</>
-              : <>आप कौन हैं? ड्राइवर हैं? आप को भाड़ा चाहिए तो आप <span className="font-black" style={{ color: C.navy }}>ड्राइवर ऐप</span> चुनें।</>}
-          </p>
-          <p className="text-base font-bold leading-relaxed mt-2" style={{ color: C.ink }}>
-            {lang === "en"
-              ? <>Are you a customer? If you want to book a vehicle, choose the <span className="font-black" style={{ color: C.success }}>Customer App</span>.</>
-              : lang === "mr"
-              ? <>तुम्ही कस्टमर आहात का? तुम्हाला गाडी बुक करायची असेल तर तुम्ही <span className="font-black" style={{ color: C.success }}>कस्टमर अ‍ॅप</span> निवडा.</>
-              : <>अगर आप कस्टमर हैं? आप को गाड़ी बुक करना है तो आप <span className="font-black" style={{ color: C.success }}>कस्टमर ऐप</span> चुनें।</>}
-          </p>
-        </div>
-      )}
+      <p className="text-sm text-center mb-6" style={{ color: C.inkSoft }}>
+        {anyVerified
+          ? (lang === "en" ? "Continue where you left off, or logout to switch" : lang === "mr" ? "जिथून सोडले होते तिथून सुरू ठेवा, किंवा स्विच करण्यासाठी लॉगआउट करा" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें")
+          : (lang === "en" ? "Choose your app" : lang === "mr" ? "तुमचे अ‍ॅप निवडा" : "अपनी ऐप चुनें")}
+      </p>
 
       <div className={bothShown ? "w-full grid grid-cols-2 gap-3" : "w-full flex flex-col items-center"}>
         {showDriver && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col"}>
             <button onClick={() => onSelect("driver")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
-              <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#EAF1FF" }}>
-                <IdCard size={30} color={C.navy} />
-              </div>
+              <img src="/role-driver.png" alt="" className="h-16 w-auto rounded-xl mb-3" />
               <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver App" : lang === "mr" ? "ड्रायव्हर अ‍ॅप" : "ड्राइवर ऐप"}</div>
               <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To find fare & loads" : lang === "mr" ? "भाडे आणि लोड शोधण्यासाठी" : "भाड़ा और लोड खोजने के लिए"}</div>
             </button>
@@ -3489,9 +3470,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
         {showCustomer && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col mt-3"}>
             <button onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.success}` }}>
-              <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: "#E6F7EE" }}>
-                <UserCheck size={30} color={C.success} />
-              </div>
+              <img src="/role-customer.png" alt="" className="h-16 w-auto rounded-xl mb-3" />
               <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : lang === "mr" ? "कस्टमर अ‍ॅप" : "कस्टमर ऐप"}</div>
               <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "To book a vehicle" : lang === "mr" ? "गाडी बुक करण्यासाठी" : "गाड़ी बुक करने के लिए"}</div>
             </button>
