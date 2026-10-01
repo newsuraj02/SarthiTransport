@@ -763,7 +763,7 @@ exports.notifyForceUpdate = onDocumentWritten("settings/main", async (event) => 
   }
 });
 
-// bookingOtps (see verifyPickupOtp above) is only ever needed for the
+// bookingOtps (see verifyPickupOtp below) is only ever needed for the
 // brief window between a trip starting and the driver verifying pickup —
 // same unbounded-growth concern as adminNotifications, same fix.
 const BOOKING_OTP_TTL_HOURS = 24;
@@ -961,12 +961,12 @@ function locationsNear(lat1, lng1, lat2, lng2, radiusKm = ROUTE_MATCH_RADIUS_KM)
   return haversineKm(lat1, lng1, lat2, lng2) <= radiusKm;
 }
 
-// Server-side twin of src/App.jsx's cleanupOrphanedAdminRates — the one
-// Change Log entry with a real, deterministic data remedy (duplicate Admin
-// route-rate entries left behind by an already-fixed edit-save bug). Run
-// here with Admin SDK privileges instead of trusting the admin's own
-// browser session to have current data, since resolveChangeLogEntry below
-// runs this before ever asking Claude to verify anything.
+// The one Change Log entry with a real, deterministic data remedy
+// (duplicate Admin route-rate entries left behind by an already-fixed
+// edit-save bug). Run here with Admin SDK privileges instead of trusting
+// the admin's own browser session to have current data, since
+// resolveChangeLogEntry below runs this before ever asking Claude to
+// verify anything.
 async function cleanupOrphanedAdminRates() {
   const snap = await db.collection("adminRouteFares").get();
   const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((r) => r.pickupLat != null && r.dropLat != null);
