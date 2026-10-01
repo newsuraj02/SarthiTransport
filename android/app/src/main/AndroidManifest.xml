@@ -153,4 +153,12 @@
          notification still posts normally (heads-up banner + sound), it
          just won't force the screen on/over the lock screen by itself. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- See RingingBookingActivity.java's startRinging() -- it calls
+         Vibrator.vibrate() directly (not just a notification channel's own
+         vibration pattern, which doesn't need this), and that call needs
+         this permission declared or it silently does nothing on-device. A
+         real gap this app had until caught by review -- the ringing screen
+         would have shown and played its ringtone fine, just without ever
+         vibrating. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>
