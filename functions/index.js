@@ -404,10 +404,19 @@ exports.sendBulkDriverWhatsApp = onCall({ region: "asia-south1", secrets: [MSG91
           },
         }),
       });
+      // Logged on every outcome, not just a non-2xx one -- MSG91's bulk
+      // endpoint can return HTTP 200 with an error described only inside
+      // the body (seen when driver_reinstall_offer reported "Sent" to the
+      // admin here but never actually appeared in MSG91's own Logs panel:
+      // res.ok was true, so the old code never looked at the body at all).
+      // console.log, not console.error, on the success path so normal
+      // sends don't spam Cloud Functions' error-level logs.
+      const bodyText = await res.text();
       if (!res.ok) {
-        console.error(`[whatsapp bulk:${kind}] rejected by MSG91:`, await res.text());
+        console.error(`[whatsapp bulk:${kind}] rejected by MSG91 (HTTP ${res.status}):`, bodyText);
         continue;
       }
+      console.log(`[whatsapp bulk:${kind}] MSG91 response (HTTP ${res.status}):`, bodyText);
       sent += chunk.length;
     } catch (e) {
       console.error(`[whatsapp bulk:${kind}] send failed:`, e.message);
