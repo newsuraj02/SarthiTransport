@@ -5390,6 +5390,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // bookDriver itself only ever runs from that sheet's own Confirm button.
   const [confirmingEntry, setConfirmingEntry] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  // Captured off the entry right before resetFields() clears the form --
+  // the success sheet below needs to say which vehicle the request went
+  // to even after pickup/drop/weight are already wiped.
+  const [lastBooked, setLastBooked] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim());
   const weightReady = weight.trim().length >= 3;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
@@ -5481,6 +5485,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
       fare: entry.fare,
     });
     if (err) { setBookingError(err); return; }
+    setLastBooked({ tierLabel: entry.tier.label });
     resetFields();
     setConfirmingEntry(null);
     setSelectedDriverKey(null);
@@ -5677,7 +5682,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto text-3xl" style={{ background: C.success, color: "#fff" }}>✓</div>
             <h3 className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Booking request sent" : lang === "mr" ? "बुकिंग रिक्वेस्ट पाठवली" : "बुकिंग रिक्वेस्ट भेज दी गई"}</h3>
             <p className="text-sm" style={{ color: C.inkSoft }}>
-              {lang === "en" ? "Nearby drivers have been notified. You'll be alerted the moment one accepts." : lang === "mr" ? "जवळच्या ड्रायव्हर्सना सूचना गेली आहे. ड्रायव्हर मिळताच तुम्हाला कळवले जाईल." : "आस-पास के ड्राइवरों को सूचना भेज दी गई है। ड्राइवर मिलते ही आपको बता दिया जाएगा।"}
+              {lang === "en"
+                ? `Your request has gone out to ${lastBooked?.tierLabel || ""} drivers nearby. You'll be alerted the moment one accepts.`
+                : lang === "mr"
+                ? `${lastBooked?.tierLabel || ""} असलेल्या जवळच्या ड्रायव्हर्सना तुमची रिक्वेस्ट गेली आहे. ड्रायव्हर मिळताच तुम्हाला कळवले जाईल.`
+                : `${lastBooked?.tierLabel || ""} वाले आस-पास के ड्राइवरों को आपकी रिक्वेस्ट भेज दी गई है। ड्राइवर मिलते ही आपको बता दिया जाएगा।`}
             </p>
           </div>
         </div>
@@ -5784,6 +5793,10 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   useEffect(() => { setManualMapOpen(false); }, [weight]);
   const [confirmingEntry, setConfirmingEntry] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  // Captured off the entry (and the date/time fields) right before
+  // resetFields() clears the form -- the success sheet below needs to say
+  // which vehicle and when even after advanceDate/advanceTime are wiped.
+  const [lastBooked, setLastBooked] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim() && advanceDate && advanceTime);
   const weightReady = weight.trim().length >= 3;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
@@ -5856,6 +5869,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
       fare: entry.fare,
     });
     if (err) { setBookingError(err); return; }
+    setLastBooked({ tierLabel: entry.tier.label, date: advanceDate, time: advanceTime });
     resetFields();
     setConfirmingEntry(null);
     setSelectedDriverKey(null);
@@ -6042,7 +6056,11 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto text-3xl" style={{ background: C.success, color: "#fff" }}>✓</div>
             <h3 className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Advance booking request sent" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग रिक्वेस्ट पाठवली" : "एडवांस बुकिंग रिक्वेस्ट भेज दी गई"}</h3>
             <p className="text-sm" style={{ color: C.inkSoft }}>
-              {lang === "en" ? "Nearby drivers have been notified. You'll be alerted the moment one accepts." : lang === "mr" ? "जवळच्या ड्रायव्हर्सना सूचना गेली आहे. ड्रायव्हर मिळताच तुम्हाला कळवले जाईल." : "आस-पास के ड्राइवरों को सूचना भेज दी गई है। ड्राइवर मिलते ही आपको बता दिया जाएगा।"}
+              {lang === "en"
+                ? `For ${lastBooked?.date}, ${formatTimeSlot(lastBooked?.time, lang)} — your request has gone out to ${lastBooked?.tierLabel || ""} drivers. You'll be notified the moment one accepts.`
+                : lang === "mr"
+                ? `${lastBooked?.date}, ${formatTimeSlot(lastBooked?.time, lang)} साठी ${lastBooked?.tierLabel || ""} असलेल्या ड्रायव्हर्सना तुमची रिक्वेस्ट गेली आहे. ड्रायव्हर मिळताच तुम्हाला कळवले जाईल.`
+                : `${lastBooked?.date}, ${formatTimeSlot(lastBooked?.time, lang)} के लिए ${lastBooked?.tierLabel || ""} वाले ड्राइवरों को आपकी रिक्वेस्ट भेज दी गई है। ड्राइवर मिलते ही सूचना आएगी।`}
             </p>
           </div>
         </div>
