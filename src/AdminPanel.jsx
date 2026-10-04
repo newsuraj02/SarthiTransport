@@ -704,7 +704,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
       renderItem: (t) => (
         <div key={t.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fmt(t.fare)} · {statusMeta[t.status]?.label || t.status}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {statusMeta[t.status]?.label || t.status}</div>
         </div>
       ),
     },
@@ -1412,7 +1412,7 @@ function AdminSavedRoutes({ handSetRates, outlierIds, adminRouteFaresError, lang
                   <div className="text-xs font-bold truncate mt-1" style={{ color: C.ink }}>{r.pickupName}</div>
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
                   <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
-                    {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {fmt(r.totalFare)}
+                    {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {lang === "en" ? "rate hidden" : lang === "mr" ? "दर लपवलेला" : "दर छुपाया गया"}
                   </div>
                   {isLongHaulSmallLoad(r.estimatedKm, r.tierMaxKg) && (
                     <div className="text-[9.5px] font-bold mt-1" style={{ color: C.safety }}>
@@ -1829,7 +1829,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                     <div className="text-xs font-bold truncate mt-1" style={{ color: C.ink }}>{r.pickupName}</div>
                     <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
                     <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
-                      {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {fmt(r.totalFare)}
+                      {lang === "en" ? "Up to" : lang === "mr" ? "पर्यंत" : "तक"} {r.tierMaxKg >= FARE_TIER_MAX_KG_UNCAPPED ? "∞" : `${r.tierMaxKg}kg`} · {lang === "en" ? "rate hidden" : lang === "mr" ? "दर लपवलेला" : "दर छुपाया गया"}
                     </div>
                   </button>
                 ))}
@@ -1874,12 +1874,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                           <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {g.dropName}</div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="text-xs font-black" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Avg" : lang === "mr" ? "सरासरी" : "औसत"}: {fmt(avgTotal)}</div>
-                          {avgDefault != null && (
-                            <div className="text-[10px] font-bold mt-0.5" style={{ color: Math.abs(diffPct) > 15 ? C.safety : C.inkSoft }}>
-                              {lang === "en" ? "Default" : lang === "mr" ? "डिफॉल्ट" : "डिफ़ॉल्ट"}: {fmt(avgDefault)} ({diffPct > 0 ? "+" : ""}{diffPct}%)
-                            </div>
-                          )}
+                          <div className="text-xs font-black" style={{ color: C.inkSoft }}>{lang === "en" ? "rate hidden" : lang === "mr" ? "दर लपवलेला" : "दर छुपाया गया"}</div>
                         </div>
                       </div>
                       <div className="space-y-1.5">
@@ -1909,9 +1904,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                                 </div>
                               ) : (
                                 <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
-                                  {lang === "en" ? "1-5km" : "1-5किमी"}: {fmt(r.tier1to5Fare)} · {lang === "en" ? "Total" : lang === "mr" ? "एकूण" : "कुल"}: {fmt(r.totalFare)}
+                                  {lang === "en" ? "rate hidden" : lang === "mr" ? "दर लपवलेला" : "दर छुपाया गया"}
                                   {r.estimatedKm != null && <> · {formatDistanceExact(r.estimatedKm, lang)}</>}
-                                  {r.perKmRate != null && <> · {fmt(r.perKmRate)}/km</>}
                                 </div>
                               )}
                               {r.pickupLat != null && (

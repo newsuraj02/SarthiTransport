@@ -5598,11 +5598,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                   {visibleDrivers.map((entry) => {
                     const key = entry.id;
                     const isSelected = selectedDriverKey === key;
-                    // Already resolved (and outlier-corrected, see
-                    // nearbyDrivers above) -- not recomputed here, so the
-                    // card shown and the fare bookDriver actually sends
-                    // never disagree.
-                    const fare = entry.fare;
                     return (
                       <div key={key}>
                         <button onClick={() => setSelectedDriverKey(isSelected ? null : key)}
@@ -5619,11 +5614,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                               {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
                             </div>
                           </div>
-                          <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
                         </button>
                         {isSelected && (
                           <button onClick={() => setConfirmingEntry(entry)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 animate-pulse" style={{ background: C.success }}>
-                            {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}
+                            {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"}
                           </button>
                         )}
                       </div>
@@ -5656,7 +5650,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               <div className="flex justify-between"><dt style={{ color: C.inkSoft }}>{lang === "en" ? "Distance" : lang === "mr" ? "अंतर" : "दूरी"}</dt><dd className="font-bold" style={{ color: C.ink }}>{distance !== null ? formatDistanceExact(distance, lang) : "—"}</dd></div>
               <div className="flex justify-between gap-3"><dt className="shrink-0" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}</dt><dd className="font-bold text-right truncate" style={{ color: C.ink }}>{pickup}</dd></div>
               <div className="flex justify-between gap-3"><dt className="shrink-0" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}</dt><dd className="font-bold text-right truncate" style={{ color: C.ink }}>{drop}</dd></div>
-              <div className="flex justify-between pt-1.5" style={{ borderTop: `1px solid ${C.line}` }}><dt className="font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}</dt><dd className="font-black text-lg" style={{ color: C.success }}>{fmt(confirmingEntry.fare)}</dd></div>
             </dl>
             {bookingError && (
               <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
@@ -5976,7 +5969,6 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                   {visibleDrivers.map((entry) => {
                     const key = entry.id;
                     const isSelected = selectedDriverKey === key;
-                    const fare = entry.fare;
                     return (
                       <div key={key}>
                         <button onClick={() => setSelectedDriverKey(isSelected ? null : key)}
@@ -5993,11 +5985,10 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                               {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
                             </div>
                           </div>
-                          <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
                         </button>
                         {isSelected && (
                           <button onClick={() => setConfirmingEntry(entry)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 animate-pulse" style={{ background: C.success }}>
-                            {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}
+                            {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"}
                           </button>
                         )}
                       </div>
@@ -6030,10 +6021,6 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                 ? `${advanceDate}, ${formatTimeSlot(advanceTime, lang)} साठी — तुमची रिक्वेस्ट ${confirmingEntry.tier.label} गाडीच्या ड्रायव्हर्सना पाठवली जाईल — ${pickup} ते ${drop}${distance !== null ? ` (${formatDistanceExact(distance, lang)})` : ""}.`
                 : `${advanceDate}, ${formatTimeSlot(advanceTime, lang)} के लिए — आपकी रिक्वेस्ट ${confirmingEntry.tier.label} वाले ड्राइवरों को भेजी जाएगी — ${pickup} से ${drop}${distance !== null ? ` (${formatDistanceExact(distance, lang)})` : ""}।`}
             </p>
-            <div className="flex items-center justify-between pt-1.5" style={{ borderTop: `1px solid ${C.line}` }}>
-              <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}</span>
-              <span className="font-black text-lg" style={{ color: C.success }}>{fmt(confirmingEntry.fare)}</span>
-            </div>
             {bookingError && (
               <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
             )}
@@ -6204,7 +6191,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
             <span className="text-base font-black" style={{ color: "#FFFFFF" }}>{secondsLeft}</span>
           </div>
           <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Waiting for Driver's Confirmation" : lang === "mr" ? "ड्रायव्हरच्या पुष्टीची वाट पाहत आहे" : "ड्राइवर की पुष्टि का इंतज़ार है"}</div>
-          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{pdVeh ? `${vehicleLabel(pdVeh, lang)} · ${b.pendingDriverName}` : b.pendingDriverName}{b.fare ? ` · ${fmt(b.fare)}` : ""}</div>
+          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{pdVeh ? `${vehicleLabel(pdVeh, lang)} · ${b.pendingDriverName}` : b.pendingDriverName}</div>
         </div>
         <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: "#8B0000" }}>
           {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
@@ -6231,7 +6218,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
             <Truck size={20} color="#FFFFFF" />
           </div>
           <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Notifying Nearby Drivers" : lang === "mr" ? "जवळच्या ड्रायव्हर्सना कळवत आहोत" : "आस-पास के ड्राइवरों को सूचित किया जा रहा है"}</div>
-          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{b.fare ? fmt(b.fare) : ""}</div>
         </div>
         <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: "#8B0000" }}>
           {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
@@ -6269,9 +6255,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
               <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{vehicleLabel(bidVehicleType, lang) || bid.driverName}</div>
               {bid.distanceKm != null && <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{bid.distanceKm} {lang === "en" ? "km away" : lang === "mr" ? "किमी दूर" : "किमी दूर"}</div>}
               {bidVehicleType && <div className="text-[9px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{vehicleCapacity(bidVehicleType, lang)}</div>}
-            </div>
-            <div className="text-right shrink-0">
-              <div className="text-base font-bold" style={{ color: "#000000" }}>{fmt(bid.amount)}</div>
             </div>
           </div>
           {(bid.hours || bid.extraHourRate) && (
@@ -7764,12 +7747,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
             <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.distance} {lang === "en" ? "km" : "किमी"}</span>
             <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{ab.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
           </div>
-          {ab.fare != null && (
-            <div className="text-center rounded-lg py-2.5 mb-3" style={{ background: C.metallicGold }}>
-              <div className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Your fare" : lang === "mr" ? "तुमचे भाडे" : "आपका भाड़ा"}</div>
-              <div className="text-2xl font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(ab.fare)}</div>
-            </div>
-          )}
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => {
               // Only the driver the dispatch ladder currently has it
@@ -7825,12 +7802,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
                   <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{b.distance} {lang === "en" ? "km" : "किमी"}</span>
                   <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{b.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
                 </div>
-                {b.fare != null && (
-                  <div className="text-center rounded-lg py-2.5 mb-3" style={{ background: C.metallicGold }}>
-                    <div className="text-xs font-bold" style={{ color: "#000000" }}>{lang === "en" ? "Your fare" : lang === "mr" ? "तुमचे भाडे" : "आपका भाड़ा"}</div>
-                    <div className="text-2xl font-black" style={{ color: "#000000", fontFamily: monoFont }}>{fmt(b.fare)}</div>
-                  </div>
-                )}
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" disabled={responding} onClick={() => respondToBroadcast(b.id, false)}
                     className="rounded-lg py-3.5 text-base font-black" style={{ background: C.paper, border: `2px solid ${C.safety}`, color: C.safety, opacity: responding ? 0.5 : 1 }}>
@@ -9267,7 +9238,6 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
                     <Clock3 size={13} />
                     <span className="text-sm font-bold" style={{ fontFamily: bodyFont }}>{lang === "en" ? "Advance ride:" : lang === "mr" ? "अ‍ॅडव्हान्स राइड:" : "एडवांस राइड:"} {rideDateTimeLabel(ab)}</span>
                   </div>
-                  <div className="text-base font-extrabold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>{lang === "en" ? "Fixed fare:" : lang === "mr" ? "निश्चित भाडे:" : "तय भाड़ा:"} {fmt(ab.fare)}</div>
                   {ab.hours && (
                     <div className="text-sm font-bold mt-1" style={{ color: "#000000", fontFamily: bodyFont, fontVariantNumeric: "tabular-nums" }}>
                       {lang === "en" ? `${ab.hours} hrs loading/unloading` : lang === "mr" ? `${ab.hours} तास लोडिंग/अनलोडिंग` : `${ab.hours} घंटे लोडिंग/अनलोडिंग`}{ab.extraHourRate ? (lang === "en" ? ` · then ${fmt(ab.extraHourRate)}/hr waiting charge` : lang === "mr" ? ` · त्यानंतर ${fmt(ab.extraHourRate)}/तास वेटिंग चार्ज` : ` · उसके बाद ${fmt(ab.extraHourRate)}/घंटा वेटिंग चार्ज`) : ""}
