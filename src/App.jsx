@@ -5390,7 +5390,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // bookDriver itself only ever runs from that sheet's own Confirm button.
   const [confirmingEntry, setConfirmingEntry] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
-  const canBook = !!(pickup.trim() && drop.trim() && weight.trim());
+  const locationsReady = !!(pickup.trim() && drop.trim());
+  const weightReady = weight.trim().length >= 3;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
 
   // Every real, currently online/approved/non-blacklisted driver within
@@ -5449,13 +5450,15 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
       : e);
   })();
 
-  // The selected driver's card floats to the top of the displayed list
-  // (matching the design mock) -- nearbyDrivers itself stays in its
-  // original tier/distance sort order, this is purely a display-time
-  // reorder keyed off selectedDriverKey.
-  const displayDrivers = selectedDriverKey
-    ? [...nearbyDrivers.filter((e) => e.id === selectedDriverKey), ...nearbyDrivers.filter((e) => e.id !== selectedDriverKey)]
-    : nearbyDrivers;
+  // Once a driver is picked, the list collapses down to just that one
+  // card (matching the design mock) instead of floating it to the top of
+  // a still-full list -- "Choose another vehicle" below it is the only
+  // way back to the full list. Falls back to the full list if the
+  // selected driver ever drops out of nearbyDrivers entirely (went
+  // offline, no longer matches the current weight) rather than showing a
+  // stale single card for someone no longer there.
+  const selectedEntry = selectedDriverKey ? nearbyDrivers.find((e) => e.id === selectedDriverKey) || null : null;
+  const visibleDrivers = selectedEntry ? [selectedEntry] : nearbyDrivers;
 
   // Tapping a specific driver's card books them directly — the system no
   // longer picks who to dispatch to first, the customer just did by
@@ -5547,71 +5550,94 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
         </div>
 
-        {!canBook && (
+        {!locationsReady && (
           <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
             🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
           </button>
         )}
       </div>
 
-      {/* Shown inline on the page the moment pickup/drop/weight are all
-          filled in, rather than behind a separate "Book Now" tap into a
-          modal sheet -- every real, currently eligible driver near Pickup
-          is listed individually with their own KYC vehicle photo, category
+      {/* Once Pickup+Drop are filled, this section takes over from the
+          disabled Book button above: a nudge to enter weight until it has
+          at least 3 digits (matching the design mock), then the eligible-
+          driver list. Every real, currently eligible driver near Pickup is
+          listed individually with their own KYC vehicle photo, category
           label, capacity, and fare (see nearbyDrivers/bookDriver), so the
           customer picks by looking at the actual vehicle rather than an
           anonymous category card. Several drivers can share a category
           (e.g. three separate 17ft entries) -- they share the same fare,
           since pricing is per-category, but each is its own bookable card
-          because each is a real, different vehicle. The selected card
-          floats to the top of the list (see displayDrivers) with an inline
-          "Book this vehicle" button right under it; tapping that opens the
-          confirmation sheet below rather than booking immediately. */}
-      {canBook && (
+          because each is a real, different vehicle. Once one is picked,
+          the list collapses to just that card (see visibleDrivers) with
+          an inline "Book this vehicle" button right under it and a
+          "Choose another vehicle" link back to the full list; tapping
+          Book opens the confirmation sheet below rather than booking
+          immediately. */}
+      {locationsReady && (
         <div className="px-5 pb-4 space-y-2.5">
-          <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(21,89,214,0.08)", border: `1.5px solid rgba(21,89,214,0.3)` }}>
-            👇 {lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}
-          </div>
-          {bookingError && !confirmingEntry && (
-            <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
+          {!weightReady ? (
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
+              👆 {lang === "en" ? "Enter weight first, then vehicles will show" : lang === "mr" ? "आधी वजन टाका, मग गाड्या दिसतील" : "पहले वजन डालें, तभी गाड़ियाँ दिखेंगी"}
+            </div>
+          ) : (
+            <>
+              {!selectedEntry && (
+                <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(21,89,214,0.08)", border: `1.5px solid rgba(21,89,214,0.3)` }}>
+                  👇 {lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}
+                </div>
+              )}
+              {bookingError && !confirmingEntry && (
+                <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
+              )}
+              {nearbyDrivers.length === 0 ? (
+                <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
+                  {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
+                </p>
+              ) : (
+                <>
+                  {visibleDrivers.map((entry) => {
+                    const key = entry.id;
+                    const isSelected = selectedDriverKey === key;
+                    // Already resolved (and outlier-corrected, see
+                    // nearbyDrivers above) -- not recomputed here, so the
+                    // card shown and the fare bookDriver actually sends
+                    // never disagree.
+                    const fare = entry.fare;
+                    return (
+                      <div key={key}>
+                        <button onClick={() => setSelectedDriverKey(isSelected ? null : key)}
+                          className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
+                          style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : C.paper }}>
+                          <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
+                            <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                              <VehicleCategoryIcon tierIndex={entry.tierIndex} />
+                            </div>
+                          } />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
+                            <div className="text-[11px]" style={{ color: C.inkSoft }}>
+                              {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
+                            </div>
+                          </div>
+                          <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
+                        </button>
+                        {isSelected && (
+                          <button onClick={() => setConfirmingEntry(entry)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 animate-pulse" style={{ background: C.success }}>
+                            {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {selectedEntry && (
+                    <button onClick={() => setSelectedDriverKey(null)} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
+                      ↺ {lang === "en" ? "Choose another vehicle" : lang === "mr" ? "दुसरी गाडी निवडा" : "दूसरी गाड़ी चुनें"}
+                    </button>
+                  )}
+                </>
+              )}
+            </>
           )}
-          {nearbyDrivers.length === 0 ? (
-            <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
-              {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
-            </p>
-          ) : displayDrivers.map((entry) => {
-            const key = entry.id;
-            const isSelected = selectedDriverKey === key;
-            // Already resolved (and outlier-corrected, see nearbyDrivers
-            // above) -- not recomputed here, so the card shown and the
-            // fare bookDriver actually sends never disagree.
-            const fare = entry.fare;
-            return (
-              <div key={key}>
-                <button onClick={() => setSelectedDriverKey(isSelected ? null : key)}
-                  className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
-                  style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : C.paper }}>
-                  <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
-                    <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                      <VehicleCategoryIcon tierIndex={entry.tierIndex} />
-                    </div>
-                  } />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
-                    <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                      {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
-                    </div>
-                  </div>
-                  <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
-                </button>
-                {isSelected && (
-                  <button onClick={() => setConfirmingEntry(entry)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 animate-pulse" style={{ background: C.success }}>
-                    {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}
-                  </button>
-                )}
-              </div>
-            );
-          })}
         </div>
       )}
 
@@ -5676,8 +5702,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
 // convention of a separate, self-contained copy per screen instead of one
 // component branching on a mode flag (see AdminFleet/AdminDriverList's own
 // duplicated bulk-send state for the same reasoning). The two real
-// differences: a date/time picker up front gating canBook alongside
-// pickup/drop/weight, ADVANCE_BID_RADIUS_KM instead of CURRENT_BID_RADIUS_KM
+// differences: a date/time picker up front gating locationsReady alongside
+// pickup/drop, ADVANCE_BID_RADIUS_KM instead of CURRENT_BID_RADIUS_KM
 // (a scheduled driver has time to travel further), and bookDriver's
 // per-category minimum-lead-time check (minAdvanceNoticeHours) before
 // requestByCategory ever runs.
@@ -5765,7 +5791,8 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   useEffect(() => { setManualMapOpen(false); }, [weight]);
   const [confirmingEntry, setConfirmingEntry] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
-  const canBook = !!(pickup.trim() && drop.trim() && weight.trim() && advanceDate && advanceTime);
+  const locationsReady = !!(pickup.trim() && drop.trim() && advanceDate && advanceTime);
+  const weightReady = weight.trim().length >= 3;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
   const scheduledForValue = `${advanceDate} ${advanceTime}`;
 
@@ -5802,9 +5829,15 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
       : e);
   })();
 
-  const displayDrivers = selectedDriverKey
-    ? [...nearbyDrivers.filter((e) => e.id === selectedDriverKey), ...nearbyDrivers.filter((e) => e.id !== selectedDriverKey)]
-    : nearbyDrivers;
+  // Once a driver is picked, the list collapses down to just that one
+  // card (matching the design mock) instead of floating it to the top of
+  // a still-full list -- "Choose another vehicle" below it is the only
+  // way back to the full list. Falls back to the full list if the
+  // selected driver ever drops out of nearbyDrivers entirely (went
+  // offline, no longer matches the current weight) rather than showing a
+  // stale single card for someone no longer there.
+  const selectedEntry = selectedDriverKey ? nearbyDrivers.find((e) => e.id === selectedDriverKey) || null : null;
+  const visibleDrivers = selectedEntry ? [selectedEntry] : nearbyDrivers;
 
   // Same advance-notice lead-time check the old toggled panel had (scaled
   // by the driver's own category) -- happens here, once a specific vehicle
@@ -5911,55 +5944,74 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
         </div>
 
-        {!canBook && (
+        {!locationsReady && (
           <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
             📅 {lang === "en" ? "Book Advance" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें"}
           </button>
         )}
       </div>
 
-      {canBook && (
+      {locationsReady && (
         <div className="px-5 pb-4 space-y-2.5">
-          <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(21,89,214,0.08)", border: `1.5px solid rgba(21,89,214,0.3)` }}>
-            👇 {lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}
-          </div>
-          {bookingError && !confirmingEntry && (
-            <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
+          {!weightReady ? (
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
+              👆 {lang === "en" ? "Enter weight first, then vehicles will show" : lang === "mr" ? "आधी वजन टाका, मग गाड्या दिसतील" : "पहले वजन डालें, तभी गाड़ियाँ दिखेंगी"}
+            </div>
+          ) : (
+            <>
+              {!selectedEntry && (
+                <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(21,89,214,0.08)", border: `1.5px solid rgba(21,89,214,0.3)` }}>
+                  👇 {lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}
+                </div>
+              )}
+              {bookingError && !confirmingEntry && (
+                <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
+              )}
+              {nearbyDrivers.length === 0 ? (
+                <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
+                  {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
+                </p>
+              ) : (
+                <>
+                  {visibleDrivers.map((entry) => {
+                    const key = entry.id;
+                    const isSelected = selectedDriverKey === key;
+                    const fare = entry.fare;
+                    return (
+                      <div key={key}>
+                        <button onClick={() => setSelectedDriverKey(isSelected ? null : key)}
+                          className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
+                          style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : C.paper }}>
+                          <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
+                            <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                              <VehicleCategoryIcon tierIndex={entry.tierIndex} />
+                            </div>
+                          } />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
+                            <div className="text-[11px]" style={{ color: C.inkSoft }}>
+                              {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
+                            </div>
+                          </div>
+                          <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
+                        </button>
+                        {isSelected && (
+                          <button onClick={() => setConfirmingEntry(entry)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 animate-pulse" style={{ background: C.success }}>
+                            {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {selectedEntry && (
+                    <button onClick={() => setSelectedDriverKey(null)} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
+                      ↺ {lang === "en" ? "Choose another vehicle" : lang === "mr" ? "दुसरी गाडी निवडा" : "दूसरी गाड़ी चुनें"}
+                    </button>
+                  )}
+                </>
+              )}
+            </>
           )}
-          {nearbyDrivers.length === 0 ? (
-            <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
-              {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
-            </p>
-          ) : displayDrivers.map((entry) => {
-            const key = entry.id;
-            const isSelected = selectedDriverKey === key;
-            const fare = entry.fare;
-            return (
-              <div key={key}>
-                <button onClick={() => setSelectedDriverKey(isSelected ? null : key)}
-                  className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
-                  style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : C.paper }}>
-                  <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
-                    <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                      <VehicleCategoryIcon tierIndex={entry.tierIndex} />
-                    </div>
-                  } />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
-                    <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                      {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
-                    </div>
-                  </div>
-                  <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
-                </button>
-                {isSelected && (
-                  <button onClick={() => setConfirmingEntry(entry)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 animate-pulse" style={{ background: C.success }}>
-                    {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}
-                  </button>
-                )}
-              </div>
-            );
-          })}
         </div>
       )}
 
