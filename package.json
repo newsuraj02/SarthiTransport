@@ -12,7 +12,8 @@
     "verify:mh-rates": "node scripts/importMaharashtraDefaults.mjs --verify",
     "migrate:fare-tiers": "node scripts/migrateFareTierBoundaries.mjs",
     "verify:fare-tiers": "node scripts/migrateFareTierBoundaries.mjs --verify",
-    "revert:diesel-driver-rates": "node scripts/revertDieselDriverRates.mjs"
+    "revert:diesel-driver-rates": "node scripts/revertDieselDriverRates.mjs",
+    "delete:all-route-rates": "node scripts/deleteAllRouteRates.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
