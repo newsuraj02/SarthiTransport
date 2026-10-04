@@ -183,37 +183,49 @@ exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event
   });
 
   const sends = [];
+  // Temporary per-driver skip-reason logging (not permanent diagnostic
+  // scaffolding — remove once the "no new-load push at all" report is
+  // root-caused) -- every one of these conditions fails completely
+  // silently otherwise, so there was no way to tell which one was
+  // actually blocking a specific test driver without seeing this.
+  const skipLog = [];
   driversSnap.forEach((doc) => {
     const driver = doc.data();
-    if (!driver.online || driver.kyc !== "Approved" || driver.blacklisted || !driver.fcmToken) return;
+    const tag = `${doc.id} (${driver.name || "?"})`;
+    if (!driver.online) { skipLog.push(`${tag}: not online`); return; }
+    if (driver.kyc !== "Approved") { skipLog.push(`${tag}: kyc=${driver.kyc}`); return; }
+    if (driver.blacklisted) { skipLog.push(`${tag}: blacklisted`); return; }
+    if (!driver.fcmToken) { skipLog.push(`${tag}: no fcmToken`); return; }
 
     // Same "bigger truck can carry a smaller load" rule as the client's
     // openLoads filter in DriverHome.
     const driverVehicleDef = vehicleTypesByKey[driver.vehicleSpec?.type];
-    if (driverVehicleDef && loadVehicleDef && loadVehicleDef.capacityKg > driverVehicleDef.capacityKg) return;
-    if (driverVehicleDef && !loadVehicleDef && load.vehicle !== driver.vehicleSpec?.type) return;
+    if (driverVehicleDef && loadVehicleDef && loadVehicleDef.capacityKg > driverVehicleDef.capacityKg) { skipLog.push(`${tag}: vehicle too small (${driverVehicleDef.capacityKg}kg < load's ${loadVehicleDef.capacityKg}kg)`); return; }
+    if (driverVehicleDef && !loadVehicleDef && load.vehicle !== driver.vehicleSpec?.type) { skipLog.push(`${tag}: vehicle type mismatch (driver=${driver.vehicleSpec?.type}, load=${load.vehicle})`); return; }
 
     // Current (non-advance) loads only alert drivers within BID_RADIUS_KM of
     // the pickup point — same rule as the client's openLoads filter. Advance
     // bookings are exempt since the driver has time to travel there.
     if (!load.scheduledFor && load.pickupLat != null && load.pickupLng != null) {
-      if (!driver.lastKnownLocation) return;
+      if (!driver.lastKnownLocation) { skipLog.push(`${tag}: no lastKnownLocation`); return; }
       // See DRIVER_LOCATION_STALE_MS -- don't push-alert a driver whose
       // "online" flag is stuck true from before they locked their phone;
       // their last coordinate isn't proof they're actually near this load.
-      if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > DRIVER_LOCATION_STALE_MS) return;
+      if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > DRIVER_LOCATION_STALE_MS) { skipLog.push(`${tag}: lastKnownLocation stale (age ${driver.lastKnownLocation.updatedAt ? Math.round((Date.now() - driver.lastKnownLocation.updatedAt) / 1000) + "s" : "no timestamp"})`); return; }
       const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng);
-      if (distKm > BID_RADIUS_KM) return;
+      if (distKm > BID_RADIUS_KM) { skipLog.push(`${tag}: ${distKm.toFixed(1)}km away, outside ${BID_RADIUS_KM}km radius`); return; }
     }
 
     // No ping if this load would conflict with a commitment the driver
     // already has (current trip in progress, or an upcoming Advance booking
     // plus its vehicle-tonnage buffer) — they can't bid on it anyway.
     const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
-    if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) return;
+    if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
 
+    skipLog.push(`${tag}: SENDING`);
     sends.push(sendLoadAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
   });
+  console.log(`[onNewLoadPosted] booking ${event.params.bookingId} (vehicle=${load.vehicle}, pickup=${load.pickupLat},${load.pickupLng}): ${driversSnap.size} drivers checked, ${sends.length} sends queued\n${skipLog.join("\n")}`);
 
   await Promise.all(sends);
 });
