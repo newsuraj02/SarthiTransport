@@ -5574,7 +5574,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           Book opens the confirmation sheet below rather than booking
           immediately. */}
       {locationsReady && (
-        <div className="px-5 pb-4 space-y-2.5">
+        <div className="px-5 pt-3 pb-4 space-y-2.5">
           {!weightReady ? (
             <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
               👆 {lang === "en" ? "Enter weight first, then vehicles will show" : lang === "mr" ? "आधी वजन टाका, मग गाड्या दिसतील" : "पहले वजन डालें, तभी गाड़ियाँ दिखेंगी"}
@@ -5952,7 +5952,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
       </div>
 
       {locationsReady && (
-        <div className="px-5 pb-4 space-y-2.5">
+        <div className="px-5 pt-3 pb-4 space-y-2.5">
           {!weightReady ? (
             <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
               👆 {lang === "en" ? "Enter weight first, then vehicles will show" : lang === "mr" ? "आधी वजन टाका, मग गाड्या दिसतील" : "पहले वजन डालें, तभी गाड़ियाँ दिखेंगी"}
