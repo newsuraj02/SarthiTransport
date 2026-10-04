@@ -1139,6 +1139,60 @@ export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS
   return Math.round(total);
 }
 
+// ---- Return Load: a driver's vehicle is recognized as "empty, heading
+// home" right after finishing a trip, and gets a discounted fare (and the
+// customer too, if that specific driver accepts) on any new load that
+// genuinely sits on their way back -- the guide's own section 7(c)
+// background rule, ported as-is. "आसपास" (nearby) here is ONLY for
+// recognizing a return load; it never affects what an Admin route rate
+// applies to (that's always the exact pickup/drop, see
+// getAdminRouteOverride/findExactAdminRoute).
+const RETURN_RADIUS_KM = 4;
+const HOME_RADIUS_KM = 25;
+const RETURN_HOURS = 24;
+
+// Called once a trip actually completes (see completeBooking) -- patches
+// straight onto the driver doc. `returnHomeLat/Lng` is deliberately only
+// ever set ONCE and kept from there on (first trip's own pickup, the
+// closest thing to "home" this app can infer without a dedicated profile
+// field) rather than overwritten every single trip, so it stays a stable
+// point to route return loads toward instead of drifting to wherever the
+// driver's last job happened to start.
+function markReturnModePatch(driver, booking) {
+  return {
+    returnActive: true,
+    returnAtLat: booking.dropLat ?? null,
+    returnAtLng: booking.dropLng ?? null,
+    returnHomeLat: driver.returnHomeLat ?? booking.pickupLat ?? null,
+    returnHomeLng: driver.returnHomeLng ?? booking.pickupLng ?? null,
+    returnTierMaxKg: findFareTier(driver.vehicleSpec?.capacityKg, DEFAULT_FARE_TIERS).maxKg,
+    returnUntil: Date.now() + RETURN_HOURS * 3600e3,
+  };
+}
+// True when `load` (a booking being newly broadcast) counts as a return
+// load FOR THIS SPECIFIC driver right now: same capacity tier, pickup
+// within RETURN_RADIUS_KM of where the driver's vehicle actually is, drop
+// within HOME_RADIUS_KM of their own inferred home. `now` is injectable
+// for tests; defaults to the real clock.
+export function isReturnLoadFor(driver, load, now = Date.now()) {
+  return !!(
+    driver.returnActive &&
+    driver.returnUntil > now &&
+    driver.returnTierMaxKg === load.tierMaxKg &&
+    driver.returnAtLat != null && driver.returnHomeLat != null &&
+    load.pickupLat != null && load.dropLat != null &&
+    haversineKm(load.pickupLat, load.pickupLng, driver.returnAtLat, driver.returnAtLng) <= RETURN_RADIUS_KM &&
+    haversineKm(load.dropLat, load.dropLng, driver.returnHomeLat, driver.returnHomeLng) <= HOME_RADIUS_KM
+  );
+}
+// Ends a driver's own return-mode window the moment they take on ANY new
+// job (return load or not) -- same as the guide's own `free` flag
+// dropping the instant a load is accepted, rather than waiting out the
+// full RETURN_HOURS window while already busy with something else.
+function clearReturnModePatch() {
+  return { returnActive: false };
+}
+
 // Flags a fare that's wildly out of line with its OWN sibling tiers on the
 // same route -- not a fixed rupee/percentage threshold, since a real fare
 // legitimately varies a lot by distance and vehicle size. Instead compares
@@ -7868,8 +7922,20 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
         <div className="space-y-3">
           {broadcastBookings.map((b) => {
             const responding = respondingBroadcastId === b.id;
+            // Return Load (see isReturnLoadFor in the fare-engine section
+            // above) -- this driver's own vehicle happens to be empty and
+            // heading home past this exact load right now. The discount
+            // itself only applies once accepted (see driverRespondBooking);
+            // this badge is just letting the driver know before they tap.
+            const isReturn = isReturnLoadFor(driver, b);
             return (
-              <div key={b.id} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
+              <div key={b.id} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `2px solid ${isReturn ? C.success : C.marigoldDeep}` }}>
+                {isReturn && (
+                  <div className="rounded-lg px-2.5 py-1.5 mb-2 flex items-center gap-1.5" style={{ background: C.success }}>
+                    <Truck size={13} color="#fff" />
+                    <span className="text-xs font-black text-white">{lang === "en" ? "Return Load — on your way home" : lang === "mr" ? "रिटर्न लोड — घराच्या वाटेवर" : "रिटर्न लोड — घर की तरफ़"}</span>
+                  </div>
+                )}
                 <RideTypeBanner booking={b} lang={lang} />
                 <div className="mb-2">
                   <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span></div>
@@ -9780,10 +9846,17 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
-  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500 });
+  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500, returnPct: 15 });
   const commissionPct = settings.commissionPct;
   const bonusPct = settings.bonusPct;
   const minWallet = settings.minWallet;
+  // The Return Load discount % (see markReturnMode/isReturnLoadFor below) --
+  // app-wide, Admin-set (same AdminRateCalculator switch/pills as before,
+  // now actually synced here instead of usePersistedState's per-browser
+  // localStorage, per the guide's own section 7a note that the real app
+  // needs this in Firestore, not just the demo's browser storage). `?? 15`
+  // covers a settings/main doc created before this field existed.
+  const returnPct = settings.returnPct ?? 15;
   // Always the code constant now, never settings.fareTiers — Admin has no
   // UI to edit this (removed from Admin Settings, since Admin's own
   // route+bracket overrides and driver-submitted averages are the real
@@ -9799,6 +9872,7 @@ export default function App() {
   const setCommissionPct = (v) => patchDoc("settings", "main", { commissionPct: typeof v === "function" ? v(commissionPct) : v }).catch((e) => console.error(e));
   const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
   const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
+  const setReturnPct = (v) => patchDoc("settings", "main", { returnPct: typeof v === "function" ? v(returnPct) : v }).catch((e) => console.error(e));
   // Bumped by hand in Admin Settings each time a new Production release
   // actually goes out on the Play Console — there's no client-reachable API
   // that tells the app "what's live in Production" on its own, so this
@@ -9970,7 +10044,7 @@ export default function App() {
     // create before subscribing would leave everyone stuck on defaults
     // forever if that one initial call is slow on a flaky connection.
     const unsub = subscribeDoc("settings", "main", (data) => { if (data) setSettingsLocal(data); });
-    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500 })
+    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500, returnPct: 15 })
       .catch((e) => console.error("[settings init]", e));
     return unsub;
   }, []);
@@ -10439,11 +10513,21 @@ export default function App() {
       const conflict = findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor, hours: b.hours }, bookings, vehicleTypes, lang);
       if (conflict) return conflict;
       const otp = String(Math.floor(1000 + Math.random() * 9000));
+      // Return Load (see isReturnLoadFor above): this specific driver's
+      // vehicle is empty and genuinely heading home past this load's
+      // pickup/drop right now -- both their own fare and the customer's
+      // get the same app-wide return discount applied to whatever fare
+      // was already resolved at request time (not re-derived from
+      // scratch, so it stays whatever pricing layer -- Admin override,
+      // scaled, or formula -- originally produced it).
+      const isReturn = isReturnLoadFor(driver, b);
+      const claimedFare = isReturn ? Math.round((b.fare || 0) * (1 - returnPct / 100)) : b.fare;
       let result;
       try {
         result = await claimBooking(bookingId, {
           status: "Ongoing", driverName: driver.name, driverMobile: driver.mobile || mobileForDriverName(driver.name),
           vehicle: driver.vehicleSpec?.type || null, progress: 0,
+          ...(isReturn ? { fare: claimedFare, isReturn: true, returnPct } : {}),
         });
       } catch (e) {
         console.error(e);
@@ -10455,6 +10539,9 @@ export default function App() {
       // See otp-readable-by-any-driver in BUG_TRACKER_SEED for why this
       // is its own document instead of a field on the booking itself.
       createDoc("bookingOtps", bookingId, { otp, customerMobile: b.customerMobile || "" }).catch((e) => console.error("[booking otp]", e));
+      // Taking on ANY job (return load or not) ends this driver's own
+      // return-mode window early, same as the guide's `free` flag.
+      if (driver.mobile) patchDoc("drivers", driver.mobile, clearReturnModePatch()).catch((e) => console.error("[return mode clear]", e));
       finishAcceptSideEffects(b, bookingId);
       return null;
     }
@@ -10501,6 +10588,7 @@ export default function App() {
       status: "Ongoing", driverName: driver.name, driverMobile: driver.mobile || mobileForDriverName(driver.name),
       vehicle: driver.vehicleSpec?.type || null, progress: 0, pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null,
     }).catch((e) => console.error(e));
+    if (driver.mobile) patchDoc("drivers", driver.mobile, clearReturnModePatch()).catch((e) => console.error("[return mode clear]", e));
     finishAcceptSideEffects(b, bookingId);
     return null;
   };
@@ -10587,6 +10675,12 @@ export default function App() {
     if (b.driverName) unfreezeDriverName(b.driverName);
     patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge, completedAt: Date.now() }).catch((e) => console.error(e));
     if (b.driverName === driver?.name) setDriver({ ...driver, online: true });
+    // Return Load: this vehicle is now empty and (per the guide's own
+    // background rule) assumed to be heading home for up to RETURN_HOURS —
+    // see markReturnModePatch/isReturnLoadFor above.
+    if (b.driverName === driver?.name && driver?.mobile) {
+      patchDoc("drivers", driver.mobile, markReturnModePatch(driver, b)).catch((e) => console.error("[return mode]", e));
+    }
     // Referral payout (₹200 to whichever driver referred this one, the
     // first time they complete a real trip — see shareApp) moved into a
     // Cloud Function: this session can only ever be the *referred*
@@ -10866,6 +10960,7 @@ export default function App() {
             <Suspense fallback={<AdminLoadingFallback />}>
               <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
+                returnPct={returnPct} setReturnPct={setReturnPct}
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
                 latestAdminVersionCode={settings.latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={settings.adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl}
                 fareTiers={fareTiers} lang={lang} onLogout={logout}

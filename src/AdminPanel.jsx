@@ -277,7 +277,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
   );
 }
 
-function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, returnPct, setReturnPct, bugs, systemHealth }) {
   // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
   // pick the field that actually answers "did this happen today" for that
   // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
@@ -948,7 +948,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
             {dieselError || dieselFlash}
           </div>
         )}
-        <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} lang={lang} />
+        <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />
       </div>
     );
   }
@@ -1299,7 +1299,7 @@ const JUDGE_COLOR = { ok: C.success, warn: C.marigoldDeep, bad: C.safety };
 // The guide's own home screen (section 1): two buttons, Admin Rate
 // Calculator and Saved Routes (with a live count) -- opens one or the
 // other as its own full-screen sheet, same as before.
-function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, lang }) {
+function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, lang }) {
   const [rateCalcOpen, setRateCalcOpen] = useState(false);
   // Entry to pre-load the calculator with -- set when Saved Routes' own
   // edit action reopens this instead of editing inline.
@@ -1332,7 +1332,7 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
         </div>
       )}
       {rateCalcOpen && (
-        <AdminRateCalculator adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} routeFares={routeFares} drivers={drivers} lang={lang}
+        <AdminRateCalculator adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} routeFares={routeFares} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang}
           prefill={calcPrefill} onClose={() => setRateCalcOpen(false)} />
       )}
       {savedRoutesOpen && (
@@ -1432,12 +1432,13 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditA
 // vehicle is SELECTED (full-screen picker, section 3), not typed as a
 // loose weight number -- unlike CustomerBooking's customer-facing weight
 // field, Admin is pricing one exact tier at a time.
-function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, routeFares, drivers, lang, prefill, onClose }) {
+function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, routeFares, drivers, returnPct, setReturnPct, lang, prefill, onClose }) {
   const [isReturn, setIsReturn] = useState(false);
-  // Persisted across sessions (and independent of the switch itself) --
-  // same "whatever Admin last chose stays chosen" rule the guide specifies
-  // for the app-wide return discount (section 7a).
-  const [returnPct, setReturnPct] = usePersistedState("sarthi_returnPct", 15);
+  // returnPct/setReturnPct come from settings/main (Firestore, see App.jsx)
+  // now, not local browser storage -- every driver/customer session needs
+  // to read the SAME admin-set percentage, not just this one admin device
+  // (see the guide's own section 7a note that the demo's browser-storage
+  // version isn't what the real app should do).
   const [zone, setZone] = useState("in");
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
@@ -3265,7 +3266,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -3288,7 +3289,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} returnPct={returnPct} setReturnPct={setReturnPct} bugs={bugs} systemHealth={systemHealth} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
