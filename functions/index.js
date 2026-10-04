@@ -516,9 +516,16 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
     });
 
     const sends = [];
+    // Temporary per-driver skip-reason logging -- same reasoning as
+    // onNewLoadPosted's copy above (not permanent scaffolding, remove once
+    // the "no push notification at all" report is root-caused).
+    const skipLog = [];
     driversSnap.forEach((doc) => {
       const driver = doc.data();
-      if (!driver.online || driver.kyc !== "Approved" || driver.blacklisted) return;
+      const tag = `${doc.id} (${driver.name || "?"})`;
+      if (!driver.online) { skipLog.push(`${tag}: not online`); return; }
+      if (driver.kyc !== "Approved") { skipLog.push(`${tag}: kyc=${driver.kyc}`); return; }
+      if (driver.blacklisted) { skipLog.push(`${tag}: blacklisted`); return; }
 
       const capacityKg = Number(driver.vehicleSpec?.capacityKg) || 0;
       const driverTierMaxKg = fareTierMaxKgFor(capacityKg);
@@ -526,21 +533,27 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       for (let offset = 0; offset <= DISPATCH_MAX_TIER_CLIMB; offset++) {
         if (driverTierMaxKg === tierMaxKgAboveServer(load.tierMaxKg, offset)) { tierMatch = true; break; }
       }
-      if (!tierMatch) return;
+      if (!tierMatch) { skipLog.push(`${tag}: vehicle tier mismatch (driver capacity=${capacityKg}kg -> tier ${driverTierMaxKg}, load tier=${load.tierMaxKg})`); return; }
 
-      if (load.pickupLat == null || !driver.lastKnownLocation) return;
-      if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > DRIVER_LOCATION_STALE_MS) return;
-      if (haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng) > DIRECT_REQUEST_RADIUS_KM) return;
+      if (load.pickupLat == null) { skipLog.push(`${tag}: load has no pickupLat/Lng`); return; }
+      if (!driver.lastKnownLocation) { skipLog.push(`${tag}: no lastKnownLocation`); return; }
+      if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > DRIVER_LOCATION_STALE_MS) { skipLog.push(`${tag}: lastKnownLocation stale (age ${driver.lastKnownLocation.updatedAt ? Math.round((Date.now() - driver.lastKnownLocation.updatedAt) / 1000) + "s" : "no timestamp"})`); return; }
+      const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng);
+      if (distKm > DIRECT_REQUEST_RADIUS_KM) { skipLog.push(`${tag}: ${distKm.toFixed(1)}km away, outside ${DIRECT_REQUEST_RADIUS_KM}km radius`); return; }
 
       const lockHours = notificationLockHours(capacityKg);
-      if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) return;
+      if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
 
       if (driver.fcmToken) {
+        skipLog.push(`${tag}: SENDING push+ring+whatsapp`);
         sends.push(sendDirectRequestAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
         sends.push(sendDirectRequestRingAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
+      } else {
+        skipLog.push(`${tag}: no fcmToken (push/ring skipped, WhatsApp still sent)`);
       }
       sends.push(sendDirectRequestWhatsApp(doc.id, load));
     });
+    console.log(`[onDirectRequestBroadcast] booking ${event.params.bookingId} (tier=${load.tierMaxKg}, pickup=${load.pickupLat},${load.pickupLng}): ${driversSnap.size} drivers checked\n${skipLog.join("\n")}`);
     await Promise.all(sends);
   }
 );
