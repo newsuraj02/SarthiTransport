@@ -1273,12 +1273,10 @@ function getRouteAverageFare(pickup, drop, routeFares, pickupLat, pickupLng, dro
   return { avgFare, count: matches.length };
 }
 // Admin's own route-specific override (see AdminRateCalculator) — set
-// deliberately by Admin for one route AND one capacity tier at a time
-// (e.g. Pune-Kolhapur for a 5000kg-class vehicle might be priced
-// differently than the same route for a 9000kg one), and takes priority
-// over everything else once it exists: Admin has final say over what
-// drivers have individually quoted (getRouteAverageFare) or what the
-// generic formula would say (calculateFare). Matches by the same
+// deliberately by Admin for one route AND one capacity tier AND one zone
+// (inside/outside city) AND one return-load state at a time (the guide's
+// own route identity: "पिकअप + ड्रॉप + ज़ोन + रिटर्न", section 6/8), and
+// takes final say over everything else once it exists. Matches by the same
 // coordinate radius as driver routes (locationsNear); if more than one
 // override somehow matches (two overlapping entries within 25km), the
 // most recently saved one wins, since these are meant to be one
@@ -1287,19 +1285,23 @@ function getRouteAverageFare(pickup, drop, routeFares, pickupLat, pickupLng, dro
 // distanceKm (the actual customer's own routed pickup->drop distance, not
 // just whatever this override's own saved estimatedKm was) is optional
 // only so every existing caller before this param existed keeps working —
-// when it's given and comes out longer than this override's estimatedKm,
-// the excess is charged at the override's own perKmRate on top of the
-// flat totalFare, instead of always charging exactly totalFare regardless
-// of how much farther this specific trip actually turns out to be.
-export function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm) {
+// when it's given and comes out longer than this override's own
+// estimatedKm, the excess is charged at the override's own `per` rate on
+// top of its flat totalFare, instead of always charging exactly totalFare
+// regardless of how much farther this specific trip actually turns out
+// to be.
+export function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm, zone = null, isReturn = false) {
   if (!Array.isArray(adminRouteFares) || adminRouteFares.length === 0) return null;
   const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
   if (!p || !d) return null;
   const tier = findFareTier(capacityKg, tiers);
   const routeKm = pickupLat != null && dropLat != null ? haversineKm(pickupLat, pickupLng, dropLat, dropLng) : null;
   const radiusKm = routeMatchRadiusKm(routeKm);
+  const effectiveZone = zone || (routeKm != null && routeKm < OUTSTATION_THRESHOLD_KM ? "in" : "out");
   const matches = adminRouteFares.filter((r) => {
     if (r.tierMaxKg !== tier.maxKg) return false;
+    if ((r.zone || "in") !== effectiveZone) return false;
+    if (!!r.isReturn !== !!isReturn) return false;
     const pickupOk = pickupLat != null && r.pickupLat != null
       ? locationsNear(pickupLat, pickupLng, r.pickupLat, r.pickupLng, radiusKm)
       : routeTextsMatch(r.pickupKey, p);
@@ -1312,28 +1314,87 @@ export function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares,
   matches.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   const best = matches[0];
   const base = Number(best.totalFare) || 0;
-  if (distanceKm != null && best.estimatedKm != null && best.perKmRate != null && distanceKm > best.estimatedKm) {
-    return Math.round(base + (distanceKm - best.estimatedKm) * Number(best.perKmRate));
+  if (distanceKm != null && best.estimatedKm != null && best.per != null && distanceKm > best.estimatedKm) {
+    return Math.round(base + (distanceKm - best.estimatedKm) * Number(best.per));
   }
   return base;
 }
+// The guide's `findRoute()` (section 6/8) — same matching rules as
+// getAdminRouteOverride, but keyed to an EXACT tierMaxKg (not resolved
+// from a capacity number) and returning the whole saved doc rather than
+// just a computed fare, for AdminRateCalculator's own prefill/"already
+// live" UI (it needs the doc's own fix/per/totalFare/id, not a number).
+export function findExactAdminRoute(pickup, drop, tierMaxKg, zone, isReturn, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng) {
+  if (!Array.isArray(adminRouteFares) || adminRouteFares.length === 0) return null;
+  const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
+  if (!p || !d) return null;
+  const routeKm = pickupLat != null && dropLat != null ? haversineKm(pickupLat, pickupLng, dropLat, dropLng) : null;
+  const radiusKm = routeMatchRadiusKm(routeKm);
+  const matches = adminRouteFares.filter((r) => {
+    if (r.tierMaxKg !== tierMaxKg) return false;
+    if ((r.zone || "in") !== zone) return false;
+    if (!!r.isReturn !== !!isReturn) return false;
+    const pickupOk = pickupLat != null && r.pickupLat != null
+      ? locationsNear(pickupLat, pickupLng, r.pickupLat, r.pickupLng, radiusKm)
+      : routeTextsMatch(r.pickupKey, p);
+    const dropOk = dropLat != null && r.dropLat != null
+      ? locationsNear(dropLat, dropLng, r.dropLat, r.dropLng, radiusKm)
+      : routeTextsMatch(r.dropKey, d);
+    return pickupOk && dropOk;
+  });
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return matches[0];
+}
+// The guide's `routeScale()` (section 8) — the middle layer between an
+// exact Admin override for THIS tier and the plain master formula: if
+// Admin has set a rate for at least one OTHER tier on this exact same
+// route+zone+return-state, every sibling tier's rate scales by the same
+// average ratio (Admin's rate ÷ what the master formula alone would say
+// for that tier+route), instead of silently falling all the way back to
+// an unscaled formula number the moment the exact tier Admin priced isn't
+// the one being quoted. Scaling the already-computed total fare by this
+// ratio is mathematically identical to the guide's own method of scaling
+// fix/per independently then recomputing (every mode here is linear in
+// fix and per), so this returns the ratio alone — multiply it onto
+// calculateFare's own result at the call site.
+export function getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares, tiers) {
+  if (!Array.isArray(adminRouteFares) || adminRouteFares.length === 0) return null;
+  const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
+  if (!p || !d) return null;
+  const matches = adminRouteFares.filter((r) =>
+    (r.zone || "in") === zone && !!r.isReturn === !!isReturn &&
+    routeTextsMatch(r.pickupKey, p) && routeTextsMatch(r.dropKey, d));
+  if (matches.length === 0) return null;
+  const ratios = matches
+    .map((r) => {
+      const formulaFare = calculateFare(r.tierMaxKg, r.estimatedKm, tiers, r.zone || "in", 0);
+      return formulaFare > 0 ? (Number(r.totalFare) || 0) / formulaFare : null;
+    })
+    .filter((x) => x != null);
+  return ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : null;
+}
 // Single entry point every booking-fare display/write goes through, so the
 // driver-picker list and the actual booking write always agree on the same
-// number for the same trip. Two layers only, deliberately: Admin's own
-// override for this route+tier (see getAdminRouteOverride) takes final say
-// when it exists, else the generic capacity-tier formula. A third layer —
-// averaging what drivers themselves quote for a route (see
-// getRouteAverageFare) — used to sit between these two, but individual
-// drivers' numbers turned out wildly inconsistent for the same route+
-// bracket (e.g. a 500kg quote pricier than a 750kg one), which customers
-// saw as arbitrary and Admin couldn't easily audit. Set Fare (SetFareForm)
-// still exists for drivers to log what they're charging, and Admin's
-// Driver Ride Entries still shows it — it's just reference data now, with
+// number for the same trip. Three layers, in the guide's own priority
+// order (section 8): (क) Admin's exact override for THIS tier+route+zone+
+// return-state (getAdminRouteOverride) → (ख) the averaged scale ratio from
+// Admin's overrides on OTHER tiers of this same route (getRouteScaleRatio)
+// applied to the master formula → (ग) the plain master formula alone. A
+// driver-quote-averaging layer (getRouteAverageFare) used to sit in this
+// chain but individual drivers' numbers turned out wildly inconsistent for
+// the same route+bracket, which customers saw as arbitrary and Admin
+// couldn't easily audit — Set Fare (SetFareForm) still exists for drivers
+// to log what they're charging, and Admin's Driver Entries still shows it
+// (now compared against this same resolved rate via judge()), but it has
 // zero effect on what a customer is actually quoted.
-function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares) {
-  const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm);
+function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, zone = null, isReturn = false) {
+  const effectiveZone = zone || (distanceKm != null && distanceKm < OUTSTATION_THRESHOLD_KM ? "in" : "out");
+  const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm, effectiveZone, isReturn);
   if (adminOverride != null) return adminOverride;
-  return calculateFare(capacityKg, distanceKm, tiers);
+  const scaleRatio = getRouteScaleRatio(pickup, drop, effectiveZone, isReturn, adminRouteFares, tiers);
+  const formulaFare = calculateFare(capacityKg, distanceKm, tiers, effectiveZone, 0);
+  return scaleRatio != null ? Math.round(formulaFare * scaleRatio) : formulaFare;
 }
 function resolveFare(driver, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares) {
   return resolveFareForCapacity(driver?.vehicleSpec?.capacityKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
