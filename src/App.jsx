@@ -6019,15 +6019,21 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setConfirmingEntry(null)}>
           <div className="w-full max-w-sm rounded-t-2xl p-5 space-y-3" style={{ background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Confirm booking" : lang === "mr" ? "बुकिंग पक्की करा" : "बुकिंग पक्की करें"}</h3>
-            <dl className="text-sm space-y-1.5">
-              <div className="flex justify-between"><dt style={{ color: C.inkSoft }}>{lang === "en" ? "When" : lang === "mr" ? "केव्हा" : "कब"}</dt><dd className="font-bold" style={{ color: C.ink }}>{advanceDate} · {formatTimeSlot(advanceTime, lang)}</dd></div>
-              <div className="flex justify-between"><dt style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle" : lang === "mr" ? "वाहन" : "वाहन"}</dt><dd className="font-bold" style={{ color: C.ink }}>{confirmingEntry.tier.label}</dd></div>
-              <div className="flex justify-between"><dt style={{ color: C.inkSoft }}>{lang === "en" ? "Weight" : lang === "mr" ? "वजन" : "वज़न"}</dt><dd className="font-bold" style={{ color: C.ink }}>{weight} kg</dd></div>
-              <div className="flex justify-between"><dt style={{ color: C.inkSoft }}>{lang === "en" ? "Distance" : lang === "mr" ? "अंतर" : "दूरी"}</dt><dd className="font-bold" style={{ color: C.ink }}>{distance !== null ? formatDistanceExact(distance, lang) : "—"}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="shrink-0" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}</dt><dd className="font-bold text-right truncate" style={{ color: C.ink }}>{pickup}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="shrink-0" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}</dt><dd className="font-bold text-right truncate" style={{ color: C.ink }}>{drop}</dd></div>
-              <div className="flex justify-between pt-1.5" style={{ borderTop: `1px solid ${C.line}` }}><dt className="font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}</dt><dd className="font-black text-lg" style={{ color: C.success }}>{fmt(confirmingEntry.fare)}</dd></div>
-            </dl>
+            {/* One flowing sentence instead of an itemized field-by-field
+                list -- Pickup/Drop/date/time are all already visible on the
+                form right behind this sheet, so repeating each as its own
+                row just added reading weight without adding information. */}
+            <p className="text-sm leading-relaxed" style={{ color: C.ink }}>
+              {lang === "en"
+                ? `For ${advanceDate}, ${formatTimeSlot(advanceTime, lang)} — your request goes out to ${confirmingEntry.tier.label} drivers for ${pickup} → ${drop}${distance !== null ? ` (${formatDistanceExact(distance, lang)})` : ""}.`
+                : lang === "mr"
+                ? `${advanceDate}, ${formatTimeSlot(advanceTime, lang)} साठी — तुमची रिक्वेस्ट ${confirmingEntry.tier.label} गाडीच्या ड्रायव्हर्सना पाठवली जाईल — ${pickup} ते ${drop}${distance !== null ? ` (${formatDistanceExact(distance, lang)})` : ""}.`
+                : `${advanceDate}, ${formatTimeSlot(advanceTime, lang)} के लिए — आपकी रिक्वेस्ट ${confirmingEntry.tier.label} वाले ड्राइवरों को भेजी जाएगी — ${pickup} से ${drop}${distance !== null ? ` (${formatDistanceExact(distance, lang)})` : ""}।`}
+            </p>
+            <div className="flex items-center justify-between pt-1.5" style={{ borderTop: `1px solid ${C.line}` }}>
+              <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}</span>
+              <span className="font-black text-lg" style={{ color: C.success }}>{fmt(confirmingEntry.fare)}</span>
+            </div>
             {bookingError && (
               <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
             )}
