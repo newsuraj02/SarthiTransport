@@ -213,12 +213,24 @@ const VEHICLE_MODEL_SPECS = [
   { keys: ["ashok leyland dost", "dost"], capacityKg: 1250, length: 8, width: 5, height: 5 },
   { keys: ["bolero maxitruck", "bolero pickup", "bolero"], capacityKg: 1500, length: 8.5, width: 5, height: 5.5 },
   { keys: ["tata 407"], capacityKg: 2500, length: 10, width: 5.5, height: 6 },
-  { keys: ["tata 709"], capacityKg: 4000, length: 12, width: 6, height: 6.5 },
-  { keys: ["eicher 14", "14 ft", "14ft"], capacityKg: 5000, length: 14, width: 6, height: 6.5 },
-  { keys: ["eicher 17", "17 ft", "17ft"], capacityKg: 7000, length: 17, width: 6.5, height: 7 },
-  { keys: ["eicher 19", "19 ft", "19ft"], capacityKg: 9000, length: 19, width: 6.5, height: 7 },
-  { keys: ["6 wheeler", "six wheeler", "6-wheeler"], capacityKg: 9000, length: 19, width: 6.5, height: 7 },
-  { keys: ["10 wheeler", "ten wheeler", "10-wheeler"], capacityKg: 16000, length: 22, width: 7, height: 7.5 },
+  // Re-aligned to DEFAULT_FARE_TIERS' own maxKg for these exact labels (the
+  // 24-vehicle master rate list) -- these used to point at a different,
+  // now-removed 8-tier scheme; left mismatched, a driver typing "17ft"
+  // would autofill a capacity that lands them in the wrong fare tier.
+  { keys: ["eicher 14", "14 ft", "14ft"], capacityKg: 3500, length: 14, width: 6, height: 6.5 },
+  { keys: ["eicher 17", "17 ft", "17ft"], capacityKg: 5000, length: 17, width: 6.5, height: 7 },
+  { keys: ["eicher 19", "19 ft", "19ft"], capacityKg: 7000, length: 19, width: 6.5, height: 7 },
+  { keys: ["20 ft container", "20ft container"], capacityKg: 7500, length: 20, width: 6.5, height: 7.5 },
+  { keys: ["6 wheeler", "six wheeler", "6-wheeler"], capacityKg: 9000, length: 17.5, width: 7, height: 7.5 },
+  { keys: ["sxl", "32 ft sxl", "32ft sxl"], capacityKg: 9500, length: 32, width: 7.5, height: 8 },
+  { keys: ["22 ft", "22ft"], capacityKg: 10000, length: 22, width: 7, height: 7.5 },
+  { keys: ["24 ft", "24ft"], capacityKg: 12000, length: 24, width: 7, height: 7.5 },
+  { keys: ["10 wheeler", "ten wheeler", "10-wheeler", "taurus"], capacityKg: 16000, length: 28, width: 7.5, height: 8 },
+  { keys: ["mxl", "32 ft mxl", "32ft mxl"], capacityKg: 18000, length: 32, width: 7.5, height: 8 },
+  { keys: ["12 wheeler", "twelve wheeler", "12-wheeler"], capacityKg: 21000, length: 34, width: 8, height: 8 },
+  { keys: ["14 wheeler", "fourteen wheeler", "14-wheeler"], capacityKg: 25000, length: 36, width: 8, height: 8.5 },
+  { keys: ["16 wheeler", "sixteen wheeler", "16-wheeler", "40 ft trailer", "40ft trailer"], capacityKg: 30000, length: 40, width: 8, height: 8.5 },
+  { keys: ["trailer", "multi axle", "multi-axle", "odc"], capacityKg: 999999 /* FARE_TIER_MAX_KG_UNCAPPED -- declared later in the file, can't reference it this early */, length: 40, width: 8.5, height: 9 },
 ];
 function lookupVehicleModelSpec(name) {
   const q = (name || "").trim().toLowerCase();
@@ -971,73 +983,67 @@ const DISPATCH_MAX_TIER_CLIMB = 2;
 // real routed distance from Google's Distance Matrix API.
 const ROAD_DISTANCE_FACTOR = 1.35;
 
-// Fixed, calculated fare — replaces the old "discuss on call" model with an
-// upfront price shown before booking, same idea as Porter's per-vehicle
-// pricing. Keyed by CAPACITY (same reasoning as before: drivers free-type
-// their vehicle name in KYC, so there's no fixed catalog to key on directly —
-// see resolveVehicleTypeKey in DriverKyc), but each bracket is now named
-// after the real vehicle category it represents (3-Wheeler, Tata Ace,
-// Pickup 8ft/9ft, Tata 407, 14ft, 17ft, 19ft) instead of being an anonymous
-// weight band, and within-city vs outstation are two deliberately DIFFERENT
-// pricing models, not one formula stretched across both:
+// Fixed, calculated fare — replaces the old 8-category formula with the
+// 24-vehicle master rate list and calculation rules from the "सारथी —
+// एडमिन रेट कैलकुलेटर" developer guide (admin-rate-calculator-developer-
+// guide.md), taken over exactly as specified there, not re-derived: every
+// vehicle from a 500kg loading auto up to 35+ tonne multi-axle trailers,
+// each with its own single fixed rate (no range) rather than a formula
+// stretched across a wide capacity band.
 //
-// WITHIN-CITY (distanceKm < OUTSTATION_THRESHOLD_KM): baseFare + perKmRate ×
-// distance, same shape as before. Every category's baseFare/perKmRate was
-// re-derived from a real local competitor's handwritten rate card (3 routes,
-// 4 distances, Sep 2026) rather than guessed, then clamped to within ±20% of
-// Porter's own published rate for that vehicle (Porter's real number, not
-// "Porter+1" — see git history for the pre-clamp figures if that's ever
-// needed) so no single category jumps further from Porter than a 20% band
-// in either direction. Two categories (17ft, 19ft) have no real competitor
-// or Porter data at all — Porter's own number was itself extrapolated by
-// continuing its step-up pattern, so those two are unchanged from before and
-// should be revisited first if better data ever turns up.
+// THREE pricing modes, picked by vehicle class + zone (inside-city vs
+// outside-city) — never one formula covering all three:
+//   - "base" (light/medium, 500kg-5T, inside city): fix + max(0, km-3) × per
+//     — the fixed amount already covers the first 3km.
+//   - "min" (light/medium, outside city): km × per, but never below the
+//     fixed minimum charge for that vehicle.
+//   - "heavy" (5T+, inside OR outside city — no base, no min, same formula
+//     either way): km × per.
+// No toll estimate, no long-haul discount taper, no vehicle-class-based toll
+// rate — the guide's own formula is exactly this and nothing more; a
+// previous version of this file added both on top of a different 8-category
+// list, which no longer applies to this one.
 //
-// OUTSTATION (distanceKm >= OUTSTATION_THRESHOLD_KM): pure per-km, NO fixed
-// base at all — outstationPerKmRate × distance × the same long-haul discount
-// curve the Maharashtra Rate Card import already uses (see
-// scripts/importMaharashtraDefaults.mjs's maharashtraLongHaulDiscountPct,
-// duplicated here as longHaulDiscountPct so calculateFare doesn't need a
-// network round-trip to apply it). This isn't a coincidence — the
-// outstationPerKmRate values ARE the Maharashtra Rate Card's own per-band
-// mid-rates, so this fallback formula and Admin's ~880 researched hub-route
-// overrides are now the same model, not two disagreeing ones. A separate
-// base+perKm taper was tried first and rejected: it only agreed with the
-// Maharashtra numbers at the one distance it was fitted to, and overshot by
-// 30-50%+ at every other distance tested (route comparisons, Sep 2026) —
-// because a formula with a large fixed base can't track a pure-proportional
-// one across a range of distances, only at a single point.
-//
-// A toll estimate is folded silently into the outstation total (never a
-// separate line item — the customer just sees one number, same as today):
-// plazas ≈ round(distanceKm / 70) (NHAI's own ~60-70km plaza-spacing policy),
-// each charged at TOLL_PLAZA_RATE_BY_CLASS for the tier's vehicle class.
-// Within-city never adds a toll — real quotes on every local route checked
-// never carried one, so there's nothing to add there.
-//
-// Surge/dynamic pricing (Porter's third pricing lever, alongside base+perKm)
-// is intentionally NOT implemented here — parked on standby pending a
-// decision on how "demand" would even be detected at this fleet's scale.
-//
-// Ordered ascending by capacity; the last entry (maxKg: FARE_TIER_MAX_KG_UNCAPPED)
-// is the catch-all for anything bigger than 7 tonnes.
+// Ordered ascending by maxKg (required for findFareTier's threshold search
+// below) — NOT the guide's own display order, which groups the heavy
+// category by rate instead of weight (see section 4's own note: the 8T 32ft
+// SXL container has a lower kg than several entries listed before it,
+// because its big box costs more than its actual payload weight would
+// suggest). AdminRateCalculator's own vehicle-picker re-sorts the heavy
+// group that way for display only — this array itself has to stay strictly
+// ascending by maxKg or capacity lookups below it break.
 export const FARE_TIER_MAX_KG_UNCAPPED = 999999;
+// Customers/drivers never pick a zone explicitly (see CustomerBooking) —
+// only Admin's own calculator has a manual toggle (see calculateFare's
+// `zone` param) — so every other caller needs this distance falls back
+// automatically to decide which of "base"/"min" applies for a light/medium
+// vehicle. Heavy vehicles ignore this entirely (same formula both ways).
 const OUTSTATION_THRESHOLD_KM = 40;
-// NHAI toll plazas are spaced roughly every 60-70km on national highways —
-// this estimates how many a trip crosses rather than trying to model exact
-// plaza locations per route, which would need live route/toll data we don't
-// have. Deliberately conservative (rounds rather than always rounding up).
-const TOLL_PLAZA_SPACING_KM = 70;
-const TOLL_PLAZA_RATE_BY_CLASS = { lcv: 275, truck: 400, heavyTruck: 580 };
 const DEFAULT_FARE_TIERS = [
-  { maxKg: 500, label: "3-Wheeler/Tempo", baseFare: 204, perKmRate: 19, outstationPerKmRate: 22, tollClass: "lcv" },
-  { maxKg: 850, label: "Tata Ace/Chhota Hathi", baseFare: 242, perKmRate: 23, outstationPerKmRate: 24.5, tollClass: "lcv" },
-  { maxKg: 1200, label: "Pickup 8ft", baseFare: 354, perKmRate: 26, outstationPerKmRate: 30, tollClass: "lcv" },
-  { maxKg: 1700, label: "Pickup 9ft", baseFare: 546, perKmRate: 37, outstationPerKmRate: 38.5, tollClass: "lcv" },
-  { maxKg: 2500, label: "Tata 407", baseFare: 818, perKmRate: 50, outstationPerKmRate: 38.5, tollClass: "truck" },
-  { maxKg: 4500, label: "14ft", baseFare: 1344, perKmRate: 63, outstationPerKmRate: 50, tollClass: "truck" },
-  { maxKg: 7000, label: "17ft", baseFare: 1681, perKmRate: 98, outstationPerKmRate: 56.5, tollClass: "heavyTruck" },
-  { maxKg: FARE_TIER_MAX_KG_UNCAPPED, label: "19ft/Large Truck", baseFare: 2281, perKmRate: 127, outstationPerKmRate: 71.5, tollClass: "heavyTruck" },
+  { maxKg: 500, label: "3-व्हीलर लोडिंग ऑटो (Ape / ई-लोडर)", weightLabel: "500 kg", heavy: false, innerFix: 170, innerPer: 18, outerMin: 250, outerPer: 16 },
+  { maxKg: 750, label: "टाटा ऐस गोल्ड / Ape XL", weightLabel: "750 kg", heavy: false, innerFix: 220, innerPer: 21, outerMin: 350, outerPer: 18 },
+  { maxKg: 800, label: "मारुति सुपर कैरी / ऐस डीज़ल", weightLabel: "800 kg", heavy: false, innerFix: 230, innerPer: 22, outerMin: 380, outerPer: 19 },
+  { maxKg: 900, label: "महिंद्रा जीतो / ऐस HT", weightLabel: "900 kg", heavy: false, innerFix: 250, innerPer: 23, outerMin: 420, outerPer: 19.5 },
+  { maxKg: 1000, label: "छोटा हाथी / टाटा ऐस", weightLabel: "1 टन", heavy: false, innerFix: 280, innerPer: 24, outerMin: 450, outerPer: 20 },
+  { maxKg: 1200, label: "बोलेरो पिकअप 1.2T / इंट्रा V30", weightLabel: "1.2 टन", heavy: false, innerFix: 350, innerPer: 26, outerMin: 550, outerPer: 22 },
+  { maxKg: 1250, label: "सुपर ऐस / दोस्त", weightLabel: "1.25 टन", heavy: false, innerFix: 380, innerPer: 28, outerMin: 600, outerPer: 23 },
+  { maxKg: 1500, label: "पिकअप 8 फीट / बोलेरो पिकअप", weightLabel: "1.5 टन", heavy: false, innerFix: 500, innerPer: 33, outerMin: 800, outerPer: 28 },
+  { maxKg: 2000, label: "बड़ा दोस्त / इंट्रा V50 (9.5 फीट)", weightLabel: "2 टन", heavy: false, innerFix: 600, innerPer: 34, outerMin: 1000, outerPer: 29 },
+  { maxKg: 2500, label: "टाटा 407 (10 फीट)", weightLabel: "2.5 टन", heavy: false, innerFix: 750, innerPer: 37, outerMin: 1300, outerPer: 31 },
+  { maxKg: 3500, label: "14 फीट आयशर ट्रक", weightLabel: "3.5 टन", heavy: false, innerFix: 1100, innerPer: 44, outerMin: 1800, outerPer: 37 },
+  { maxKg: 5000, label: "17 फीट आयशर ट्रक", weightLabel: "5 टन", heavy: false, innerFix: 1800, innerPer: 55, outerMin: 2800, outerPer: 46 },
+  { maxKg: 7000, label: "19 फीट आयशर ट्रक", weightLabel: "7 टन", heavy: true, heavyPer: 58 },
+  { maxKg: 7500, label: "20 फीट कंटेनर (बंद बॉडी)", weightLabel: "7 टन", heavy: true, heavyPer: 62 },
+  { maxKg: 9000, label: "6-चक्का ट्रक (17.5 फीट ओपन)", weightLabel: "9 टन", heavy: true, heavyPer: 64 },
+  { maxKg: 9500, label: "32 फीट SXL कंटेनर (बड़ा डिब्बा, हल्का माल)", weightLabel: "8 टन", heavy: true, heavyPer: 78 },
+  { maxKg: 10000, label: "22 फीट ट्रक / कंटेनर", weightLabel: "10 टन", heavy: true, heavyPer: 70 },
+  { maxKg: 12000, label: "24 फीट ट्रक / कंटेनर", weightLabel: "12 टन", heavy: true, heavyPer: 74 },
+  { maxKg: 16000, label: "10-चक्का ट्रक (टॉरस)", weightLabel: "16 टन", heavy: true, heavyPer: 90 },
+  { maxKg: 18000, label: "32 फीट MXL कंटेनर (मल्टी-एक्सेल)", weightLabel: "18 टन", heavy: true, heavyPer: 98 },
+  { maxKg: 21000, label: "12-चक्का ट्रक", weightLabel: "21 टन", heavy: true, heavyPer: 105 },
+  { maxKg: 25000, label: "14-चक्का ट्रक", weightLabel: "25 टन", heavy: true, heavyPer: 118 },
+  { maxKg: 30000, label: "16-चक्का / 40 फीट ट्रेलर", weightLabel: "30 टन", heavy: true, heavyPer: 135 },
+  { maxKg: FARE_TIER_MAX_KG_UNCAPPED, label: "मल्टी-एक्सेल ट्रेलर (ODC, भारी मशीनें)", weightLabel: "35+ टन", heavy: true, heavyPer: 160 },
 ];
 
 // distanceKm may be null (coords never resolved — canPost doesn't require a
@@ -1109,36 +1115,28 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
   return true;
 }
 
-// Same sqrt taper scripts/importMaharashtraDefaults.mjs's
-// maharashtraLongHaulDiscountPct applies when building the Rate Card, kept
-// in step here deliberately (see the big comment above DEFAULT_FARE_TIERS)
-// so the live outstation formula and that import agree beyond 300km too,
-// not just on the per-km rate.
-function longHaulDiscountPct(km) {
-  if (km <= 300) return 0;
-  return Math.min(16, 16 * Math.sqrt((km - 300) / 500));
-}
-
-// Rounds rather than always rounding up — see TOLL_PLAZA_SPACING_KM — but
-// never below 1: any genuine outstation trip crosses at least one plaza.
-function estimatedTollPlazas(outstationKm) {
-  return Math.max(1, Math.round(outstationKm / TOLL_PLAZA_SPACING_KM));
-}
-
-export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS) {
+// The guide's own `auto()` — `zone` is "in" | "out", defaulted to an
+// automatic distance-threshold guess (OUTSTATION_THRESHOLD_KM) for every
+// caller that has no explicit zone of its own (customer/driver app —
+// nobody there ever picks a zone by hand). AdminRateCalculator passes its
+// own manually-toggled zone explicitly instead of relying on this default.
+// `returnPct` (0-100) is the guide's post-floor return-load discount (see
+// section 7) — applied AFTER the outside-city minimum floor, same as the
+// guide specifies, never before it.
+export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS, zone = null, returnPct = 0) {
   const tier = findFareTier(capacityKg, tiers);
   const km = distanceKm || 0;
-  if (km < OUTSTATION_THRESHOLD_KM) {
-    return Math.round(tier.baseFare + tier.perKmRate * km);
+  const effectiveZone = zone || (km < OUTSTATION_THRESHOLD_KM ? "in" : "out");
+  let total;
+  if (tier.heavy) {
+    total = km * tier.heavyPer;
+  } else if (effectiveZone === "out") {
+    total = Math.max(km * tier.outerPer, tier.outerMin);
+  } else {
+    total = tier.innerFix + Math.max(0, km - 3) * tier.innerPer;
   }
-  // Outstation: pure per-km, no fixed base at all (see the design note
-  // above) — the toll is added silently into this same total, never shown
-  // to the customer as a separate amount.
-  const discountFactor = 1 - longHaulDiscountPct(km) / 100;
-  const distanceFare = km * (tier.outstationPerKmRate ?? tier.perKmRate) * discountFactor;
-  const tollPerPlaza = TOLL_PLAZA_RATE_BY_CLASS[tier.tollClass] ?? TOLL_PLAZA_RATE_BY_CLASS.lcv;
-  const toll = estimatedTollPlazas(km) * tollPerPlaza;
-  return Math.round(distanceFare + toll);
+  if (returnPct > 0) total = total * (1 - returnPct / 100);
+  return Math.round(total);
 }
 
 // Flags a fare that's wildly out of line with its OWN sibling tiers on the
@@ -5616,7 +5614,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
                             <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
+                              {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
                             </div>
                           </div>
                         </button>
@@ -5996,7 +5994,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
                             <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "7+ tonnes" : "7+ टन") : `${entry.tier.maxKg}kg`)}
+                              {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
                             </div>
                           </div>
                         </button>
