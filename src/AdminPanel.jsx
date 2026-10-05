@@ -711,7 +711,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
       renderItem: (t) => (
         <div key={t.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {statusMeta[t.status]?.label || t.status}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fmt(t.fare)} · {statusMeta[t.status]?.label || t.status}</div>
         </div>
       ),
     },
