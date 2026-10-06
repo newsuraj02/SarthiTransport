@@ -310,5 +310,23 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+
+    // Mutual-consent hamali/extra-stop/other proposals on a trip (see
+    // addExtra/respondExtra, App.jsx) -- same broad sign-in-required read
+    // as bookings/routeFares. Create is limited to proposing your OWN
+    // pending entry (byMobile must be the caller's own phone); update is
+    // limited to the OTHER party flipping status to accepted/rejected --
+    // the guide's own "whoever added it can't approve it themselves" rule,
+    // enforced here too so a client can't just bypass the App.jsx check.
+    match /bookingExtras/{id} {
+      allow read: if isSignedIn();
+      allow create: if isOwnPhone(request.resource.data.byMobile) && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (
+        isSignedIn() && !isOwnPhone(resource.data.byMobile) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'answeredAt']) &&
+        request.resource.data.status in ['accepted', 'rejected']
+      );
+      allow delete: if isAdmin();
+    }
   }
 }

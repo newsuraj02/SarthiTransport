@@ -1301,6 +1301,98 @@ function clearReturnModePatch() {
   return { returnActive: false };
 }
 
+// ---- Waiting / halting + mutual-consent extras + final bill (guide
+// section 5C/10A/15). Waiting is free up to includedDays(); every day
+// beyond that bills a fixed per-vehicle HALT_PER_DAY automatically, no
+// negotiation. Hamali/extra-stop/other are the opposite -- the app never
+// prices them; either side proposes an amount and the OTHER must
+// explicitly accept before it counts toward the bill.
+export const KM_PER_DAY = 500;
+
+// Per-vehicle halting ₹/day, keyed by tier maxKg (guide section 5C's table).
+const HALT_PER_DAY_BY_MAXKG = {
+  500: 300, 750: 500, 800: 500, 900: 500, 1000: 500,
+  1200: 700, 1250: 700, 1500: 700,
+  2000: 800, 2500: 900,
+  3500: 1000, 5000: 1200,
+  7000: 1300, 7500: 1200, 9000: 1300, 9500: 1500, 10000: 1200, 12000: 1300,
+  16000: 1500, 18000: 2000, 21000: 1800, 25000: 1800, 30000: 2500,
+  [FARE_TIER_MAX_KG_UNCAPPED]: 3000,
+};
+export function haltPerDayFor(tierMaxKg) {
+  return HALT_PER_DAY_BY_MAXKG[tierMaxKg] ?? 500;
+}
+
+// Days included free in the fare itself: inside city always 1; outside,
+// one day per KM_PER_DAY of distance (rounded up) plus 1 -- so up to 500km
+// is 2 included days, 501-1000km is 3, and so on.
+export function includedDays(zone, km) {
+  if (zone !== "out") return 1;
+  return Math.ceil((km || 0) / KM_PER_DAY) + 1;
+}
+
+// Days actually used -- pickup loading-start to drop OTP-complete, every
+// started 24h block counting as one full day (so 1 minute into day 2
+// bills as 2 days, same as the guide's own day counting).
+export function daysUsed(startedAtMs, completedAtMs) {
+  if (!startedAtMs || !completedAtMs || completedAtMs <= startedAtMs) return 1;
+  return Math.ceil((completedAtMs - startedAtMs) / (24 * 3600e3));
+}
+
+// Automatic halting charge once a trip runs past its included days --
+// 0 if it didn't. Never debatable like the mutual-consent extras below.
+export function haltOf(tierMaxKg, zone, km, usedDays) {
+  const extraDays = Math.max(0, usedDays - includedDays(zone, km));
+  return extraDays * haltPerDayFor(tierMaxKg);
+}
+
+// Hamali/extra-stop/other -- mutual-consent only, never auto-priced; the
+// app deliberately prefills no amount and sets no rate for any of these.
+export const EXTRA_TYPES = [
+  { id: "labour", label: "हमाली (लोडिंग/अनलोडिंग)", labelEn: "Labour (loading/unloading)" },
+  { id: "stop", label: "एक्स्ट्रा स्टॉप", labelEn: "Extra stop" },
+  { id: "other", label: "दूसरा खर्च", labelEn: "Other expense" },
+];
+// Proposes one extra charge on a trip -- "pending" until the OTHER party
+// accepts or rejects it (see respondExtra; enforced again server-side in
+// firestore.rules so a client can't just flip its own proposal to accepted).
+export function addExtra(bookingId, { type, amount, note, by, byMobile }) {
+  return createDoc("bookingExtras", genId(), {
+    bookingId, type, amount: Number(amount) || 0, note: note || "",
+    by, byMobile, status: "pending", at: Date.now(), answeredAt: null,
+  });
+}
+// `responderMobile` must differ from the extra's own `byMobile` -- the
+// guide's own "जिसने जोड़ा वह खुद मंज़ूर नहीं कर सकता" rule, enforced here too
+// (not just firestore.rules) so the UI can refuse before even trying.
+export function respondExtra(extra, accept, responderMobile) {
+  if (extra.byMobile === responderMobile) return Promise.reject(new Error("self-approval not allowed"));
+  return patchDoc("bookingExtras", extra.id, { status: accept ? "accepted" : "rejected", answeredAt: Date.now() });
+}
+
+// The guide's own mandated bill-footer note (section 15) -- shown under
+// every completed trip's bill, unchanged regardless of what's actually on it.
+export const BILL_NOTE_HI = "भाड़े में टोल टैक्स, पार्किंग और शामिल दिनों तक की वेटिंग जुड़ी है — टोल ड्राइवर भरेगा, कस्टमर को अलग से कुछ नहीं देना। शामिल दिनों के बाद हर दिन का हॉल्टिंग चार्ज ऐप अपने आप जोड़ता है। हमाली (लोडिंग/अनलोडिंग) और एक्स्ट्रा स्टॉप सारथी तय नहीं करता — ये ड्राइवर और कस्टमर आपसी सहमति से तय करते हैं और दोनों की मंज़ूरी के बाद ही बिल में जुड़ते हैं।";
+
+// Final invoice once a trip completes (OTP) -- `fare` must be the REGULAR,
+// pre-return-discount fare (see driverRespondBooking's originalFare) so
+// the discount shows as its own bill line, same as the guide's own table:
+// fare (toll-included) − return discount + halting + approved extras.
+// Unapproved/unanswered extras are excluded from the total but kept in
+// `skippedExtras` for Admin visibility ("मना या बिना जवाब वाले बिल में नहीं").
+export function buildBill({ fare, isReturn = false, returnPct = 0, haltingCharge = 0, extras = [] }) {
+  const returnDiscount = isReturn && returnPct > 0 ? Math.round((fare || 0) * (returnPct / 100)) : 0;
+  const approvedExtras = (extras || []).filter((e) => e.status === "accepted");
+  const skippedExtras = (extras || []).filter((e) => e.status !== "accepted");
+  const extrasTotal = approvedExtras.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  return {
+    fare: fare || 0, isReturn, returnPct, returnDiscount, haltingCharge, extrasTotal,
+    approvedExtras, skippedExtras,
+    total: Math.round((fare || 0) - returnDiscount + haltingCharge + extrasTotal),
+    note: BILL_NOTE_HI,
+  };
+}
+
 // Flags a fare that's wildly out of line with its OWN sibling tiers on the
 // same route -- not a fixed rupee/percentage threshold, since a real fare
 // legitimately varies a lot by distance and vehicle size. Instead compares
@@ -6337,7 +6429,7 @@ function RideTypeBanner({ booking, lang }) {
 
 // Shows a single active (Bidding or Ongoing) booking — the customer's main
 // page focuses on this one card instead of a separate "My Rides" tab.
-function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassignAwaitingDriver, driverVehicle, drivers, lang, onAddAnother, onBidAccepted }) {
+function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassignAwaitingDriver, driverVehicle, drivers, lang, onAddAnother, onBidAccepted, customerMobile, bookingExtras }) {
   const VEHICLES = vehicleTypes;
   const [selectedBid, setSelectedBid] = useState(null);
   const [acceptError, setAcceptError] = useState("");
@@ -6688,6 +6780,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
         )}
         {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
       </div>
+      {b.loadingStartedAt && (
+        <TripExtras booking={b} myRole="customer" myMobile={customerMobile} extras={bookingExtras} lang={lang} />
+      )}
       {showDocs && <BillDocumentsModal booking={b} onClose={() => setShowDocs(false)} lang={lang} />}
     </div>
     </div>
@@ -6782,7 +6877,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
             )}
             {b.status === "Completed" && b.fare > 0 && (
               <div className="mt-2">
-                <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : lang === "mr" ? "बेस भाडे" : "बेस भाड़ा"} baseFare={b.fare - (b.extraCharge || 0)} totalAmount={b.fare} trip={b} lang={lang} />
+                <TripBreakdownTable baseFareLabel={lang === "en" ? "Base fare" : lang === "mr" ? "बेस भाडे" : "बेस भाड़ा"} baseFare={b.fare - (b.extraCharge || 0)} totalAmount={b.bill?.total ?? b.fare} trip={b} lang={lang} />
               </div>
             )}
           </div>
@@ -6932,7 +7027,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
 // Mirrors the driver's own DriverTripSummary.
 function CustomerTripSummary({ trip, lang, onDone }) {
   const baseFare = (trip.fare || 0) - (trip.extraCharge || 0);
-  const totalAmount = trip.fare || 0;
+  const totalAmount = trip.bill?.total ?? trip.fare ?? 0;
   const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   return (
     <div>
@@ -6983,7 +7078,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, requestByCategory, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, alerts, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares }) {
+function CustomerApp({ bookings, requestByCategory, reassignAwaitingDriver, drivers, vehicleTypes, cancelBooking, rateBooking, acceptBid, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, alerts, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares, bookingExtras }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Badge + "View your Booking here" callout on the hamburger button, shown
   // right after a bid is accepted (see the onBidAccepted callbacks below)
@@ -7326,6 +7421,7 @@ function CustomerApp({ bookings, requestByCategory, reassignAwaitingDriver, driv
         {rideView === "current" ? (
           activeBooking && !addingAnother ? (
             <ActiveRide booking={activeBooking} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} reassignAwaitingDriver={reassignAwaitingDriver} driverVehicle={activeDriverVehicle} drivers={drivers} lang={lang}
+              customerMobile={customerMobile} bookingExtras={bookingExtras}
               onAddAnother={() => setAddingAnother(true)}
               onBidAccepted={(booking) => {
                 // The bid isn't booked yet — it's now "AwaitingDriver", shown
@@ -7347,7 +7443,7 @@ function CustomerApp({ bookings, requestByCategory, reassignAwaitingDriver, driv
             {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
               <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking} acceptBid={acceptBid} reassignAwaitingDriver={reassignAwaitingDriver}
                 driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
-                drivers={drivers} lang={lang} onBidAccepted={() => setShowBookingHint(true)} />
+                drivers={drivers} lang={lang} customerMobile={customerMobile} bookingExtras={bookingExtras} onBidAccepted={() => setShowBookingHint(true)} />
             ) : (
               <div className="px-5 py-5">
                 {advanceBookings.length === 0 ? (
@@ -7440,9 +7536,121 @@ function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }
             <Row context={`${lang === "en" ? "Waiting charge" : lang === "mr" ? "वेटिंग चार्ज" : "वेटिंग चार्ज"} (${fmt(trip.extraHourRate || 0)}/${lang === "en" ? "hr" : lang === "mr" ? "तास" : "घं"})`}
               time={fmtHrMin(waitingMs, lang)} charges={fmt(trip.extraCharge)} />
           )}
+          {/* Automatic halting + mutual-consent extras (guide section
+              5C/10A/15) -- only ever shown once a real bill exists
+              (completeBooking), never guessed from trip.extraCharge above,
+              which is the older, separate hour-based system. */}
+          {trip.bill?.isReturn && trip.bill.returnDiscount > 0 && (
+            <Row context={lang === "en" ? `Return load discount (${trip.bill.returnPct}%)` : lang === "mr" ? `रिटर्न लोड सूट (${trip.bill.returnPct}%)` : `रिटर्न लोड छूट (${trip.bill.returnPct}%)`}
+              charges={`−${fmt(trip.bill.returnDiscount)}`} />
+          )}
+          {trip.bill?.haltingCharge > 0 && (
+            <Row context={lang === "en" ? "Halting charge" : lang === "mr" ? "हॉल्टिंग चार्ज" : "हॉल्टिंग चार्ज"} charges={`+${fmt(trip.bill.haltingCharge)}`} />
+          )}
+          {trip.bill?.approvedExtras?.map((e, i) => (
+            <Row key={i} context={`${EXTRA_TYPES.find((t) => t.id === e.type)?.label || e.type}${e.note ? ` — ${e.note}` : ""}`} charges={`+${fmt(e.amount)}`} />
+          ))}
           <Row context={lang === "en" ? "Total" : lang === "mr" ? "एकूण" : "कुल"} charges={fmt(totalAmount)} bold />
         </tbody>
       </table>
+      {trip.bill && (
+        <div className="px-3 py-2.5 text-[11px]" style={{ background: C.bg, color: C.inkSoft, borderTop: "1.5px solid #000000" }}>{trip.bill.note}</div>
+      )}
+    </div>
+  );
+}
+
+// Mutual-consent hamali/extra-stop/other proposals on an active trip
+// (guide section 10A/15) -- shared by the driver's and customer's own
+// active-trip screens. `extras` is the whole bookingExtras collection
+// (same broad-read-plus-client-filter pattern as bookings/routeFares
+// elsewhere), filtered here to this one booking. addExtra/respondExtra
+// are the module-level Firestore helpers near isReturnLoadFor above,
+// called directly rather than threaded down as extra props. The app never
+// prices or prefills any of these -- only type/amount/note the proposing
+// side actually typed in.
+function TripExtras({ booking, myRole, myMobile, extras, lang }) {
+  const [adding, setAdding] = useState(false);
+  const [type, setType] = useState("labour");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [busyId, setBusyId] = useState(null);
+  const mine = (extras || []).filter((e) => e.bookingId === booking.id);
+
+  const submit = async () => {
+    const amt = Number(amount);
+    if (!amt || amt <= 0) return;
+    try {
+      await addExtra(booking.id, { type, amount: amt, note: note.trim(), by: myRole, byMobile: myMobile });
+      setAdding(false); setAmount(""); setNote(""); setType("labour");
+    } catch (e) { console.error(e); }
+  };
+  const respond = async (extra, accept) => {
+    setBusyId(extra.id);
+    try { await respondExtra(extra, accept, myMobile); } catch (e) { console.error(e); }
+    setBusyId(null);
+  };
+
+  return (
+    <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Expenses" : lang === "mr" ? "खर्च" : "खर्च"}</div>
+        <button type="button" onClick={() => setAdding((v) => !v)} className="text-xs font-bold" style={{ color: C.navy }}>
+          {adding ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : `+ ${lang === "en" ? "Add" : lang === "mr" ? "जोडा" : "जोड़ें"}`}
+        </button>
+      </div>
+      {adding && (
+        <div className="mt-2.5 grid gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
+            {EXTRA_TYPES.map((t) => (
+              <button key={t.id} type="button" onClick={() => setType(t.id)} className="rounded-lg py-1.5 px-1 text-[11px] font-bold"
+                style={{ border: `1.5px solid ${C.line}`, background: type === t.id ? C.navy : C.bg, color: type === t.id ? "#fff" : C.ink }}>
+                {lang === "en" ? t.labelEn : t.label}
+              </button>
+            ))}
+          </div>
+          <input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)}
+            placeholder={lang === "en" ? "Amount" : lang === "mr" ? "रक्कम" : "रकम"}
+            className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} />
+          <input value={note} onChange={(e) => setNote(e.target.value)}
+            placeholder={lang === "en" ? "Short note" : lang === "mr" ? "छोटी नोंद" : "छोटा नोट"}
+            className="w-full rounded-lg p-2.5 text-sm font-semibold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} />
+          <button type="button" onClick={submit} disabled={!Number(amount)} className="w-full rounded-lg py-2.5 text-sm font-bold"
+            style={{ background: Number(amount) ? C.success : "#E0E0E0", color: Number(amount) ? "#fff" : "#9AA3B0" }}>
+            {lang === "en" ? "Send for approval" : lang === "mr" ? "मंजुरीसाठी पाठवा" : "मंज़ूरी के लिए भेजें"}
+          </button>
+        </div>
+      )}
+      {mine.length > 0 && (
+        <div className="mt-2.5 space-y-1.5">
+          {mine.map((e) => {
+            const meta = EXTRA_TYPES.find((t) => t.id === e.type);
+            const canRespond = e.status === "pending" && e.byMobile !== myMobile;
+            return (
+              <div key={e.id} className="rounded-lg px-2.5 py-2 flex items-center justify-between gap-2" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{(lang === "en" ? meta?.labelEn : meta?.label) || e.type} · {fmt(e.amount)}</div>
+                  {e.note && <div className="text-[10px] truncate" style={{ color: C.inkSoft }}>{e.note}</div>}
+                </div>
+                {canRespond ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button type="button" disabled={busyId === e.id} onClick={() => respond(e, true)} className="text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: C.success, color: "#fff" }}>
+                      {lang === "en" ? "Accept" : lang === "mr" ? "मंजूर" : "मंज़ूर"}
+                    </button>
+                    <button type="button" disabled={busyId === e.id} onClick={() => respond(e, false)} className="text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: C.safety, color: "#fff" }}>
+                      {lang === "en" ? "Reject" : lang === "mr" ? "नकार" : "मना"}
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-[10px] font-bold shrink-0" style={{ color: e.status === "accepted" ? C.success : e.status === "rejected" ? C.safety : C.inkSoft }}>
+                    {e.status === "accepted" ? (lang === "en" ? "Accepted" : lang === "mr" ? "मंजूर" : "मंज़ूर") : e.status === "rejected" ? (lang === "en" ? "Rejected" : lang === "mr" ? "नकार" : "मना") : (lang === "en" ? "Waiting" : lang === "mr" ? "प्रतीक्षा" : "इंतज़ार")}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -7535,8 +7743,8 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
           and handed to completeBooking below. */}
       <button
         onClick={() => {
-          completeBooking(trip.id, clock.extraCharge);
-          onEnded?.({ ...trip, extraCharge: clock.extraCharge, billableHours: clock.billableHours, waitingElapsedStr: clock.waitingElapsedStr });
+          const { haltingCharge, bill } = completeBooking(trip.id, clock.extraCharge) || {};
+          onEnded?.({ ...trip, extraCharge: clock.extraCharge, billableHours: clock.billableHours, waitingElapsedStr: clock.waitingElapsedStr, haltingCharge, bill });
         }}
         className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
         {lang === "en" ? "End Trip" : lang === "mr" ? "एंड ट्रिप" : "एंड ट्रिप"}
@@ -7601,7 +7809,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
 // card with numbers on it.
 function DriverTripSummary({ trip, lang, onDone }) {
   const baseFare = trip.fare || 0;
-  const totalAmount = baseFare + (trip.extraCharge || 0);
+  const totalAmount = trip.bill?.total ?? (baseFare + (trip.extraCharge || 0));
   const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   return (
     <div>
@@ -7652,7 +7860,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, fareTiers, lang, onOpenWallet, locationPermission }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, fareTiers, lang, onOpenWallet, locationPermission, bookingExtras }) {
   const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
@@ -8159,6 +8367,9 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
               )}
             </div>
 
+            {myTrip.loadingStartedAt && (
+              <TripExtras booking={myTrip} myRole="driver" myMobile={driver?.mobile} extras={bookingExtras} lang={lang} />
+            )}
             <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
           </div>
         </div>
@@ -9251,7 +9462,7 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, fareTiers }) {
+function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, fareTiers, bookingExtras }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [setFareOpen, setSetFareOpen] = useState(false);
@@ -9494,7 +9705,7 @@ function DriverApp({ driver, setDriver, bookings, addBid, driverRespondBooking, 
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} bookingExtras={bookingExtras} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
@@ -10046,6 +10257,14 @@ export default function App() {
   // scoped to the owning driver (or Admin) in firestore.rules.
   const [routeFares, setRouteFares] = useState([]);
   useEffect(() => (firestoreReady ? subscribeCollection("routeFares", setRouteFares, null) : undefined), authDeps);
+  // Mutual-consent hamali/extra-stop/other proposals (see addExtra/
+  // respondExtra above) -- flat collection keyed by bookingId rather than
+  // a trips/{id}/extras subcollection, matching this app's own existing
+  // flat-collection convention (routeFares keyed by driverMobile, etc.)
+  // instead of the guide's own demo schema. Sign-in-required read, same
+  // broad-read-plus-client-filter trade-off as bookings/routeFares.
+  const [bookingExtras, setBookingExtras] = useState([]);
+  useEffect(() => (firestoreReady ? subscribeCollection("bookingExtras", setBookingExtras, null) : undefined), authDeps);
   // Admin's own route+tier fare overrides (see AdminRateCalculator, opened
   // from AdminRouteFares) — takes priority over routeFares above whenever
   // it exists for a given route/tier (see getAdminRouteOverride/
@@ -10661,7 +10880,11 @@ export default function App() {
         result = await claimBooking(bookingId, {
           status: "Ongoing", driverName: driver.name, driverMobile: driver.mobile || mobileForDriverName(driver.name),
           vehicle: driver.vehicleSpec?.type || null, progress: 0,
-          ...(isReturn ? { fare: claimedFare, isReturn: true, returnPct } : {}),
+          // originalFare keeps the pre-discount regular fare around --
+          // buildBill() needs it to show the return discount as its own
+          // bill line (guide section 15) instead of back-computing it
+          // from the already-discounted fare and losing a rupee to rounding.
+          ...(isReturn ? { fare: claimedFare, originalFare: b.fare, isReturn: true, returnPct } : {}),
         });
       } catch (e) {
         console.error(e);
@@ -10807,7 +11030,21 @@ export default function App() {
     const b = bookings.find((x) => x.id === id);
     if (!b) return;
     if (b.driverName) unfreezeDriverName(b.driverName);
-    patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge, completedAt: Date.now() }).catch((e) => console.error(e));
+    const completedAtMs = Date.now();
+    // Automatic halting + final bill (guide section 5C/10A/15) -- halting
+    // is free up to includedDays(), then a fixed per-vehicle ₹/day with no
+    // negotiation; the bill itself uses the REGULAR pre-return-discount
+    // fare (originalFare, see driverRespondBooking) so the return discount
+    // shows as its own line instead of being re-derived with rounding loss.
+    // extraCharge (the older, now-dormant hour-based overtime system) stays
+    // folded into `fare` exactly as before and isn't part of this new bill.
+    const zone = zoneFor(b.pickupLat, b.pickupLng, b.dropLat, b.dropLng, b.distance);
+    const usedDays = daysUsed(b.loadingStartedAt, completedAtMs);
+    const haltingCharge = haltOf(b.tierMaxKg, zone, b.distance, usedDays);
+    const regularFare = b.isReturn ? (b.originalFare ?? b.fare) : b.fare;
+    const myExtras = bookingExtras.filter((e) => e.bookingId === id);
+    const bill = buildBill({ fare: regularFare, isReturn: b.isReturn, returnPct: b.returnPct, haltingCharge, extras: myExtras });
+    patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge, haltingCharge, bill, completedAt: completedAtMs }).catch((e) => console.error(e));
     if (b.driverName === driver?.name) setDriver({ ...driver, online: true });
     // Return Load: this vehicle is now empty and (per the guide's own
     // background rule) assumed to be heading home for up to RETURN_HOURS —
@@ -10825,6 +11062,11 @@ export default function App() {
     // not-eligible-yet case (not referred, already credited, etc.), so
     // there's nothing here worth awaiting or surfacing to the driver.
     if (b.driverName === driver?.name) creditDriverReferral().catch((e) => console.error("[referral]", e));
+    // Returned (not just patched to Firestore) so LoadingTimer's onEnded
+    // snapshot -- built locally, before the patch above round-trips back
+    // through the subscription -- can show the real bill immediately
+    // instead of waiting a beat with haltingCharge/bill still undefined.
+    return { haltingCharge, bill };
   };
   const startLoading = (id, adjustMs = 0) => {
     const b = bookings.find((x) => x.id === id);
@@ -11032,7 +11274,7 @@ export default function App() {
           <CustomerApp bookings={bookings} requestByCategory={requestByCategory} reassignAwaitingDriver={reassignAwaitingDriver} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} acceptBid={acceptBid} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} alerts={alerts} onOpenTerms={() => setShowTerms(true)}
-            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} />
+            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookingExtras={bookingExtras} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth}
@@ -11082,7 +11324,7 @@ export default function App() {
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert} alerts={alerts}
             minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
-            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} fareTiers={fareTiers} />
+            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} fareTiers={fareTiers} bookingExtras={bookingExtras} />
         )}
         {role === "admin" && adminAuth && isNativeApp && !adminUnlocked && (
           <Suspense fallback={<AdminLoadingFallback />}>
