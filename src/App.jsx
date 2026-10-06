@@ -1026,16 +1026,25 @@ const DEFAULT_FARE_TIERS = [
   { maxKg: 2000, label: "बड़ा दोस्त / इंट्रा V50 (9.5 फीट)", weightLabel: "2 टन", heavy: false, innerFix: 640, innerPer: 34, outerMin: 1000, outerPer: 30, tollPerKm: 1.5 },
   { maxKg: 2500, label: "टाटा 407 (10 फीट)", weightLabel: "2.5 टन", heavy: false, innerFix: 780, innerPer: 37, outerMin: 1300, outerPer: 31, tollPerKm: 1.5 },
   { maxKg: 3500, label: "14 फीट आयशर ट्रक", weightLabel: "3.5 टन", heavy: false, innerFix: 1100, innerPer: 44, outerMin: 1800, outerPer: 32, tollPerKm: 1.5 },
-  { maxKg: 5000, label: "17 फीट आयशर ट्रक", weightLabel: "5 टन", heavy: false, innerFix: 1800, innerPer: 55, outerMin: 2800, outerPer: 34, tollPerKm: 2.5 },
-  { maxKg: 7000, label: "19 फीट ओपन ट्रक (आयशर)", weightLabel: "7 टन", heavy: true, innerFix: 3000, innerPer: 54, outerMin: 4500, outerPer: 41, tollPerKm: 3 },
-  { maxKg: 7500, label: "20 फीट कंटेनर (बंद बॉडी)", weightLabel: "7 टन", heavy: true, innerFix: 2400, innerPer: 46, outerMin: 3700, outerPer: 35, tollPerKm: 3 },
-  { maxKg: 9000, label: "6-चक्का ट्रक (17.5 फीट ओपन)", weightLabel: "9 टन", heavy: true, innerFix: 3100, innerPer: 55, outerMin: 4600, outerPer: 42, tollPerKm: 3 },
-  { maxKg: 9500, label: "32 फीट SXL कंटेनर (बड़ा डिब्बा, हल्का माल)", weightLabel: "8 टन", heavy: true, innerFix: 3700, innerPer: 60, outerMin: 5400, outerPer: 46, tollPerKm: 3.5 },
-  { maxKg: 10000, label: "22 फीट ट्रक / कंटेनर", weightLabel: "10 टन", heavy: true, innerFix: 2600, innerPer: 47, outerMin: 3900, outerPer: 36, tollPerKm: 3 },
-  { maxKg: 12000, label: "24 फीट ट्रक / कंटेनर", weightLabel: "12 टन", heavy: true, innerFix: 2800, innerPer: 49, outerMin: 4200, outerPer: 37, tollPerKm: 3 },
+  // innerFix/innerPer/outerMin/outerPer/tollPerKm for 5000-12000 and
+  // 18000/21000 were adjusted from their original guide-sourced values to
+  // remove "heavier vehicle is cheaper than a lighter one" reversals that
+  // existed in the raw market-sourced data (open-body trucks/SXL/MXL
+  // pricing vs. containers and plain multi-axle trucks around them) --
+  // via isotonic regression (least-squares monotonic fit) across all 24
+  // tiers, so each adjustment moved only as far as the surrounding tiers
+  // required, not snapped fully to either end. Verified zero fare-order
+  // violations across every distance 1-1200km, both zones, every tier pair.
+  { maxKg: 5000, label: "17 फीट आयशर ट्रक", weightLabel: "5 टन", heavy: false, innerFix: 1800, innerPer: 52, outerMin: 2800, outerPer: 34, tollPerKm: 2.5 },
+  { maxKg: 7000, label: "19 फीट ओपन ट्रक (आयशर)", weightLabel: "7 टन", heavy: true, innerFix: 2700, innerPer: 52, outerMin: 4100, outerPer: 38, tollPerKm: 3 },
+  { maxKg: 7500, label: "20 फीट कंटेनर (बंद बॉडी)", weightLabel: "7 टन", heavy: true, innerFix: 2700, innerPer: 52, outerMin: 4100, outerPer: 38, tollPerKm: 3 },
+  { maxKg: 9000, label: "6-चक्का ट्रक (17.5 फीट ओपन)", weightLabel: "9 टन", heavy: true, innerFix: 3050, innerPer: 53, outerMin: 4530, outerPer: 40, tollPerKm: 3 },
+  { maxKg: 9500, label: "32 फीट SXL कंटेनर (बड़ा डिब्बा, हल्का माल)", weightLabel: "8 टन", heavy: true, innerFix: 3050, innerPer: 53, outerMin: 4530, outerPer: 40, tollPerKm: 3 },
+  { maxKg: 10000, label: "22 फीट ट्रक / कंटेनर", weightLabel: "10 टन", heavy: true, innerFix: 3050, innerPer: 53, outerMin: 4530, outerPer: 40, tollPerKm: 3 },
+  { maxKg: 12000, label: "24 फीट ट्रक / कंटेनर", weightLabel: "12 टन", heavy: true, innerFix: 3050, innerPer: 53, outerMin: 4530, outerPer: 40, tollPerKm: 3 },
   { maxKg: 16000, label: "10-चक्का ट्रक (टॉरस)", weightLabel: "16 टन", heavy: true, innerFix: 3500, innerPer: 58, outerMin: 5100, outerPer: 44, tollPerKm: 4 },
-  { maxKg: 18000, label: "32 फीट MXL कंटेनर (मल्टी-एक्सेल)", weightLabel: "18 टन", heavy: true, innerFix: 5200, innerPer: 76, outerMin: 7300, outerPer: 58, tollPerKm: 5.5 },
-  { maxKg: 21000, label: "12-चक्का ट्रक", weightLabel: "21 टन", heavy: true, innerFix: 4300, innerPer: 71, outerMin: 6300, outerPer: 54, tollPerKm: 5 },
+  { maxKg: 18000, label: "32 फीट MXL कंटेनर (मल्टी-एक्सेल)", weightLabel: "18 टन", heavy: true, innerFix: 4750, innerPer: 73, outerMin: 6800, outerPer: 56, tollPerKm: 5.5 },
+  { maxKg: 21000, label: "12-चक्का ट्रक", weightLabel: "21 टन", heavy: true, innerFix: 4750, innerPer: 73, outerMin: 6800, outerPer: 56, tollPerKm: 5.5 },
   { maxKg: 25000, label: "14-चक्का ट्रक", weightLabel: "25 टन", heavy: true, innerFix: 4800, innerPer: 73, outerMin: 6800, outerPer: 56, tollPerKm: 5.5 },
   { maxKg: 30000, label: "16-चक्का / 40 फीट ट्रेलर", weightLabel: "30 टन", heavy: true, innerFix: 6000, innerPer: 84, outerMin: 8300, outerPer: 64, tollPerKm: 6 },
   { maxKg: FARE_TIER_MAX_KG_UNCAPPED, label: "मल्टी-एक्सेल ट्रेलर (ODC, भारी मशीनें)", weightLabel: "35+ टन", heavy: true, innerFix: 8000, innerPer: 111, outerMin: 11000, outerPer: 85, tollPerKm: 7 },
