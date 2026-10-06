@@ -1246,8 +1246,15 @@ export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS
 // recognizing a return load; it never affects what an Admin route rate
 // applies to (that's always the exact pickup/drop, see
 // getAdminRouteOverride/findExactAdminRoute).
-const RETURN_RADIUS_KM = 4;
-const HOME_RADIUS_KM = 25;
+// Zone-dependent eligibility radii (guide section 7) -- keyed by the LOAD's
+// own zone (zoneFor on the load's pickup/drop, not the driver's trip), since
+// a close match means something very different inside a city than on a
+// highway-distance outstation return. `homeMinKm` is new: a driver barely
+// away from home has no real "return trip" to discount in the first place.
+const RETURN_RULES = {
+  in: { homeMinKm: 5, pickupRadiusKm: 2, dropRadiusKm: 3 },
+  out: { homeMinKm: 30, pickupRadiusKm: 4, dropRadiusKm: 25 },
+};
 const RETURN_HOURS = 24;
 
 // Called once a trip actually completes (see completeBooking) -- patches
@@ -1269,19 +1276,21 @@ function markReturnModePatch(driver, booking) {
   };
 }
 // True when `load` (a booking being newly broadcast) counts as a return
-// load FOR THIS SPECIFIC driver right now: same capacity tier, pickup
-// within RETURN_RADIUS_KM of where the driver's vehicle actually is, drop
-// within HOME_RADIUS_KM of their own inferred home. `now` is injectable
-// for tests; defaults to the real clock.
+// load FOR THIS SPECIFIC driver right now: same capacity tier, driver
+// genuinely away from home, pickup close to where the driver's vehicle
+// actually is, drop close to their own inferred home -- radii picked by
+// the LOAD's own zone (inside-city vs outstation, guide section 7).
+// `now` is injectable for tests; defaults to the real clock.
 export function isReturnLoadFor(driver, load, now = Date.now()) {
-  return !!(
-    driver.returnActive &&
-    driver.returnUntil > now &&
-    driver.returnTierMaxKg === load.tierMaxKg &&
-    driver.returnAtLat != null && driver.returnHomeLat != null &&
-    load.pickupLat != null && load.dropLat != null &&
-    haversineKm(load.pickupLat, load.pickupLng, driver.returnAtLat, driver.returnAtLng) <= RETURN_RADIUS_KM &&
-    haversineKm(load.dropLat, load.dropLng, driver.returnHomeLat, driver.returnHomeLng) <= HOME_RADIUS_KM
+  if (!(driver.returnActive && driver.returnUntil > now && driver.returnTierMaxKg === load.tierMaxKg)) return false;
+  if (driver.returnAtLat == null || driver.returnHomeLat == null || load.pickupLat == null || load.dropLat == null) return false;
+  const loadZone = zoneFor(load.pickupLat, load.pickupLng, load.dropLat, load.dropLng, load.distance);
+  const rules = RETURN_RULES[loadZone] || RETURN_RULES.in;
+  const homeDistanceKm = haversineKm(driver.returnAtLat, driver.returnAtLng, driver.returnHomeLat, driver.returnHomeLng);
+  return (
+    homeDistanceKm >= rules.homeMinKm &&
+    haversineKm(load.pickupLat, load.pickupLng, driver.returnAtLat, driver.returnAtLng) <= rules.pickupRadiusKm &&
+    haversineKm(load.dropLat, load.dropLng, driver.returnHomeLat, driver.returnHomeLng) <= rules.dropRadiusKm
   );
 }
 // Ends a driver's own return-mode window the moment they take on ANY new
