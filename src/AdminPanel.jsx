@@ -22,7 +22,7 @@ import {
   NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError, driverTruckIcon, driverTruckIconInactive, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
-  getRouteScaleRatio, gpsStatus, greetingWord, haversineKm, installedDrivers,
+  getRouteScaleRatio, gpsStatus, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, locationsNear,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, routeMatchRadiusKm,
   sanitizeForDocId, trialDaysLeft, usePersistedState, uploadPhoto, KycDocThumb,
@@ -1575,10 +1575,9 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     const capacityKg = entry.capacityKg ?? (drivers || []).find((d) => d.mobile === entry.driverMobile)?.vehicleSpec?.capacityKg ?? null;
     if (capacityKg == null) return null;
     const entryTier = findFareTier(capacityKg, fareTiers);
-    // routeFares entries carry no zone of their own -- same distance-
-    // threshold guess resolveFareForCapacity falls back to for a live
-    // customer booking (40km, see OUTSTATION_THRESHOLD_KM in App.jsx).
-    const entryZone = entry.estimatedKm != null && entry.estimatedKm < 40 ? "in" : "out";
+    // routeFares entries carry no zone of their own -- resolve it the same
+    // way a live customer booking would (zoneFor, App.jsx).
+    const entryZone = zoneFor(entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng, entry.estimatedKm);
     const exact = findExactAdminRoute(entry.pickupName, entry.dropName, entryTier.maxKg, entryZone, false, adminRouteFares, entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng);
     if (exact) return Number(exact.totalFare) || null;
     const ratio = getRouteScaleRatio(entry.pickupName, entry.dropName, entryZone, false, adminRouteFares, fareTiers);

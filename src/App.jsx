@@ -983,68 +983,144 @@ const DISPATCH_MAX_TIER_CLIMB = 2;
 // real routed distance from Google's Distance Matrix API.
 const ROAD_DISTANCE_FACTOR = 1.35;
 
-// Fixed, calculated fare — replaces the old 8-category formula with the
-// 24-vehicle master rate list and calculation rules from the "सारथी —
-// एडमिन रेट कैलकुलेटर" developer guide (admin-rate-calculator-developer-
-// guide.md), taken over exactly as specified there, not re-derived: every
-// vehicle from a 500kg loading auto up to 35+ tonne multi-axle trailers,
-// each with its own single fixed rate (no range) rather than a formula
-// stretched across a wide capacity band.
+// Fixed, calculated fare — the 24-vehicle master rate list and calculation
+// rules from the "सारथी — एडमिन रेट कैलकुलेटर" developer guide's SECOND
+// (A-to-Z) revision, taken over exactly as specified there, not re-derived.
+// This replaces the first revision's numbers and formula wholesale (the
+// first revision is now explicitly invalid per the guide's own step 0 --
+// "पुराना रेट और पुराना कोड पूरा हटाएँ... दोनों साथ नहीं रखने हैं").
 //
-// THREE pricing modes, picked by vehicle class + zone (inside-city vs
-// outside-city) — never one formula covering all three:
-//   - "base" (light/medium, 500kg-5T, inside city): fix + max(0, km-3) × per
-//     — the fixed amount already covers the first 3km.
-//   - "min" (light/medium, outside city): km × per, but never below the
-//     fixed minimum charge for that vehicle.
-//   - "heavy" (5T+, inside OR outside city — no base, no min, same formula
-//     either way): km × per.
-// No toll estimate, no long-haul discount taper, no vehicle-class-based toll
-// rate — the guide's own formula is exactly this and nothing more; a
-// previous version of this file added both on top of a different 8-category
-// list, which no longer applies to this one.
+// Every one of the 24 vehicles (light/medium AND heavy alike) now uses the
+// exact same uniform two-mode formula -- there is no longer a separate
+// "heavy just does km×rate" case:
+//   - inside city: innerFix + max(0, km-3) × innerPer (the fixed amount
+//     already covers the first 3km)
+//   - outside city: max(km × outerPer, outerMin, c30-guard) + toll, where
+//     c30-guard is this SAME vehicle's own inside-city fare at exactly 30km
+//     (innerFix + 27×innerPer) -- without it, a trip just past the 30km
+//     zone boundary could come out CHEAPER than the same trip at 30km
+//     flat, which the guide calls out explicitly as something that must
+//     never happen (section 5A).
+// Toll (tollPerKm × km) is added on top of the outside-city fare only --
+// never inside the city, never built into the per-km rate itself -- see
+// TOLL_PER_KM below.
+//
+// `heavy` is now purely a DISPLAY grouping flag (which colored header a
+// vehicle sits under in the full-screen picker, and which group is
+// re-sorted by rate instead of weight) -- see AdminRateCalculator's picker,
+// not this formula.
 //
 // Ordered ascending by maxKg (required for findFareTier's threshold search
-// below) — NOT the guide's own display order, which groups the heavy
-// category by rate instead of weight (see section 4's own note: the 8T 32ft
-// SXL container has a lower kg than several entries listed before it,
-// because its big box costs more than its actual payload weight would
-// suggest). AdminRateCalculator's own vehicle-picker re-sorts the heavy
-// group that way for display only — this array itself has to stay strictly
-// ascending by maxKg or capacity lookups below it break.
+// below) — NOT the guide's own picker display order, which groups the
+// heavy category by rate instead of weight.
 export const FARE_TIER_MAX_KG_UNCAPPED = 999999;
-// Customers/drivers never pick a zone explicitly (see CustomerBooking) —
-// only Admin's own calculator has a manual toggle (see calculateFare's
-// `zone` param) — so every other caller needs this distance falls back
-// automatically to decide which of "base"/"min" applies for a light/medium
-// vehicle. Heavy vehicles ignore this entirely (same formula both ways).
-const OUTSTATION_THRESHOLD_KM = 40;
 const DEFAULT_FARE_TIERS = [
-  { maxKg: 500, label: "3-व्हीलर लोडिंग ऑटो (Ape / ई-लोडर)", weightLabel: "500 kg", heavy: false, innerFix: 170, innerPer: 18, outerMin: 250, outerPer: 16 },
-  { maxKg: 750, label: "टाटा ऐस गोल्ड / Ape XL", weightLabel: "750 kg", heavy: false, innerFix: 220, innerPer: 21, outerMin: 350, outerPer: 18 },
-  { maxKg: 800, label: "मारुति सुपर कैरी / ऐस डीज़ल", weightLabel: "800 kg", heavy: false, innerFix: 230, innerPer: 22, outerMin: 380, outerPer: 19 },
-  { maxKg: 900, label: "महिंद्रा जीतो / ऐस HT", weightLabel: "900 kg", heavy: false, innerFix: 250, innerPer: 23, outerMin: 420, outerPer: 19.5 },
-  { maxKg: 1000, label: "छोटा हाथी / टाटा ऐस", weightLabel: "1 टन", heavy: false, innerFix: 280, innerPer: 24, outerMin: 450, outerPer: 20 },
-  { maxKg: 1200, label: "बोलेरो पिकअप 1.2T / इंट्रा V30", weightLabel: "1.2 टन", heavy: false, innerFix: 350, innerPer: 26, outerMin: 550, outerPer: 22 },
-  { maxKg: 1250, label: "सुपर ऐस / दोस्त", weightLabel: "1.25 टन", heavy: false, innerFix: 380, innerPer: 28, outerMin: 600, outerPer: 23 },
-  { maxKg: 1500, label: "पिकअप 8 फीट / बोलेरो पिकअप", weightLabel: "1.5 टन", heavy: false, innerFix: 500, innerPer: 33, outerMin: 800, outerPer: 28 },
-  { maxKg: 2000, label: "बड़ा दोस्त / इंट्रा V50 (9.5 फीट)", weightLabel: "2 टन", heavy: false, innerFix: 600, innerPer: 34, outerMin: 1000, outerPer: 29 },
-  { maxKg: 2500, label: "टाटा 407 (10 फीट)", weightLabel: "2.5 टन", heavy: false, innerFix: 750, innerPer: 37, outerMin: 1300, outerPer: 31 },
-  { maxKg: 3500, label: "14 फीट आयशर ट्रक", weightLabel: "3.5 टन", heavy: false, innerFix: 1100, innerPer: 44, outerMin: 1800, outerPer: 37 },
-  { maxKg: 5000, label: "17 फीट आयशर ट्रक", weightLabel: "5 टन", heavy: false, innerFix: 1800, innerPer: 55, outerMin: 2800, outerPer: 46 },
-  { maxKg: 7000, label: "19 फीट आयशर ट्रक", weightLabel: "7 टन", heavy: true, heavyPer: 58 },
-  { maxKg: 7500, label: "20 फीट कंटेनर (बंद बॉडी)", weightLabel: "7 टन", heavy: true, heavyPer: 62 },
-  { maxKg: 9000, label: "6-चक्का ट्रक (17.5 फीट ओपन)", weightLabel: "9 टन", heavy: true, heavyPer: 64 },
-  { maxKg: 9500, label: "32 फीट SXL कंटेनर (बड़ा डिब्बा, हल्का माल)", weightLabel: "8 टन", heavy: true, heavyPer: 78 },
-  { maxKg: 10000, label: "22 फीट ट्रक / कंटेनर", weightLabel: "10 टन", heavy: true, heavyPer: 70 },
-  { maxKg: 12000, label: "24 फीट ट्रक / कंटेनर", weightLabel: "12 टन", heavy: true, heavyPer: 74 },
-  { maxKg: 16000, label: "10-चक्का ट्रक (टॉरस)", weightLabel: "16 टन", heavy: true, heavyPer: 90 },
-  { maxKg: 18000, label: "32 फीट MXL कंटेनर (मल्टी-एक्सेल)", weightLabel: "18 टन", heavy: true, heavyPer: 98 },
-  { maxKg: 21000, label: "12-चक्का ट्रक", weightLabel: "21 टन", heavy: true, heavyPer: 105 },
-  { maxKg: 25000, label: "14-चक्का ट्रक", weightLabel: "25 टन", heavy: true, heavyPer: 118 },
-  { maxKg: 30000, label: "16-चक्का / 40 फीट ट्रेलर", weightLabel: "30 टन", heavy: true, heavyPer: 135 },
-  { maxKg: FARE_TIER_MAX_KG_UNCAPPED, label: "मल्टी-एक्सेल ट्रेलर (ODC, भारी मशीनें)", weightLabel: "35+ टन", heavy: true, heavyPer: 160 },
+  { maxKg: 500, label: "3-व्हीलर लोडिंग ऑटो (Ape / ई-लोडर)", weightLabel: "500 kg", heavy: false, innerFix: 200, innerPer: 18, outerMin: 250, outerPer: 16, tollPerKm: 0 },
+  { maxKg: 750, label: "टाटा ऐस गोल्ड / Ape XL", weightLabel: "750 kg", heavy: false, innerFix: 240, innerPer: 21, outerMin: 350, outerPer: 20, tollPerKm: 1.5 },
+  { maxKg: 800, label: "मारुति सुपर कैरी / ऐस डीज़ल", weightLabel: "800 kg", heavy: false, innerFix: 250, innerPer: 22, outerMin: 380, outerPer: 21, tollPerKm: 1.5 },
+  { maxKg: 900, label: "महिंद्रा जीतो / ऐस HT", weightLabel: "900 kg", heavy: false, innerFix: 270, innerPer: 23, outerMin: 420, outerPer: 22, tollPerKm: 1.5 },
+  { maxKg: 1000, label: "छोटा हाथी / टाटा ऐस", weightLabel: "1 टन", heavy: false, innerFix: 300, innerPer: 24, outerMin: 450, outerPer: 23, tollPerKm: 1.5 },
+  { maxKg: 1200, label: "बोलेरो पिकअप 1.2T / इंट्रा V30", weightLabel: "1.2 टन", heavy: false, innerFix: 370, innerPer: 26, outerMin: 550, outerPer: 24, tollPerKm: 1.5 },
+  { maxKg: 1250, label: "सुपर ऐस / दोस्त", weightLabel: "1.25 टन", heavy: false, innerFix: 390, innerPer: 28, outerMin: 600, outerPer: 25, tollPerKm: 1.5 },
+  { maxKg: 1500, label: "पिकअप 8 फीट / बोलेरो पिकअप", weightLabel: "1.5 टन", heavy: false, innerFix: 480, innerPer: 33, outerMin: 800, outerPer: 27, tollPerKm: 1.5 },
+  { maxKg: 2000, label: "बड़ा दोस्त / इंट्रा V50 (9.5 फीट)", weightLabel: "2 टन", heavy: false, innerFix: 640, innerPer: 34, outerMin: 1000, outerPer: 30, tollPerKm: 1.5 },
+  { maxKg: 2500, label: "टाटा 407 (10 फीट)", weightLabel: "2.5 टन", heavy: false, innerFix: 780, innerPer: 37, outerMin: 1300, outerPer: 31, tollPerKm: 1.5 },
+  { maxKg: 3500, label: "14 फीट आयशर ट्रक", weightLabel: "3.5 टन", heavy: false, innerFix: 1100, innerPer: 44, outerMin: 1800, outerPer: 32, tollPerKm: 1.5 },
+  { maxKg: 5000, label: "17 फीट आयशर ट्रक", weightLabel: "5 टन", heavy: false, innerFix: 1800, innerPer: 55, outerMin: 2800, outerPer: 34, tollPerKm: 2.5 },
+  { maxKg: 7000, label: "19 फीट ओपन ट्रक (आयशर)", weightLabel: "7 टन", heavy: true, innerFix: 3000, innerPer: 54, outerMin: 4500, outerPer: 41, tollPerKm: 3 },
+  { maxKg: 7500, label: "20 फीट कंटेनर (बंद बॉडी)", weightLabel: "7 टन", heavy: true, innerFix: 2400, innerPer: 46, outerMin: 3700, outerPer: 35, tollPerKm: 3 },
+  { maxKg: 9000, label: "6-चक्का ट्रक (17.5 फीट ओपन)", weightLabel: "9 टन", heavy: true, innerFix: 3100, innerPer: 55, outerMin: 4600, outerPer: 42, tollPerKm: 3 },
+  { maxKg: 9500, label: "32 फीट SXL कंटेनर (बड़ा डिब्बा, हल्का माल)", weightLabel: "8 टन", heavy: true, innerFix: 3700, innerPer: 60, outerMin: 5400, outerPer: 46, tollPerKm: 3.5 },
+  { maxKg: 10000, label: "22 फीट ट्रक / कंटेनर", weightLabel: "10 टन", heavy: true, innerFix: 2600, innerPer: 47, outerMin: 3900, outerPer: 36, tollPerKm: 3 },
+  { maxKg: 12000, label: "24 फीट ट्रक / कंटेनर", weightLabel: "12 टन", heavy: true, innerFix: 2800, innerPer: 49, outerMin: 4200, outerPer: 37, tollPerKm: 3 },
+  { maxKg: 16000, label: "10-चक्का ट्रक (टॉरस)", weightLabel: "16 टन", heavy: true, innerFix: 3500, innerPer: 58, outerMin: 5100, outerPer: 44, tollPerKm: 4 },
+  { maxKg: 18000, label: "32 फीट MXL कंटेनर (मल्टी-एक्सेल)", weightLabel: "18 टन", heavy: true, innerFix: 5200, innerPer: 76, outerMin: 7300, outerPer: 58, tollPerKm: 5.5 },
+  { maxKg: 21000, label: "12-चक्का ट्रक", weightLabel: "21 टन", heavy: true, innerFix: 4300, innerPer: 71, outerMin: 6300, outerPer: 54, tollPerKm: 5 },
+  { maxKg: 25000, label: "14-चक्का ट्रक", weightLabel: "25 टन", heavy: true, innerFix: 4800, innerPer: 73, outerMin: 6800, outerPer: 56, tollPerKm: 5.5 },
+  { maxKg: 30000, label: "16-चक्का / 40 फीट ट्रेलर", weightLabel: "30 टन", heavy: true, innerFix: 6000, innerPer: 84, outerMin: 8300, outerPer: 64, tollPerKm: 6 },
+  { maxKg: FARE_TIER_MAX_KG_UNCAPPED, label: "मल्टी-एक्सेल ट्रेलर (ODC, भारी मशीनें)", weightLabel: "35+ टन", heavy: true, innerFix: 8000, innerPer: 111, outerMin: 11000, outerPer: 85, tollPerKm: 7 },
 ];
+
+// Inside-city vs outside-city detection (section 5A) -- NOT a simple
+// distance cutoff: a real city/metro list with named, possibly multi-
+// centered regions ("मुंबई महानगर" = Mumbai + Thane + Navi Mumbai, each
+// its own 25km-radius center; "पुणे महानगर" = Pune + Pimpri-Chinchwad),
+// since a straight-line distance threshold alone can't tell "across town"
+// from "across the state". Centers reuse the same researched coordinates
+// scripts/importMaharashtraDefaults.mjs already uses for its own hub list,
+// for consistency, plus a few more Maharashtra cities/metros and the
+// interstate cities referenced in the guide's own market-comparison
+// section (5D) so that Bengaluru/Chennai/Ahmedabad/Delhi/Jaipur routes
+// resolve correctly too.
+const CITY_KM = 30;
+const CITY_RADIUS_KM = 25;
+const CITIES = [
+  { name: "मुंबई महानगर", centers: [
+    { area: "मुंबई", lat: 19.0760, lng: 72.8777 },
+    { area: "ठाणे", lat: 19.2183, lng: 72.9781 },
+    { area: "नवी मुंबई", lat: 19.0330, lng: 73.0297 },
+  ] },
+  { name: "पुणे महानगर", centers: [
+    { area: "पुणे", lat: 18.5204, lng: 73.8567 },
+    { area: "पिंपरी-चिंचवड", lat: 18.6298, lng: 73.7997 },
+  ] },
+  { name: "सांगली-मिरज", centers: [
+    { area: "सांगली", lat: 16.8524, lng: 74.5815 },
+    { area: "मिरज", lat: 16.8276, lng: 74.6414 },
+  ] },
+  { name: "कोल्हापुर", centers: [{ area: "कोल्हापुर", lat: 16.7050, lng: 74.2433 }] },
+  { name: "नाशिक", centers: [{ area: "नाशिक", lat: 20.0059, lng: 73.7910 }] },
+  { name: "सोलापुर", centers: [{ area: "सोलापुर", lat: 17.6599, lng: 75.9064 }] },
+  { name: "छ. संभाजीनगर", centers: [{ area: "छ. संभाजीनगर", lat: 19.8762, lng: 75.3433 }] },
+  { name: "अहमदनगर", centers: [{ area: "अहमदनगर", lat: 19.0948, lng: 74.7480 }] },
+  { name: "सातारा", centers: [{ area: "सातारा", lat: 17.6805, lng: 74.0183 }] },
+  { name: "कराड", centers: [{ area: "कराड", lat: 17.2906, lng: 74.1831 }] },
+  { name: "अमरावती", centers: [{ area: "अमरावती", lat: 20.9374, lng: 77.7796 }] },
+  { name: "नांदेड", centers: [{ area: "नांदेड", lat: 19.1383, lng: 77.3210 }] },
+  { name: "नागपुर", centers: [{ area: "नागपुर", lat: 21.1458, lng: 79.0882 }] },
+  { name: "जळगाव", centers: [{ area: "जळगाव", lat: 21.0077, lng: 75.5626 }] },
+  { name: "अकोला", centers: [{ area: "अकोला", lat: 20.7002, lng: 77.0082 }] },
+  { name: "बेंगलुरु", centers: [{ area: "बेंगलुरु", lat: 12.9716, lng: 77.5946 }] },
+  { name: "चेन्नई", centers: [{ area: "चेन्नई", lat: 13.0827, lng: 80.2707 }] },
+  { name: "अहमदाबाद", centers: [{ area: "अहमदाबाद", lat: 23.0225, lng: 72.5714 }] },
+  { name: "दिल्ली", centers: [{ area: "दिल्ली", lat: 28.7041, lng: 77.1025 }] },
+  { name: "जयपुर", centers: [{ area: "जयपुर", lat: 26.9124, lng: 75.7873 }] },
+];
+// The city (metro name) a point belongs to -- the first city with ANY
+// center within CITY_RADIUS_KM, nearest match if more than one qualifies.
+// null means "no city" (a village/town not in the list), which zoneFor
+// below still treats as a valid same-zone match for a short village-to-
+// village hop (section 5A, rule 3) rather than always charging outstation.
+export function cityOf(lat, lng) {
+  if (lat == null || lng == null) return null;
+  let best = null, bestKm = Infinity;
+  for (const city of CITIES) {
+    for (const c of city.centers) {
+      const km = haversineKm(lat, lng, c.lat, c.lng);
+      if (km <= CITY_RADIUS_KM && km < bestKm) { best = city.name; bestKm = km; }
+    }
+  }
+  return best;
+}
+// The guide's zoneFor() (section 5A) -- in this exact priority order:
+//   1. road distance > CITY_KM (30km) -> always outside, regardless of city
+//   2. pickup and drop in the SAME named city -> inside
+//   3. neither pickup nor drop in any listed city (village-to-village) -> inside
+//   4. everything else (different cities, or one in/one out of a city) -> outside
+// Falls back to a pure distance cutoff (zoneByKm in the guide) when
+// coordinates aren't resolved yet -- e.g. before geocoding catches up --
+// rather than leaving the zone undetermined.
+export function zoneFor(pickupLat, pickupLng, dropLat, dropLng, roadKm) {
+  if (pickupLat == null || dropLat == null) {
+    return roadKm != null && roadKm > CITY_KM ? "out" : "in";
+  }
+  if (roadKm != null && roadKm > CITY_KM) return "out";
+  const pCity = cityOf(pickupLat, pickupLng);
+  const dCity = cityOf(dropLat, dropLng);
+  if (pCity && dCity && pCity === dCity) return "in";
+  if (!pCity && !dCity) return "in";
+  return "out";
+}
 
 // distanceKm may be null (coords never resolved — canPost doesn't require a
 // resolved distance, see CustomerBooking) — falls back to just the base
@@ -1064,6 +1140,27 @@ export function findFareTier(capacityKg, tiers = DEFAULT_FARE_TIERS) {
   // throw, crashing the booking screen for every customer and driver at once.
   const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
   return list.find((t) => (capacityKg || 0) <= t.maxKg) || list[list.length - 1];
+}
+
+// Customer-facing "what vehicle should I book for this weight" picker (guide
+// section 4/14) — deliberately NOT the same as findFareTier above. A real
+// driver's own vehicle maps to exactly one bracket by capacity (findFareTier,
+// ascending-first-match), but a customer choosing a vehicle to book should
+// get whichever qualifying tier is actually CHEAPEST, since a heavier-
+// capacity tier can have a lower innerFix than a lighter one right above the
+// customer's weight (e.g. 7500kg/20ft container undercuts 7000kg/19ft open
+// truck). Picks the lowest innerFix among all tiers that can carry the
+// weight; ties broken by the smaller maxKg.
+export function vehicleForWeight(weightKg, tiers = DEFAULT_FARE_TIERS) {
+  const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
+  const qualifying = list.filter((t) => t.maxKg >= (weightKg || 0));
+  const pool = qualifying.length > 0 ? qualifying : list;
+  return pool.reduce((cheapest, t) => {
+    if (!cheapest) return t;
+    if (t.innerFix < cheapest.innerFix) return t;
+    if (t.innerFix === cheapest.innerFix && t.maxKg < cheapest.maxKg) return t;
+    return cheapest;
+  }, null);
 }
 
 // Climbs `offset` brackets above `tierMaxKg` (capacity-wise) — used by
@@ -1115,23 +1212,25 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
   return true;
 }
 
-// The guide's own `auto()` — `zone` is "in" | "out", defaulted to an
-// automatic distance-threshold guess (OUTSTATION_THRESHOLD_KM) for every
-// caller that has no explicit zone of its own (customer/driver app —
-// nobody there ever picks a zone by hand). AdminRateCalculator passes its
-// own manually-toggled zone explicitly instead of relying on this default.
-// `returnPct` (0-100) is the guide's post-floor return-load discount (see
-// section 7) — applied AFTER the outside-city minimum floor, same as the
-// guide specifies, never before it.
+// The guide's own `auto()` (section 5/5A/5B) — `zone` ("in"|"out") should
+// come from zoneFor() wherever a caller has real pickup/drop coordinates;
+// this only falls back to a plain CITY_KM distance cutoff when `zone`
+// isn't given at all (e.g. findFareOutliers/interpolateOutlierFare below,
+// which only ever have a tier+distance pair to judge a ratio from, not
+// real coordinates). `returnPct` (0-100) is the guide's post-floor
+// return-load discount (section 7) — applied after everything else,
+// including the toll, never before it.
 export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS, zone = null, returnPct = 0) {
   const tier = findFareTier(capacityKg, tiers);
   const km = distanceKm || 0;
-  const effectiveZone = zone || (km < OUTSTATION_THRESHOLD_KM ? "in" : "out");
+  const effectiveZone = zone || (km > CITY_KM ? "out" : "in");
   let total;
-  if (tier.heavy) {
-    total = km * tier.heavyPer;
-  } else if (effectiveZone === "out") {
-    total = Math.max(km * tier.outerPer, tier.outerMin);
+  if (effectiveZone === "out") {
+    // c30: this same vehicle's own inside-city fare at exactly 30km —
+    // the floor that stops a trip just past the zone boundary from ever
+    // coming out cheaper than the same trip at 30km flat (section 5A).
+    const c30 = tier.innerFix + 27 * tier.innerPer;
+    total = Math.max(km * tier.outerPer, tier.outerMin, c30) + km * tier.tollPerKm;
   } else {
     total = tier.innerFix + Math.max(0, km - 3) * tier.innerPer;
   }
@@ -1351,7 +1450,7 @@ export function getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares,
   const tier = findFareTier(capacityKg, tiers);
   const routeKm = pickupLat != null && dropLat != null ? haversineKm(pickupLat, pickupLng, dropLat, dropLng) : null;
   const radiusKm = routeMatchRadiusKm(routeKm);
-  const effectiveZone = zone || (routeKm != null && routeKm < OUTSTATION_THRESHOLD_KM ? "in" : "out");
+  const effectiveZone = zone || zoneFor(pickupLat, pickupLng, dropLat, dropLng, routeKm);
   const matches = adminRouteFares.filter((r) => {
     if (r.tierMaxKg !== tier.maxKg) return false;
     if ((r.zone || "in") !== effectiveZone) return false;
@@ -1443,7 +1542,7 @@ export function getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares
 // (now compared against this same resolved rate via judge()), but it has
 // zero effect on what a customer is actually quoted.
 function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, zone = null, isReturn = false) {
-  const effectiveZone = zone || (distanceKm != null && distanceKm < OUTSTATION_THRESHOLD_KM ? "in" : "out");
+  const effectiveZone = zone || zoneFor(pickupLat, pickupLng, dropLat, dropLng, distanceKm);
   const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm, effectiveZone, isReturn);
   if (adminOverride != null) return adminOverride;
   const scaleRatio = getRouteScaleRatio(pickup, drop, effectiveZone, isReturn, adminRouteFares, tiers);
