@@ -1433,13 +1433,19 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditA
 // loose weight number -- unlike CustomerBooking's customer-facing weight
 // field, Admin is pricing one exact tier at a time.
 function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, routeFares, drivers, returnPct, setReturnPct, lang, prefill, onClose }) {
+  // isReturn now means "the ⇅ swap button has flipped pickup/drop" -- the
+  // form is calculating the RETURN-direction fare for this same pair of
+  // places, not a manually-toggled discount switch (guide section 6A).
   const [isReturn, setIsReturn] = useState(false);
   // returnPct/setReturnPct come from settings/main (Firestore, see App.jsx)
   // now, not local browser storage -- every driver/customer session needs
   // to read the SAME admin-set percentage, not just this one admin device
   // (see the guide's own section 7a note that the demo's browser-storage
-  // version isn't what the real app should do).
-  const [zone, setZone] = useState("in");
+  // version isn't what the real app should do). pctDraft/pctEditing back
+  // the inline "✎ बदलें" -> pick % -> लागू करें/रद्द करें confirm/cancel flow;
+  // the app-wide returnPct itself only ever changes on an explicit "apply".
+  const [pctDraft, setPctDraft] = useState(returnPct);
+  const [pctEditing, setPctEditing] = useState(false);
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null);
@@ -1487,6 +1493,10 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   }, [pickupCoords, dropCoords, mapsReady]);
 
   const tier = selectedMaxKg != null ? fareTiers.find((t) => t.maxKg === selectedMaxKg) : null;
+  // Zone is fully auto-detected now (guide section 5A's zoneFor, the same
+  // city-list logic a real booking resolves with) -- no more manual
+  // inside/outside toggle for Admin to get wrong or forget to flip.
+  const zone = zoneFor(pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, distance);
 
   // A fresh route/tier/zone context lets new suggestions apply again --
   // same intent as the guide's own matchOff/manual resets on every pickup/
@@ -1510,8 +1520,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     : null;
   const suggestionSource = exactMatch ? "admin" : scaleRatio != null ? "scaled" : "formula";
 
-  const baseFix = tier && !tier.heavy ? (zone === "out" ? tier.outerMin : tier.innerFix) : null;
-  const basePer = tier ? (tier.heavy ? tier.heavyPer : (zone === "out" ? tier.outerPer : tier.innerPer)) : null;
+  const baseFix = tier ? (zone === "out" ? tier.outerMin : tier.innerFix) : null;
+  const basePer = tier ? (zone === "out" ? tier.outerPer : tier.innerPer) : null;
   const suggestedFix = exactMatch ? (exactMatch.fix ?? null)
     : (scaleRatio != null && baseFix != null ? Math.round(baseFix * scaleRatio / 10) * 10 : baseFix);
   const suggestedPer = exactMatch ? exactMatch.per
@@ -1527,9 +1537,18 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
 
   const km = distance || 0;
   const fixNum = Number(fix) || 0, perNum = Number(per) || 0;
+  // Same uniform formula as calculateFare (App.jsx) now -- every vehicle,
+  // light or heavy, uses fix/min + per km, with the 30km floor guard and
+  // toll surcharge applied outside city. The guard and toll stay tied to
+  // the tier's own defaults (never Admin-overridable here), exactly like
+  // calculateFare; only fix/per themselves can be overridden per route.
+  const c30Guard = tier ? tier.innerFix + 27 * tier.innerPer : 0;
   const computedTotal = tier && km > 0
-    ? (tier.heavy ? km * perNum : zone === "out" ? Math.max(km * perNum, fixNum) : fixNum + Math.max(0, km - 3) * perNum)
+    ? (zone === "out" ? Math.max(km * perNum, fixNum, c30Guard) + km * tier.tollPerKm : fixNum + Math.max(0, km - 3) * perNum)
     : null;
+  // isReturn means the ⇅ swap has flipped this into the return direction --
+  // the return-load discount only ever applies on that side, never the
+  // regular-direction fare (guide section 6A/7).
   const suggestedTotal = computedTotal != null
     ? Math.round(isReturn && returnPct > 0 ? computedTotal * (1 - returnPct / 100) : computedTotal)
     : null;
@@ -1540,19 +1559,18 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
 
   const resetForm = () => {
     setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
-    setSelectedMaxKg(null); setZone("in"); setIsReturn(false);
+    setSelectedMaxKg(null); setIsReturn(false); setPctEditing(false);
     setFix(""); setFixTouched(false); setPer(""); setPerTouched(false);
     setTotalFare(""); setManual(false);
     setEditingId(null); setComparingEntry(null); setSaveError("");
   };
   const editEntry = (r) => {
-    setSaveError("");
+    setSaveError(""); setPctEditing(false);
     setPickup(r.pickupName || ""); setDrop(r.dropName || "");
     setPickupCoords(r.pickupLat != null ? { lat: r.pickupLat, lng: r.pickupLng } : null);
     setDropCoords(r.dropLat != null ? { lat: r.dropLat, lng: r.dropLng } : null);
     setDistance(r.estimatedKm ?? null);
     setSelectedMaxKg(r.tierMaxKg ?? null);
-    setZone(r.zone || "in");
     setIsReturn(!!r.isReturn);
     if (r.returnPct) setReturnPct(r.returnPct);
     setFix(r.fix != null ? String(r.fix) : ""); setFixTouched(true);
@@ -1590,8 +1608,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     const capacityKg = r.capacityKg ?? (drivers || []).find((d) => d.mobile === r.driverMobile)?.vehicleSpec?.capacityKg ?? null;
     const entryTier = capacityKg != null ? findFareTier(capacityKg, fareTiers) : null;
     setSelectedMaxKg(entryTier ? entryTier.maxKg : null);
-    setZone(r.estimatedKm != null && r.estimatedKm < 40 ? "in" : "out");
-    setIsReturn(false);
+    setIsReturn(false); setPctEditing(false);
     setPickup(r.pickupName || ""); setDrop(r.dropName || "");
     setPickupCoords(r.pickupLat != null ? { lat: r.pickupLat, lng: r.pickupLng } : null);
     setDropCoords(r.dropLat != null ? { lat: r.dropLat, lng: r.dropLng } : null);
@@ -1616,7 +1633,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
         tierMaxKg: tier.maxKg,
         veh: tier.label,
         zone,
-        fix: tier.heavy ? null : (fix !== "" ? Number(fix) || 0 : 0),
+        fix: fix !== "" ? Number(fix) || 0 : 0,
         per: Number(per) || 0,
         totalFare: Number(totalFare) || 0,
         manual,
@@ -1647,14 +1664,25 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
 
   const comparingJudge = comparingEntry && totalFare !== "" ? judgeRate(Number(comparingEntry.totalFare) || 0, Number(totalFare) || 0) : null;
 
+  // ⇅ -- flips pickup and drop (and their resolved coords) in place and
+  // toggles isReturn, so the form now computes/saves the RETURN-direction
+  // fare for this same pair of places (guide section 6A). Distance and
+  // zone are symmetric either way, so nothing else needs to change.
+  const swapRoute = () => {
+    setPickup(drop); setDrop(pickup);
+    setPickupCoords(dropCoords); setDropCoords(pickupCoords);
+    setIsReturn((v) => !v); setPctEditing(false);
+    setSavedFlash(false); setSaveError("");
+  };
+
   // Light/medium group stays in ascending-maxKg order (natural small-to-
-  // large reading order); the heavy group is re-sorted by its own rate,
-  // ascending -- the guide's own display rule (section 4): a vehicle with
-  // less actual payload but a bigger box (e.g. the 32ft SXL container)
-  // costs more than some heavier-payload options, so showing it by weight
-  // alone would look out of order next to its own price.
+  // large reading order); the heavy group is re-sorted by its own base
+  // rate, ascending -- the guide's own display rule (section 4): a
+  // vehicle with less actual payload but a bigger box (e.g. the 32ft SXL
+  // container) costs more than some heavier-payload options, so showing
+  // it by weight alone would look out of order next to its own price.
   const lightTiers = fareTiers.filter((t) => !t.heavy);
-  const heavyTiers = [...fareTiers.filter((t) => t.heavy)].sort((a, b) => a.heavyPer - b.heavyPer);
+  const heavyTiers = [...fareTiers.filter((t) => t.heavy)].sort((a, b) => a.innerFix - b.innerFix);
 
   const RETURN_PCTS = [5, 10, 15, 20, 25, 30, 35];
   const inputCls = "w-full rounded-lg p-2.5 text-sm font-bold outline-none";
@@ -1675,53 +1703,83 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
             </div>
           )}
 
-          {/* Return load switch + % pills -- section 7a/7b. The % Admin
-              picks stays saved even with the switch off, and applies to
-              every return fare app-wide (persisted via usePersistedState,
-              not just this one route). */}
-          <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${isReturn ? C.success : C.line}` }}>
-            <button type="button" onClick={() => setIsReturn((v) => !v)} className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5" style={{ background: isReturn ? "rgba(63,122,84,0.1)" : C.paper }}>
-              <div className="text-left">
-                <div className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Return Load" : lang === "mr" ? "रिटर्न लोड (परतीचा माल)" : "रिटर्न लोड (वापसी का माल)"}</div>
-                <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `On lowers the fare ${returnPct}%` : lang === "mr" ? `चालू केल्यास भाडे ${returnPct}% कमी होईल` : `चालू करने पर भाड़ा ${returnPct}% कम`}</div>
-              </div>
-              <span className="text-xs font-black px-2.5 py-1 rounded-full shrink-0" style={{ color: "#fff", background: isReturn ? C.success : C.safety }}>
-                {isReturn ? (lang === "en" ? "ON" : lang === "mr" ? "चालू" : "चालू") : (lang === "en" ? "OFF" : lang === "mr" ? "बंद" : "बंद")}
-              </span>
-            </button>
-            {isReturn && (
-              <div className="px-3.5 py-3 grid gap-2" style={{ borderTop: `1.5px dashed ${C.success}` }}>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {RETURN_PCTS.map((v) => (
-                    <button key={v} type="button" onClick={() => setReturnPct(v)} className="rounded-lg py-1.5 text-xs font-black"
-                      style={{ border: `1.5px solid ${C.line}`, background: returnPct === v ? C.success : C.paper, color: returnPct === v ? "#fff" : C.ink }}>
-                      {v}%
-                    </button>
-                  ))}
+          {/* Pickup/drop + ⇅ swap -- section 6A. Swapping flips both fields
+              in place and marks the form as computing the RETURN-direction
+              fare for this same pair of places; saving while swapped tags
+              a distinct "Return Load" route (save()'s __ret doc id) that
+              never touches the regular-direction rate. */}
+          <div className="flex items-stretch gap-2">
+            <div className="flex-1 grid gap-2">
+              <LocationField lang={lang} value={pickup}
+                onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); setSaveError(""); }}
+                onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); setSaveError(""); }}
+                mapsReady={mapsReady}
+                placeholder={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} />
+              <LocationField lang={lang} value={drop}
+                onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setSavedFlash(false); setSaveError(""); }}
+                onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); setSaveError(""); }}
+                mapsReady={mapsReady}
+                placeholder={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} />
+            </div>
+            <button type="button" onClick={swapRoute} title={lang === "en" ? "Swap for return load" : lang === "mr" ? "रिटर्न लोडसाठी स्वॅप करा" : "रिटर्न लोड के लिए स्वैप करें"}
+              className="shrink-0 w-11 rounded-xl flex items-center justify-center text-lg font-black"
+              style={{ background: isReturn ? C.success : C.navy, color: "#fff" }}>⇅</button>
+          </div>
+
+          {/* Zone is fully auto-detected (zoneFor, same as a real booking)
+              -- no manual inside/outside toggle for Admin to forget. */}
+          <div className="rounded-xl px-3.5 py-2.5 flex items-center justify-between" style={{ border: `1.5px solid ${C.line}`, background: C.bg }}>
+            <span className="text-xs font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Zone (auto)" : lang === "mr" ? "झोन (ऑटो)" : "ज़ोन (ऑटो)"}</span>
+            <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ color: "#fff", background: zone === "out" ? C.marigoldDeep : C.navy }}>
+              {zone === "out" ? (lang === "en" ? "Outside City" : lang === "mr" ? "शहराबाहेर" : "शहर के बाहर") : (lang === "en" ? "Inside City" : lang === "mr" ? "शहरात" : "शहर के अंदर")}
+            </span>
+          </div>
+
+          {/* Return-load fare panel -- only shown once ⇅ has flipped this
+              into the return direction. "✎ बदलें" opens the % picker inline;
+              returnPct (app-wide, Firestore-backed) only changes on the
+              explicit "लागू करें", never just by picking a pill (section 7b). */}
+          {isReturn && (
+            <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${C.success}` }}>
+              <div className="px-3.5 py-2.5" style={{ background: "rgba(63,122,84,0.1)" }}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-bold" style={{ color: C.success }}>
+                    {lang === "en" ? `Return fare (${returnPct}% less)` : lang === "mr" ? `रिटर्न भाडे (${returnPct}% कमी)` : `रिटर्न भाड़ा (${returnPct}% कम)`}
+                  </div>
+                  <button type="button" onClick={() => { setPctDraft(returnPct); setPctEditing((v) => !v); }} className="text-xs font-bold shrink-0" style={{ color: C.navy }}>
+                    ✎ {lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"}
+                  </button>
                 </div>
+                {pctEditing && (
+                  <div className="grid gap-2 mt-2 pt-2" style={{ borderTop: `1.5px dashed ${C.success}` }}>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {RETURN_PCTS.map((v) => (
+                        <button key={v} type="button" onClick={() => setPctDraft(v)} className="rounded-lg py-1.5 text-xs font-black"
+                          style={{ border: `1.5px solid ${C.line}`, background: pctDraft === v ? C.success : C.paper, color: pctDraft === v ? "#fff" : C.ink }}>
+                          {v}%
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => setPctEditing(false)} className="rounded-lg py-1.5 text-xs font-bold" style={{ border: `1.5px solid ${C.line}`, color: C.inkSoft, background: C.paper }}>
+                        {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                      </button>
+                      <button type="button" onClick={() => { setReturnPct(pctDraft); setPctEditing(false); }} className="rounded-lg py-1.5 text-xs font-bold" style={{ background: C.success, color: "#fff" }}>
+                        {lang === "en" ? "Apply" : lang === "mr" ? "लागू करा" : "लागू करें"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 rounded-xl overflow-hidden" style={{ border: `1.5px solid ${C.line}` }}>
-            <button type="button" onClick={() => setZone("in")} className="py-2.5 text-sm font-black" style={{ background: zone === "in" ? C.navy : C.paper, color: zone === "in" ? "#fff" : C.ink }}>
-              {lang === "en" ? "Inside City" : lang === "mr" ? "शहरात" : "शहर के अंदर"}
-            </button>
-            <button type="button" onClick={() => setZone("out")} className="py-2.5 text-sm font-black" style={{ background: zone === "out" ? C.marigoldDeep : C.paper, color: zone === "out" ? "#fff" : C.ink }}>
-              {lang === "en" ? "Outside City" : lang === "mr" ? "शहराबाहेर" : "शहर के बाहर"}
-            </button>
-          </div>
-
-          <LocationField lang={lang} value={pickup}
-            onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setSavedFlash(false); setSaveError(""); }}
-            onPlaceSelected={(p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); setSaveError(""); }}
-            mapsReady={mapsReady}
-            placeholder={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} />
-          <LocationField lang={lang} value={drop}
-            onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setSavedFlash(false); setSaveError(""); }}
-            onPlaceSelected={(p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setSavedFlash(false); setSaveError(""); }}
-            mapsReady={mapsReady}
-            placeholder={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} />
+              {computedTotal != null && suggestedTotal != null && (
+                <div className="px-3.5 py-2 flex items-center justify-between gap-1.5 text-[11px] font-bold" style={{ color: C.ink, background: C.paper, fontFamily: monoFont }}>
+                  <span>{lang === "en" ? "Going" : lang === "mr" ? "जाणे" : "जाना"} {fmt(computedTotal)}</span>
+                  <span style={{ color: C.success }}>{lang === "en" ? "Return" : lang === "mr" ? "रिटर्न" : "रिटर्न"} {fmt(suggestedTotal)}</span>
+                  <span style={{ color: C.inkSoft }}>{lang === "en" ? "Diff" : lang === "mr" ? "फरक" : "फ़र्क़"} −{fmt(computedTotal - suggestedTotal)}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1751,9 +1809,9 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
           <div className="grid grid-cols-3 gap-2 items-end">
             <div>
               <div className="text-[11px] font-bold mb-1 min-h-[28px] flex items-end" style={{ color: C.inkSoft }}>
-                {tier?.heavy ? (lang === "en" ? "N/A" : lang === "mr" ? "लागू नाही" : "लागू नहीं") : zone === "out" ? (lang === "en" ? "Minimum charge" : lang === "mr" ? "मिनिमम चार्ज" : "मिनिमम चार्ज") : (lang === "en" ? "1–3 km Fixed Rate" : lang === "mr" ? "1–3 किमी फिक्स्ड दर" : "1–3 किमी फिक्स्ड दर")}
+                {zone === "out" ? (lang === "en" ? "Minimum charge" : lang === "mr" ? "मिनिमम चार्ज" : "मिनिमम चार्ज") : (lang === "en" ? "1–3 km Fixed Rate" : lang === "mr" ? "1–3 किमी फिक्स्ड दर" : "1–3 किमी फिक्स्ड दर")}
               </div>
-              <input type="number" inputMode="numeric" value={fix} disabled={!!tier?.heavy}
+              <input type="number" inputMode="numeric" value={fix}
                 onChange={(e) => { setFix(e.target.value); setFixTouched(true); setManual(false); setSavedFlash(false); setSaveError(""); }}
                 className={inputCls} style={{ ...inputStyle, fontWeight: 700 }} placeholder={lang === "en" ? "e.g. 250" : "उदा. 250"} />
             </div>
@@ -1785,6 +1843,16 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               <span style={{ color: C.inkSoft }}>{lang === "en" ? "System formula — no Admin rate set for this route yet" : lang === "mr" ? "सिस्टम फॉर्म्युला — या रूटसाठी अजून अ‍ॅडमिन दर नाही" : "सिस्टम फॉर्मूला — इस रूट के लिए अभी तक एडमिन दर नहीं है"}</span>
             )}
           </div>
+
+          {/* Toll surcharge (guide section 5C) -- fixed per vehicle class,
+              outside city only, never Admin-editable here, always added on
+              top of fix/min+per. Shown so the total's composition is clear. */}
+          {zone === "out" && tier && tier.tollPerKm > 0 && km > 0 && (
+            <div className="flex items-center justify-between text-[11px] font-bold rounded-lg px-2.5 py-1.5" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
+              <span>{lang === "en" ? `Toll included (₹${tier.tollPerKm}/km)` : lang === "mr" ? `टोल समाविष्ट (₹${tier.tollPerKm}/किमी)` : `टोल शामिल (₹${tier.tollPerKm}/किमी)`}</span>
+              <span style={{ fontFamily: monoFont }}>+{fmt(Math.round(km * tier.tollPerKm))}</span>
+            </div>
+          )}
 
           {comparingEntry && comparingJudge && (
             <div className="rounded-xl px-3 py-2.5 flex items-center gap-2.5" style={{ background: `${JUDGE_COLOR[comparingJudge.cls]}1A`, border: `1.5px solid ${JUDGE_COLOR[comparingJudge.cls]}` }}>
@@ -1898,7 +1966,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                 </button>
               ))}
               <div className="rounded-lg px-3 py-2 text-xs font-black mt-2" style={{ background: "rgba(239,108,26,0.1)", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
-                {lang === "en" ? "Heavy/Outstation: total km × rate only" : lang === "mr" ? "हेवी/आउटस्टेशन: फक्त कुल km × रेट" : "हेवी/आउटस्टेशन: सिर्फ कुल km × रेट"}
+                {lang === "en" ? "Heavy/Outstation: same formula, bigger rates + toll" : lang === "mr" ? "हेवी/आउटस्टेशन: तोच फॉर्म्युला, मोठे दर + टोल" : "हेवी/आउटस्टेशन: वही फॉर्मूला, बड़े दर + टोल"}
               </div>
               {heavyTiers.map((t) => (
                 <button key={t.maxKg} onClick={() => { setSelectedMaxKg(t.maxKg); setKgPickerOpen(false); }}
