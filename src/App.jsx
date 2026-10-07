@@ -1205,16 +1205,29 @@ const DIRECT_REQUEST_RADIUS_KM = 30;
 // off-duty driver.
 const BROADCAST_LOCATION_STALE_MS = 24 * 60 * 60 * 1000;
 
+// How far ABOVE the customer's own entered weight a vehicle's capacity may
+// go and still qualify for the broadcast (see isDriverBroadcastEligible) --
+// a straight kg window on the booking's own b.weight (the customer's real
+// entered weight, always set by requestByCategory), not a count of tier
+// brackets climbed. Replaces the old DISPATCH_MAX_TIER_CLIMB-based bracket
+// climb for this path specifically, which (with 24 narrow tiers in the
+// master rate table) silently stopped 2 brackets above a 6000-7000kg load
+// at 9000kg, not the much larger 10000kg+ vehicles a plain "+5000kg" window
+// was expected to reach. DISPATCH_MAX_TIER_CLIMB/tierMaxKgAbove are
+// untouched everywhere else (retargetToNextDriver's own escalation ladder,
+// the separate Bidding-accept flow) -- this constant is broadcast-only.
+const BROADCAST_WEIGHT_HEADROOM_KG = 5000;
+
 // Whether driver d currently qualifies to see/accept broadcast booking b:
 // KYC-approved, not blacklisted (online status deliberately NOT checked —
-// see below); own vehicle capacity resolves to b's own category or up to
-// DISPATCH_MAX_TIER_CLIMB brackets above it; hasn't already declined it;
-// has reported a location within DIRECT_REQUEST_RADIUS_KM of pickup inside
-// the last BROADCAST_LOCATION_STALE_MS; and has no scheduling conflict.
-// Pure/explicit-args like findDriverLoadConflict/tierMaxKgAbove above, so
-// both requestByCategory (checking "does anyone qualify at all") and
-// DriverHome (building each driver's own list of open requests) share the
-// exact same notion of "eligible" and can never drift apart.
+// see below); own vehicle capacity can actually carry b's weight and isn't
+// more than BROADCAST_WEIGHT_HEADROOM_KG over it; hasn't already declined
+// it; has reported a location within DIRECT_REQUEST_RADIUS_KM of pickup
+// inside the last BROADCAST_LOCATION_STALE_MS; and has no scheduling
+// conflict. Pure/explicit-args like findDriverLoadConflict above, so both
+// requestByCategory (checking "does anyone qualify at all") and DriverHome
+// (building each driver's own list of open requests) share the exact same
+// notion of "eligible" and can never drift apart.
 //
 // Online status is deliberately NOT checked here, on request -- every
 // eligible driver within range should see/be pushed a new load regardless
@@ -1229,12 +1242,8 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
   if (d.kyc !== "Approved" || d.blacklisted) return false;
   if ((b.declinedBy || []).includes(d.name)) return false;
   const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-  const dTierMaxKg = findFareTier(dCapKg, fareTiers).maxKg;
-  let tierMatch = false;
-  for (let offset = 0; offset <= DISPATCH_MAX_TIER_CLIMB; offset++) {
-    if (dTierMaxKg === tierMaxKgAbove(b.tierMaxKg, offset, fareTiers)) { tierMatch = true; break; }
-  }
-  if (!tierMatch) return false;
+  const loadWeightKg = Number(b.weight) || 0;
+  if (dCapKg < loadWeightKg || dCapKg > loadWeightKg + BROADCAST_WEIGHT_HEADROOM_KG) return false;
   if (b.pickupLat == null || !d.lastKnownLocation) return false;
   if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > BROADCAST_LOCATION_STALE_MS) return false;
   if (haversineKm(d.lastKnownLocation.lat, d.lastKnownLocation.lng, b.pickupLat, b.pickupLng) > DIRECT_REQUEST_RADIUS_KM) return false;
@@ -10598,7 +10607,10 @@ export default function App() {
   // at all right now), or null on success.
   const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, fare: fareOverride }) => {
     const bookingId = genId();
-    const draftBooking = { id: bookingId, tierMaxKg, pickupLat, pickupLng, scheduledFor, declinedBy: [] };
+    // weight included here to match the real created doc below -- isDriverBroadcastEligible
+    // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
+    // pre-check needs the same field or it would always see loadWeightKg as 0.
+    const draftBooking = { id: bookingId, tierMaxKg, weight: customerWeight ?? tierMaxKg, pickupLat, pickupLng, scheduledFor, declinedBy: [] };
     const anyEligible = drivers.some((d) => isDriverBroadcastEligible(d, draftBooking, vehicleTypes, bookings, fareTiers, lang));
     if (!anyEligible) {
       return lang === "en" ? "No vehicles available nearby right now — please try again shortly." : lang === "mr" ? "सध्या जवळपास कोणतेही वाहन उपलब्ध नाही — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "अभी आसपास कोई वाहन उपलब्ध नहीं है — कृपया थोड़ी देर बाद फिर कोशिश करें।";

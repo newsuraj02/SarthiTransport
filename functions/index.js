@@ -481,15 +481,23 @@ async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile) 
 // same still-open booking (e.g. addDeclinedBy adding one more name to
 // declinedBy) must NOT re-blast everyone who already got it.
 //
-// Capacity/tier matching mirrors isDriverBroadcastEligible's own bracket
-// logic. FARE_TIER_MAX_KGS/DISPATCH_MAX_TIER_CLIMB are duplicated here --
-// same manual-sync-required pattern as notificationLockHours/haversineKm
-// above, since Cloud Functions can't import client code -- and safe to
-// hardcode since these are fixed code constants on the client too, never
-// Admin-editable (see App.jsx's own "Always the code constant now, never
-// settings.fareTiers" comment).
+// Capacity matching mirrors isDriverBroadcastEligible's own kg-window
+// logic (src/App.jsx) -- a driver qualifies if their capacity can carry
+// the load and isn't more than BROADCAST_WEIGHT_HEADROOM_KG over its
+// weight. These constants are duplicated here -- same manual-sync-required
+// pattern as notificationLockHours/haversineKm above, since Cloud
+// Functions can't import client code -- and safe to hardcode since these
+// are fixed code constants on the client too, never Admin-editable (see
+// App.jsx's own "Always the code constant now, never settings.fareTiers"
+// comment).
 const DIRECT_REQUEST_RADIUS_KM = 30;
-const DISPATCH_MAX_TIER_CLIMB = 2;
+// Same constant as src/App.jsx's BROADCAST_WEIGHT_HEADROOM_KG -- kept in
+// sync manually. Replaced the old tier-bracket-climb approach (which used
+// a stale, never-synced 8-tier FARE_TIER_MAX_KGS list from before the
+// 24-tier rate table rebuild) with a plain kg window directly on the
+// load's own weight, since "2 brackets above" turned out to mean a much
+// smaller jump than expected once the rate table went from ~8 tiers to 24.
+const BROADCAST_WEIGHT_HEADROOM_KG = 5000;
 // Same constant as src/App.jsx's BROADCAST_LOCATION_STALE_MS -- kept in
 // sync manually (see that file's comment for the full reasoning). Wider
 // than DRIVER_LOCATION_STALE_MS above on purpose: this broadcast path is
@@ -498,14 +506,6 @@ const DISPATCH_MAX_TIER_CLIMB = 2;
 // while 24h (not unbounded) still guards against the already-fixed
 // stale-online-driver-treated-as-available bug.
 const BROADCAST_LOCATION_STALE_MS = 24 * 60 * 60 * 1000;
-const FARE_TIER_MAX_KGS = [500, 850, 1200, 1700, 2500, 4500, 7000, 999999];
-function fareTierMaxKgFor(capacityKg) {
-  return FARE_TIER_MAX_KGS.find((maxKg) => (capacityKg || 0) <= maxKg) ?? FARE_TIER_MAX_KGS[FARE_TIER_MAX_KGS.length - 1];
-}
-function tierMaxKgAboveServer(tierMaxKg, offset) {
-  const baseIdx = Math.max(0, FARE_TIER_MAX_KGS.indexOf(tierMaxKg));
-  return FARE_TIER_MAX_KGS[Math.min(baseIdx + offset, FARE_TIER_MAX_KGS.length - 1)];
-}
 exports.onDirectRequestBroadcast = onDocumentCreated(
   { document: "bookings/{bookingId}", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_DIRECT_REQUEST_TEMPLATE, MSG91_WHATSAPP_NAMESPACE] },
   async (event) => {
@@ -538,12 +538,11 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       if (driver.blacklisted) { skipLog.push(`${tag}: blacklisted`); return; }
 
       const capacityKg = Number(driver.vehicleSpec?.capacityKg) || 0;
-      const driverTierMaxKg = fareTierMaxKgFor(capacityKg);
-      let tierMatch = false;
-      for (let offset = 0; offset <= DISPATCH_MAX_TIER_CLIMB; offset++) {
-        if (driverTierMaxKg === tierMaxKgAboveServer(load.tierMaxKg, offset)) { tierMatch = true; break; }
+      const loadWeightKg = Number(load.weight) || 0;
+      if (capacityKg < loadWeightKg || capacityKg > loadWeightKg + BROADCAST_WEIGHT_HEADROOM_KG) {
+        skipLog.push(`${tag}: capacity ${capacityKg}kg outside [${loadWeightKg}kg, ${loadWeightKg + BROADCAST_WEIGHT_HEADROOM_KG}kg] window for load weight ${loadWeightKg}kg`);
+        return;
       }
-      if (!tierMatch) { skipLog.push(`${tag}: vehicle tier mismatch (driver capacity=${capacityKg}kg -> tier ${driverTierMaxKg}, load tier=${load.tierMaxKg})`); return; }
 
       if (load.pickupLat == null) { skipLog.push(`${tag}: load has no pickupLat/Lng`); return; }
       if (!driver.lastKnownLocation) { skipLog.push(`${tag}: no lastKnownLocation`); return; }
