@@ -5708,10 +5708,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
     setLocatingPickup(false);
   };
 
-  const resetFields = () => {
-    setPickup(""); setDrop(""); setWeight("");
-    setPickupCoords(null); setDropCoords(null);
-  };
   const [bookingError, setBookingError] = useState("");
   // Which driver's card is tapped/highlighted in the inline list — a
   // separate step from actually booking them (see bookDriver below), so
@@ -5726,15 +5722,13 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // the collapse re-asserts itself exactly like the mock's render() does.
   const [manualMapOpen, setManualMapOpen] = useState(false);
   useEffect(() => { setManualMapOpen(false); }, [weight]);
-  // Tapping a driver's inline "Book this vehicle" button opens a
-  // confirmation sheet (this entry) rather than booking immediately --
-  // bookDriver itself only ever runs from that sheet's own Confirm button.
-  const [confirmingEntry, setConfirmingEntry] = useState(null);
-  const [bookingSuccess, setBookingSuccess] = useState(false);
-  // Captured off the entry right before resetFields() clears the form --
-  // the success sheet below needs to say which vehicle the request went
-  // to even after pickup/drop/weight are already wiped.
-  const [lastBooked, setLastBooked] = useState(null);
+  // Tapping a driver's inline "Book this vehicle" button sends the
+  // request immediately (no separate confirmation step) -- sendingKey
+  // marks that one card's button as "Request sent. Please wait" (disabled)
+  // until this whole component unmounts, which happens naturally the
+  // moment CustomerApp's own activeBooking picks up the just-created
+  // AwaitingDriver booking from Firestore and swaps in ActiveRide instead.
+  const [sendingKey, setSendingKey] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim());
   const weightReady = weight.trim().length >= 3;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
@@ -5810,10 +5804,14 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // choosing this photo (see requestByCategory's driverName param). If
   // THIS driver doesn't respond within the timeout, retargetToNextDriver
   // still takes over automatically from there, same as it always has.
-  // Only ever called from the confirmation sheet's own Confirm button, not
-  // directly off a card tap — see confirmingEntry above.
+  // Fires straight off the inline "Book this vehicle" tap now (no separate
+  // confirmation sheet) -- sendingKey disables that one card's button and
+  // relabels it "Request sent. Please wait" rather than resetting the form
+  // or showing a separate success overlay; the component unmounts on its
+  // own once activeBooking swaps this screen for ActiveRide.
   const bookDriver = (entry) => {
     setBookingError("");
+    setSendingKey(entry.id);
     const err = requestByCategory({
       pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
@@ -5825,12 +5823,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
       // saw and tapped to accept.
       fare: entry.fare,
     });
-    if (err) { setBookingError(err); return; }
-    setLastBooked({ tierLabel: entry.tier.label });
-    resetFields();
-    setConfirmingEntry(null);
-    setSelectedDriverKey(null);
-    setBookingSuccess(true);
+    if (err) { setBookingError(err); setSendingKey(null); return; }
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
@@ -5934,8 +5927,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           the list collapses to just that card (see visibleDrivers) with
           an inline "Book this vehicle" button right under it and a
           "Choose another vehicle" link back to the full list; tapping
-          Book opens the confirmation sheet below rather than booking
-          immediately. */}
+          Book sends the request immediately (no confirmation sheet) and
+          that same button becomes a disabled "Request sent. Please wait". */}
       {locationsReady && (
         <div className="px-5 pt-3 pb-4 space-y-2.5">
           {!weightReady ? (
@@ -5949,7 +5942,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                   👇 {lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}
                 </div>
               )}
-              {bookingError && !confirmingEntry && (
+              {bookingError && (
                 <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
               )}
               {nearbyDrivers.length === 0 ? (
@@ -5961,10 +5954,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                   {visibleDrivers.map((entry) => {
                     const key = entry.id;
                     const isSelected = selectedDriverKey === key;
+                    const isSending = sendingKey === key;
                     const fare = entry.fare;
                     return (
                       <div key={key}>
-                        <button onClick={() => setSelectedDriverKey(isSelected ? null : key)}
+                        <button onClick={() => setSelectedDriverKey(isSelected ? null : key)} disabled={isSending}
                           className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
                           style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : C.paper }}>
                           <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
@@ -5981,14 +5975,18 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                           <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
                         </button>
                         {isSelected && (
-                          <button onClick={() => setConfirmingEntry(entry)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 animate-pulse" style={{ background: C.success }}>
-                            {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}
+                          <button onClick={() => bookDriver(entry)} disabled={isSending}
+                            className={`w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 ${isSending ? "" : "animate-pulse"}`}
+                            style={{ background: isSending ? C.inkSoft : C.success }}>
+                            {isSending
+                              ? (lang === "en" ? "Request sent. Please wait" : lang === "mr" ? "रिक्वेस्ट पाठवली. कृपया थांबा" : "रिक्वेस्ट भेज दी गई. कृपया प्रतीक्षा करें")
+                              : <>{lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}</>}
                           </button>
                         )}
                       </div>
                     );
                   })}
-                  {selectedEntry && (
+                  {selectedEntry && sendingKey !== selectedEntry.id && (
                     <button onClick={() => setSelectedDriverKey(null)} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
                       ↺ {lang === "en" ? "Choose another vehicle" : lang === "mr" ? "दुसरी गाडी निवडा" : "दूसरी गाड़ी चुनें"}
                     </button>
@@ -5997,59 +5995,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               )}
             </>
           )}
-        </div>
-      )}
-
-      {/* Confirmation step before the request actually fires -- a deliberate
-          "are you sure" summary (matching the design mock) between tapping
-          a specific vehicle's inline book button and requestByCategory
-          actually running, rather than booking the instant that button is
-          tapped. */}
-      {confirmingEntry && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setConfirmingEntry(null)}>
-          <div className="w-full max-w-sm rounded-t-2xl p-5 space-y-3" style={{ background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Confirm booking" : lang === "mr" ? "बुकिंग पक्की करा" : "बुकिंग पक्की करें"}</h3>
-            <dl className="text-sm space-y-1.5">
-              <div className="flex justify-between"><dt style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle" : lang === "mr" ? "वाहन" : "वाहन"}</dt><dd className="font-bold" style={{ color: C.ink }}>{confirmingEntry.tier.label}</dd></div>
-              <div className="flex justify-between"><dt style={{ color: C.inkSoft }}>{lang === "en" ? "Weight" : lang === "mr" ? "वजन" : "वज़न"}</dt><dd className="font-bold" style={{ color: C.ink }}>{weight} kg</dd></div>
-              <div className="flex justify-between"><dt style={{ color: C.inkSoft }}>{lang === "en" ? "Distance" : lang === "mr" ? "अंतर" : "दूरी"}</dt><dd className="font-bold" style={{ color: C.ink }}>{distance !== null ? formatDistanceExact(distance, lang) : "—"}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="shrink-0" style={{ color: C.inkSoft }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}</dt><dd className="font-bold text-right truncate" style={{ color: C.ink }}>{pickup}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="shrink-0" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}</dt><dd className="font-bold text-right truncate" style={{ color: C.ink }}>{drop}</dd></div>
-              <div className="flex justify-between pt-1.5" style={{ borderTop: `1px solid ${C.line}` }}><dt className="font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}</dt><dd className="font-black text-lg" style={{ color: C.success }}>{fmt(confirmingEntry.fare)}</dd></div>
-            </dl>
-            {bookingError && (
-              <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
-            )}
-            <div className="grid grid-cols-2 gap-2.5">
-              <button onClick={() => setConfirmingEntry(null)} className="rounded-xl py-3 font-bold text-sm" style={{ border: `2px solid ${C.line}`, color: C.ink }}>
-                {lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"}
-              </button>
-              <button onClick={() => bookDriver(confirmingEntry)} className="rounded-xl py-3 font-black text-sm text-white" style={{ background: C.success }}>
-                {lang === "en" ? "Confirm booking" : lang === "mr" ? "पक्की बुक करा" : "पक्का बुक करें"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* bookingSuccess stays shown until this whole component unmounts --
-          which happens naturally the moment CustomerApp's own activeBooking
-          picks up the just-created booking from Firestore and swaps in
-          ActiveRide instead, usually within a second or two. Smooths over
-          that gap instead of snapping straight back to an empty form. */}
-      {bookingSuccess && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }}>
-          <div className="w-full max-w-sm rounded-t-2xl p-6 text-center space-y-2" style={{ background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}>
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto text-3xl" style={{ background: C.success, color: "#fff" }}>✓</div>
-            <h3 className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Booking request sent" : lang === "mr" ? "बुकिंग रिक्वेस्ट पाठवली" : "बुकिंग रिक्वेस्ट भेज दी गई"}</h3>
-            <p className="text-sm" style={{ color: C.inkSoft }}>
-              {lang === "en"
-                ? `Your request has gone out to ${lastBooked?.tierLabel || ""} drivers nearby. You'll be alerted the moment one accepts.`
-                : lang === "mr"
-                ? `${lastBooked?.tierLabel || ""} असलेल्या जवळच्या ड्रायव्हर्सना तुमची रिक्वेस्ट गेली आहे. ड्रायव्हर मिळताच तुम्हाला कळवले जाईल.`
-                : `${lastBooked?.tierLabel || ""} वाले आस-पास के ड्राइवरों को आपकी रिक्वेस्ट भेज दी गई है। ड्राइवर मिलते ही आपको बता दिया जाएगा।`}
-            </p>
-          </div>
         </div>
       )}
     </div>
@@ -6143,21 +6088,15 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); };
   const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); };
 
-  const resetFields = () => {
-    setPickup(""); setDrop(""); setWeight("");
-    setPickupCoords(null); setDropCoords(null);
-    setAdvanceDate(""); setAdvanceTime("");
-  };
   const [bookingError, setBookingError] = useState("");
   const [selectedDriverKey, setSelectedDriverKey] = useState(null);
   const [manualMapOpen, setManualMapOpen] = useState(false);
   useEffect(() => { setManualMapOpen(false); }, [weight]);
-  const [confirmingEntry, setConfirmingEntry] = useState(null);
-  const [bookingSuccess, setBookingSuccess] = useState(false);
-  // Captured off the entry (and the date/time fields) right before
-  // resetFields() clears the form -- the success sheet below needs to say
-  // which vehicle and when even after advanceDate/advanceTime are wiped.
-  const [lastBooked, setLastBooked] = useState(null);
+  // Tapping a driver's inline "Book this vehicle" button sends the
+  // request immediately (no separate confirmation step) -- sendingKey
+  // marks that one card's button as "Request sent. Please wait" (disabled)
+  // until this whole component unmounts, same as CustomerBooking above.
+  const [sendingKey, setSendingKey] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim() && advanceDate && advanceTime);
   const weightReady = weight.trim().length >= 3;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
@@ -6223,18 +6162,14 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
         : `इस वाहन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`);
       return;
     }
+    setSendingKey(entry.id);
     const err = requestByCategory({
       pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: scheduledForValue,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       fare: entry.fare,
     });
-    if (err) { setBookingError(err); return; }
-    setLastBooked({ tierLabel: entry.tier.label, date: advanceDate, time: advanceTime });
-    resetFields();
-    setConfirmingEntry(null);
-    setSelectedDriverKey(null);
-    setBookingSuccess(true);
+    if (err) { setBookingError(err); setSendingKey(null); return; }
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
@@ -6332,7 +6267,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                   👇 {lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}
                 </div>
               )}
-              {bookingError && !confirmingEntry && (
+              {bookingError && (
                 <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
               )}
               {nearbyDrivers.length === 0 ? (
@@ -6344,10 +6279,11 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                   {visibleDrivers.map((entry) => {
                     const key = entry.id;
                     const isSelected = selectedDriverKey === key;
+                    const isSending = sendingKey === key;
                     const fare = entry.fare;
                     return (
                       <div key={key}>
-                        <button onClick={() => setSelectedDriverKey(isSelected ? null : key)}
+                        <button onClick={() => setSelectedDriverKey(isSelected ? null : key)} disabled={isSending}
                           className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
                           style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : C.paper }}>
                           <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
@@ -6364,14 +6300,18 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                           <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
                         </button>
                         {isSelected && (
-                          <button onClick={() => setConfirmingEntry(entry)} className="w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 animate-pulse" style={{ background: C.success }}>
-                            {lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}
+                          <button onClick={() => bookDriver(entry)} disabled={isSending}
+                            className={`w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 ${isSending ? "" : "animate-pulse"}`}
+                            style={{ background: isSending ? C.inkSoft : C.success }}>
+                            {isSending
+                              ? (lang === "en" ? "Request sent. Please wait" : lang === "mr" ? "रिक्वेस्ट पाठवली. कृपया थांबा" : "रिक्वेस्ट भेज दी गई. कृपया प्रतीक्षा करें")
+                              : <>{lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}</>}
                           </button>
                         )}
                       </div>
                     );
                   })}
-                  {selectedEntry && (
+                  {selectedEntry && sendingKey !== selectedEntry.id && (
                     <button onClick={() => setSelectedDriverKey(null)} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
                       ↺ {lang === "en" ? "Choose another vehicle" : lang === "mr" ? "दुसरी गाडी निवडा" : "दूसरी गाड़ी चुनें"}
                     </button>
@@ -6380,56 +6320,6 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
               )}
             </>
           )}
-        </div>
-      )}
-
-      {confirmingEntry && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setConfirmingEntry(null)}>
-          <div className="w-full max-w-sm rounded-t-2xl p-5 space-y-3" style={{ background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }} onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Confirm booking" : lang === "mr" ? "बुकिंग पक्की करा" : "बुकिंग पक्की करें"}</h3>
-            {/* One flowing sentence instead of an itemized field-by-field
-                list -- Pickup/Drop/date/time are all already visible on the
-                form right behind this sheet, so repeating each as its own
-                row just added reading weight without adding information. */}
-            <p className="text-sm leading-relaxed" style={{ color: C.ink }}>
-              {lang === "en"
-                ? `For ${advanceDate}, ${formatTimeSlot(advanceTime, lang)} — your request goes out to ${confirmingEntry.tier.label} drivers for ${pickup} → ${drop}${distance !== null ? ` (${formatDistanceExact(distance, lang)})` : ""}.`
-                : lang === "mr"
-                ? `${advanceDate}, ${formatTimeSlot(advanceTime, lang)} साठी — तुमची रिक्वेस्ट ${confirmingEntry.tier.label} गाडीच्या ड्रायव्हर्सना पाठवली जाईल — ${pickup} ते ${drop}${distance !== null ? ` (${formatDistanceExact(distance, lang)})` : ""}.`
-                : `${advanceDate}, ${formatTimeSlot(advanceTime, lang)} के लिए — आपकी रिक्वेस्ट ${confirmingEntry.tier.label} वाले ड्राइवरों को भेजी जाएगी — ${pickup} से ${drop}${distance !== null ? ` (${formatDistanceExact(distance, lang)})` : ""}।`}
-            </p>
-            <div className="flex items-center justify-between pt-1.5" style={{ borderTop: `1px solid ${C.line}` }}>
-              <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}</span>
-              <span className="font-black text-lg" style={{ color: C.success }}>{fmt(confirmingEntry.fare)}</span>
-            </div>
-            {bookingError && (
-              <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
-            )}
-            <div className="grid grid-cols-2 gap-2.5">
-              <button onClick={() => setConfirmingEntry(null)} className="rounded-xl py-3 font-bold text-sm" style={{ border: `2px solid ${C.line}`, color: C.ink }}>
-                {lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"}
-              </button>
-              <button onClick={() => bookDriver(confirmingEntry)} className="rounded-xl py-3 font-black text-sm text-white" style={{ background: C.success }}>
-                {lang === "en" ? "Confirm booking" : lang === "mr" ? "पक्की बुक करा" : "पक्का बुक करें"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {bookingSuccess && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }}>
-          <div className="w-full max-w-sm rounded-t-2xl p-6 text-center space-y-2" style={{ background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}>
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto text-3xl" style={{ background: C.success, color: "#fff" }}>✓</div>
-            <h3 className="text-lg font-black" style={{ color: C.ink }}>{lang === "en" ? "Advance booking request sent" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग रिक्वेस्ट पाठवली" : "एडवांस बुकिंग रिक्वेस्ट भेज दी गई"}</h3>
-            <p className="text-sm" style={{ color: C.inkSoft }}>
-              {lang === "en"
-                ? `For ${lastBooked?.date}, ${formatTimeSlot(lastBooked?.time, lang)} — your request has gone out to ${lastBooked?.tierLabel || ""} drivers. You'll be notified the moment one accepts.`
-                : lang === "mr"
-                ? `${lastBooked?.date}, ${formatTimeSlot(lastBooked?.time, lang)} साठी ${lastBooked?.tierLabel || ""} असलेल्या ड्रायव्हर्सना तुमची रिक्वेस्ट गेली आहे. ड्रायव्हर मिळताच तुम्हाला कळवले जाईल.`
-                : `${lastBooked?.date}, ${formatTimeSlot(lastBooked?.time, lang)} के लिए ${lastBooked?.tierLabel || ""} वाले ड्राइवरों को आपकी रिक्वेस्ट भेज दी गई है। ड्राइवर मिलते ही सूचना आएगी।`}
-            </p>
-          </div>
         </div>
       )}
     </div>
