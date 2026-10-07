@@ -490,6 +490,14 @@ async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile) 
 // settings.fareTiers" comment).
 const DIRECT_REQUEST_RADIUS_KM = 30;
 const DISPATCH_MAX_TIER_CLIMB = 2;
+// Same constant as src/App.jsx's BROADCAST_LOCATION_STALE_MS -- kept in
+// sync manually (see that file's comment for the full reasoning). Wider
+// than DRIVER_LOCATION_STALE_MS above on purpose: this broadcast path is
+// meant to reach a driver regardless of their online toggle, so it needs a
+// window generous enough to still find them by a recent-ish last fix,
+// while 24h (not unbounded) still guards against the already-fixed
+// stale-online-driver-treated-as-available bug.
+const BROADCAST_LOCATION_STALE_MS = 24 * 60 * 60 * 1000;
 const FARE_TIER_MAX_KGS = [500, 850, 1200, 1700, 2500, 4500, 7000, 999999];
 function fareTierMaxKgFor(capacityKg) {
   return FARE_TIER_MAX_KGS.find((maxKg) => (capacityKg || 0) <= maxKg) ?? FARE_TIER_MAX_KGS[FARE_TIER_MAX_KGS.length - 1];
@@ -523,7 +531,9 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
     driversSnap.forEach((doc) => {
       const driver = doc.data();
       const tag = `${doc.id} (${driver.name || "?"})`;
-      if (!driver.online) { skipLog.push(`${tag}: not online`); return; }
+      // Online status deliberately NOT checked here, on request -- this
+      // broadcast is meant to reach every eligible driver within range
+      // regardless of whether they're currently on duty.
       if (driver.kyc !== "Approved") { skipLog.push(`${tag}: kyc=${driver.kyc}`); return; }
       if (driver.blacklisted) { skipLog.push(`${tag}: blacklisted`); return; }
 
@@ -537,7 +547,7 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
 
       if (load.pickupLat == null) { skipLog.push(`${tag}: load has no pickupLat/Lng`); return; }
       if (!driver.lastKnownLocation) { skipLog.push(`${tag}: no lastKnownLocation`); return; }
-      if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > DRIVER_LOCATION_STALE_MS) { skipLog.push(`${tag}: lastKnownLocation stale (age ${driver.lastKnownLocation.updatedAt ? Math.round((Date.now() - driver.lastKnownLocation.updatedAt) / 1000) + "s" : "no timestamp"})`); return; }
+      if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > BROADCAST_LOCATION_STALE_MS) { skipLog.push(`${tag}: lastKnownLocation stale (age ${driver.lastKnownLocation.updatedAt ? Math.round((Date.now() - driver.lastKnownLocation.updatedAt) / 1000) + "s" : "no timestamp"})`); return; }
       const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng);
       if (distKm > DIRECT_REQUEST_RADIUS_KM) { skipLog.push(`${tag}: ${distKm.toFixed(1)}km away, outside ${DIRECT_REQUEST_RADIUS_KM}km radius`); return; }
 

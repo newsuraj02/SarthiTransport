@@ -1194,18 +1194,39 @@ function tierMaxKgAbove(tierMaxKg, offset, tiers = DEFAULT_FARE_TIERS) {
 // whether pendingDriverName is set).
 const DIRECT_REQUEST_RADIUS_KM = 30;
 
+// Wider staleness cutoff than NEARBY_DRIVER_STALE_MS (5 min, used for the
+// live map/picker display) -- broadcast-dispatch reach deliberately goes
+// further so a driver who went off duty recently still gets found by their
+// last real position, without reviving stale-online-driver-treated-as-
+//-available (BUG_TRACKER_SEED, critical, fixed 2026-09-17: 188/203
+// "Online" drivers had no recent GPS at all, so an unbounded/no-staleness
+// check pushed loads to drivers based on days-old coordinates). 24h is the
+// deliberate middle ground between that bug and genuinely excluding every
+// off-duty driver.
+const BROADCAST_LOCATION_STALE_MS = 24 * 60 * 60 * 1000;
+
 // Whether driver d currently qualifies to see/accept broadcast booking b:
-// online, KYC-approved, not blacklisted; own vehicle capacity resolves to
-// b's own category or up to DISPATCH_MAX_TIER_CLIMB brackets above it;
-// hasn't already declined it; has a fresh GPS fix within
-// DIRECT_REQUEST_RADIUS_KM of pickup (same staleness cutoff as every other
-// live-location check in this file); and has no scheduling conflict.
+// KYC-approved, not blacklisted (online status deliberately NOT checked —
+// see below); own vehicle capacity resolves to b's own category or up to
+// DISPATCH_MAX_TIER_CLIMB brackets above it; hasn't already declined it;
+// has reported a location within DIRECT_REQUEST_RADIUS_KM of pickup inside
+// the last BROADCAST_LOCATION_STALE_MS; and has no scheduling conflict.
 // Pure/explicit-args like findDriverLoadConflict/tierMaxKgAbove above, so
 // both requestByCategory (checking "does anyone qualify at all") and
 // DriverHome (building each driver's own list of open requests) share the
 // exact same notion of "eligible" and can never drift apart.
+//
+// Online status is deliberately NOT checked here, on request -- every
+// eligible driver within range should see/be pushed a new load regardless
+// of whether they're currently on duty, not just whoever happens to be
+// online with the picker list already showing them. GPS freshness still
+// is, just with a much wider window (BROADCAST_LOCATION_STALE_MS, 24h) than
+// the live map's 5-minute one -- dropping it entirely would revive
+// stale-online-driver-treated-as-available (BUG_TRACKER_SEED, critical,
+// fixed 2026-09-17), where a driver's days-old coordinate got treated as
+// proof they're reachable right now.
 function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang) {
-  if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+  if (d.kyc !== "Approved" || d.blacklisted) return false;
   if ((b.declinedBy || []).includes(d.name)) return false;
   const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
   const dTierMaxKg = findFareTier(dCapKg, fareTiers).maxKg;
@@ -1215,7 +1236,7 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
   }
   if (!tierMatch) return false;
   if (b.pickupLat == null || !d.lastKnownLocation) return false;
-  if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
+  if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > BROADCAST_LOCATION_STALE_MS) return false;
   if (haversineKm(d.lastKnownLocation.lat, d.lastKnownLocation.lng, b.pickupLat, b.pickupLng) > DIRECT_REQUEST_RADIUS_KM) return false;
   if (findDriverLoadConflict(d, b, bookings, vehicleTypes, lang)) return false;
   return true;
