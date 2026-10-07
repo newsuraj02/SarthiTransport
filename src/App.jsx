@@ -16,7 +16,7 @@ import {
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Settings2, Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Plus, Loader2, RefreshCw,
-  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, LocateFixed,
+  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs,
@@ -5877,11 +5877,17 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
             />
           </div>
           {/* Separate box next to Pickup, not an icon inside it -- own
-              border/background, same height as the input. */}
+              border/background, stretched to the input's own height. */}
           <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
-            title={lang === "en" ? "Use current location" : lang === "mr" ? "सध्याचे ठिकाण वापरा" : "मौजूदा लोकेशन इस्तेमाल करें"}
-            className="shrink-0 rounded-lg flex items-center justify-center" style={{ width: 52, height: 52, background: C.paper, border: `1.5px solid ${C.line}` }}>
-            {locatingPickup ? <Loader2 size={19} color={C.marigoldDeep} className="animate-spin" /> : <LocateFixed size={20} color={C.marigoldDeep} strokeWidth={2.2} />}
+            className="shrink-0 self-stretch rounded-lg flex items-center justify-center text-center px-1.5"
+            style={{ width: 84, background: C.paper, border: `1.5px solid ${C.line}` }}>
+            {locatingPickup ? (
+              <Loader2 size={16} color={C.marigoldDeep} className="animate-spin" />
+            ) : (
+              <span className="text-[10px] font-bold leading-tight" style={{ color: C.marigoldDeep }}>
+                {lang === "en" ? "Use Current Location" : lang === "mr" ? "सध्याचे ठिकाण वापरा" : "मौजूदा लोकेशन इस्तेमाल करें"}
+              </span>
+            )}
           </button>
         </div>
 
