@@ -16,7 +16,7 @@ import {
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Settings2, Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Plus, Loader2, RefreshCw,
-  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator,
+  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, LocateFixed,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs,
@@ -5310,7 +5310,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-export function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false }) {
+export function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, onUseCurrentLocation, locatingCurrent = false }) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -5376,7 +5376,11 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
   };
 
   const inputCls = "w-full rounded-lg py-5 text-xs font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16 };
+  // The "use current location" button only ever takes the empty-field slot
+  // the X-clear button occupies once there's a value — never both at once,
+  // so paddingRight only needs the one 52px reservation either way.
+  const showUseCurrentLocation = !value && !!onUseCurrentLocation;
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: (value || showUseCurrentLocation) ? 52 : 16 };
   const showDropdown = dropdownOpen && predictions.length > 0;
   // Shown instead of the live-predictions dropdown, only while the field is
   // focused and still empty — the moment there's real input, predictions
@@ -5396,6 +5400,13 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
             className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
             <X size={20} color={C.inkSoft} strokeWidth={2.5} />
+          </button>
+        )}
+        {showUseCurrentLocation && (
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={onUseCurrentLocation} disabled={locatingCurrent}
+            title={lang === "en" ? "Use current location" : lang === "mr" ? "सध्याचे ठिकाण वापरा" : "मौजूदा लोकेशन इस्तेमाल करें"}
+            className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
+            {locatingCurrent ? <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" /> : <LocateFixed size={19} color={C.marigoldDeep} strokeWidth={2.2} />}
           </button>
         )}
         {showDropdown && (
@@ -5689,6 +5700,25 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); };
   const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); };
 
+  // "Use current location" button on the Pickup field (LocationField's
+  // onUseCurrentLocation) -- same one-shot GPS call and reverseGeocode as
+  // onMapClick above, just for a direct tap instead of a map tap.
+  const [locatingPickup, setLocatingPickup] = useState(false);
+  const useCurrentLocationForPickup = async () => {
+    setLocatingPickup(true);
+    try {
+      const pos = await getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+      locationPermission?.markGranted();
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      onPickupPlaceSelected({ name, lat, lng });
+    } catch (err) {
+      if (isLocationPermissionDeniedError(err)) locationPermission?.markDenied();
+      else console.error("[use current location]", err);
+    }
+    setLocatingPickup(false);
+  };
+
   const resetFields = () => {
     setPickup(""); setDrop(""); setWeight("");
     setPickupCoords(null); setDropCoords(null);
@@ -5853,6 +5883,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
           onFocus={() => setActiveField("pickup")}
           recentItems={recentPickups}
+          onUseCurrentLocation={useCurrentLocationForPickup}
+          locatingCurrent={locatingPickup}
         />
 
         <LocationField
