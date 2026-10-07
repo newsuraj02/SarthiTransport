@@ -88,6 +88,20 @@ select {
   animation: driverSelectBounce 0.4s ease-out;
 }
 
+/* "Use current location" box next to Pickup (CustomerBooking) -- blinks
+   between solid blue and white (text/icon invert along with it via
+   currentColor) to draw the eye before the customer has filled Pickup,
+   same spirit as guided-submit-ready's pulse but a color swap instead of
+   an opacity/shadow one, matching the reference design exactly. */
+@keyframes currentLocationBlink {
+  0%, 100% { background-color: #0052CC; color: #FFFFFF; }
+  50%      { background-color: #FFFFFF; color: #0052CC; }
+}
+.current-location-blink {
+  animation: currentLocationBlink 1.4s ease-in-out infinite;
+  border: 1.5px solid #0052CC;
+}
+
 /* App-wide tap feedback — every button presses down very slightly on tap
    instead of giving no visual response at all. Pure CSS (no JS), so it
    costs nothing on a slow phone. Disabled buttons are excluded so a

@@ -16,7 +16,7 @@ import {
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
   Settings2, Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Plus, Loader2, RefreshCw,
-  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator,
+  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, LocateFixed,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs,
@@ -5869,19 +5869,27 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               recentItems={recentPickups}
             />
           </div>
-          {/* Separate box next to Pickup, not an icon inside it -- own
-              border/background, stretched to the input's own height. */}
-          <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
-            className="shrink-0 self-stretch rounded-lg flex items-center justify-center text-center px-1.5"
-            style={{ width: 84, background: C.paper, border: `1.5px solid ${C.line}` }}>
-            {locatingPickup ? (
-              <Loader2 size={16} color={C.marigoldDeep} className="animate-spin" />
-            ) : (
-              <span className="text-[10px] font-bold leading-tight" style={{ color: C.marigoldDeep }}>
-                {lang === "en" ? "Use Current Location" : lang === "mr" ? "सध्याचे ठिकाण वापरा" : "मौजूदा लोकेशन इस्तेमाल करें"}
-              </span>
-            )}
-          </button>
+          {/* Separate box next to Pickup -- blue/white blink (see
+              .current-location-blink, index.css) until tapped or Pickup
+              gets any text (typed or picked), at which point it's gone
+              entirely -- no point offering "use current location" once
+              there's already an address in the field. */}
+          {!pickup.trim() && (
+            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
+              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup ? "" : "current-location-blink"}`}
+              style={{ width: 92, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
+              {locatingPickup ? (
+                <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
+              ) : (
+                <>
+                  <LocateFixed size={20} color="currentColor" strokeWidth={2.2} />
+                  <span className="text-[10px] font-bold leading-tight" style={{ color: "currentColor" }}>
+                    {lang === "en" ? "Use Current Location" : lang === "mr" ? "करंट लोकेशन निवडा" : "करंट लोकेशन चुनें"}
+                  </span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         <LocationField
