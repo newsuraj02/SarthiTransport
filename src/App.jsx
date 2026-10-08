@@ -5615,6 +5615,46 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
   return { activeStep, stepProps };
 }
 
+// Pads a vehicle-category list up to a minimum count by climbing to the
+// next tier(s) ABOVE whatever's already included, when nearby real
+// inventory is thin -- so a customer in a sparse area still sees at least
+// a few real choices instead of just one or two. Never adds a tier BELOW
+// what's already shown (a smaller vehicle than the load can't carry it
+// anyway). Mirrors nearbyDrivers' own driver-eligibility checks (online/
+// KYC/blacklist/location-freshness/radius) exactly, just scoped one tier
+// at a time instead of the normal flat capacity-headroom window -- shared
+// by CustomerBooking and CustomerAdvanceBooking, which both build
+// `withFare` the same way before calling this.
+function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCoords, radiusKm, pickup, drop, distance, dropCoords, adminRouteFares, minCategories = 3 }) {
+  const coveredTiers = new Set(withFare.map((e) => e.tier.maxKg));
+  if (coveredTiers.size >= minCategories || !pickupCoords) return withFare;
+  const sortedTiers = [...fareTiers].sort((a, b) => a.maxKg - b.maxKg);
+  const highestCovered = coveredTiers.size ? Math.max(...coveredTiers) : -Infinity;
+  const extra = [];
+  for (const tier of sortedTiers) {
+    if (coveredTiers.size >= minCategories) break;
+    if (tier.maxKg <= highestCovered) continue;
+    const matches = drivers.filter((d) => {
+      if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+      const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+      if (findFareTier(dCapKg, fareTiers).maxKg !== tier.maxKg) return false;
+      if (!d.lastKnownLocation?.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
+      return haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) <= radiusKm;
+    });
+    if (!matches.length) continue;
+    coveredTiers.add(tier.maxKg);
+    const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
+    const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+    for (const d of matches) {
+      const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+      const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+      const id = d.mobile || d.id;
+      extra.push({ driver: d, capacityKg, tier, tierIndex, km, id, fare });
+    }
+  }
+  return extra.length ? [...withFare, ...extra].sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km) : withFare;
+}
+
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
@@ -5626,6 +5666,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   const [dropCoords, setDropCoords] = useState(null);
   const [distance, setDistance] = useState(null);
   const [weight, setWeight] = useState("");
+  // kg (default) or ton -- loadKg below converts for every downstream use
+  // (vehicle matching, fare resolution), so the rest of this component
+  // never needs to know which unit was actually typed.
+  const [weightUnit, setWeightUnit] = useState("kg");
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -5760,7 +5804,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // AwaitingDriver booking from Firestore and swaps in ActiveRide instead.
   const [sendingKey, setSendingKey] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim());
-  const weightReady = weight.trim().length >= 3;
+  const weightReady = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1) > 0;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
 
   // Every real, currently online/approved/non-blacklisted driver within
@@ -5779,9 +5823,9 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // category (lightest first) and then nearest-first within a category,
   // matching the order the fare tiers and the dispatch engine already use
   // elsewhere.
-  const loadKg = Number(weight) || 0;
+  const loadKg = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1);
   const nearbyDrivers = (() => {
-    const withFare = drivers
+    let withFare = drivers
       .filter((d) => {
         if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
         const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
@@ -5800,6 +5844,14 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
         return { driver: d, capacityKg, tier, tierIndex, km, id, fare };
       })
       .sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km);
+
+    // Fewer than 3 distinct categories available nearby? Climb to the next
+    // tier(s) above what's already here so the customer still sees a few
+    // real choices (see padVehicleCategories above).
+    withFare = padVehicleCategories(withFare, {
+      drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: CURRENT_BID_RADIUS_KM,
+      pickup, drop, distance, dropCoords, adminRouteFares,
+    });
 
     // A bad Admin override for just one tier on this route (a stray digit,
     // a mixed-up route -- see findFareOutliers) would otherwise show the
@@ -5941,7 +5993,24 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
             </span>
           </div>
-          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
+          <div className="relative">
+            <input className={inputCls} style={{ ...inputStyle, paddingRight: 46 }} inputMode="decimal"
+              placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
+              onChange={(e) => {
+                // Digits and at most one decimal point -- same filter the
+                // guide's own snippet uses, so "15.5" types cleanly instead
+                // of the old all-non-digits-stripped integer-only input.
+                const clean = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                setWeight(clean);
+              }} />
+            {/* kg/ton toggle -- same right-edge slot pattern as LocationField's
+                clear button, just a unit switch instead. */}
+            <button type="button" onClick={() => setWeightUnit((u) => (u === "kg" ? "ton" : "kg"))}
+              className="absolute right-1 top-1 bottom-1 px-2 rounded-md text-[10px] font-black"
+              style={{ background: C.navy, color: "#fff" }}>
+              {weightUnit === "kg" ? "kg" : "टन"}
+            </button>
+          </div>
         </div>
 
         {!locationsReady && (
@@ -6064,6 +6133,10 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   const [dropCoords, setDropCoords] = useState(null);
   const [distance, setDistance] = useState(null);
   const [weight, setWeight] = useState("");
+  // kg (default) or ton -- loadKg below converts for every downstream use
+  // (vehicle matching, fare resolution), so the rest of this component
+  // never needs to know which unit was actually typed.
+  const [weightUnit, setWeightUnit] = useState("kg");
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6136,13 +6209,13 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   // until this whole component unmounts, same as CustomerBooking above.
   const [sendingKey, setSendingKey] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim() && advanceDate && advanceTime);
-  const weightReady = weight.trim().length >= 3;
+  const weightReady = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1) > 0;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
   const scheduledForValue = `${advanceDate} ${advanceTime}`;
 
-  const loadKg = Number(weight) || 0;
+  const loadKg = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1);
   const nearbyDrivers = (() => {
-    const withFare = drivers
+    let withFare = drivers
       .filter((d) => {
         if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
         const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
@@ -6161,6 +6234,11 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
         return { driver: d, capacityKg, tier, tierIndex, km, id, fare };
       })
       .sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km);
+
+    withFare = padVehicleCategories(withFare, {
+      drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: ADVANCE_BID_RADIUS_KM,
+      pickup, drop, distance, dropCoords, adminRouteFares,
+    });
 
     const outlierIds = findFareOutliers(
       withFare.map((e) => ({ id: e.id, tierMaxKg: e.tier.maxKg, totalFare: e.fare, estimatedKm: distance })),
@@ -6282,7 +6360,24 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
               {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
             </span>
           </div>
-          <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "Enter Weight (kg)" : lang === "mr" ? "वजन टाका (किलोग्राम)" : "वजन डालें (किलोग्राम)"} value={weight} onChange={(e) => setWeight(e.target.value.replace(/\D/g, ""))} />
+          <div className="relative">
+            <input className={inputCls} style={{ ...inputStyle, paddingRight: 46 }} inputMode="decimal"
+              placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
+              onChange={(e) => {
+                // Digits and at most one decimal point -- same filter the
+                // guide's own snippet uses, so "15.5" types cleanly instead
+                // of the old all-non-digits-stripped integer-only input.
+                const clean = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                setWeight(clean);
+              }} />
+            {/* kg/ton toggle -- same right-edge slot pattern as LocationField's
+                clear button, just a unit switch instead. */}
+            <button type="button" onClick={() => setWeightUnit((u) => (u === "kg" ? "ton" : "kg"))}
+              className="absolute right-1 top-1 bottom-1 px-2 rounded-md text-[10px] font-black"
+              style={{ background: C.navy, color: "#fff" }}>
+              {weightUnit === "kg" ? "kg" : "टन"}
+            </button>
+          </div>
         </div>
 
         {!locationsReady && (
