@@ -1434,7 +1434,7 @@ export function respondExtra(extra, accept, responderMobile) {
 
 // The guide's own mandated bill-footer note (section 15) -- shown under
 // every completed trip's bill, unchanged regardless of what's actually on it.
-export const BILL_NOTE_HI = "भाड़े में टोल टैक्स, पार्किंग और शामिल दिनों तक की वेटिंग जुड़ी है — टोल ड्राइवर भरेगा, कस्टमर को अलग से कुछ नहीं देना। शामिल दिनों के बाद हर दिन का हॉल्टिंग चार्ज ऐप अपने आप जोड़ता है। हमाली (लोडिंग/अनलोडिंग) और एक्स्ट्रा स्टॉप सारथी तय नहीं करता — ये ड्राइवर और कस्टमर आपसी सहमति से तय करते हैं और दोनों की मंज़ूरी के बाद ही बिल में जुड़ते हैं।";
+export const BILL_NOTE_HI = "भाड़े में टोल टैक्स, पार्किंग और शामिल दिनों तक की वेटिंग जुड़ी है — टोल ड्राइवर भरेगा, कस्टमर को अलग से कुछ नहीं देना। शामिल दिनों के बाद हर दिन का हॉल्टिंग चार्ज ऐप अपने आप जोड़ता है। हमाली (लोडिंग/अनलोडिंग) और एक्स्ट्रा स्टॉप अपना ट्रांसपोर्ट तय नहीं करता — ये ड्राइवर और कस्टमर आपसी सहमति से तय करते हैं और दोनों की मंज़ूरी के बाद ही बिल में जुड़ते हैं।";
 
 // Final invoice once a trip completes (OTP) -- `fare` must be the REGULAR,
 // pre-return-discount fare (see driverRespondBooking's originalFare) so
