@@ -5731,17 +5731,20 @@ function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCo
 }
 
 // Weight input shape per unit -- kg is a plain 3-5 digit integer (100kg to
-// 99999kg; nobody books a <100kg truck load), tons allow up to 2 integer
-// digits plus 2 decimal digits (0 to 99.99t) for sub-tonne precision.
-// Enforced at the character level in getWeightInputChange below (not just
-// validated on submit), so the field itself can never grow past either
-// shape -- which also means the only way a customer "overflows" one unit's
-// cap is by actually trying to type a number that belongs in the OTHER
-// unit (e.g. typing "750" while on the tons toggle, meant as kg); that
-// overflow is reported back as mismatchUnit so the UI can offer to switch
-// instead of just silently refusing the keystroke with no explanation.
+// 99999kg; nobody books a <100kg truck load). Tons are a pure digit
+// stream the customer never has to put a decimal point into themselves --
+// the first 2 digits typed are the whole-tonne part, and the decimal
+// point is inserted automatically the moment a 3rd digit arrives, taking
+// up to 3 more digits after it (0 to 99.999t). Enforced at the character
+// level in getWeightInputChange below (not just validated on submit), so
+// the field itself can never grow past either shape -- which also means
+// the only way a customer "overflows" one unit's cap is by actually
+// trying to type a number that belongs in the OTHER unit (e.g. typing
+// "750" while on the tons toggle, meant as kg); that overflow is reported
+// back as mismatchUnit so the UI can offer to switch instead of just
+// silently refusing the keystroke with no explanation.
 const KG_WEIGHT_RE = /^\d{3,5}$/;
-const TON_WEIGHT_RE = /^\d{1,2}(\.\d{1,2})?$/;
+const TON_WEIGHT_RE = /^\d{1,2}(\.\d{1,3})?$/;
 function getWeightInputChange(rawValue, unit) {
   if (unit === "kg") {
     const digitsOnly = rawValue.replace(/[^0-9]/g, "");
@@ -5752,12 +5755,16 @@ function getWeightInputChange(rawValue, unit) {
     const mismatchUnit = (/\./.test(rawValue) || digitsOnly.length > 5) ? "ton" : null;
     return { clean, mismatchUnit };
   }
-  const noJunk = rawValue.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
-  const [intPart, decPart] = noJunk.split(".");
-  const clean = intPart.slice(0, 2) + (noJunk.includes(".") ? "." + (decPart || "").slice(0, 2) : "");
-  // More than 2 integer digits before any decimal point -- almost
-  // certainly a kg-sized number (e.g. "750") typed while still on tons.
-  const mismatchUnit = intPart.length > 2 ? "kg" : null;
+  // Any "." the customer types is ignored (there's nothing for them to
+  // place -- it's placed for them); only the digits typed matter.
+  const digitsOnly = rawValue.replace(/[^0-9]/g, "");
+  const capped = digitsOnly.slice(0, 5); // 2 whole-tonne + 3 decimal digits
+  const intPart = capped.slice(0, 2);
+  const decPart = capped.slice(2);
+  const clean = decPart ? `${intPart}.${decPart}` : intPart;
+  // More than 5 meaningful digits total -- same digit budget as kg's own
+  // cap -- almost certainly a kg-sized number typed while still on tons.
+  const mismatchUnit = digitsOnly.length > 5 ? "kg" : null;
   return { clean, mismatchUnit };
 }
 function isWeightValid(weight, unit) {
