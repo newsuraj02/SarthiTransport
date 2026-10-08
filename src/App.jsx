@@ -540,16 +540,6 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
-    id: "driver-referral-self-fraud-unprotected-fields",
-    title: "A driver can self-referral-fraud unlimited wallet credit by editing their own driver record directly",
-    severity: "high",
-    status: "open",
-    type: "security",
-    area: "Driver Wallet / Referrals / firestore.rules / Cloud Functions",
-    description: "creditDriverReferral trusts a driver's own referredBy/referralCredited fields, which firestore.rules' driverProtectedFieldsUnchanged() does not protect from direct client writes (it only guards kyc/blacklisted/wallet/heldCredit/bonus/createdAt). A driver can use the Firebase client SDK to write { referredBy: <own mobile>, referralCredited: false } onto their own drivers/{mobile} doc, then call creditDriverReferral repeatedly -- each call resolves the \"referrer\" to their own doc and credits wallet += ₹200 via the Admin SDK, giving unlimited self-funded wallet credit as long as they have one completed trip and keep resetting referralCredited between calls. Found during a full-app audit. Explicitly left UNFIXED per direct instruction (only a specific subset of that audit's findings were authorized to be fixed) -- still open, needs a decision on when to close it.",
-    foundAt: "2026-09-17",
-  },
-  {
     id: "unassigned-booking-write-no-field-allowlist",
     title: "Any signed-in stranger could rewrite fare/pickup/drop/customerMobile on someone else's still-unassigned booking",
     severity: "high",
@@ -657,17 +647,6 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
-    id: "stale-online-driver-treated-as-available",
-    title: "Booking matching and push alerts treated a driver's days-old GPS coordinate as proof they're reachable near a pickup right now",
-    severity: "critical",
-    status: "fixed",
-    type: "bug",
-    area: "CustomerBooking / retargetToNextDriver / onNewLoadPosted",
-    description: "Measured live via the new Admin GPS status view: 188 of 203 drivers marked Online had no recent GPS at all -- online is a manual toggle with no auto-expiry, and mobile browsers pause watchPosition almost immediately once a tab is backgrounded/locked, so a driver who toggled on and then put their phone away stays 'Online' forever with a frozen lastKnownLocation. eligibleDrivers (CustomerBooking), retargetToNextDriver, and onNewLoadPosted (functions/index.js, the new-load push alert) all checked online + capacity + proximity, but never whether that stored coordinate was actually recent -- a driver's location from days ago could coincidentally fall inside the radius and be shown/pushed as available despite being unreachable. The 'nearby drivers' map (nearbyOnlineDrivers) already applied a 5-minute staleness cutoff (NEARBY_DRIVER_STALE_MS) for its own display; this was the one concept that hadn't been extended to real booking matching. Fixed by applying that same cutoff to all three: a driver whose lastKnownLocation.updatedAt is older than 5 minutes is now excluded, same fail-closed principle as proximity-filter-fails-open-not-closed.",
-    foundAt: "2026-09-17",
-    fixedAt: "2026-09-17",
-  },
-  {
     id: "firestore-retry-on-transient-network-error",
     title: "Added automatic retry-with-backoff for Firestore reads/writes on a transient network blip",
     severity: "low",
@@ -712,16 +691,6 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-18",
   },
   {
-    id: "driver-webview-geolocation-hangs-forever",
-    title: "A driver's GPS watch starts but never receives a fix or an error, on at least one real OPPO/ColorOS device",
-    severity: "high",
-    status: "open",
-    type: "bug",
-    area: "DriverHome watchPosition (Android WebView)",
-    description: "Live investigation, unresolved. A driver's Admin GPS status showed 'Never' despite Online being on. Added a temporary on-screen debug readout (gpsDebug in DriverHome -- see changelog-webview-geolocation-debug-readout) confirming the watchPosition effect itself is correct: it starts exactly when Duty turns on and stops exactly when it turns off (hasGeolocation=true either way). Once started, though, navigator.geolocation.watchPosition never calls back with either a fix OR an error -- not even the TIMEOUT error after the requested 15s, which should fire regardless of GPS availability. Ruled out one by one on the actual device: app location permission (granted), device-wide Location Services (on), Wi-Fi/Bluetooth scanning (on), Improve Location Accuracy (on), battery/background restrictions (foreground allowed, and the app was in foreground throughout), and environment (retested outdoors with clear sky, still hangs). Decisive isolation: Google Maps on the SAME phone gets a location fix immediately -- so this is not a device-wide GPS/Play-Services problem, it's specific to this app's WebView. Capacitor's own source (verified directly, see node_modules/@capacitor/android) already handles WebView geolocation permission correctly by default (BridgeWebChromeClient.onGeolocationPermissionsShowPrompt auto-grants once the Android runtime permission exists; Bridge.java already calls settings.setGeolocationEnabled(true)) -- so the leading theory is that the APK currently installed on that phone predates whichever Capacitor/Android version actually contains that correct behavior, since a native app's WebView behavior is fixed at build time and doesn't update on its own. Explicitly NOT yet tested: sideloading a fresh test build to confirm/rule this out -- deliberately declined for now (this app is Play Store-distributed for Customer/Driver, and a fresh build wasn't wanted at this time). Revisit by building a test APK (same CI pipeline, same signing key, sideloadable without touching the real Play Store listing) and re-running the same debug readout.",
-    foundAt: "2026-09-18",
-  },
-  {
     id: "changelog-webview-geolocation-debug-readout",
     title: "Added a temporary on-screen GPS debug readout to DriverHome for live diagnosis",
     severity: "low",
@@ -729,16 +698,6 @@ const BUG_TRACKER_SEED = [
     type: "feature",
     area: "DriverHome",
     description: "Ships with a normal hosting deploy (no APK rebuild needed, since this is plain web code loaded live) -- shows whether the watchPosition effect actually started, each raw GPS fix received, or any geolocation error with its real code and message, right on the Driver Home screen. Deliberately left in place (status kept open, not fixed) until driver-webview-geolocation-hangs-forever above is actually resolved -- remove this readout once that's fixed.",
-    foundAt: "2026-09-18",
-  },
-  {
-    id: "force-update-push-and-inapp-update",
-    title: "Force-update now reaches closed apps via push, and updates in-app via Play Core instead of only linking out",
-    severity: "medium",
-    status: "open",
-    type: "feature",
-    area: "Android native (AppUpdateBridgePlugin) / notifyForceUpdate / Admin Settings",
-    description: "The 'Required versionCode' gate in Admin Settings previously only ever blocked someone the next time they opened the app -- a driver/customer who kept it closed would never find out. Two additions: (1) notifyForceUpdate (Cloud Function) fires an FCM push to every driver/customer still behind the required versionCode the moment Admin bumps it, reaching them even with the app fully closed -- targeting uses a new appVersionCode field each install reports once per launch (useReportInstalledVersion). (2) The 'Update Required' block screen now tries Play Core's own in-app 'immediate update' flow (AppUpdateBridgePlugin) first, so a Play Store install updates without ever leaving the app; only falls back to the manual Play Store link if that's unavailable (e.g. Admin's sideloaded APK, which Play Core can't find an update for at all). Status kept open until confirmed on a real device after the next native rebuild -- this is new Java code (new plugin + Play Core dependency), so it needs a real rebuild before either half can be tested; a hosting-only deploy can't reach it.",
     foundAt: "2026-09-18",
   },
   {
@@ -1220,10 +1179,9 @@ const DIRECT_REQUEST_RADIUS_KM = 30;
 // Wider staleness cutoff than NEARBY_DRIVER_STALE_MS (5 min, used for the
 // live map/picker display) -- broadcast-dispatch reach deliberately goes
 // further so a driver who went off duty recently still gets found by their
-// last real position, without reviving stale-online-driver-treated-as-
-//-available (BUG_TRACKER_SEED, critical, fixed 2026-09-17: 188/203
+// last real position, without reviving the bug fixed 2026-09-17: 188/203
 // "Online" drivers had no recent GPS at all, so an unbounded/no-staleness
-// check pushed loads to drivers based on days-old coordinates). 24h is the
+// check pushed loads to drivers based on days-old coordinates. 24h is the
 // deliberate middle ground between that bug and genuinely excluding every
 // off-duty driver.
 const BROADCAST_LOCATION_STALE_MS = 24 * 60 * 60 * 1000;
@@ -1257,9 +1215,8 @@ const BROADCAST_WEIGHT_HEADROOM_KG = 5000;
 // of whether they're currently on duty, not just whoever happens to be
 // online with the picker list already showing them. GPS freshness still
 // is, just with a much wider window (BROADCAST_LOCATION_STALE_MS, 24h) than
-// the live map's 5-minute one -- dropping it entirely would revive
-// stale-online-driver-treated-as-available (BUG_TRACKER_SEED, critical,
-// fixed 2026-09-17), where a driver's days-old coordinate got treated as
+// the live map's 5-minute one -- dropping it entirely would revive the bug
+// fixed 2026-09-17 where a driver's days-old coordinate got treated as
 // proof they're reachable right now.
 function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang) {
   if (d.kyc !== "Approved" || d.blacklisted) return false;
@@ -10680,6 +10637,13 @@ export default function App() {
   }, [bugs]);
   const setBugStatus = (id, status, note) => patchDoc("bugs", id, { status, ...(status === "fixed" ? { fixedAt: Date.now() } : {}), ...(note !== undefined ? { resolutionNote: note } : {}) }).catch((e) => console.error(e));
   const addBug = (fields) => createDoc("bugs", genId("BUG"), { ...fields, status: "open", foundAt: new Date().toISOString().slice(0, 10) }).catch((e) => console.error(e));
+  // Permanently removes a Change Log entry -- unlike setBugStatus("fixed"),
+  // this is for an entry that shouldn't be tracked at all anymore (e.g. a
+  // duplicate, or one the admin has decided isn't worth keeping). Deleting
+  // an id still present in BUG_TRACKER_SEED would just get it silently
+  // re-seeded on the next load (see the sync effect above) -- removing it
+  // from BUG_TRACKER_SEED itself is what actually makes a deletion stick.
+  const removeBug = (id) => removeDoc("bugs", id).catch((e) => console.error(e));
   const [expenseCategories, setExpenseCategories] = useState({}); // { hiName: {key, hi, en, icon} }
   useEffect(() => (firestoreReady && role === "admin" && adminAuth
     ? subscribeCollection("expenseCategories", (docs) => {
@@ -11657,7 +11621,7 @@ export default function App() {
                 withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
                 vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver}
                 expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification}
-                bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} systemHealth={systemHealth} />
+                bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} removeBug={removeBug} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} systemHealth={systemHealth} />
             </Suspense>
           </div>
         )}
