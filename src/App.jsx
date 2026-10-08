@@ -386,6 +386,7 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
 // never re-read once the collection exists.
 const BUG_TRACKER_SEED = [
   {
+    number: 1,
     id: "commission-fields-misleading",
     title: "Driver Wallet/History showed commission deductions that never actually happened",
     severity: "high",
@@ -396,6 +397,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-09",
   },
   {
+    number: 2,
     id: "otp-readable-by-any-driver",
     title: "Pickup OTP was readable by any signed-in user (including the assigned driver's own app) before it was ever entered",
     severity: "medium",
@@ -407,6 +409,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-13",
   },
   {
+    number: 3,
     id: "wallet-full-doc-overwrite-race",
     title: "Driver wallet/profile updates overwrote the whole document, which could race with a concurrent write",
     severity: "medium",
@@ -417,6 +420,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-13",
   },
   {
+    number: 4,
     id: "admin-block-button-mobile-id-mismatch",
     title: "Admin's Block/Unblock button silently did nothing for a driver record missing its own mobile field",
     severity: "medium",
@@ -427,6 +431,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-10",
   },
   {
+    number: 5,
     id: "routefares-world-readable",
     title: "routeFares (Set Fare) was readable by anyone on the internet with no login, exposing driver phone numbers",
     severity: "high",
@@ -438,6 +443,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-13",
   },
   {
+    number: 6,
     id: "withdrawals-recharge-broad-read",
     title: "Any signed-in driver/customer could read every OTHER driver/customer's wallet withdrawal and recharge amounts",
     severity: "medium",
@@ -448,6 +454,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-13",
   },
   {
+    number: 7,
     id: "admin-notification-single-target-broad-read",
     title: "A 1:1 Admin message to one specific driver/customer was still downloaded to every signed-in user's device",
     severity: "medium",
@@ -458,6 +465,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-13",
   },
   {
+    number: 8,
     id: "admin-notification-batch-target-broad-read",
     title: "A batch Admin message to a specific LIST of recipients is still broadly readable by any signed-in user",
     severity: "low",
@@ -468,6 +476,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 9,
     id: "diesel-adjuster-per-km-amplification",
     title: "Diesel +/- control moved driver-submitted rates by far more than the intended ₹1/km",
     severity: "medium",
@@ -478,6 +487,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-16",
   },
   {
+    number: 10,
     id: "set-fare-saved-without-resolved-coordinates",
     title: "Set Fare / Admin Rate Calculator could save an entry before its address had actually geocoded",
     severity: "medium",
@@ -488,6 +498,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-16",
   },
   {
+    number: 11,
     id: "admin-rate-calculator-stale-fare-vs-fresh-label",
     title: "Admin Rate Calculator could show a \"system formula\" label next to a totally unrelated leftover number",
     severity: "medium",
@@ -498,6 +509,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 12,
     id: "route-match-radius-too-tight-for-long-haul",
     title: "A flat 25km route-match radius was too tight for 300+ km inter-district hauls",
     severity: "low",
@@ -508,6 +520,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-16",
   },
   {
+    number: 13,
     id: "live-tracking-map-post-otp-line-regression",
     title: "Tracking map's route line disappeared entirely post-OTP if the driver's GPS hadn't reported in yet",
     severity: "low",
@@ -518,6 +531,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 14,
     id: "verify-pickup-otp-function-never-deployed",
     title: "Pickup OTP verification failed for every driver because the Cloud Function had never actually been deployed",
     severity: "high",
@@ -528,6 +542,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-16",
   },
   {
+    number: 15,
     id: "admin-rate-calculator-orphaned-duplicate-on-edit",
     title: "Editing an existing Admin rate's route or weight bracket left the old entry behind as a stale duplicate",
     severity: "medium",
@@ -540,6 +555,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 16,
     id: "driver-referral-self-fraud-unprotected-fields",
     title: "A driver can self-referral-fraud unlimited wallet credit by editing their own driver record directly",
     severity: "high",
@@ -550,6 +566,7 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-17",
   },
   {
+    number: 17,
     id: "unassigned-booking-write-no-field-allowlist",
     title: "Any signed-in stranger could rewrite fare/pickup/drop/customerMobile on someone else's still-unassigned booking",
     severity: "high",
@@ -561,6 +578,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 18,
     id: "same-name-driver-lookup-collision",
     title: "Two drivers sharing the same display name could receive each other's push alerts or referral credit",
     severity: "medium",
@@ -571,6 +589,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 19,
     id: "tracking-map-silent-beeps-autoplay-policy",
     title: "Every in-app beep/chime silently failed to play because of the browser's audio autoplay policy",
     severity: "medium",
@@ -581,6 +600,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 20,
     id: "proximity-filter-fails-open-not-closed",
     title: "Customer's driver picker showed drivers 1000+ km away when the pickup address hadn't finished geocoding",
     severity: "high",
@@ -591,6 +611,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 21,
     id: "pricing-simplified-to-two-layers",
     title: "Removed the driver-average pricing layer; fare now resolves from only Admin override then the default formula",
     severity: "low",
@@ -602,6 +623,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 22,
     id: "tracking-map-eta-and-custom-icons",
     title: "Live Tracking map now shows road ETA and uses custom Pickup/Drop/vehicle icons instead of default pins",
     severity: "low",
@@ -613,6 +635,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 23,
     id: "driver-response-timeout-extended-2min",
     title: "Driver accept/reject timer extended from 60 seconds to 2 minutes, with a repeating beep for the whole window",
     severity: "low",
@@ -624,6 +647,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 24,
     id: "bug-tracker-broadened-to-change-log",
     title: "Bug Tracker moved into System Settings and broadened into a searchable Change Log covering bugs, features, UI and config changes",
     severity: "low",
@@ -635,6 +659,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 25,
     id: "daily-health-check-added",
     title: "Added an automated daily health check, split across two systems that watch each other",
     severity: "low",
@@ -646,6 +671,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 26,
     id: "admin-driver-gps-status-view",
     title: "Added a per-driver GPS status view so admin can see whether live tracking is actually working, not just guess from Online status",
     severity: "low",
@@ -657,6 +683,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 27,
     id: "stale-online-driver-treated-as-available",
     title: "Booking matching and push alerts treated a driver's days-old GPS coordinate as proof they're reachable near a pickup right now",
     severity: "critical",
@@ -668,6 +695,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-17",
   },
   {
+    number: 28,
     id: "firestore-retry-on-transient-network-error",
     title: "Added automatic retry-with-backoff for Firestore reads/writes on a transient network blip",
     severity: "low",
@@ -679,6 +707,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-18",
   },
   {
+    number: 29,
     id: "changelog-resolve-manual-fallback",
     title: "Added a manual 'mark fixed' fallback for when the automated Resolve (Claude verification) itself fails",
     severity: "low",
@@ -690,6 +719,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-18",
   },
   {
+    number: 30,
     id: "changelog-type-badge-hide-when-fixed",
     title: "Change Log's type badge (Bug/Feature/UI/Config/Security) now hides once an entry is Fixed",
     severity: "low",
@@ -701,6 +731,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-18",
   },
   {
+    number: 31,
     id: "native-location-services-prompt",
     title: "Added a real native 'Turn on Location?' system prompt, separate from the app's own location permission",
     severity: "medium",
@@ -712,6 +743,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-18",
   },
   {
+    number: 32,
     id: "driver-webview-geolocation-hangs-forever",
     title: "A driver's GPS watch starts but never receives a fix or an error, on at least one real OPPO/ColorOS device",
     severity: "high",
@@ -722,6 +754,7 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-18",
   },
   {
+    number: 33,
     id: "changelog-webview-geolocation-debug-readout",
     title: "Added a temporary on-screen GPS debug readout to DriverHome for live diagnosis",
     severity: "low",
@@ -732,6 +765,7 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-18",
   },
   {
+    number: 34,
     id: "force-update-push-and-inapp-update",
     title: "Force-update now reaches closed apps via push, and updates in-app via Play Core instead of only linking out",
     severity: "medium",
@@ -742,6 +776,7 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-18",
   },
   {
+    number: 35,
     id: "gps-whatsapp-reminder-queue",
     title: "Added a WhatsApp reminder queue for drivers online but with no live GPS",
     severity: "medium",
@@ -753,6 +788,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-18",
   },
   {
+    number: 36,
     id: "dispatch-tracking-fields-missing-from-rules-allowlist",
     title: "A driver's own Reject silently failed to retarget the booking because dispatchPass wasn't in firestore.rules' write allowlist",
     severity: "medium",
@@ -764,6 +800,7 @@ const BUG_TRACKER_SEED = [
     fixedAt: "2026-09-24",
   },
   {
+    number: 37,
     id: "admin-notification-read-restriction-broke-list-queries",
     title: "Admin Announcements silently stopped reaching every customer/driver — Firestore doesn't support per-document read rules on an unscoped list query",
     severity: "high",
@@ -10692,7 +10729,13 @@ export default function App() {
       .forEach((b) => createDoc("bugs", b.id, b).catch((e) => console.error("[seed bug]", e)));
   }, [bugs]);
   const setBugStatus = (id, status, note) => patchDoc("bugs", id, { status, ...(status === "fixed" ? { fixedAt: Date.now() } : {}), ...(note !== undefined ? { resolutionNote: note } : {}) }).catch((e) => console.error(e));
-  const addBug = (fields) => createDoc("bugs", genId("BUG"), { ...fields, status: "open", foundAt: new Date().toISOString().slice(0, 10) }).catch((e) => console.error(e));
+  // `number` is a small, permanent, human-typeable reference per entry
+  // (see BUG_TRACKER_SEED, numbered 1-37 there) -- unlike the Firestore
+  // doc id (a slug or genId("BUG") string), it's short enough to type into
+  // the Change Log's search box and jump straight to one specific entry,
+  // and never changes once assigned (next-highest-plus-one, not re-packed
+  // if an earlier entry is ever deleted).
+  const addBug = (fields) => createDoc("bugs", genId("BUG"), { ...fields, number: Math.max(0, ...bugs.map((b) => Number(b.number) || 0)) + 1, status: "open", foundAt: new Date().toISOString().slice(0, 10) }).catch((e) => console.error(e));
   const [expenseCategories, setExpenseCategories] = useState({}); // { hiName: {key, hi, en, icon} }
   useEffect(() => (firestoreReady && role === "admin" && adminAuth
     ? subscribeCollection("expenseCategories", (docs) => {

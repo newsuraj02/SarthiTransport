@@ -1169,7 +1169,10 @@ function FixedChangeLogCard({ b, lang, setBugStatus }) {
   return (
     <div className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${C.line}`, opacity: 0.7 }}>
       <div className="flex items-start justify-between gap-2">
-        <div className="text-xs font-bold" style={{ color: C.ink }}>{b.title}</div>
+        <div className="text-xs font-bold" style={{ color: C.ink }}>
+          {b.number != null && <span style={{ color: C.inkSoft }}>#{b.number} </span>}
+          {b.title}
+        </div>
         <span className="text-[9px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: C.success, color: "#FFFFFF" }}>
           {lang === "en" ? "FIXED" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड"}
         </span>
@@ -1196,9 +1199,15 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
   const [typeFilter, setTypeFilter] = useState("all");
   const [resolvingId, setResolvingId] = useState(null);
   const q = query.trim().toLowerCase();
+  // A pure number in the search box means "jump to #N" -- an EXACT match
+  // on that entry's permanent number (see addBug's own comment), not a
+  // substring search, so typing "7" surfaces #7 only and not #17/#27/#71
+  // too. Anything else still does the normal substring text search.
+  const isNumberSearch = q.length > 0 && /^\d+$/.test(q);
   const filtered = (bugs || []).filter((b) => {
     if (typeFilter !== "all" && (b.type || "bug") !== typeFilter) return false;
     if (!q) return true;
+    if (isNumberSearch) return String(b.number ?? "") === q;
     return [b.title, b.description, b.area].some((f) => (f || "").toLowerCase().includes(q));
   });
   // Open/resolving entries sort by severity (worst first), same as
@@ -1248,7 +1257,7 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
         </button>
       </div>
       <input value={query} onChange={(e) => setQuery(e.target.value)}
-        placeholder={lang === "en" ? "Search changes..." : lang === "mr" ? "बदल शोधा..." : "बदलाव खोजें..."}
+        placeholder={lang === "en" ? "Search changes, or type a # to jump to it..." : lang === "mr" ? "बदल शोधा, किंवा थेट जाण्यासाठी # टाका..." : "बदलाव खोजें, या सीधे जाने के लिए # डालें..."}
         className="w-full rounded-lg px-3 py-2.5 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink, background: C.paper }} />
       <div className="flex gap-1.5 mb-3 overflow-x-auto pb-0.5">
         {["all", ...Object.keys(CHANGE_TYPE_LABEL)].map((t) => (
@@ -1298,7 +1307,10 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
             return (
               <div key={b.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${BUG_SEVERITY_COLOR[b.severity] || C.line}` }}>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="text-xs font-bold" style={{ color: C.ink }}>{b.title}</div>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>
+                    {b.number != null && <span style={{ color: C.inkSoft }}>#{b.number} </span>}
+                    {b.title}
+                  </div>
                   <span className="text-[9px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: resolving ? C.marigoldDeep : (BUG_SEVERITY_COLOR[b.severity] || C.inkSoft), color: "#FFFFFF" }}>
                     {resolving ? (lang === "en" ? "RESOLVING…" : lang === "mr" ? "सोडवत आहे…" : "हल हो रहा है…") : (BUG_SEVERITY_LABEL[b.severity] || b.severity || "").toUpperCase()}
                   </span>
