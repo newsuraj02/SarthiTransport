@@ -1131,15 +1131,12 @@ const CHANGE_TYPE_COLOR = { bug: C.safety, feature: C.navy, ui: C.marigoldDeep, 
 // once per new entry with BUG_TRACKER_SEED and added to over time via the
 // form below. Nothing here is customer/driver-facing; SOS/complaint
 // reports (AdminAlerts) are a separate, unrelated inbox.
-function AdminBugTracker({ bugs, setBugStatus, addBug, removeBug, lang }) {
+function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState({ title: "", description: "", area: "", severity: "medium", type: "bug" });
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [resolvingId, setResolvingId] = useState(null);
-  // Second tap confirms -- a permanent delete (not just a status flip) is
-  // one tap away from every entry otherwise, including open/unfixed ones.
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const q = query.trim().toLowerCase();
   const filtered = (bugs || []).filter((b) => {
     if (typeFilter !== "all" && (b.type || "bug") !== typeFilter) return false;
@@ -1274,24 +1271,6 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, removeBug, lang }) {
                         ? (lang === "en" ? "Reopen" : lang === "mr" ? "पुन्हा उघडा" : "फिर से खोलें")
                         : (lang === "en" ? "Resolve" : lang === "mr" ? "सोडवा" : "हल करें")}
                     </button>
-                    {/* Permanent delete -- separate from Resolve/Reopen,
-                        which only ever flip status and keep the entry's
-                        history. Second tap (confirmDeleteId) guards against
-                        an accidental tap wiping an entry for good, same
-                        reasoning as any other irreversible admin action in
-                        this panel. */}
-                    {confirmDeleteId === b.id ? (
-                      <button onClick={() => { removeBug(b.id); setConfirmDeleteId(null); }}
-                        className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>
-                        {lang === "en" ? "Confirm delete" : lang === "mr" ? "डिलीट कन्फर्म करा" : "डिलीट कन्फर्म करें"}
-                      </button>
-                    ) : (
-                      <button onClick={() => setConfirmDeleteId(b.id)}
-                        className="text-[11px] font-semibold px-2 py-1.5 rounded-lg" style={{ color: C.inkSoft }}
-                        aria-label={lang === "en" ? "Delete entry" : lang === "mr" ? "नोंद डिलीट करा" : "एंट्री डिलीट करें"}>
-                        <X size={13} />
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -2967,7 +2946,7 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
   );
 }
 
-function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, bugs, setBugStatus, addBug, removeBug, lang }) {
+function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, bugs, setBugStatus, addBug, lang }) {
   // Commission/bonus/min-wallet are edited as a draft and only written to
   // Firestore on Save, instead of firing a write on every keystroke. Stays
   // in sync with the live values as long as there's no unsaved edit, so an
@@ -3071,7 +3050,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
         {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
       </button>
     </div>
-    <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} removeBug={removeBug} lang={lang} />
+    <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />
     </div>
   );
 }
@@ -3354,7 +3333,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, removeBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -3381,7 +3360,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
-      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} removeBug={removeBug} lang={lang} />}
+      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "finance" && <AdminFinance tripLog={tripLog} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
