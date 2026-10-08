@@ -129,7 +129,17 @@ export async function removeDoc(name, id) {
 // still thinks they got it. A transaction re-reads the doc from the server
 // at commit time and only applies `patch` if it's still actually open,
 // so exactly one caller ever gets { ok: true } for a given booking.
-export async function claimBooking(id, patch) {
+//
+// `extraWrites` (optional, [{ name, id, data }]) commits alongside the same
+// transaction -- e.g. driverRespondBooking's bookingOtps doc. Without this,
+// that doc used to be written as a separate, un-awaited call AFTER this
+// transaction already committed status:"Ongoing", so the customer's own
+// subscription could see "Ongoing" and start listening for the OTP before
+// the OTP doc existed yet, showing nothing for a beat. Writing it inside
+// this same transaction means it's created atomically with the status
+// flip -- by the time any client observes "Ongoing", the OTP doc is
+// already there, every time, not just usually.
+export async function claimBooking(id, patch, extraWrites = []) {
   const db = getDb();
   return withRetry(() => runTransaction(db, async (tx) => {
     const ref = doc(db, "bookings", id);
@@ -138,6 +148,9 @@ export async function claimBooking(id, patch) {
     const data = snap.data();
     if (data.status !== "AwaitingDriver" || data.driverMobile) return { ok: false, reason: "taken" };
     tx.update(ref, patch);
+    for (const w of extraWrites) {
+      tx.set(doc(db, w.name, w.id), { ...w.data, createdAt: serverTimestamp() });
+    }
     return { ok: true };
   }));
 }

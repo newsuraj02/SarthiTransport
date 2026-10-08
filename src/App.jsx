@@ -6753,9 +6753,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
         )}
         {cancelError && <div className="text-[11px] font-bold mt-2" style={{ color: C.safety }}>{cancelError}</div>}
       </div>
-      {b.loadingStartedAt && (
-        <TripExtras booking={b} myRole="customer" myMobile={customerMobile} extras={bookingExtras} lang={lang} />
-      )}
+      {/* Kharch (hamali/extra-stop/other mutual-consent expenses, see
+          TripExtras) hidden for now on request -- not needed yet. Component
+          and its whole data layer (addExtra/respondExtra/buildBill in the
+          fare-engine section, bookingExtras Firestore collection/rules)
+          are untouched, just not rendered here. */}
       {showDocs && <BillDocumentsModal booking={b} onClose={() => setShowDocs(false)} lang={lang} />}
     </div>
     </div>
@@ -8340,9 +8342,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
               )}
             </div>
 
-            {myTrip.loadingStartedAt && (
-              <TripExtras booking={myTrip} myRole="driver" myMobile={driver?.mobile} extras={bookingExtras} lang={lang} />
-            )}
+            {/* Kharch hidden for now -- see matching note in ActiveRide. */}
             <LoadingTimer trip={myTrip} completeBooking={completeBooking} lang={lang} onEnded={setCompletedTrip} />
           </div>
         </div>
@@ -10861,7 +10861,15 @@ export default function App() {
           // bill line (guide section 15) instead of back-computing it
           // from the already-discounted fare and losing a rupee to rounding.
           ...(isReturn ? { fare: claimedFare, originalFare: b.fare, isReturn: true, returnPct } : {}),
-        });
+        }, [
+          // See otp-readable-by-any-driver in BUG_TRACKER_SEED for why this
+          // is its own document instead of a field on the booking itself.
+          // Written in the SAME transaction as the status:"Ongoing" flip
+          // above (not a separate call afterward) so the customer's own
+          // subscription never observes "Ongoing" before this doc exists --
+          // that gap used to show a brief blank/slow-to-appear OTP.
+          { name: "bookingOtps", id: bookingId, data: { otp, customerMobile: b.customerMobile || "" } },
+        ]);
       } catch (e) {
         console.error(e);
         return lang === "en" ? "Couldn't accept — please try again." : lang === "mr" ? "स्वीकार करता आले नाही — कृपया पुन्हा प्रयत्न करा." : "स्वीकार नहीं हो सका — कृपया फिर कोशिश करें।";
@@ -10869,9 +10877,6 @@ export default function App() {
       if (!result.ok) {
         return lang === "en" ? "This load has already been taken by another driver." : lang === "mr" ? "हा लोड आधीच दुसऱ्या ड्रायव्हरने घेतला आहे." : "यह लोड पहले ही दूसरे ड्राइवर द्वारा ले लिया गया है।";
       }
-      // See otp-readable-by-any-driver in BUG_TRACKER_SEED for why this
-      // is its own document instead of a field on the booking itself.
-      createDoc("bookingOtps", bookingId, { otp, customerMobile: b.customerMobile || "" }).catch((e) => console.error("[booking otp]", e));
       // Taking on ANY job (return load or not) ends this driver's own
       // return-mode window early, same as the guide's `free` flag.
       if (driver.mobile) patchDoc("drivers", driver.mobile, clearReturnModePatch()).catch((e) => console.error("[return mode clear]", e));
@@ -10916,7 +10921,16 @@ export default function App() {
     // Function (see DriverOtpEntry), which returns pass/fail only and
     // never the real value. See otp-readable-by-any-driver in
     // BUG_TRACKER_SEED.
-    createDoc("bookingOtps", bookingId, { otp, customerMobile: b.customerMobile || "" }).catch((e) => console.error("[booking otp]", e));
+    // Awaited (not fire-and-forget) and written BEFORE the status patch
+    // below -- same reasoning as claimBooking's extraWrites above: the
+    // customer's own subscription must never be able to observe
+    // status:"Ongoing" before this doc actually exists.
+    try {
+      await createDoc("bookingOtps", bookingId, { otp, customerMobile: b.customerMobile || "" });
+    } catch (e) {
+      console.error("[booking otp]", e);
+      return lang === "en" ? "Couldn't accept — please try again." : lang === "mr" ? "स्वीकार करता आले नाही — कृपया पुन्हा प्रयत्न करा." : "स्वीकार नहीं हो सका — कृपया फिर कोशिश करें।";
+    }
     patchDoc("bookings", bookingId, {
       status: "Ongoing", driverName: driver.name, driverMobile: driver.mobile || mobileForDriverName(driver.name),
       vehicle: driver.vehicleSpec?.type || null, progress: 0, pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null,
