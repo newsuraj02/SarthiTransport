@@ -1125,12 +1125,74 @@ const BUG_SEVERITY_LABEL = { critical: "Critical", high: "High", medium: "Medium
 const CHANGE_TYPE_LABEL = { bug: "Bug", feature: "Feature", ui: "UI", config: "Config", security: "Security" };
 const CHANGE_TYPE_COLOR = { bug: C.safety, feature: C.navy, ui: C.marigoldDeep, config: C.metallicGreen, security: "#8B0000" };
 
+// fixedAt is written two different ways -- a live Firestore write
+// (resolveChangeLogEntry/setBugStatus) stamps a real ms timestamp, while
+// BUG_TRACKER_SEED's own entries just carry a plain "YYYY-MM-DD" string --
+// this normalizes either into ms so both sort and age the same way.
+function fixedAtMs(b) {
+  if (typeof b.fixedAt === "number") return b.fixedAt;
+  if (b.fixedAt) {
+    const t = new Date(b.fixedAt).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  }
+  return 0;
+}
+// How long a fix stays in the "Recently Fixed" group before falling back
+// to "Fixed Earlier" -- see the Recently/Earlier split in AdminBugTracker.
+const RECENT_FIX_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+// "3d ago"/"2w ago" style phrasing so a fix's age reads at a glance
+// instead of everyone having to mentally diff today's date against an
+// ISO string -- same reasoning as the Recently/Earlier grouping itself.
+function relativeFixedLabel(ms, lang) {
+  const days = Math.max(0, Math.floor((Date.now() - ms) / (24 * 60 * 60 * 1000)));
+  if (days === 0) return lang === "en" ? "today" : lang === "mr" ? "आज" : "आज";
+  if (days === 1) return lang === "en" ? "yesterday" : lang === "mr" ? "काल" : "कल";
+  if (days < 7) return lang === "en" ? `${days}d ago` : lang === "mr" ? `${days} दिवसांपूर्वी` : `${days} दिन पहले`;
+  if (days < 30) {
+    const weeks = Math.floor(days / 7);
+    return lang === "en" ? `${weeks}w ago` : lang === "mr" ? `${weeks} आठवड्यांपूर्वी` : `${weeks} हफ्ते पहले`;
+  }
+  const months = Math.floor(days / 30);
+  return lang === "en" ? `${months}mo ago` : lang === "mr" ? `${months} महिन्यांपूर्वी` : `${months} महीने पहले`;
+}
+
 // Admin's internal Change Log (see AdminSettings, where this now lives) —
 // a running record of what's actually changed in this app: bugs found and
 // fixed, features added, UI tweaks, config/permissions changes. Seeded
 // once per new entry with BUG_TRACKER_SEED and added to over time via the
 // form below. Nothing here is customer/driver-facing; SOS/complaint
 // reports (AdminAlerts) are a separate, unrelated inbox.
+// A fixed Change Log entry's own card -- pulled out of AdminBugTracker
+// since it's now rendered from two separate groups (Recently Fixed /
+// Fixed Earlier, see RECENT_FIX_WINDOW_MS) instead of one flat list.
+// Simpler than the open-entry card: no severity border/badge, no
+// resolving state (only an open entry can be mid-resolve), just the
+// title, type-free summary, resolution note, and a relative "Nd/w/mo
+// ago" fixedAt label (see relativeFixedLabel) next to the exact date.
+function FixedChangeLogCard({ b, lang, setBugStatus }) {
+  return (
+    <div className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${C.line}`, opacity: 0.7 }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-xs font-bold" style={{ color: C.ink }}>{b.title}</div>
+        <span className="text-[9px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: C.success, color: "#FFFFFF" }}>
+          {lang === "en" ? "FIXED" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड"}
+        </span>
+      </div>
+      {b.area && <div className="text-[10px] font-semibold mt-0.5" style={{ color: C.marigoldDeep }}>{b.area}</div>}
+      {b.resolutionNote && <p className="text-[10px] italic mt-1" style={{ color: C.inkSoft }}>{b.resolutionNote}</p>}
+      <div className="flex items-center justify-between mt-2">
+        <span className="text-[10px]" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Found" : lang === "mr" ? "सापडले" : "मिला"} {b.foundAt || "—"}
+          {b.fixedAt && ` · ${lang === "en" ? "Fixed" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड"} ${relativeFixedLabel(fixedAtMs(b), lang)} (${typeof b.fixedAt === "number" ? new Date(b.fixedAt).toISOString().slice(0, 10) : b.fixedAt})`}
+        </span>
+        <button onClick={() => setBugStatus(b.id, "open")} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+          {lang === "en" ? "Reopen" : lang === "mr" ? "पुन्हा उघडा" : "फिर से खोलें"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState({ title: "", description: "", area: "", severity: "medium", type: "bug" });
@@ -1143,10 +1205,20 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
     if (!q) return true;
     return [b.title, b.description, b.area].some((f) => (f || "").toLowerCase().includes(q));
   });
-  const sorted = [...filtered].sort((a, b) => {
-    if ((a.status === "fixed") !== (b.status === "fixed")) return a.status === "fixed" ? 1 : -1;
-    return (BUG_SEVERITY_ORDER[a.severity] ?? 9) - (BUG_SEVERITY_ORDER[b.severity] ?? 9);
-  });
+  // Open/resolving entries sort by severity (worst first), same as
+  // before. Fixed entries now sort by HOW RECENTLY they were fixed
+  // (newest first) instead of severity -- severity stops being the
+  // useful axis once something's actually fixed; recency is what tells
+  // an admin scanning the log "what did we just fix" vs "what's been
+  // settled for a while". Split further into Recently Fixed / Fixed
+  // Earlier groups at render time (RECENT_FIX_WINDOW_MS) so that
+  // distinction is visible at a glance, not just in sort order.
+  const openSorted = filtered.filter((b) => b.status !== "fixed")
+    .sort((a, b) => (BUG_SEVERITY_ORDER[a.severity] ?? 9) - (BUG_SEVERITY_ORDER[b.severity] ?? 9));
+  const fixedSorted = filtered.filter((b) => b.status === "fixed")
+    .sort((a, b) => fixedAtMs(b) - fixedAtMs(a));
+  const recentlyFixed = fixedSorted.filter((b) => Date.now() - fixedAtMs(b) <= RECENT_FIX_WINDOW_MS);
+  const fixedEarlier = fixedSorted.filter((b) => Date.now() - fixedAtMs(b) > RECENT_FIX_WINDOW_MS);
   const submit = () => {
     if (!draft.title.trim()) return;
     addBug({ title: draft.title.trim(), description: draft.description.trim(), area: draft.area.trim(), severity: draft.severity, type: draft.type });
@@ -1220,62 +1292,77 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
           </button>
         </div>
       )}
-      {sorted.length === 0 ? (
+      {filtered.length === 0 ? (
         <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{q || typeFilter !== "all" ? (lang === "en" ? "Nothing matches." : lang === "mr" ? "काहीही जुळत नाही." : "कुछ भी मेल नहीं खाता।") : (lang === "en" ? "No changes logged yet." : lang === "mr" ? "अजून कोणताही बदल नोंदवलेला नाही." : "अभी तक कोई बदलाव दर्ज नहीं हुआ।")}</p>
       ) : (
         <div className="space-y-2">
-          {sorted.map((b) => {
-            const fixed = b.status === "fixed";
+          {openSorted.map((b) => {
             const type = b.type || "bug";
             const resolving = resolvingId === b.id || b.status === "resolving";
             return (
-              <div key={b.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${fixed ? C.line : BUG_SEVERITY_COLOR[b.severity] || C.line}`, opacity: fixed ? 0.7 : 1 }}>
+              <div key={b.id} className="rounded-xl p-3" style={{ background: C.paper, border: `1.5px solid ${BUG_SEVERITY_COLOR[b.severity] || C.line}` }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="text-xs font-bold" style={{ color: C.ink }}>{b.title}</div>
-                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: resolving ? C.marigoldDeep : fixed ? C.success : (BUG_SEVERITY_COLOR[b.severity] || C.inkSoft), color: "#FFFFFF" }}>
-                    {resolving ? (lang === "en" ? "RESOLVING…" : lang === "mr" ? "सोडवत आहे…" : "हल हो रहा है…") : fixed ? (lang === "en" ? "FIXED" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड") : (BUG_SEVERITY_LABEL[b.severity] || b.severity || "").toUpperCase()}
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: resolving ? C.marigoldDeep : (BUG_SEVERITY_COLOR[b.severity] || C.inkSoft), color: "#FFFFFF" }}>
+                    {resolving ? (lang === "en" ? "RESOLVING…" : lang === "mr" ? "सोडवत आहे…" : "हल हो रहा है…") : (BUG_SEVERITY_LABEL[b.severity] || b.severity || "").toUpperCase()}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  {/* Type badge only shows while genuinely open/resolving --
-                      per explicit request, it should disappear once an
-                      entry is Fixed, and reappear if it's Reopened. */}
-                  {!fixed && (
-                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded" style={{ background: CHANGE_TYPE_COLOR[type] || C.inkSoft, color: "#fff" }}>{CHANGE_TYPE_LABEL[type] || type}</span>
-                  )}
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded" style={{ background: CHANGE_TYPE_COLOR[type] || C.inkSoft, color: "#fff" }}>{CHANGE_TYPE_LABEL[type] || type}</span>
                   {b.area && <div className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{b.area}</div>}
                 </div>
                 {b.resolutionNote && <p className="text-[10px] italic mt-1" style={{ color: C.inkSoft }}>{b.resolutionNote}</p>}
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-[10px]" style={{ color: C.inkSoft }}>
-                    {lang === "en" ? "Found" : lang === "mr" ? "सापडले" : "मिला"} {b.foundAt || "—"}{fixed && b.fixedAt ? ` · ${lang === "en" ? "Fixed" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड"} ${typeof b.fixedAt === "number" ? new Date(b.fixedAt).toISOString().slice(0, 10) : b.fixedAt}` : ""}
+                    {lang === "en" ? "Found" : lang === "mr" ? "सापडले" : "मिला"} {b.foundAt || "—"}
                   </span>
                   <div className="flex items-center gap-2">
-                    {/* Manual fallback -- only shown when not fixed and not
-                        mid-resolve, for exactly the case where the automated
-                        Resolve (resolveChangeLogEntry -> Claude) is broken
-                        (e.g. the ANTHROPIC_API_KEY/model call itself failing)
-                        and the admin already knows this is genuinely fine and
-                        just wants to clear it, same as before Resolve called
-                        Claude at all. */}
-                    {!fixed && !resolving && (
+                    {/* Manual fallback -- only shown when not mid-resolve,
+                        for exactly the case where the automated Resolve
+                        (resolveChangeLogEntry -> Claude) is broken (e.g.
+                        the ANTHROPIC_API_KEY/model call itself failing)
+                        and the admin already knows this is genuinely fine
+                        and just wants to clear it, same as before Resolve
+                        called Claude at all. */}
+                    {!resolving && (
                       <button onClick={() => setBugStatus(b.id, "fixed", lang === "en" ? "Marked fixed manually by admin (automated check unavailable)." : lang === "mr" ? "अ‍ॅडमिनने मॅन्युअली फिक्स्ड मार्क केले (ऑटोमेटेड चेक उपलब्ध नाही)." : "एडमिन द्वारा मैन्युअली फिक्स्ड मार्क किया गया (ऑटोमेटेड चेक उपलब्ध नहीं)।")}
                         className="text-[10px] font-semibold underline" style={{ color: C.inkSoft }}>
                         {lang === "en" ? "Mark fixed manually" : lang === "mr" ? "मॅन्युअली फिक्स्ड मार्क करा" : "मैन्युअली फिक्स्ड मार्क करें"}
                       </button>
                     )}
-                    <button onClick={() => fixed ? setBugStatus(b.id, "open") : resolve(b)} disabled={resolving} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: fixed ? C.paper : C.metallicGreen, color: fixed ? C.inkSoft : "#FFFFFF", border: fixed ? `1px solid ${C.line}` : "none", opacity: resolving ? 0.6 : 1 }}>
-                      {resolving
-                        ? (lang === "en" ? "Resolving…" : lang === "mr" ? "सोडवत आहे…" : "हल हो रहा है…")
-                        : fixed
-                        ? (lang === "en" ? "Reopen" : lang === "mr" ? "पुन्हा उघडा" : "फिर से खोलें")
-                        : (lang === "en" ? "Resolve" : lang === "mr" ? "सोडवा" : "हल करें")}
+                    <button onClick={() => resolve(b)} disabled={resolving} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: C.metallicGreen, color: "#FFFFFF", opacity: resolving ? 0.6 : 1 }}>
+                      {resolving ? (lang === "en" ? "Resolving…" : lang === "mr" ? "सोडवत आहे…" : "हल हो रहा है…") : (lang === "en" ? "Resolve" : lang === "mr" ? "सोडवा" : "हल करें")}
                     </button>
                   </div>
                 </div>
               </div>
             );
           })}
+          {/* Fixed entries split into two groups (RECENT_FIX_WINDOW_MS)
+              instead of one undifferentiated pile at the bottom -- per
+              explicit request, there was previously no way to tell a fix
+              from this morning apart from one from a month ago without
+              reading every single date by hand. */}
+          {recentlyFixed.length > 0 && (
+            <>
+              <div className="pt-2 pb-0.5 text-[10px] font-black uppercase tracking-wide" style={{ color: C.inkSoft }}>
+                {lang === "en" ? "Recently Fixed" : lang === "mr" ? "अलीकडे फिक्स्ड" : "हाल ही में फिक्स्ड"}
+              </div>
+              {recentlyFixed.map((b) => (
+                <FixedChangeLogCard key={b.id} b={b} lang={lang} setBugStatus={setBugStatus} />
+              ))}
+            </>
+          )}
+          {fixedEarlier.length > 0 && (
+            <>
+              <div className="pt-2 pb-0.5 text-[10px] font-black uppercase tracking-wide" style={{ color: C.inkSoft }}>
+                {lang === "en" ? "Fixed Earlier" : lang === "mr" ? "आधी फिक्स्ड" : "पहले फिक्स्ड"}
+              </div>
+              {fixedEarlier.map((b) => (
+                <FixedChangeLogCard key={b.id} b={b} lang={lang} setBugStatus={setBugStatus} />
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>
