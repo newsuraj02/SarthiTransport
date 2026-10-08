@@ -1143,17 +1143,13 @@ const RECENT_FIX_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 // "3d ago"/"2w ago" style phrasing so a fix's age reads at a glance
 // instead of everyone having to mentally diff today's date against an
 // ISO string -- same reasoning as the Recently/Earlier grouping itself.
+// Plain day count, always -- no week/month rollup and no "today"/
+// "yesterday" special-casing, per explicit request to just use numbers.
 function relativeFixedLabel(ms, lang) {
   const days = Math.max(0, Math.floor((Date.now() - ms) / (24 * 60 * 60 * 1000)));
-  if (days === 0) return lang === "en" ? "today" : lang === "mr" ? "आज" : "आज";
-  if (days === 1) return lang === "en" ? "yesterday" : lang === "mr" ? "काल" : "कल";
-  if (days < 7) return lang === "en" ? `${days}d ago` : lang === "mr" ? `${days} दिवसांपूर्वी` : `${days} दिन पहले`;
-  if (days < 30) {
-    const weeks = Math.floor(days / 7);
-    return lang === "en" ? `${weeks}w ago` : lang === "mr" ? `${weeks} आठवड्यांपूर्वी` : `${weeks} हफ्ते पहले`;
-  }
-  const months = Math.floor(days / 30);
-  return lang === "en" ? `${months}mo ago` : lang === "mr" ? `${months} महिन्यांपूर्वी` : `${months} महीने पहले`;
+  if (lang === "en") return `${days} day${days === 1 ? "" : "s"} ago`;
+  if (lang === "mr") return `${days} ${days === 1 ? "दिवसापूर्वी" : "दिवसांपूर्वी"}`;
+  return `${days} दिन पहले`;
 }
 
 // Admin's internal Change Log (see AdminSettings, where this now lives) —
