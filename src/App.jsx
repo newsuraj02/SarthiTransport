@@ -17,6 +17,7 @@ import {
   Settings2, Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Plus, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, LocateFixed,
+  AlertTriangle,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs,
@@ -925,6 +926,21 @@ export function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Standard great-circle initial bearing (compass degrees, 0=North,
+// 90=East) from one coordinate to another — used only to point a vehicle
+// marker in its direction of travel; purely a map-display calculation on
+// coordinates already on screen, no GPS/tracking change involved.
+function bearingDeg(lat1, lng1, lat2, lng2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const toDeg = (r) => (r * 180) / Math.PI;
+  const phi1 = toRad(lat1);
+  const phi2 = toRad(lat2);
+  const dLng = toRad(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLng);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
 // Loading/unloading time (the allowed-hours/waiting-charge clock) must only
 // count time actually spent at the pickup or drop point, never the drive
 // between them — see the geofence pause/resume logic in DriverHome's GPS
@@ -976,6 +992,13 @@ const DISPATCH_MAX_PASSES = 3;
 // above the original so a small load never lands on a wildly oversized
 // (and pricier-feeling) vehicle after climbing indefinitely.
 const DISPATCH_MAX_TIER_CLIMB = 2;
+// Broadcast request (requestByCategory, pendingDriverName null): how long
+// ActiveRide waits with every eligible driver already notified at once
+// before showing the customer a "no driver found yet" state instead of
+// just "Notifying Nearby Drivers" forever. Longer than AWAITING_DRIVER_
+// TIMEOUT_SEC since this is the one-shot total wait across every driver
+// who could see it, not a single driver's turn in a retarget ladder.
+const BROADCAST_NO_DRIVER_TIMEOUT_SEC = 180;
 
 // Roads aren't a straight line, so straight-line distance is scaled up by a
 // fixed factor as a stand-in for real road distance — typical for Indian
@@ -1993,6 +2016,28 @@ function useSmoothPosition(target, duration = 1200) {
   return display;
 }
 
+// Tracks the compass bearing (see bearingDeg) of a moving marker's last
+// genuine step, so a vehicle icon can be rotated to face the direction of
+// travel instead of always pointing the same fixed way. Returns null until
+// a second fix arrives (nothing to point toward yet) and otherwise holds
+// the last real heading rather than resetting to null/0 while stationary
+// or between two almost-identical GPS fixes -- real GPS jitter of a few
+// metres while parked would otherwise spin the icon to a meaningless
+// heading for no reason.
+function useBearing(target, minMoveKm = 0.01) {
+  const prevRef = useRef(null);
+  const [heading, setHeading] = useState(null);
+  useEffect(() => {
+    if (!target) return;
+    const prev = prevRef.current;
+    if (prev && haversineKm(prev.lat, prev.lng, target.lat, target.lng) > minMoveKm) {
+      setHeading(bearingDeg(prev.lat, prev.lng, target.lat, target.lng));
+    }
+    prevRef.current = target;
+  }, [target?.lat, target?.lng, minMoveKm]);
+  return heading;
+}
+
 // FLIP-animates a reordered list (First-Last-Invert-Play): whenever the
 // order of `itemIds` changes, each item that moved is nudged back to its
 // previous on-screen spot with a transform and then transitioned to 0, so
@@ -2996,11 +3041,19 @@ function pinMarkerIcon(color, letter) {
 // icon path) instead of an emoji label sitting on a plain colored circle
 // -- renders identically on every device/OS instead of depending on
 // however that platform happens to draw 🚚.
-function vehicleMarkerIcon() {
+// headingDeg: compass bearing (0=North) the marker should visually face,
+// or null/omitted for the original fixed orientation. The glyph as drawn
+// faces East (its cab leads on the right), so the SVG rotation applied is
+// headingDeg-90 -- baked straight into the <g> transform rather than
+// passed as a MarkerF/Icon `rotation` prop, since Google Maps only
+// supports that for Symbol-path icons, not plain image/data-URI icons
+// like this one.
+function vehicleMarkerIcon(headingDeg = null) {
   const truckPath = "M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zM18 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z";
+  const rotate = headingDeg == null ? 0 : headingDeg - 90;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
     <circle cx="20" cy="20" r="18" fill="${C.navy}" stroke="#fff" stroke-width="3"/>
-    <g transform="translate(8,8)"><path d="${truckPath}" fill="#fff"/></g>
+    <g transform="rotate(${rotate} 20 20) translate(8,8)"><path d="${truckPath}" fill="#fff"/></g>
   </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
@@ -3035,6 +3088,13 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
   const rawCustomerPos = customerLocation?.lat != null && customerLocation?.lng != null ? { lat: customerLocation.lat, lng: customerLocation.lng } : null;
   const driverPos = useSmoothPosition(rawDriverPos);
   const customerPos = useSmoothPosition(rawCustomerPos);
+  // Direction of travel, computed from consecutive raw GPS fixes (not the
+  // smoothed/gliding driverPos, which re-renders many times a second as it
+  // eases between two fixes -- that would recompute a bearing between two
+  // nearly-identical points on every animation frame) -- purely a map-
+  // display calculation, no change to how/where the GPS fix itself comes
+  // from.
+  const driverHeading = useBearing(rawDriverPos);
   // Always the driver's actual live position to wherever they're headed
   // next — Pickup until the OTP is entered, then Drop for the rest of the
   // trip — never a fixed Pickup->Drop reference line. Both the drawn path
@@ -3173,7 +3233,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
         {driverPos && routeDestination && <PolylineF path={roadPath || [driverPos, routeDestination]} options={{ strokeColor: C.navy, strokeOpacity: 1, strokeWeight: 8 }} />}
         {!driverPos && !toPickup && pickupPos && dropPos && <PolylineF path={staticRoadPath || [pickupPos, dropPos]} options={{ strokeColor: C.navy, strokeOpacity: 1, strokeWeight: 8 }} />}
         {driverPos && (
-          <MarkerF position={driverPos} icon={vehicleMarkerIcon()} />
+          <MarkerF position={driverPos} icon={vehicleMarkerIcon(driverHeading)} />
         )}
         {!toPickup && customerPos && (
           <MarkerF
@@ -3317,10 +3377,13 @@ function customerPinIcon() {
 // A small truck/tempo silhouette in a white badge, in place of a plain dot
 // or emoji, for each nearby online driver — closer to how ride-hailing
 // apps show an actual vehicle shape on the map.
-export function driverTruckIcon() {
+// headingDeg: see vehicleMarkerIcon's comment -- same East-facing default
+// (cab/front leads on the right), same rotation-baked-into-the-SVG reason.
+export function driverTruckIcon(headingDeg = null) {
+  const rotate = headingDeg == null ? 0 : headingDeg - 90;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">` +
     `<circle cx="17" cy="17" r="16" fill="#fff" stroke="${C.marigoldDeep}" stroke-width="2"/>` +
-    `<g transform="translate(6,11)">` +
+    `<g transform="rotate(${rotate} 17 17) translate(6,11)">` +
     `<rect x="0" y="0" width="14" height="8" rx="1.2" fill="${C.navy}"/>` +
     `<path d="M14 2h5.5L22 6v2H14z" fill="${C.navy}"/>` +
     `<circle cx="4.5" cy="9" r="2.1" fill="${C.navy}"/>` +
@@ -3378,6 +3441,22 @@ function VehicleCategoryIcon({ tierIndex, size = 40 }) {
       {dualRear && <circle cx={rearAxleX + 7} cy={wheelY} r="3.4" fill={C.navy} />}
     </svg>
   );
+}
+
+// One marker per online driver on the customer's browse map, each gliding
+// toward their latest Firestore position (useSmoothPosition) and rotated
+// to face their direction of travel (useBearing) instead of snapping to
+// the new spot/orientation on every live update. Pulled out into its own
+// component (rather than calling these hooks inline inside NearbyVehicles-
+// Map's .map()) because the number of nearby drivers changes over time —
+// calling a hook a different number of times across renders breaks React,
+// whereas each driver's OWN marker instance (keyed by id) calls them a
+// fixed number of times across its own re-renders.
+function NearbyDriverMarker({ driver }) {
+  const rawPos = { lat: driver.lastKnownLocation.lat, lng: driver.lastKnownLocation.lng };
+  const pos = useSmoothPosition(rawPos);
+  const heading = useBearing(rawPos);
+  return <MarkerF position={pos || rawPos} icon={driverTruckIcon(heading)} />;
 }
 
 function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick, showOpenInMaps = true }) {
@@ -3470,11 +3549,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           />
         ))}
         {nearby.map((d) => (
-          <MarkerF
-            key={d.mobile || d.id}
-            position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }}
-            icon={driverTruckIcon()}
-          />
+          <NearbyDriverMarker key={d.mobile || d.id} driver={d} />
         ))}
       </GoogleMap>
       <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
@@ -6574,6 +6649,27 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAwaiting, b.id, b.pendingDriverName, b.acceptedAt]);
 
+  // Broadcast request (pendingDriverName null, every eligible driver already
+  // notified at once -- see the AwaitingDriver branch below). Unlike the
+  // single-driver countdown above there's nobody to retarget to, so this
+  // just flags BROADCAST_NO_DRIVER_TIMEOUT_SEC of silence so the customer
+  // isn't left staring at "Notifying Nearby Drivers" forever with no signal
+  // that something may actually be wrong (e.g. no driver online nearby).
+  const isBroadcasting = b.status === "AwaitingDriver" && !b.pendingDriverName;
+  const [noDriverYet, setNoDriverYet] = useState(false);
+  useEffect(() => {
+    if (!isBroadcasting) {
+      setNoDriverYet(false);
+      return;
+    }
+    const startMs = b.createdAt?.toMillis ? b.createdAt.toMillis() : Date.now();
+    const check = () => setNoDriverYet(Date.now() - startMs >= BROADCAST_NO_DRIVER_TIMEOUT_SEC * 1000);
+    check();
+    const id = setInterval(check, 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBroadcasting, b.id, b.createdAt]);
+
   const shareTrip = () => {
     const text = lang === "en"
       ? `My goods are moving via Apna Transport.\nBooking: ${b.id}\nDriver: ${b.driverName || "—"}\nVehicle Number: ${driverVehicle?.vehicleNumber || "—"}\nRoute: ${b.pickup} → ${b.drop}\nStatus: ${b.progress}% complete`
@@ -6610,26 +6706,38 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, acceptBid, reassi
 
   // Broadcast request, nobody individually targeted yet (TEMPORARY
   // experiment — see DIRECT_REQUEST_RADIUS_KM/requestByCategory) — no
-  // countdown (no single driver to time out on; every eligible driver
-  // within the radius already sees it at once, see DriverHome's list).
+  // per-driver countdown (no single driver to time out on; every eligible
+  // driver within the radius already sees it at once, see DriverHome's
+  // list) but noDriverYet (above) flags BROADCAST_NO_DRIVER_TIMEOUT_SEC of
+  // total silence so this isn't a silent dead end for the customer.
   if (b.status === "AwaitingDriver") {
     return (
       <div className="min-h-full flex flex-col justify-between px-5 py-5">
-        <div className="rounded-xl p-4 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <div className="rounded-xl p-4 shadow-sm text-center" style={{ background: C.paper, border: `1.5px solid ${noDriverYet ? "#8B0000" : C.marigoldDeep}` }}>
           {b.scheduledFor && (
             <div className="rounded-lg p-2 mb-3 flex items-center justify-center gap-1.5 shadow-lg" style={{ background: C.marigoldDeep }}>
               <Clock3 size={12} color="#FFFFFF" />
               <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
             </div>
           )}
-          <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2 guided-submit-ready" style={{ background: C.navy }}>
-            <Truck size={20} color="#FFFFFF" />
+          <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2 guided-submit-ready" style={{ background: noDriverYet ? "#8B0000" : C.navy }}>
+            {noDriverYet ? <AlertTriangle size={20} color="#FFFFFF" /> : <Truck size={20} color="#FFFFFF" />}
           </div>
-          <div className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Notifying Nearby Drivers" : lang === "mr" ? "जवळच्या ड्रायव्हर्सना कळवत आहोत" : "आस-पास के ड्राइवरों को सूचित किया जा रहा है"}</div>
-          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>{b.fare ? fmt(b.fare) : ""}</div>
+          <div className="text-base font-black" style={{ color: C.ink }}>
+            {noDriverYet
+              ? (lang === "en" ? "No Driver Responded Yet" : lang === "mr" ? "अजून कोणत्याही ड्रायव्हरने प्रतिसाद दिला नाही" : "अभी तक किसी ड्राइवर ने जवाब नहीं दिया")
+              : (lang === "en" ? "Notifying Nearby Drivers" : lang === "mr" ? "जवळच्या ड्रायव्हर्सना कळवत आहोत" : "आस-पास के ड्राइवरों को सूचित किया जा रहा है")}
+          </div>
+          <div className="text-sm font-bold mt-1" style={{ color: C.inkSoft }}>
+            {noDriverYet
+              ? (lang === "en" ? "You can keep waiting, or cancel and try again." : lang === "mr" ? "तुम्ही वाट पाहू शकता, किंवा रद्द करून पुन्हा प्रयत्न करू शकता." : "आप इंतज़ार कर सकते हैं, या रद्द करके फिर से कोशिश कर सकते हैं।")
+              : (b.fare ? fmt(b.fare) : "")}
+          </div>
         </div>
         <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: "#8B0000" }}>
-          {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+          {noDriverYet
+            ? (lang === "en" ? "Cancel & Try Again" : lang === "mr" ? "रद्द करा आणि पुन्हा प्रयत्न करा" : "रद्द करें और फिर कोशिश करें")
+            : (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें")}
         </button>
       </div>
     );
