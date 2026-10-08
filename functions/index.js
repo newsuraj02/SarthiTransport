@@ -1098,7 +1098,7 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 300,
-        system: "You are verifying, for the admin of a production Indian trucking-marketplace app (Sarthi Transport), whether a previously-logged Change Log entry (a bug, feature, UI or config change) is currently resolved. Respond with ONLY strict JSON, no markdown: {\"resolved\": true|false, \"note\": \"one short plain-language sentence for the admin\"}. If the entry describes a code-level fix that its own description says already shipped, and no live data action contradicts that, treat it as resolved. If a data remedy just ran, factor its actual result into your note and your resolved decision.",
+        system: "You are verifying, for the admin of a production Indian trucking-marketplace app (Apna Transport), whether a previously-logged Change Log entry (a bug, feature, UI or config change) is currently resolved. Respond with ONLY strict JSON, no markdown: {\"resolved\": true|false, \"note\": \"one short plain-language sentence for the admin\"}. If the entry describes a code-level fix that its own description says already shipped, and no live data action contradicts that, treat it as resolved. If a data remedy just ran, factor its actual result into your note and your resolved decision.",
         messages: [{
           role: "user",
           content: `Change Log entry:\nTitle: ${bug.title || ""}\nType: ${bug.type || "bug"}\nArea: ${bug.area || ""}\nOriginal description: ${bug.description || "(none)"}\n\nWhat just happened when Resolve was clicked: ${actionSummary}\n\nIs this issue resolved right now? Respond with the JSON only.`,
