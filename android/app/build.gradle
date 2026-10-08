@@ -45,17 +45,8 @@ android {
     }
     buildTypes {
         release {
-            // Was false -- Play Console's App Bundle Explorer flagged "DEX
-            // code optimisation: Low", "Obfuscation percentage: 2%", and
-            // "R8 configuration: -" as a direct result of R8 never
-            // actually running on release builds. Turned on together with
-            // the keep rules added to proguard-rules.pro (same commit),
-            // which protect every class this app's own native code (incl.
-            // the frozen GPS tracking plugins) depends on being found by
-            // name at runtime -- this needs a real device test before
-            // trusting it in production, not just a successful compile.
-            minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             // Packages a native-debug-symbols.zip into the .aab so Play
             // Console can symbolicate crashes/ANRs in the small amount of
             // native (.so) code bundled by AndroidX/Capacitor dependencies
