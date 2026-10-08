@@ -5770,11 +5770,13 @@ function getWeightInputChange(rawValue, unit) {
 function isWeightValid(weight, unit) {
   return unit === "kg" ? KG_WEIGHT_RE.test(weight) : TON_WEIGHT_RE.test(weight) && Number(weight) > 0;
 }
-// "kg"/"ton" label in the customer's language -- kg is never translated
-// (it's not a real word in Hindi/Marathi usage here), ton/टन is.
-function weightUnitLabel(unit, lang) {
-  if (unit === "kg") return "kg";
-  return lang === "en" ? "ton" : "टन";
+// "kg"/"ton" label -- always the plain Latin abbreviation, same as "kg",
+// regardless of app language. Previously ton/टन switched to Devanagari in
+// hi/mr while kg stayed "kg" either way, so the toggle showed two
+// different scripts side by side ("kg" | "टन") instead of reading as one
+// consistent unit pair.
+function weightUnitLabel(unit) {
+  return unit === "kg" ? "kg" : "ton";
 }
 
 // =====================================================================
@@ -5917,6 +5919,17 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // opens, instead of it firing the instant they tap the card. Keyed the
   // same way as each entry's own id.
   const [selectedDriverKey, setSelectedDriverKey] = useState(null);
+  // Reset the moment the entered weight OR its unit changes -- without
+  // this, a vehicle selected under one weight/unit stayed "selected"
+  // (collapsing the list down to just that one card, see visibleDrivers
+  // below) even after the customer changed the weight enough that a
+  // different set of vehicles should now be showing, e.g. switching the
+  // kg/ton toggle after already picking a card. Only truly clears when the
+  // previously selected id no longer appears in the freshly filtered list
+  // at all; this makes it unconditional, so a genuinely new weight/unit
+  // always shows the full fresh list again instead of silently keeping a
+  // stale single-vehicle view whenever the old id still happens to match.
+  useEffect(() => { setSelectedDriverKey(null); }, [weight, weightUnit]);
   // The map collapses to a compact header once weight is filled in (same
   // "form before map" flow as the design mock) -- manualMapOpen is the
   // explicit "View Map" override, reset the moment weight changes again so
@@ -6125,7 +6138,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
             </span>
           </div>
           <div className="relative flex-1">
-            <input className={inputCls} style={{ ...inputStyle, paddingRight: 86 }} inputMode="decimal"
+            <input className={inputCls} style={{ ...inputStyle, paddingRight: 108 }} inputMode="decimal"
               placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
               onChange={(e) => {
                 // See getWeightInputChange's own comment -- enforces kg's
@@ -6140,16 +6153,16 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                 single button that only displays whichever is currently
                 active) -- same right-edge slot pattern as LocationField's
                 clear button. */}
-            <div className="absolute right-1 top-1 bottom-1 flex items-center gap-0.5 rounded-md p-0.5" style={{ background: "rgba(0,0,0,0.06)" }}>
+            <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1 rounded-md p-1" style={{ background: "rgba(0,0,0,0.06)" }}>
               <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
-                className="h-full px-2 rounded text-[10px] font-black"
+                className="h-full px-3 rounded text-xs font-black"
                 style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
                 kg
               </button>
               <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
-                className="h-full px-2 rounded text-[10px] font-black"
+                className="h-full px-3 rounded text-xs font-black"
                 style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
-                {weightUnitLabel("ton", lang)}
+                {weightUnitLabel("ton")}
               </button>
             </div>
           </div>
@@ -6189,12 +6202,12 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
             // trusted yet.
             <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
               {lang === "en"
-                ? `Do you mean ${weightUnitLabel(weightUnitHint, lang)}? `
+                ? `Do you mean ${weightUnitLabel(weightUnitHint)}? `
                 : lang === "mr"
-                ? `तुमचा अर्थ ${weightUnitLabel(weightUnitHint, lang)} आहे का? `
-                : `क्या आपका मतलब ${weightUnitLabel(weightUnitHint, lang)} से है? `}
+                ? `तुमचा अर्थ ${weightUnitLabel(weightUnitHint)} आहे का? `
+                : `क्या आपका मतलब ${weightUnitLabel(weightUnitHint)} से है? `}
               <button type="button" onClick={() => { setWeightUnit(weightUnitHint); setWeightUnitHint(null); }} className="underline">
-                {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint, lang)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint, lang)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint, lang)} पर स्विच करें`}
+                {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint)} पर स्विच करें`}
               </button>
             </div>
           ) : !weightReady ? (
@@ -6529,7 +6542,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
             </span>
           </div>
           <div className="relative flex-1">
-            <input className={inputCls} style={{ ...inputStyle, paddingRight: 86 }} inputMode="decimal"
+            <input className={inputCls} style={{ ...inputStyle, paddingRight: 108 }} inputMode="decimal"
               placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
               onChange={(e) => {
                 // See getWeightInputChange's own comment -- enforces kg's
@@ -6544,16 +6557,16 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                 single button that only displays whichever is currently
                 active) -- same right-edge slot pattern as LocationField's
                 clear button. */}
-            <div className="absolute right-1 top-1 bottom-1 flex items-center gap-0.5 rounded-md p-0.5" style={{ background: "rgba(0,0,0,0.06)" }}>
+            <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1 rounded-md p-1" style={{ background: "rgba(0,0,0,0.06)" }}>
               <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
-                className="h-full px-2 rounded text-[10px] font-black"
+                className="h-full px-3 rounded text-xs font-black"
                 style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
                 kg
               </button>
               <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
-                className="h-full px-2 rounded text-[10px] font-black"
+                className="h-full px-3 rounded text-xs font-black"
                 style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
-                {weightUnitLabel("ton", lang)}
+                {weightUnitLabel("ton")}
               </button>
             </div>
           </div>
@@ -6577,12 +6590,12 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
             // trusted yet.
             <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
               {lang === "en"
-                ? `Do you mean ${weightUnitLabel(weightUnitHint, lang)}? `
+                ? `Do you mean ${weightUnitLabel(weightUnitHint)}? `
                 : lang === "mr"
-                ? `तुमचा अर्थ ${weightUnitLabel(weightUnitHint, lang)} आहे का? `
-                : `क्या आपका मतलब ${weightUnitLabel(weightUnitHint, lang)} से है? `}
+                ? `तुमचा अर्थ ${weightUnitLabel(weightUnitHint)} आहे का? `
+                : `क्या आपका मतलब ${weightUnitLabel(weightUnitHint)} से है? `}
               <button type="button" onClick={() => { setWeightUnit(weightUnitHint); setWeightUnitHint(null); }} className="underline">
-                {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint, lang)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint, lang)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint, lang)} पर स्विच करें`}
+                {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint)} पर स्विच करें`}
               </button>
             </div>
           ) : !weightReady ? (
