@@ -5730,6 +5730,46 @@ function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCo
   return extra.length ? [...withFare, ...extra].sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km) : withFare;
 }
 
+// Weight input shape per unit -- kg is a plain 3-5 digit integer (100kg to
+// 99999kg; nobody books a <100kg truck load), tons allow up to 2 integer
+// digits plus 2 decimal digits (0 to 99.99t) for sub-tonne precision.
+// Enforced at the character level in getWeightInputChange below (not just
+// validated on submit), so the field itself can never grow past either
+// shape -- which also means the only way a customer "overflows" one unit's
+// cap is by actually trying to type a number that belongs in the OTHER
+// unit (e.g. typing "750" while on the tons toggle, meant as kg); that
+// overflow is reported back as mismatchUnit so the UI can offer to switch
+// instead of just silently refusing the keystroke with no explanation.
+const KG_WEIGHT_RE = /^\d{3,5}$/;
+const TON_WEIGHT_RE = /^\d{1,2}(\.\d{1,2})?$/;
+function getWeightInputChange(rawValue, unit) {
+  if (unit === "kg") {
+    const digitsOnly = rawValue.replace(/[^0-9]/g, "");
+    const clean = digitsOnly.slice(0, 5);
+    // A decimal point typed at all, or more than 5 digits, isn't a bigger
+    // kg value (kg is capped at 5 digits/99999kg on purpose) -- it's almost
+    // certainly a tons value (e.g. "2.5" or "12000" meant as 12 tons).
+    const mismatchUnit = (/\./.test(rawValue) || digitsOnly.length > 5) ? "ton" : null;
+    return { clean, mismatchUnit };
+  }
+  const noJunk = rawValue.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+  const [intPart, decPart] = noJunk.split(".");
+  const clean = intPart.slice(0, 2) + (noJunk.includes(".") ? "." + (decPart || "").slice(0, 2) : "");
+  // More than 2 integer digits before any decimal point -- almost
+  // certainly a kg-sized number (e.g. "750") typed while still on tons.
+  const mismatchUnit = intPart.length > 2 ? "kg" : null;
+  return { clean, mismatchUnit };
+}
+function isWeightValid(weight, unit) {
+  return unit === "kg" ? KG_WEIGHT_RE.test(weight) : TON_WEIGHT_RE.test(weight) && Number(weight) > 0;
+}
+// "kg"/"ton" label in the customer's language -- kg is never translated
+// (it's not a real word in Hindi/Marathi usage here), ton/टन is.
+function weightUnitLabel(unit, lang) {
+  if (unit === "kg") return "kg";
+  return lang === "en" ? "ton" : "टन";
+}
+
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
@@ -5745,6 +5785,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // (vehicle matching, fare resolution), so the rest of this component
   // never needs to know which unit was actually typed.
   const [weightUnit, setWeightUnit] = useState("kg");
+  // Set the moment getWeightInputChange (see its own comment) detects the
+  // customer typing past the current unit's cap -- holds the OTHER unit to
+  // offer switching to, cleared the instant they either switch or edit the
+  // field back under the cap.
+  const [weightUnitHint, setWeightUnitHint] = useState(null);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -5879,7 +5924,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // AwaitingDriver booking from Firestore and swaps in ActiveRide instead.
   const [sendingKey, setSendingKey] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim());
-  const weightReady = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1) > 0;
+  const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
 
   // Every real, currently online/approved/non-blacklisted driver within
@@ -6061,30 +6106,45 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           onFocus={() => setActiveField("drop")}
         />
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
-            <Navigation size={16} color={C.inkSoft} className="shrink-0" />
-            <span className="truncate">
+        <div className="flex gap-3">
+          {/* Narrower now (fixed width, not a 50/50 grid column) -- the
+              weight box needs the extra room for the two-segment kg/ton
+              toggle below, and this box's own content (a short distance
+              or "Calculating...") reads fine truncated at this width. */}
+          <div className={`${inputCls} flex items-center gap-1.5 shrink-0`} style={{ ...inputStyle, width: 104 }}>
+            <Navigation size={14} color={C.inkSoft} className="shrink-0" />
+            <span className="truncate text-[11px]">
               {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
             </span>
           </div>
-          <div className="relative">
-            <input className={inputCls} style={{ ...inputStyle, paddingRight: 46 }} inputMode="decimal"
+          <div className="relative flex-1">
+            <input className={inputCls} style={{ ...inputStyle, paddingRight: 86 }} inputMode="decimal"
               placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
               onChange={(e) => {
-                // Digits and at most one decimal point -- same filter the
-                // guide's own snippet uses, so "15.5" types cleanly instead
-                // of the old all-non-digits-stripped integer-only input.
-                const clean = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                // See getWeightInputChange's own comment -- enforces kg's
+                // 3-5 digit / tons' 2+2-digit shape as you type, and flags
+                // mismatchUnit (surfaced below) the moment what's typed
+                // looks like it belongs in the OTHER unit instead.
+                const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
                 setWeight(clean);
+                setWeightUnitHint(mismatchUnit);
               }} />
-            {/* kg/ton toggle -- same right-edge slot pattern as LocationField's
-                clear button, just a unit switch instead. */}
-            <button type="button" onClick={() => setWeightUnit((u) => (u === "kg" ? "ton" : "kg"))}
-              className="absolute right-1 top-1 bottom-1 px-2 rounded-md text-[10px] font-black"
-              style={{ background: C.navy, color: "#fff" }}>
-              {weightUnit === "kg" ? "kg" : "टन"}
-            </button>
+            {/* Both units shown at once now (a real segmented toggle, not a
+                single button that only displays whichever is currently
+                active) -- same right-edge slot pattern as LocationField's
+                clear button. */}
+            <div className="absolute right-1 top-1 bottom-1 flex items-center gap-0.5 rounded-md p-0.5" style={{ background: "rgba(0,0,0,0.06)" }}>
+              <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
+                className="h-full px-2 rounded text-[10px] font-black"
+                style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
+                kg
+              </button>
+              <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
+                className="h-full px-2 rounded text-[10px] font-black"
+                style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
+                {weightUnitLabel("ton", lang)}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -6113,7 +6173,24 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           that same button becomes a disabled "Request sent. Please wait". */}
       {locationsReady && (
         <div className="px-5 pt-3 pb-4 space-y-2.5">
-          {!weightReady ? (
+          {weightUnitHint ? (
+            // Typed value overflowed the current unit's shape (see
+            // getWeightInputChange) -- almost certainly meant for the
+            // OTHER unit, so this offers a one-tap fix instead of a
+            // generic error, and (same as !weightReady) still hides the
+            // vehicle list below, since the entered weight can't be
+            // trusted yet.
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
+              {lang === "en"
+                ? `Do you mean ${weightUnitLabel(weightUnitHint, lang)}? `
+                : lang === "mr"
+                ? `तुमचा अर्थ ${weightUnitLabel(weightUnitHint, lang)} आहे का? `
+                : `क्या आपका मतलब ${weightUnitLabel(weightUnitHint, lang)} से है? `}
+              <button type="button" onClick={() => { setWeightUnit(weightUnitHint); setWeightUnitHint(null); }} className="underline">
+                {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint, lang)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint, lang)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint, lang)} पर स्विच करें`}
+              </button>
+            </div>
+          ) : !weightReady ? (
             <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
               👆 {lang === "en" ? "Enter weight first, then vehicles will show" : lang === "mr" ? "आधी वजन टाका, मग गाड्या दिसतील" : "पहले वजन डालें, तभी गाड़ियाँ दिखेंगी"}
             </div>
@@ -6212,6 +6289,11 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   // (vehicle matching, fare resolution), so the rest of this component
   // never needs to know which unit was actually typed.
   const [weightUnit, setWeightUnit] = useState("kg");
+  // Set the moment getWeightInputChange (see its own comment) detects the
+  // customer typing past the current unit's cap -- holds the OTHER unit to
+  // offer switching to, cleared the instant they either switch or edit the
+  // field back under the cap.
+  const [weightUnitHint, setWeightUnitHint] = useState(null);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6284,7 +6366,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   // until this whole component unmounts, same as CustomerBooking above.
   const [sendingKey, setSendingKey] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim() && advanceDate && advanceTime);
-  const weightReady = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1) > 0;
+  const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
   const scheduledForValue = `${advanceDate} ${advanceTime}`;
 
@@ -6428,30 +6510,45 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           onFocus={() => setActiveField("drop")}
         />
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className={`${inputCls} flex items-center gap-2`} style={inputStyle}>
-            <Navigation size={16} color={C.inkSoft} className="shrink-0" />
-            <span className="truncate">
+        <div className="flex gap-3">
+          {/* Narrower now (fixed width, not a 50/50 grid column) -- the
+              weight box needs the extra room for the two-segment kg/ton
+              toggle below, and this box's own content (a short distance
+              or "Calculating...") reads fine truncated at this width. */}
+          <div className={`${inputCls} flex items-center gap-1.5 shrink-0`} style={{ ...inputStyle, width: 104 }}>
+            <Navigation size={14} color={C.inkSoft} className="shrink-0" />
+            <span className="truncate text-[11px]">
               {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
             </span>
           </div>
-          <div className="relative">
-            <input className={inputCls} style={{ ...inputStyle, paddingRight: 46 }} inputMode="decimal"
+          <div className="relative flex-1">
+            <input className={inputCls} style={{ ...inputStyle, paddingRight: 86 }} inputMode="decimal"
               placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
               onChange={(e) => {
-                // Digits and at most one decimal point -- same filter the
-                // guide's own snippet uses, so "15.5" types cleanly instead
-                // of the old all-non-digits-stripped integer-only input.
-                const clean = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                // See getWeightInputChange's own comment -- enforces kg's
+                // 3-5 digit / tons' 2+2-digit shape as you type, and flags
+                // mismatchUnit (surfaced below) the moment what's typed
+                // looks like it belongs in the OTHER unit instead.
+                const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
                 setWeight(clean);
+                setWeightUnitHint(mismatchUnit);
               }} />
-            {/* kg/ton toggle -- same right-edge slot pattern as LocationField's
-                clear button, just a unit switch instead. */}
-            <button type="button" onClick={() => setWeightUnit((u) => (u === "kg" ? "ton" : "kg"))}
-              className="absolute right-1 top-1 bottom-1 px-2 rounded-md text-[10px] font-black"
-              style={{ background: C.navy, color: "#fff" }}>
-              {weightUnit === "kg" ? "kg" : "टन"}
-            </button>
+            {/* Both units shown at once now (a real segmented toggle, not a
+                single button that only displays whichever is currently
+                active) -- same right-edge slot pattern as LocationField's
+                clear button. */}
+            <div className="absolute right-1 top-1 bottom-1 flex items-center gap-0.5 rounded-md p-0.5" style={{ background: "rgba(0,0,0,0.06)" }}>
+              <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
+                className="h-full px-2 rounded text-[10px] font-black"
+                style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
+                kg
+              </button>
+              <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
+                className="h-full px-2 rounded text-[10px] font-black"
+                style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
+                {weightUnitLabel("ton", lang)}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -6464,7 +6561,24 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
 
       {locationsReady && (
         <div className="px-5 pt-3 pb-4 space-y-2.5">
-          {!weightReady ? (
+          {weightUnitHint ? (
+            // Typed value overflowed the current unit's shape (see
+            // getWeightInputChange) -- almost certainly meant for the
+            // OTHER unit, so this offers a one-tap fix instead of a
+            // generic error, and (same as !weightReady) still hides the
+            // vehicle list below, since the entered weight can't be
+            // trusted yet.
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
+              {lang === "en"
+                ? `Do you mean ${weightUnitLabel(weightUnitHint, lang)}? `
+                : lang === "mr"
+                ? `तुमचा अर्थ ${weightUnitLabel(weightUnitHint, lang)} आहे का? `
+                : `क्या आपका मतलब ${weightUnitLabel(weightUnitHint, lang)} से है? `}
+              <button type="button" onClick={() => { setWeightUnit(weightUnitHint); setWeightUnitHint(null); }} className="underline">
+                {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint, lang)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint, lang)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint, lang)} पर स्विच करें`}
+              </button>
+            </div>
+          ) : !weightReady ? (
             <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
               👆 {lang === "en" ? "Enter weight first, then vehicles will show" : lang === "mr" ? "आधी वजन टाका, मग गाड्या दिसतील" : "पहले वजन डालें, तभी गाड़ियाँ दिखेंगी"}
             </div>
