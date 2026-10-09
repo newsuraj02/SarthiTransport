@@ -5457,6 +5457,14 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
   const blurTimeoutRef = useRef(null);
+  // Golden-yellow highlight + auto-scroll-into-view while this field is
+  // focused -- restored per explicit report that it regressed from an
+  // earlier version. scrollIntoView is what actually keeps the field
+  // visible above the on-screen keyboard; relying on the WebView's own
+  // default behavior isn't consistent enough inside the installed app to
+  // trust on its own.
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
@@ -5518,7 +5526,11 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
   };
 
   const inputCls = "w-full rounded-lg py-5 text-xs font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16 };
+  const inputStyle = {
+    background: focused ? "rgba(255,204,0,0.08)" : C.paper,
+    border: `1.5px solid ${focused ? C.marigold : C.line}`,
+    color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16,
+  };
   const showDropdown = dropdownOpen && predictions.length > 0;
   // Shown instead of the live-predictions dropdown, only while the field is
   // focused and still empty — the moment there's real input, predictions
@@ -5530,10 +5542,15 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
   return (
     <div>
       <div className="relative w-full">
-        <input className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
+        <input ref={inputRef} className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
           onChange={(e) => { onChange(e); setDropdownOpen(true); }}
-          onFocus={() => { setDropdownOpen(true); onFocus?.(); }}
-          onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
+          onFocus={(e) => {
+            setDropdownOpen(true);
+            setFocused(true);
+            e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+            onFocus?.();
+          }}
+          onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); setFocused(false); onBlur?.(); }} />
         {value && (
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
             className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
@@ -5727,6 +5744,25 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
   return { activeStep, stepProps };
 }
 
+// The heaviest capacity this app's live fleet can actually carry right
+// now -- any KYC-Approved, non-blacklisted driver's registered vehicle
+// counts (not just online ones; "do we have a truck this big at all" is
+// about fleet composition, not moment-to-moment duty status). Used to cap
+// the Enter Weight input itself, per explicit request: a customer
+// shouldn't be able to type a weight heavier than anything the fleet
+// could ever carry, and should see a clear "we don't have a vehicle for
+// this" note instead of the vehicle list once they do. Recomputed on
+// every render straight from the live `drivers` subscription, so it
+// grows the moment a bigger vehicle completes KYC -- no separate wiring
+// needed for that.
+function maxFleetVehicleCapacityKg(drivers, VEHICLES) {
+  return (drivers || []).reduce((max, d) => {
+    if (d.kyc !== "Approved" || d.blacklisted) return max;
+    const capKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+    return Math.max(max, capKg);
+  }, 0);
+}
+
 // Pads a vehicle-category list up to a minimum count by climbing to the
 // next tier(s) ABOVE whatever's already included, when nearby real
 // inventory is thin -- so a customer in a sparse area still sees at least
@@ -5737,11 +5773,18 @@ function useGuidedSteps(stepCompleted, { pinFocus = false, autoScroll = true, au
 // at a time instead of the normal flat capacity-headroom window -- shared
 // by CustomerBooking and CustomerAdvanceBooking, which both build
 // `withFare` the same way before calling this.
-function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCoords, radiusKm, pickup, drop, distance, dropCoords, adminRouteFares, minCategories = 3 }) {
+function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCoords, radiusKm, pickup, drop, distance, dropCoords, adminRouteFares, minCategories = 3, loadKg = 0, bookings = [], lang = "hi", scheduledFor = null }) {
   const coveredTiers = new Set(withFare.map((e) => e.tier.maxKg));
   if (coveredTiers.size >= minCategories || !pickupCoords) return withFare;
   const sortedTiers = [...fareTiers].sort((a, b) => a.maxKg - b.maxKg);
-  const highestCovered = coveredTiers.size ? Math.max(...coveredTiers) : -Infinity;
+  // Never pad with a tier that can't actually carry loadKg -- previously
+  // this started climbing from the SMALLEST tier whenever nothing matched
+  // the entered weight at all (coveredTiers empty -> highestCovered
+  // -Infinity), which meant an unreasonably heavy weight with no real
+  // match still got padded with irrelevant small vehicles (750kg, 1000kg,
+  // ...) instead of correctly showing no vehicles at all. The floor is
+  // now whichever is higher: what's already covered, or loadKg itself.
+  const highestCovered = Math.max(coveredTiers.size ? Math.max(...coveredTiers) : -Infinity, loadKg - 1);
   const extra = [];
   for (const tier of sortedTiers) {
     if (coveredTiers.size >= minCategories) break;
@@ -5751,7 +5794,13 @@ function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCo
       const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
       if (findFareTier(dCapKg, fareTiers).maxKg !== tier.maxKg) return false;
       if (!d.lastKnownLocation?.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-      return haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) <= radiusKm;
+      if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > radiusKm) return false;
+      // A driver mid-trip or inside an upcoming advance-booking window is
+      // on the move and shouldn't be offered as a padding option either --
+      // same reasoning as the main nearbyDrivers filter. scheduledFor (set
+      // only by CustomerAdvanceBooking) checks against THAT future window
+      // instead of right now.
+      return !findDriverLoadConflict(d, { scheduledFor }, bookings, VEHICLES, lang);
     });
     if (!matches.length) continue;
     coveredTiers.add(tier.maxKg);
@@ -5768,18 +5817,20 @@ function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCo
 }
 
 // Weight input shape per unit -- kg is a plain 3-5 digit integer (100kg to
-// 99999kg; nobody books a <100kg truck load). Tons are a pure digit
-// stream the customer never has to put a decimal point into themselves --
-// the first 2 digits typed are the whole-tonne part, and the decimal
-// point is inserted automatically the moment a 3rd digit arrives, taking
-// up to 3 more digits after it (0 to 99.999t). Enforced at the character
-// level in getWeightInputChange below (not just validated on submit), so
-// the field itself can never grow past either shape -- which also means
-// the only way a customer "overflows" one unit's cap is by actually
-// trying to type a number that belongs in the OTHER unit (e.g. typing
-// "750" while on the tons toggle, meant as kg); that overflow is reported
-// back as mismatchUnit so the UI can offer to switch instead of just
-// silently refusing the keystroke with no explanation.
+// 99999kg; nobody books a <100kg truck load). Tons allow up to 2 integer
+// digits plus 3 decimal digits (0 to 99.999t), typed manually including
+// the decimal point itself -- a prior version auto-inserted the "." after
+// the 2nd digit, but that was confusing (no visible cue for whether the
+// next digit landed before or after the point), so this reverted back to
+// plain manual typing, same interaction as any normal decimal field.
+// Enforced at the character level in getWeightInputChange below (not just
+// validated on submit), so the field itself can never grow past either
+// shape -- which also means the only way a customer "overflows" one
+// unit's cap is by actually trying to type a number that belongs in the
+// OTHER unit (e.g. typing "750" while on the tons toggle, meant as kg);
+// that overflow is reported back as mismatchUnit so the UI can offer to
+// switch instead of just silently refusing the keystroke with no
+// explanation.
 const KG_WEIGHT_RE = /^\d{3,5}$/;
 const TON_WEIGHT_RE = /^\d{1,2}(\.\d{1,3})?$/;
 function getWeightInputChange(rawValue, unit) {
@@ -5792,16 +5843,14 @@ function getWeightInputChange(rawValue, unit) {
     const mismatchUnit = (/\./.test(rawValue) || digitsOnly.length > 5) ? "ton" : null;
     return { clean, mismatchUnit };
   }
-  // Any "." the customer types is ignored (there's nothing for them to
-  // place -- it's placed for them); only the digits typed matter.
-  const digitsOnly = rawValue.replace(/[^0-9]/g, "");
-  const capped = digitsOnly.slice(0, 5); // 2 whole-tonne + 3 decimal digits
-  const intPart = capped.slice(0, 2);
-  const decPart = capped.slice(2);
-  const clean = decPart ? `${intPart}.${decPart}` : intPart;
-  // More than 5 meaningful digits total -- same digit budget as kg's own
-  // cap -- almost certainly a kg-sized number typed while still on tons.
-  const mismatchUnit = digitsOnly.length > 5 ? "kg" : null;
+  // At most one decimal point (same filter as every other decimal input
+  // in this app), up to 2 integer digits and 3 decimal digits.
+  const noJunk = rawValue.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+  const [intPart, decPart] = noJunk.split(".");
+  const clean = intPart.slice(0, 2) + (noJunk.includes(".") ? "." + (decPart || "").slice(0, 3) : "");
+  // More than 2 integer digits before any decimal point -- almost
+  // certainly a kg-sized number (e.g. "750") typed while still on tons.
+  const mismatchUnit = intPart.length > 2 ? "kg" : null;
   return { clean, mismatchUnit };
 }
 function isWeightValid(weight, unit) {
@@ -5819,7 +5868,7 @@ function weightUnitLabel(unit) {
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares }) {
+function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings }) {
   const VEHICLES = vehicleTypes;
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
@@ -5836,6 +5885,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // offer switching to, cleared the instant they either switch or edit the
   // field back under the cap.
   const [weightUnitHint, setWeightUnitHint] = useState(null);
+  // Same golden-yellow focus highlight + auto-scroll-into-view as
+  // LocationField's Pickup/Drop boxes (see that component) -- this is a
+  // plain input, not LocationField, so it needs its own focused state.
+  const [weightFocused, setWeightFocused] = useState(false);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6001,6 +6054,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // matching the order the fare tiers and the dispatch engine already use
   // elsewhere.
   const loadKg = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1);
+  const maxFleetCapacityKg = maxFleetVehicleCapacityKg(drivers, VEHICLES);
+  const exceedsFleetMax = weightReady && maxFleetCapacityKg > 0 && loadKg > maxFleetCapacityKg;
   const nearbyDrivers = (() => {
     let withFare = drivers
       .filter((d) => {
@@ -6009,7 +6064,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
         if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
         if (!pickupCoords || !d.lastKnownLocation) return false;
         if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-        return haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) <= CURRENT_BID_RADIUS_KM;
+        if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > CURRENT_BID_RADIUS_KM) return false;
+        // On an Ongoing trip right now, or inside an upcoming advance-
+        // booking's protected window -- on the move, not actually
+        // available, shouldn't be shown as a bookable card at all.
+        return !findDriverLoadConflict(d, {}, bookings, VEHICLES, lang);
       })
       .map((d) => {
         const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
@@ -6027,7 +6086,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
     // real choices (see padVehicleCategories above).
     withFare = padVehicleCategories(withFare, {
       drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: CURRENT_BID_RADIUS_KM,
-      pickup, drop, distance, dropCoords, adminRouteFares,
+      pickup, drop, distance, dropCoords, adminRouteFares, loadKg, bookings, lang,
     });
 
     // A bad Admin override for just one tier on this route (a stray digit,
@@ -6175,7 +6234,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
             </span>
           </div>
           <div className="relative flex-1">
-            <input className={inputCls} style={{ ...inputStyle, paddingRight: 108 }} inputMode="decimal"
+            <input className={inputCls} style={{
+                ...inputStyle, paddingRight: 108,
+                background: weightFocused ? "rgba(255,204,0,0.08)" : inputStyle.background,
+                border: `1.5px solid ${weightFocused ? C.marigold : C.line}`,
+              }} inputMode="decimal"
               placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
               onChange={(e) => {
                 // See getWeightInputChange's own comment -- enforces kg's
@@ -6185,7 +6248,9 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                 const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
                 setWeight(clean);
                 setWeightUnitHint(mismatchUnit);
-              }} />
+              }}
+              onFocus={(e) => { setWeightFocused(true); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }}
+              onBlur={() => setWeightFocused(false)} />
             {/* Both units shown at once now (a real segmented toggle, not a
                 single button that only displays whichever is currently
                 active) -- same right-edge slot pattern as LocationField's
@@ -6246,6 +6311,20 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               <button type="button" onClick={() => { setWeightUnit(weightUnitHint); setWeightUnitHint(null); }} className="underline">
                 {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint)} पर स्विच करें`}
               </button>
+            </div>
+          ) : exceedsFleetMax ? (
+            // Entered weight is heavier than anything the live fleet can
+            // carry (see maxFleetVehicleCapacityKg) -- same "don't show
+            // vehicles on an error" rule as weightUnitHint above, since no
+            // real vehicle could ever match this. maxFleetCapacityKg grows
+            // automatically the moment a bigger vehicle completes KYC, so
+            // this message is never stuck describing a stale ceiling.
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
+              {lang === "en"
+                ? `We don't currently have a vehicle for this weight. Max available: ${maxFleetCapacityKg}kg.`
+                : lang === "mr"
+                ? `सध्या तुमच्या वजनासाठी आमच्याकडे वाहन उपलब्ध नाही. कमाल उपलब्ध: ${maxFleetCapacityKg}kg.`
+                : `फिलहाल आपके वजन के लिए कोई गाड़ी उपलब्ध नहीं है। अधिकतम उपलब्ध: ${maxFleetCapacityKg}kg.`}
             </div>
           ) : !weightReady ? (
             <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
@@ -6331,7 +6410,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
 // (a scheduled driver has time to travel further), and bookDriver's
 // per-category minimum-lead-time check (minAdvanceNoticeHours) before
 // requestByCategory ever runs.
-function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares }) {
+function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -6351,6 +6430,10 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   // offer switching to, cleared the instant they either switch or edit the
   // field back under the cap.
   const [weightUnitHint, setWeightUnitHint] = useState(null);
+  // Same golden-yellow focus highlight + auto-scroll-into-view as
+  // LocationField's Pickup/Drop boxes (see that component) -- this is a
+  // plain input, not LocationField, so it needs its own focused state.
+  const [weightFocused, setWeightFocused] = useState(false);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6428,6 +6511,8 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   const scheduledForValue = `${advanceDate} ${advanceTime}`;
 
   const loadKg = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1);
+  const maxFleetCapacityKg = maxFleetVehicleCapacityKg(drivers, VEHICLES);
+  const exceedsFleetMax = weightReady && maxFleetCapacityKg > 0 && loadKg > maxFleetCapacityKg;
   const nearbyDrivers = (() => {
     let withFare = drivers
       .filter((d) => {
@@ -6436,7 +6521,11 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
         if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
         if (!pickupCoords || !d.lastKnownLocation) return false;
         if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-        return haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) <= ADVANCE_BID_RADIUS_KM;
+        if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > ADVANCE_BID_RADIUS_KM) return false;
+        // Checked against THIS booking's own scheduled slot (scheduledForValue),
+        // not right now -- a driver free right now but already committed
+        // during the requested advance window is still unavailable for it.
+        return !findDriverLoadConflict(d, { scheduledFor: scheduledForValue }, bookings, VEHICLES, lang);
       })
       .map((d) => {
         const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
@@ -6451,7 +6540,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
 
     withFare = padVehicleCategories(withFare, {
       drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: ADVANCE_BID_RADIUS_KM,
-      pickup, drop, distance, dropCoords, adminRouteFares,
+      pickup, drop, distance, dropCoords, adminRouteFares, loadKg, bookings, lang, scheduledFor: scheduledForValue,
     });
 
     const outlierIds = findFareOutliers(
@@ -6579,7 +6668,11 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
             </span>
           </div>
           <div className="relative flex-1">
-            <input className={inputCls} style={{ ...inputStyle, paddingRight: 108 }} inputMode="decimal"
+            <input className={inputCls} style={{
+                ...inputStyle, paddingRight: 108,
+                background: weightFocused ? "rgba(255,204,0,0.08)" : inputStyle.background,
+                border: `1.5px solid ${weightFocused ? C.marigold : C.line}`,
+              }} inputMode="decimal"
               placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
               onChange={(e) => {
                 // See getWeightInputChange's own comment -- enforces kg's
@@ -6589,7 +6682,9 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                 const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
                 setWeight(clean);
                 setWeightUnitHint(mismatchUnit);
-              }} />
+              }}
+              onFocus={(e) => { setWeightFocused(true); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }}
+              onBlur={() => setWeightFocused(false)} />
             {/* Both units shown at once now (a real segmented toggle, not a
                 single button that only displays whichever is currently
                 active) -- same right-edge slot pattern as LocationField's
@@ -6634,6 +6729,20 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
               <button type="button" onClick={() => { setWeightUnit(weightUnitHint); setWeightUnitHint(null); }} className="underline">
                 {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint)} पर स्विच करें`}
               </button>
+            </div>
+          ) : exceedsFleetMax ? (
+            // Entered weight is heavier than anything the live fleet can
+            // carry (see maxFleetVehicleCapacityKg) -- same "don't show
+            // vehicles on an error" rule as weightUnitHint above, since no
+            // real vehicle could ever match this. maxFleetCapacityKg grows
+            // automatically the moment a bigger vehicle completes KYC, so
+            // this message is never stuck describing a stale ceiling.
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
+              {lang === "en"
+                ? `We don't currently have a vehicle for this weight. Max available: ${maxFleetCapacityKg}kg.`
+                : lang === "mr"
+                ? `सध्या तुमच्या वजनासाठी आमच्याकडे वाहन उपलब्ध नाही. कमाल उपलब्ध: ${maxFleetCapacityKg}kg.`
+                : `फिलहाल आपके वजन के लिए कोई गाड़ी उपलब्ध नहीं है। अधिकतम उपलब्ध: ${maxFleetCapacityKg}kg.`}
             </div>
           ) : !weightReady ? (
             <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
@@ -7782,10 +7891,10 @@ function CustomerApp({ bookings, requestByCategory, reassignAwaitingDriver, driv
               }} />
           ) : advanceOpen ? (
             <CustomerAdvanceBooking requestByCategory={requestByCategory} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
-              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} />
+              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} />
           ) : (
             <CustomerBooking requestByCategory={requestByCategory} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
-              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} />
+              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} />
           )
         ) : (
           <div>
