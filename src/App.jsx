@@ -2944,14 +2944,7 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
   const p2 = drop ? hashPos(drop + "x") : null;
   const tx = p2 ? p1.x + (p2.x - p1.x) * (progress ?? 0) / 100 : p1.x;
   const ty = p2 ? p1.y + (p2.y - p1.y) * (progress ?? 0) / 100 : p1.y;
-  // No real coordinates here (mock fallback), so hand off to Google Maps
-  // using the address text instead — same real-<a>-link handoff as the real
-  // LiveTrackingMap (see its mapsUrl comment for why it's not window.open()).
-  const mapsUrl = pickup
-    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pickup)}&destination=${encodeURIComponent(drop || pickup)}&travelmode=driving`
-    : null;
   return (
-    <div>
     <div className="relative rounded-lg overflow-hidden" style={{ height, background: "#E5E5E5", border: `1px solid ${C.line}` }}>
       <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
         {Array.from({ length: 6 }).map((_, i) => (
@@ -2975,16 +2968,6 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
           🏁 {lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}
         </div>
       )}
-    </div>
-    {/* Below the box, not overlapping it — same reasoning as the real
-        LiveTrackingMap's button below (see its comment): keeps behavior
-        consistent regardless of which one happens to be rendering. */}
-    {mapsUrl && (
-      <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-        className="flex items-center justify-center gap-1.5 text-xs font-black py-2 mt-1.5 rounded-lg shadow-sm" style={{ background: "#FFCC00", color: "#000000" }}>
-        {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
-      </a>
-    )}
     </div>
   );
 }
@@ -3223,34 +3206,15 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
     mapInstance.panTo(rawDriverPos);
   }, [mapInstance, following, rawDriverPos?.lat, rawDriverPos?.lng]);
 
-  // The embedded map is now pan/zoomable in place (gestureHandling: "greedy"
-  // + a real zoom control below) instead of being a tap-anywhere preview —
-  // a full-cover overlay would block those gestures entirely, so "open in
-  // real Google Maps" moved to its own small corner button instead. It's a
-  // genuine <a> link (not a button + onClick calling window.open) — inside
-  // the installed Capacitor app, window.open() from JS needs native "new
-  // window" support Capacitor doesn't enable by default, so it silently
-  // does nothing there; a real anchor click is what Capacitor's WebView
-  // actually hands off to the system browser/Maps app for any URL outside
-  // the app's own origin.
-  // routeOrigin is always the driver's own live GPS now — until their
-  // first fix comes in (just opened the app, weak signal, permission
-  // prompt not yet answered), there's no origin yet even though
-  // routeDestination (Pickup, or Drop once loading's started) is always
-  // known. Tapping needs to work through the whole trip regardless — Before
-  // OTP, During OTP, After OTP, until End Trip — so this falls back to just
-  // opening that destination point alone instead of going dead.
-  const mapsUrl = routeDestination
-    ? routeOrigin
-      ? `https://www.google.com/maps/dir/?api=1&origin=${routeOrigin.lat},${routeOrigin.lng}&destination=${routeDestination.lat},${routeDestination.lng}&travelmode=driving`
-      : `https://www.google.com/maps/search/?api=1&query=${routeDestination.lat},${routeDestination.lng}`
-    : null;
+  // The embedded map is pan/zoomable in place (gestureHandling: "greedy" +
+  // a real zoom control below) -- the in-app route/ETA is now considered
+  // capable enough on its own, so this no longer hands off to a real
+  // Google Maps link (removed on request).
 
   if (!hasKey || !isLoaded || !hasCoords) {
     return <MockMap pickup={pickup} drop={toPickup ? null : drop} progress={toPickup ? undefined : progress} zoneColor={zoneColor} height={height} lang={lang} />;
   }
   return (
-    <div>
     <div className="relative rounded-lg overflow-hidden" style={{ height, border: `1px solid ${C.line}` }}>
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
@@ -3327,19 +3291,6 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
           <Navigation size={16} color="#fff" />
         </button>
       )}
-    </div>
-    {/* Sits in normal flow right below the map now, not overlapping it —
-        with gestureHandling: "greedy" enabled above (see options), Google's
-        own map div can swallow touches meant for anything absolutely
-        positioned on top of it, which is exactly what made this button
-        visible but unresponsive. Placing it outside the map's box entirely
-        removes any doubt about who receives the tap. */}
-    {mapsUrl && (
-      <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-        className="flex items-center justify-center gap-1.5 text-xs font-black py-2 mt-1.5 rounded-lg shadow-sm" style={{ background: "#FFCC00", color: "#000000" }}>
-        {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
-      </a>
-    )}
     </div>
   );
 }
@@ -3496,26 +3447,12 @@ function NearbyDriverMarker({ driver }) {
   return <MarkerF position={pos || rawPos} icon={driverTruckIcon(heading)} />;
 }
 
-function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick, showOpenInMaps = true }) {
+function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const nearby = nearbyOnlineDrivers(drivers, customerLocation);
   const nearbyInactive = nearbyOfflineDrivers(drivers, customerLocation);
   const center = customerLocation || NEARBY_MAP_DEFAULT_CENTER;
   const [mapInstance, setMapInstance] = useState(null);
-
-  const googleMapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${center.lat},${center.lng}`;
-  // Until Pickup and Drop are both filled in, there's no fixed route yet to
-  // hand off to Google Maps — the customer just tracks nearby vehicles live
-  // right here on the in-app map, so the button stays hidden until then.
-  // A real <a> link, not a button + window.open() — see LiveTrackingMap's
-  // mapsUrl comment for why: Capacitor's WebView hands off genuine link
-  // clicks to the system browser by default, but not JS window.open() calls.
-  const OpenInMapsButton = () => showOpenInMaps ? (
-    <a href={googleMapsSearchUrl} target="_blank" rel="noopener noreferrer"
-      className="absolute bottom-2 right-2 text-xs font-black px-2.5 py-1.5 rounded-full shadow-lg" style={{ background: "#FFCC00", color: "#000000" }}>
-      {lang === "en" ? "Open in Google Maps" : lang === "mr" ? "गूगल मॅप्समध्ये उघडा" : "गूगल मैप्स में खोलें"}
-    </a>
-  ) : null;
 
   useEffect(() => {
     if (!mapInstance || !window.google?.maps) return;
@@ -3564,7 +3501,6 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
         <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
           {countLabel}
         </div>
-        <OpenInMapsButton />
       </div>
     );
   }
@@ -3592,7 +3528,6 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
       <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
         {countLabel}
       </div>
-      <OpenInMapsButton />
     </div>
   );
 }
@@ -6205,7 +6140,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
         // vehicles near the load's actual pickup point, not near
         // themselves. Falls back to customerLocation (device GPS) only
         // before Pickup has been entered/geocoded, same as before.
-        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} showOpenInMaps={!!(pickup.trim() && drop.trim())} />
+        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} />
       )}
       <div className="px-5 pt-4 space-y-4">
         <div className="flex items-start gap-2">
@@ -6661,7 +6596,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           </button>
         </div>
       ) : (
-        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} showOpenInMaps={!!(pickup.trim() && drop.trim())} />
+        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} />
       )}
       <div className="px-5 pt-4 space-y-4">
         <div className="space-y-3">
