@@ -186,6 +186,22 @@ export async function bulkUpdateDocs(name, updates) {
   }
 }
 
+// Deletes many docs in one go -- same chunked-batch pattern as
+// bulkUpdateDocs above (500-write Firestore cap per batch), for a bulk
+// permanent-delete action (e.g. Admin clearing old ride history) instead
+// of hundreds of individual removeDoc round-trips.
+export async function bulkDeleteDocs(name, ids) {
+  const db = getDb();
+  if (!db || ids.length === 0) return;
+  for (let i = 0; i < ids.length; i += BATCH_CHUNK_SIZE) {
+    const batch = writeBatch(db);
+    ids.slice(i, i + BATCH_CHUNK_SIZE).forEach((id) => {
+      batch.delete(doc(db, name, id));
+    });
+    await withRetry(() => batch.commit());
+  }
+}
+
 export async function seedIfEmpty(name, items, idField) {
   const snap = await withRetry(() => getDoc(doc(getDb(), name, items[0][idField])));
   if (snap.exists()) return; // assume the collection is already seeded

@@ -3150,7 +3150,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
   );
 }
 
-function AdminFinance({ tripLog, lang }) {
+function AdminFinance({ tripLog, bookings, deleteAllRideHistory, lang }) {
   // Commission is deliberately held at 0 here too (see driverRespondBooking)
   // — fare is a real, fixed, calculated number again, but this report
   // shouldn't show non-zero "would-be" commission while actual wallet
@@ -3166,7 +3166,38 @@ function AdminFinance({ tripLog, lang }) {
     a.href = url; a.download = "commission-report.csv"; a.click();
     URL.revokeObjectURL(url);
   };
+
+  // Permanently deletes every finished (Completed/Cancelled) booking from
+  // Firestore -- explicit admin request to reclaim storage. Typed
+  // confirmation ("DELETE", not just a tap) since this is irreversible and
+  // affects far more than this screen -- see deleteAllRideHistory's own
+  // comment in App.jsx: every customer's and driver's own Ride History tab
+  // reads this same collection, so this clears those too, not just here.
+  const CONFIRM_WORD = "DELETE";
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [justDeleted, setJustDeleted] = useState(0);
+  const deletableCount = (bookings || []).filter((b) => b.status === "Completed" || b.status === "Cancelled").length;
+  const runDelete = async () => {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteAllRideHistory();
+      setJustDeleted(deletableCount);
+      setConfirmingDelete(false);
+      setConfirmText("");
+    } catch (e) {
+      console.error("[deleteAllRideHistory]", e);
+      setDeleteError(lang === "en" ? "Couldn't delete — please try again." : lang === "mr" ? "डिलीट होऊ शकले नाही — पुन्हा प्रयत्न करा." : "डिलीट नहीं हो सका — दोबारा कोशिश करें।");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
+    <div className="space-y-3">
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Reports — Commission & Earnings" : lang === "mr" ? "रिपोर्ट्स — कमिशन आणि कमाई" : "रिपोर्ट्स — कमीशन और कमाई"}</div>
@@ -3202,6 +3233,60 @@ function AdminFinance({ tripLog, lang }) {
           </tbody>
         </table>
       )}
+    </div>
+
+    {/* Separate card, deliberately set apart from the report above --
+        this is the one irreversible action on this whole screen. Typed
+        confirmation (CONFIRM_WORD) rather than a tap-to-confirm, since
+        the blast radius here is bigger than a single record: it also
+        clears Ride History for every customer and driver, not just this
+        table. */}
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1.5px solid ${C.safety}` }}>
+      <div className="text-sm font-bold mb-1 flex items-center gap-1.5" style={{ color: C.safety }}>
+        <AlertTriangle size={16} /> {lang === "en" ? "Danger Zone" : lang === "mr" ? "धोकादायक विभाग" : "खतरनाक क्षेत्र"}
+      </div>
+      <p className="text-[11px] font-semibold mb-3" style={{ color: C.inkSoft }}>
+        {lang === "en"
+          ? "Permanently deletes every finished (Completed/Cancelled) ride from the database, to free up storage. This also clears Ride History in every customer's and driver's own app — not just this report. Active/ongoing rides are never touched. This cannot be undone."
+          : lang === "mr"
+          ? "स्टोरेज मोकळी करण्यासाठी प्रत्येक पूर्ण झालेली (Completed/Cancelled) राइड डेटाबेसमधून कायमची डिलीट करते. यामुळे प्रत्येक कस्टमर आणि ड्रायव्हरच्या स्वतःच्या अ‍ॅपमधील Ride History देखील मिटेल — फक्त हा रिपोर्ट नाही. सुरू असलेल्या राइड्सना कधीही धक्का लागणार नाही. हे पूर्ववत करता येणार नाही."
+          : "स्टोरेज खाली करने के लिए हर पूरी हो चुकी (Completed/Cancelled) राइड को डेटाबेस से स्थायी रूप से डिलीट करता है। इससे हर कस्टमर और ड्राइवर के अपने ऐप में Ride History भी मिट जाएगी — सिर्फ यह रिपोर्ट नहीं। चल रही राइड्स को कभी नहीं छुआ जाएगा। इसे वापस नहीं किया जा सकता।"}
+      </p>
+      {justDeleted > 0 && (
+        <p className="text-xs font-bold mb-2" style={{ color: C.success }}>
+          {lang === "en" ? `Deleted ${justDeleted} ride record(s).` : lang === "mr" ? `${justDeleted} राइड रेकॉर्ड डिलीट केले.` : `${justDeleted} राइड रिकॉर्ड डिलीट किए गए।`}
+        </p>
+      )}
+      {!confirmingDelete ? (
+        <button onClick={() => { setConfirmingDelete(true); setJustDeleted(0); }} disabled={deletableCount === 0}
+          className="w-full rounded-lg py-3 text-sm font-bold" style={{ background: deletableCount ? C.safety : "#E5E5E5", color: deletableCount ? "#FFFFFF" : C.inkSoft }}>
+          {lang === "en" ? `Delete All Ride History (${deletableCount})` : lang === "mr" ? `सर्व राइड हिस्टरी डिलीट करा (${deletableCount})` : `सभी राइड हिस्ट्री डिलीट करें (${deletableCount})`}
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs font-bold" style={{ color: C.safety }}>
+            {lang === "en"
+              ? `This will permanently delete ${deletableCount} ride record(s) right now. Type DELETE below to confirm.`
+              : lang === "mr"
+              ? `यामुळे आत्ताच ${deletableCount} राइड रेकॉर्ड कायमचे डिलीट होतील. पुष्टीसाठी खाली DELETE टाका.`
+              : `इससे अभी ${deletableCount} राइड रिकॉर्ड स्थायी रूप से डिलीट हो जाएंगे। पुष्टि के लिए नीचे DELETE टाइप करें।`}
+          </p>
+          <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={CONFIRM_WORD}
+            className="w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none" style={{ border: `1.5px solid ${C.safety}`, color: C.ink }} />
+          {deleteError && <p className="text-xs font-bold" style={{ color: C.safety }}>{deleteError}</p>}
+          <div className="flex gap-2">
+            <button onClick={() => { setConfirmingDelete(false); setConfirmText(""); setDeleteError(""); }} disabled={deleting}
+              className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+              {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+            </button>
+            <button onClick={runDelete} disabled={confirmText !== CONFIRM_WORD || deleting}
+              className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: confirmText === CONFIRM_WORD ? C.safety : "#E5E5E5", color: confirmText === CONFIRM_WORD ? "#FFFFFF" : C.inkSoft }}>
+              {deleting ? (lang === "en" ? "Deleting…" : lang === "mr" ? "डिलीट होत आहे…" : "डिलीट हो रहा है…") : (lang === "en" ? "Permanently Delete" : lang === "mr" ? "कायमचे डिलीट करा" : "स्थायी रूप से डिलीट करें")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
     </div>
   );
 }
@@ -3428,7 +3513,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -3456,7 +3541,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
-      {tab === "finance" && <AdminFinance tripLog={tripLog} lang={lang} />}
+      {tab === "finance" && <AdminFinance tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}

@@ -20,7 +20,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import {
-  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs,
+  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs, bulkDeleteDocs,
   claimBooking, addDeclinedBy,
 } from "./firestoreStore";
 import { increment, serverTimestamp } from "firebase/firestore";
@@ -11020,6 +11020,19 @@ export default function App() {
   // Trip history is just every booking that's been assigned to a driver —
   // no separate collection to keep in sync.
   const tripLog = bookings.filter((b) => b.driverName);
+  // Permanently deletes every finished (Completed/Cancelled) booking from
+  // Firestore -- explicit admin request to reclaim storage. Deliberately
+  // scoped to terminal statuses only: a booking still Ongoing/
+  // AwaitingDriver/Bidding is a live trip, not history, and is never
+  // touched by this regardless of age. Since tripLog/DriverHistory/every
+  // customer's and driver's own Ride History tab all read this same
+  // bookings collection (see the comment above -- no separate history
+  // store), this clears all of them at once, not just AdminFinance's own
+  // Reports table.
+  const deleteAllRideHistory = () => {
+    const ids = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled").map((b) => b.id);
+    return bulkDeleteDocs("bookings", ids);
+  };
 
   const requestWithdrawal = (amount) => {
     if (amount <= 0 || !driver) return;
@@ -11814,7 +11827,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct}
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
