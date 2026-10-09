@@ -5452,18 +5452,20 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-export function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false }) {
+export function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false }) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
   const blurTimeoutRef = useRef(null);
-  // Golden-yellow highlight + auto-scroll-into-view while this field is
-  // focused -- restored per explicit report that it regressed from an
-  // earlier version. scrollIntoView is what actually keeps the field
-  // visible above the on-screen keyboard; relying on the WebView's own
-  // default behavior isn't consistent enough inside the installed app to
-  // trust on its own.
-  const [focused, setFocused] = useState(false);
+  // Auto-scroll-into-view the moment this field is focused, so it clears
+  // the on-screen keyboard -- relying on the WebView's own default
+  // behavior isn't consistent enough inside the installed app to trust on
+  // its own. The golden-yellow highlight itself is NOT driven by this raw
+  // DOM focus -- it's the `highlighted` prop, which the parent (Customer-
+  // Booking/CustomerAdvanceBooking) computes from the guided fill order
+  // (defaults to Pickup, moves to Drop once it's explicitly focused or
+  // Pickup's filled in) so it stays lit on the current step even after
+  // the keyboard closes, not just for the instant this input has focus.
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -5525,11 +5527,15 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
     onPlaceSelected({ name: r.name, lat: coords?.lat ?? r.lat, lng: coords?.lng ?? r.lng });
   };
 
-  const inputCls = "w-full rounded-lg py-5 text-xs font-bold outline-none";
+  const inputCls = "w-full rounded-lg py-5 text-xs font-bold";
   const inputStyle = {
-    background: focused ? "rgba(255,204,0,0.08)" : C.paper,
-    border: `1.5px solid ${focused ? C.marigold : C.line}`,
-    color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16,
+    background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16,
+    // Golden-yellow ring OUTSIDE the box (not the box's own border/
+    // background) with a visible gap, via outline-offset -- per explicit
+    // request, a highlighted field reads as "this one" without changing
+    // the box itself.
+    outline: highlighted ? `2.5px solid ${C.marigold}` : "none",
+    outlineOffset: highlighted ? 3 : 0,
   };
   const showDropdown = dropdownOpen && predictions.length > 0;
   // Shown instead of the live-predictions dropdown, only while the field is
@@ -5546,11 +5552,10 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
           onChange={(e) => { onChange(e); setDropdownOpen(true); }}
           onFocus={(e) => {
             setDropdownOpen(true);
-            setFocused(true);
             e.target.scrollIntoView({ behavior: "smooth", block: "center" });
             onFocus?.();
           }}
-          onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); setFocused(false); onBlur?.(); }} />
+          onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
         {value && (
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
             className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
@@ -5885,21 +5890,21 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // offer switching to, cleared the instant they either switch or edit the
   // field back under the cap.
   const [weightUnitHint, setWeightUnitHint] = useState(null);
-  // Same golden-yellow focus highlight + auto-scroll-into-view as
-  // LocationField's Pickup/Drop boxes (see that component) -- this is a
-  // plain input, not LocationField, so it needs its own focused state.
-  const [weightFocused, setWeightFocused] = useState(false);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
-  // Which field (Pickup or Drop) the cursor was last in — tapping a point
-  // on the live map fills THAT field with the tapped location, same as if
-  // it had been typed. Deliberately sticky (only ever set on focus, never
-  // cleared on blur): tapping the map blurs whatever input was focused
-  // before the map's own click event fires, so a "currently focused"
-  // version would already be null by the time this runs. Falls back to
-  // whichever of the two is still empty if neither was ever focused.
-  const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | null
+  // Which field (Pickup, Drop, or Weight) was last focused — tapping a
+  // point on the live map fills Pickup/Drop with the tapped location, same
+  // as if it had been typed (Weight obviously isn't a map-fillable field,
+  // but it shares this same state since all three use it to drive the
+  // golden "current step" highlight below -- see highlightField).
+  // Deliberately sticky (only ever set on focus, never cleared on blur):
+  // tapping the map blurs whatever input was focused before the map's own
+  // click event fires, so a "currently focused" version would already be
+  // null by the time onMapClick runs. Falls back to the natural fill
+  // order (pickup -> drop -> weight) if nothing was ever explicitly
+  // focused yet.
+  const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | 'weight' | null
   const onMapClick = async (lat, lng) => {
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field) return;
@@ -6036,6 +6041,14 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   const locationsReady = !!(pickup.trim() && drop.trim());
   const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
+  // Which ONE of Pickup/Drop/Enter Weight gets the golden "current step"
+  // ring (see LocationField's highlighted prop and the weight input's own
+  // outline below) -- defaults through the natural fill order and stays
+  // on a field even after it loses actual DOM focus, not just for the
+  // instant it's focused. activeField (sticky, set onFocus -- see its own
+  // comment above) takes over the moment the customer explicitly taps a
+  // field out of order.
+  const highlightField = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : !weightReady ? "weight" : null);
 
   // Every real, currently online/approved/non-blacklisted driver within
   // the request radius of Pickup AND whose own vehicle can actually carry
@@ -6185,6 +6198,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
               onFocus={() => setActiveField("pickup")}
               recentItems={recentPickups}
+              highlighted={highlightField === "pickup"}
             />
           </div>
           {/* Separate box next to Pickup -- blue/white blink (see
@@ -6220,6 +6234,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           suggestions={suggestAreas(drop)}
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
           onFocus={() => setActiveField("drop")}
+          highlighted={highlightField === "drop"}
         />
 
         <div className="flex gap-3">
@@ -6236,8 +6251,13 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           <div className="relative flex-1">
             <input className={inputCls} style={{
                 ...inputStyle, paddingRight: 108,
-                background: weightFocused ? "rgba(255,204,0,0.08)" : inputStyle.background,
-                border: `1.5px solid ${weightFocused ? C.marigold : C.line}`,
+                // Same outside-the-box golden ring as LocationField's
+                // highlighted prop (see that component), driven by
+                // highlightField instead of raw DOM focus -- stays lit on
+                // Enter Weight as the current guided step even after the
+                // keyboard closes, not just while actually focused.
+                outline: highlightField === "weight" ? `2.5px solid ${C.marigold}` : "none",
+                outlineOffset: highlightField === "weight" ? 3 : 0,
               }} inputMode="decimal"
               placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
               onChange={(e) => {
@@ -6249,8 +6269,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                 setWeight(clean);
                 setWeightUnitHint(mismatchUnit);
               }}
-              onFocus={(e) => { setWeightFocused(true); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }}
-              onBlur={() => setWeightFocused(false)} />
+              onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
             {/* Both units shown at once now (a real segmented toggle, not a
                 single button that only displays whichever is currently
                 active) -- same right-edge slot pattern as LocationField's
@@ -6430,10 +6449,6 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   // offer switching to, cleared the instant they either switch or edit the
   // field back under the cap.
   const [weightUnitHint, setWeightUnitHint] = useState(null);
-  // Same golden-yellow focus highlight + auto-scroll-into-view as
-  // LocationField's Pickup/Drop boxes (see that component) -- this is a
-  // plain input, not LocationField, so it needs its own focused state.
-  const [weightFocused, setWeightFocused] = useState(false);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6509,6 +6524,10 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
   const scheduledForValue = `${advanceDate} ${advanceTime}`;
+  // Which ONE of Pickup/Drop/Enter Weight gets the golden "current step"
+  // ring -- see CustomerBooking's identical highlightField for the full
+  // reasoning.
+  const highlightField = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : !weightReady ? "weight" : null);
 
   const loadKg = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1);
   const maxFleetCapacityKg = maxFleetVehicleCapacityKg(drivers, VEHICLES);
@@ -6642,6 +6661,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
           onFocus={() => setActiveField("pickup")}
           recentItems={recentPickups}
+          highlighted={highlightField === "pickup"}
         />
 
         <LocationField
@@ -6654,6 +6674,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           suggestions={suggestAreas(drop)}
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
           onFocus={() => setActiveField("drop")}
+          highlighted={highlightField === "drop"}
         />
 
         <div className="flex gap-3">
@@ -6670,8 +6691,13 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           <div className="relative flex-1">
             <input className={inputCls} style={{
                 ...inputStyle, paddingRight: 108,
-                background: weightFocused ? "rgba(255,204,0,0.08)" : inputStyle.background,
-                border: `1.5px solid ${weightFocused ? C.marigold : C.line}`,
+                // Same outside-the-box golden ring as LocationField's
+                // highlighted prop (see that component), driven by
+                // highlightField instead of raw DOM focus -- stays lit on
+                // Enter Weight as the current guided step even after the
+                // keyboard closes, not just while actually focused.
+                outline: highlightField === "weight" ? `2.5px solid ${C.marigold}` : "none",
+                outlineOffset: highlightField === "weight" ? 3 : 0,
               }} inputMode="decimal"
               placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
               onChange={(e) => {
@@ -6683,8 +6709,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                 setWeight(clean);
                 setWeightUnitHint(mismatchUnit);
               }}
-              onFocus={(e) => { setWeightFocused(true); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }}
-              onBlur={() => setWeightFocused(false)} />
+              onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
             {/* Both units shown at once now (a real segmented toggle, not a
                 single button that only displays whichever is currently
                 active) -- same right-edge slot pattern as LocationField's
