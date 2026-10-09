@@ -5909,8 +5909,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field) return;
     const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); }
-    else { setDrop(name); setDropCoords({ lat, lng }); }
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); }
+    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); }
   };
 
   // If the customer typed Pickup/Drop by hand without tapping an
@@ -5984,8 +5984,14 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
       .catch((e) => console.error("[distance matrix]", e));
   }, [pickupCoords, dropCoords, mapsReady]);
 
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); };
+  // Advances the golden highlight (highlightField, below) to the next
+  // step the moment a real place is actually chosen -- a dropdown pick,
+  // "Use Current Location" (routes through this same handler), or a map
+  // tap all count, same as explicitly tapping into the next field by
+  // hand. Typing by hand doesn't trigger this -- only a genuine selection
+  // does, since the customer might still be mid-edit after typing.
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); };
 
   // "Use current location" box next to the Pickup field -- same one-shot
   // GPS call and reverseGeocode as onMapClick above, just for a direct tap
@@ -6457,8 +6463,8 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field) return;
     const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); }
-    else { setDrop(name); setDropCoords({ lat, lng }); }
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); }
+    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); }
   };
 
   useEffect(() => {
@@ -6508,8 +6514,12 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
       .catch((e) => console.error("[distance matrix]", e));
   }, [pickupCoords, dropCoords, mapsReady]);
 
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); };
+  // Advances the golden highlight (highlightField, below) to the next
+  // step the moment a real place is actually chosen -- a dropdown pick or
+  // a map tap both count, same as explicitly tapping into the next field
+  // by hand. Typing by hand doesn't trigger this.
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); };
 
   const [bookingError, setBookingError] = useState("");
   const [selectedDriverKey, setSelectedDriverKey] = useState(null);
