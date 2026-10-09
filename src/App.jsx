@@ -5452,7 +5452,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-export function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false }) {
+export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false }, ref) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -5466,7 +5466,10 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
   // (defaults to Pickup, moves to Drop once it's explicitly focused or
   // Pickup's filled in) so it stays lit on the current step even after
   // the keyboard closes, not just for the instant this input has focus.
-  const inputRef = useRef(null);
+  // `ref` (forwarded straight to the <input> DOM node) is what lets the
+  // parent actually move the cursor into this field programmatically --
+  // see onPickupPlaceSelected/onDropPlaceSelected/onMapClick's .focus()
+  // calls after advancing the highlight to the next step.
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
@@ -5527,15 +5530,20 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
     onPlaceSelected({ name: r.name, lat: coords?.lat ?? r.lat, lng: coords?.lng ?? r.lng });
   };
 
-  const inputCls = "w-full rounded-lg py-5 text-xs font-bold";
-  const inputStyle = {
-    background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16,
-    // Golden-yellow ring OUTSIDE the box (not the box's own border/
-    // background) with a visible gap, via outline-offset -- per explicit
-    // request, a highlighted field reads as "this one" without changing
-    // the box itself.
-    outline: highlighted ? `2.5px solid ${C.marigold}` : "none",
-    outlineOffset: highlighted ? 3 : 0,
+  const inputCls = "w-full rounded-lg py-5 text-xs font-bold outline-none";
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16 };
+  // Golden-yellow frame AROUND the box (not the box's own border/
+  // background) -- a padded, colored outer wrapper rather than an
+  // outline, so the gap between the box and the highlight itself is
+  // filled solid gold, not left empty. Wraps the existing relative/
+  // absolute-positioned inner block unchanged, so the clear button and
+  // predictions dropdown stay flush with the input's own edges rather
+  // than shifting inward with this padding.
+  const highlightWrapStyle = {
+    padding: highlighted ? 4 : 0,
+    background: highlighted ? C.marigold : "transparent",
+    borderRadius: highlighted ? 12 : 0,
+    transition: "padding 0.15s ease, background 0.15s ease",
   };
   const showDropdown = dropdownOpen && predictions.length > 0;
   // Shown instead of the live-predictions dropdown, only while the field is
@@ -5547,50 +5555,52 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
 
   return (
     <div>
-      <div className="relative w-full">
-        <input ref={inputRef} className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
-          onChange={(e) => { onChange(e); setDropdownOpen(true); }}
-          onFocus={(e) => {
-            setDropdownOpen(true);
-            e.target.scrollIntoView({ behavior: "smooth", block: "center" });
-            onFocus?.();
-          }}
-          onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
-        {value && (
-          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
-            className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
-            <X size={20} color={C.inkSoft} strokeWidth={2.5} />
-          </button>
-        )}
-        {showDropdown && (
-          <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
-            {predictions.map((p) => {
-              const main = stripPlusCode(p.structured_formatting?.main_text || p.description);
-              const secondary = stripPlusCode(p.structured_formatting?.secondary_text || "");
-              return (
-                <button key={p.place_id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectPrediction(p)}
-                  className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                  <MapPin size={14} color={C.marigoldDeep} className="mt-0.5 shrink-0" />
-                  <span className="text-xs leading-snug">
-                    <span className="font-bold" style={{ color: C.ink }}>{main}</span>
-                    {secondary && <span style={{ color: C.inkSoft }}> {secondary}</span>}
-                  </span>
+      <div style={highlightWrapStyle}>
+        <div className="relative w-full">
+          <input ref={ref} className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
+            onChange={(e) => { onChange(e); setDropdownOpen(true); }}
+            onFocus={(e) => {
+              setDropdownOpen(true);
+              e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+              onFocus?.();
+            }}
+            onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
+          {value && (
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
+              className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
+              <X size={20} color={C.inkSoft} strokeWidth={2.5} />
+            </button>
+          )}
+          {showDropdown && (
+            <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+              {predictions.map((p) => {
+                const main = stripPlusCode(p.structured_formatting?.main_text || p.description);
+                const secondary = stripPlusCode(p.structured_formatting?.secondary_text || "");
+                return (
+                  <button key={p.place_id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectPrediction(p)}
+                    className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                    <MapPin size={14} color={C.marigoldDeep} className="mt-0.5 shrink-0" />
+                    <span className="text-xs leading-snug">
+                      <span className="font-bold" style={{ color: C.ink }}>{main}</span>
+                      {secondary && <span style={{ color: C.inkSoft }}> {secondary}</span>}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {showRecents && (
+            <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+              {recentItems.map((r, i) => (
+                <button key={i} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectRecent(r)}
+                  className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
+                  <Clock3 size={14} color={C.inkSoft} className="mt-0.5 shrink-0" />
+                  <span className="text-xs font-bold leading-snug" style={{ color: C.ink }}>{r.name}</span>
                 </button>
-              );
-            })}
-          </div>
-        )}
-        {showRecents && (
-          <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
-            {recentItems.map((r, i) => (
-              <button key={i} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectRecent(r)}
-                className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
-                <Clock3 size={14} color={C.inkSoft} className="mt-0.5 shrink-0" />
-                <span className="text-xs font-bold leading-snug" style={{ color: C.ink }}>{r.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
@@ -5601,7 +5611,7 @@ export function LocationField({ value, onChange, onPlaceSelected, mapsReady, pla
       )}
     </div>
   );
-}
+});
 
 // Wraps one field/section of a multi-step form with the app-wide guided
 // pattern: the active step glows amber (see .guided-step-active in
@@ -5905,12 +5915,19 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // order (pickup -> drop -> weight) if nothing was ever explicitly
   // focused yet.
   const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | 'weight' | null
+  // Real DOM refs for the three fields -- lets the auto-advance below
+  // actually move the keyboard cursor into the next field, not just the
+  // visual highlight, the moment a place is chosen (not while typing by
+  // hand). LocationField forwards its ref straight to its <input>.
+  const pickupFieldRef = useRef(null);
+  const dropFieldRef = useRef(null);
+  const weightInputRef = useRef(null);
   const onMapClick = async (lat, lng) => {
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field) return;
     const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); }
-    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); }
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); dropFieldRef.current?.focus(); }
+    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); weightInputRef.current?.focus(); }
   };
 
   // If the customer typed Pickup/Drop by hand without tapping an
@@ -5990,8 +6007,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // tap all count, same as explicitly tapping into the next field by
   // hand. Typing by hand doesn't trigger this -- only a genuine selection
   // does, since the customer might still be mid-edit after typing.
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); };
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); dropFieldRef.current?.focus(); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); weightInputRef.current?.focus(); };
 
   // "Use current location" box next to the Pickup field -- same one-shot
   // GPS call and reverseGeocode as onMapClick above, just for a direct tap
@@ -6205,6 +6222,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               onFocus={() => setActiveField("pickup")}
               recentItems={recentPickups}
               highlighted={highlightField === "pickup"}
+              ref={pickupFieldRef}
             />
           </div>
           {/* Separate box next to Pickup -- blue/white blink (see
@@ -6241,6 +6259,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
           onFocus={() => setActiveField("drop")}
           highlighted={highlightField === "drop"}
+          ref={dropFieldRef}
         />
 
         <div className="flex gap-3">
@@ -6254,43 +6273,45 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
             </span>
           </div>
-          <div className="relative flex-1">
-            <input className={inputCls} style={{
-                ...inputStyle, paddingRight: 108,
-                // Same outside-the-box golden ring as LocationField's
-                // highlighted prop (see that component), driven by
-                // highlightField instead of raw DOM focus -- stays lit on
-                // Enter Weight as the current guided step even after the
-                // keyboard closes, not just while actually focused.
-                outline: highlightField === "weight" ? `2.5px solid ${C.marigold}` : "none",
-                outlineOffset: highlightField === "weight" ? 3 : 0,
-              }} inputMode="decimal"
-              placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
-              onChange={(e) => {
-                // See getWeightInputChange's own comment -- enforces kg's
-                // 3-5 digit / tons' 2+2-digit shape as you type, and flags
-                // mismatchUnit (surfaced below) the moment what's typed
-                // looks like it belongs in the OTHER unit instead.
-                const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
-                setWeight(clean);
-                setWeightUnitHint(mismatchUnit);
-              }}
-              onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
-            {/* Both units shown at once now (a real segmented toggle, not a
-                single button that only displays whichever is currently
-                active) -- same right-edge slot pattern as LocationField's
-                clear button. */}
-            <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1 rounded-md p-1" style={{ background: "rgba(0,0,0,0.06)" }}>
-              <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
-                className="h-full px-3 rounded text-xs font-black"
-                style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
-                kg
-              </button>
-              <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
-                className="h-full px-3 rounded text-xs font-black"
-                style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
-                {weightUnitLabel("ton")}
-              </button>
+          {/* Same golden-frame wrapper technique as LocationField's
+              highlightWrapStyle -- padded, colored outer div around the
+              untouched relative/absolute-positioned inner block, so the
+              kg/ton toggle stays flush with the input's own edges. */}
+          <div className="flex-1" style={{
+              padding: highlightField === "weight" ? 4 : 0,
+              background: highlightField === "weight" ? C.marigold : "transparent",
+              borderRadius: highlightField === "weight" ? 12 : 0,
+              transition: "padding 0.15s ease, background 0.15s ease",
+            }}>
+            <div className="relative">
+              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108 }} inputMode="decimal"
+                placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
+                onChange={(e) => {
+                  // See getWeightInputChange's own comment -- enforces kg's
+                  // 3-5 digit / tons' 2+2-digit shape as you type, and flags
+                  // mismatchUnit (surfaced below) the moment what's typed
+                  // looks like it belongs in the OTHER unit instead.
+                  const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
+                  setWeight(clean);
+                  setWeightUnitHint(mismatchUnit);
+                }}
+                onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
+              {/* Both units shown at once now (a real segmented toggle, not a
+                  single button that only displays whichever is currently
+                  active) -- same right-edge slot pattern as LocationField's
+                  clear button. */}
+              <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1 rounded-md p-1" style={{ background: "rgba(0,0,0,0.06)" }}>
+                <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
+                  className="h-full px-3 rounded text-xs font-black"
+                  style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
+                  kg
+                </button>
+                <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
+                  className="h-full px-3 rounded text-xs font-black"
+                  style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
+                  {weightUnitLabel("ton")}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -6458,13 +6479,19 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
-  const [activeField, setActiveField] = useState(null);
+  const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | 'weight' | null
+  // Real DOM refs for the three fields -- see CustomerBooking's identical
+  // ones for the full reasoning (moves the keyboard cursor, not just the
+  // highlight, on an actual place selection).
+  const pickupFieldRef = useRef(null);
+  const dropFieldRef = useRef(null);
+  const weightInputRef = useRef(null);
   const onMapClick = async (lat, lng) => {
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field) return;
     const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); }
-    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); }
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); dropFieldRef.current?.focus(); }
+    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); weightInputRef.current?.focus(); }
   };
 
   useEffect(() => {
@@ -6518,8 +6545,8 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   // step the moment a real place is actually chosen -- a dropdown pick or
   // a map tap both count, same as explicitly tapping into the next field
   // by hand. Typing by hand doesn't trigger this.
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); };
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); dropFieldRef.current?.focus(); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); weightInputRef.current?.focus(); };
 
   const [bookingError, setBookingError] = useState("");
   const [selectedDriverKey, setSelectedDriverKey] = useState(null);
@@ -6672,6 +6699,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           onFocus={() => setActiveField("pickup")}
           recentItems={recentPickups}
           highlighted={highlightField === "pickup"}
+          ref={pickupFieldRef}
         />
 
         <LocationField
@@ -6685,6 +6713,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
           onFocus={() => setActiveField("drop")}
           highlighted={highlightField === "drop"}
+          ref={dropFieldRef}
         />
 
         <div className="flex gap-3">
@@ -6698,43 +6727,45 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
               {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
             </span>
           </div>
-          <div className="relative flex-1">
-            <input className={inputCls} style={{
-                ...inputStyle, paddingRight: 108,
-                // Same outside-the-box golden ring as LocationField's
-                // highlighted prop (see that component), driven by
-                // highlightField instead of raw DOM focus -- stays lit on
-                // Enter Weight as the current guided step even after the
-                // keyboard closes, not just while actually focused.
-                outline: highlightField === "weight" ? `2.5px solid ${C.marigold}` : "none",
-                outlineOffset: highlightField === "weight" ? 3 : 0,
-              }} inputMode="decimal"
-              placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
-              onChange={(e) => {
-                // See getWeightInputChange's own comment -- enforces kg's
-                // 3-5 digit / tons' 2+2-digit shape as you type, and flags
-                // mismatchUnit (surfaced below) the moment what's typed
-                // looks like it belongs in the OTHER unit instead.
-                const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
-                setWeight(clean);
-                setWeightUnitHint(mismatchUnit);
-              }}
-              onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
-            {/* Both units shown at once now (a real segmented toggle, not a
-                single button that only displays whichever is currently
-                active) -- same right-edge slot pattern as LocationField's
-                clear button. */}
-            <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1 rounded-md p-1" style={{ background: "rgba(0,0,0,0.06)" }}>
-              <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
-                className="h-full px-3 rounded text-xs font-black"
-                style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
-                kg
-              </button>
-              <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
-                className="h-full px-3 rounded text-xs font-black"
-                style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
-                {weightUnitLabel("ton")}
-              </button>
+          {/* Same golden-frame wrapper technique as LocationField's
+              highlightWrapStyle -- padded, colored outer div around the
+              untouched relative/absolute-positioned inner block, so the
+              kg/ton toggle stays flush with the input's own edges. */}
+          <div className="flex-1" style={{
+              padding: highlightField === "weight" ? 4 : 0,
+              background: highlightField === "weight" ? C.marigold : "transparent",
+              borderRadius: highlightField === "weight" ? 12 : 0,
+              transition: "padding 0.15s ease, background 0.15s ease",
+            }}>
+            <div className="relative">
+              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108 }} inputMode="decimal"
+                placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
+                onChange={(e) => {
+                  // See getWeightInputChange's own comment -- enforces kg's
+                  // 3-5 digit / tons' 2+2-digit shape as you type, and flags
+                  // mismatchUnit (surfaced below) the moment what's typed
+                  // looks like it belongs in the OTHER unit instead.
+                  const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
+                  setWeight(clean);
+                  setWeightUnitHint(mismatchUnit);
+                }}
+                onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
+              {/* Both units shown at once now (a real segmented toggle, not a
+                  single button that only displays whichever is currently
+                  active) -- same right-edge slot pattern as LocationField's
+                  clear button. */}
+              <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1 rounded-md p-1" style={{ background: "rgba(0,0,0,0.06)" }}>
+                <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
+                  className="h-full px-3 rounded text-xs font-black"
+                  style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
+                  kg
+                </button>
+                <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
+                  className="h-full px-3 rounded text-xs font-black"
+                  style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
+                  {weightUnitLabel("ton")}
+                </button>
+              </div>
             </div>
           </div>
         </div>
