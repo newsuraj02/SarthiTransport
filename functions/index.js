@@ -61,39 +61,6 @@ async function clearStaleFcmTokenOnFailure(collectionName, docId, error) {
   }
 }
 
-async function sendLoadAlert(token, load, bookingId, driverMobile) {
-  if (!token) return;
-  try {
-    await getMessaging().send({
-      token,
-      notification: {
-        title: "🔔 नया भाड़ा उपलब्ध है!",
-        body: `📍 लोडिंग: ${load.pickup}\n🏁 अनलोडिंग: ${load.drop}\n🚛 गाड़ी: ${load.vehicle || "-"}${load.weight ? ` · ${load.weight}kg` : ""}`,
-      },
-      android: {
-        priority: "high",
-        notification: {
-          channelId: "new_load_alerts",
-          priority: "max",
-          visibility: "public",
-          defaultSound: true,
-          defaultVibrateTimings: false,
-          vibrateTimingsMillis: [0, 400, 200, 400, 200, 400],
-        },
-      },
-      webpush: {
-        headers: { Urgency: "high" },
-        notification: { requireInteraction: true, vibrate: [400, 200, 400, 200, 400], tag: "new-load", renotify: true },
-        fcmOptions: { link: "/?open=driver" },
-      },
-      data: { type: "new_load", bookingId },
-    });
-  } catch (e) {
-    console.error("[push] load-alert send failed:", e.message);
-    await clearStaleFcmTokenOnFailure("drivers", driverMobile, e);
-  }
-}
-
 // Same lock-hours chart as src/App.jsx's notificationLockHours — kept in
 // sync manually since this Cloud Function can't import from the browser
 // bundle. Update both together if the chart ever changes.
@@ -108,9 +75,8 @@ function parseScheduledFor(scheduledFor) {
   return new Date(`${datePart}T${timePart}:00`);
 }
 
-// Same great-circle distance + radius as src/App.jsx's haversineKm/BID_RADIUS_KM
-// — kept in sync manually, same as the other client-side logic duplicated
-// above. Only applies to current (non-advance) loads.
+// Same great-circle distance formula as src/App.jsx's haversineKm — kept in
+// sync manually, same as the other client-side logic duplicated above.
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -118,15 +84,6 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
-const BID_RADIUS_KM = 100;
-// Same staleness cutoff as src/App.jsx's NEARBY_DRIVER_STALE_MS -- kept in
-// sync manually. A driver who's still marked online but whose GPS hasn't
-// updated in this long almost certainly locked their phone/closed the app
-// after toggling on (measured live: 188 of 203 "online" drivers had no
-// recent GPS at all) -- their last coordinate could be days old and just
-// happen to fall inside the radius by coincidence, not proof they're
-// actually reachable near this pickup right now.
-const DRIVER_LOCATION_STALE_MS = 5 * 60 * 1000;
 
 // Mirrors src/App.jsx's getBookingWindow — the real-world time window a
 // driver is committed to for an already-accepted Ongoing booking.
@@ -155,87 +112,8 @@ function hasLoadConflict(load, myOngoing, lockHours) {
   });
 }
 
-// Fires the moment a customer posts a new load — pushes a loud, high-priority
-// alert to every driver who is Online, KYC-approved, not blocked, whose
-// vehicle can carry this load, and who isn't currently inside their own
-// advance-booking protection window (see notificationLockHours). This is
-// what actually reaches a driver whose app is closed/backgrounded — the
-// client-side beep in DriverHome only fires while that screen is open.
-exports.onNewLoadPosted = onDocumentCreated("bookings/{bookingId}", async (event) => {
-  const load = event.data?.data();
-  if (!load || load.status !== "Bidding") return;
-
-  const [vehicleTypesSnap, driversSnap, ongoingSnap] = await Promise.all([
-    db.collection("vehicleTypes").get(),
-    db.collection("drivers").get(),
-    db.collection("bookings").where("status", "==", "Ongoing").get(),
-  ]);
-
-  const vehicleTypesByKey = {};
-  vehicleTypesSnap.forEach((doc) => { vehicleTypesByKey[doc.id] = doc.data(); });
-  const loadVehicleDef = vehicleTypesByKey[load.vehicle];
-
-  const ongoingByDriver = {};
-  ongoingSnap.forEach((doc) => {
-    const b = doc.data();
-    if (!b.driverName) return;
-    (ongoingByDriver[b.driverName] ||= []).push(b);
-  });
-
-  const sends = [];
-  // Temporary per-driver skip-reason logging (not permanent diagnostic
-  // scaffolding — remove once the "no new-load push at all" report is
-  // root-caused) -- every one of these conditions fails completely
-  // silently otherwise, so there was no way to tell which one was
-  // actually blocking a specific test driver without seeing this.
-  const skipLog = [];
-  driversSnap.forEach((doc) => {
-    const driver = doc.data();
-    const tag = `${doc.id} (${driver.name || "?"})`;
-    if (!driver.online) { skipLog.push(`${tag}: not online`); return; }
-    if (driver.kyc !== "Approved") { skipLog.push(`${tag}: kyc=${driver.kyc}`); return; }
-    if (driver.blacklisted) { skipLog.push(`${tag}: blacklisted`); return; }
-    if (!driver.fcmToken) { skipLog.push(`${tag}: no fcmToken`); return; }
-
-    // Same "bigger truck can carry a smaller load" rule as the client's
-    // openLoads filter in DriverHome.
-    const driverVehicleDef = vehicleTypesByKey[driver.vehicleSpec?.type];
-    if (driverVehicleDef && loadVehicleDef && loadVehicleDef.capacityKg > driverVehicleDef.capacityKg) { skipLog.push(`${tag}: vehicle too small (${driverVehicleDef.capacityKg}kg < load's ${loadVehicleDef.capacityKg}kg)`); return; }
-    if (driverVehicleDef && !loadVehicleDef && load.vehicle !== driver.vehicleSpec?.type) { skipLog.push(`${tag}: vehicle type mismatch (driver=${driver.vehicleSpec?.type}, load=${load.vehicle})`); return; }
-
-    // Current (non-advance) loads only alert drivers within BID_RADIUS_KM of
-    // the pickup point — same rule as the client's openLoads filter. Advance
-    // bookings are exempt since the driver has time to travel there.
-    if (!load.scheduledFor && load.pickupLat != null && load.pickupLng != null) {
-      if (!driver.lastKnownLocation) { skipLog.push(`${tag}: no lastKnownLocation`); return; }
-      // See DRIVER_LOCATION_STALE_MS -- don't push-alert a driver whose
-      // "online" flag is stuck true from before they locked their phone;
-      // their last coordinate isn't proof they're actually near this load.
-      if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > DRIVER_LOCATION_STALE_MS) { skipLog.push(`${tag}: lastKnownLocation stale (age ${driver.lastKnownLocation.updatedAt ? Math.round((Date.now() - driver.lastKnownLocation.updatedAt) / 1000) + "s" : "no timestamp"})`); return; }
-      const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng);
-      if (distKm > BID_RADIUS_KM) { skipLog.push(`${tag}: ${distKm.toFixed(1)}km away, outside ${BID_RADIUS_KM}km radius`); return; }
-    }
-
-    // No ping if this load would conflict with a commitment the driver
-    // already has (current trip in progress, or an upcoming Advance booking
-    // plus its vehicle-tonnage buffer) — they can't bid on it anyway.
-    const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
-    if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
-
-    skipLog.push(`${tag}: SENDING`);
-    sends.push(sendLoadAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
-  });
-  console.log(`[onNewLoadPosted] booking ${event.params.bookingId} (vehicle=${load.vehicle}, pickup=${load.pickupLat},${load.pickupLng}): ${driversSnap.size} drivers checked, ${sends.length} sends queued\n${skipLog.join("\n")}`);
-
-  await Promise.all(sends);
-});
-
-// A loud, high-priority alert to one specific driver — reused for both a
-// fresh direct request and the 1-minute auto-reassign/manual-reject
-// retarget moving the same booking to the next driver (see
-// retargetToNextDriver in src/App.jsx). Reuses the exact same channel/
-// pattern as sendLoadAlert above (already proven to reach a closed app)
-// rather than a new, unregistered notification channel.
+// A loud, high-priority alert to one specific driver — reused for every
+// driver in the broadcast list (see onDirectRequestBroadcast below).
 async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
   if (!token) return;
   try {
@@ -298,8 +176,8 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // down by KALEYRA_VOICE_SID (masked calling stayed on Kaleyra; only
 // WhatsApp moved, once MSG91's account setup -- AuthKey, WhatsApp number,
 // namespace, approved "direct_booking_request" template -- was finished).
-// Declared here, ahead of sendDirectRequestWhatsApp/onDirectRequestAssigned/
-// onDirectRequestBroadcast below (all reference these in their eagerly-
+// Declared here, ahead of sendDirectRequestWhatsApp/onDirectRequestBroadcast
+// below (both reference these in their eagerly-
 // evaluated `secrets: [...]` option, at module-load time), same
 // avoid-a-TDZ-ReferenceError-on-deploy reasoning as the old KALEYRA_API_KEY
 // placement had.
@@ -471,15 +349,13 @@ async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile) 
   }
 }
 
-// TEMPORARY broadcast-dispatch experiment (see src/App.jsx:
-// requestByCategory/isDriverBroadcastEligible) — a fresh category-based
-// request created with nobody individually targeted (pendingDriverName
-// null) alerts every eligible driver at once (push + WhatsApp), not just
-// the single nearest one onDirectRequestAssigned below still handles for
-// the separate Bidding-accept flow. onDocumentCreated (not Written) since
-// this should fire exactly once, at creation -- a later update to the
-// same still-open booking (e.g. addDeclinedBy adding one more name to
-// declinedBy) must NOT re-blast everyone who already got it.
+// Fires once per fresh category-based request (see src/App.jsx:
+// requestByCategory/isDriverBroadcastEligible), alerting every eligible
+// driver at once (push + WhatsApp) — whoever accepts first gets it.
+// onDocumentCreated (not Written) since this should fire exactly once, at
+// creation -- a later update to the same still-open booking (e.g.
+// addDeclinedBy adding one more name to declinedBy) must NOT re-blast
+// everyone who already got it.
 //
 // Capacity matching mirrors isDriverBroadcastEligible's own kg-window
 // logic (src/App.jsx) -- a driver qualifies if their capacity can carry
@@ -499,12 +375,11 @@ const DIRECT_REQUEST_RADIUS_KM = 30;
 // smaller jump than expected once the rate table went from ~8 tiers to 24.
 const BROADCAST_WEIGHT_HEADROOM_KG = 5000;
 // Same constant as src/App.jsx's BROADCAST_LOCATION_STALE_MS -- kept in
-// sync manually (see that file's comment for the full reasoning). Wider
-// than DRIVER_LOCATION_STALE_MS above on purpose: this broadcast path is
-// meant to reach a driver regardless of their online toggle, so it needs a
-// window generous enough to still find them by a recent-ish last fix,
-// while 24h (not unbounded) still guards against the already-fixed
-// stale-online-driver-treated-as-available bug.
+// sync manually (see that file's comment for the full reasoning). This
+// broadcast path is meant to reach a driver regardless of their online
+// toggle, so it needs a window generous enough to still find them by a
+// recent-ish last fix, while 24h (not unbounded) still guards against the
+// already-fixed stale-online-driver-treated-as-available bug.
 const BROADCAST_LOCATION_STALE_MS = 24 * 60 * 60 * 1000;
 exports.onDirectRequestBroadcast = onDocumentCreated(
   { document: "bookings/{bookingId}", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_DIRECT_REQUEST_TEMPLATE, MSG91_WHATSAPP_NAMESPACE] },
@@ -524,9 +399,10 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
     });
 
     const sends = [];
-    // Temporary per-driver skip-reason logging -- same reasoning as
-    // onNewLoadPosted's copy above (not permanent scaffolding, remove once
-    // the "no push notification at all" report is root-caused).
+    // Per-driver skip-reason logging -- every one of these conditions
+    // fails completely silently otherwise, so there was no way to tell
+    // which one was actually blocking a specific test driver without
+    // seeing this.
     const skipLog = [];
     driversSnap.forEach((doc) => {
       const driver = doc.data();
@@ -567,45 +443,7 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
   }
 );
 
-// Fires whenever a booking becomes (or stays, but with a different driver)
-// "AwaitingDriver" — a fresh direct request from CustomerBooking's driver
-// picker, or a retarget after the previous driver timed out/rejected.
-// Reaches the newly-targeted driver even if their app is fully closed,
-// same as onNewLoadPosted above. Only fires on a real change of who's
-// pending, not on unrelated field updates to the same booking (e.g. the
-// customer's live GPS ticking during a still-Bidding wait elsewhere).
-// (Doesn't overlap with onDirectRequestBroadcast above: that only fires
-// for a broadcast booking's creation, no pendingDriverName; this only
-// fires once one gets set, i.e. the Bidding-accept flow.)
-exports.onDirectRequestAssigned = onDocumentWritten(
-  { document: "bookings/{bookingId}", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_DIRECT_REQUEST_TEMPLATE, MSG91_WHATSAPP_NAMESPACE] },
-  async (event) => {
-    const before = event.data?.before?.data();
-    const after = event.data?.after?.data();
-    if (!after || after.status !== "AwaitingDriver" || !after.pendingDriverName) return;
-    if (before?.status === "AwaitingDriver" && before?.pendingDriverName === after.pendingDriverName) return;
-
-    // pendingDriverMobile (the doc id, guaranteed unique) is preferred over
-    // a name lookup -- two drivers can share the same free-text display
-    // name (no uniqueness enforced at signup), which used to let this
-    // resolve to the WRONG same-named driver's fcmToken. Falls back to the
-    // old name-based query only for a booking written before this field
-    // existed.
-    const driverDoc = after.pendingDriverMobile
-      ? await db.collection("drivers").doc(after.pendingDriverMobile).get()
-      : (await db.collection("drivers").where("name", "==", after.pendingDriverName).limit(1).get()).docs[0];
-    const driver = driverDoc?.data();
-    if (!driver) return;
-
-    await Promise.all([
-      driver.fcmToken ? sendDirectRequestAlert(driver.fcmToken, after, event.params.bookingId, driverDoc.id) : Promise.resolve(),
-      driver.fcmToken ? sendDirectRequestRingAlert(driver.fcmToken, after, event.params.bookingId, driverDoc.id) : Promise.resolve(),
-      sendDirectRequestWhatsApp(driverDoc.id, after),
-    ]);
-  }
-);
-
-// Customer-side equivalent of sendDirectRequestAlert/sendLoadAlert above —
+// Customer-side equivalent of sendDirectRequestAlert above —
 // reaches the customer even with the app fully closed, for the two moments
 // they most need to know without having it open: their driver accepting
 // (status -> Ongoing) and the trip finishing (status -> Completed). Reuses
@@ -652,27 +490,6 @@ exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", asyn
   if (!token) return;
 
   await sendCustomerBookingAlert(token, after, event.params.bookingId, becameOngoing ? "accepted" : "completed", after.customerMobile);
-});
-
-// Runs hourly. A customer's load that has sat in "Bidding" for 6+ hours
-// gets deleted outright -- covers both cases: zero bids at all, or bids
-// came in but the customer never accepted one. Either way, 6 hours with
-// nothing resolved means it's dead weight, not something still "awaiting
-// bids" on Admin's tile. This is a hard delete (not the status-flip a
-// manual cancel uses) -- the doc is gone, nothing left in Admin's
-// Cancelled history for it, per explicit product decision. Frees the
-// customer to re-post instead of it quietly rotting forever.
-const STALE_BID_HOURS = 6;
-exports.expireStaleLoads = onSchedule({ schedule: "0 * * * *", timeZone: "Asia/Kolkata" }, async () => {
-  const cutoff = Date.now() - STALE_BID_HOURS * 60 * 60 * 1000;
-  const snap = await db.collection("bookings").where("status", "==", "Bidding").get();
-  const deletions = [];
-  snap.forEach((doc) => {
-    const b = doc.data();
-    if (!b.createdAt?.toMillis || b.createdAt.toMillis() > cutoff) return;
-    deletions.push(doc.ref.delete());
-  });
-  await Promise.all(deletions);
 });
 
 // Admin's "Send Notification" screen (AdminNotify) -- logs a message to
@@ -735,8 +552,7 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
 // same-day heads-up (both Admin's own "Sent Notifications" list and every
 // driver/customer's "Admin Announcements" inbox read from this same
 // collection), not a permanent record, so it was quietly growing Firestore
-// storage for no real benefit. Hard-deletes anything older than 24h, same
-// pattern as expireStaleLoads above.
+// storage for no real benefit. Hard-deletes anything older than 24h.
 const ADMIN_NOTIFICATION_TTL_HOURS = 24;
 exports.expireOldAdminNotifications = onSchedule({ schedule: "0 * * * *", timeZone: "Asia/Kolkata" }, async () => {
   const cutoff = Timestamp.fromMillis(Date.now() - ADMIN_NOTIFICATION_TTL_HOURS * 60 * 60 * 1000);
@@ -749,8 +565,8 @@ exports.expireOldAdminNotifications = onSchedule({ schedule: "0 * * * *", timeZo
 // The "Required versionCode" gate in Admin Settings (src/App.jsx's
 // nativeVersionState) only ever blocks someone the next time they actually
 // open the app — a driver/customer who keeps it fully closed would never
-// find out. This reaches them anyway, the same way sendLoadAlert already
-// does for new loads. appVersionCode is written once per launch by
+// find out. This reaches them anyway, the same way sendDirectRequestAlert
+// already does for new loads. appVersionCode is written once per launch by
 // useReportInstalledVersion (src/App.jsx); missing entirely (an install
 // from before that existed, or one that's never reported yet) is treated
 // as "old" so it's never skipped by accident.
@@ -1289,9 +1105,7 @@ const HEALTH_CHECK_PASSWORD = "apna-pin-1234";
 // asserts an actual result instead of just "did the query not crash" --
 // this is the exact regression behind proximity-filter-fails-open-not-closed
 // in BUG_TRACKER_SEED. Mirrors src/App.jsx's CURRENT_BID_RADIUS_KM (30km,
-// the customer-facing current-load radius that bug was actually in) --
-// deliberately NOT the same as this file's own BID_RADIUS_KM above, which
-// is the broader new-load PUSH ALERT radius, a different constant.
+// the customer-facing current-load radius that bug was actually in).
 const HEALTH_CHECK_RADIUS_KM = 30;
 const HEALTH_CHECK_DRIVER_LOC = { lat: 18.5204, lng: 73.8567 }; // Pune
 const HEALTH_CHECK_NEAR_PICKUP = { lat: 18.55, lng: 73.9 }; // ~6km away -- must be eligible
@@ -1330,7 +1144,6 @@ async function checkSourceMarkers() {
     return [`[Source check] Couldn't fetch src/App.jsx from GitHub: ${e.message} -- skipped.`];
   }
   const mustContain = [
-    ["AWAITING_DRIVER_TIMEOUT_SEC = 120", "2-minute driver response timeout"],
     ["CURRENT_BID_RADIUS_KM = 30", "30km current-load proximity radius"],
     ["ADVANCE_BID_RADIUS_KM = 50", "50km advance-load proximity radius"],
     ["!pickupCoords || !d.lastKnownLocation", "proximity filter failing closed on missing coordinates"],
