@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.apnatransport.mobile.data.BookingRepository
@@ -30,6 +32,12 @@ import com.apnatransport.mobile.reliability.needsAutoStartSettings
 import com.apnatransport.mobile.reliability.openAutoStartSettings
 import com.apnatransport.mobile.reliability.openFullScreenIntentSettings
 import com.apnatransport.mobile.service.LocationTrackerService
+import com.apnatransport.mobile.ui.theme.AppBg
+import com.apnatransport.mobile.ui.theme.Ink
+import com.apnatransport.mobile.ui.theme.InkSoft
+import com.apnatransport.mobile.ui.theme.Line
+import com.apnatransport.mobile.ui.theme.MarigoldDeep
+import com.apnatransport.mobile.ui.theme.Success
 import kotlinx.coroutines.launch
 
 // Duty toggle + a plain list of open broadcast loads -- the smallest slice
@@ -167,7 +175,7 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Driver Duty", style = MaterialTheme.typography.titleMedium)
+            Text("Driver Duty", color = Ink, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
             Switch(
                 checked = online,
                 onCheckedChange = { checked ->
@@ -259,6 +267,10 @@ fun HomeScreen(
     }
 }
 
+// Matches the hybrid app's reminder/nudge-box convention (e.g. the
+// install-steps card in App.jsx): white/paper background, 1.5dp
+// marigoldDeep border, marigoldDeep-tinted heading -- not a shadowed
+// Material card.
 @Composable
 private fun ReliabilityCard(
     title: String,
@@ -267,30 +279,48 @@ private fun ReliabilityCard(
     onPrimary: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ElevatedCard(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = AppBg),
+        border = BorderStroke(1.5.dp, MarigoldDeep),
+        shape = MaterialTheme.shapes.medium,
+    ) {
         Column(Modifier.padding(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(title, color = MarigoldDeep, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
-            Text(body, style = MaterialTheme.typography.bodySmall)
+            Text(body, color = InkSoft, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onDismiss) { Text("Not now") }
-                Button(onClick = onPrimary) { Text(primaryLabel) }
+                Button(onClick = onPrimary, colors = ButtonDefaults.buttonColors(containerColor = Success)) {
+                    Text(primaryLabel, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
 }
 
+// Matches the hybrid app's list-card convention: flat white card, solid
+// black (C.line) border, bold title. Accept is the primary action
+// (C.metallicGreen fill, same as "Send Quote"/"Book this vehicle"
+// elsewhere); Decline is a plain outlined secondary action.
 @Composable
 private fun OpenBookingCard(booking: OpenBooking, onAccept: () -> Unit, onDecline: () -> Unit) {
-    ElevatedCard(Modifier.fillMaxWidth()) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(containerColor = AppBg),
+        border = BorderStroke(1.5.dp, Line),
+        shape = MaterialTheme.shapes.medium,
+    ) {
         Column(Modifier.padding(12.dp)) {
-            Text("${booking.pickup} → ${booking.drop}", style = MaterialTheme.typography.titleSmall)
-            Text("${booking.weight}kg · ₹${booking.fare}", style = MaterialTheme.typography.bodySmall)
+            Text("${booking.pickup} → ${booking.drop}", color = Ink, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleSmall)
+            Text("${booking.weight}kg · ₹${booking.fare}", color = InkSoft, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onDecline) { Text("Decline") }
-                Button(onClick = onAccept) { Text("Accept") }
+                OutlinedButton(onClick = onDecline, shape = MaterialTheme.shapes.small) { Text("Decline") }
+                Button(onClick = onAccept, colors = ButtonDefaults.buttonColors(containerColor = Success), shape = MaterialTheme.shapes.small) {
+                    Text("Accept", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

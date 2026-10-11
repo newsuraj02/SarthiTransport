@@ -1,5 +1,6 @@
 package com.apnatransport.mobile.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,10 +8,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.apnatransport.mobile.data.CustomerBookingRepository
 import com.apnatransport.mobile.data.MyBooking
+import com.apnatransport.mobile.ui.theme.AppBg
+import com.apnatransport.mobile.ui.theme.Ink
+import com.apnatransport.mobile.ui.theme.InkSoft
+import com.apnatransport.mobile.ui.theme.Line
+import com.apnatransport.mobile.ui.theme.Success
 import kotlinx.coroutines.launch
 
 // Customer's home screen: post a load, see its own live bookings update
@@ -35,7 +42,7 @@ fun CustomerScreen(
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Book a load", style = MaterialTheme.typography.titleMedium)
+        Text("Book a load", color = Ink, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = pickup,
@@ -85,13 +92,15 @@ fun CustomerScreen(
                 }
             },
             enabled = !posting,
-            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Success),
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
         ) {
-            if (posting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("Post load")
+            if (posting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("Post load", fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(24.dp))
-        Text("Your bookings", style = MaterialTheme.typography.titleMedium)
+        Text("Your bookings", color = Ink, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         if (myBookings.isEmpty()) {
             Text("No active bookings.", style = MaterialTheme.typography.bodyMedium)
@@ -104,15 +113,20 @@ fun CustomerScreen(
 
 @Composable
 private fun MyBookingCard(booking: MyBooking) {
-    ElevatedCard(Modifier.fillMaxWidth()) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(containerColor = AppBg),
+        border = BorderStroke(1.5.dp, Line),
+        shape = MaterialTheme.shapes.medium,
+    ) {
         Column(Modifier.padding(12.dp)) {
-            Text("${booking.pickup} → ${booking.drop}", style = MaterialTheme.typography.titleSmall)
+            Text("${booking.pickup} → ${booking.drop}", color = Ink, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleSmall)
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("₹${booking.fare}", style = MaterialTheme.typography.bodySmall)
+                Text("₹${booking.fare}", color = InkSoft, style = MaterialTheme.typography.bodySmall)
                 AssistChip(onClick = {}, label = { Text(statusLabel(booking)) })
             }
         }

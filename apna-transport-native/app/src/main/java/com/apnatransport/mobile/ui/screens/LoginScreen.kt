@@ -8,8 +8,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import com.apnatransport.mobile.auth.AuthRepository
 import com.apnatransport.mobile.auth.Role
+import com.apnatransport.mobile.ui.theme.Ink
+import com.apnatransport.mobile.ui.theme.MonoTextStyle
+import com.apnatransport.mobile.ui.theme.Success
 import kotlinx.coroutines.launch
 
 // Proves the native auth path end-to-end against the same Firestore
@@ -38,6 +42,8 @@ fun LoginScreen(
         ) {
             Text(
                 if (role == Role.DRIVER) "Apna Driver" else "Apna Transport",
+                color = Ink,
+                fontWeight = FontWeight.Black,
                 style = MaterialTheme.typography.headlineMedium,
             )
             Spacer(Modifier.height(24.dp))
@@ -45,6 +51,7 @@ fun LoginScreen(
                 value = mobile,
                 onValueChange = { if (it.length <= 10) mobile = it.filter(Char::isDigit) },
                 label = { Text("Mobile number") },
+                textStyle = MonoTextStyle,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -54,6 +61,7 @@ fun LoginScreen(
                 value = pin,
                 onValueChange = { if (it.length <= 4) pin = it.filter(Char::isDigit) },
                 label = { Text("4-digit PIN") },
+                textStyle = MonoTextStyle,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true,
@@ -76,12 +84,14 @@ fun LoginScreen(
                     }
                 },
                 enabled = !loading && mobile.length == 10 && pin.length == 4,
-                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Success),
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
             ) {
                 if (loading) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("Log In")
+                    Text("Log In", fontWeight = FontWeight.Bold)
                 }
             }
         }
