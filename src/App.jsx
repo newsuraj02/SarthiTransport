@@ -8025,6 +8025,26 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // so "above" vehicle options can bid too, not just an exact match.
   const driverVehicleDef = vehicleTypes.find((v) => v.key === driver.vehicleSpec?.type);
 
+  // Android 14+ added a separate "Full screen notifications" permission
+  // that isn't auto-granted on a fresh install (see USE_FULL_SCREEN_INTENT's
+  // comment in AndroidManifest.xml) -- without it, AppFirebaseMessagingService's
+  // ringing notification still posts (heads-up banner + sound), it just
+  // won't force the screen on/over the lock screen, which defeats the
+  // whole point of a missed-load alert for a driver whose phone is locked
+  // in their pocket. No reliable way to detect from JS whether this is
+  // already granted or even needed on this OS version, so (like the
+  // battery-optimization nudge) this is shown once ever per device rather
+  // than gated on a real check -- opens the app's own notification
+  // settings screen, where this toggle lives on 14+ (and is simply the
+  // general notification settings on older versions, still a reasonable
+  // thing to have the driver glance at once).
+  const [fullScreenNotifNudgeDismissed, setFullScreenNotifNudgeDismissed] = usePersistedState("sarthi_fullScreenNotifNudgeDismissed", false);
+  const [showFullScreenNotifNudge, setShowFullScreenNotifNudge] = useState(false);
+  useEffect(() => {
+    if (!isNativeApp || fullScreenNotifNudgeDismissed) return;
+    setShowFullScreenNotifNudge(true);
+  }, [fullScreenNotifNudgeDismissed]);
+
   // If this driver has an upcoming Advance booking, Current (immediate)
   // loads are hidden entirely — no notification, no listing, no bidding —
   // starting N hours before it (N scaled by this driver's own vehicle
@@ -8497,6 +8517,35 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
             </button>
             <button
               onClick={() => setShowBgLocationSettingsNudge(false)}
+              className="px-3 rounded-lg py-2 text-xs font-bold"
+              style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+              {lang === "en" ? "Later" : lang === "mr" ? "नंतर" : "बाद में"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showFullScreenNotifNudge && (
+        <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#EAF1FF", border: `1.5px solid ${C.navy}` }}>
+          <div className="text-xs font-bold mb-1" style={{ color: C.navy }}>
+            {lang === "en" ? "Don't miss a new load" : lang === "mr" ? "नवीन लोड चुकवू नका" : "नया लोड न चूकें"}
+          </div>
+          <div className="text-xs mb-2.5" style={{ color: C.inkSoft }}>
+            {lang === "en"
+              ? "For loads to ring and wake your screen even when the phone is locked, turn on \"Full screen notifications\" for Apna Transport in notification settings."
+              : lang === "mr"
+              ? "फोन लॉक असतानाही लोडसाठी रिंग वाजावी आणि स्क्रीन जागी व्हावी यासाठी, नोटिफिकेशन सेटिंग्जमध्ये Apna Transport साठी \"Full screen notifications\" चालू करा."
+              : "फोन लॉक होने पर भी नए लोड की रिंग बजे और स्क्रीन जागे, इसके लिए नोटिफिकेशन सेटिंग्स में Apna Transport के लिए \"Full screen notifications\" चालू करें।"}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { openNativeSettingsBridge("notifications"); setShowFullScreenNotifNudge(false); setFullScreenNotifNudgeDismissed(true); }}
+              className="flex-1 rounded-lg py-2 text-xs font-black"
+              style={{ background: C.navy, color: "#fff" }}>
+              {lang === "en" ? "Open Settings" : lang === "mr" ? "सेटिंग्ज उघडा" : "सेटिंग्स खोलें"}
+            </button>
+            <button
+              onClick={() => { setShowFullScreenNotifNudge(false); setFullScreenNotifNudgeDismissed(true); }}
               className="px-3 rounded-lg py-2 text-xs font-bold"
               style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>
               {lang === "en" ? "Later" : lang === "mr" ? "नंतर" : "बाद में"}
