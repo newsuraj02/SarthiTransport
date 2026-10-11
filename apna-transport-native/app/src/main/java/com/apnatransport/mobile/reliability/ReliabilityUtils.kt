@@ -11,6 +11,12 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import com.google.android.gms.common.api.ResolvableApiException
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
+import com.google.android.gms.location.Priority
+import kotlinx.coroutines.tasks.await
 
 // Ported from the hybrid app's android/app/src/main/java/com/apnatransport/app/
 // PowerBridgePlugin.java, FusedLocationBridgePlugin.java and
@@ -167,4 +173,38 @@ fun openFullScreenIntentSettings(context: Context) {
     }
     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
     if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
+}
+
+// -- Device-wide "Turn on Location?" dialog (LocationBridgePlugin) ---------
+//
+// Distinct from app permission (hasLocationPermission above) -- this is
+// about the phone's Location Services/GPS being switched off entirely at
+// the OS level, which no amount of granted app permission does anything
+// to fix. Wraps Play Services' SettingsClient.checkLocationSettings(),
+// which either confirms Location is already on, or hands back a
+// ResolvableApiException whose .resolution (an IntentSender) pops the
+// exact same native "Turn on Location?" dialog Google Maps/Uber show --
+// no manual trip to Settings needed. Launch the returned IntentSender via
+// rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()).
+sealed class LocationServicesCheck {
+    data object Enabled : LocationServicesCheck()
+    data class Resolvable(val exception: ResolvableApiException) : LocationServicesCheck()
+    data object NotResolvable : LocationServicesCheck()
+}
+
+suspend fun checkLocationServicesEnabled(context: Context): LocationServicesCheck {
+    val request = LocationSettingsRequest.Builder()
+        .addLocationRequest(LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 10000L).build())
+        .build()
+    return try {
+        LocationServices.getSettingsClient(context).checkLocationSettings(request).await()
+        LocationServicesCheck.Enabled
+    } catch (e: ResolvableApiException) {
+        LocationServicesCheck.Resolvable(e)
+    } catch (_: Exception) {
+        // Not resolvable at all on this device (e.g. no Location hardware,
+        // or Play Services unavailable) -- caller should just proceed
+        // rather than block on something it can't fix either.
+        LocationServicesCheck.NotResolvable
+    }
 }

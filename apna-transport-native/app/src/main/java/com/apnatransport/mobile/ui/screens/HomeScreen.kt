@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,8 +20,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.apnatransport.mobile.data.BookingRepository
 import com.apnatransport.mobile.data.OpenBooking
+import com.apnatransport.mobile.reliability.LocationServicesCheck
 import com.apnatransport.mobile.reliability.batteryOptimizationExemptionIntent
 import com.apnatransport.mobile.reliability.canUseFullScreenIntent
+import com.apnatransport.mobile.reliability.checkLocationServicesEnabled
 import com.apnatransport.mobile.reliability.hasBackgroundLocationPermission
 import com.apnatransport.mobile.reliability.isIgnoringBatteryOptimizations
 import com.apnatransport.mobile.reliability.needsAutoStartSettings
@@ -81,15 +84,44 @@ fun HomeScreen(
     var autoStartCardHidden by remember { mutableStateOf(false) }
     var fullScreenCardHidden by remember { mutableStateOf(false) }
 
+    fun enableDutyNow() {
+        online = true
+        bookingRepository.setOnline(driverMobile, true)
+        toggleLocationTracking(context, driverMobile, true)
+    }
+
+    val locationServicesLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) {
+        // Device-wide Location Services being off doesn't crash or block
+        // anything the way missing app permission does (startForeground()
+        // works fine either way) -- this dialog's result doesn't reliably
+        // report accept/decline across every OEM anyway, so proceed
+        // regardless, same non-blocking-nudge reasoning as the other
+        // reliability cards below.
+        enableDutyNow()
+    }
+
+    suspend fun proceedPastLocationServicesCheck() {
+        when (val check = checkLocationServicesEnabled(context)) {
+            is LocationServicesCheck.Resolvable -> {
+                try {
+                    locationServicesLauncher.launch(IntentSenderRequest.Builder(check.exception.resolution.intentSender).build())
+                } catch (_: Exception) {
+                    enableDutyNow()
+                }
+            }
+            else -> enableDutyNow()
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { results ->
         val locationGranted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (pendingEnable && locationGranted) {
-            online = true
-            bookingRepository.setOnline(driverMobile, true)
-            toggleLocationTracking(context, driverMobile, true)
+            scope.launch { proceedPastLocationServicesCheck() }
         } else if (pendingEnable) {
             permissionDenied = true
         }
@@ -147,9 +179,7 @@ fun HomeScreen(
                     }
                     permissionDenied = false
                     if (hasLocationPermission(context)) {
-                        online = true
-                        bookingRepository.setOnline(driverMobile, true)
-                        toggleLocationTracking(context, driverMobile, true)
+                        scope.launch { proceedPastLocationServicesCheck() }
                     } else {
                         pendingEnable = true
                         permissionLauncher.launch(requestLocationPermissions())

@@ -98,16 +98,28 @@ release signing, not connected to Play Console).
   when Accept/Reject is tapped from the ring screen.
 - **Background reliability** (`reliability/ReliabilityUtils.kt`, ported
   from the hybrid app's `PowerBridgePlugin`/`FusedLocationBridgePlugin`/
-  `RingingBridgePlugin` — plain native functions now, no Capacitor
-  plugin wrapper needed): location permission is requested before duty
-  can go online at all (required for `LocationTrackerService`'s
-  `foregroundServiceType="location"` to legally start on API 29+/34+);
-  once online, persistent re-verify nudge cards cover battery-
-  optimization exemption, background location ("Allow all the time"),
-  OEM autostart settings (Xiaomi/OPPO/Vivo/Huawei/Honor), and the
-  Android 14+ full-screen-intent permission the ring alert needs — each
-  re-checked every time duty goes online, not just once, since any of
-  them can be silently revoked later.
+  `RingingBridgePlugin`/`LocationBridgePlugin` — plain native functions
+  now, no Capacitor plugin wrapper needed): location permission is
+  requested before duty can go online at all (required for
+  `LocationTrackerService`'s `foregroundServiceType="location"` to
+  legally start on API 29+/34+), followed by a non-blocking check that
+  the device's Location Services/GPS is actually switched on (the
+  native "Turn on Location?" system dialog, distinct from app
+  permission — granted permission does nothing if GPS itself is off at
+  the OS level). Once online, persistent re-verify nudge cards cover
+  battery-optimization exemption, background location ("Allow all the
+  time"), OEM autostart settings (Xiaomi/OPPO/Vivo/Huawei/Honor), and
+  the Android 14+ full-screen-intent permission the ring alert needs —
+  each re-checked every time duty goes online, not just once, since any
+  of them can be silently revoked later.
+- **Notification channel** (`ApnaApp.onCreate()`, ported from the
+  hybrid app's `MainActivity.java`): creates the `new_load_alerts`
+  Android notification channel on every process start. Needed because
+  the server sends some pushes (the driver's plain new-load alert, and
+  customer-side driver-accepted/trip-completed alerts) with a
+  `notification` payload the OS displays automatically — but Android
+  8+ silently drops any such push targeting a channel that was never
+  created on-device, even though the send itself succeeds server-side.
 - **Customer side**: a form to post a load (pickup/drop/weight) and a
   live Firestore listener showing that customer's own open/ongoing
   bookings, updating in real time once a driver accepts.
@@ -135,3 +147,7 @@ release signing, not connected to Play Console).
   history, masked calling, announcements, referral, advance bookings,
   return-load mode, settings/language switch, and any Admin
   functionality (Admin is not part of this native rewrite at all).
+- Forced in-app updates (the hybrid app's `AppUpdateBridgePlugin`, Play
+  Core's `startUpdateFlowForResult`) aren't ported — meaningless before
+  this app is actually distributed via Play Console, since it only
+  ever finds an update for an install Play Store itself is tracking.
