@@ -192,19 +192,18 @@ sealed class LocationServicesCheck {
     data object NotResolvable : LocationServicesCheck()
 }
 
-suspend fun checkLocationServicesEnabled(context: Context): LocationServicesCheck {
+suspend fun checkLocationServicesEnabled(context: Context): LocationServicesCheck = try {
     val request = LocationSettingsRequest.Builder()
         .addLocationRequest(LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 10000L).build())
         .build()
-    return try {
-        LocationServices.getSettingsClient(context).checkLocationSettings(request).await()
-        LocationServicesCheck.Enabled
-    } catch (e: ResolvableApiException) {
-        LocationServicesCheck.Resolvable(e)
-    } catch (_: Exception) {
-        // Not resolvable at all on this device (e.g. no Location hardware,
-        // or Play Services unavailable) -- caller should just proceed
-        // rather than block on something it can't fix either.
-        LocationServicesCheck.NotResolvable
-    }
+    LocationServices.getSettingsClient(context).checkLocationSettings(request).await()
+    LocationServicesCheck.Enabled
+} catch (e: ResolvableApiException) {
+    LocationServicesCheck.Resolvable(e)
+} catch (_: Exception) {
+    // Not resolvable at all on this device (e.g. no Location hardware,
+    // or Play Services unavailable) -- caller should just proceed rather
+    // than block on something it can't fix either. Also covers the
+    // request-building calls above throwing, not just the Task itself.
+    LocationServicesCheck.NotResolvable
 }

@@ -80,6 +80,7 @@ fun HomeScreen(
     var online by remember { mutableStateOf(false) }
     var pendingEnable by remember { mutableStateOf(false) }
     var permissionDenied by remember { mutableStateOf(false) }
+    var toggleError by remember { mutableStateOf<String?>(null) }
     val openBookings by produceState(initialValue = emptyList<OpenBooking>()) {
         bookingRepository.observeOpenBookings().collect { value = it }
     }
@@ -92,10 +93,23 @@ fun HomeScreen(
     var autoStartCardHidden by remember { mutableStateOf(false) }
     var fullScreenCardHidden by remember { mutableStateOf(false) }
 
+    // toggleLocationTracking (startForegroundService) had no error handling
+    // at all -- any exception there (e.g. a foreground-service-start
+    // restriction this device's Android/OEM version enforces beyond what's
+    // been accounted for) propagated uncaught, which is indistinguishable
+    // from a crash/freeze with no visible cause. Catching here and
+    // surfacing the real exception on screen so a real device failure is
+    // finally diagnosable without adb/logcat access.
     fun enableDutyNow() {
-        online = true
-        bookingRepository.setOnline(driverMobile, true)
-        toggleLocationTracking(context, driverMobile, true)
+        try {
+            bookingRepository.setOnline(driverMobile, true)
+            toggleLocationTracking(context, driverMobile, true)
+            online = true
+            toggleError = null
+        } catch (e: Throwable) {
+            online = false
+            toggleError = "${e::class.java.simpleName}: ${e.message}"
+        }
     }
 
     val locationServicesLauncher = rememberLauncherForActivityResult(
@@ -181,11 +195,13 @@ fun HomeScreen(
                 onCheckedChange = { checked ->
                     if (!checked) {
                         online = false
+                        toggleError = null
                         bookingRepository.setOnline(driverMobile, false)
                         toggleLocationTracking(context, driverMobile, false)
                         return@Switch
                     }
                     permissionDenied = false
+                    toggleError = null
                     if (hasLocationPermission(context)) {
                         scope.launch { proceedPastLocationServicesCheck() }
                     } else {
@@ -193,6 +209,14 @@ fun HomeScreen(
                         permissionLauncher.launch(requestLocationPermissions())
                     }
                 },
+            )
+        }
+        if (toggleError != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Couldn't go on duty: $toggleError",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
             )
         }
         if (permissionDenied) {
