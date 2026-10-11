@@ -8045,6 +8045,32 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     setShowFullScreenNotifNudge(true);
   }, [fullScreenNotifNudgeDismissed]);
 
+  // Separate from the one-time battery-optimization ASK above (which fires
+  // once and never confirms whether it actually landed -- see
+  // requestBatteryOptimizationExemption's .finally()) -- this RE-VERIFIES
+  // the real OS-level state via isIgnoringBatteryOptimizations (already
+  // built natively, never previously called from JS) every time this
+  // screen mounts while online, and keeps showing until it's actually
+  // granted rather than dismissing itself forever after one attempt. This
+  // exemption is what lets the ring alert survive the app being fully
+  // killed, not just GPS tracking -- a driver who missed/declined the
+  // one-time ask had no way to be told their background reliability was
+  // ever actually broken. Bundled with the OEM autostart action in the
+  // same card since on Oppo/Xiaomi/Vivo/Huawei both are needed together,
+  // and there's no way to programmatically verify autostart's own state
+  // (no OEM API for it), only battery optimization's.
+  const [batteryOptIgnoring, setBatteryOptIgnoring] = useState(null); // null = not checked yet
+  const [needsOemAutoStart, setNeedsOemAutoStart] = useState(false);
+  const [bgReliabilityCardHiddenThisVisit, setBgReliabilityCardHiddenThisVisit] = useState(false);
+  useEffect(() => {
+    if (!isNativeApp || !driver.online) return;
+    let cancelled = false;
+    PowerBridgeNative.isIgnoringBatteryOptimizations().then(({ ignoring }) => { if (!cancelled) setBatteryOptIgnoring(ignoring); }).catch(() => {});
+    needsAutoStartSettings().then(({ needed }) => { if (!cancelled) setNeedsOemAutoStart(needed); });
+    return () => { cancelled = true; };
+  }, [driver.online]);
+  const showBgReliabilityCard = isNativeApp && driver.online && batteryOptIgnoring === false && !bgReliabilityCardHiddenThisVisit;
+
   // If this driver has an upcoming Advance booking, Current (immediate)
   // loads are hidden entirely — no notification, no listing, no bidding —
   // starting N hours before it (N scaled by this driver's own vehicle
@@ -8551,6 +8577,43 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
               {lang === "en" ? "Later" : lang === "mr" ? "नंतर" : "बाद में"}
             </button>
           </div>
+        </div>
+      )}
+
+      {showBgReliabilityCard && (
+        <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#FDECEC", border: `1.5px solid ${C.safety}` }}>
+          <div className="text-xs font-bold mb-1" style={{ color: C.safety }}>
+            {lang === "en" ? "⚠️ Loads may not reach you when the app is closed" : lang === "mr" ? "⚠️ अ‍ॅप बंद असताना लोड पोहोचणार नाहीत" : "⚠️ ऐप बंद होने पर लोड नहीं पहुंचेंगे"}
+          </div>
+          <div className="text-xs mb-2.5" style={{ color: C.inkSoft }}>
+            {lang === "en"
+              ? "Battery optimization is still ON for Apna Transport — your phone may stop load alerts from reaching you after the app is closed/killed. Turn it off below."
+              : lang === "mr"
+              ? "Apna Transport साठी बॅटरी ऑप्टिमायझेशन अजून चालू आहे — अ‍ॅप बंद/किल झाल्यावर फोन लोड अलर्ट थांबवू शकतो. खाली बंद करा."
+              : "Apna Transport के लिए बैटरी ऑप्टिमाइज़ेशन अभी भी ऑन है — ऐप बंद/किल होने के बाद फोन लोड अलर्ट रोक सकता है। नीचे इसे बंद करें।"}
+          </div>
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={() => { requestBatteryOptimizationExemption().then(() => PowerBridgeNative.isIgnoringBatteryOptimizations()).then(({ ignoring }) => setBatteryOptIgnoring(ignoring)).catch(() => {}); }}
+              className="flex-1 rounded-lg py-2 text-xs font-black"
+              style={{ background: C.safety, color: "#fff" }}>
+              {lang === "en" ? "Allow (recommended)" : lang === "mr" ? "परवानगी द्या (शिफारस)" : "अनुमति दें (सुझाव)"}
+            </button>
+            <button
+              onClick={() => setBgReliabilityCardHiddenThisVisit(true)}
+              className="px-3 rounded-lg py-2 text-xs font-bold"
+              style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+              {lang === "en" ? "Hide" : lang === "mr" ? "लपवा" : "छुपाएं"}
+            </button>
+          </div>
+          {needsOemAutoStart && (
+            <button
+              onClick={() => openAutoStartSettings()}
+              className="w-full rounded-lg py-2 text-xs font-bold"
+              style={{ background: "#fff", color: C.safety, border: `1.5px solid ${C.safety}` }}>
+              {lang === "en" ? "Also enable \"Autostart\" / \"Background activity\"" : lang === "mr" ? "\"Autostart\" / \"Background activity\" देखील चालू करा" : "\"Autostart\" / \"Background activity\" भी चालू करें"}
+            </button>
+          )}
         </div>
       )}
 
