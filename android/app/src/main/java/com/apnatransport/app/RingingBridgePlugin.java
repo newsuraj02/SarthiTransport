@@ -1,6 +1,9 @@
 package com.apnatransport.app;
 
+import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -31,6 +34,27 @@ public class RingingBridgePlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("action", action);
         result.put("bookingId", bookingId);
+        call.resolve(result);
+    }
+
+    // Whether this app can actually force the full-screen ring screen over
+    // the lock screen right now -- see AppFirebaseMessagingService.java's
+    // setFullScreenIntent. Android 14+ (API 34) added a separate
+    // "Full screen notifications" permission that isn't auto-granted on a
+    // fresh install; without it, the notification still posts normally
+    // (heads-up banner + sound) but silently never wakes the screen. No
+    // such restriction exists before API 34 -- canUseFullScreenIntent()
+    // itself doesn't exist on older SDKs, so this just reports true there,
+    // same as the OS effectively allows unconditionally.
+    @PluginMethod
+    public void canUseFullScreenIntent(PluginCall call) {
+        boolean can = true;
+        if (Build.VERSION.SDK_INT >= 34) {
+            NotificationManager manager = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            can = manager != null && manager.canUseFullScreenIntent();
+        }
+        JSObject result = new JSObject();
+        result.put("can", can);
         call.resolve(result);
     }
 }

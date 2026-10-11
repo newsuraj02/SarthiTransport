@@ -2426,6 +2426,26 @@ async function consumePendingRingAction() {
   }
 }
 
+// Real, re-checkable state of Android 14's separate "Full screen
+// notifications" permission (see RingingBridgePlugin.java's
+// canUseFullScreenIntent) -- unlike the one-shot asks elsewhere, there's
+// no system dialog to request this with at all, only a Settings screen
+// (see SettingsBridgeActivity's "full_screen_intent" target), so the only
+// thing JS can do is keep checking the real state and nudge toward
+// Settings until it's actually on. Defaults to true (nothing to fix) on
+// a plain browser tab or an older native build without this plugin
+// method yet, same fail-open reasoning as every other capability check
+// in this app that shouldn't block normal use just because it can't ask.
+async function canUseFullScreenIntent() {
+  if (!isNativeApp) return true;
+  try {
+    const { can } = await RingingBridgeNative.canUseFullScreenIntent();
+    return can;
+  } catch (e) {
+    return true;
+  }
+}
+
 // See PowerBridgePlugin.java -- the real fix for LocationTrackerService
 // getting killed on an idle phone: a battery-optimization exemption (a
 // genuine one-tap system dialog) plus, on the worst OEMs, a best-effort
@@ -8031,19 +8051,22 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // ringing notification still posts (heads-up banner + sound), it just
   // won't force the screen on/over the lock screen, which defeats the
   // whole point of a missed-load alert for a driver whose phone is locked
-  // in their pocket. No reliable way to detect from JS whether this is
-  // already granted or even needed on this OS version, so (like the
-  // battery-optimization nudge) this is shown once ever per device rather
-  // than gated on a real check -- opens the app's own notification
-  // settings screen, where this toggle lives on 14+ (and is simply the
-  // general notification settings on older versions, still a reasonable
-  // thing to have the driver glance at once).
-  const [fullScreenNotifNudgeDismissed, setFullScreenNotifNudgeDismissed] = usePersistedState("sarthi_fullScreenNotifNudgeDismissed", false);
-  const [showFullScreenNotifNudge, setShowFullScreenNotifNudge] = useState(false);
+  // in their pocket. Now backed by a real, re-checkable state
+  // (canUseFullScreenIntent, via RingingBridgePlugin.java's
+  // canUseFullScreenIntent -- added alongside this) instead of a one-shot
+  // "show once ever" dismiss, same upgrade as the battery-optimization
+  // card above: re-verified every time this screen mounts while online,
+  // and keeps showing until it's actually granted. Reports true (nothing
+  // to fix) on API <34, where this restriction doesn't exist at all.
+  const [canUseFullScreenIntentState, setCanUseFullScreenIntentState] = useState(null); // null = not checked yet
+  const [fullScreenNotifNudgeHiddenThisVisit, setFullScreenNotifNudgeHiddenThisVisit] = useState(false);
   useEffect(() => {
-    if (!isNativeApp || fullScreenNotifNudgeDismissed) return;
-    setShowFullScreenNotifNudge(true);
-  }, [fullScreenNotifNudgeDismissed]);
+    if (!isNativeApp || !driver.online) return;
+    let cancelled = false;
+    canUseFullScreenIntent().then((can) => { if (!cancelled) setCanUseFullScreenIntentState(can); });
+    return () => { cancelled = true; };
+  }, [driver.online]);
+  const showFullScreenNotifNudge = isNativeApp && driver.online && canUseFullScreenIntentState === false && !fullScreenNotifNudgeHiddenThisVisit;
 
   // Separate from the one-time battery-optimization ASK above (which fires
   // once and never confirms whether it actually landed -- see
@@ -8158,23 +8181,28 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 
   // "Allow all the time" background location -- see
   // BackgroundLocationDisclosure and requestBackgroundLocationPermission
-  // above. Shown at most once ever per device (never re-nagged, same as
-  // every other permission ask in this app), and only once this driver
-  // has actually gone Online at least once with foreground location
-  // already granted -- Play Store policy requires this be asked "in
-  // context," not at first launch before the driver has any reason to
-  // understand why it matters.
+  // above. The big disclosure screen itself is still shown at most once
+  // ever per device (Play Store policy wants it asked "in context," not
+  // repeatedly, and only once this driver has actually gone Online at
+  // least once with foreground location already granted). The lightweight
+  // follow-up nudge below, however, is now RE-VERIFIED every time this
+  // screen mounts while online -- not just once, immediately after the
+  // disclosure's "Continue" tap -- so a driver who dismissed/missed that
+  // one follow-up isn't silently stuck with broken background GPS sharing
+  // forever with no way to be told. Same gap the battery-optimization
+  // check above was fixed for, closed here too per explicit request.
   const [bgLocationDisclosureShown, setBgLocationDisclosureShown] = usePersistedState("sarthi_bgLocationDisclosureShown", false);
   const [showBgLocationDisclosure, setShowBgLocationDisclosure] = useState(false);
-  // Follow-up nudge, shown once, if the "Continue" tap above didn't
-  // actually land a grant -- see that button's own comment for why this
-  // is frequently the only real path to "Allow all the time" on API 30+.
   const [showBgLocationSettingsNudge, setShowBgLocationSettingsNudge] = useState(false);
   useEffect(() => {
-    if (!locationTrackerAvailable || bgLocationDisclosureShown || !driver.online) return;
-    if (locationPermission.permission !== "granted") return;
+    if (!locationTrackerAvailable || !driver.online || locationPermission.permission !== "granted") return;
     let cancelled = false;
-    checkBackgroundLocationPermission().then(({ granted }) => { if (!cancelled && !granted) setShowBgLocationDisclosure(true); });
+    checkBackgroundLocationPermission().then(({ granted }) => {
+      if (cancelled) return;
+      if (granted) { setShowBgLocationSettingsNudge(false); return; }
+      if (!bgLocationDisclosureShown) setShowBgLocationDisclosure(true);
+      else setShowBgLocationSettingsNudge(true);
+    });
     return () => { cancelled = true; };
   }, [locationTrackerAvailable, bgLocationDisclosureShown, driver.online, locationPermission.permission]);
 
@@ -8565,16 +8593,16 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => { openNativeSettingsBridge("notifications"); setShowFullScreenNotifNudge(false); setFullScreenNotifNudgeDismissed(true); }}
+              onClick={() => { openNativeSettingsBridge("full_screen_intent"); canUseFullScreenIntent().then(setCanUseFullScreenIntentState); }}
               className="flex-1 rounded-lg py-2 text-xs font-black"
               style={{ background: C.navy, color: "#fff" }}>
               {lang === "en" ? "Open Settings" : lang === "mr" ? "सेटिंग्ज उघडा" : "सेटिंग्स खोलें"}
             </button>
             <button
-              onClick={() => { setShowFullScreenNotifNudge(false); setFullScreenNotifNudgeDismissed(true); }}
+              onClick={() => setFullScreenNotifNudgeHiddenThisVisit(true)}
               className="px-3 rounded-lg py-2 text-xs font-bold"
               style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>
-              {lang === "en" ? "Later" : lang === "mr" ? "नंतर" : "बाद में"}
+              {lang === "en" ? "Hide" : lang === "mr" ? "लपवा" : "छुपाएं"}
             </button>
           </div>
         </div>

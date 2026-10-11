@@ -3,6 +3,7 @@ package com.apnatransport.app;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 
@@ -24,7 +25,17 @@ public class SettingsBridgeActivity extends Activity {
         super.onCreate(savedInstanceState);
         String target = getIntent().getStringExtra("target");
         Intent settingsIntent;
-        if ("notifications".equals(target)) {
+        // Jumps straight to the exact toggle screen for Android 14's
+        // separate "Full screen notifications" permission (see
+        // RingingBridgePlugin.canUseFullScreenIntent) instead of the
+        // general per-app notification settings, which buries it a tap or
+        // two deeper. The action constant itself only exists from API 34 --
+        // below that, there's no such restriction to begin with, so this
+        // just falls through to the general notifications screen instead.
+        if ("full_screen_intent".equals(target) && Build.VERSION.SDK_INT >= 34) {
+            settingsIntent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
+            settingsIntent.setData(Uri.fromParts("package", getPackageName(), null));
+        } else if ("notifications".equals(target) || "full_screen_intent".equals(target)) {
             settingsIntent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
             settingsIntent.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
         } else {
