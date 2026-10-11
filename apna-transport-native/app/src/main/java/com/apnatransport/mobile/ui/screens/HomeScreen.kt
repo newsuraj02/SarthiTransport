@@ -19,6 +19,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.apnatransport.mobile.data.BookingRepository
 import com.apnatransport.mobile.data.OpenBooking
+import com.apnatransport.mobile.reliability.batteryOptimizationExemptionIntent
+import com.apnatransport.mobile.reliability.canUseFullScreenIntent
+import com.apnatransport.mobile.reliability.hasBackgroundLocationPermission
+import com.apnatransport.mobile.reliability.isIgnoringBatteryOptimizations
+import com.apnatransport.mobile.reliability.needsAutoStartSettings
+import com.apnatransport.mobile.reliability.openAutoStartSettings
+import com.apnatransport.mobile.reliability.openFullScreenIntentSettings
 import com.apnatransport.mobile.service.LocationTrackerService
 import kotlinx.coroutines.launch
 
@@ -40,10 +47,18 @@ import kotlinx.coroutines.launch
 // throws a SecurityException immediately inside onStartCommand -- the
 // service dies while startForegroundService() is still waiting on it,
 // which is what was presenting as an unrecoverable freeze before this
-// permission check existed. ACCESS_BACKGROUND_LOCATION (needed for
-// tracking to keep writing once the app itself isn't foregrounded) is
-// deliberately not requested here yet -- see the TODO on
-// requestLocationPermissions below.
+// permission check existed.
+//
+// Once online, this also surfaces the same background-reliability fixes
+// already proven on the hybrid app (see reliability/ReliabilityUtils.kt
+// and its header comment for where each was ported from): battery-
+// optimization exemption, background location (so tracking survives the
+// app itself being backgrounded, not just foreground-only), OEM autostart
+// settings, and the Android 14+ full-screen-intent permission the ring
+// alert needs. Each is a persistent re-verify nudge, not a one-shot --
+// it checks again every time duty goes online, since a driver (or an
+// OEM's own "optimize battery usage" sweep) can silently revoke any of
+// these later.
 @Composable
 fun HomeScreen(
     driverMobile: String,
@@ -58,6 +73,14 @@ fun HomeScreen(
         bookingRepository.observeOpenBookings().collect { value = it }
     }
 
+    var batteryOptIgnoring by remember { mutableStateOf<Boolean?>(null) }
+    var backgroundLocationGranted by remember { mutableStateOf<Boolean?>(null) }
+    var fullScreenIntentOk by remember { mutableStateOf<Boolean?>(null) }
+    var batteryCardHidden by remember { mutableStateOf(false) }
+    var backgroundLocationCardHidden by remember { mutableStateOf(false) }
+    var autoStartCardHidden by remember { mutableStateOf(false) }
+    var fullScreenCardHidden by remember { mutableStateOf(false) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { results ->
@@ -71,6 +94,35 @@ fun HomeScreen(
             permissionDenied = true
         }
         pendingEnable = false
+    }
+
+    val batteryOptLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        // The dialog doesn't reliably hand back an accept/decline result
+        // code across every OEM -- re-checking real state afterward is the
+        // only trustworthy signal either way (see ReliabilityUtils.kt).
+        batteryOptIgnoring = isIgnoringBatteryOptimizations(context)
+    }
+
+    val backgroundLocationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        backgroundLocationGranted = hasBackgroundLocationPermission(context)
+    }
+
+    // Re-verified every time duty goes online, not just once -- any of
+    // these can be silently revoked later by the driver or an OEM battery
+    // sweep, and a one-shot check would never catch that.
+    LaunchedEffect(online) {
+        if (!online) return@LaunchedEffect
+        batteryOptIgnoring = isIgnoringBatteryOptimizations(context)
+        backgroundLocationGranted = hasBackgroundLocationPermission(context)
+        fullScreenIntentOk = canUseFullScreenIntent(context)
+        batteryCardHidden = false
+        backgroundLocationCardHidden = false
+        autoStartCardHidden = false
+        fullScreenCardHidden = false
     }
 
     LaunchedEffect(Unit) {
@@ -118,6 +170,50 @@ fun HomeScreen(
             Text("Turn duty on to see open loads.", style = MaterialTheme.typography.bodyMedium)
             return@Column
         }
+
+        if (batteryOptIgnoring == false && !batteryCardHidden) {
+            ReliabilityCard(
+                title = "Allow background battery usage",
+                body = "Without this, Android may stop sharing your location once the app isn't in front.",
+                primaryLabel = "Allow (recommended)",
+                onPrimary = { batteryOptLauncher.launch(batteryOptimizationExemptionIntent(context)) },
+                onDismiss = { batteryCardHidden = true },
+            )
+        }
+        if (backgroundLocationGranted == false && !backgroundLocationCardHidden) {
+            ReliabilityCard(
+                title = "Allow location all the time",
+                body = "\"While using the app\" stops location sharing the moment you switch apps. Choose \"Allow all the time\" to keep sharing in the background.",
+                primaryLabel = "Allow (recommended)",
+                onPrimary = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    } else {
+                        backgroundLocationGranted = true
+                    }
+                },
+                onDismiss = { backgroundLocationCardHidden = true },
+            )
+        }
+        if (needsAutoStartSettings() && !autoStartCardHidden) {
+            ReliabilityCard(
+                title = "Allow autostart",
+                body = "Your phone's manufacturer needs a separate permission to keep this app running in the background.",
+                primaryLabel = "Open settings",
+                onPrimary = { openAutoStartSettings(context) },
+                onDismiss = { autoStartCardHidden = true },
+            )
+        }
+        if (fullScreenIntentOk == false && !fullScreenCardHidden) {
+            ReliabilityCard(
+                title = "Allow full-screen alerts",
+                body = "Needed so a new load rings like an incoming call, even when your phone is locked.",
+                primaryLabel = "Open settings",
+                onPrimary = { openFullScreenIntentSettings(context) },
+                onDismiss = { fullScreenCardHidden = true },
+            )
+        }
+
         if (openBookings.isEmpty()) {
             Text("You're online — a load will appear here.", style = MaterialTheme.typography.bodyMedium)
         }
@@ -128,6 +224,28 @@ fun HomeScreen(
                     onAccept = { scope.launch { bookingRepository.acceptBooking(booking.id, driverMobile) } },
                     onDecline = { scope.launch { bookingRepository.declineBooking(booking.id, driverMobile) } },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReliabilityCard(
+    title: String,
+    body: String,
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ElevatedCard(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        Column(Modifier.padding(12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(body, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDismiss) { Text("Not now") }
+                Button(onClick = onPrimary) { Text(primaryLabel) }
             }
         }
     }
@@ -162,14 +280,6 @@ private fun hasLocationPermission(context: Context): Boolean {
     return fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED
 }
 
-// TODO(Phase 1a): also prompt for ACCESS_BACKGROUND_LOCATION (a separate,
-// later system dialog on API 29+) the way the hybrid app's
-// BackgroundLocationDisclosure does, so tracking keeps writing once the
-// app itself is backgrounded rather than only while it's in the
-// foreground. Foreground-only location is enough to prove the pipeline
-// works and to satisfy the foregroundServiceType="location" requirement
-// this fixes, but it's not yet the same background-survives-everything
-// guarantee the hybrid app's GPS tracking has.
 private fun requestLocationPermissions(): Array<String> {
     val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

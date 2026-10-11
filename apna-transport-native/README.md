@@ -96,6 +96,18 @@ release signing, not connected to Play Console).
   near-verbatim from the hybrid app's proven implementation), including
   bringing the app to the foreground via `singleTask` + `onNewIntent`
   when Accept/Reject is tapped from the ring screen.
+- **Background reliability** (`reliability/ReliabilityUtils.kt`, ported
+  from the hybrid app's `PowerBridgePlugin`/`FusedLocationBridgePlugin`/
+  `RingingBridgePlugin` — plain native functions now, no Capacitor
+  plugin wrapper needed): location permission is requested before duty
+  can go online at all (required for `LocationTrackerService`'s
+  `foregroundServiceType="location"` to legally start on API 29+/34+);
+  once online, persistent re-verify nudge cards cover battery-
+  optimization exemption, background location ("Allow all the time"),
+  OEM autostart settings (Xiaomi/OPPO/Vivo/Huawei/Honor), and the
+  Android 14+ full-screen-intent permission the ring alert needs — each
+  re-checked every time duty goes online, not just once, since any of
+  them can be silently revoked later.
 - **Customer side**: a form to post a load (pickup/drop/weight) and a
   live Firestore listener showing that customer's own open/ongoing
   bookings, updating in real time once a driver accepts.
