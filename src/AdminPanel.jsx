@@ -1125,12 +1125,23 @@ const BUG_SEVERITY_LABEL = { critical: "Critical", high: "High", medium: "Medium
 const CHANGE_TYPE_LABEL = { bug: "Bug", feature: "Feature", ui: "UI", config: "Config", security: "Security" };
 const CHANGE_TYPE_COLOR = { bug: C.safety, feature: C.navy, ui: C.marigoldDeep, config: C.metallicGreen, security: "#8B0000" };
 
-// fixedAt is written two different ways -- a live Firestore write
-// (resolveChangeLogEntry/setBugStatus) stamps a real ms timestamp, while
+// fixedAt is written three different ways -- a live Firestore write via
+// serverTimestamp() comes back as a real Firestore Timestamp object (with
+// .seconds/.nanoseconds, or a .toMillis() method depending on SDK path),
+// some other live write path stamps a plain ms number directly, and
 // BUG_TRACKER_SEED's own entries just carry a plain "YYYY-MM-DD" string --
-// this normalizes either into ms so both sort and age the same way.
+// this normalizes all three into ms so sorting/aging/display all agree.
+// A Timestamp object used to fall through to `new Date(timestampObject)`,
+// which silently produces Invalid Date (NaN) rather than throwing -- the
+// old NaN-guard then returned 0 (epoch), which is why "Fixed 20737 days
+// ago" showed up for every entry actually fixed via this write path: that
+// IS Date.now() - epoch in days.
 function fixedAtMs(b) {
   if (typeof b.fixedAt === "number") return b.fixedAt;
+  if (b.fixedAt && typeof b.fixedAt.toMillis === "function") return b.fixedAt.toMillis();
+  if (b.fixedAt && typeof b.fixedAt.seconds === "number") {
+    return b.fixedAt.seconds * 1000 + Math.floor((b.fixedAt.nanoseconds || 0) / 1e6);
+  }
   if (b.fixedAt) {
     const t = new Date(b.fixedAt).getTime();
     return Number.isNaN(t) ? 0 : t;
@@ -1182,7 +1193,7 @@ function FixedChangeLogCard({ b, lang, setBugStatus }) {
       <div className="flex items-center justify-between mt-2">
         <span className="text-[10px]" style={{ color: C.inkSoft }}>
           {lang === "en" ? "Found" : lang === "mr" ? "सापडले" : "मिला"} {b.foundAt || "—"}
-          {b.fixedAt && ` · ${lang === "en" ? "Fixed" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड"} ${relativeFixedLabel(fixedAtMs(b), lang)} (${typeof b.fixedAt === "number" ? new Date(b.fixedAt).toISOString().slice(0, 10) : b.fixedAt})`}
+          {b.fixedAt && ` · ${lang === "en" ? "Fixed" : lang === "mr" ? "फिक्स्ड" : "फिक्स्ड"} ${relativeFixedLabel(fixedAtMs(b), lang)} (${fixedAtMs(b) ? new Date(fixedAtMs(b)).toISOString().slice(0, 10) : b.fixedAt})`}
         </span>
         <button onClick={() => setBugStatus(b.id, "open")} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: C.paper, color: C.inkSoft, border: `1px solid ${C.line}` }}>
           {lang === "en" ? "Reopen" : lang === "mr" ? "पुन्हा उघडा" : "फिर से खोलें"}
