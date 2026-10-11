@@ -6,7 +6,7 @@
 
     <!-- Location: fine for real GPS fixes, coarse as the SDK-required
          companion, background for LocationTrackerService continuing to
-         write fixes once the app is minimized -- see that service's own
+         write fixes once the app is minimized, see that service's own
          header comment for why this can't be done from Compose/JS timers
          alone. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -15,14 +15,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
-    <!-- See AppFirebaseMessagingService / RingingBookingActivity -- the
+    <!-- See AppFirebaseMessagingService / RingingBookingActivity, the
          "ring like an incoming call" full-screen alert for a new load,
          ported from the main Capacitor app's proven implementation. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Real "ignore battery optimizations" system dialog -- see the
+    <!-- Real "ignore battery optimizations" system dialog, see the
          reliability work done on the main Capacitor app this session;
          the exact same OS-level exemption matters here too, for the exact
          same reason (LocationTrackerService + the FCM wake-up both need
@@ -53,7 +53,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Full-screen "incoming call" ring screen -- see
+        <!-- Full-screen "incoming call" ring screen, see
              ui/ringing/RingingBookingActivity.java. showWhenLocked/
              turnScreenOn cover API 27+ declaratively; that class's own
              legacy window-flag path covers API 24-26 (this project's
@@ -73,7 +73,7 @@
             </intent-filter>
         </service>
 
-        <!-- See service/LocationTrackerService.java -- foregroundServiceType
+        <!-- See service/LocationTrackerService.java: foregroundServiceType
              "location" is mandatory on API 29+ for a location-type
              foreground service to be allowed to start at all. -->
         <service
