@@ -136,6 +136,13 @@ release signing, not connected to Play Console).
 - **Customer side**: a form to post a load (pickup/drop/weight) and a
   live Firestore listener showing that customer's own open/ongoing
   bookings, updating in real time once a driver accepts.
+- **FCM token registration** (`AuthRepository.signIn()` +
+  `AppFirebaseMessagingService.onNewToken()`): writes the device's push
+  token to `drivers/{mobile}.fcmToken`/`customers/{mobile}.fcmToken`
+  right after sign-in, and again on any future token refresh. Without
+  this the server has no valid token to send this install's pushes to
+  at all — confirmed as a real gap (duty toggle worked, but nothing
+  ever rang) before being fixed.
 
 ## What's a placeholder (do not ship to real drivers/customers yet)
 
@@ -151,9 +158,6 @@ release signing, not connected to Play Console).
   fare, not the real fare-tier resolution (see `src/App.jsx`'s
   `resolveFareForTier`), and skips the eligibility pre-check (so it'll
   happily post a load with no eligible driver nearby).
-- `AppFirebaseMessagingService.onNewToken()` doesn't yet write the new
-  FCM token back to `drivers/{mobile}.fcmToken` (or the customer
-  equivalent).
 - No driver/customer registration or KYC-creation flow —
   `AuthRepository` only signs in to an account that already exists.
 - Deliberately out of scope for this first slice: wallet, trip

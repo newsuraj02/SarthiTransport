@@ -1,6 +1,8 @@
 package com.apnatransport.mobile.auth
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
 
 // Mirrors firebaseClient.js's pinAuthEmail/pinToPassword exactly, same
@@ -38,7 +40,27 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 
     suspend fun signIn(mobile: String, pin: String, role: Role): Result<Unit> = runCatching {
         auth.signInWithEmailAndPassword(pinAuthEmail(mobile, role), pinToPassword(pin)).await()
-        Unit
+        registerFcmToken(mobile, role)
+    }
+
+    // FCM generates a token on app startup regardless of auth state, often
+    // well before sign-in happens, so AppFirebaseMessagingService's
+    // onNewToken() (which only fires on a NEW/refreshed token) won't catch
+    // it -- without this, a driver/customer who installs fresh and signs
+    // in would never get a token written to drivers/{mobile}.fcmToken (or
+    // customers/{mobile}) at all, and never receive a single push.
+    // Confirmed as a real gap: duty toggle worked but nothing rang.
+    // Best-effort -- a failure here shouldn't fail sign-in itself; a
+    // future token refresh would still be caught by onNewToken().
+    private suspend fun registerFcmToken(mobile: String, role: Role) {
+        try {
+            val token = FirebaseMessaging.getInstance().token.await()
+            val collection = if (role == Role.CUSTOMER) "customers" else "drivers"
+            FirebaseFirestore.getInstance().collection(collection).document(mobile)
+                .update("fcmToken", token).await()
+        } catch (_: Exception) {
+            // best-effort, see comment above
+        }
     }
 
     // TODO(Phase 1a): registration (new driver/customer, no account yet),

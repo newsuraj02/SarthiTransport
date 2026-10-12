@@ -8,8 +8,12 @@ import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.os.Build;
+import android.util.Log;
 import androidx.annotation.NonNull;
 import com.apnatransport.mobile.ui.ringing.RingingBookingActivity;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 import java.util.Map;
@@ -35,6 +39,7 @@ import java.util.Map;
 // backgrounded/killed; a `notification` payload would let the OS handle
 // display itself and skip calling this class's code entirely.
 public class AppFirebaseMessagingService extends FirebaseMessagingService {
+    private static final String TAG = "AppFirebaseMsgService";
     private static final String RING_CHANNEL_ID = "direct_request_ring";
     private static final int RING_NOTIFICATION_ID = 7821;
 
@@ -46,14 +51,36 @@ public class AppFirebaseMessagingService extends FirebaseMessagingService {
         showRingingNotification(data);
     }
 
+    // Without this, the server has no valid token to send this device's
+    // pushes to at all -- confirmed as a real gap, not a hypothetical one
+    // (a driver reported duty/toggle working but nothing ringing, which
+    // this explains: a token was never registered for this app's install).
+    // Mirrors useRideNotifications' client-side token write in the hybrid
+    // app, just from the native FCM SDK's own callback instead of a JS
+    // onMessage listener. Only covers the "token refreshes while this
+    // service is alive" case -- AuthRepository.signIn() separately writes
+    // the token right after a fresh sign-in, since FCM generates a token
+    // on app startup regardless of auth state, often well before
+    // onNewToken() would ever fire again post-login.
     @Override
     public void onNewToken(@NonNull String token) {
         super.onNewToken(token);
-        // TODO(Phase 1a): write this token to drivers/{mobile}.fcmToken,
-        // same as useRideNotifications does client-side in the main app --
-        // needs the signed-in driver's mobile number, which this service
-        // doesn't have direct access to on its own. Route through
-        // AuthRepository/a shared singleton once that exists.
+        writeFcmToken(token);
+    }
+
+    private void writeFcmToken(String token) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        String email = user != null ? user.getEmail() : null;
+        if (email == null) return;
+        int at = email.indexOf('@');
+        if (at < 0) return;
+        String mobile = email.substring(0, at);
+        // pinAuthEmail format: "{mobile}@{role}.apnatransport.local" --
+        // see AuthRepository.kt's own copy of this scheme.
+        String collection = email.startsWith("customer.", at + 1) ? "customers" : "drivers";
+        FirebaseFirestore.getInstance().collection(collection).document(mobile)
+            .update("fcmToken", token)
+            .addOnFailureListener(e -> Log.e(TAG, "fcmToken write failed", e));
     }
 
     private void showRingingNotification(Map<String, String> data) {
