@@ -108,7 +108,7 @@ fun HomeScreen(
             toggleError = null
         } catch (e: Throwable) {
             online = false
-            toggleError = "${e::class.java.simpleName}: ${e.message}"
+            toggleError = "Couldn't go on duty: ${e::class.java.simpleName}: ${e.message}"
         }
     }
 
@@ -167,20 +167,37 @@ fun HomeScreen(
 
     // Re-verified every time duty goes online, not just once -- any of
     // these can be silently revoked later by the driver or an OEM battery
-    // sweep, and a one-shot check would never catch that.
+    // sweep, and a one-shot check would never catch that. Guarded for the
+    // same reason as enableDutyNow() above -- an uncaught exception inside
+    // a LaunchedEffect's coroutine crashes the whole app with no visible
+    // cause, and this one runs automatically the instant duty goes online,
+    // with nothing for the user to have tapped to trigger it directly.
     LaunchedEffect(online) {
         if (!online) return@LaunchedEffect
-        batteryOptIgnoring = isIgnoringBatteryOptimizations(context)
-        backgroundLocationGranted = hasBackgroundLocationPermission(context)
-        fullScreenIntentOk = canUseFullScreenIntent(context)
-        batteryCardHidden = false
-        backgroundLocationCardHidden = false
-        autoStartCardHidden = false
-        fullScreenCardHidden = false
+        try {
+            batteryOptIgnoring = isIgnoringBatteryOptimizations(context)
+            backgroundLocationGranted = hasBackgroundLocationPermission(context)
+            fullScreenIntentOk = canUseFullScreenIntent(context)
+            batteryCardHidden = false
+            backgroundLocationCardHidden = false
+            autoStartCardHidden = false
+            fullScreenCardHidden = false
+        } catch (e: Throwable) {
+            toggleError = "Reliability check failed: ${e::class.java.simpleName}: ${e.message}"
+        }
     }
 
+    // Runs automatically the moment this screen first composes, before the
+    // user has tapped anything -- same crash risk as above if
+    // isOnline()'s Firestore read throws (permission-denied, network
+    // error, etc.), and the most likely explanation for a crash reported
+    // as happening "even before" the duty toggle is touched at all.
     LaunchedEffect(Unit) {
-        online = bookingRepository.isOnline(driverMobile)
+        try {
+            online = bookingRepository.isOnline(driverMobile)
+        } catch (e: Throwable) {
+            toggleError = "Couldn't load duty status: ${e::class.java.simpleName}: ${e.message}"
+        }
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -211,13 +228,9 @@ fun HomeScreen(
                 },
             )
         }
-        if (toggleError != null) {
+        toggleError?.let {
             Spacer(Modifier.height(8.dp))
-            Text(
-                "Couldn't go on duty: $toggleError",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
         if (permissionDenied) {
             Spacer(Modifier.height(8.dp))
