@@ -38,6 +38,7 @@ import com.apnatransport.mobile.ui.theme.InkSoft
 import com.apnatransport.mobile.ui.theme.Line
 import com.apnatransport.mobile.ui.theme.MarigoldDeep
 import com.apnatransport.mobile.ui.theme.Success
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import kotlinx.coroutines.launch
 
 // Duty toggle + a plain list of open broadcast loads -- the smallest slice
@@ -109,6 +110,7 @@ fun HomeScreen(
         } catch (e: Throwable) {
             online = false
             toggleError = "Couldn't go on duty: ${e::class.java.simpleName}: ${e.message}"
+            FirebaseCrashlytics.getInstance().recordException(e)
         }
     }
 
@@ -184,6 +186,7 @@ fun HomeScreen(
             fullScreenCardHidden = false
         } catch (e: Throwable) {
             toggleError = "Reliability check failed: ${e::class.java.simpleName}: ${e.message}"
+            FirebaseCrashlytics.getInstance().recordException(e)
         }
     }
 
@@ -197,6 +200,7 @@ fun HomeScreen(
             online = bookingRepository.isOnline(driverMobile)
         } catch (e: Throwable) {
             toggleError = "Couldn't load duty status: ${e::class.java.simpleName}: ${e.message}"
+            FirebaseCrashlytics.getInstance().recordException(e)
         }
     }
 

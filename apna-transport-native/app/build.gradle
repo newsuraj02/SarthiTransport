@@ -118,6 +118,14 @@ dependencies {
     implementation "com.google.firebase:firebase-auth"
     implementation "com.google.firebase:firebase-firestore"
     implementation "com.google.firebase:firebase-messaging"
+    // Automatic crash reporting -- this sandbox has no Android device/
+    // emulator/adb to get a real stack trace from a device-only crash, so
+    // this is how those actually get diagnosed from here on: a crash on a
+    // sideloaded build uploads to the sarthi-transport-74865 Firebase
+    // project's Crashlytics dashboard (Firebase Console -> Crashlytics),
+    // where the real stack trace can be read directly instead of guessing
+    // from symptom descriptions.
+    implementation "com.google.firebase:firebase-crashlytics"
 
     // -- Location (LocationTrackerService) + Maps (trip/pickup screens) --
     implementation "com.google.android.gms:play-services-location:21.3.0"
@@ -142,6 +150,10 @@ try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {
         apply plugin: 'com.google.gms.google-services'
+        // Crashlytics' Gradle plugin needs google-services.json present
+        // too (reads the same app id out of it), so gated on the same
+        // check rather than a separate one.
+        apply plugin: 'com.google.firebase.crashlytics'
     }
 } catch (Exception e) {
     logger.warn("google-services.json not found in apna-transport-native/app/ -- Firebase won't initialize until it's added. See apna-transport-native/README.md.")

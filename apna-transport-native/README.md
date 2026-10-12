@@ -18,6 +18,19 @@ stays live for all existing users throughout this migration.
 This is a scaffold, not a finished app — see "What's a placeholder"
 below before giving this to a real driver or customer.
 
+## Checking crashes (Crashlytics)
+
+The session developing this has no Android device/emulator/adb access,
+so a crash on a real sideloaded device can't be diagnosed from a
+symptom description alone. Firebase Crashlytics is wired in
+(`app/build.gradle`) so it doesn't have to be: after a crash, open the
+[Firebase Console](https://console.firebase.google.com/) →
+**sarthi-transport-74865** → **Crashlytics** (left sidebar) → the
+`com.apnatransport.mobile` app. The real stack trace shows up there
+within a few minutes of the crash (the device needs network access
+after the crash for it to upload) — screenshot or copy it over instead
+of describing the symptom.
+
 ## One-time setup: register the Firebase app
 
 The committed source has no `google-services.json`, so right now this
