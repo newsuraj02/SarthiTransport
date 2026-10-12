@@ -18,6 +18,27 @@ if (localPropsFile.exists()) {
     localPropsFile.withInputStream { localProps.load(it) }
 }
 
+// versionCode/versionName never change between commits here (no CI input
+// bumps them the way build-capacitor.yml's app_version_code/app_version_name
+// do for the hybrid app) -- every sideload build showed "0.1.0" regardless
+// of which commit it came from, with no way to visually tell from Android's
+// App Info screen whether a newly installed build is actually the one just
+// pushed. Baking the short git commit SHA into versionName instead, so it's
+// always traceable: compare what Settings > Apps > Apna Transport shows
+// against the commit hash just given. Falls back to "dev" if git isn't
+// available (shouldn't happen in CI, only a concern for an unusual local
+// build setup) rather than failing the build over a cosmetic string.
+def gitSha = {
+    try {
+        def process = "git rev-parse --short=8 HEAD".execute(null, rootDir)
+        process.waitFor()
+        def sha = process.text.trim()
+        return sha ?: "dev"
+    } catch (Exception ignored) {
+        return "dev"
+    }
+}.call()
+
 android {
     namespace = "com.apnatransport.mobile"
     compileSdk = 36
@@ -36,7 +57,7 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.1.0-${gitSha}"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Native Android Maps SDK key -- a DIFFERENT key from the JS Maps
