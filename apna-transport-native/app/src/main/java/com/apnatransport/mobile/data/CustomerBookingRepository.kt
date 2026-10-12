@@ -1,5 +1,6 @@
 package com.apnatransport.mobile.data
 
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -23,17 +24,31 @@ data class MyBooking(
     val driverName: String?,
 )
 
-private fun DocumentSnapshot.toMyBooking(): MyBooking? {
-    val pickup = getString("pickup") ?: return null
-    val drop = getString("drop") ?: return null
-    return MyBooking(
+// Same defensive pattern as BookingRepository.kt's toOpenBooking() -- see
+// its comment. getDouble()/getString() throw a hard RuntimeException
+// rather than returning null when a field exists but isn't the expected
+// type, which crashed the equivalent driver-side listener in production;
+// this screen reads the exact same `bookings` documents, so it has the
+// identical risk.
+private fun DocumentSnapshot.toMyBooking(): MyBooking? = try {
+    val pickup = get("pickup") as? String ?: return null
+    val drop = get("drop") as? String ?: return null
+    val fareValue = get("fare")
+    MyBooking(
         id = id,
         pickup = pickup,
         drop = drop,
-        fare = getDouble("fare") ?: 0.0,
-        status = getString("status") ?: "AwaitingDriver",
-        driverName = getString("driverName"),
+        fare = when (fareValue) {
+            is Number -> fareValue.toDouble()
+            is String -> fareValue.toDoubleOrNull() ?: 0.0
+            else -> 0.0
+        },
+        status = get("status") as? String ?: "AwaitingDriver",
+        driverName = get("driverName") as? String,
     )
+} catch (e: Throwable) {
+    FirebaseCrashlytics.getInstance().recordException(e)
+    null
 }
 
 class CustomerBookingRepository(private val db: FirebaseFirestore = FirebaseFirestore.getInstance()) {

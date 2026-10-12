@@ -2,6 +2,7 @@ package com.apnatransport.mobile.data
 
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -20,16 +21,40 @@ data class OpenBooking(
     val fare: Double,
 )
 
-private fun DocumentSnapshot.toOpenBooking(): OpenBooking? {
-    val pickup = getString("pickup") ?: return null
-    val drop = getString("drop") ?: return null
-    return OpenBooking(
+// Confirmed via Crashlytics: DocumentSnapshot.getDouble("weight") throws a
+// hard RuntimeException ("Field 'weight' is not a java.lang.Number") for at
+// least one live booking document whose weight field isn't actually stored
+// as a Number (likely an older write path or a different schema version).
+// Because this runs inside observeOpenBookings()'s live snapshot listener,
+// ONE bad document anywhere in the open-broadcast set crashed every
+// driver's app the instant duty went online -- not a permission or
+// foreground-service issue at all, despite how it presented. Reading each
+// field generically and coercing defensively (never a type-specific
+// getter that can throw) instead, plus a belt-and-suspenders try/catch so
+// no future unanticipated field-shape surprise can crash this listener
+// again -- a malformed single document should be skipped, not take down
+// the whole list.
+private fun numberField(value: Any?): Double = when (value) {
+    is Number -> value.toDouble()
+    is String -> value.toDoubleOrNull() ?: 0.0
+    else -> 0.0
+}
+
+private fun DocumentSnapshot.toOpenBooking(): OpenBooking? = try {
+    // get() + `as? String` instead of getString(), which throws the same
+    // way getDouble() does if the stored value isn't actually a String.
+    val pickup = get("pickup") as? String ?: return null
+    val drop = get("drop") as? String ?: return null
+    OpenBooking(
         id = id,
         pickup = pickup,
         drop = drop,
-        weight = getDouble("weight") ?: 0.0,
-        fare = getDouble("fare") ?: 0.0,
+        weight = numberField(get("weight")),
+        fare = numberField(get("fare")),
     )
+} catch (e: Throwable) {
+    FirebaseCrashlytics.getInstance().recordException(e)
+    null
 }
 
 class BookingRepository(private val db: FirebaseFirestore = FirebaseFirestore.getInstance()) {
@@ -40,7 +65,7 @@ class BookingRepository(private val db: FirebaseFirestore = FirebaseFirestore.ge
 
     suspend fun isOnline(mobile: String): Boolean {
         val snap = db.collection("drivers").document(mobile).get().await()
-        return snap.getBoolean("online") ?: false
+        return snap.get("online") as? Boolean ?: false
     }
 
     // TODO(Phase 1a): port the real eligibility match (vehicle capacity
