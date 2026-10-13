@@ -121,7 +121,7 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
       token,
       notification: {
         title: "🚨 आपके लिए सीधी बुकिंग रिक्वेस्ट!",
-        body: `📍 लोडिंग: ${load.pickup}\n🏁 अनलोडिंग: ${load.drop}${load.weight ? `\n⚖️ ${load.weight}kg` : ""}\n⏱️ 60 सेकंड में जवाब दें`,
+        body: `📍 लोडिंग: ${load.pickup}\n🏁 अनलोडिंग: ${load.drop}${load.weight ? `\n⚖️ ${load.weight}kg` : ""}\n⏱️ 2 मिनट में जवाब दें`,
       },
       android: {
         priority: "high",
