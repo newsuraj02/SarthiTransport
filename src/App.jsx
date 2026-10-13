@@ -8420,129 +8420,11 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // reasoning as autostart) and fall through to the next step in the
   // SAME call instead of blocking the rest of the gate behind a
   // permission that will never self-resolve through this path again.
-  const permGateTried = useRef(new Set()); // "autostart", "location-denied", "push-denied" -- see above
-  const locationPermRef = useRef(locationPermission);
-  locationPermRef.current = locationPermission;
-  //
-  // Owner request (2026-10-13, round 3): "यहीं पर सारा परमिशन एक के बाद एक"
-  // -- on this home screen, every permission one right after the other.
-  // The gate above only ever did ONE step per app resume: every branch
-  // `return`ed after its action and waited for the next appStateChange.
-  // Worse, that resume usually arrived while the step was still awaiting
-  // (requestPushToken waits for the FCM token AFTER the dialog closes, which
-  // easily takes longer than the 700ms delay), so `busy` was still true,
-  // the resume was dropped, and the chain silently stopped after the first
-  // dialog. Now one pass walks all six steps in order: each action is
-  // awaited until the driver is back in the app (dialog closed / Settings
-  // screen left), then the very next step starts on its own. A pass is
-  // never interrupted by its own dialogs; after a pass ends, every later
-  // resume runs a fresh pass (re-checking real OS state), so anything
-  // still off keeps coming back until it's turned on, as before.
-  useEffect(() => {
-    if (!isNativeApp || !driver.mobile) return;
-    let running = false;
-    let cancelled = false;
-    let handle = null;
-    const tried = permGateTried.current;
-    const firstTime = (key) => { if (tried.has(key)) return false; tried.add(key); return true; };
-    const watchers = new Set(); // appStateChange -> the step currently waiting
-
-    // Runs `action` and resolves once the driver is back in the app.
-    // opensScreen=false (a system dialog): done when the action settles,
-    //   or, if the app went to the background meanwhile, once it's back.
-    // opensScreen=true (a Settings screen): done once the driver returns
-    //   from it; if the app never actually left within 4s (screen failed
-    //   to open on this phone), move on instead of hanging.
-    // Never waits forever on an action that shows nothing (15s cap).
-    const runAndWait = (action, opensScreen = false) => new Promise((resolve) => {
-      let left = false;
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        watchers.delete(watch);
-        clearTimeout(cap);
-        resolve();
-      };
-      const watch = (isActive) => {
-        if (!isActive) left = true;
-        else if (left) setTimeout(finish, 800);
-      };
-      watchers.add(watch);
-      const cap = setTimeout(() => { if (!left) finish(); }, opensScreen ? 4000 : 15000);
-      Promise.resolve()
-        .then(action)
-        .catch((e) => console.error("[permission gate] step", e))
-        .then(() => { if (!opensScreen && !left) finish(); });
-    });
-
-    const pass = async () => {
-      // 1. लोकेशन
-      const locPerm = locationPermRef.current?.permission;
-      if (locPerm !== "granted") {
-        if (locPerm === "denied") {
-          if (firstTime("location-denied")) await runAndWait(() => openNativeSettingsBridge("location"), true);
-        } else {
-          await runAndWait(() => locationPermRef.current?.enable?.());
-        }
-      }
-      if (cancelled) return;
-      // 2. नोटिफिकेशन (+ इसी फोन का FCM टोकन सर्वर पर)
-      const pushPerm = await checkPushPermission();
-      if (pushPerm !== "granted") {
-        if (pushPerm === "denied") {
-          if (firstTime("push-denied")) await runAndWait(() => openNativeSettingsBridge("notifications"), true);
-        } else {
-          // Token save is chained on its own -- the next step doesn't wait
-          // for the FCM token, only for the dialog to close.
-          await runAndWait(() => requestPushToken().then((r) => {
-            if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
-          }));
-        }
-      }
-      if (cancelled) return;
-      // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
-      const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
-      if (battery?.ignoring === false) await runAndWait(() => requestBatteryOptimizationExemption());
-      if (cancelled) return;
-      // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+) -- Settings > Apps > Apna Transport > "Full screen notifications"
-      if (!(await canUseFullScreenIntent())) await runAndWait(() => openNativeSettingsBridge("full_screen_intent"), true);
-      if (cancelled) return;
-      // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले -- Settings > Apps > Apna Transport > "Display over other apps"
-      if (!(await canDrawOverlays())) await runAndWait(() => openOverlaySettings(), true);
-      if (cancelled) return;
-      // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...): फोन इसकी हालत बताता नहीं (कोई OS API नहीं), इसलिए हर ऐप-ओपन पर एक बार
-      if (firstTime("autostart")) {
-        const { needed } = await needsAutoStartSettings();
-        if (needed) await runAndWait(() => openAutoStartSettings(), true);
-      }
-    };
-
-    const run = async () => {
-      if (running || cancelled) return;
-      running = true;
-      try {
-        await pass();
-      } catch (e) {
-        console.error("[permission gate]", e);
-      } finally {
-        running = false;
-      }
-    };
-
-    // Listener first, then the pass -- so the very first Settings screen's
-    // leave/return is never missed.
-    CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-      watchers.forEach((w) => w(isActive));
-      // Resumes caused by this pass's own dialogs are handled by
-      // runAndWait above; only a resume after the pass ends starts a new one.
-      if (isActive && !running) setTimeout(run, 700);
-    })
-      .then((h) => { if (cancelled) h.remove(); else handle = h; })
-      .catch((e) => console.error("[permission gate] appStateChange", e))
-      .finally(() => run());
-    return () => { cancelled = true; handle?.remove(); watchers.clear(); };
-  }, [driver.mobile]);
+  // Owner request (2026-10-13, 14:53): nothing is asked on its own any
+  // more. The home screen shows one red "लोड घंटी बंद है" button
+  // (LoadBellButton); one tap runs runPermissionChain below, which asks
+  // every permission one after another, and the button disappears once
+  // the bell is fully on.
 
   const [autoStartCardDismissed, setAutoStartCardDismissed] = usePersistedState("sarthi_autoStartCardDismissed", false);
   const [showAutoStartCard, setShowAutoStartCard] = useState(false);
@@ -9069,7 +8951,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       )}
 
 
-      <LoadBellButton driver={driver} lang={lang} />
+      <LoadBellButton driver={driver} lang={lang} locationPermission={locationPermission} />
 
       {/* My Wallet + Driver Duty switch — moved down here from the header
           row above DriverHome (see DriverApp) so the Get Estimate card can
@@ -9107,9 +8989,77 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 // phone or closes the app and hears exactly what a real load sounds like.
 // Native app only: a browser tab can't wake a locked phone at all.
 const BELL_STEPS = ["push", "battery", "fullscreen", "overlay"];
-function LoadBellButton({ driver, lang, place = "home" }) {
+
+// Runs `action` and resolves once the driver is back in the app.
+// opensScreen=false (a system dialog): done when the action settles, or,
+//   if the app went to the background meanwhile, once it's back.
+// opensScreen=true (a Settings screen): done once the driver returns from
+//   it; if the app never left within 4s (screen didn't open on this
+//   phone), move on instead of hanging. 15s cap on a dialog that shows
+//   nothing at all.
+async function runAndWaitForReturn(action, opensScreen = false) {
+  let left = false;
+  let done = false;
+  let finishFn = () => {};
+  const finished = new Promise((resolve) => { finishFn = resolve; });
+  const finish = () => { if (!done) { done = true; finishFn(); } };
+  let handle = null;
+  try {
+    handle = await CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) left = true;
+      else if (left) setTimeout(finish, 800);
+    });
+  } catch (e) {
+    console.error("[load bell] appStateChange", e);
+  }
+  const cap = setTimeout(() => { if (!left) finish(); }, opensScreen ? 4000 : 15000);
+  Promise.resolve()
+    .then(action)
+    .catch((e) => console.error("[load bell] step", e))
+    .then(() => { if (!opensScreen && !left) finish(); });
+  await finished;
+  clearTimeout(cap);
+  handle?.remove();
+}
+
+// Owner request (2026-10-13): one tap on "लोड घंटी बंद है" asks every
+// permission one right after the other -- location, notifications (+ this
+// phone's FCM token saved), battery, lock-screen alert, display over other
+// apps, autostart -- each opening as soon as the driver is back from the
+// previous one. A runtime permission already denied for good (Android
+// won't show its dialog again) opens its Settings screen instead.
+async function runPermissionChain({ driverMobile, locationPermission }) {
+  // 1. लोकेशन
+  const loc = locationPermission?.permission;
+  if (loc && loc !== "granted" && loc !== "unsupported") {
+    if (loc === "denied") await runAndWaitForReturn(() => openNativeSettingsBridge("location"), true);
+    else await runAndWaitForReturn(() => locationPermission.enable?.());
+  }
+  // 2. नोटिफिकेशन -- token is saved on its own; the next step only waits
+  //    for the dialog, not for the FCM token.
+  const push = await checkPushPermission();
+  if (push !== "granted") {
+    if (push === "denied") await runAndWaitForReturn(() => openNativeSettingsBridge("notifications"), true);
+    else await runAndWaitForReturn(() => requestPushToken().then((r) => {
+      if (r.ok && driverMobile) patchDoc("drivers", driverMobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+    }));
+  }
+  // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
+  const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
+  if (battery?.ignoring === false) await runAndWaitForReturn(() => requestBatteryOptimizationExemption());
+  // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+)
+  if (!(await canUseFullScreenIntent())) await runAndWaitForReturn(() => openNativeSettingsBridge("full_screen_intent"), true);
+  // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले
+  if (!(await canDrawOverlays())) await runAndWaitForReturn(() => openOverlaySettings(), true);
+  // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...): no OS API reports its state,
+  //    so it's opened once per tap on phones that have it.
+  const { needed } = await needsAutoStartSettings();
+  if (needed) await runAndWaitForReturn(() => openAutoStartSettings(), true);
+}
+function LoadBellButton({ driver, lang, place = "home", locationPermission }) {
   const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   const [missing, setMissing] = useState(null);
+  const [turningOn, setTurningOn] = useState(false);
   const [test, setTest] = useState({ state: "idle", left: 0 });
   const checkRef = useRef(null);
   checkRef.current = async () => {
@@ -9147,19 +9097,17 @@ function LoadBellButton({ driver, lang, place = "home" }) {
     if (r.ok && driver.mobile) await patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
     return r.ok;
   };
-  const fixNext = async () => {
-    const next = BELL_STEPS.find((s) => missing.includes(s));
+  const turnOn = async () => {
+    if (turningOn) return;
+    setTurningOn(true);
     try {
-      if (next === "push") {
-        if ((await checkPushPermission()) === "denied") openNativeSettingsBridge("notifications");
-        else await saveToken();
-      } else if (next === "battery") await requestBatteryOptimizationExemption();
-      else if (next === "fullscreen") openNativeSettingsBridge("full_screen_intent");
-      else if (next === "overlay") await openOverlaySettings();
+      await runPermissionChain({ driverMobile: driver.mobile, locationPermission });
     } catch (e) {
-      console.error("[load bell] fix", e);
+      console.error("[load bell] chain", e);
+    } finally {
+      setTurningOn(false);
+      checkRef.current();
     }
-    setTimeout(() => checkRef.current(), 700);
   };
   const runTest = async () => {
     setTest({ state: "waiting", left: 10 });
@@ -9184,22 +9132,6 @@ function LoadBellButton({ driver, lang, place = "home" }) {
   // missed. The green status + "टेस्ट घंटी" live on the profile screen.
   if (ready && place === "home") return null;
 
-  if (!ready) {
-    return (
-      <button onClick={fixNext} className={`w-full rounded-2xl p-3.5 ${place === "home" ? "mt-4" : "mb-4"} text-left shadow-lg guided-submit-ready`} style={{ background: C.safety, border: "2px solid #8B0000" }}>
-        <div className="flex items-center gap-2.5">
-          <Bell size={26} color="#FFFFFF" />
-          <div className="flex-1 min-w-0">
-            <div className="text-base font-black text-white">{T("Load bell is OFF — tap to turn on", "लोड घंटी बंद आहे — सुरू करण्यासाठी दाबा", "लोड घंटी बंद है — चालू करने के लिए दबाएँ")}</div>
-            <div className="text-xs font-bold mt-0.5" style={{ color: "#FFE3E3" }}>
-              {T("Still needed", "अजून बाकी", "अभी बाकी")}: {BELL_STEPS.filter((s) => missing.includes(s)).map((s) => stepLabel[s]).join(" · ")}
-            </div>
-          </div>
-        </div>
-      </button>
-    );
-  }
-
   const testMsg = {
     waiting: T(`Bell rings in ${test.left} s — lock the phone now`, `${test.left} सेकंदात घंटी वाजेल — आता फोन लॉक करा`, `${test.left} सेकंड में घंटी बजेगी — अभी फ़ोन लॉक कर दें`),
     sent: T("Test bell sent. Tap any button on the ring screen to stop it.", "टेस्ट घंटी पाठवली. थांबवण्यासाठी कोणतेही बटण दाबा.", "टेस्ट घंटी भेज दी। बंद करने के लिए घंटी वाली स्क्रीन पर कोई भी बटन दबाएँ।"),
@@ -9209,17 +9141,40 @@ function LoadBellButton({ driver, lang, place = "home" }) {
     err: T("Test failed — check internet and try again.", "टेस्ट अयशस्वी — इंटरनेट तपासा.", "टेस्ट नहीं हो पाया — इंटरनेट देखकर फिर कोशिश करें।"),
   }[test.state];
 
-  return (
-    <div className={`rounded-2xl p-3 shadow-sm ${place === "home" ? "mt-4" : "mb-4"}`} style={{ background: "#E8F7EE", border: `1.5px solid ${C.success}` }}>
-      <div className="flex items-center gap-2.5">
-        <Bell size={22} color={C.success} />
-        <div className="flex-1 text-sm font-black" style={{ color: C.ink }}>{T("Load bell is ON", "लोड घंटी सुरू आहे", "लोड घंटी चालू है")} ✓</div>
-        <button onClick={runTest} disabled={test.state === "waiting"} className="shrink-0 rounded-full px-3 py-2 text-xs font-black text-white" style={{ background: test.state === "waiting" ? C.inkSoft : C.navy }}>
-          🔔 {T("Test bell", "टेस्ट घंटी", "टेस्ट घंटी")}
-        </button>
+  // Profile: a compact half-width box that sits beside Logout.
+  if (place === "profile") {
+    return (
+      <div className="flex-1 min-w-0">
+        {!ready ? (
+          <button onClick={turnOn} disabled={turningOn} className="w-full rounded-lg py-3.5 px-2 flex items-center justify-center gap-1.5 font-black text-sm text-white" style={{ background: C.safety, border: "2px solid #8B0000" }}>
+            <Bell size={16} color="#FFFFFF" /> {turningOn ? T("Turning on…", "सुरू होत आहे…", "चालू हो रही है…") : T("Bell OFF", "घंटी बंद", "घंटी बंद है")}
+          </button>
+        ) : (
+          <button onClick={runTest} disabled={test.state === "waiting"} className="w-full rounded-lg py-3.5 px-2 flex items-center justify-center gap-1.5 font-black text-sm" style={{ background: "#E8F7EE", color: C.success, border: `1.5px solid ${C.success}` }}>
+            <Bell size={16} color={C.success} /> {test.state === "waiting" ? T(`Rings in ${test.left}s`, `${test.left} से. मध्ये`, `${test.left} से. में बजेगी`) : T("Bell ON · Test", "घंटी सुरू · टेस्ट", "घंटी चालू · टेस्ट")}
+          </button>
+        )}
+        {ready && testMsg && <div className="text-[11px] font-bold mt-1.5 leading-snug" style={{ color: test.state === "err" || test.state === "noToken" ? C.safety : C.ink }}>{testMsg}</div>}
       </div>
-      {testMsg && <div className="text-xs font-bold mt-2" style={{ color: test.state === "err" || test.state === "noToken" ? C.safety : C.ink }}>{testMsg}</div>}
-    </div>
+    );
+  }
+
+  // Home: only the red message; once the bell is on, nothing.
+  if (ready) return null;
+  return (
+    <button onClick={turnOn} disabled={turningOn} className="w-full rounded-2xl p-3.5 mt-4 text-left shadow-lg guided-submit-ready" style={{ background: C.safety, border: "2px solid #8B0000" }}>
+      <div className="flex items-center gap-2.5">
+        <Bell size={26} color="#FFFFFF" />
+        <div className="flex-1 min-w-0">
+          <div className="text-base font-black text-white">
+            {turningOn ? T("Turning the load bell on…", "लोड घंटी सुरू होत आहे…", "लोड घंटी चालू हो रही है…") : T("Load bell is OFF — tap to turn on", "लोड घंटी बंद आहे — सुरू करण्यासाठी दाबा", "लोड घंटी बंद है — चालू करने के लिए दबाएँ")}
+          </div>
+          <div className="text-xs font-bold mt-0.5" style={{ color: "#FFE3E3" }}>
+            {turningOn ? T("Allow each one as it opens", "प्रत्येक परवानगी द्या", "जो-जो खुले, उसे अनुमति दें") : `${T("Still needed", "अजून बाकी", "अभी बाकी")}: ${BELL_STEPS.filter((s) => missing.includes(s)).map((s) => stepLabel[s]).join(" · ")}`}
+          </div>
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -9875,11 +9830,13 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
         </div>
       )}
 
-      <LoadBellButton driver={driver} lang={lang} place="profile" />
-
-      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
-        <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
-      </button>
+      {/* Owner (2026-10-13 14:53): load bell sits right beside Logout. */}
+      <div className="flex items-start gap-2.5">
+        <LoadBellButton driver={driver} lang={lang} place="profile" />
+        <button onClick={onLogout} className="flex-1 flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
+          <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
+        </button>
+      </div>
     </div>
   );
 }
