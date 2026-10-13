@@ -255,6 +255,23 @@ export async function creditDriverReferral() {
   }
 }
 
+// Driver's "टेस्ट घंटी" (see LoadBellButton in App.jsx): asks the server to
+// send THIS driver's own phone a real ring push after delaySec, so the
+// driver can lock the phone / close the app and hear the real thing.
+// Resolves { ok, reason? } and never throws.
+export async function sendTestRing(delaySec = 10) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "sendTestRing");
+    const result = await call({ delaySec });
+    return result.data;
+  } catch (e) {
+    console.error("[sendTestRing] callable failed", e);
+    return { ok: false, reason: e?.code === "functions/resource-exhausted" ? "too_soon" : "error" };
+  }
+}
+
 // Verifies a driver's typed-in pickup OTP guess against the real value
 // server-side (see functions/index.js: verifyPickupOtp) without the real
 // value ever reaching this client at all — see DriverOtpEntry (App.jsx)

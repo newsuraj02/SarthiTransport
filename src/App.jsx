@@ -28,7 +28,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -898,7 +898,7 @@ function findDriverLoadConflict(driver, candidate, bookings, vehicleTypes, lang)
   const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
   const newStart = candidate.scheduledFor ? parseScheduledFor(candidate.scheduledFor) : new Date();
   const newEnd = candidate.hours ? new Date(newStart.getTime() + candidate.hours * 60 * 60 * 1000) : newStart;
-  const myCommitments = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && b.id !== candidate.id);
+  const myCommitments = bookings.filter((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && b.id !== candidate.id);
   for (const existing of myCommitments) {
     const win = getBookingWindow(existing);
     if (!win) continue;
@@ -2486,6 +2486,20 @@ async function canDrawOverlays() {
 async function openOverlaySettings() {
   if (!isNativeApp) return;
   try { await RingingBridgeNative.openOverlaySettings(); } catch (e) { console.error("[ringingBridge] overlay", e); }
+}
+
+// Opens the Settings screen for "overlay" / "full_screen_intent" and has
+// the app come back by itself the moment the driver turns the toggle on
+// (RingingBridgePlugin.openSettingsAndReturn). An installed build older
+// than that native code falls back to just opening the screen.
+async function openSettingsAndReturn(target) {
+  if (!isNativeApp) return;
+  try {
+    await RingingBridgeNative.openSettingsAndReturn({ target });
+  } catch (e) {
+    if (target === "overlay") await openOverlaySettings();
+    else openNativeSettingsBridge(target);
+  }
 }
 
 const PowerBridgeNative = registerPlugin("PowerBridge");
@@ -6847,6 +6861,24 @@ function RideTypeBanner({ booking, lang }) {
   );
 }
 
+// Identity by mobile number, not by name (owner report 2026-10-13: "driver
+// customer ki pahchan nahi ho pa rahi"). Every booking/withdrawal/recharge
+// already stores driverMobile, but the app used to match records to a
+// driver by driverName -- so two drivers who share a name (two "Raju"s)
+// would see each other's trips, wallet requests and history, and the
+// customer could be shown the other Raju's photo and vehicle. Name is only
+// used as a fallback for old records saved before driverMobile existed.
+function isDriverRecord(rec, driver) {
+  if (!rec || !driver) return false;
+  if (rec.driverMobile && driver.mobile) return rec.driverMobile === driver.mobile;
+  return !!rec.driverName && rec.driverName === driver.name;
+}
+function findBookingDriver(drivers, b) {
+  if (!b || !drivers) return null;
+  if (b.driverMobile) return drivers.find((d) => d.mobile === b.driverMobile || d.id === b.driverMobile) || null;
+  return b.driverName ? drivers.find((d) => d.name === b.driverName) || null : null;
+}
+
 // "1250 किग्रा" below a tonne, "1.5 टन" from a tonne up -- the same unit a
 // truck owner would say out loud.
 function formatKgLabel(kg, lang) {
@@ -6863,14 +6895,12 @@ function formatKgLabel(kg, lang) {
 // Customer's "vehicle booked" panel (owner request 2026-10-13): one card
 // with everything the customer asks the driver on the phone -- how far the
 // vehicle is right now, the fare, the vehicle model + number, its carrying
-// capacity and the load weight they booked for. Bookings are created with
-// vehicle: null (requestByCategory books by capacity tier, not by a vehicle
-// key), so the model has to come from the assigned driver's own
-// vehicleSpec.type -- the old card read b.vehicle and showed a blank model.
+// capacity and the load weight they booked for. Model comes from the
+// assigned driver's own vehicleSpec.type first (the vehicle actually
+// coming), falling back to b.vehicle stamped at claim time.
 function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
   const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
-  const driverDoc = (b.driverMobile && drivers.find((d) => d.mobile === b.driverMobile || d.id === b.driverMobile))
-    || drivers.find((d) => d.name === b.driverName) || null;
+  const driverDoc = findBookingDriver(drivers, b);
   const spec = driverVehicle || driverDoc?.vehicleSpec || null;
   const modelDef = VEHICLES.find((x) => x.key === spec?.type) || v || null;
   const modelName = vehicleLabel(modelDef, lang) || T("Vehicle", "गाडी", "गाड़ी");
@@ -7496,7 +7526,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
-  const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
+  const activeDriverVehicle = findBookingDriver(drivers, activeBooking)?.vehicleSpec;
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer");
   // Lifted up here (rather than owned inside CustomerBooking) so the same
   // permission state/banner carries across from the booking-entry screen
@@ -7797,7 +7827,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
           <div>
             {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
               <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking}
-                driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
+                driverVehicle={findBookingDriver(drivers, advanceBookings.find((ab) => ab.id === selectedAdvanceId))?.vehicleSpec}
                 drivers={drivers} lang={lang} customerMobile={customerMobile} bookingExtras={bookingExtras} />
             ) : (
               <div className="px-5 py-5">
@@ -8216,7 +8246,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
 }
 
 function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, fareTiers, lang, onOpenWallet, locationPermission, bookingExtras }) {
-  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
+  const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
   // above stop matching it on the very next render, so this is what the
@@ -8284,7 +8314,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // banner below — the actual filtering (which also covers any OTHER load,
   // including another Advance one, whose time would conflict) is done by
   // findDriverLoadConflict in openLoads.
-  const myAdvanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
+  const myAdvanceBookings = bookings.filter((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && isFutureAdvance(b.scheduledFor));
   const notificationsLocked = myAdvanceBookings.some((b) => {
     const scheduled = parseScheduledFor(b.scheduledFor);
     const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
@@ -8404,65 +8434,11 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // reasoning as autostart) and fall through to the next step in the
   // SAME call instead of blocking the rest of the gate behind a
   // permission that will never self-resolve through this path again.
-  const permGateTried = useRef(new Set()); // "autostart", "location-denied", "push-denied" -- see above
-  const locationPermRef = useRef(locationPermission);
-  locationPermRef.current = locationPermission;
-  useEffect(() => {
-    if (!isNativeApp || !driver.mobile) return;
-    let busy = false;
-    let cancelled = false;
-    let handle = null;
-    const tried = permGateTried.current;
-    const firstTime = (key) => { if (tried.has(key)) return false; tried.add(key); return true; };
-    const step = async () => {
-      if (busy || cancelled) return;
-      busy = true;
-      try {
-        // 1. लोकेशन
-        const locPerm = locationPermRef.current?.permission;
-        if (locPerm !== "granted") {
-          if (locPerm === "denied") {
-            if (firstTime("location-denied")) openNativeSettingsBridge("location");
-          } else {
-            await locationPermRef.current?.enable?.();
-            return;
-          }
-        }
-        // 2. नोटिफिकेशन (+ इसी फोन का FCM टोकन सर्वर पर)
-        const pushPerm = await checkPushPermission();
-        if (pushPerm !== "granted") {
-          if (pushPerm === "denied") {
-            if (firstTime("push-denied")) openNativeSettingsBridge("notifications");
-          } else {
-            const r = await requestPushToken();
-            if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
-            return;
-          }
-        }
-        // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
-        const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
-        if (battery?.ignoring === false) { await requestBatteryOptimizationExemption(); return; }
-        // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+) -- Settings > Apps > Apna Transport > "Full screen notifications" पर ले जाता है
-        if (!(await canUseFullScreenIntent())) { openNativeSettingsBridge("full_screen_intent"); return; }
-        // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले -- Settings > Apps > Apna Transport > "Display over other apps" पर ले जाता है
-        if (!(await canDrawOverlays())) { await openOverlaySettings(); return; }
-        // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...): फोन इसकी हालत बताता नहीं (कोई OS API नहीं), इसलिए हर ऐप-ओपन पर एक बार -- उस OEM की अपनी Autostart/Startup Manager स्क्रीन पर ले जाता है
-        if (firstTime("autostart")) {
-          const { needed } = await needsAutoStartSettings();
-          if (needed) { await openAutoStartSettings(); return; }
-        }
-      } catch (e) {
-        console.error("[permission gate]", e);
-      } finally {
-        busy = false;
-      }
-    };
-    step();
-    CapacitorApp.addListener("appStateChange", ({ isActive }) => { if (isActive) setTimeout(step, 700); })
-      .then((h) => { if (cancelled) h.remove(); else handle = h; })
-      .catch((e) => console.error("[permission gate] appStateChange", e));
-    return () => { cancelled = true; handle?.remove(); };
-  }, [driver.mobile]);
+  // Owner request (2026-10-13, 14:53): nothing is asked on its own any
+  // more. The home screen shows one red "लोड घंटी बंद है" button
+  // (LoadBellButton); one tap runs runPermissionChain below, which asks
+  // every permission one after another, and the button disappears once
+  // the bell is fully on.
 
   const [autoStartCardDismissed, setAutoStartCardDismissed] = usePersistedState("sarthi_autoStartCardDismissed", false);
   const [showAutoStartCard, setShowAutoStartCard] = useState(false);
@@ -8782,6 +8758,25 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
           )}
 
           <div>
+            {/* Who the driver is going to meet -- before this the trip
+                screen only had a "Call Customer" button and no name at all,
+                so at the pickup gate the driver had nothing to ask for.
+                Mobile is shown as last 4 digits only: calls still go
+                through MaskedCallButton below. */}
+            <div className="rounded-2xl p-3 mb-2.5 shadow-sm flex items-center gap-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: C.navy }}><UserCircle2 size={22} color="#fff" /></div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : lang === "mr" ? "ग्राहक" : "ग्राहक"}</div>
+                <div className="text-sm font-black truncate" style={{ color: C.ink }}>{myTrip.customerName || (lang === "en" ? "Name not given" : lang === "mr" ? "नाव दिलेले नाही" : "नाम नहीं दिया")}</div>
+                {myTrip.customerMobile && (
+                  <div className="text-xs font-bold mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>📱 ••••••{String(myTrip.customerMobile).replace(/\D/g, "").slice(-4)}</div>
+                )}
+              </div>
+              <div className="text-right shrink-0">
+                {myTrip.fare ? <div className="text-base font-black" style={{ color: C.ink }}>{fmt(myTrip.fare)}</div> : null}
+                {formatKgLabel(myTrip.weight, lang) && <div className="text-xs font-bold" style={{ color: C.inkSoft }}>{formatKgLabel(myTrip.weight, lang)}</div>}
+              </div>
+            </div>
             {myTrip.customerMobile && (
               <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
                 label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
@@ -8970,6 +8965,8 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       )}
 
 
+      <LoadBellButton driver={driver} lang={lang} locationPermission={locationPermission} />
+
       {/* My Wallet + Driver Duty switch — moved down here from the header
           row above DriverHome (see DriverApp) so the Get Estimate card can
           take that top spot instead. */}
@@ -8994,6 +8991,210 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   );
 }
 
+// ---- लोड घंटी बटन (owner request 2026-10-13 13:31) ----
+// One button on the driver home screen that tells the driver plainly
+// whether a load will wake the phone and ring loudly, and fixes whatever
+// is missing with one tap per item: notification permission (+ this
+// phone's FCM token saved), battery exemption, Android 14 full-screen
+// alerts, and "display over other apps" (ring screen opens by itself).
+// Re-checked every time the driver comes back to the app, so the status is
+// always the phone's real state. "टेस्ट घंटी" sends this phone a REAL ring
+// push from the server after 10 s (sendTestRing) -- the driver locks the
+// phone or closes the app and hears exactly what a real load sounds like.
+// Native app only: a browser tab can't wake a locked phone at all.
+const BELL_STEPS = ["push", "battery", "overlay", "fullscreen"];
+
+// Runs `action` and resolves once the driver is back in the app.
+// opensScreen=false (a system dialog): done when the action settles, or,
+//   if the app went to the background meanwhile, once it's back.
+// opensScreen=true (a Settings screen): done once the driver returns from
+//   it; if the app never left within 4s (screen didn't open on this
+//   phone), move on instead of hanging. 15s cap on a dialog that shows
+//   nothing at all.
+async function runAndWaitForReturn(action, opensScreen = false) {
+  let left = false;
+  let done = false;
+  let finishFn = () => {};
+  const finished = new Promise((resolve) => { finishFn = resolve; });
+  const finish = () => { if (!done) { done = true; finishFn(); } };
+  let handle = null;
+  try {
+    handle = await CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) left = true;
+      else if (left) setTimeout(finish, 800);
+    });
+  } catch (e) {
+    console.error("[load bell] appStateChange", e);
+  }
+  const cap = setTimeout(() => { if (!left) finish(); }, opensScreen ? 4000 : 15000);
+  Promise.resolve()
+    .then(action)
+    .catch((e) => console.error("[load bell] step", e))
+    .then(() => { if (!opensScreen && !left) finish(); });
+  await finished;
+  clearTimeout(cap);
+  handle?.remove();
+}
+
+// Owner request (2026-10-13): one tap on "लोड घंटी बंद है" asks every
+// permission one right after the other -- location, notifications (+ this
+// phone's FCM token saved), battery, display over other apps, lock-screen
+// alert, autostart -- each opening as soon as the driver is back from the
+// previous one. A runtime permission already denied for good (Android
+// won't show its dialog again) opens its Settings screen instead.
+async function runPermissionChain({ driverMobile, locationPermission }) {
+  // 1. लोकेशन
+  const loc = locationPermission?.permission;
+  if (loc && loc !== "granted" && loc !== "unsupported") {
+    if (loc === "denied") await runAndWaitForReturn(() => openNativeSettingsBridge("location"), true);
+    else await runAndWaitForReturn(() => locationPermission.enable?.());
+  }
+  // 2. नोटिफिकेशन -- token is saved on its own; the next step only waits
+  //    for the dialog, not for the FCM token.
+  const push = await checkPushPermission();
+  if (push !== "granted") {
+    if (push === "denied") await runAndWaitForReturn(() => openNativeSettingsBridge("notifications"), true);
+    else await runAndWaitForReturn(() => requestPushToken().then((r) => {
+      if (r.ok && driverMobile) patchDoc("drivers", driverMobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+    }));
+  }
+  // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
+  const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
+  if (battery?.ignoring === false) await runAndWaitForReturn(() => requestBatteryOptimizationExemption());
+  // 4. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले. Asked
+  //    before the lock-screen alert because once it's on, the app is
+  //    allowed to bring itself back from Settings, so step 5 also returns
+  //    by itself the moment its toggle is flipped.
+  if (!(await canDrawOverlays())) await runAndWaitForReturn(() => openSettingsAndReturn("overlay"), true);
+  // 5. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+) -- toggle on = app comes back on its own
+  if (!(await canUseFullScreenIntent())) await runAndWaitForReturn(() => openSettingsAndReturn("full_screen_intent"), true);
+  // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...): no OS API reports its state,
+  //    so it's opened once per tap on phones that have it.
+  const { needed } = await needsAutoStartSettings();
+  if (needed) await runAndWaitForReturn(() => openAutoStartSettings(), true);
+}
+function LoadBellButton({ driver, lang, place = "home", locationPermission }) {
+  const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  const [missing, setMissing] = useState(null);
+  const [turningOn, setTurningOn] = useState(false);
+  const [test, setTest] = useState({ state: "idle", left: 0 });
+  const checkRef = useRef(null);
+  checkRef.current = async () => {
+    const m = [];
+    if ((await checkPushPermission()) !== "granted") m.push("push");
+    const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
+    if (battery?.ignoring === false) m.push("battery");
+    if (!(await canUseFullScreenIntent())) m.push("fullscreen");
+    if (!(await canDrawOverlays())) m.push("overlay");
+    setMissing(m);
+  };
+  useEffect(() => {
+    if (!isNativeApp) return undefined;
+    let handle = null;
+    let cancelled = false;
+    checkRef.current();
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => { if (isActive) setTimeout(() => checkRef.current(), 700); })
+      .then((h) => { if (cancelled) h.remove(); else handle = h; })
+      .catch((e) => console.error("[load bell] appStateChange", e));
+    const onOk = () => setTest({ state: "ok", left: 0 });
+    window.addEventListener("sarthi-test-ring-ok", onOk);
+    return () => { cancelled = true; handle?.remove(); window.removeEventListener("sarthi-test-ring-ok", onOk); };
+  }, []);
+  // Countdown shown while the server waits before sending the test ring.
+  useEffect(() => {
+    if (test.state !== "waiting" || test.left <= 0) return undefined;
+    const id = setTimeout(() => setTest((t) => (t.state === "waiting" ? { ...t, left: t.left - 1 } : t)), 1000);
+    return () => clearTimeout(id);
+  }, [test]);
+
+  if (!isNativeApp || missing === null) return null;
+
+  const saveToken = async () => {
+    const r = await requestPushToken();
+    if (r.ok && driver.mobile) await patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+    return r.ok;
+  };
+  const turnOn = async () => {
+    if (turningOn) return;
+    setTurningOn(true);
+    try {
+      await runPermissionChain({ driverMobile: driver.mobile, locationPermission });
+    } catch (e) {
+      console.error("[load bell] chain", e);
+    } finally {
+      setTurningOn(false);
+      checkRef.current();
+    }
+  };
+  const runTest = async () => {
+    setTest({ state: "waiting", left: 10 });
+    await saveToken(); // make sure the server has THIS phone's current token
+    const r = await sendTestRing(10);
+    if (r?.ok) setTest((t) => (t.state === "ok" ? t : { state: "sent", left: 0 }));
+    else setTest({ state: r?.reason === "too_soon" ? "tooSoon" : r?.reason === "no_token" ? "noToken" : "err", left: 0 });
+  };
+
+  const stepLabel = {
+    push: T("Notifications", "नोटिफिकेशन", "नोटिफिकेशन"),
+    battery: T("Battery", "बॅटरी", "बैटरी"),
+    fullscreen: T("Lock-screen alert", "लॉक स्क्रीन अलर्ट", "लॉक स्क्रीन अलर्ट"),
+    overlay: T("Open over other apps", "इतर अ‍ॅप्सवर उघडणे", "दूसरे ऐप के ऊपर खुलना"),
+  };
+  const ready = missing.length === 0;
+
+  // Owner (2026-10-13 13:40): once the bell is on it goes into the
+  // background -- nothing on the home screen. The red button comes back
+  // only if the phone itself loses a permission later (driver turned it
+  // off in Settings, app reinstalled), because then loads would really be
+  // missed. The green status + "टेस्ट घंटी" live on the profile screen.
+  if (ready && place === "home") return null;
+
+  const testMsg = {
+    waiting: T(`Bell rings in ${test.left} s — lock the phone now`, `${test.left} सेकंदात घंटी वाजेल — आता फोन लॉक करा`, `${test.left} सेकंड में घंटी बजेगी — अभी फ़ोन लॉक कर दें`),
+    sent: T("Test bell sent. Tap any button on the ring screen to stop it.", "टेस्ट घंटी पाठवली. थांबवण्यासाठी कोणतेही बटण दाबा.", "टेस्ट घंटी भेज दी। बंद करने के लिए घंटी वाली स्क्रीन पर कोई भी बटन दबाएँ।"),
+    ok: T("✅ Test passed — loads will ring on this phone.", "✅ टेस्ट यशस्वी — या फोनवर लोडची घंटी वाजेल.", "✅ टेस्ट सफल — इस फ़ोन पर लोड की घंटी बजेगी।"),
+    tooSoon: T("Wait 30 seconds before testing again.", "पुन्हा टेस्टसाठी 30 सेकंद थांबा.", "दोबारा टेस्ट के लिए 30 सेकंड रुकें।"),
+    noToken: T("Notification not registered yet — open the app again and retry.", "नोटिफिकेशन अजून नोंदले नाही — अ‍ॅप पुन्हा उघडा.", "नोटिफिकेशन अभी दर्ज नहीं हुआ — ऐप दोबारा खोलकर फिर टेस्ट करें।"),
+    err: T("Test failed — check internet and try again.", "टेस्ट अयशस्वी — इंटरनेट तपासा.", "टेस्ट नहीं हो पाया — इंटरनेट देखकर फिर कोशिश करें।"),
+  }[test.state];
+
+  // Profile: a compact half-width box that sits beside Logout.
+  if (place === "profile") {
+    return (
+      <div className="flex-1 min-w-0">
+        {!ready ? (
+          <button onClick={turnOn} disabled={turningOn} className="w-full rounded-lg py-3.5 px-2 flex items-center justify-center gap-1.5 font-black text-sm text-white" style={{ background: C.safety, border: "2px solid #8B0000" }}>
+            <Bell size={16} color="#FFFFFF" /> {turningOn ? T("Turning on…", "सुरू होत आहे…", "चालू हो रही है…") : T("Bell OFF", "घंटी बंद", "घंटी बंद है")}
+          </button>
+        ) : (
+          <button onClick={runTest} disabled={test.state === "waiting"} className="w-full rounded-lg py-3.5 px-2 flex items-center justify-center gap-1.5 font-black text-sm" style={{ background: "#E8F7EE", color: C.success, border: `1.5px solid ${C.success}` }}>
+            <Bell size={16} color={C.success} /> {test.state === "waiting" ? T(`Rings in ${test.left}s`, `${test.left} से. मध्ये`, `${test.left} से. में बजेगी`) : T("Bell ON · Test", "घंटी सुरू · टेस्ट", "घंटी चालू · टेस्ट")}
+          </button>
+        )}
+        {ready && testMsg && <div className="text-[11px] font-bold mt-1.5 leading-snug" style={{ color: test.state === "err" || test.state === "noToken" ? C.safety : C.ink }}>{testMsg}</div>}
+      </div>
+    );
+  }
+
+  // Home: only the red message; once the bell is on, nothing.
+  if (ready) return null;
+  return (
+    <button onClick={turnOn} disabled={turningOn} className="w-full rounded-2xl p-3.5 mt-4 text-left shadow-lg guided-submit-ready" style={{ background: C.safety, border: "2px solid #8B0000" }}>
+      <div className="flex items-center gap-2.5">
+        <Bell size={26} color="#FFFFFF" />
+        <div className="flex-1 min-w-0">
+          <div className="text-base font-black text-white">
+            {turningOn ? T("Turning the load bell on…", "लोड घंटी सुरू होत आहे…", "लोड घंटी चालू हो रही है…") : T("Load bell is OFF — tap to turn on", "लोड घंटी बंद आहे — सुरू करण्यासाठी दाबा", "लोड घंटी बंद है — चालू करने के लिए दबाएँ")}
+          </div>
+          <div className="text-xs font-bold mt-0.5" style={{ color: "#FFE3E3" }}>
+            {turningOn ? T("Allow each one as it opens", "प्रत्येक परवानगी द्या", "जो-जो खुले, उसे अनुमति दें") : `${T("Still needed", "अजून बाकी", "अभी बाकी")}: ${BELL_STEPS.filter((s) => missing.includes(s)).map((s) => stepLabel[s]).join(" · ")}`}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge }) {
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -9002,8 +9203,8 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
   const displayWallet = useCountUp(driver.wallet || 0);
   const displayBonus = useCountUp(driver.bonus || 0);
   const inTrial = isInTrial(driver.createdAt);
-  const myWithdrawals = (withdrawals || []).filter((w) => w.driverName === driver.name);
-  const myRecharges = (rechargeRequests || []).filter((r) => r.driverName === driver.name);
+  const myWithdrawals = (withdrawals || []).filter((w) => isDriverRecord(w, driver));
+  const myRecharges = (rechargeRequests || []).filter((r) => isDriverRecord(r, driver));
 
   // The wallet balance moves for two reasons right now: an approved
   // recharge landing, or a referral reward — commission is deliberately
@@ -9114,7 +9315,7 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
 }
 
 function DriverHistory({ tripLog, driver, lang }) {
-  const myTrips = tripLog.filter((t) => t.driverName === driver.name);
+  const myTrips = tripLog.filter((t) => isDriverRecord(t, driver));
   const [docsTrip, setDocsTrip] = useState(null);
   return (
     <div className="px-5 py-5">
@@ -9646,9 +9847,13 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
         </div>
       )}
 
-      <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
-        <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
-      </button>
+      {/* Owner (2026-10-13 14:53): load bell sits right beside Logout. */}
+      <div className="flex items-start gap-2.5">
+        <LoadBellButton driver={driver} lang={lang} place="profile" />
+        <button onClick={onLogout} className="flex-1 flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
+          <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -9931,11 +10136,11 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
     patchDoc("drivers", driver.mobile, { lastActiveAt: serverTimestamp() }).catch((e) => console.error("[driver lastActiveAt]", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
+  const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Jobs this driver is already assigned to but that are scheduled for a
   // future date — kept out of myTrip (above) so today's home screen isn't
   // stuck showing a trip that's days away, but still reachable here.
-  const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
+  const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && isFutureAdvance(b.scheduledFor));
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
   useReportInstalledVersion("drivers", driver.mobile);
   const locationPermission = useLocationPermission();
@@ -11224,6 +11429,8 @@ export default function App() {
     const check = () => {
       consumePendingRingAction().then(({ action, bookingId }) => {
         if (!bookingId || (action !== "acceptBooking" && action !== "rejectBooking")) return;
+        // "टेस्ट घंटी" (sendTestRing) -- nothing to claim; just confirm it worked.
+        if (String(bookingId).startsWith("TEST-")) { try { localStorage.setItem("sarthi_testRingOkAt", String(Date.now())); } catch { /* storage off */ } window.dispatchEvent(new Event("sarthi-test-ring-ok")); return; }
         driverRespondBookingRef.current(bookingId, action === "acceptBooking").catch((e) => console.error("[ringingBridge] respond", e));
       });
     };
@@ -11374,7 +11581,7 @@ export default function App() {
     progressTimer.current = setInterval(() => {
       if (!driver) return;
       bookings
-        .filter((b) => b.status === "Ongoing" && b.progress < 95 && b.driverName === driver.name)
+        .filter((b) => b.status === "Ongoing" && b.progress < 95 && isDriverRecord(b, driver))
         .forEach((b) => patchDoc("bookings", b.id, { progress: b.progress + 5 }).catch((e) => console.error(e)));
     }, 1200);
     return () => clearInterval(progressTimer.current);

@@ -805,6 +805,46 @@ exports.classifyKycPhoto = onCall({ region: "asia-south1", secrets: [GEMINI_API_
 // driverName, since two drivers can share the same free-text display name
 // (no uniqueness enforced at signup) and a name-based lookup could
 // previously be satisfied by a different, same-named driver's trip.
+// Driver taps "टेस्ट घंटी" (LoadBellButton in src/App.jsx): sends the
+// driver's OWN phone the exact same data-only ring message a real load
+// uses, after a short delay so they can lock the phone or close the app
+// first. bookingId starts with "TEST-" -- the app ignores Accept/Reject for
+// it (nothing to claim). Only to the caller's own fcmToken, max once per
+// 30 s per driver.
+exports.sendTestRing = onCall({ region: "asia-south1" }, async (request) => {
+  const callerPhone = callerPhoneFromAuth(request.auth?.token);
+  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
+  const mobile = callerPhone.replace("+91", "");
+  const ref = db.collection("drivers").doc(mobile);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, reason: "not_found" };
+  const d = snap.data();
+  if (!d.fcmToken) return { ok: false, reason: "no_token" };
+  const now = Date.now();
+  if (d.lastTestRingAt && now - d.lastTestRingAt < 30000) throw new HttpsError("resource-exhausted", "Wait 30 seconds.");
+  await ref.update({ lastTestRingAt: now });
+  const delaySec = Math.max(0, Math.min(15, Number(request.data?.delaySec) || 0));
+  if (delaySec) await new Promise((r) => setTimeout(r, delaySec * 1000));
+  try {
+    await getMessaging().send({
+      token: d.fcmToken,
+      android: { priority: "high" },
+      data: {
+        type: "direct_request_ring",
+        bookingId: `TEST-${now}`,
+        pickup: "🔔 टेस्ट घंटी — यह असली लोड नहीं है",
+        drop: "बंद करने के लिए कोई भी बटन दबाएँ",
+        weight: "-",
+      },
+    });
+    return { ok: true };
+  } catch (e) {
+    console.error("[push] test ring send failed:", e.message);
+    await clearStaleFcmTokenOnFailure("drivers", mobile, e);
+    return { ok: false, reason: "send_failed" };
+  }
+});
+
 exports.creditDriverReferral = onCall({ region: "asia-south1" }, async (request) => {
   const callerPhone = callerPhoneFromAuth(request.auth?.token);
   if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
