@@ -2162,7 +2162,7 @@ function speakAlert(text, lang = "hi") {
 // earlier session, so it stays fresh without asking again; `enable()` is
 // what the banner's button calls to trigger the actual browser permission
 // prompt on first use.
-function useRideNotifications(collectionName, docId, lang, { autoAsk = false } = {}) {
+function useRideNotifications(collectionName, docId, lang) {
   // Web tab: Notification.permission is read synchronously so the very
   // first render already shows the right banner (unchanged from before).
   // Native app: there's no synchronous equivalent (checkPushPermission
@@ -2185,26 +2185,17 @@ function useRideNotifications(collectionName, docId, lang, { autoAsk = false } =
 
   // Customer app (owner rule 2026-10-13): no banner/card ever -- the
   // NotificationBanner below renders nothing -- so on Android 13+ a
-  // customer was simply never asked and never got "driver found" /
-  // "vehicle arriving" / "delivered" with the app closed. Now Android's own
-  // one-tap dialog opens right after login, once per app open until
-  // granted, and this phone's token is saved. A hard "denied" (Android
-  // stops showing the dialog itself) is left alone rather than nagged.
-  // The driver app doesn't need this: its PermissionGate asks instead.
-  const autoAskedRef = useRef(false);
-  useEffect(() => {
-    if (!autoAsk || !isNativeApp || !docId || autoAskedRef.current) return;
-    autoAskedRef.current = true;
-    (async () => {
-      if ((await checkPushPermission()) !== "default") return;
-      const result = await requestPushToken();
-      if (result.ok) {
-        patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
-        setPermission("granted");
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoAsk, docId]);
+  // customer needs an active push-permission trigger of its own. That
+  // trigger is CustomerApp's own dedicated gate (see the effect right
+  // after useRideNotifications is called there), not this hook -- an
+  // earlier version of this had a one-shot "ask once on mount" effect
+  // right here, but it gave up for good the instant the OS reported
+  // "denied" (no re-ask, no Settings fallback), which is the exact
+  // forever-stuck-with-no-token bug CustomerApp's gate was built to fix
+  // for exactly this reason. Removed in favor of that single mechanism
+  // rather than keeping two different push-permission flows running at
+  // once. The driver app doesn't need either: its own PermissionGate
+  // asks instead.
 
   const enable = async () => {
     const result = await requestPushToken();
@@ -7550,7 +7541,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   // into the Ongoing-trip GPS sharing below, instead of resetting the
   // moment CustomerBooking unmounts for ActiveRide.
   const locationPermission = useLocationPermission();
-  const rideNotifications = useRideNotifications("customers", customerMobile, lang, { autoAsk: true });
+  const rideNotifications = useRideNotifications("customers", customerMobile, lang);
   useReportInstalledVersion("customers", customerMobile);
 
   // Real-device finding (2026-10-13): most customers (and most drivers,
