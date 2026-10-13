@@ -7387,6 +7387,8 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
         </div>
       )}
 
+      {isNativeApp && <PushDiagnosticPanel collectionName="customers" mobile={customerMobile} />}
+
       <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
         <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
       </button>
@@ -9053,6 +9055,57 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   );
 }
 
+// ---- TEMPORARY push-token diagnostic (2026-10-13) ----
+// chrome://inspect over USB kept failing to attach on the actual stuck
+// test devices (driver notification permission confirmed granted in
+// Settings, fcmToken still null in Firestore, and no way to see WHY --
+// requestPushToken() throwing? timing out? resolving ok:false with some
+// reason? patchDoc itself failing?) -- too many USB/adb/driver points of
+// failure to debug blind over a cable. This surfaces the real result
+// directly on the phone's own screen instead: no computer, no USB, no
+// native build, just tap the button and read (or screenshot) the output.
+// Remove once the real fcmToken-stuck-despite-granted-permission bug is
+// found and fixed -- this is diagnostic scaffolding, not a feature.
+function PushDiagnosticPanel({ collectionName, mobile }) {
+  const [out, setOut] = useState(null);
+  const [running, setRunning] = useState(false);
+  const run = async () => {
+    setRunning(true);
+    const lines = [`isNativeApp: ${isNativeApp}`, `mobile: ${mobile || "-"}`];
+    try {
+      const perm = await checkPushPermission();
+      lines.push(`checkPushPermission(): "${perm}"`);
+    } catch (e) {
+      lines.push(`checkPushPermission() THREW: ${e?.name || ""} ${e?.message || e}`);
+    }
+    try {
+      const r = await requestPushToken();
+      lines.push(`requestPushToken(): ok=${r?.ok} reason="${r?.reason || "-"}" token=${r?.token ? r.token.slice(0, 16) + "…(" + r.token.length + " chars)" : "-"}`);
+      if (r?.ok && r.token && mobile) {
+        try {
+          await patchDoc(collectionName, mobile, { fcmToken: r.token });
+          lines.push("patchDoc(fcmToken): wrote OK");
+        } catch (e2) {
+          lines.push(`patchDoc(fcmToken) THREW: ${e2?.name || ""} ${e2?.message || e2}`);
+        }
+      }
+    } catch (e) {
+      lines.push(`requestPushToken() THREW: ${e?.name || ""} ${e?.message || e}`);
+    }
+    setOut(lines.join("\n"));
+    setRunning(false);
+  };
+  return (
+    <div className="rounded-xl p-3 mt-3 text-xs" style={{ background: "#FFF8E1", border: "1px solid #E0C068" }}>
+      <div className="font-black mb-1.5">🔧 Push diagnostic (temporary — screenshot this)</div>
+      <button onClick={run} disabled={running} className="rounded-full px-3 py-1.5 font-bold text-white text-xs" style={{ background: running ? "#9AA3B0" : "#1F3C88" }}>
+        {running ? "Running…" : "Run check"}
+      </button>
+      {out && <pre className="mt-2 whitespace-pre-wrap break-all" style={{ fontFamily: monoFont, fontSize: 10 }}>{out}</pre>}
+    </div>
+  );
+}
+
 // ---- लोड घंटी बटन (owner request 2026-10-13 13:31) ----
 // One button on the driver home screen that tells the driver plainly
 // whether a load will wake the phone and ring loudly, and fixes whatever
@@ -9834,6 +9887,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
       )}
 
       <LoadBellButton driver={driver} lang={lang} place="profile" />
+      {isNativeApp && <PushDiagnosticPanel collectionName="drivers" mobile={driver.mobile} />}
 
       <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
         <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
