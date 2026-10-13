@@ -4,7 +4,7 @@ import { getAuth, setPersistence, indexedDBLocalPersistence, browserLocalPersist
 import { getStorage } from "firebase/storage";
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -383,25 +383,56 @@ async function getMessagingIfSupported() {
 // below ----
 //
 // Inside the installed app, FCM registration goes through the OS/Play
-// Services directly via @capacitor/push-notifications rather than the
-// browser's Web Push + VAPID + service-worker path (getToken/onMessage
-// below) — that's still exactly what a plain browser tab uses, untouched.
-// Both ultimately hand back a plain FCM device token that
-// functions/index.js's sendLoadAlert/sendDirectRequestAlert already send
-// to via admin.messaging().send({ token, ... }) — same Firebase project,
-// same send call, either kind of token works, so no backend changes were
-// needed for this.
+// Services directly rather than the browser's Web Push + VAPID +
+// service-worker path (getToken/onMessage below) — that's still exactly
+// what a plain browser tab uses, untouched. Both ultimately hand back a
+// plain FCM device token that functions/index.js's sendLoadAlert/
+// sendDirectRequestAlert already send to via admin.messaging().send({
+// token, ... }), same Firebase project, same send call either way, so no
+// backend changes were needed for any of this.
 //
-// Requires android/app/google-services.json to exist (see that file's
-// absence noted in DEPLOYMENT.md) — without it, Capacitor's own
-// build.gradle template silently skips applying the google-services
-// plugin and native push registration below will fail with reason
-// "unsupported"/"error", same as this app already handles an
-// unconfigured/unsupported web-push environment.
-//
-// Dynamically imported (never bundled/evaluated in a plain browser tab,
-// isNativeApp false) so a bug or version mismatch in the native-only
-// plugin can never break the web build.
+// Real-device finding (2026-10-13): @capacitor/push-notifications'
+// checkPermissions()/requestPermissions()/register() all hung forever on
+// at least one test device -- confirmed NOT its own logic (read the
+// actual source in node_modules, it's plain synchronous/
+// immediately-resolving code, no path that could hang) and NOT a broken
+// Capacitor bridge generally (a different plugin, CapacitorApp, resolved
+// instantly on the same device, and a full uninstall+reinstall changed
+// nothing). That left the official plugin's own load()/bridge-
+// registration never completing on that device, for reasons invisible
+// without native-side logs this investigation had no way to get (no adb/
+// chrome://inspect access on the available test setup). Routed through
+// NativePushPlugin instead (see
+// android/app/.../NativePushPlugin.java) — a small custom plugin
+// re-implementing only the two things that were actually blocked
+// (permission check/request, token fetch), registered the exact same
+// proven-reliable way (registerPlugin() in MainActivity, before
+// super.onCreate()) as this app's other custom plugins
+// (PowerBridgePlugin, RingingBridgePlugin), which were never affected by
+// whatever's wrong with the official plugin's own registration. This
+// deliberately does NOT touch how ring pushes are received at all — that
+// path is AppFirebaseMessagingService, a plain native FCM service
+// entirely independent of any Capacitor plugin bridge, already working
+// fine; only the "get this device's token written to Firestore" path
+// moved.
+const NativePushNative = registerPlugin("NativePush");
+
+// Capacitor's PermissionState ("granted"/"denied"/"prompt"/
+// "prompt-with-rationale") collapses onto the same 3-state shape the rest
+// of this app already reads off the browser's Notification.permission
+// ("granted"/"denied"/"default") — so callers (useRideNotifications /
+// NotificationBanner in src/App.jsx) don't need a separate native branch
+// just to render the right banner.
+function toWebPermissionShape(state) {
+  return state === "granted" || state === "denied" ? state : "default";
+}
+
+// TEMPORARY diagnostic (2026-10-13): kept deliberately pointed at the OLD
+// official plugin -- checkPushPermission/requestPushToken below have
+// moved entirely off it onto NativePushNative above, so no real caller
+// uses this anymore. Left in only as a continued "is the official plugin
+// still broken on this device" signal for the push diagnostic panel in
+// App.jsx. Remove both together once this investigation resolves.
 let pushNotificationsPluginPromise = null;
 function getNativePushNotifications() {
   if (!isNativeApp) return Promise.resolve(null);
@@ -415,28 +446,6 @@ function getNativePushNotifications() {
   }
   return pushNotificationsPluginPromise;
 }
-
-// Capacitor's PermissionState ("granted"/"denied"/"prompt"/
-// "prompt-with-rationale") collapses onto the same 3-state shape the rest
-// of this app already reads off the browser's Notification.permission
-// ("granted"/"denied"/"default") — so callers (useRideNotifications /
-// NotificationBanner in src/App.jsx) don't need a separate native branch
-// just to render the right banner.
-function toWebPermissionShape(state) {
-  return state === "granted" || state === "denied" ? state : "default";
-}
-
-// TEMPORARY diagnostic (2026-10-13): isolates whether a stuck device's
-// problem is specific to permission-checking or the whole plugin's call
-// dispatch. PushNotificationsPlugin.register()'s native Java calls
-// call.resolve() IMMEDIATELY (it doesn't wait for the token -- that
-// arrives later via a separate "registration" event) -- so this raw call
-// should always resolve near-instantly if the plugin's method dispatch
-// works at all, completely independent of checkPermissions()/
-// requestPermissions(). If this ALSO hangs, the issue is in this
-// plugin's bridge registration itself (not permission-state reading
-// specifically); if it resolves fine, the problem is narrower than that.
-// Remove alongside the rest of the push diagnostic once resolved.
 export async function rawPushRegisterProbe() {
   if (!isNativeApp) return { ok: false, reason: "not-native" };
   const PushNotifications = await getNativePushNotifications();
@@ -449,6 +458,18 @@ export async function rawPushRegisterProbe() {
   }
 }
 
+// Belt-and-suspenders only at this point -- NativePushPlugin's calls are
+// simple, proven-reliable-pattern native code, not expected to hang the
+// way the official plugin did, but a timeout here costs nothing and
+// means a future surprise fails loud instead of silent, same reasoning
+// as everywhere else this session touched.
+function withTimeout(promise, ms, reason) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(reason)), ms)),
+  ]);
+}
+
 // Native equivalent of the browser's `Notification.permission` read —
 // unlike that, this is inherently async (goes through the native bridge),
 // so callers that need a synchronous initial value (useRideNotifications'
@@ -456,10 +477,8 @@ export async function rawPushRegisterProbe() {
 // directly on web and only call this for the native branch.
 export async function checkPushPermission() {
   if (!isNativeApp) return typeof Notification !== "undefined" ? Notification.permission : "unsupported";
-  const PushNotifications = await getNativePushNotifications();
-  if (!PushNotifications) return "unsupported";
   try {
-    const status = await PushNotifications.checkPermissions();
+    const status = await withTimeout(NativePushNative.checkPermissions(), 10000, "checkPermissions timeout");
     return toWebPermissionShape(status.receive);
   } catch (e) {
     console.error("[nativePush] checkPermissions failed", e);
@@ -468,59 +487,23 @@ export async function checkPushPermission() {
 }
 
 async function requestNativePushToken() {
-  const PushNotifications = await getNativePushNotifications();
-  if (!PushNotifications) return { ok: false, reason: "unsupported" };
   try {
-    let state = (await PushNotifications.checkPermissions()).receive;
+    let state = (await withTimeout(NativePushNative.checkPermissions(), 10000, "checkPermissions timeout")).receive;
     if (state === "prompt" || state === "prompt-with-rationale") {
-      state = (await PushNotifications.requestPermissions()).receive;
+      state = (await withTimeout(NativePushNative.requestPermissions(), 30000, "requestPermissions timeout")).receive;
     }
     if (state !== "granted") return { ok: false, reason: toWebPermissionShape(state) };
   } catch (e) {
     console.error("[nativePush] permission check failed", e);
     return { ok: false, reason: "error" };
   }
-  // register() itself resolves before the token is known — the actual
-  // token (or failure) arrives asynchronously through these two events,
-  // same as the plugin's own docs describe, so wrap that in a Promise
-  // rather than awaiting register() directly.
-  //
-  // Real-device finding (2026-10-13): on at least one stuck test device,
-  // NEITHER event ever fires at all -- not "registration", not
-  // "registrationError" -- so this Promise hung forever with no visible
-  // symptom beyond "fcmToken never gets written". Worse than a normal
-  // failure: every caller of this (PermissionGate, the customer push
-  // gate, LoadBellButton, useRideNotifications) awaits it directly, so a
-  // device where Play Services/FCM genuinely never responds silently
-  // deadlocks the ENTIRE permission-gate chain on that device forever,
-  // not just the push step -- battery/full-screen/overlay/autostart never
-  // even get checked either. A 20s timeout turns that silent, permanent
-  // hang into a real, visible "timeout" reason instead -- still fails
-  // (nothing can invent a token Play Services won't hand over), but at
-  // least every caller gets an answer and the gate can keep moving
-  // instead of freezing on this one step forever.
-  return new Promise((resolve) => {
-    let settled = false;
-    let regHandle, errHandle, timer;
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      regHandle?.then((h) => h.remove());
-      errHandle?.then((h) => h.remove());
-      resolve(result);
-    };
-    regHandle = PushNotifications.addListener("registration", (token) => finish({ ok: true, token: token.value }));
-    errHandle = PushNotifications.addListener("registrationError", (err) => {
-      console.error("[nativePush] registration error", err);
-      finish({ ok: false, reason: "error" });
-    });
-    timer = setTimeout(() => {
-      console.error("[nativePush] register() timed out after 20s -- neither registration nor registrationError fired (Play Services/FCM likely unreachable on this device)");
-      finish({ ok: false, reason: "timeout" });
-    }, 20000);
-    PushNotifications.register();
-  });
+  try {
+    const { token } = await withTimeout(NativePushNative.getToken(), 20000, "getToken timeout");
+    return { ok: true, token };
+  } catch (e) {
+    console.error("[nativePush] getToken failed", e);
+    return { ok: false, reason: "error" };
+  }
 }
 
 // Asks the browser for notification permission, registers the service

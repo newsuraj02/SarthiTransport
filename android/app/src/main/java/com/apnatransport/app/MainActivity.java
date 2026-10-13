@@ -33,6 +33,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(LocationTrackerPlugin.class);
         registerPlugin(PowerBridgePlugin.class);
         registerPlugin(RingingBridgePlugin.class);
+        registerPlugin(NativePushPlugin.class);
         super.onCreate(savedInstanceState);
         createLoadAlertNotificationChannel();
     }
