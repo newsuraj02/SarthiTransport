@@ -2162,7 +2162,7 @@ function speakAlert(text, lang = "hi") {
 // earlier session, so it stays fresh without asking again; `enable()` is
 // what the banner's button calls to trigger the actual browser permission
 // prompt on first use.
-function useRideNotifications(collectionName, docId, lang) {
+function useRideNotifications(collectionName, docId, lang, { autoAsk = false } = {}) {
   // Web tab: Notification.permission is read synchronously so the very
   // first render already shows the right banner (unchanged from before).
   // Native app: there's no synchronous equivalent (checkPushPermission
@@ -2182,6 +2182,29 @@ function useRideNotifications(collectionName, docId, lang) {
     checkPushPermission().then((p) => { if (!cancelled) setPermission(p); });
     return () => { cancelled = true; };
   }, []);
+
+  // Customer app (owner rule 2026-10-13): no banner/card ever -- the
+  // NotificationBanner below renders nothing -- so on Android 13+ a
+  // customer was simply never asked and never got "driver found" /
+  // "vehicle arriving" / "delivered" with the app closed. Now Android's own
+  // one-tap dialog opens right after login, once per app open until
+  // granted, and this phone's token is saved. A hard "denied" (Android
+  // stops showing the dialog itself) is left alone rather than nagged.
+  // The driver app doesn't need this: its PermissionGate asks instead.
+  const autoAskedRef = useRef(false);
+  useEffect(() => {
+    if (!autoAsk || !isNativeApp || !docId || autoAskedRef.current) return;
+    autoAskedRef.current = true;
+    (async () => {
+      if ((await checkPushPermission()) !== "default") return;
+      const result = await requestPushToken();
+      if (result.ok) {
+        patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+        setPermission("granted");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAsk, docId]);
 
   const enable = async () => {
     const result = await requestPushToken();
@@ -2226,7 +2249,7 @@ function useRideNotifications(collectionName, docId, lang) {
     })();
     return () => { cancelled = true; unsub?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionName, docId]);
+  }, [collectionName, docId, permission === "granted"]);
 
   return { permission, enable, toast };
 }
@@ -7507,7 +7530,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   // into the Ongoing-trip GPS sharing below, instead of resetting the
   // moment CustomerBooking unmounts for ActiveRide.
   const locationPermission = useLocationPermission();
-  const rideNotifications = useRideNotifications("customers", customerMobile, lang);
+  const rideNotifications = useRideNotifications("customers", customerMobile, lang, { autoAsk: true });
   useReportInstalledVersion("customers", customerMobile);
 
   // Real GPS live-tracking, mirroring the driver's own — shares the

@@ -484,6 +484,19 @@ exports.onBookingTaken = onDocumentUpdated("bookings/{bookingId}", async (event)
   }));
 });
 
+// Text for every customer alert. "arriving" and "loading" added 2026-10-13
+// (owner: the customer must hear about their booking whether the app is
+// open or closed) -- before that a customer only got "accepted" and
+// "completed", and nothing when the truck reached their gate.
+const CUSTOMER_ALERT_TEXT = {
+  accepted: (b) => ({ title: "✅ ड्राइवर मिल गया!", body: `${b.driverName || "ड्राइवर"} आपकी बुकिंग स्वीकार कर चुके हैं और रास्ते में हैं।` }),
+  arriving: (b) => ({ title: "🚚 गाड़ी पहुँचने वाली है", body: `${b.driverName || "ड्राइवर"} पिकअप के पास हैं। ऐप में OTP देखकर ड्राइवर को बताएँ।` }),
+  loading: (b) => ({ title: "📦 लोडिंग शुरू हो गई", body: `आपका माल ${b.drop || "ड्रॉप"} के लिए लोड हो रहा है।` }),
+  completed: (b) => ({ title: "🏁 डिलीवरी पूरी हुई", body: `आपकी बुकिंग (${b.pickup} → ${b.drop}) पूरी हो गई है।` }),
+};
+// Driver this close to pickup (straight line) counts as "arriving".
+const CUSTOMER_ARRIVING_KM = 0.5;
+
 // Customer-side equivalent of sendDirectRequestAlert above —
 // reaches the customer even with the app fully closed, for the two moments
 // they most need to know without having it open: their driver accepting
@@ -495,9 +508,7 @@ async function sendCustomerBookingAlert(token, booking, bookingId, kind, custome
   try {
     await getMessaging().send({
       token,
-      notification: kind === "accepted"
-        ? { title: "✅ ड्राइवर मिल गया!", body: `${booking.driverName || "ड्राइवर"} आपकी बुकिंग स्वीकार कर चुके हैं और रास्ते में हैं।` }
-        : { title: "🏁 डिलीवरी पूरी हुई", body: `आपकी बुकिंग (${booking.pickup} → ${booking.drop}) पूरी हो गई है।` },
+      notification: CUSTOMER_ALERT_TEXT[kind](booking),
       android: {
         priority: "high",
         notification: { channelId: "new_load_alerts", priority: "max", visibility: "public", defaultSound: true, defaultVibrateTimings: true },
@@ -524,13 +535,24 @@ exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", asyn
 
   const becameOngoing = after.status === "Ongoing" && before?.status !== "Ongoing";
   const becameCompleted = after.status === "Completed" && before?.status !== "Completed";
-  if (!becameOngoing && !becameCompleted) return;
+  const loadingStarted = after.status === "Ongoing" && !!after.loadingStartedAt && !before?.loadingStartedAt;
+  // Arriving: fires once per booking, the first driverLocation write within
+  // CUSTOMER_ARRIVING_KM of pickup before loading starts. Guarded by
+  // customerArrivingNotified (set below) so the frequent GPS writes on
+  // this doc never send it twice.
+  const loc = after.driverLocation;
+  const arriving = after.status === "Ongoing" && !after.loadingStartedAt && !after.customerArrivingNotified
+    && loc?.lat != null && loc?.lng != null && after.pickupLat != null && after.pickupLng != null
+    && haversineKm(loc.lat, loc.lng, after.pickupLat, after.pickupLng) <= CUSTOMER_ARRIVING_KM;
+  const kind = becameCompleted ? "completed" : loadingStarted ? "loading" : becameOngoing ? "accepted" : arriving ? "arriving" : null;
+  if (!kind) return;
+  if (kind === "arriving") await event.data.after.ref.update({ customerArrivingNotified: true });
 
   const customerSnap = await db.collection("customers").doc(after.customerMobile).get();
   const token = customerSnap.data()?.fcmToken;
   if (!token) return;
 
-  await sendCustomerBookingAlert(token, after, event.params.bookingId, becameOngoing ? "accepted" : "completed", after.customerMobile);
+  await sendCustomerBookingAlert(token, after, event.params.bookingId, kind, after.customerMobile);
 });
 
 // Admin's "Send Notification" screen (AdminNotify) -- logs a message to
