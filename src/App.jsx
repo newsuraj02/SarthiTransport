@@ -8294,16 +8294,38 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // ---- PermissionGate (owner rule, 2026-10-13) ----
   // ऐप खुलते ही सारी इजाज़त, बिना किसी कार्ड या समझाने वाले मैसेज के:
   // Android's own dialog/settings screen, one at a time; the next one opens
-  // when the driver returns to the app. Anything already granted is never
-  // asked again; anything still missing is asked once per app open.
-  // Background location keeps its Play-policy disclosure screen
-  // (BackgroundLocationDisclosure below) -- Play requires that one.
-  const permGateTried = useRef(new Set());
+  // when the driver returns to the app. Background location keeps its
+  // Play-policy disclosure screen (BackgroundLocationDisclosure below) --
+  // Play requires that one.
+  //
+  // Real-device report (2026-10-13): ring alerts still weren't arriving
+  // after this gate ran, because steps 1-5 below only ever fired ONCE per
+  // mount (the old `firstTime(key)` guard) and then permanently skipped
+  // themselves on every later resume regardless of whether the driver
+  // actually finished the step -- backing out of the battery/full-screen/
+  // overlay Settings screen without flipping the toggle (easy to do by
+  // accident) silently fell through to the next step and the gate never
+  // came back to it. Fixed by re-checking each one's REAL OS-reported
+  // state (not a one-shot flag) every single time this effect's step()
+  // runs -- i.e. every resume -- so the exact Settings screen keeps
+  // reopening until that permission is actually granted, per explicit
+  // request ("won't go until it's turned on"). Safe to call every time:
+  // each of these either shows a real system dialog Android itself
+  // declines to re-show once truly denied (no annoyance), or jumps to the
+  // one exact OS settings screen that controls it -- never a loop within
+  // one step() call, since each branch returns after one action and waits
+  // for the next resume.
+  //
+  // Autostart (step 6) is the one exception -- OPPO/Xiaomi/Vivo/Huawei
+  // expose NO API to ever read its real state back, so there's no "keep
+  // retrying until granted" possible for it at all. Still asked once per
+  // app OPEN now (component mount), not once ever per device as before --
+  // a driver who missed/backed out of it the first time gets another shot
+  // next time they open the app, instead of the gate giving up on it
+  // forever after a single try.
+  const permGateTried = useRef(new Set()); // only "autostart" uses this now -- see above
   const locationPermRef = useRef(locationPermission);
   locationPermRef.current = locationPermission;
-  const [autoStartOpenedOnce, setAutoStartOpenedOnce] = usePersistedState("sarthi_autoStartOpenedOnce", false);
-  const autoStartOpenedRef = useRef(autoStartOpenedOnce);
-  autoStartOpenedRef.current = autoStartOpenedOnce;
   useEffect(() => {
     if (!isNativeApp || !driver.mobile) return;
     let busy = false;
@@ -8316,23 +8338,22 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       busy = true;
       try {
         // 1. लोकेशन
-        if (locationPermRef.current?.permission !== "granted" && firstTime("location")) { await locationPermRef.current?.enable?.(); return; }
+        if (locationPermRef.current?.permission !== "granted") { await locationPermRef.current?.enable?.(); return; }
         // 2. नोटिफिकेशन (+ इसी फोन का FCM टोकन सर्वर पर)
-        if ((await checkPushPermission()) !== "granted" && firstTime("push")) {
+        if ((await checkPushPermission()) !== "granted") {
           const r = await requestPushToken();
           if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
           return;
         }
         // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
         const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
-        if (battery?.ignoring === false && firstTime("battery")) { await requestBatteryOptimizationExemption(); return; }
-        // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+)
-        if (!(await canUseFullScreenIntent()) && firstTime("fullscreen")) { openNativeSettingsBridge("full_screen_intent"); return; }
-        // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले
-        if (!(await canDrawOverlays()) && firstTime("overlay")) { await openOverlaySettings(); return; }
-        // 6. Autostart (Xiaomi/Oppo/Vivo/Realme...): फोन बताता नहीं, इसलिए ज़िंदगी में एक बार
-        if (!autoStartOpenedRef.current && firstTime("autostart")) {
-          setAutoStartOpenedOnce(true);
+        if (battery?.ignoring === false) { await requestBatteryOptimizationExemption(); return; }
+        // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+) -- Settings > Apps > Apna Transport > "Full screen notifications" पर ले जाता है
+        if (!(await canUseFullScreenIntent())) { openNativeSettingsBridge("full_screen_intent"); return; }
+        // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले -- Settings > Apps > Apna Transport > "Display over other apps" पर ले जाता है
+        if (!(await canDrawOverlays())) { await openOverlaySettings(); return; }
+        // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...): फोन इसकी हालत बताता नहीं (कोई OS API नहीं), इसलिए हर ऐप-ओपन पर एक बार -- उस OEM की अपनी Autostart/Startup Manager स्क्रीन पर ले जाता है
+        if (firstTime("autostart")) {
           const { needed } = await needsAutoStartSettings();
           if (needed) { await openAutoStartSettings(); return; }
         }
