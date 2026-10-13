@@ -8407,61 +8407,125 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   const permGateTried = useRef(new Set()); // "autostart", "location-denied", "push-denied" -- see above
   const locationPermRef = useRef(locationPermission);
   locationPermRef.current = locationPermission;
+  //
+  // Owner request (2026-10-13, round 3): "यहीं पर सारा परमिशन एक के बाद एक"
+  // -- on this home screen, every permission one right after the other.
+  // The gate above only ever did ONE step per app resume: every branch
+  // `return`ed after its action and waited for the next appStateChange.
+  // Worse, that resume usually arrived while the step was still awaiting
+  // (requestPushToken waits for the FCM token AFTER the dialog closes, which
+  // easily takes longer than the 700ms delay), so `busy` was still true,
+  // the resume was dropped, and the chain silently stopped after the first
+  // dialog. Now one pass walks all six steps in order: each action is
+  // awaited until the driver is back in the app (dialog closed / Settings
+  // screen left), then the very next step starts on its own. A pass is
+  // never interrupted by its own dialogs; after a pass ends, every later
+  // resume runs a fresh pass (re-checking real OS state), so anything
+  // still off keeps coming back until it's turned on, as before.
   useEffect(() => {
     if (!isNativeApp || !driver.mobile) return;
-    let busy = false;
+    let running = false;
     let cancelled = false;
     let handle = null;
     const tried = permGateTried.current;
     const firstTime = (key) => { if (tried.has(key)) return false; tried.add(key); return true; };
-    const step = async () => {
-      if (busy || cancelled) return;
-      busy = true;
-      try {
-        // 1. लोकेशन
-        const locPerm = locationPermRef.current?.permission;
-        if (locPerm !== "granted") {
-          if (locPerm === "denied") {
-            if (firstTime("location-denied")) openNativeSettingsBridge("location");
-          } else {
-            await locationPermRef.current?.enable?.();
-            return;
-          }
+    const watchers = new Set(); // appStateChange -> the step currently waiting
+
+    // Runs `action` and resolves once the driver is back in the app.
+    // opensScreen=false (a system dialog): done when the action settles,
+    //   or, if the app went to the background meanwhile, once it's back.
+    // opensScreen=true (a Settings screen): done once the driver returns
+    //   from it; if the app never actually left within 4s (screen failed
+    //   to open on this phone), move on instead of hanging.
+    // Never waits forever on an action that shows nothing (15s cap).
+    const runAndWait = (action, opensScreen = false) => new Promise((resolve) => {
+      let left = false;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        watchers.delete(watch);
+        clearTimeout(cap);
+        resolve();
+      };
+      const watch = (isActive) => {
+        if (!isActive) left = true;
+        else if (left) setTimeout(finish, 800);
+      };
+      watchers.add(watch);
+      const cap = setTimeout(() => { if (!left) finish(); }, opensScreen ? 4000 : 15000);
+      Promise.resolve()
+        .then(action)
+        .catch((e) => console.error("[permission gate] step", e))
+        .then(() => { if (!opensScreen && !left) finish(); });
+    });
+
+    const pass = async () => {
+      // 1. लोकेशन
+      const locPerm = locationPermRef.current?.permission;
+      if (locPerm !== "granted") {
+        if (locPerm === "denied") {
+          if (firstTime("location-denied")) await runAndWait(() => openNativeSettingsBridge("location"), true);
+        } else {
+          await runAndWait(() => locationPermRef.current?.enable?.());
         }
-        // 2. नोटिफिकेशन (+ इसी फोन का FCM टोकन सर्वर पर)
-        const pushPerm = await checkPushPermission();
-        if (pushPerm !== "granted") {
-          if (pushPerm === "denied") {
-            if (firstTime("push-denied")) openNativeSettingsBridge("notifications");
-          } else {
-            const r = await requestPushToken();
+      }
+      if (cancelled) return;
+      // 2. नोटिफिकेशन (+ इसी फोन का FCM टोकन सर्वर पर)
+      const pushPerm = await checkPushPermission();
+      if (pushPerm !== "granted") {
+        if (pushPerm === "denied") {
+          if (firstTime("push-denied")) await runAndWait(() => openNativeSettingsBridge("notifications"), true);
+        } else {
+          // Token save is chained on its own -- the next step doesn't wait
+          // for the FCM token, only for the dialog to close.
+          await runAndWait(() => requestPushToken().then((r) => {
             if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
-            return;
-          }
+          }));
         }
-        // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
-        const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
-        if (battery?.ignoring === false) { await requestBatteryOptimizationExemption(); return; }
-        // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+) -- Settings > Apps > Apna Transport > "Full screen notifications" पर ले जाता है
-        if (!(await canUseFullScreenIntent())) { openNativeSettingsBridge("full_screen_intent"); return; }
-        // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले -- Settings > Apps > Apna Transport > "Display over other apps" पर ले जाता है
-        if (!(await canDrawOverlays())) { await openOverlaySettings(); return; }
-        // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...): फोन इसकी हालत बताता नहीं (कोई OS API नहीं), इसलिए हर ऐप-ओपन पर एक बार -- उस OEM की अपनी Autostart/Startup Manager स्क्रीन पर ले जाता है
-        if (firstTime("autostart")) {
-          const { needed } = await needsAutoStartSettings();
-          if (needed) { await openAutoStartSettings(); return; }
-        }
+      }
+      if (cancelled) return;
+      // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
+      const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
+      if (battery?.ignoring === false) await runAndWait(() => requestBatteryOptimizationExemption());
+      if (cancelled) return;
+      // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+) -- Settings > Apps > Apna Transport > "Full screen notifications"
+      if (!(await canUseFullScreenIntent())) await runAndWait(() => openNativeSettingsBridge("full_screen_intent"), true);
+      if (cancelled) return;
+      // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले -- Settings > Apps > Apna Transport > "Display over other apps"
+      if (!(await canDrawOverlays())) await runAndWait(() => openOverlaySettings(), true);
+      if (cancelled) return;
+      // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...): फोन इसकी हालत बताता नहीं (कोई OS API नहीं), इसलिए हर ऐप-ओपन पर एक बार
+      if (firstTime("autostart")) {
+        const { needed } = await needsAutoStartSettings();
+        if (needed) await runAndWait(() => openAutoStartSettings(), true);
+      }
+    };
+
+    const run = async () => {
+      if (running || cancelled) return;
+      running = true;
+      try {
+        await pass();
       } catch (e) {
         console.error("[permission gate]", e);
       } finally {
-        busy = false;
+        running = false;
       }
     };
-    step();
-    CapacitorApp.addListener("appStateChange", ({ isActive }) => { if (isActive) setTimeout(step, 700); })
+
+    // Listener first, then the pass -- so the very first Settings screen's
+    // leave/return is never missed.
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      watchers.forEach((w) => w(isActive));
+      // Resumes caused by this pass's own dialogs are handled by
+      // runAndWait above; only a resume after the pass ends starts a new one.
+      if (isActive && !running) setTimeout(run, 700);
+    })
       .then((h) => { if (cancelled) h.remove(); else handle = h; })
-      .catch((e) => console.error("[permission gate] appStateChange", e));
-    return () => { cancelled = true; handle?.remove(); };
+      .catch((e) => console.error("[permission gate] appStateChange", e))
+      .finally(() => run());
+    return () => { cancelled = true; handle?.remove(); watchers.clear(); };
   }, [driver.mobile]);
 
   const [autoStartCardDismissed, setAutoStartCardDismissed] = usePersistedState("sarthi_autoStartCardDismissed", false);
