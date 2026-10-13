@@ -7038,6 +7038,14 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
               ? (lang === "en" ? "You can keep waiting, or cancel and try again." : lang === "mr" ? "तुम्ही वाट पाहू शकता, किंवा रद्द करून पुन्हा प्रयत्न करू शकता." : "आप इंतज़ार कर सकते हैं, या रद्द करके फिर से कोशिश कर सकते हैं।")
               : (b.fare ? fmt(b.fare) : "")}
           </div>
+          {/* Uber-style live feedback: how many drivers' phones have
+              confirmed they're ringing (functions/index.js: ringAck). */}
+          {b.ringDeliveredCount > 0 && (
+            <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 mt-2 text-xs font-black" style={{ background: "#E8F7EE", color: C.success, border: `1px solid ${C.success}` }}>
+              <Bell size={12} color={C.success} />
+              {lang === "en" ? `Ringing on ${b.ringDeliveredCount} driver phone${b.ringDeliveredCount > 1 ? "s" : ""}` : lang === "mr" ? `${b.ringDeliveredCount} ड्रायव्हरच्या फोनवर घंटी वाजत आहे` : `${b.ringDeliveredCount} ड्राइवरों के फ़ोन पर घंटी बज रही है`}
+            </div>
+          )}
           {!noDriverYet && (formatKgLabel(b.weight, lang) || b.distance != null) && (
             <div className="text-xs font-bold mt-1" style={{ color: C.inkSoft }}>
               {[formatKgLabel(b.weight, lang), b.distance != null ? formatDistanceExact(b.distance, lang) : null].filter(Boolean).join(" · ")}

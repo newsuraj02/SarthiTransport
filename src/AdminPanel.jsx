@@ -92,6 +92,17 @@ function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
           {statusLabel(k)}: {statusCounts[k] || 0}
         </span>
       ))}
+      {/* Open loads: how many alerted phones confirmed the ring
+          (functions/index.js ringAck). Red when none have. */}
+      {(bookings || []).filter((b) => b.status === "AwaitingDriver" && (b.alertedDriverMobiles || []).length).slice(0, 4).map((b) => {
+        const sent = b.alertedDriverMobiles.length;
+        const got = b.ringDeliveredCount || 0;
+        return (
+          <span key={b.id} className="text-[10px] font-bold mt-0.5" style={{ color: got ? "#1B873F" : "#C62828" }}>
+            🔔 {(b.pickup || "").split(",")[0].slice(0, 14)}: {got}/{sent} {lang === "en" ? "rang" : "फ़ोन बजे"}
+          </span>
+        );
+      })}
     </div>
   );
 

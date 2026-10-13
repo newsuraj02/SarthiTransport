@@ -220,6 +220,14 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // Per-driver "did the phone ring?" receipts for each load (see
+    // functions/index.js: onDirectRequestBroadcast / ringAck). Holds the
+    // one-time ackKey, so it's never readable by drivers or customers;
+    // written only via the Admin SDK.
+    match /ringDeliveries/{id} {
+      allow read: if isAdmin();
+    }
+
     // Admin "Send Notification" history (see functions/index.js:
     // sendAdminNotification) — written only by that Cloud Function via the
     // Admin SDK, no client write path needed or allowed here. Doubles as
