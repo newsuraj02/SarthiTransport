@@ -2488,6 +2488,20 @@ async function openOverlaySettings() {
   try { await RingingBridgeNative.openOverlaySettings(); } catch (e) { console.error("[ringingBridge] overlay", e); }
 }
 
+// Opens the Settings screen for "overlay" / "full_screen_intent" and has
+// the app come back by itself the moment the driver turns the toggle on
+// (RingingBridgePlugin.openSettingsAndReturn). An installed build older
+// than that native code falls back to just opening the screen.
+async function openSettingsAndReturn(target) {
+  if (!isNativeApp) return;
+  try {
+    await RingingBridgeNative.openSettingsAndReturn({ target });
+  } catch (e) {
+    if (target === "overlay") await openOverlaySettings();
+    else openNativeSettingsBridge(target);
+  }
+}
+
 const PowerBridgeNative = registerPlugin("PowerBridge");
 async function requestBatteryOptimizationExemption() {
   if (!isNativeApp) return { granted: null };
@@ -8988,7 +9002,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 // push from the server after 10 s (sendTestRing) -- the driver locks the
 // phone or closes the app and hears exactly what a real load sounds like.
 // Native app only: a browser tab can't wake a locked phone at all.
-const BELL_STEPS = ["push", "battery", "fullscreen", "overlay"];
+const BELL_STEPS = ["push", "battery", "overlay", "fullscreen"];
 
 // Runs `action` and resolves once the driver is back in the app.
 // opensScreen=false (a system dialog): done when the action settles, or,
@@ -9024,8 +9038,8 @@ async function runAndWaitForReturn(action, opensScreen = false) {
 
 // Owner request (2026-10-13): one tap on "लोड घंटी बंद है" asks every
 // permission one right after the other -- location, notifications (+ this
-// phone's FCM token saved), battery, lock-screen alert, display over other
-// apps, autostart -- each opening as soon as the driver is back from the
+// phone's FCM token saved), battery, display over other apps, lock-screen
+// alert, autostart -- each opening as soon as the driver is back from the
 // previous one. A runtime permission already denied for good (Android
 // won't show its dialog again) opens its Settings screen instead.
 async function runPermissionChain({ driverMobile, locationPermission }) {
@@ -9047,10 +9061,13 @@ async function runPermissionChain({ driverMobile, locationPermission }) {
   // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
   const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
   if (battery?.ignoring === false) await runAndWaitForReturn(() => requestBatteryOptimizationExemption());
-  // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+)
-  if (!(await canUseFullScreenIntent())) await runAndWaitForReturn(() => openNativeSettingsBridge("full_screen_intent"), true);
-  // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले
-  if (!(await canDrawOverlays())) await runAndWaitForReturn(() => openOverlaySettings(), true);
+  // 4. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले. Asked
+  //    before the lock-screen alert because once it's on, the app is
+  //    allowed to bring itself back from Settings, so step 5 also returns
+  //    by itself the moment its toggle is flipped.
+  if (!(await canDrawOverlays())) await runAndWaitForReturn(() => openSettingsAndReturn("overlay"), true);
+  // 5. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+) -- toggle on = app comes back on its own
+  if (!(await canUseFullScreenIntent())) await runAndWaitForReturn(() => openSettingsAndReturn("full_screen_intent"), true);
   // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...): no OS API reports its state,
   //    so it's opened once per tap on phones that have it.
   const { needed } = await needsAutoStartSettings();
