@@ -8255,7 +8255,8 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, fareTiers, lang, onOpenWallet, locationPermission, bookingExtras }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, vehicleTypes, fareTiers, lang, onOpenWallet, locationPermission, bookingExtras }) {
+  const [cancelError, setCancelError] = useState("");
   const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
@@ -8804,6 +8805,17 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
           {!myTrip.loadingStartedAt && (
             <div className="mb-4">
               <DriverOtpEntry trip={myTrip} startLoading={startLoading} lang={lang} />
+              {/* Only reachable before the OTP is verified -- cancelBooking
+                  itself also enforces this server-side (see its own
+                  loadingStartedAt check in App()), this just keeps a driver
+                  from tapping a button that can't do anything once the
+                  goods are already loaded/in transit. */}
+              <div className="flex justify-end mt-2">
+                <button onClick={() => { const err = cancelBooking?.(myTrip.id); if (err) setCancelError(err); }} className="text-sm font-semibold" style={{ color: C.safety }}>
+                  {lang === "en" ? "Cancel ride" : lang === "mr" ? "राइड रद्द करा" : "राइड रद्द करें"}
+                </button>
+              </div>
+              {cancelError && <div className="text-[11px] font-bold mt-1 text-right" style={{ color: C.safety }}>{cancelError}</div>}
             </div>
           )}
 
@@ -10150,7 +10162,7 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
   );
 }
 
-function DriverApp({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, fareTiers, bookingExtras }) {
+function DriverApp({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, fareTiers, bookingExtras }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [setFareOpen, setSetFareOpen] = useState(false);
@@ -10393,7 +10405,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
             <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
           </div>
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} bookingExtras={bookingExtras} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} bookingExtras={bookingExtras} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);
@@ -11815,7 +11827,7 @@ export default function App() {
           </div>
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
-          <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading}
+          <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert} alerts={alerts}
             minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
