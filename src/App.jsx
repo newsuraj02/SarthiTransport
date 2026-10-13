@@ -8323,7 +8323,27 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // a driver who missed/backed out of it the first time gets another shot
   // next time they open the app, instead of the gate giving up on it
   // forever after a single try.
-  const permGateTried = useRef(new Set()); // only "autostart" uses this now -- see above
+  //
+  // Real-device report (2026-10-13, round 2): both test drivers showed
+  // fcmToken: null in Firestore, and the fix above wasn't enough -- steps
+  // 1 (location) and 2 (push) are Android RUNTIME permissions, the one
+  // category where a real denial means the OS will NEVER show that
+  // dialog again, ever, full stop (unlike battery/full-screen/overlay,
+  // which are always re-promptable). Both steps used to `return`
+  // unconditionally the moment they weren't "granted" -- so once either
+  // one was truly denied (easy to do by reflex on first install), that
+  // single `return` fired on every future resume FOREVER, before steps
+  // 2-6 ever got a chance to run at all. That's exactly how a driver ends
+  // up with fcmToken permanently null AND battery/full-screen/overlay/
+  // autostart never asked either, all from one denied dialog months
+  // earlier. Fixed by only `return`-ing (pausing for the next resume)
+  // when a dialog can actually still be shown ("prompt"/"default"); once
+  // truly "denied", deep-link to the one exact Settings screen that
+  // controls it ONCE per app open (same no-known-real-state-API
+  // reasoning as autostart) and fall through to the next step in the
+  // SAME call instead of blocking the rest of the gate behind a
+  // permission that will never self-resolve through this path again.
+  const permGateTried = useRef(new Set()); // "autostart", "location-denied", "push-denied" -- see above
   const locationPermRef = useRef(locationPermission);
   locationPermRef.current = locationPermission;
   useEffect(() => {
@@ -8338,12 +8358,25 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       busy = true;
       try {
         // 1. लोकेशन
-        if (locationPermRef.current?.permission !== "granted") { await locationPermRef.current?.enable?.(); return; }
+        const locPerm = locationPermRef.current?.permission;
+        if (locPerm !== "granted") {
+          if (locPerm === "denied") {
+            if (firstTime("location-denied")) openNativeSettingsBridge("location");
+          } else {
+            await locationPermRef.current?.enable?.();
+            return;
+          }
+        }
         // 2. नोटिफिकेशन (+ इसी फोन का FCM टोकन सर्वर पर)
-        if ((await checkPushPermission()) !== "granted") {
-          const r = await requestPushToken();
-          if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
-          return;
+        const pushPerm = await checkPushPermission();
+        if (pushPerm !== "granted") {
+          if (pushPerm === "denied") {
+            if (firstTime("push-denied")) openNativeSettingsBridge("notifications");
+          } else {
+            const r = await requestPushToken();
+            if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+            return;
+          }
         }
         // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
         const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
