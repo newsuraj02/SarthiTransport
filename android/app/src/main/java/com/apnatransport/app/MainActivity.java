@@ -7,11 +7,23 @@ import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // TEMPORARY (2026-10-13): lets chrome://inspect attach to this
+        // app's WebView over USB so real console.error output (from
+        // requestPushToken/checkPushPermission/the permission gates in
+        // App.jsx) can actually be read on a signed release build, instead
+        // of guessing blind -- release builds have this off by default.
+        // Static call, no WebView instance needed yet. REMOVE once the
+        // fcmToken-not-writing-despite-granted-permission investigation
+        // resolves -- leaving remote debugging on a production build
+        // indefinitely is a real attack surface on a rooted/compromised
+        // device with USB access.
+        WebView.setWebContentsDebuggingEnabled(true);
         // Must run before super.onCreate() -- Capacitor registers plugins
         // during the base onCreate(), so registering any later misses it.
         registerPlugin(SettingsBridgePlugin.class);
