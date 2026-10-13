@@ -28,7 +28,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, rawPushRegisterProbe, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -9115,6 +9115,21 @@ function PushDiagnosticPanel({ collectionName, mobile }) {
       push(`CapacitorApp.getInfo() THREW: ${appInfoResult.error?.name || ""} ${appInfoResult.error?.message || appInfoResult.error}`);
     } else {
       push(`CapacitorApp.getInfo(): OK, version=${appInfoResult.value?.version || "-"} build=${appInfoResult.value?.build || "-"}`);
+    }
+
+    // Raw PushNotifications.register() call, bypassing checkPushPermission/
+    // requestPushToken entirely -- its native Java resolves the call
+    // IMMEDIATELY (before even waiting for a token), so this should always
+    // come back fast if the plugin's call dispatch works at all, completely
+    // independent of permission-state reading. Isolates "whole plugin
+    // broken" from "specifically the permission check is what hangs".
+    const rawRegisterResult = await raceTimeout(rawPushRegisterProbe(), 8000);
+    if (rawRegisterResult.timedOut) {
+      push(`rawPushRegisterProbe(): TIMED OUT after 8s -- this plugin's calls never get a response at all, even ones that resolve instantly server-side`);
+    } else if (rawRegisterResult.error) {
+      push(`rawPushRegisterProbe() THREW: ${rawRegisterResult.error?.name || ""} ${rawRegisterResult.error?.message || rawRegisterResult.error}`);
+    } else {
+      push(`rawPushRegisterProbe(): ${JSON.stringify(rawRegisterResult.value)}`);
     }
 
     const permResult = await raceTimeout(checkPushPermission(), 8000);

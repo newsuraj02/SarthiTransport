@@ -426,6 +426,29 @@ function toWebPermissionShape(state) {
   return state === "granted" || state === "denied" ? state : "default";
 }
 
+// TEMPORARY diagnostic (2026-10-13): isolates whether a stuck device's
+// problem is specific to permission-checking or the whole plugin's call
+// dispatch. PushNotificationsPlugin.register()'s native Java calls
+// call.resolve() IMMEDIATELY (it doesn't wait for the token -- that
+// arrives later via a separate "registration" event) -- so this raw call
+// should always resolve near-instantly if the plugin's method dispatch
+// works at all, completely independent of checkPermissions()/
+// requestPermissions(). If this ALSO hangs, the issue is in this
+// plugin's bridge registration itself (not permission-state reading
+// specifically); if it resolves fine, the problem is narrower than that.
+// Remove alongside the rest of the push diagnostic once resolved.
+export async function rawPushRegisterProbe() {
+  if (!isNativeApp) return { ok: false, reason: "not-native" };
+  const PushNotifications = await getNativePushNotifications();
+  if (!PushNotifications) return { ok: false, reason: "plugin-unavailable" };
+  try {
+    await PushNotifications.register();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e?.message || String(e) };
+  }
+}
+
 // Native equivalent of the browser's `Notification.permission` read —
 // unlike that, this is inherently async (goes through the native bridge),
 // so callers that need a synchronous initial value (useRideNotifications'
