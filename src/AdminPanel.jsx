@@ -29,7 +29,39 @@ import {
   LocationField, PhotoPicker, RouteLine, SafeImage, StatTile,
 } from "./App.jsx";
 
-function AdminLiveMap({ drivers, lang = "hi" }) {
+// Owner rule (2026-10-13): every vehicle's current status shows directly
+// on the live map -- colour of the truck + a legend with counts.
+const VEHICLE_STATUS_STALE_MS = 5 * 60 * 1000;
+const VEHICLE_STATUS = {
+  trip: { color: "#E8590C", hi: "ट्रिप पर", en: "On trip", mr: "ट्रिपवर" },
+  free: { color: "#1B873F", hi: "खाली (ड्यूटी पर)", en: "Free (on duty)", mr: "मोकळी (ड्युटीवर)" },
+  stale: { color: "#C62828", hi: "ड्यूटी पर, GPS बंद", en: "On duty, no GPS", mr: "ड्युटीवर, GPS बंद" },
+  off: { color: "#9AA3B0", hi: "ड्यूटी बंद", en: "Off duty", mr: "ड्युटी बंद" },
+};
+function vehicleStatusOf(d, bookings, now) {
+  const onTrip = (bookings || []).some((b) => b.status === "Ongoing" && ((d.mobile && b.driverMobile === d.mobile) || (d.name && b.driverName === d.name)));
+  if (onTrip) return "trip";
+  if (!d.online) return "off";
+  const age = now - (d.lastKnownLocation?.updatedAt || 0);
+  return age > VEHICLE_STATUS_STALE_MS ? "stale" : "free";
+}
+function statusTruckIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">` +
+    `<circle cx="17" cy="17" r="16" fill="#fff" stroke="${color}" stroke-width="3"/>` +
+    `<g transform="translate(6,11)">` +
+    `<rect x="0" y="0" width="14" height="8" rx="1.2" fill="${color}"/>` +
+    `<path d="M14 2h5.5L22 6v2H14z" fill="${color}"/>` +
+    `<circle cx="4.5" cy="9" r="2.1" fill="${color}"/>` +
+    `<circle cx="17.5" cy="9" r="2.1" fill="${color}"/>` +
+    `</g></svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(34, 34),
+    anchor: new window.google.maps.Point(17, 17),
+  };
+}
+
+function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const [mapInstance, setMapInstance] = useState(null);
   const installed = installedDrivers(drivers);
@@ -47,7 +79,21 @@ function AdminLiveMap({ drivers, lang = "hi" }) {
   }, [mapInstance, located.length, located.map((d) => `${d.lastKnownLocation.lat},${d.lastKnownLocation.lng}`).join("|")]);
 
   const staleMinutes = (d) => Math.round((Date.now() - (d.lastKnownLocation?.updatedAt || 0)) / 60000);
-  const markerTitle = (d) => `${d.name || d.mobile} · ${staleMinutes(d)}${lang === "en" ? "m ago" : " मिनट पहले"}`;
+  const statusNow = Date.now();
+  const statusOf = (d) => vehicleStatusOf(d, bookings, statusNow);
+  const statusLabel = (k) => VEHICLE_STATUS[k][lang === "en" ? "en" : lang === "mr" ? "mr" : "hi"];
+  const markerTitle = (d) => `${d.name || d.mobile} · ${statusLabel(statusOf(d))} · ${staleMinutes(d)}${lang === "en" ? "m ago" : " मिनट पहले"}`;
+  const statusCounts = located.reduce((acc, d) => { const k = statusOf(d); acc[k] = (acc[k] || 0) + 1; return acc; }, {});
+  const statusLegend = (
+    <div className="absolute top-2 right-2 rounded-lg px-2 py-1.5 shadow-sm flex flex-col gap-0.5" style={{ background: "rgba(255,255,255,0.95)", border: "1px solid #ddd" }}>
+      {["trip", "free", "stale", "off"].map((k) => (
+        <span key={k} className="text-[10px] font-bold flex items-center gap-1" style={{ color: "#222" }}>
+          <span style={{ width: 9, height: 9, borderRadius: 9, background: VEHICLE_STATUS[k].color, display: "inline-block" }} />
+          {statusLabel(k)}: {statusCounts[k] || 0}
+        </span>
+      ))}
+    </div>
+  );
 
   // Shared by both render branches below so the two never drift apart
   // again the way the tile/map mismatch did before. neverLocated is
@@ -66,20 +112,16 @@ function AdminLiveMap({ drivers, lang = "hi" }) {
         <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
           {Array.from({ length: 8 }).map((_, i) => <line key={"h" + i} x1="0" y1={i * 14} x2="100" y2={i * 14} stroke="#D8D8D8" strokeWidth="0.4" />)}
           {Array.from({ length: 8 }).map((_, i) => <line key={"v" + i} x1={i * 14} y1="0" x2={i * 14} y2="100" stroke="#D8D8D8" strokeWidth="0.4" />)}
-          {offline.map((d) => {
+          {located.map((d) => {
             const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
             if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
-            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill="#9AA3B0" stroke="#fff" strokeWidth="0.6" />;
-          })}
-          {online.map((d) => {
-            const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
-            if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
-            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill={C.navy} stroke="#fff" strokeWidth="0.6" />;
+            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill={VEHICLE_STATUS[statusOf(d)].color} stroke="#fff" strokeWidth="0.6"><title>{markerTitle(d)}</title></circle>;
           })}
         </svg>
         <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
           {mapSummaryLabel}
         </div>
+        {statusLegend}
       </div>
     );
   }
@@ -91,16 +133,14 @@ function AdminLiveMap({ drivers, lang = "hi" }) {
         onLoad={setMapInstance}
         options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: true, clickableIcons: false }}
       >
-        {offline.map((d) => (
-          <MarkerF key={d.mobile || d.id} position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }} icon={driverTruckIconInactive()} title={markerTitle(d)} />
-        ))}
-        {online.map((d) => (
-          <MarkerF key={d.mobile || d.id} position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }} icon={driverTruckIcon()} title={markerTitle(d)} />
+        {located.map((d) => (
+          <MarkerF key={d.mobile || d.id} position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }} icon={statusTruckIcon(VEHICLE_STATUS[statusOf(d)].color)} title={markerTitle(d)} />
         ))}
       </GoogleMap>
       <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
         {mapSummaryLabel}
       </div>
+      {statusLegend}
     </div>
   );
 }
@@ -762,7 +802,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"}</h2>
-        <AdminLiveMap drivers={drivers} lang={lang} />
+        <AdminLiveMap drivers={drivers} bookings={bookings} lang={lang} />
       </div>
     );
   }

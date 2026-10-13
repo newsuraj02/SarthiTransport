@@ -2274,6 +2274,24 @@ function isLocationPermissionDeniedError(err) {
 // first real geolocation call resolves or is denied — every watchPosition/
 // getCurrentPosition call site reports back through markGranted/markDenied
 // so this stays accurate even there.
+// Fields of `next` that differ from `prev` (top-level, by reference --
+// callers build `next` with {...prev, x}, so untouched nested objects keep
+// the same reference). `online` is deliberately never included: only the
+// driver's own duty button writes it (owner rule, 2026-10-13).
+// Owner rule (2026-10-13): no in-app cards asking for permissions --
+// DriverHome's PermissionGate opens the Android screens directly instead.
+const PERMISSION_CARDS_ENABLED = false;
+
+function changedProfileFields(prev, next) {
+  const patch = {};
+  if (!next) return patch;
+  for (const k of Object.keys(next)) {
+    if (k === "online" || k === "id" || k === "createdAt") continue;
+    if (!prev || next[k] !== prev[k]) patch[k] = next[k] === undefined ? null : next[k];
+  }
+  return patch;
+}
+
 function useLocationPermission() {
   const [permission, setPermission] = useState(() => (navigator.geolocation ? "prompt" : "unsupported"));
   useEffect(() => {
@@ -2453,6 +2471,23 @@ async function canUseFullScreenIntent() {
 // Only ever called once per driver device (see DriverHome's
 // primeBackgroundTracking effect) -- not on every app open, matching this
 // app's existing "ask once up front, never nag" permission philosophy.
+// "Display over other apps" -- lets the ring screen open by itself even
+// while the driver is using another app with the screen unlocked (the
+// full-screen intent alone only shows a heads-up banner in that case).
+async function canDrawOverlays() {
+  if (!isNativeApp) return true;
+  try {
+    const { can } = await RingingBridgeNative.canDrawOverlays();
+    return can;
+  } catch (e) {
+    return true; // older native build without this method: don't loop on it
+  }
+}
+async function openOverlaySettings() {
+  if (!isNativeApp) return;
+  try { await RingingBridgeNative.openOverlaySettings(); } catch (e) { console.error("[ringingBridge] overlay", e); }
+}
+
 const PowerBridgeNative = registerPlugin("PowerBridge");
 async function requestBatteryOptimizationExemption() {
   if (!isNativeApp) return { granted: null };
@@ -3024,6 +3059,11 @@ function vehicleMarkerIcon(headingDeg = null) {
 // no real coordinates (e.g. it was posted before Maps was set up).
 function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng, driverLocation, customerLocation, progress, zoneColor, height = 150, lang = "hi", mode = "route" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
+  // Re-renders every 20s so the "last location N min ago" chip below keeps
+  // counting even when no new GPS fix arrives (that's exactly when it matters).
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNowTick(Date.now()), 20000); return () => clearInterval(t); }, []);
+  const gpsAgeMin = driverLocation?.updatedAt ? Math.floor((nowTick - driverLocation.updatedAt) / 60000) : null;
   // "toPickup" mode (used before a driver has entered the OTP) draws only
   // the driver's live position and the Pickup pin, with the route line
   // between THEM instead of Pickup->Drop — Drop isn't relevant yet since
@@ -3200,6 +3240,16 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
             {" "}{toPickup
               ? (lang === "en" ? "to pickup" : lang === "mr" ? "पिकअपपर्यंत" : "पिकअप तक")
               : (lang === "en" ? "to drop" : lang === "mr" ? "ड्रॉपपर्यंत" : "ड्रॉप तक")}
+          </span>
+        </div>
+      )}
+      {/* Owner rule (2026-10-13): the vehicle's live status shows right on
+          the map -- if the driver's phone has stopped sending GPS for 2+
+          minutes, say so instead of silently showing an old position. */}
+      {gpsAgeMin != null && gpsAgeMin >= 2 && (
+        <div className="absolute bottom-2 left-2 rounded-full px-2.5 py-1 shadow-sm" style={{ background: "rgba(139,0,0,0.92)", maxWidth: "75%" }}>
+          <span className="text-[11px] font-bold" style={{ color: "#fff" }}>
+            {lang === "en" ? `📶 Vehicle's last location: ${gpsAgeMin} min ago` : lang === "mr" ? `📶 गाडीचे शेवटचे लोकेशन: ${gpsAgeMin} मिनिटांपूर्वी` : `📶 गाड़ी की आखिरी लोकेशन ${gpsAgeMin} मिनट पहले की है`}
           </span>
         </div>
       )}
@@ -4826,7 +4876,8 @@ function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
   const setPortalDriver = (updater) => {
     if (!portalDriver) return;
     const next = typeof updater === "function" ? updater(portalDriver) : updater;
-    if (firestoreReady && mobile) replaceDoc("drivers", mobile, next).catch((e) => console.error("[driver kyc portal save]", e));
+    const patch = changedProfileFields(portalDriver, next);
+    if (firestoreReady && mobile && Object.keys(patch).length) patchDoc("drivers", mobile, patch).catch((e) => console.error("[driver kyc portal save]", e));
   };
   // DriverOnboarding's own back button normally logs out of the app — not
   // meaningful here (there's no login to leave). Repurposed instead to
@@ -8158,7 +8209,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // never nag again" pattern rather than adding a persistent banner.
   const [batteryOptPrimed, setBatteryOptPrimed] = usePersistedState("sarthi_batteryOptPrimed", false);
   useEffect(() => {
-    if (!locationTrackerAvailable || batteryOptPrimed) return;
+    if (!locationTrackerAvailable || batteryOptPrimed || isNativeApp) return; // native: PermissionGate below asks
     requestBatteryOptimizationExemption().finally(() => setBatteryOptPrimed(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationTrackerAvailable, batteryOptPrimed]);
@@ -8170,6 +8221,64 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // before jumping the driver there rather than firing silently. Shown at
   // most once ever per device, and only on a manufacturer that actually
   // needs it — every other OEM never sees this card at all.
+  // ---- PermissionGate (owner rule, 2026-10-13) ----
+  // ऐप खुलते ही सारी इजाज़त, बिना किसी कार्ड या समझाने वाले मैसेज के:
+  // Android's own dialog/settings screen, one at a time; the next one opens
+  // when the driver returns to the app. Anything already granted is never
+  // asked again; anything still missing is asked once per app open.
+  // Background location keeps its Play-policy disclosure screen
+  // (BackgroundLocationDisclosure below) -- Play requires that one.
+  const permGateTried = useRef(new Set());
+  const locationPermRef = useRef(locationPermission);
+  locationPermRef.current = locationPermission;
+  const [autoStartOpenedOnce, setAutoStartOpenedOnce] = usePersistedState("sarthi_autoStartOpenedOnce", false);
+  const autoStartOpenedRef = useRef(autoStartOpenedOnce);
+  autoStartOpenedRef.current = autoStartOpenedOnce;
+  useEffect(() => {
+    if (!isNativeApp || !driver.mobile) return;
+    let busy = false;
+    let cancelled = false;
+    let handle = null;
+    const tried = permGateTried.current;
+    const firstTime = (key) => { if (tried.has(key)) return false; tried.add(key); return true; };
+    const step = async () => {
+      if (busy || cancelled) return;
+      busy = true;
+      try {
+        // 1. लोकेशन
+        if (locationPermRef.current?.permission !== "granted" && firstTime("location")) { await locationPermRef.current?.enable?.(); return; }
+        // 2. नोटिफिकेशन (+ इसी फोन का FCM टोकन सर्वर पर)
+        if ((await checkPushPermission()) !== "granted" && firstTime("push")) {
+          const r = await requestPushToken();
+          if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+          return;
+        }
+        // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
+        const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
+        if (battery?.ignoring === false && firstTime("battery")) { await requestBatteryOptimizationExemption(); return; }
+        // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+)
+        if (!(await canUseFullScreenIntent()) && firstTime("fullscreen")) { openNativeSettingsBridge("full_screen_intent"); return; }
+        // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले
+        if (!(await canDrawOverlays()) && firstTime("overlay")) { await openOverlaySettings(); return; }
+        // 6. Autostart (Xiaomi/Oppo/Vivo/Realme...): फोन बताता नहीं, इसलिए ज़िंदगी में एक बार
+        if (!autoStartOpenedRef.current && firstTime("autostart")) {
+          setAutoStartOpenedOnce(true);
+          const { needed } = await needsAutoStartSettings();
+          if (needed) { await openAutoStartSettings(); return; }
+        }
+      } catch (e) {
+        console.error("[permission gate]", e);
+      } finally {
+        busy = false;
+      }
+    };
+    step();
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => { if (isActive) setTimeout(step, 700); })
+      .then((h) => { if (cancelled) h.remove(); else handle = h; })
+      .catch((e) => console.error("[permission gate] appStateChange", e));
+    return () => { cancelled = true; handle?.remove(); };
+  }, [driver.mobile]);
+
   const [autoStartCardDismissed, setAutoStartCardDismissed] = usePersistedState("sarthi_autoStartCardDismissed", false);
   const [showAutoStartCard, setShowAutoStartCard] = useState(false);
   useEffect(() => {
@@ -8521,7 +8630,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 
   return (
     <div className="px-5 pt-5 pb-5">
-      {showAutoStartCard && (
+      {PERMISSION_CARDS_ENABLED && showAutoStartCard && (
         <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#EAF1FF", border: `1.5px solid ${C.navy}` }}>
           <div className="text-xs font-bold mb-1" style={{ color: C.navy }}>
             {lang === "en" ? "Keep getting loads while your phone is locked" : lang === "mr" ? "फोन लॉक असतानाही लोड मिळत राहण्यासाठी" : "फोन लॉक होने पर भी लोड मिलते रहें"}
@@ -8579,7 +8688,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
         </div>
       )}
 
-      {showFullScreenNotifNudge && (
+      {PERMISSION_CARDS_ENABLED && showFullScreenNotifNudge && (
         <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#EAF1FF", border: `1.5px solid ${C.navy}` }}>
           <div className="text-xs font-bold mb-1" style={{ color: C.navy }}>
             {lang === "en" ? "Don't miss a new load" : lang === "mr" ? "नवीन लोड चुकवू नका" : "नया लोड न चूकें"}
@@ -8608,7 +8717,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
         </div>
       )}
 
-      {showBgReliabilityCard && (
+      {PERMISSION_CARDS_ENABLED && showBgReliabilityCard && (
         <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#FDECEC", border: `1.5px solid ${C.safety}` }}>
           <div className="text-xs font-bold mb-1" style={{ color: C.safety }}>
             {lang === "en" ? "⚠️ Loads may not reach you when the app is closed" : lang === "mr" ? "⚠️ अ‍ॅप बंद असताना लोड पोहोचणार नाहीत" : "⚠️ ऐप बंद होने पर लोड नहीं पहुंचेंगे"}
@@ -8688,7 +8797,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
             <span className="text-[9px] font-bold">{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</span>
             <span className="text-[9px] font-bold mt-0.5">{lang === "en" ? "Duty" : lang === "mr" ? "ड्युटी" : "ड्यूटी"}</span>
           </div>
-          <button onClick={() => setDriver({ ...driver, online: !driver.online })} className="shrink-0 flex items-center">
+          <button onClick={() => { if (driver.mobile) patchDoc("drivers", driver.mobile, { online: !driver.online, onlineChangedAt: Date.now() }).catch((e) => console.error("[duty toggle]", e)); }} className="shrink-0 flex items-center">
             <span className="w-14 h-8 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
               <span className="absolute inset-0 flex items-center text-[10px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 8 : 0, paddingRight: driver.online ? 0 : 8 }}>{driver.online ? "On" : "Off"}</span>
               <span className="w-6 h-6 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 31 : 4 }} />
@@ -10627,10 +10736,19 @@ export default function App() {
     return unsub;
   }, [driverAuth.verified, driverAuth.mobile]);
 
+  // Owner rule (2026-10-13): duty stays ON until the driver himself taps
+  // the duty button. So setDriver no longer overwrites the whole profile
+  // from this client's in-memory copy (replaceDoc) -- that could silently
+  // write back a stale `online`, `fcmToken` or `lastKnownLocation` that
+  // another device/the native GPS service had just changed. It now patches
+  // only the fields the caller actually changed, and never `online`
+  // (only the duty button's own patchDoc touches that field).
   const setDriver = (updater) => {
     if (!driver) return;
     const next = typeof updater === "function" ? updater(driver) : updater;
-    if (firestoreReady && driverAuth.mobile) replaceDoc("drivers", driverAuth.mobile, next).catch((e) => console.error("[driver save]", e));
+    if (!firestoreReady || !driverAuth.mobile) return;
+    const patch = changedProfileFields(driver, next);
+    if (Object.keys(patch).length) patchDoc("drivers", driverAuth.mobile, patch).catch((e) => console.error("[driver save]", e));
   };
 
   // Every wallet/bonus/heldCredit mutation goes through here instead of
@@ -10992,7 +11110,7 @@ export default function App() {
     const myExtras = bookingExtras.filter((e) => e.bookingId === id);
     const bill = buildBill({ fare: regularFare, isReturn: b.isReturn, returnPct: b.returnPct, haltingCharge, extras: myExtras });
     patchDoc("bookings", id, { status: "Completed", progress: 100, extraCharge, fare: (b.fare || 0) + extraCharge, haltingCharge, bill, completedAt: completedAtMs }).catch((e) => console.error(e));
-    if (b.driverName === driver?.name) setDriver({ ...driver, online: true });
+    if (b.driverName === driver?.name && driver?.mobile) patchDoc("drivers", driver.mobile, { online: true }).catch((e) => console.error("[duty after trip]", e));
     // Return Load: this vehicle is now empty and (per the guide's own
     // background rule) assumed to be heading home for up to RETURN_HOURS —
     // see markReturnModePatch/isReturnLoadFor above.

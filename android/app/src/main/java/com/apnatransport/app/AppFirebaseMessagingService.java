@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.os.Build;
+import android.provider.Settings;
 import androidx.annotation.NonNull;
 import com.capacitorjs.plugins.pushnotifications.MessagingService;
 import com.google.firebase.messaging.RemoteMessage;
@@ -41,7 +42,9 @@ public class AppFirebaseMessagingService extends MessagingService {
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
         super.onMessageReceived(remoteMessage);
         Map<String, String> data = remoteMessage.getData();
-        if (!"direct_request_ring".equals(data.get("type"))) return;
+        String type = data.get("type");
+        if ("load_taken".equals(type)) { closeLoad(data.get("bookingId")); return; }
+        if (!"direct_request_ring".equals(type)) return;
         showRingingNotification(data);
     }
 
@@ -80,6 +83,31 @@ public class AppFirebaseMessagingService extends MessagingService {
 
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) manager.notify(RING_NOTIFICATION_ID, builder.build());
+
+        // Owner rule (2026-10-13): the app must wake up and open by itself.
+        // The full-screen intent above already does that on a locked/asleep
+        // phone; when the phone is unlocked and in use Android only shows a
+        // banner -- unless the driver granted "Display over other apps", in
+        // which case we may open the ring screen straight away.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) {
+            try { startActivity(fullScreenIntent); } catch (Exception ignored) { }
+        }
+    }
+
+    public static final String ACTION_LOAD_TAKEN = "com.apnatransport.app.LOAD_TAKEN";
+
+    // Another driver accepted this load (or the customer cancelled it):
+    // remove its banners and close the ring screen if it is showing it.
+    private void closeLoad(String bookingId) {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.cancel(RING_NOTIFICATION_ID);
+            if (bookingId != null) manager.cancel("load-" + bookingId, 0);
+        }
+        Intent intent = new Intent(ACTION_LOAD_TAKEN);
+        intent.setPackage(getPackageName());
+        intent.putExtra("bookingId", bookingId);
+        sendBroadcast(intent);
     }
 
     // Its own channel, separate from "new_load_alerts" (see MainActivity) --

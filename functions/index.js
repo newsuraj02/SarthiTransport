@@ -1,4 +1,4 @@
-const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
@@ -127,6 +127,9 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
         priority: "high",
         notification: {
           channelId: "new_load_alerts",
+          // Lets AppFirebaseMessagingService remove this exact banner when
+          // another driver takes the load (see onBookingTaken below).
+          tag: `load-${bookingId}`,
           priority: "max",
           visibility: "public",
           defaultSound: true,
@@ -399,6 +402,7 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
     });
 
     const sends = [];
+    const alerted = [];
     // Per-driver skip-reason logging -- every one of these conditions
     // fails completely silently otherwise, so there was no way to tell
     // which one was actually blocking a specific test driver without
@@ -431,17 +435,54 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
 
       if (driver.fcmToken) {
         skipLog.push(`${tag}: SENDING push+ring+whatsapp`);
-        sends.push(sendDirectRequestAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
-        sends.push(sendDirectRequestRingAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
+        alerted.push(doc.id);
+        sends.push(() => sendDirectRequestAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
+        sends.push(() => sendDirectRequestRingAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
       } else {
         skipLog.push(`${tag}: no fcmToken (push/ring skipped, WhatsApp still sent)`);
       }
-      sends.push(sendDirectRequestWhatsApp(doc.id, load));
+      sends.push(() => sendDirectRequestWhatsApp(doc.id, load));
     });
     console.log(`[onDirectRequestBroadcast] booking ${event.params.bookingId} (tier=${load.tierMaxKg}, pickup=${load.pickupLat},${load.pickupLng}): ${driversSnap.size} drivers checked\n${skipLog.join("\n")}`);
-    await Promise.all(sends);
+    // Saved BEFORE anything rings, so onBookingTaken always knows whose
+    // phone to stop -- even if someone accepts within a second.
+    if (alerted.length) {
+      await event.data.ref.update({ alertedDriverMobiles: alerted }).catch((e) => console.error("[onDirectRequestBroadcast] alertedDriverMobiles", e.message));
+    }
+    await Promise.all(sends.map((send) => send()));
   }
 );
+
+// Owner rule (2026-10-13): once one driver accepts a load (or the customer
+// cancels it before anyone does), it disappears from every OTHER driver's
+// phone at once -- their ring screen closes, the ringing stops and the
+// banner is removed (see AppFirebaseMessagingService "load_taken"). The
+// in-app list already drops it by itself (it only shows AwaitingDriver).
+exports.onBookingTaken = onDocumentUpdated("bookings/{bookingId}", async (event) => {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  if (!before || !after) return;
+  if (before.status !== "AwaitingDriver" || after.status === "AwaitingDriver") return;
+  const alerted = after.alertedDriverMobiles || before.alertedDriverMobiles || [];
+  const winner = after.driverMobile || null;
+  const targets = alerted.filter((m) => m && m !== winner);
+  if (!targets.length) return;
+  const snaps = await db.getAll(...targets.map((m) => db.collection("drivers").doc(m)));
+  await Promise.all(snaps.map(async (snap) => {
+    const token = snap.get("fcmToken");
+    if (!token) return;
+    try {
+      await getMessaging().send({
+        token,
+        android: { priority: "high" },
+        data: { type: "load_taken", bookingId: event.params.bookingId, reason: after.status === "Ongoing" ? "taken" : "closed" },
+      });
+    } catch (e) {
+      console.error("[onBookingTaken] send failed:", e.message);
+      await clearStaleFcmTokenOnFailure("drivers", snap.id, e);
+    }
+  }));
+});
 
 // Customer-side equivalent of sendDirectRequestAlert above —
 // reaches the customer even with the app fully closed, for the two moments

@@ -1,6 +1,14 @@
 package com.apnatransport.app;
 
 import android.app.NotificationManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.IntentFilter;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
+import androidx.core.content.ContextCompat;
 import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
@@ -26,6 +34,22 @@ import androidx.appcompat.app.AppCompatActivity;
 public class RingingBookingActivity extends AppCompatActivity {
     private MediaPlayer ringtonePlayer;
     private Vibrator vibrator;
+    // Same window the driver app gives for a reply (2 minutes) -- after that
+    // the ringing stops by itself instead of ringing forever.
+    private static final long RING_TIMEOUT_MS = 2 * 60 * 1000;
+    private final Handler timeoutHandler = new Handler(Looper.getMainLooper());
+    private String shownBookingId;
+    private final BroadcastReceiver loadTakenReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String id = intent.getStringExtra("bookingId");
+            if (id != null && id.equals(shownBookingId)) {
+                stopRinging();
+                Toast.makeText(RingingBookingActivity.this, "यह लोड दूसरे ड्राइवर ने ले लिया", Toast.LENGTH_LONG).show();
+                finish();
+            }
+        }
+    };
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -38,6 +62,10 @@ public class RingingBookingActivity extends AppCompatActivity {
         String drop = intent.getStringExtra("drop");
         String weight = intent.getStringExtra("weight");
         String bookingId = intent.getStringExtra("bookingId");
+        shownBookingId = bookingId;
+        ContextCompat.registerReceiver(this, loadTakenReceiver,
+            new IntentFilter(AppFirebaseMessagingService.ACTION_LOAD_TAKEN), ContextCompat.RECEIVER_NOT_EXPORTED);
+        timeoutHandler.postDelayed(() -> { stopRinging(); finish(); }, RING_TIMEOUT_MS);
 
         ((TextView) findViewById(R.id.ringingPickup)).setText(pickup != null ? pickup : "-");
         ((TextView) findViewById(R.id.ringingDrop)).setText(drop != null ? drop : "-");
@@ -85,11 +113,13 @@ public class RingingBookingActivity extends AppCompatActivity {
             ringtonePlayer = new MediaPlayer();
             ringtonePlayer.setAudioAttributes(
                 new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    // ALARM, not ringtone: still rings when the phone's ringer is
+                    // on silent/vibrate (owner: the bell must always be heard).
+                    .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
             );
-            ringtonePlayer.setDataSource(this, RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE));
+            ringtonePlayer.setDataSource(this, ringSoundUri());
             ringtonePlayer.setLooping(true);
             ringtonePlayer.prepare();
             ringtonePlayer.start();
@@ -116,6 +146,15 @@ public class RingingBookingActivity extends AppCompatActivity {
                 vibrator.vibrate(pattern, 0);
             }
         }
+    }
+
+    // The phone's ringtone; if none is set (silent ringtone), its alarm
+    // sound; then its notification sound -- never nothing.
+    private Uri ringSoundUri() {
+        Uri uri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE);
+        if (uri == null) uri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM);
+        if (uri == null) uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+        return uri;
     }
 
     private void stopRinging() {
@@ -148,6 +187,8 @@ public class RingingBookingActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        timeoutHandler.removeCallbacksAndMessages(null);
+        try { unregisterReceiver(loadTakenReceiver); } catch (Exception ignored) { }
         stopRinging();
         super.onDestroy();
     }

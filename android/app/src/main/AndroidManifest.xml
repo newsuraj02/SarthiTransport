@@ -161,4 +161,8 @@
          would have shown and played its ringtone fine, just without ever
          vibrating. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Owner rule 2026-10-13: the ring screen must open by itself even while the
+         driver is using another app. "Display over other apps" is the only way
+         Android allows that (PermissionGate opens its settings screen once). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 </manifest>
