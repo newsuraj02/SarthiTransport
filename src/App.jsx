@@ -8446,6 +8446,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // SAME call instead of blocking the rest of the gate behind a
   // permission that will never self-resolve through this path again.
   const permGateTried = useRef(new Set()); // "autostart", "location-denied", "push-denied" -- see above
+  const pushTokenSavedRef = useRef(false);
   const locationPermRef = useRef(locationPermission);
   locationPermRef.current = locationPermission;
   useEffect(() => {
@@ -8478,6 +8479,20 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
             const r = await requestPushToken();
             if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
             return;
+          }
+        } else if (!pushTokenSavedRef.current) {
+          // Permission already granted (e.g. given before login, or on an
+          // earlier install): the branch above never ran, so nothing here
+          // ever saved THIS phone's token. Save it once per app session,
+          // and retry on the next resume if it failed -- without a token on
+          // the server, a closed/asleep phone can never ring.
+          const r = await requestPushToken();
+          if (r.ok) {
+            await patchDoc("drivers", driver.mobile, { fcmToken: r.token, fcmTokenSavedAt: Date.now() })
+              .then(() => { pushTokenSavedRef.current = true; })
+              .catch((e) => console.error("[push token]", e));
+          } else {
+            console.error("[push token] not obtained:", r.reason);
           }
         }
         // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
