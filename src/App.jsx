@@ -6835,6 +6835,91 @@ function RideTypeBanner({ booking, lang }) {
   );
 }
 
+// "1250 किग्रा" below a tonne, "1.5 टन" from a tonne up -- the same unit a
+// truck owner would say out loud.
+function formatKgLabel(kg, lang) {
+  const n = Number(kg);
+  if (!n || n <= 0) return null;
+  if (n >= FARE_TIER_MAX_KG_UNCAPPED) return lang === "en" ? "35+ tonnes" : "35+ टन";
+  if (n >= 1000) {
+    const t = Math.round((n / 1000) * 10) / 10;
+    return `${t} ${lang === "en" ? "ton" : "टन"}`;
+  }
+  return `${Math.round(n)} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}`;
+}
+
+// Customer's "vehicle booked" panel (owner request 2026-10-13): one card
+// with everything the customer asks the driver on the phone -- how far the
+// vehicle is right now, the fare, the vehicle model + number, its carrying
+// capacity and the load weight they booked for. Bookings are created with
+// vehicle: null (requestByCategory books by capacity tier, not by a vehicle
+// key), so the model has to come from the assigned driver's own
+// vehicleSpec.type -- the old card read b.vehicle and showed a blank model.
+function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
+  const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  const driverDoc = (b.driverMobile && drivers.find((d) => d.mobile === b.driverMobile || d.id === b.driverMobile))
+    || drivers.find((d) => d.name === b.driverName) || null;
+  const spec = driverVehicle || driverDoc?.vehicleSpec || null;
+  const modelDef = VEHICLES.find((x) => x.key === spec?.type) || v || null;
+  const modelName = vehicleLabel(modelDef, lang) || T("Vehicle", "गाडी", "गाड़ी");
+  const capacityKg = Number(spec?.capacityKg) || modelDef?.capacityKg || Number(b.tierMaxKg) || 0;
+
+  // Live distance: vehicle -> pickup until loading starts, vehicle -> drop
+  // after. Same road-factor estimate the booking screen uses for its own
+  // distance, so the two numbers agree with each other.
+  const target = b.loadingStartedAt
+    ? (b.dropLat != null ? { lat: b.dropLat, lng: b.dropLng } : null)
+    : (b.pickupLat != null ? { lat: b.pickupLat, lng: b.pickupLng } : null);
+  const liveKm = estimateDistanceKm(b.driverLocation, target);
+  const liveLabel = liveKm != null
+    ? formatDistanceExact(liveKm, lang)
+    : T("Waiting for location…", "लोकेशन येत आहे…", "लोकेशन आ रही है…");
+  const liveCaption = b.loadingStartedAt
+    ? T("Distance to drop", "ड्रॉपपर्यंत अंतर", "ड्रॉप तक दूरी")
+    : T("Vehicle is away", "गाडी किती दूर", "गाड़ी कितनी दूर");
+
+  const tiles = [
+    { icon: <Navigation size={14} color={C.navy} />, label: liveCaption, value: liveLabel, strong: true },
+    { icon: <IndianRupee size={14} color={C.navy} />, label: T("Fare", "भाडे", "भाड़ा"), value: b.fare ? fmt(b.fare) : "—", strong: true },
+    { icon: <Truck size={14} color={C.navy} />, label: T("Capacity", "क्षमता", "क्षमता"), value: formatKgLabel(capacityKg, lang) || "—" },
+    { icon: <Weight size={14} color={C.navy} />, label: T("Your load", "तुमचे वजन", "आपका वज़न"), value: formatKgLabel(b.weight, lang) || "—" },
+  ];
+
+  return (
+    <div className="rounded-2xl mb-2.5 shadow-sm overflow-hidden" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="p-3 flex items-center gap-2.5" style={{ borderBottom: `1px solid ${C.line}` }}>
+        <SafeImage
+          src={driverDoc?.photo?.url}
+          alt={T("Driver", "ड्रायव्हर", "ड्राइवर")}
+          className="w-11 h-11 rounded-full object-cover shrink-0"
+          fallback={<div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: C.pimpri }}><UserCircle2 size={22} color="#fff" /></div>}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-black truncate" style={{ color: C.ink }}>{b.driverName || "—"}</div>
+          <div className="text-xs font-bold truncate mt-0.5" style={{ color: C.inkSoft }}>{modelName}</div>
+        </div>
+        <div className="shrink-0 rounded-md px-2 py-1 text-xs font-black" style={{ background: "#FFF6D6", color: C.ink, border: `1.5px solid ${C.ink}`, fontFamily: monoFont, letterSpacing: 1 }}>
+          {spec?.vehicleNumber || T("No. pending", "नंबर नाही", "नंबर नहीं")}
+        </div>
+      </div>
+      <div className="grid grid-cols-2">
+        {tiles.map((t, i) => (
+          <div key={i} className="p-3" style={{ borderRight: i % 2 === 0 ? `1px solid ${C.line}` : "none", borderBottom: i < 2 ? `1px solid ${C.line}` : "none" }}>
+            <div className="flex items-center gap-1 text-[11px] font-bold" style={{ color: C.inkSoft }}>{t.icon}{t.label}</div>
+            <div className={`${t.strong ? "text-base" : "text-sm"} font-black mt-0.5`} style={{ color: C.ink }}>{t.value}</div>
+          </div>
+        ))}
+      </div>
+      {b.distance != null && (
+        <div className="px-3 py-2 text-[11px] font-bold flex items-center gap-1" style={{ color: C.inkSoft, borderTop: `1px solid ${C.line}` }}>
+          <MapPin size={12} color={C.inkSoft} />
+          {T("Total trip (pickup → drop)", "एकूण प्रवास (पिकअप → ड्रॉप)", "कुल सफ़र (पिकअप → ड्रॉप)")}: <span style={{ color: C.ink }}>{formatDistanceExact(b.distance, lang)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Shows a single active (AwaitingDriver or Ongoing) booking — the customer's
 // main page focuses on this one card instead of a separate "My Rides" tab.
 function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, drivers, lang, onAddAnother, customerMobile, bookingExtras }) {
@@ -6914,6 +6999,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
               ? (lang === "en" ? "You can keep waiting, or cancel and try again." : lang === "mr" ? "तुम्ही वाट पाहू शकता, किंवा रद्द करून पुन्हा प्रयत्न करू शकता." : "आप इंतज़ार कर सकते हैं, या रद्द करके फिर से कोशिश कर सकते हैं।")
               : (b.fare ? fmt(b.fare) : "")}
           </div>
+          {!noDriverYet && (formatKgLabel(b.weight, lang) || b.distance != null) && (
+            <div className="text-xs font-bold mt-1" style={{ color: C.inkSoft }}>
+              {[formatKgLabel(b.weight, lang), b.distance != null ? formatDistanceExact(b.distance, lang) : null].filter(Boolean).join(" · ")}
+            </div>
+          )}
         </div>
         <button onClick={() => cancelBooking(b.id)} className="w-full rounded-xl py-4 font-black text-base text-white" style={{ background: "#8B0000" }}>
           {noDriverYet
@@ -6963,22 +7053,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
         )}
       </div>
 
-      <div className="rounded-2xl mb-2.5 shadow-sm flex" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="flex-1 p-3 flex items-center gap-2.5">
-          <SafeImage
-            src={drivers.find((d) => d.name === b.driverName)?.photo?.url}
-            alt={lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}
-            className="w-10 h-10 rounded-full object-cover"
-            fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.pimpri }}><UserCircle2 size={20} color="#fff" /></div>}
-          />
-          <div className="text-sm font-bold" style={{ color: C.ink }}>{b.driverName}</div>
-        </div>
-        <div className="w-px" style={{ background: C.line }} />
-        <div className="flex-1 p-3">
-          <div className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Details" : lang === "mr" ? "गाडीची माहिती" : "गाड़ी की जानकारी"}</div>
-          <div className="text-sm font-bold mt-0.5" style={{ color: C.ink }}>{vehicleLabel(v, lang)} · {driverVehicle?.vehicleNumber || (lang === "en" ? "unavailable" : lang === "mr" ? "उपलब्ध नाही" : "उपलब्ध नहीं")}</div>
-        </div>
-      </div>
+      <BookedVehiclePanel b={b} v={v} VEHICLES={VEHICLES} driverVehicle={driverVehicle} drivers={drivers} lang={lang} />
 
       {b.driverMobile && (
         <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
@@ -6991,11 +7066,6 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
         {!b.loadingStartedAt && (
           <div style={{ color: C.ink }}>
             <span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{b.pickup}</span>
-            {b.distance != null && (
-              <div className="mt-1.5">
-                <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(b.distance, lang)}</span>
-              </div>
-            )}
           </div>
         )}
         {b.loadingStartedAt && (
