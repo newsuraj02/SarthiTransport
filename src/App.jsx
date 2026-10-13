@@ -8928,7 +8928,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 // phone or closes the app and hears exactly what a real load sounds like.
 // Native app only: a browser tab can't wake a locked phone at all.
 const BELL_STEPS = ["push", "battery", "fullscreen", "overlay"];
-function LoadBellButton({ driver, lang }) {
+function LoadBellButton({ driver, lang, place = "home" }) {
   const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   const [missing, setMissing] = useState(null);
   const [test, setTest] = useState({ state: "idle", left: 0 });
@@ -8998,9 +8998,16 @@ function LoadBellButton({ driver, lang }) {
   };
   const ready = missing.length === 0;
 
+  // Owner (2026-10-13 13:40): once the bell is on it goes into the
+  // background -- nothing on the home screen. The red button comes back
+  // only if the phone itself loses a permission later (driver turned it
+  // off in Settings, app reinstalled), because then loads would really be
+  // missed. The green status + "टेस्ट घंटी" live on the profile screen.
+  if (ready && place === "home") return null;
+
   if (!ready) {
     return (
-      <button onClick={fixNext} className="w-full rounded-2xl p-3.5 mt-4 text-left shadow-lg guided-submit-ready" style={{ background: C.safety, border: "2px solid #8B0000" }}>
+      <button onClick={fixNext} className={`w-full rounded-2xl p-3.5 ${place === "home" ? "mt-4" : "mb-4"} text-left shadow-lg guided-submit-ready`} style={{ background: C.safety, border: "2px solid #8B0000" }}>
         <div className="flex items-center gap-2.5">
           <Bell size={26} color="#FFFFFF" />
           <div className="flex-1 min-w-0">
@@ -9024,7 +9031,7 @@ function LoadBellButton({ driver, lang }) {
   }[test.state];
 
   return (
-    <div className="rounded-2xl p-3 mt-4 shadow-sm" style={{ background: "#E8F7EE", border: `1.5px solid ${C.success}` }}>
+    <div className={`rounded-2xl p-3 shadow-sm ${place === "home" ? "mt-4" : "mb-4"}`} style={{ background: "#E8F7EE", border: `1.5px solid ${C.success}` }}>
       <div className="flex items-center gap-2.5">
         <Bell size={22} color={C.success} />
         <div className="flex-1 text-sm font-black" style={{ color: C.ink }}>{T("Load bell is ON", "लोड घंटी सुरू आहे", "लोड घंटी चालू है")} ✓</div>
@@ -9688,6 +9695,8 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
           )}
         </div>
       )}
+
+      <LoadBellButton driver={driver} lang={lang} place="profile" />
 
       <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
         <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
