@@ -898,7 +898,7 @@ function findDriverLoadConflict(driver, candidate, bookings, vehicleTypes, lang)
   const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
   const newStart = candidate.scheduledFor ? parseScheduledFor(candidate.scheduledFor) : new Date();
   const newEnd = candidate.hours ? new Date(newStart.getTime() + candidate.hours * 60 * 60 * 1000) : newStart;
-  const myCommitments = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && b.id !== candidate.id);
+  const myCommitments = bookings.filter((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && b.id !== candidate.id);
   for (const existing of myCommitments) {
     const win = getBookingWindow(existing);
     if (!win) continue;
@@ -6847,6 +6847,24 @@ function RideTypeBanner({ booking, lang }) {
   );
 }
 
+// Identity by mobile number, not by name (owner report 2026-10-13: "driver
+// customer ki pahchan nahi ho pa rahi"). Every booking/withdrawal/recharge
+// already stores driverMobile, but the app used to match records to a
+// driver by driverName -- so two drivers who share a name (two "Raju"s)
+// would see each other's trips, wallet requests and history, and the
+// customer could be shown the other Raju's photo and vehicle. Name is only
+// used as a fallback for old records saved before driverMobile existed.
+function isDriverRecord(rec, driver) {
+  if (!rec || !driver) return false;
+  if (rec.driverMobile && driver.mobile) return rec.driverMobile === driver.mobile;
+  return !!rec.driverName && rec.driverName === driver.name;
+}
+function findBookingDriver(drivers, b) {
+  if (!b || !drivers) return null;
+  if (b.driverMobile) return drivers.find((d) => d.mobile === b.driverMobile || d.id === b.driverMobile) || null;
+  return b.driverName ? drivers.find((d) => d.name === b.driverName) || null : null;
+}
+
 // "1250 किग्रा" below a tonne, "1.5 टन" from a tonne up -- the same unit a
 // truck owner would say out loud.
 function formatKgLabel(kg, lang) {
@@ -6863,14 +6881,12 @@ function formatKgLabel(kg, lang) {
 // Customer's "vehicle booked" panel (owner request 2026-10-13): one card
 // with everything the customer asks the driver on the phone -- how far the
 // vehicle is right now, the fare, the vehicle model + number, its carrying
-// capacity and the load weight they booked for. Bookings are created with
-// vehicle: null (requestByCategory books by capacity tier, not by a vehicle
-// key), so the model has to come from the assigned driver's own
-// vehicleSpec.type -- the old card read b.vehicle and showed a blank model.
+// capacity and the load weight they booked for. Model comes from the
+// assigned driver's own vehicleSpec.type first (the vehicle actually
+// coming), falling back to b.vehicle stamped at claim time.
 function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
   const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
-  const driverDoc = (b.driverMobile && drivers.find((d) => d.mobile === b.driverMobile || d.id === b.driverMobile))
-    || drivers.find((d) => d.name === b.driverName) || null;
+  const driverDoc = findBookingDriver(drivers, b);
   const spec = driverVehicle || driverDoc?.vehicleSpec || null;
   const modelDef = VEHICLES.find((x) => x.key === spec?.type) || v || null;
   const modelName = vehicleLabel(modelDef, lang) || T("Vehicle", "गाडी", "गाड़ी");
@@ -7496,7 +7512,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   // The actual assigned driver's vehicle — looked up from the shared drivers
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
-  const activeDriverVehicle = drivers.find((d) => d.name === activeBooking?.driverName)?.vehicleSpec;
+  const activeDriverVehicle = findBookingDriver(drivers, activeBooking)?.vehicleSpec;
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer");
   // Lifted up here (rather than owned inside CustomerBooking) so the same
   // permission state/banner carries across from the booking-entry screen
@@ -7797,7 +7813,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
           <div>
             {selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (
               <ActiveRide booking={advanceBookings.find((ab) => ab.id === selectedAdvanceId)} vehicleTypes={vehicleTypes} cancelBooking={cancelBooking}
-                driverVehicle={drivers.find((d) => d.name === advanceBookings.find((ab) => ab.id === selectedAdvanceId)?.driverName)?.vehicleSpec}
+                driverVehicle={findBookingDriver(drivers, advanceBookings.find((ab) => ab.id === selectedAdvanceId))?.vehicleSpec}
                 drivers={drivers} lang={lang} customerMobile={customerMobile} bookingExtras={bookingExtras} />
             ) : (
               <div className="px-5 py-5">
@@ -8216,7 +8232,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
 }
 
 function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, vehicleTypes, fareTiers, lang, onOpenWallet, locationPermission, bookingExtras }) {
-  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
+  const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
   // "Completed" immediately (see LoadingTimer's onEnded), which makes myTrip
   // above stop matching it on the very next render, so this is what the
@@ -8284,7 +8300,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // banner below — the actual filtering (which also covers any OTHER load,
   // including another Advance one, whose time would conflict) is done by
   // findDriverLoadConflict in openLoads.
-  const myAdvanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
+  const myAdvanceBookings = bookings.filter((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && isFutureAdvance(b.scheduledFor));
   const notificationsLocked = myAdvanceBookings.some((b) => {
     const scheduled = parseScheduledFor(b.scheduledFor);
     const lockHours = notificationLockHours(driverVehicleDef?.capacityKg || 0);
@@ -8846,6 +8862,25 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
           )}
 
           <div>
+            {/* Who the driver is going to meet -- before this the trip
+                screen only had a "Call Customer" button and no name at all,
+                so at the pickup gate the driver had nothing to ask for.
+                Mobile is shown as last 4 digits only: calls still go
+                through MaskedCallButton below. */}
+            <div className="rounded-2xl p-3 mb-2.5 shadow-sm flex items-center gap-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: C.navy }}><UserCircle2 size={22} color="#fff" /></div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Customer" : lang === "mr" ? "ग्राहक" : "ग्राहक"}</div>
+                <div className="text-sm font-black truncate" style={{ color: C.ink }}>{myTrip.customerName || (lang === "en" ? "Name not given" : lang === "mr" ? "नाव दिलेले नाही" : "नाम नहीं दिया")}</div>
+                {myTrip.customerMobile && (
+                  <div className="text-xs font-bold mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>📱 ••••••{String(myTrip.customerMobile).replace(/\D/g, "").slice(-4)}</div>
+                )}
+              </div>
+              <div className="text-right shrink-0">
+                {myTrip.fare ? <div className="text-base font-black" style={{ color: C.ink }}>{fmt(myTrip.fare)}</div> : null}
+                {formatKgLabel(myTrip.weight, lang) && <div className="text-xs font-bold" style={{ color: C.inkSoft }}>{formatKgLabel(myTrip.weight, lang)}</div>}
+              </div>
+            </div>
             {myTrip.customerMobile && (
               <MaskedCallButton bookingId={myTrip.id} fallbackMobile={myTrip.customerMobile} lang={lang}
                 label={lang === "en" ? "Call Customer" : lang === "mr" ? "ग्राहकाला कॉल करा" : "ग्राहक को कॉल करें"}
@@ -9066,8 +9101,8 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
   const displayWallet = useCountUp(driver.wallet || 0);
   const displayBonus = useCountUp(driver.bonus || 0);
   const inTrial = isInTrial(driver.createdAt);
-  const myWithdrawals = (withdrawals || []).filter((w) => w.driverName === driver.name);
-  const myRecharges = (rechargeRequests || []).filter((r) => r.driverName === driver.name);
+  const myWithdrawals = (withdrawals || []).filter((w) => isDriverRecord(w, driver));
+  const myRecharges = (rechargeRequests || []).filter((r) => isDriverRecord(r, driver));
 
   // The wallet balance moves for two reasons right now: an approved
   // recharge landing, or a referral reward — commission is deliberately
@@ -9178,7 +9213,7 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
 }
 
 function DriverHistory({ tripLog, driver, lang }) {
-  const myTrips = tripLog.filter((t) => t.driverName === driver.name);
+  const myTrips = tripLog.filter((t) => isDriverRecord(t, driver));
   const [docsTrip, setDocsTrip] = useState(null);
   return (
     <div className="px-5 py-5">
@@ -9995,11 +10030,11 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
     patchDoc("drivers", driver.mobile, { lastActiveAt: serverTimestamp() }).catch((e) => console.error("[driver lastActiveAt]", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const myTrip = bookings.find((b) => b.status === "Ongoing" && b.driverName === driver.name && !isFutureAdvance(b.scheduledFor));
+  const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Jobs this driver is already assigned to but that are scheduled for a
   // future date — kept out of myTrip (above) so today's home screen isn't
   // stuck showing a trip that's days away, but still reachable here.
-  const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && b.driverName === driver.name && isFutureAdvance(b.scheduledFor));
+  const advanceBookings = bookings.filter((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && isFutureAdvance(b.scheduledFor));
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
   useReportInstalledVersion("drivers", driver.mobile);
   const locationPermission = useLocationPermission();
@@ -11438,7 +11473,7 @@ export default function App() {
     progressTimer.current = setInterval(() => {
       if (!driver) return;
       bookings
-        .filter((b) => b.status === "Ongoing" && b.progress < 95 && b.driverName === driver.name)
+        .filter((b) => b.status === "Ongoing" && b.progress < 95 && isDriverRecord(b, driver))
         .forEach((b) => patchDoc("bookings", b.id, { progress: b.progress + 5 }).catch((e) => console.error(e)));
     }, 1200);
     return () => clearInterval(progressTimer.current);
