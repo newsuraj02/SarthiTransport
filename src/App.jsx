@@ -9102,6 +9102,21 @@ function PushDiagnosticPanel({ collectionName, mobile }) {
     setRunning(true);
     setLines([`isNativeApp: ${isNativeApp}`, `mobile: ${mobile || "-"}`]);
 
+    // Control test: a completely DIFFERENT native plugin (CapacitorApp,
+    // already used elsewhere in this app -- see useReportInstalledVersion)
+    // -- if this ALSO hangs, the whole Capacitor bridge is broken on this
+    // device, not just push-notifications specifically. If this comes
+    // back fine while the push checks below hang, it's isolated to that
+    // one plugin.
+    const appInfoResult = await raceTimeout(CapacitorApp.getInfo(), 8000);
+    if (appInfoResult.timedOut) {
+      push(`CapacitorApp.getInfo(): TIMED OUT after 8s -- whole bridge may be broken, not just push`);
+    } else if (appInfoResult.error) {
+      push(`CapacitorApp.getInfo() THREW: ${appInfoResult.error?.name || ""} ${appInfoResult.error?.message || appInfoResult.error}`);
+    } else {
+      push(`CapacitorApp.getInfo(): OK, version=${appInfoResult.value?.version || "-"} build=${appInfoResult.value?.build || "-"}`);
+    }
+
     const permResult = await raceTimeout(checkPushPermission(), 8000);
     if (permResult.timedOut) {
       push(`checkPushPermission(): TIMED OUT after 8s (never resolved at all)`);
