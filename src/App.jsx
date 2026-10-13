@@ -2656,7 +2656,19 @@ function usePrimePermissionsOnce(permsPrimedGlobal, setPermsPrimedGlobal) {
       // Browser tab: no dedicated native permission flow exists, so this
       // real getCurrentPosition call is still how a browser first prompts.
       if (!isNativeApp && location.permission !== "granted") await location.enable();
-      if (typeof Notification !== "undefined" && Notification.permission === "default") await requestPushToken();
+      // Real-device finding (2026-10-13): most drivers AND customers had no
+      // fcmToken field in Firestore at all -- not just null, never written.
+      // Root cause: this used to gate the push-permission request on the
+      // raw browser `Notification.permission === "default"` global, which
+      // is exactly the web-only API checkPushPermission() (see
+      // firebaseClient.js) was written to avoid relying on for native, since
+      // Capacitor's WebView doesn't reliably reflect real native permission
+      // state through it. That meant this one-time, pre-login priming --
+      // the ONLY push-permission prompt a customer ever gets; drivers are
+      // separately covered by DriverHome's PermissionGate -- silently never
+      // fired the native OS dialog at all, for anyone, ever. Swapped to the
+      // already-existing native-safe helper instead of the raw web check.
+      if ((await checkPushPermission()) === "default") await requestPushToken();
       setPermsPrimedGlobal(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -7493,6 +7505,55 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
   const locationPermission = useLocationPermission();
   const rideNotifications = useRideNotifications("customers", customerMobile, lang);
   useReportInstalledVersion("customers", customerMobile);
+
+  // Real-device finding (2026-10-13): most customers (and most drivers,
+  // before DriverHome's PermissionGate existed) had no fcmToken field in
+  // Firestore at all. Customers had NO active push-permission mechanism of
+  // their own at all -- only usePrimePermissionsOnce's single pre-login,
+  // once-EVER-per-device prompt (now fixed separately, see its own
+  // comment, but that fix only helps a brand-new install going forward --
+  // an existing device already has permsPrimedGlobal persisted true and
+  // will never run that check again) and a NotificationBanner that's been
+  // a dead `return null` stub for a while. Any customer who denied that
+  // one prompt, or whose device never actually got asked due to the bug
+  // just fixed, had zero way to ever be asked again or recover. This
+  // mirrors DriverHome's PermissionGate (steps 1-2, same reasoning): ask
+  // again every time this screen mounts/resumes while the OS can still
+  // show the real dialog ("prompt"/"default"); once truly "denied" (the
+  // OS will never show that dialog again), deep-link to the exact
+  // notification-settings screen ONCE per app open instead of either
+  // nagging forever or doing nothing. No location/battery/full-screen/
+  // overlay/autostart steps here -- those are driver-only (background GPS
+  // tracking, ring alert), not relevant to a customer's own device.
+  const custPushGateTried = useRef(false);
+  useEffect(() => {
+    if (!isNativeApp || !customerMobile) return;
+    let busy = false;
+    let cancelled = false;
+    let handle = null;
+    const step = async () => {
+      if (busy || cancelled) return;
+      busy = true;
+      try {
+        const pushPerm = await checkPushPermission();
+        if (pushPerm === "denied") {
+          if (!custPushGateTried.current) { custPushGateTried.current = true; openNativeSettingsBridge("notifications"); }
+        } else if (pushPerm !== "granted") {
+          const r = await requestPushToken();
+          if (r.ok) patchDoc("customers", customerMobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+        }
+      } catch (e) {
+        console.error("[customer push gate]", e);
+      } finally {
+        busy = false;
+      }
+    };
+    step();
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => { if (isActive) setTimeout(step, 700); })
+      .then((h) => { if (cancelled) h.remove(); else handle = h; })
+      .catch((e) => console.error("[customer push gate] appStateChange", e));
+    return () => { cancelled = true; handle?.remove(); };
+  }, [customerMobile]);
 
   // Real GPS live-tracking, mirroring the driver's own — shares the
   // customer's actual device location while a trip is Ongoing, so the
