@@ -28,7 +28,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -8890,6 +8890,8 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       )}
 
 
+      <LoadBellButton driver={driver} lang={lang} />
+
       {/* My Wallet + Driver Duty switch — moved down here from the header
           row above DriverHome (see DriverApp) so the Get Estimate card can
           take that top spot instead. */}
@@ -8910,6 +8912,127 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- लोड घंटी बटन (owner request 2026-10-13 13:31) ----
+// One button on the driver home screen that tells the driver plainly
+// whether a load will wake the phone and ring loudly, and fixes whatever
+// is missing with one tap per item: notification permission (+ this
+// phone's FCM token saved), battery exemption, Android 14 full-screen
+// alerts, and "display over other apps" (ring screen opens by itself).
+// Re-checked every time the driver comes back to the app, so the status is
+// always the phone's real state. "टेस्ट घंटी" sends this phone a REAL ring
+// push from the server after 10 s (sendTestRing) -- the driver locks the
+// phone or closes the app and hears exactly what a real load sounds like.
+// Native app only: a browser tab can't wake a locked phone at all.
+const BELL_STEPS = ["push", "battery", "fullscreen", "overlay"];
+function LoadBellButton({ driver, lang }) {
+  const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  const [missing, setMissing] = useState(null);
+  const [test, setTest] = useState({ state: "idle", left: 0 });
+  const checkRef = useRef(null);
+  checkRef.current = async () => {
+    const m = [];
+    if ((await checkPushPermission()) !== "granted") m.push("push");
+    const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
+    if (battery?.ignoring === false) m.push("battery");
+    if (!(await canUseFullScreenIntent())) m.push("fullscreen");
+    if (!(await canDrawOverlays())) m.push("overlay");
+    setMissing(m);
+  };
+  useEffect(() => {
+    if (!isNativeApp) return undefined;
+    let handle = null;
+    let cancelled = false;
+    checkRef.current();
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => { if (isActive) setTimeout(() => checkRef.current(), 700); })
+      .then((h) => { if (cancelled) h.remove(); else handle = h; })
+      .catch((e) => console.error("[load bell] appStateChange", e));
+    const onOk = () => setTest({ state: "ok", left: 0 });
+    window.addEventListener("sarthi-test-ring-ok", onOk);
+    return () => { cancelled = true; handle?.remove(); window.removeEventListener("sarthi-test-ring-ok", onOk); };
+  }, []);
+  // Countdown shown while the server waits before sending the test ring.
+  useEffect(() => {
+    if (test.state !== "waiting" || test.left <= 0) return undefined;
+    const id = setTimeout(() => setTest((t) => (t.state === "waiting" ? { ...t, left: t.left - 1 } : t)), 1000);
+    return () => clearTimeout(id);
+  }, [test]);
+
+  if (!isNativeApp || missing === null) return null;
+
+  const saveToken = async () => {
+    const r = await requestPushToken();
+    if (r.ok && driver.mobile) await patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+    return r.ok;
+  };
+  const fixNext = async () => {
+    const next = BELL_STEPS.find((s) => missing.includes(s));
+    try {
+      if (next === "push") {
+        if ((await checkPushPermission()) === "denied") openNativeSettingsBridge("notifications");
+        else await saveToken();
+      } else if (next === "battery") await requestBatteryOptimizationExemption();
+      else if (next === "fullscreen") openNativeSettingsBridge("full_screen_intent");
+      else if (next === "overlay") await openOverlaySettings();
+    } catch (e) {
+      console.error("[load bell] fix", e);
+    }
+    setTimeout(() => checkRef.current(), 700);
+  };
+  const runTest = async () => {
+    setTest({ state: "waiting", left: 10 });
+    await saveToken(); // make sure the server has THIS phone's current token
+    const r = await sendTestRing(10);
+    if (r?.ok) setTest((t) => (t.state === "ok" ? t : { state: "sent", left: 0 }));
+    else setTest({ state: r?.reason === "too_soon" ? "tooSoon" : r?.reason === "no_token" ? "noToken" : "err", left: 0 });
+  };
+
+  const stepLabel = {
+    push: T("Notifications", "नोटिफिकेशन", "नोटिफिकेशन"),
+    battery: T("Battery", "बॅटरी", "बैटरी"),
+    fullscreen: T("Lock-screen alert", "लॉक स्क्रीन अलर्ट", "लॉक स्क्रीन अलर्ट"),
+    overlay: T("Open over other apps", "इतर अ‍ॅप्सवर उघडणे", "दूसरे ऐप के ऊपर खुलना"),
+  };
+  const ready = missing.length === 0;
+
+  if (!ready) {
+    return (
+      <button onClick={fixNext} className="w-full rounded-2xl p-3.5 mt-4 text-left shadow-lg guided-submit-ready" style={{ background: C.safety, border: "2px solid #8B0000" }}>
+        <div className="flex items-center gap-2.5">
+          <Bell size={26} color="#FFFFFF" />
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-black text-white">{T("Load bell is OFF — tap to turn on", "लोड घंटी बंद आहे — सुरू करण्यासाठी दाबा", "लोड घंटी बंद है — चालू करने के लिए दबाएँ")}</div>
+            <div className="text-xs font-bold mt-0.5" style={{ color: "#FFE3E3" }}>
+              {T("Still needed", "अजून बाकी", "अभी बाकी")}: {BELL_STEPS.filter((s) => missing.includes(s)).map((s) => stepLabel[s]).join(" · ")}
+            </div>
+          </div>
+        </div>
+      </button>
+    );
+  }
+
+  const testMsg = {
+    waiting: T(`Bell rings in ${test.left} s — lock the phone now`, `${test.left} सेकंदात घंटी वाजेल — आता फोन लॉक करा`, `${test.left} सेकंड में घंटी बजेगी — अभी फ़ोन लॉक कर दें`),
+    sent: T("Test bell sent. Tap any button on the ring screen to stop it.", "टेस्ट घंटी पाठवली. थांबवण्यासाठी कोणतेही बटण दाबा.", "टेस्ट घंटी भेज दी। बंद करने के लिए घंटी वाली स्क्रीन पर कोई भी बटन दबाएँ।"),
+    ok: T("✅ Test passed — loads will ring on this phone.", "✅ टेस्ट यशस्वी — या फोनवर लोडची घंटी वाजेल.", "✅ टेस्ट सफल — इस फ़ोन पर लोड की घंटी बजेगी।"),
+    tooSoon: T("Wait 30 seconds before testing again.", "पुन्हा टेस्टसाठी 30 सेकंद थांबा.", "दोबारा टेस्ट के लिए 30 सेकंड रुकें।"),
+    noToken: T("Notification not registered yet — open the app again and retry.", "नोटिफिकेशन अजून नोंदले नाही — अ‍ॅप पुन्हा उघडा.", "नोटिफिकेशन अभी दर्ज नहीं हुआ — ऐप दोबारा खोलकर फिर टेस्ट करें।"),
+    err: T("Test failed — check internet and try again.", "टेस्ट अयशस्वी — इंटरनेट तपासा.", "टेस्ट नहीं हो पाया — इंटरनेट देखकर फिर कोशिश करें।"),
+  }[test.state];
+
+  return (
+    <div className="rounded-2xl p-3 mt-4 shadow-sm" style={{ background: "#E8F7EE", border: `1.5px solid ${C.success}` }}>
+      <div className="flex items-center gap-2.5">
+        <Bell size={22} color={C.success} />
+        <div className="flex-1 text-sm font-black" style={{ color: C.ink }}>{T("Load bell is ON", "लोड घंटी सुरू आहे", "लोड घंटी चालू है")} ✓</div>
+        <button onClick={runTest} disabled={test.state === "waiting"} className="shrink-0 rounded-full px-3 py-2 text-xs font-black text-white" style={{ background: test.state === "waiting" ? C.inkSoft : C.navy }}>
+          🔔 {T("Test bell", "टेस्ट घंटी", "टेस्ट घंटी")}
+        </button>
+      </div>
+      {testMsg && <div className="text-xs font-bold mt-2" style={{ color: test.state === "err" || test.state === "noToken" ? C.safety : C.ink }}>{testMsg}</div>}
     </div>
   );
 }
@@ -11144,6 +11267,8 @@ export default function App() {
     const check = () => {
       consumePendingRingAction().then(({ action, bookingId }) => {
         if (!bookingId || (action !== "acceptBooking" && action !== "rejectBooking")) return;
+        // "टेस्ट घंटी" (sendTestRing) -- nothing to claim; just confirm it worked.
+        if (String(bookingId).startsWith("TEST-")) { try { localStorage.setItem("sarthi_testRingOkAt", String(Date.now())); } catch { /* storage off */ } window.dispatchEvent(new Event("sarthi-test-ring-ok")); return; }
         driverRespondBookingRef.current(bookingId, action === "acceptBooking").catch((e) => console.error("[ringingBridge] respond", e));
       });
     };
