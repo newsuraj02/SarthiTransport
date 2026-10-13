@@ -9078,42 +9078,65 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 // native build, just tap the button and read (or screenshot) the output.
 // Remove once the real fcmToken-stuck-despite-granted-permission bug is
 // found and fixed -- this is diagnostic scaffolding, not a feature.
+// Races any promise against a plain timer so a step that hangs forever
+// (confirmed real on a test device -- see requestNativePushToken's own
+// 20s timeout in firebaseClient.js) can't freeze this diagnostic's UI
+// the same way -- resolves { timedOut: true } instead of just sitting on
+// "Running..." forever with zero visible information either way.
+function raceTimeout(promise, ms) {
+  return Promise.race([
+    promise.then((v) => ({ timedOut: false, value: v })).catch((e) => ({ timedOut: false, error: e })),
+    new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), ms)),
+  ]);
+}
 function PushDiagnosticPanel({ collectionName, mobile }) {
-  const [out, setOut] = useState(null);
+  // Appended to and re-rendered after EVERY step (not just once at the
+  // end) -- the previous version only called setOut() once, after
+  // everything finished, so "nothing on screen" looked identical whether
+  // step 1 was instant and step 2 was hanging, or step 1 itself was the
+  // one stuck. This version shows exactly which line it never gets past.
+  const [lines, setLines] = useState([]);
   const [running, setRunning] = useState(false);
+  const push = (line) => setLines((prev) => [...prev, line]);
   const run = async () => {
     setRunning(true);
-    const lines = [`isNativeApp: ${isNativeApp}`, `mobile: ${mobile || "-"}`];
-    try {
-      const perm = await checkPushPermission();
-      lines.push(`checkPushPermission(): "${perm}"`);
-    } catch (e) {
-      lines.push(`checkPushPermission() THREW: ${e?.name || ""} ${e?.message || e}`);
+    setLines([`isNativeApp: ${isNativeApp}`, `mobile: ${mobile || "-"}`]);
+
+    const permResult = await raceTimeout(checkPushPermission(), 8000);
+    if (permResult.timedOut) {
+      push(`checkPushPermission(): TIMED OUT after 8s (never resolved at all)`);
+    } else if (permResult.error) {
+      push(`checkPushPermission() THREW: ${permResult.error?.name || ""} ${permResult.error?.message || permResult.error}`);
+    } else {
+      push(`checkPushPermission(): "${permResult.value}"`);
     }
-    try {
-      const r = await requestPushToken();
-      lines.push(`requestPushToken(): ok=${r?.ok} reason="${r?.reason || "-"}" token=${r?.token ? r.token.slice(0, 16) + "…(" + r.token.length + " chars)" : "-"}`);
+
+    const tokenResult = await raceTimeout(requestPushToken(), 25000);
+    if (tokenResult.timedOut) {
+      push(`requestPushToken(): TIMED OUT after 25s (its own internal 20s timeout never even fired -- stuck somewhere before that)`);
+    } else if (tokenResult.error) {
+      push(`requestPushToken() THREW: ${tokenResult.error?.name || ""} ${tokenResult.error?.message || tokenResult.error}`);
+    } else {
+      const r = tokenResult.value;
+      push(`requestPushToken(): ok=${r?.ok} reason="${r?.reason || "-"}" token=${r?.token ? r.token.slice(0, 16) + "…(" + r.token.length + " chars)" : "-"}`);
       if (r?.ok && r.token && mobile) {
         try {
           await patchDoc(collectionName, mobile, { fcmToken: r.token });
-          lines.push("patchDoc(fcmToken): wrote OK");
+          push("patchDoc(fcmToken): wrote OK");
         } catch (e2) {
-          lines.push(`patchDoc(fcmToken) THREW: ${e2?.name || ""} ${e2?.message || e2}`);
+          push(`patchDoc(fcmToken) THREW: ${e2?.name || ""} ${e2?.message || e2}`);
         }
       }
-    } catch (e) {
-      lines.push(`requestPushToken() THREW: ${e?.name || ""} ${e?.message || e}`);
     }
-    setOut(lines.join("\n"));
     setRunning(false);
   };
   return (
     <div className="rounded-xl p-3 mt-3 text-xs" style={{ background: "#FFF8E1", border: "1px solid #E0C068" }}>
       <div className="font-black mb-1.5">🔧 Push diagnostic (temporary — screenshot this)</div>
       <button onClick={run} disabled={running} className="rounded-full px-3 py-1.5 font-bold text-white text-xs" style={{ background: running ? "#9AA3B0" : "#1F3C88" }}>
-        {running ? "Running…" : "Run check"}
+        {running ? "Running… (updates live below)" : "Run check"}
       </button>
-      {out && <pre className="mt-2 whitespace-pre-wrap break-all" style={{ fontFamily: monoFont, fontSize: 10 }}>{out}</pre>}
+      {lines.length > 0 && <pre className="mt-2 whitespace-pre-wrap break-all" style={{ fontFamily: monoFont, fontSize: 10 }}>{lines.join("\n")}</pre>}
     </div>
   );
 }
