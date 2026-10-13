@@ -461,12 +461,28 @@ async function requestNativePushToken() {
   // token (or failure) arrives asynchronously through these two events,
   // same as the plugin's own docs describe, so wrap that in a Promise
   // rather than awaiting register() directly.
+  //
+  // Real-device finding (2026-10-13): on at least one stuck test device,
+  // NEITHER event ever fires at all -- not "registration", not
+  // "registrationError" -- so this Promise hung forever with no visible
+  // symptom beyond "fcmToken never gets written". Worse than a normal
+  // failure: every caller of this (PermissionGate, the customer push
+  // gate, LoadBellButton, useRideNotifications) awaits it directly, so a
+  // device where Play Services/FCM genuinely never responds silently
+  // deadlocks the ENTIRE permission-gate chain on that device forever,
+  // not just the push step -- battery/full-screen/overlay/autostart never
+  // even get checked either. A 20s timeout turns that silent, permanent
+  // hang into a real, visible "timeout" reason instead -- still fails
+  // (nothing can invent a token Play Services won't hand over), but at
+  // least every caller gets an answer and the gate can keep moving
+  // instead of freezing on this one step forever.
   return new Promise((resolve) => {
     let settled = false;
-    let regHandle, errHandle;
+    let regHandle, errHandle, timer;
     const finish = (result) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timer);
       regHandle?.then((h) => h.remove());
       errHandle?.then((h) => h.remove());
       resolve(result);
@@ -476,6 +492,10 @@ async function requestNativePushToken() {
       console.error("[nativePush] registration error", err);
       finish({ ok: false, reason: "error" });
     });
+    timer = setTimeout(() => {
+      console.error("[nativePush] register() timed out after 20s -- neither registration nor registrationError fired (Play Services/FCM likely unreachable on this device)");
+      finish({ ok: false, reason: "timeout" });
+    }, 20000);
     PushNotifications.register();
   });
 }
