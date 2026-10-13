@@ -12,7 +12,12 @@ import android.provider.Settings;
 import androidx.annotation.NonNull;
 import com.capacitorjs.plugins.pushnotifications.MessagingService;
 import com.google.firebase.messaging.RemoteMessage;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import org.json.JSONObject;
 
 // Subclasses Capacitor's own FCM service (not a fresh one registered
 // alongside it -- Firebase only ever delivers to ONE FirebaseMessagingService
@@ -46,6 +51,42 @@ public class AppFirebaseMessagingService extends MessagingService {
         if ("load_taken".equals(type)) { closeLoad(data.get("bookingId")); return; }
         if (!"direct_request_ring".equals(type)) return;
         showRingingNotification(data);
+        sendRingAck(data);
+    }
+
+    // "घंटी बजी" receipt (functions/index.js: ringAck). Tells the server this
+    // phone really got the load and is ringing, so it stops re-sending to
+    // us and the customer sees how many phones are ringing. Only sent when
+    // the server included ackKey/ackUrl (real loads; never the test ring).
+    // Runs off the main thread; a failure just means the server re-rings.
+    private void sendRingAck(Map<String, String> data) {
+        final String ackUrl = data.get("ackUrl");
+        final String ackKey = data.get("ackKey");
+        final String bookingId = data.get("bookingId");
+        final String driverMobile = data.get("driverMobile");
+        if (ackUrl == null || ackKey == null || bookingId == null || driverMobile == null) return;
+        if (!ackUrl.startsWith("https://")) return;
+        new Thread(() -> {
+            HttpURLConnection conn = null;
+            try {
+                JSONObject body = new JSONObject();
+                body.put("bookingId", bookingId);
+                body.put("driverMobile", driverMobile);
+                body.put("key", ackKey);
+                byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+                conn = (HttpURLConnection) new URL(ackUrl).openConnection();
+                conn.setRequestMethod("POST");
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(8000);
+                conn.setDoOutput(true);
+                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                try (OutputStream os = conn.getOutputStream()) { os.write(bytes); }
+                conn.getResponseCode();
+            } catch (Exception ignored) {
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }).start();
     }
 
     private void showRingingNotification(Map<String, String> data) {

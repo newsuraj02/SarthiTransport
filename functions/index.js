@@ -1,6 +1,7 @@
 const { onDocumentCreated, onDocumentWritten, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const crypto = require("crypto");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -332,18 +333,21 @@ exports.sendBulkDriverWhatsApp = onCall({ region: "asia-south1", secrets: [MSG91
 // ignores this extra data message the same way it always would have, and
 // keeps getting the original alert exactly as before. Only once a driver's
 // app has actually updated does this second message start doing anything.
-async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile) {
+async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile, ackKey = null) {
   if (!token) return;
   try {
     await getMessaging().send({
       token,
-      android: { priority: "high" },
+      android: { priority: "high", ttl: 120 * 1000 },
       data: {
         type: "direct_request_ring",
         bookingId,
         pickup: load.pickup || "-",
         drop: load.drop || "-",
         weight: load.weight ? String(load.weight) : "-",
+        // Delivery receipt (see ringAck below): the phone posts these back
+        // the moment it starts ringing. Older app builds just ignore them.
+        ...(ackKey ? { ackKey, driverMobile, ackUrl: RING_ACK_URL } : {}),
       },
     });
   } catch (e) {
@@ -384,8 +388,46 @@ const BROADCAST_WEIGHT_HEADROOM_KG = 5000;
 // recent-ish last fix, while 24h (not unbounded) still guards against the
 // already-fixed stale-online-driver-treated-as-available bug.
 const BROADCAST_LOCATION_STALE_MS = 24 * 60 * 60 * 1000;
+// ---- घंटी पहुँची? (delivery receipt + automatic re-ring), 2026-10-13 ----
+// Uber-style: the server doesn't just fire the push and hope. Every
+// alerted driver gets a one-time ackKey (stored in ringDeliveries, which
+// only the Admin SDK writes and only admins can read); the phone posts it
+// back to ringAck the moment it rings. Anyone who hasn't acknowledged
+// after RING_RETRY_DELAYS_MS while the load is still open gets the ring
+// again. bookings.ringDeliveredCount lets the customer see how many phones
+// are actually ringing.
+const PROJECT_ID = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "sarthi-transport-74865";
+const RING_ACK_URL = `https://asia-south1-${PROJECT_ID}.cloudfunctions.net/ringAck`;
+const RING_RETRY_DELAYS_MS = [20000, 25000]; // re-ring at ~20 s, then ~45 s
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+exports.ringAck = onRequest({ region: "asia-south1", cors: false }, async (req, res) => {
+  if (req.method !== "POST") { res.status(405).send("POST only"); return; }
+  const { bookingId, driverMobile, key } = req.body || {};
+  if (typeof bookingId !== "string" || typeof driverMobile !== "string" || typeof key !== "string"
+      || !/^[A-Za-z0-9_-]{1,64}$/.test(bookingId) || !/^\d{10}$/.test(driverMobile)) {
+    res.status(400).send("bad request"); return;
+  }
+  const ref = db.collection("ringDeliveries").doc(`${bookingId}_${driverMobile}`);
+  try {
+    const firstAck = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.data().key !== key) return null;
+      if (snap.data().ackAt) return false;
+      tx.update(ref, { ackAt: Date.now() });
+      tx.update(db.collection("bookings").doc(bookingId), { ringDeliveredCount: FieldValue.increment(1) });
+      return true;
+    });
+    if (firstAck === null) { res.status(403).send("unknown"); return; }
+    res.status(200).send("ok");
+  } catch (e) {
+    console.error("[ringAck]", e.message);
+    res.status(500).send("error");
+  }
+});
+
 exports.onDirectRequestBroadcast = onDocumentCreated(
-  { document: "bookings/{bookingId}", secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_DIRECT_REQUEST_TEMPLATE, MSG91_WHATSAPP_NAMESPACE] },
+  { document: "bookings/{bookingId}", timeoutSeconds: 120, secrets: [MSG91_AUTH_KEY, MSG91_WHATSAPP_NUMBER, MSG91_DIRECT_REQUEST_TEMPLATE, MSG91_WHATSAPP_NAMESPACE] },
   async (event) => {
     const load = event.data?.data();
     if (!load || load.status !== "AwaitingDriver" || load.pendingDriverName) return;
@@ -395,14 +437,18 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       db.collection("bookings").where("status", "==", "Ongoing").get(),
     ]);
     const ongoingByDriver = {};
+    // Keyed by mobile (name only for old bookings without driverMobile) --
+    // two drivers sharing a name must not block each other's loads.
     ongoingSnap.forEach((doc) => {
       const b = doc.data();
-      if (!b.driverName) return;
-      (ongoingByDriver[b.driverName] ||= []).push(b);
+      const key = b.driverMobile || (b.driverName ? `name:${b.driverName}` : null);
+      if (!key) return;
+      (ongoingByDriver[key] ||= []).push(b);
     });
 
     const sends = [];
     const alerted = [];
+    const ringKeys = {};
     // Per-driver skip-reason logging -- every one of these conditions
     // fails completely silently otherwise, so there was no way to tell
     // which one was actually blocking a specific test driver without
@@ -431,13 +477,16 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       if (distKm > DIRECT_REQUEST_RADIUS_KM) { skipLog.push(`${tag}: ${distKm.toFixed(1)}km away, outside ${DIRECT_REQUEST_RADIUS_KM}km radius`); return; }
 
       const lockHours = notificationLockHours(capacityKg);
-      if (hasLoadConflict(load, ongoingByDriver[driver.name] || [], lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
+      const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
+      if (hasLoadConflict(load, mine, lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
 
       if (driver.fcmToken) {
         skipLog.push(`${tag}: SENDING push+ring+whatsapp`);
         alerted.push(doc.id);
+        const ackKey = crypto.randomBytes(12).toString("hex");
+        ringKeys[doc.id] = { key: ackKey, token: driver.fcmToken };
         sends.push(() => sendDirectRequestAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
-        sends.push(() => sendDirectRequestRingAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
+        sends.push(() => sendDirectRequestRingAlert(driver.fcmToken, load, event.params.bookingId, doc.id, ackKey));
       } else {
         skipLog.push(`${tag}: no fcmToken (push/ring skipped, WhatsApp still sent)`);
       }
@@ -447,9 +496,36 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
     // Saved BEFORE anything rings, so onBookingTaken always knows whose
     // phone to stop -- even if someone accepts within a second.
     if (alerted.length) {
-      await event.data.ref.update({ alertedDriverMobiles: alerted }).catch((e) => console.error("[onDirectRequestBroadcast] alertedDriverMobiles", e.message));
+      await event.data.ref.update({ alertedDriverMobiles: alerted, ringDeliveredCount: 0 }).catch((e) => console.error("[onDirectRequestBroadcast] alertedDriverMobiles", e.message));
+      const batch = db.batch();
+      const bookingId = event.params.bookingId;
+      for (const [mobile, { key }] of Object.entries(ringKeys)) {
+        batch.set(db.collection("ringDeliveries").doc(`${bookingId}_${mobile}`), { bookingId, driverMobile: mobile, key, sentAt: Date.now(), attempts: 1, ackAt: null });
+      }
+      await batch.commit().catch((e) => console.error("[onDirectRequestBroadcast] ringDeliveries", e.message));
     }
     await Promise.all(sends.map((send) => send()));
+
+    // Re-ring whoever's phone hasn't confirmed, while the load is still open.
+    const bookingId = event.params.bookingId;
+    for (const delay of RING_RETRY_DELAYS_MS) {
+      if (!Object.keys(ringKeys).length) break;
+      await sleep(delay);
+      const now = (await event.data.ref.get()).data();
+      if (!now || now.status !== "AwaitingDriver") break;
+      const pending = await db.collection("ringDeliveries").where("bookingId", "==", bookingId).where("ackAt", "==", null).get();
+      if (pending.empty) break;
+      const retries = [];
+      pending.forEach((d) => {
+        const { driverMobile, key, attempts } = d.data();
+        const entry = ringKeys[driverMobile];
+        if (!entry) return;
+        retries.push(d.ref.update({ attempts: (attempts || 1) + 1, lastRetryAt: Date.now() }));
+        retries.push(sendDirectRequestRingAlert(entry.token, load, bookingId, driverMobile, key));
+      });
+      console.log(`[onDirectRequestBroadcast] booking ${bookingId}: re-ring ${pending.size} unconfirmed phone(s)`);
+      await Promise.all(retries);
+    }
   }
 );
 
@@ -484,6 +560,19 @@ exports.onBookingTaken = onDocumentUpdated("bookings/{bookingId}", async (event)
   }));
 });
 
+// Text for every customer alert. "arriving" and "loading" added 2026-10-13
+// (owner: the customer must hear about their booking whether the app is
+// open or closed) -- before that a customer only got "accepted" and
+// "completed", and nothing when the truck reached their gate.
+const CUSTOMER_ALERT_TEXT = {
+  accepted: (b) => ({ title: "✅ ड्राइवर मिल गया!", body: `${b.driverName || "ड्राइवर"} आपकी बुकिंग स्वीकार कर चुके हैं और रास्ते में हैं।` }),
+  arriving: (b) => ({ title: "🚚 गाड़ी पहुँचने वाली है", body: `${b.driverName || "ड्राइवर"} पिकअप के पास हैं। ऐप में OTP देखकर ड्राइवर को बताएँ।` }),
+  loading: (b) => ({ title: "📦 लोडिंग शुरू हो गई", body: `आपका माल ${b.drop || "ड्रॉप"} के लिए लोड हो रहा है।` }),
+  completed: (b) => ({ title: "🏁 डिलीवरी पूरी हुई", body: `आपकी बुकिंग (${b.pickup} → ${b.drop}) पूरी हो गई है।` }),
+};
+// Driver this close to pickup (straight line) counts as "arriving".
+const CUSTOMER_ARRIVING_KM = 0.5;
+
 // Customer-side equivalent of sendDirectRequestAlert above —
 // reaches the customer even with the app fully closed, for the two moments
 // they most need to know without having it open: their driver accepting
@@ -495,9 +584,7 @@ async function sendCustomerBookingAlert(token, booking, bookingId, kind, custome
   try {
     await getMessaging().send({
       token,
-      notification: kind === "accepted"
-        ? { title: "✅ ड्राइवर मिल गया!", body: `${booking.driverName || "ड्राइवर"} आपकी बुकिंग स्वीकार कर चुके हैं और रास्ते में हैं।` }
-        : { title: "🏁 डिलीवरी पूरी हुई", body: `आपकी बुकिंग (${booking.pickup} → ${booking.drop}) पूरी हो गई है।` },
+      notification: CUSTOMER_ALERT_TEXT[kind](booking),
       android: {
         priority: "high",
         notification: { channelId: "new_load_alerts", priority: "max", visibility: "public", defaultSound: true, defaultVibrateTimings: true },
@@ -524,13 +611,24 @@ exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", asyn
 
   const becameOngoing = after.status === "Ongoing" && before?.status !== "Ongoing";
   const becameCompleted = after.status === "Completed" && before?.status !== "Completed";
-  if (!becameOngoing && !becameCompleted) return;
+  const loadingStarted = after.status === "Ongoing" && !!after.loadingStartedAt && !before?.loadingStartedAt;
+  // Arriving: fires once per booking, the first driverLocation write within
+  // CUSTOMER_ARRIVING_KM of pickup before loading starts. Guarded by
+  // customerArrivingNotified (set below) so the frequent GPS writes on
+  // this doc never send it twice.
+  const loc = after.driverLocation;
+  const arriving = after.status === "Ongoing" && !after.loadingStartedAt && !after.customerArrivingNotified
+    && loc?.lat != null && loc?.lng != null && after.pickupLat != null && after.pickupLng != null
+    && haversineKm(loc.lat, loc.lng, after.pickupLat, after.pickupLng) <= CUSTOMER_ARRIVING_KM;
+  const kind = becameCompleted ? "completed" : loadingStarted ? "loading" : becameOngoing ? "accepted" : arriving ? "arriving" : null;
+  if (!kind) return;
+  if (kind === "arriving") await event.data.after.ref.update({ customerArrivingNotified: true });
 
   const customerSnap = await db.collection("customers").doc(after.customerMobile).get();
   const token = customerSnap.data()?.fcmToken;
   if (!token) return;
 
-  await sendCustomerBookingAlert(token, after, event.params.bookingId, becameOngoing ? "accepted" : "completed", after.customerMobile);
+  await sendCustomerBookingAlert(token, after, event.params.bookingId, kind, after.customerMobile);
 });
 
 // Admin's "Send Notification" screen (AdminNotify) -- logs a message to
@@ -805,6 +903,46 @@ exports.classifyKycPhoto = onCall({ region: "asia-south1", secrets: [GEMINI_API_
 // driverName, since two drivers can share the same free-text display name
 // (no uniqueness enforced at signup) and a name-based lookup could
 // previously be satisfied by a different, same-named driver's trip.
+// Driver taps "टेस्ट घंटी" (LoadBellButton in src/App.jsx): sends the
+// driver's OWN phone the exact same data-only ring message a real load
+// uses, after a short delay so they can lock the phone or close the app
+// first. bookingId starts with "TEST-" -- the app ignores Accept/Reject for
+// it (nothing to claim). Only to the caller's own fcmToken, max once per
+// 30 s per driver.
+exports.sendTestRing = onCall({ region: "asia-south1" }, async (request) => {
+  const callerPhone = callerPhoneFromAuth(request.auth?.token);
+  if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
+  const mobile = callerPhone.replace("+91", "");
+  const ref = db.collection("drivers").doc(mobile);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, reason: "not_found" };
+  const d = snap.data();
+  if (!d.fcmToken) return { ok: false, reason: "no_token" };
+  const now = Date.now();
+  if (d.lastTestRingAt && now - d.lastTestRingAt < 30000) throw new HttpsError("resource-exhausted", "Wait 30 seconds.");
+  await ref.update({ lastTestRingAt: now });
+  const delaySec = Math.max(0, Math.min(15, Number(request.data?.delaySec) || 0));
+  if (delaySec) await new Promise((r) => setTimeout(r, delaySec * 1000));
+  try {
+    await getMessaging().send({
+      token: d.fcmToken,
+      android: { priority: "high" },
+      data: {
+        type: "direct_request_ring",
+        bookingId: `TEST-${now}`,
+        pickup: "🔔 टेस्ट घंटी — यह असली लोड नहीं है",
+        drop: "बंद करने के लिए कोई भी बटन दबाएँ",
+        weight: "-",
+      },
+    });
+    return { ok: true };
+  } catch (e) {
+    console.error("[push] test ring send failed:", e.message);
+    await clearStaleFcmTokenOnFailure("drivers", mobile, e);
+    return { ok: false, reason: "send_failed" };
+  }
+});
+
 exports.creditDriverReferral = onCall({ region: "asia-south1" }, async (request) => {
   const callerPhone = callerPhoneFromAuth(request.auth?.token);
   if (!callerPhone) throw new HttpsError("unauthenticated", "Sign in required.");
