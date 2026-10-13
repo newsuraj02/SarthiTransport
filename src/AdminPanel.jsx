@@ -39,7 +39,7 @@ const VEHICLE_STATUS = {
   off: { color: "#9AA3B0", hi: "ड्यूटी बंद", en: "Off duty", mr: "ड्युटी बंद" },
 };
 function vehicleStatusOf(d, bookings, now) {
-  const onTrip = (bookings || []).some((b) => b.status === "Ongoing" && ((d.mobile && b.driverMobile === d.mobile) || (d.name && b.driverName === d.name)));
+  const onTrip = (bookings || []).some((b) => b.status === "Ongoing" && (b.driverMobile && d.mobile ? b.driverMobile === d.mobile : (!!d.name && b.driverName === d.name)));
   if (onTrip) return "trip";
   if (!d.online) return "off";
   const age = now - (d.lastKnownLocation?.updatedAt || 0);
