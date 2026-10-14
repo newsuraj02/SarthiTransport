@@ -37,8 +37,8 @@ changes, not that bug reports here should be ignored.
 
 ## Load ring / driver notifications — FROZEN, do not touch
 
-As of commit `f8f7f50` (built 2026-10-14, CI run 38556798805, git tag
-`ring-working-2026-10-14`), the owner confirmed on real phones that the
+As of commit `f8f7f50` (built 2026-10-14, CI run 38556798805 -- the
+known-good version to go back to if anything breaks), the owner confirmed on real phones that the
 driver's load ring works with the app open, closed and the phone asleep.
 It took two days to get here. The owner has said: keep it exactly as it
 is for now. Same rule as GPS: no unsolicited changes; a NEW bug report in
