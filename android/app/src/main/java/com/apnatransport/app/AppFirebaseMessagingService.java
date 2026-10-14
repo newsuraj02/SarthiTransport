@@ -43,6 +43,17 @@ public class AppFirebaseMessagingService extends MessagingService {
     private static final String RING_CHANNEL_ID = "direct_request_ring";
     private static final int RING_NOTIFICATION_ID = 7821;
 
+    // Google rotates FCM tokens on its own (reinstall, data clear, periodic
+    // refresh) -- often while the app is closed, when no JavaScript runs.
+    // super keeps Capacitor's own handling; PushTokenSync writes the new
+    // token to drivers/{mobile} natively so the server never keeps sending
+    // to a dead token (the "rings only while open" bug, 2026-10-14).
+    @Override
+    public void onNewToken(@NonNull String token) {
+        super.onNewToken(token);
+        PushTokenSync.write(this, token);
+    }
+
     @Override
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
         super.onMessageReceived(remoteMessage);

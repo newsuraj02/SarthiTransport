@@ -45,6 +45,15 @@ public class MainActivity extends BridgeActivity {
     // getIntent() would keep returning the ORIGINAL launch intent forever,
     // and RingingBridgePlugin.consumePendingAction would never see the new
     // ringAction/ringBookingId extras.
+    // Owner report 2026-10-14: closed/asleep phones never rang because the
+    // server didn't have this phone's current FCM token. Save it natively on
+    // every app open -- see PushTokenSync.
+    @Override
+    public void onResume() {
+        super.onResume();
+        PushTokenSync.sync(this);
+    }
+
     @Override
     public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);

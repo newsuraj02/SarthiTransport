@@ -79,7 +79,10 @@ public class AppFirebaseMessagingService extends FirebaseMessagingService {
         // see AuthRepository.kt's own copy of this scheme.
         String collection = email.startsWith("customer.", at + 1) ? "customers" : "drivers";
         FirebaseFirestore.getInstance().collection(collection).document(mobile)
-            .update("fcmToken", token)
+            // Own field, NOT "fcmToken": that one belongs to the live Play Store
+            // app (com.apnatransport.app). Both apps writing the same field made
+            // whichever logged in last steal every load ring (2026-10-14).
+            .update("fcmTokenNativeApp", token)
             .addOnFailureListener(e -> Log.e(TAG, "fcmToken write failed", e));
     }
 

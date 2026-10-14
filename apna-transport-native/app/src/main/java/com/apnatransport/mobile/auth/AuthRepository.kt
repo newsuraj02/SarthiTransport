@@ -57,7 +57,9 @@ class AuthRepository(private val auth: FirebaseAuth = FirebaseAuth.getInstance()
             val token = FirebaseMessaging.getInstance().token.await()
             val collection = if (role == Role.CUSTOMER) "customers" else "drivers"
             FirebaseFirestore.getInstance().collection(collection).document(mobile)
-                .update("fcmToken", token).await()
+                // Own field -- "fcmToken" belongs to the live Play Store app; sharing
+                // it made this test app steal the live app's load rings (2026-10-14).
+                .update("fcmTokenNativeApp", token).await()
         } catch (_: Exception) {
             // best-effort, see comment above
         }
