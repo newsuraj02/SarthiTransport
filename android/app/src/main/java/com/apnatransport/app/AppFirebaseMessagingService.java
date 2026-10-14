@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
@@ -59,9 +60,9 @@ public class AppFirebaseMessagingService extends MessagingService {
         super.onMessageReceived(remoteMessage);
         Map<String, String> data = remoteMessage.getData();
         String type = data.get("type");
-        if ("load_taken".equals(type)) { closeLoad(data.get("bookingId")); return; }
+        if ("load_taken".equals(type)) { closeLoad(this, data.get("bookingId")); return; }
         if (!"direct_request_ring".equals(type)) return;
-        showRingingNotification(data);
+        showRingingNotification(this, data);
         sendRingAck(data);
     }
 
@@ -100,10 +101,16 @@ public class AppFirebaseMessagingService extends MessagingService {
         }).start();
     }
 
-    private void showRingingNotification(Map<String, String> data) {
-        createRingChannelIfNeeded();
+    // Rung booking ids for this process -- the same load can now arrive twice
+    // (FCM push AND LoadWatcher's live listener); ring it only once.
+    private static final java.util.Set<String> RUNG = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
 
-        Intent fullScreenIntent = new Intent(this, RingingBookingActivity.class);
+    static void showRingingNotification(Context ctx, Map<String, String> data) {
+        String rid = data.get("bookingId");
+        if (rid != null && !rid.startsWith("TEST-") && !RUNG.add(rid)) return;
+        createRingChannelIfNeeded(ctx);
+
+        Intent fullScreenIntent = new Intent(ctx, RingingBookingActivity.class);
         fullScreenIntent.putExtra("bookingId", data.get("bookingId"));
         fullScreenIntent.putExtra("pickup", data.get("pickup"));
         fullScreenIntent.putExtra("drop", data.get("drop"));
@@ -111,14 +118,14 @@ public class AppFirebaseMessagingService extends MessagingService {
         fullScreenIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
         int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_IMMUTABLE : 0);
-        PendingIntent fullScreenPendingIntent = PendingIntent.getActivity(this, RING_NOTIFICATION_ID, fullScreenIntent, piFlags);
+        PendingIntent fullScreenPendingIntent = PendingIntent.getActivity(ctx, RING_NOTIFICATION_ID, fullScreenIntent, piFlags);
 
         String pickup = data.get("pickup") != null ? data.get("pickup") : "-";
         String drop = data.get("drop") != null ? data.get("drop") : "-";
 
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-            ? new Notification.Builder(this, RING_CHANNEL_ID)
-            : new Notification.Builder(this);
+            ? new Notification.Builder(ctx, RING_CHANNEL_ID)
+            : new Notification.Builder(ctx);
         builder
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("नई डायरेक्ट बुकिंग रिक्वेस्ट")
@@ -130,10 +137,10 @@ public class AppFirebaseMessagingService extends MessagingService {
             .setOngoing(false);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             builder.setPriority(Notification.PRIORITY_HIGH);
-            builder.setSound(RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE));
+            builder.setSound(RingtoneManager.getActualDefaultRingtoneUri(ctx, RingtoneManager.TYPE_RINGTONE));
         }
 
-        NotificationManager manager = getSystemService(NotificationManager.class);
+        NotificationManager manager = ctx.getSystemService(NotificationManager.class);
         if (manager != null) manager.notify(RING_NOTIFICATION_ID, builder.build());
 
         // Owner rule (2026-10-13): the app must wake up and open by itself.
@@ -141,8 +148,8 @@ public class AppFirebaseMessagingService extends MessagingService {
         // phone; when the phone is unlocked and in use Android only shows a
         // banner -- unless the driver granted "Display over other apps", in
         // which case we may open the ring screen straight away.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) {
-            try { startActivity(fullScreenIntent); } catch (Exception ignored) { }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(ctx)) {
+            try { ctx.startActivity(fullScreenIntent); } catch (Exception ignored) { }
         }
     }
 
@@ -150,16 +157,16 @@ public class AppFirebaseMessagingService extends MessagingService {
 
     // Another driver accepted this load (or the customer cancelled it):
     // remove its banners and close the ring screen if it is showing it.
-    private void closeLoad(String bookingId) {
-        NotificationManager manager = getSystemService(NotificationManager.class);
+    static void closeLoad(Context ctx, String bookingId) {
+        NotificationManager manager = ctx.getSystemService(NotificationManager.class);
         if (manager != null) {
             manager.cancel(RING_NOTIFICATION_ID);
             if (bookingId != null) manager.cancel("load-" + bookingId, 0);
         }
         Intent intent = new Intent(ACTION_LOAD_TAKEN);
-        intent.setPackage(getPackageName());
+        intent.setPackage(ctx.getPackageName());
         intent.putExtra("bookingId", bookingId);
-        sendBroadcast(intent);
+        ctx.sendBroadcast(intent);
     }
 
     // Its own channel, separate from "new_load_alerts" (see MainActivity) --
@@ -172,9 +179,9 @@ public class AppFirebaseMessagingService extends MessagingService {
     // fallback so there's still real sound even on the rare device/OEM that
     // suppresses the full-screen intent itself (e.g. the user never granted
     // Android 14's separate full-screen-intent permission).
-    private void createRingChannelIfNeeded() {
+    private static void createRingChannelIfNeeded(Context ctx) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-        NotificationManager manager = getSystemService(NotificationManager.class);
+        NotificationManager manager = ctx.getSystemService(NotificationManager.class);
         if (manager == null || manager.getNotificationChannel(RING_CHANNEL_ID) != null) return;
         NotificationChannel channel = new NotificationChannel(
             RING_CHANNEL_ID, "Incoming booking requests", NotificationManager.IMPORTANCE_HIGH);
@@ -182,7 +189,7 @@ public class AppFirebaseMessagingService extends MessagingService {
         channel.enableVibration(true);
         channel.setVibrationPattern(new long[] { 0, 1000, 500, 1000, 500, 1000 });
         channel.setSound(
-            RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE),
+            RingtoneManager.getActualDefaultRingtoneUri(ctx, RingtoneManager.TYPE_RINGTONE),
             new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
