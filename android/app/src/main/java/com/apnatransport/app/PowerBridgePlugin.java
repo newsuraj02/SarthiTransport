@@ -100,10 +100,29 @@ public class PowerBridgePlugin extends Plugin {
     @PluginMethod
     public void needsAutoStartSettings(PluginCall call) {
         String manufacturer = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase();
-        boolean needed = manufacturer.contains("xiaomi") || manufacturer.contains("oppo")
-            || manufacturer.contains("vivo") || manufacturer.contains("huawei") || manufacturer.contains("honor");
         JSObject result = new JSObject();
-        result.put("needed", needed);
+        // oemLabel: the actual name of the screen this OEM shows, so the
+        // in-app instruction can say "look for a screen called X" instead
+        // of a generic "autostart" the driver won't recognize on their own
+        // phone's menus (owner request 2026-10-14: specific, device-aware
+        // instructions). Best-known common name per OEM -- exact wording
+        // can still drift by OS version, which is why openAutoStartSettings
+        // below deep-links to the real screen regardless of this label.
+        if (manufacturer.contains("xiaomi")) {
+            result.put("needed", true);
+            result.put("oemLabel", "Autostart (MIUI)");
+        } else if (manufacturer.contains("oppo")) {
+            result.put("needed", true);
+            result.put("oemLabel", "Startup Manager (ColorOS)");
+        } else if (manufacturer.contains("vivo")) {
+            result.put("needed", true);
+            result.put("oemLabel", "Autostart (Funtouch/OriginOS)");
+        } else if (manufacturer.contains("huawei") || manufacturer.contains("honor")) {
+            result.put("needed", true);
+            result.put("oemLabel", "App launch / Manage manually (EMUI)");
+        } else {
+            result.put("needed", false);
+        }
         call.resolve(result);
     }
 

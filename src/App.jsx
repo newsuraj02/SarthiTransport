@@ -9197,11 +9197,24 @@ function PushDiagnosticPanel({ collectionName, mobile }) {
 // push from the server after 10 s (sendTestRing) -- the driver locks the
 // phone or closes the app and hears exactly what a real load sounds like.
 // Native app only: a browser tab can't wake a locked phone at all.
-const BELL_STEPS = ["push", "battery", "fullscreen", "overlay"];
+const BELL_STEPS = ["push", "battery", "fullscreen", "overlay", "autostart"];
+// Owner request (2026-10-14): device-specific, step-by-step instructions
+// for each permission instead of one opaque "tap to fix" button, and the
+// card must stay up until each one is genuinely ON -- not just until
+// Settings was opened once. push/battery/fullscreen/overlay all have a
+// real OS-reported state this re-checks every resume (same pattern as
+// DriverHome's PermissionGate), so those four are truly "mandatory, won't
+// disappear until verified." autostart is the one exception: Android
+// gives no API on any OEM to read its state back at all, so it can only
+// ever be self-reported -- see its own "✓ Done" button below, a
+// deliberately different, honest treatment rather than pretending it can
+// be auto-verified like the other four.
 function LoadBellButton({ driver, lang, place = "home" }) {
   const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   const [missing, setMissing] = useState(null);
+  const [oemLabel, setOemLabel] = useState("");
   const [test, setTest] = useState({ state: "idle", left: 0 });
+  const [autostartDone, setAutostartDone] = usePersistedState(`sarthi_autostartDone_${driver.mobile || "x"}`, false);
   const checkRef = useRef(null);
   checkRef.current = async () => {
     const m = [];
@@ -9210,6 +9223,11 @@ function LoadBellButton({ driver, lang, place = "home" }) {
     if (battery?.ignoring === false) m.push("battery");
     if (!(await canUseFullScreenIntent())) m.push("fullscreen");
     if (!(await canDrawOverlays())) m.push("overlay");
+    const auto = await needsAutoStartSettings();
+    if (auto?.needed) {
+      setOemLabel(auto.oemLabel || T("Autostart", "ऑटोस्टार्ट", "ऑटोस्टार्ट"));
+      if (!autostartDone) m.push("autostart");
+    }
     setMissing(m);
   };
   useEffect(() => {
@@ -9223,6 +9241,7 @@ function LoadBellButton({ driver, lang, place = "home" }) {
     const onOk = () => setTest({ state: "ok", left: 0 });
     window.addEventListener("sarthi-test-ring-ok", onOk);
     return () => { cancelled = true; handle?.remove(); window.removeEventListener("sarthi-test-ring-ok", onOk); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Countdown shown while the server waits before sending the test ring.
   useEffect(() => {
@@ -9238,17 +9257,17 @@ function LoadBellButton({ driver, lang, place = "home" }) {
     if (r.ok && driver.mobile) await patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
     return r.ok;
   };
-  const fixNext = async () => {
-    const next = BELL_STEPS.find((s) => missing.includes(s));
+  const openStep = async (step) => {
     try {
-      if (next === "push") {
+      if (step === "push") {
         if ((await checkPushPermission()) === "denied") openNativeSettingsBridge("notifications");
         else await saveToken();
-      } else if (next === "battery") await requestBatteryOptimizationExemption();
-      else if (next === "fullscreen") openNativeSettingsBridge("full_screen_intent");
-      else if (next === "overlay") await openOverlaySettings();
+      } else if (step === "battery") await requestBatteryOptimizationExemption();
+      else if (step === "fullscreen") openNativeSettingsBridge("full_screen_intent");
+      else if (step === "overlay") await openOverlaySettings();
+      else if (step === "autostart") await openAutoStartSettings();
     } catch (e) {
-      console.error("[load bell] fix", e);
+      console.error("[load bell] fix", step, e);
     }
     setTimeout(() => checkRef.current(), 700);
   };
@@ -9260,11 +9279,43 @@ function LoadBellButton({ driver, lang, place = "home" }) {
     else setTest({ state: r?.reason === "too_soon" ? "tooSoon" : r?.reason === "no_token" ? "noToken" : "err", left: 0 });
   };
 
-  const stepLabel = {
-    push: T("Notifications", "नोटिफिकेशन", "नोटिफिकेशन"),
-    battery: T("Battery", "बॅटरी", "बैटरी"),
-    fullscreen: T("Lock-screen alert", "लॉक स्क्रीन अलर्ट", "लॉक स्क्रीन अलर्ट"),
-    overlay: T("Open over other apps", "इतर अ‍ॅप्सवर उघडणे", "दूसरे ऐप के ऊपर खुलना"),
+  // Each step's title, and the EXACT path the driver will see once
+  // Settings opens -- not just "turn this on" but which screen, which
+  // row, which word to look for, matching the "App management >
+  // notifications > Allow" level of specificity asked for. The app
+  // already opens the right screen by itself; this just tells the driver
+  // what to do once they're there.
+  const stepInfo = {
+    push: {
+      title: T("Notifications", "नोटिफिकेशन", "नोटिफिकेशन"),
+      path: T("Settings will open → look for \"Notifications\" or \"Show notifications\" → turn it ON (Allow)",
+        "सेटिंग्ज उघडेल → \"Notifications\" किंवा \"Show notifications\" शोधा → ते ON करा (Allow)",
+        "सेटिंग खुलेगी → \"Notifications\" या \"Show notifications\" ढूँढें → उसे ON करें (Allow)"),
+    },
+    battery: {
+      title: T("Battery", "बॅटरी", "बैटरी"),
+      path: T("A popup will ask about battery usage → tap \"Allow\" / \"Don't optimize\"",
+        "बॅटरी वापराबाबत पॉपअप येईल → \"Allow\" / \"Don't optimize\" दाबा",
+        "बैटरी इस्तेमाल को लेकर पॉपअप आएगा → \"Allow\" / \"Don't optimize\" दबाएँ"),
+    },
+    fullscreen: {
+      title: T("Lock-screen alert", "लॉक स्क्रीन अलर्ट", "लॉक स्क्रीन अलर्ट"),
+      path: T("Settings will open → find \"Full screen notifications\" → turn it ON",
+        "सेटिंग्ज उघडेल → \"Full screen notifications\" शोधा → ते ON करा",
+        "सेटिंग खुलेगी → \"Full screen notifications\" ढूँढें → उसे ON करें"),
+    },
+    overlay: {
+      title: T("Display over other apps", "इतर अ‍ॅप्सवर दाखवा", "दूसरे ऐप के ऊपर दिखाना"),
+      path: T("Settings will open → turn ON \"Allow display over other apps\"",
+        "सेटिंग्ज उघडेल → \"Allow display over other apps\" ON करा",
+        "सेटिंग खुलेगी → \"दूसरे ऐप के ऊपर दिखाएँ\" (Allow display over other apps) को ON करें"),
+    },
+    autostart: {
+      title: oemLabel || T("Autostart", "ऑटोस्टार्ट", "ऑटोस्टार्ट"),
+      path: T(`Your phone's own "${oemLabel || "Autostart"}" screen will open → find Apna Transport in the list → turn it ON → come back here and tap "Done"`,
+        `तुमच्या फोनची स्वतःची "${oemLabel || "Autostart"}" स्क्रीन उघडेल → यादीत Apna Transport शोधा → ते ON करा → परत येऊन "Done" दाबा`,
+        `आपके फ़ोन की अपनी "${oemLabel || "Autostart"}" स्क्रीन खुलेगी → लिस्ट में Apna Transport ढूँढें → उसे ON करें → वापस आकर "Done" दबाएँ`),
+    },
   };
   const ready = missing.length === 0;
 
@@ -9277,17 +9328,31 @@ function LoadBellButton({ driver, lang, place = "home" }) {
 
   if (!ready) {
     return (
-      <button onClick={fixNext} className={`w-full rounded-2xl p-3.5 ${place === "home" ? "mt-4" : "mb-4"} text-left shadow-lg guided-submit-ready`} style={{ background: C.safety, border: "2px solid #8B0000" }}>
-        <div className="flex items-center gap-2.5">
-          <Bell size={26} color="#FFFFFF" />
-          <div className="flex-1 min-w-0">
-            <div className="text-base font-black text-white">{T("Load bell is OFF — tap to turn on", "लोड घंटी बंद आहे — सुरू करण्यासाठी दाबा", "लोड घंटी बंद है — चालू करने के लिए दबाएँ")}</div>
-            <div className="text-xs font-bold mt-0.5" style={{ color: "#FFE3E3" }}>
-              {T("Still needed", "अजून बाकी", "अभी बाकी")}: {BELL_STEPS.filter((s) => missing.includes(s)).map((s) => stepLabel[s]).join(" · ")}
-            </div>
-          </div>
+      <div className={`w-full rounded-2xl p-3.5 ${place === "home" ? "mt-4" : "mb-4"} shadow-lg guided-submit-ready`} style={{ background: C.safety, border: "2px solid #8B0000" }}>
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <Bell size={24} color="#FFFFFF" />
+          <div className="text-base font-black text-white">{T("Load bell is OFF — finish every step below", "लोड घंटी बंद आहे — खालील सर्व स्टेप्स पूर्ण करा", "लोड घंटी बंद है — नीचे हर स्टेप पूरा करें")}</div>
         </div>
-      </button>
+        <div className="space-y-2">
+          {BELL_STEPS.filter((s) => missing.includes(s)).map((s) => (
+            <div key={s} className="rounded-xl p-2.5" style={{ background: "rgba(255,255,255,0.12)" }}>
+              <div className="text-sm font-black text-white">{stepInfo[s].title}</div>
+              <div className="text-xs font-semibold mt-0.5" style={{ color: "#FFE3E3" }}>{stepInfo[s].path}</div>
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => openStep(s)} className="rounded-full px-3 py-1.5 text-xs font-black" style={{ background: "#FFFFFF", color: C.safety }}>
+                  {T("Open Settings", "सेटिंग्ज उघडा", "सेटिंग खोलें")}
+                </button>
+                {s === "autostart" && (
+                  <button onClick={() => { setAutostartDone(true); setTimeout(() => checkRef.current(), 100); }}
+                    className="rounded-full px-3 py-1.5 text-xs font-black" style={{ background: "transparent", color: "#FFFFFF", border: "1.5px solid #FFFFFF" }}>
+                    {T("✓ Done", "✓ झाले", "✓ हो गया")}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     );
   }
 
