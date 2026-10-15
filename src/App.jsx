@@ -6487,11 +6487,35 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   }, [pickupCoords, dropCoords, mapsReady]);
 
   // Advances the golden highlight (highlightField, below) to the next
-  // step the moment a real place is actually chosen -- a dropdown pick or
-  // a map tap both count, same as explicitly tapping into the next field
-  // by hand. Typing by hand doesn't trigger this.
+  // step the moment a real place is actually chosen -- a dropdown pick,
+  // "Use Current Location" (routes through this same handler), or a map
+  // tap all count, same as explicitly tapping into the next field by
+  // hand. Typing by hand doesn't trigger this -- only a genuine selection
+  // does, since the customer might still be mid-edit after typing.
   const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); dropFieldRef.current?.focus(); };
   const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); weightInputRef.current?.focus(); };
+
+  // "Use current location" box next to the Pickup field (owner request
+  // 2026-10-15: same as CustomerBooking's own copy of this -- see that
+  // component's identical block for the full "why"). An advance booking's
+  // pickup is usually wherever the customer happens to be standing when
+  // they book it, same as a current-booking pickup, so there's no reason
+  // this convenience should exist on one form and not the other.
+  const [locatingPickup, setLocatingPickup] = useState(false);
+  const useCurrentLocationForPickup = async () => {
+    setLocatingPickup(true);
+    try {
+      const pos = await getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+      locationPermission?.markGranted();
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      onPickupPlaceSelected({ name, lat, lng });
+    } catch (err) {
+      if (isLocationPermissionDeniedError(err)) locationPermission?.markDenied();
+      else console.error("[use current location]", err);
+    }
+    setLocatingPickup(false);
+  };
 
   const [bookingError, setBookingError] = useState("");
   const [selectedDriverKey, setSelectedDriverKey] = useState(null);
@@ -6632,20 +6656,42 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
         </div>
 
-        <LocationField
-          lang={lang}
-          value={pickup}
-          onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
-          onPlaceSelected={onPickupPlaceSelected}
-          mapsReady={mapsReady}
-          placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
-          suggestions={suggestAreas(pickup)}
-          onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
-          onFocus={() => setActiveField("pickup")}
-          recentItems={recentPickups}
-          highlighted={highlightField === "pickup"}
-          ref={pickupFieldRef}
-        />
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <LocationField
+              lang={lang}
+              value={pickup}
+              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
+              onPlaceSelected={onPickupPlaceSelected}
+              mapsReady={mapsReady}
+              placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
+              suggestions={suggestAreas(pickup)}
+              onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
+              onFocus={() => setActiveField("pickup")}
+              recentItems={recentPickups}
+              highlighted={highlightField === "pickup"}
+              ref={pickupFieldRef}
+            />
+          </div>
+          {/* Same "Use Current Location" box as CustomerBooking -- blue/white
+              blink until tapped or Pickup gets any text, then gone entirely. */}
+          {!pickup.trim() && (
+            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
+              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup ? "" : "current-location-blink"}`}
+              style={{ width: 92, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
+              {locatingPickup ? (
+                <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
+              ) : (
+                <>
+                  <LocateFixed size={20} color="currentColor" strokeWidth={2.2} />
+                  <span className="text-[10px] font-bold leading-tight" style={{ color: "currentColor" }}>
+                    {lang === "en" ? "Use Current Location" : lang === "mr" ? "करंट लोकेशन निवडा" : "करंट लोकेशन चुनें"}
+                  </span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
 
         <LocationField
           lang={lang}
