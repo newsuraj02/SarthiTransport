@@ -481,16 +481,23 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       if (hasLoadConflict(load, mine, lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
 
       if (driver.fcmToken) {
-        skipLog.push(`${tag}: SENDING push+ring+whatsapp`);
+        skipLog.push(`${tag}: SENDING push+ring`);
         alerted.push(doc.id);
         const ackKey = crypto.randomBytes(12).toString("hex");
         ringKeys[doc.id] = { key: ackKey, token: driver.fcmToken };
         sends.push(() => sendDirectRequestAlert(driver.fcmToken, load, event.params.bookingId, doc.id));
         sends.push(() => sendDirectRequestRingAlert(driver.fcmToken, load, event.params.bookingId, doc.id, ackKey));
       } else {
-        skipLog.push(`${tag}: no fcmToken (push/ring skipped, WhatsApp still sent)`);
+        skipLog.push(`${tag}: no fcmToken (push/ring skipped)`);
       }
-      sends.push(() => sendDirectRequestWhatsApp(doc.id, load));
+      // WhatsApp backup alert removed per owner request (2026-10-15) --
+      // the ring is now confirmed reliable (open/closed/locked, see
+      // CLAUDE.md's frozen note on commit f8f7f50), so this WhatsApp
+      // "Load Alert!!" message every eligible driver got for every single
+      // load is now just noise. sendDirectRequestWhatsApp (above) is left
+      // defined but unused rather than deleted, to keep this change to
+      // exactly the one line that needed to change in a function this
+      // repo has marked frozen.
     });
     console.log(`[onDirectRequestBroadcast] booking ${event.params.bookingId} (tier=${load.tierMaxKg}, pickup=${load.pickupLat},${load.pickupLng}): ${driversSnap.size} drivers checked\n${skipLog.join("\n")}`);
     // Saved BEFORE anything rings, so onBookingTaken always knows whose
