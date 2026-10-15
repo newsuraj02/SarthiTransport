@@ -67,6 +67,14 @@ for a change to the ring/notification itself in that same request:
   (routed through NativePush)
 - `src/App.jsx`: `DriverHome`'s PermissionGate (incl. the push-token save
   when permission is already granted) and the in-app `playStrongBeep` loop
+- `src/App.jsx`: `LoadBellButton` — the permission checklist UI (`BELL_STEPS`,
+  `stepInfo`, the per-item "Open Settings" + autostart's self-reported
+  "✓ Done" button). As of commit `600cf28` (2026-10-15) this is the
+  owner's intended, locked-in version: one card per missing permission
+  with device-specific instructions, non-dismissible, re-verified every
+  resume. `PowerBridgePlugin.java`'s `needsAutoStartSettings` (its
+  `oemLabel` field, used by this UI) is already covered under the GPS
+  freeze above, since that's the same file.
 - the `drivers/{mobile}.fcmToken` field: only the live app
   (`com.apnatransport.app`) writes it; the test native app
   (`apna-transport-native`) writes `fcmTokenNativeApp` instead. Never let
