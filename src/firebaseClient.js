@@ -427,12 +427,10 @@ function toWebPermissionShape(state) {
   return state === "granted" || state === "denied" ? state : "default";
 }
 
-// TEMPORARY diagnostic (2026-10-13): kept deliberately pointed at the OLD
-// official plugin -- checkPushPermission/requestPushToken below have
-// moved entirely off it onto NativePushNative above, so no real caller
-// uses this anymore. Left in only as a continued "is the official plugin
-// still broken on this device" signal for the push diagnostic panel in
-// App.jsx. Remove both together once this investigation resolves.
+// Only used by listenForegroundPush below now (checkPushPermission/
+// requestPushToken moved entirely onto NativePushNative above) -- still
+// the official plugin's own event stream for a foreground toast when a
+// push arrives while the app is already open.
 let pushNotificationsPluginPromise = null;
 function getNativePushNotifications() {
   if (!isNativeApp) return Promise.resolve(null);
@@ -445,17 +443,6 @@ function getNativePushNotifications() {
       });
   }
   return pushNotificationsPluginPromise;
-}
-export async function rawPushRegisterProbe() {
-  if (!isNativeApp) return { ok: false, reason: "not-native" };
-  const PushNotifications = await getNativePushNotifications();
-  if (!PushNotifications) return { ok: false, reason: "plugin-unavailable" };
-  try {
-    await PushNotifications.register();
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, reason: e?.message || String(e) };
-  }
 }
 
 // Belt-and-suspenders only at this point -- NativePushPlugin's calls are

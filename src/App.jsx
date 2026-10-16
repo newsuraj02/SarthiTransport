@@ -28,7 +28,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, rawPushRegisterProbe, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -1775,6 +1775,22 @@ export function estimateDistanceKm(pickupCoords, dropCoords) {
   return Math.round(straightLineKm * ROAD_DISTANCE_FACTOR * 100) / 100;
 }
 
+// Owner request (2026-10-16): a customer must not be able to book with
+// Pickup and Drop at the same place. Prefers real coordinates (catches
+// "same place, slightly different text" too, e.g. two picks of the same
+// building) within SAME_LOCATION_KM of each other; falls back to a plain
+// trimmed/case-insensitive text match when either point was typed by hand
+// without ever being geocoded (no coords to compare yet).
+const SAME_LOCATION_KM = 0.05; // ~50m -- the same place, not just nearby
+export function isSameLocation(pickup, drop, pickupCoords, dropCoords) {
+  if (pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null) {
+    return haversineKm(pickupCoords.lat, pickupCoords.lng, dropCoords.lat, dropCoords.lng) < SAME_LOCATION_KM;
+  }
+  const p = (pickup || "").trim().toLowerCase();
+  const d = (drop || "").trim().toLowerCase();
+  return !!p && p === d;
+}
+
 // Exact figure, not a rounded-off approximation — meters below 1km (whole
 // number, since fractional meters aren't meaningful), km with one decimal
 // place above it.
@@ -3040,23 +3056,27 @@ function formatEtaMin(min, lang) {
 // replacing Google's plain default red teardrop + tiny text label --
 // Pickup and Drop each get their own color (green/red) instead of both
 // rendering as the same stock pin with only the letter to tell them apart.
+// Owner request (2026-10-16): clean teardrop pin, no inner circle badge
+// -- the letter sits directly in white on the colored fill instead of on
+// a separate white disc, matching a plain ride-hailing-style pin (Uber/
+// Google Maps' own default pins have no circle either).
 function pinMarkerIcon(color, letter) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="46" viewBox="0 0 34 46">
-    <path d="M17 0C7.6 0 0 7.6 0 17c0 12.4 17 29 17 29s17-16.6 17-29C34 7.6 26.4 0 17 0z" fill="${color}"/>
-    <circle cx="17" cy="17" r="11.5" fill="#fff"/>
-    <text x="17" y="22" font-family="Arial, sans-serif" font-size="14" font-weight="900" text-anchor="middle" fill="${color}">${letter}</text>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">
+    <path d="M15 0C6.7 0 0 6.7 0 15c0 11.2 15 25 15 25s15-13.8 15-25C30 6.7 23.3 0 15 0z" fill="${color}" stroke="#fff" stroke-width="1.5"/>
+    <text x="15" y="20" font-family="Arial, sans-serif" font-size="13" font-weight="900" text-anchor="middle" fill="#fff">${letter}</text>
   </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new window.google.maps.Size(34, 46),
-    anchor: new window.google.maps.Point(17, 46),
+    scaledSize: new window.google.maps.Size(30, 40),
+    anchor: new window.google.maps.Point(15, 40),
   };
 }
 
-// Circular badge with a real truck glyph (a standard "local shipping"
-// icon path) instead of an emoji label sitting on a plain colored circle
-// -- renders identically on every device/OS instead of depending on
-// however that platform happens to draw 🚚.
+// Plain truck glyph (a standard "local shipping" icon path), no circular
+// badge behind it (owner request 2026-10-16: "remove the circle around
+// the Pins") -- a white outline on the glyph itself keeps it visible
+// against any map background instead of relying on a solid disc for
+// contrast.
 // headingDeg: compass bearing (0=North) the marker should visually face,
 // or null/omitted for the original fixed orientation. The glyph as drawn
 // faces East (its cab leads on the right), so the SVG rotation applied is
@@ -3067,14 +3087,15 @@ function pinMarkerIcon(color, letter) {
 function vehicleMarkerIcon(headingDeg = null) {
   const truckPath = "M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zM18 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z";
   const rotate = headingDeg == null ? 0 : headingDeg - 90;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-    <circle cx="20" cy="20" r="18" fill="${C.navy}" stroke="#fff" stroke-width="3"/>
-    <g transform="rotate(${rotate} 20 20) translate(8,8)"><path d="${truckPath}" fill="#fff"/></g>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+    <g transform="rotate(${rotate} 17 17) translate(5,5)">
+      <path d="${truckPath}" fill="${C.navy}" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>
+    </g>
   </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new window.google.maps.Size(40, 40),
-    anchor: new window.google.maps.Point(20, 20),
+    scaledSize: new window.google.maps.Size(34, 34),
+    anchor: new window.google.maps.Point(17, 17),
   };
 }
 
@@ -6110,6 +6131,12 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // own once activeBooking swaps this screen for ActiveRide.
   const bookDriver = (entry) => {
     setBookingError("");
+    if (isSameLocation(pickup, drop, pickupCoords, dropCoords)) {
+      setBookingError(lang === "en" ? "Pickup and Drop can't be the same place — please change one of them."
+        : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण असू शकत नाही — कृपया एक बदला."
+        : "पिकअप और ड्रॉप एक ही जगह नहीं हो सकते — कृपया एक बदलें।");
+      return;
+    }
     setSendingKey(entry.id);
     const err = requestByCategory({
       pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: null,
@@ -6595,6 +6622,12 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   // front before a category is even known.
   const bookDriver = (entry) => {
     setBookingError("");
+    if (isSameLocation(pickup, drop, pickupCoords, dropCoords)) {
+      setBookingError(lang === "en" ? "Pickup and Drop can't be the same place — please change one of them."
+        : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण असू शकत नाही — कृपया एक बदला."
+        : "पिकअप और ड्रॉप एक ही जगह नहीं हो सकते — कृपया एक बदलें।");
+      return;
+    }
     const scheduled = parseScheduledFor(scheduledForValue);
     const minHours = minAdvanceNoticeHours(entry.tier.maxKg);
     const hoursUntil = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
@@ -7432,8 +7465,6 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
           )}
         </div>
       )}
-
-      {isNativeApp && <PushDiagnosticPanel collectionName="customers" mobile={customerMobile} />}
 
       <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
         <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
@@ -9128,109 +9159,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   );
 }
 
-// ---- TEMPORARY push-token diagnostic (2026-10-13) ----
-// chrome://inspect over USB kept failing to attach on the actual stuck
-// test devices (driver notification permission confirmed granted in
-// Settings, fcmToken still null in Firestore, and no way to see WHY --
-// requestPushToken() throwing? timing out? resolving ok:false with some
-// reason? patchDoc itself failing?) -- too many USB/adb/driver points of
-// failure to debug blind over a cable. This surfaces the real result
-// directly on the phone's own screen instead: no computer, no USB, no
-// native build, just tap the button and read (or screenshot) the output.
-// Remove once the real fcmToken-stuck-despite-granted-permission bug is
-// found and fixed -- this is diagnostic scaffolding, not a feature.
-// Races any promise against a plain timer so a step that hangs forever
-// (confirmed real on a test device -- see requestNativePushToken's own
-// 20s timeout in firebaseClient.js) can't freeze this diagnostic's UI
-// the same way -- resolves { timedOut: true } instead of just sitting on
-// "Running..." forever with zero visible information either way.
-function raceTimeout(promise, ms) {
-  return Promise.race([
-    promise.then((v) => ({ timedOut: false, value: v })).catch((e) => ({ timedOut: false, error: e })),
-    new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), ms)),
-  ]);
-}
-function PushDiagnosticPanel({ collectionName, mobile }) {
-  // Appended to and re-rendered after EVERY step (not just once at the
-  // end) -- the previous version only called setOut() once, after
-  // everything finished, so "nothing on screen" looked identical whether
-  // step 1 was instant and step 2 was hanging, or step 1 itself was the
-  // one stuck. This version shows exactly which line it never gets past.
-  const [lines, setLines] = useState([]);
-  const [running, setRunning] = useState(false);
-  const push = (line) => setLines((prev) => [...prev, line]);
-  const run = async () => {
-    setRunning(true);
-    setLines([`isNativeApp: ${isNativeApp}`, `mobile: ${mobile || "-"}`]);
-
-    // Control test: a completely DIFFERENT native plugin (CapacitorApp,
-    // already used elsewhere in this app -- see useReportInstalledVersion)
-    // -- if this ALSO hangs, the whole Capacitor bridge is broken on this
-    // device, not just push-notifications specifically. If this comes
-    // back fine while the push checks below hang, it's isolated to that
-    // one plugin.
-    const appInfoResult = await raceTimeout(CapacitorApp.getInfo(), 8000);
-    if (appInfoResult.timedOut) {
-      push(`CapacitorApp.getInfo(): TIMED OUT after 8s -- whole bridge may be broken, not just push`);
-    } else if (appInfoResult.error) {
-      push(`CapacitorApp.getInfo() THREW: ${appInfoResult.error?.name || ""} ${appInfoResult.error?.message || appInfoResult.error}`);
-    } else {
-      push(`CapacitorApp.getInfo(): OK, version=${appInfoResult.value?.version || "-"} build=${appInfoResult.value?.build || "-"}`);
-    }
-
-    // Raw PushNotifications.register() call, bypassing checkPushPermission/
-    // requestPushToken entirely -- its native Java resolves the call
-    // IMMEDIATELY (before even waiting for a token), so this should always
-    // come back fast if the plugin's call dispatch works at all, completely
-    // independent of permission-state reading. Isolates "whole plugin
-    // broken" from "specifically the permission check is what hangs".
-    const rawRegisterResult = await raceTimeout(rawPushRegisterProbe(), 8000);
-    if (rawRegisterResult.timedOut) {
-      push(`rawPushRegisterProbe(): TIMED OUT after 8s -- this plugin's calls never get a response at all, even ones that resolve instantly server-side`);
-    } else if (rawRegisterResult.error) {
-      push(`rawPushRegisterProbe() THREW: ${rawRegisterResult.error?.name || ""} ${rawRegisterResult.error?.message || rawRegisterResult.error}`);
-    } else {
-      push(`rawPushRegisterProbe(): ${JSON.stringify(rawRegisterResult.value)}`);
-    }
-
-    const permResult = await raceTimeout(checkPushPermission(), 8000);
-    if (permResult.timedOut) {
-      push(`checkPushPermission(): TIMED OUT after 8s (never resolved at all)`);
-    } else if (permResult.error) {
-      push(`checkPushPermission() THREW: ${permResult.error?.name || ""} ${permResult.error?.message || permResult.error}`);
-    } else {
-      push(`checkPushPermission(): "${permResult.value}"`);
-    }
-
-    const tokenResult = await raceTimeout(requestPushToken(), 25000);
-    if (tokenResult.timedOut) {
-      push(`requestPushToken(): TIMED OUT after 25s (its own internal 20s timeout never even fired -- stuck somewhere before that)`);
-    } else if (tokenResult.error) {
-      push(`requestPushToken() THREW: ${tokenResult.error?.name || ""} ${tokenResult.error?.message || tokenResult.error}`);
-    } else {
-      const r = tokenResult.value;
-      push(`requestPushToken(): ok=${r?.ok} reason="${r?.reason || "-"}" token=${r?.token ? r.token.slice(0, 16) + "…(" + r.token.length + " chars)" : "-"}`);
-      if (r?.ok && r.token && mobile) {
-        try {
-          await patchDoc(collectionName, mobile, { fcmToken: r.token });
-          push("patchDoc(fcmToken): wrote OK");
-        } catch (e2) {
-          push(`patchDoc(fcmToken) THREW: ${e2?.name || ""} ${e2?.message || e2}`);
-        }
-      }
-    }
-    setRunning(false);
-  };
-  return (
-    <div className="rounded-xl p-3 mt-3 text-xs" style={{ background: "#FFF8E1", border: "1px solid #E0C068" }}>
-      <div className="font-black mb-1.5">🔧 Push diagnostic (temporary — screenshot this)</div>
-      <button onClick={run} disabled={running} className="rounded-full px-3 py-1.5 font-bold text-white text-xs" style={{ background: running ? "#9AA3B0" : "#1F3C88" }}>
-        {running ? "Running… (updates live below)" : "Run check"}
-      </button>
-      {lines.length > 0 && <pre className="mt-2 whitespace-pre-wrap break-all" style={{ fontFamily: monoFont, fontSize: 10 }}>{lines.join("\n")}</pre>}
-    </div>
-  );
-}
 
 // ---- लोड घंटी बटन (owner request 2026-10-13 13:31) ----
 // One button on the driver home screen that tells the driver plainly
@@ -10078,7 +10006,6 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
       )}
 
       <LoadBellButton driver={driver} lang={lang} place="profile" />
-      {isNativeApp && <PushDiagnosticPanel collectionName="drivers" mobile={driver.mobile} />}
 
       <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 rounded-lg py-3.5 font-bold text-base" style={{ background: C.safety, color: "#FFFFFF", border: `1px solid ${C.safety}` }}>
         <XCircle size={16} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
