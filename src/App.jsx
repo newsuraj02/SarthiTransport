@@ -3072,30 +3072,33 @@ function pinMarkerIcon(color, letter) {
   };
 }
 
-// Plain truck glyph (a standard "local shipping" icon path), no circular
-// badge behind it (owner request 2026-10-16: "remove the circle around
-// the Pins") -- a white outline on the glyph itself keeps it visible
-// against any map background instead of relying on a solid disc for
-// contrast.
-// headingDeg: compass bearing (0=North) the marker should visually face,
-// or null/omitted for the original fixed orientation. The glyph as drawn
-// faces East (its cab leads on the right), so the SVG rotation applied is
-// headingDeg-90 -- baked straight into the <g> transform rather than
-// passed as a MarkerF/Icon `rotation` prop, since Google Maps only
-// supports that for Symbol-path icons, not plain image/data-URI icons
-// like this one.
+// Small blocky/cartoon truck token sitting on a little rounded base pad
+// (owner request 2026-10-16: no circular ring badge -- a flat cartoon
+// truck like a standard ride-hailing live-tracking marker, cream cargo
+// box + blue cab, instead of a single-tone glyph).
+// headingDeg: compass bearing (0=North) the truck should visually face,
+// or null/omitted for the original fixed orientation. The truck as drawn
+// faces East (cab leads on the right), so the rotation applied is
+// headingDeg-90. Only the truck itself rotates -- the base pad underneath
+// stays flat/unrotated, same as a pin shadow.
 function vehicleMarkerIcon(headingDeg = null) {
-  const truckPath = "M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zM18 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z";
   const rotate = headingDeg == null ? 0 : headingDeg - 90;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
-    <g transform="rotate(${rotate} 17 17) translate(5,5)">
-      <path d="${truckPath}" fill="${C.navy}" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="46" viewBox="0 0 40 46">
+    <ellipse cx="20" cy="39" rx="11" ry="4" fill="#1a8f45"/>
+    <g transform="rotate(${rotate} 20 20)">
+      <rect x="6" y="15" width="18" height="13" rx="2.2" fill="#f3dfae" stroke="#9c7a3a" stroke-width="1"/>
+      <rect x="23" y="11" width="10" height="17" rx="2.2" fill="#2f6fe0" stroke="#1d4ea3" stroke-width="1"/>
+      <rect x="26" y="14" width="5" height="5" rx="1" fill="#cfe6ff"/>
+      <circle cx="12" cy="29" r="3.3" fill="#2a2a2a"/>
+      <circle cx="12" cy="29" r="1.3" fill="#9a9a9a"/>
+      <circle cx="27" cy="29" r="3.3" fill="#2a2a2a"/>
+      <circle cx="27" cy="29" r="1.3" fill="#9a9a9a"/>
     </g>
   </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new window.google.maps.Size(34, 34),
-    anchor: new window.google.maps.Point(17, 17),
+    scaledSize: new window.google.maps.Size(40, 46),
+    anchor: new window.google.maps.Point(20, 41),
   };
 }
 
