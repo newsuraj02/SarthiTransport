@@ -3397,43 +3397,51 @@ function customerPinIcon() {
   };
 }
 
-// A small truck/tempo silhouette in a white badge, in place of a plain dot
-// or emoji, for each nearby online driver — closer to how ride-hailing
-// apps show an actual vehicle shape on the map.
+// Same blocky cartoon-truck-on-base token as vehicleMarkerIcon, for each
+// nearby online driver on the customer's browse map -- kept as its own
+// function (rather than reusing vehicleMarkerIcon directly) since the two
+// call sites independently decide colors/active-vs-inactive.
 // headingDeg: see vehicleMarkerIcon's comment -- same East-facing default
 // (cab/front leads on the right), same rotation-baked-into-the-SVG reason.
 export function driverTruckIcon(headingDeg = null) {
   const rotate = headingDeg == null ? 0 : headingDeg - 90;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">` +
-    `<circle cx="17" cy="17" r="16" fill="#fff" stroke="${C.marigoldDeep}" stroke-width="2"/>` +
-    `<g transform="rotate(${rotate} 17 17) translate(6,11)">` +
-    `<rect x="0" y="0" width="14" height="8" rx="1.2" fill="${C.navy}"/>` +
-    `<path d="M14 2h5.5L22 6v2H14z" fill="${C.navy}"/>` +
-    `<circle cx="4.5" cy="9" r="2.1" fill="${C.navy}"/>` +
-    `<circle cx="17.5" cy="9" r="2.1" fill="${C.navy}"/>` +
-    `</g></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="46" viewBox="0 0 40 46">
+    <ellipse cx="20" cy="39" rx="11" ry="4" fill="#1a8f45"/>
+    <g transform="rotate(${rotate} 20 20)">
+      <rect x="6" y="15" width="18" height="13" rx="2.2" fill="#f3dfae" stroke="#9c7a3a" stroke-width="1"/>
+      <rect x="23" y="11" width="10" height="17" rx="2.2" fill="#2f6fe0" stroke="#1d4ea3" stroke-width="1"/>
+      <rect x="26" y="14" width="5" height="5" rx="1" fill="#cfe6ff"/>
+      <circle cx="12" cy="29" r="3.3" fill="#2a2a2a"/>
+      <circle cx="12" cy="29" r="1.3" fill="#9a9a9a"/>
+      <circle cx="27" cy="29" r="3.3" fill="#2a2a2a"/>
+      <circle cx="27" cy="29" r="1.3" fill="#9a9a9a"/>
+    </g>
+  </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new window.google.maps.Size(34, 34),
-    anchor: new window.google.maps.Point(17, 17),
+    scaledSize: new window.google.maps.Size(40, 46),
+    anchor: new window.google.maps.Point(20, 41),
   };
 }
 
-// Same silhouette as driverTruckIcon, greyed out — an off-duty driver
-// plotted at their last known spot, visually distinct from a bookable one.
+// Same truck-on-base shape as driverTruckIcon, greyed out -- an off-duty
+// driver plotted at their last known spot, visually distinct from a
+// bookable one.
 export function driverTruckIconInactive() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">` +
-    `<circle cx="17" cy="17" r="16" fill="#fff" stroke="#9AA3B0" stroke-width="2"/>` +
-    `<g transform="translate(6,11)">` +
-    `<rect x="0" y="0" width="14" height="8" rx="1.2" fill="#9AA3B0"/>` +
-    `<path d="M14 2h5.5L22 6v2H14z" fill="#9AA3B0"/>` +
-    `<circle cx="4.5" cy="9" r="2.1" fill="#9AA3B0"/>` +
-    `<circle cx="17.5" cy="9" r="2.1" fill="#9AA3B0"/>` +
-    `</g></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="46" viewBox="0 0 40 46">
+    <ellipse cx="20" cy="39" rx="11" ry="4" fill="#B9BEC7"/>
+    <rect x="6" y="15" width="18" height="13" rx="2.2" fill="#E3E5E9" stroke="#9AA3B0" stroke-width="1"/>
+    <rect x="23" y="11" width="10" height="17" rx="2.2" fill="#C5CAD2" stroke="#9AA3B0" stroke-width="1"/>
+    <rect x="26" y="14" width="5" height="5" rx="1" fill="#F0F1F3"/>
+    <circle cx="12" cy="29" r="3.3" fill="#6B7280"/>
+    <circle cx="12" cy="29" r="1.3" fill="#C5CAD2"/>
+    <circle cx="27" cy="29" r="3.3" fill="#6B7280"/>
+    <circle cx="27" cy="29" r="1.3" fill="#C5CAD2"/>
+  </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new window.google.maps.Size(34, 34),
-    anchor: new window.google.maps.Point(17, 17),
+    scaledSize: new window.google.maps.Size(40, 46),
+    anchor: new window.google.maps.Point(20, 41),
   };
 }
 
