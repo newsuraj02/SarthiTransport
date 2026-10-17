@@ -6049,6 +6049,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   // AwaitingDriver booking from Firestore and swaps in ActiveRide instead.
   const [sendingKey, setSendingKey] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim());
+  const sameLocation = locationsReady && isSameLocation(pickup, drop, pickupCoords, dropCoords);
   const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
   // Which ONE of Pickup/Drop/Enter Weight gets the golden "current step"
@@ -6332,7 +6333,19 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           that same button becomes a disabled "Request sent. Please wait". */}
       {locationsReady && (
         <div className="px-5 pt-3 pb-4 space-y-2.5">
-          {weightUnitHint ? (
+          {sameLocation ? (
+            // Pickup and Drop read as the same place (see isSameLocation) --
+            // no point showing bookable vehicles for a trip that can't be
+            // booked; same "hide the list on an error" rule as
+            // weightUnitHint/exceedsFleetMax/!weightReady below, just
+            // checked first since a location problem blocks booking
+            // regardless of what the weight says.
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
+              {lang === "en" ? "Pickup and Drop look like the same place — enter a more specific address (area, landmark or street) for one of them."
+                : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
+                : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।"}
+            </div>
+          ) : weightUnitHint ? (
             // Typed value overflowed the current unit's shape (see
             // getWeightInputChange) -- almost certainly meant for the
             // OTHER unit, so this offers a one-tap fix instead of a
@@ -6573,6 +6586,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   // until this whole component unmounts, same as CustomerBooking above.
   const [sendingKey, setSendingKey] = useState(null);
   const locationsReady = !!(pickup.trim() && drop.trim() && advanceDate && advanceTime);
+  const sameLocation = !!(pickup.trim() && drop.trim()) && isSameLocation(pickup, drop, pickupCoords, dropCoords);
   const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
   const scheduledForValue = `${advanceDate} ${advanceTime}`;
@@ -6822,7 +6836,19 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
 
       {locationsReady && (
         <div className="px-5 pt-3 pb-4 space-y-2.5">
-          {weightUnitHint ? (
+          {sameLocation ? (
+            // Pickup and Drop read as the same place (see isSameLocation) --
+            // no point showing bookable vehicles for a trip that can't be
+            // booked; same "hide the list on an error" rule as
+            // weightUnitHint/exceedsFleetMax/!weightReady below, just
+            // checked first since a location problem blocks booking
+            // regardless of what the weight says.
+            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
+              {lang === "en" ? "Pickup and Drop look like the same place — enter a more specific address (area, landmark or street) for one of them."
+                : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
+                : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।"}
+            </div>
+          ) : weightUnitHint ? (
             // Typed value overflowed the current unit's shape (see
             // getWeightInputChange) -- almost certainly meant for the
             // OTHER unit, so this offers a one-tap fix instead of a
