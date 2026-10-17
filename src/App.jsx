@@ -1776,19 +1776,27 @@ export function estimateDistanceKm(pickupCoords, dropCoords) {
 }
 
 // Owner request (2026-10-16): a customer must not be able to book with
-// Pickup and Drop at the same place. Prefers real coordinates (catches
-// "same place, slightly different text" too, e.g. two picks of the same
-// building) within SAME_LOCATION_KM of each other; falls back to a plain
-// trimmed/case-insensitive text match when either point was typed by hand
-// without ever being geocoded (no coords to compare yet).
+// Pickup and Drop at the same place. Checks the address TEXT first, word
+// for word (case-insensitive, trimmed) -- this catches a customer picking
+// the same bare city/locality suggestion (e.g. "Pune, Maharashtra, India")
+// for both fields, which a driver can't tell apart on their end no matter
+// what the underlying coordinates say. Real-world case (2026-10-17): a
+// booking with that exact text in both fields still priced at ~16.5km
+// because the two picks had genuinely different coordinates (two distinct
+// Places results sharing one generic display string) -- correct fare math,
+// but useless to the driver, who has no way to know "Pune" means two
+// different spots. Falls back to coordinates (within SAME_LOCATION_KM)
+// only once the text itself differs, to still catch "same place, slightly
+// different text" (e.g. two picks of the same building worded differently).
 const SAME_LOCATION_KM = 0.05; // ~50m -- the same place, not just nearby
 export function isSameLocation(pickup, drop, pickupCoords, dropCoords) {
+  const p = (pickup || "").trim().toLowerCase();
+  const d = (drop || "").trim().toLowerCase();
+  if (p && p === d) return true;
   if (pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null) {
     return haversineKm(pickupCoords.lat, pickupCoords.lng, dropCoords.lat, dropCoords.lng) < SAME_LOCATION_KM;
   }
-  const p = (pickup || "").trim().toLowerCase();
-  const d = (drop || "").trim().toLowerCase();
-  return !!p && p === d;
+  return false;
 }
 
 // Exact figure, not a rounded-off approximation — meters below 1km (whole
@@ -6143,9 +6151,9 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   const bookDriver = (entry) => {
     setBookingError("");
     if (isSameLocation(pickup, drop, pickupCoords, dropCoords)) {
-      setBookingError(lang === "en" ? "Pickup and Drop can't be the same place — please change one of them."
-        : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण असू शकत नाही — कृपया एक बदला."
-        : "पिकअप और ड्रॉप एक ही जगह नहीं हो सकते — कृपया एक बदलें।");
+      setBookingError(lang === "en" ? "Pickup and Drop look like the same place — please enter a more specific address (area, landmark or street) for one of them."
+        : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — कृपया एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
+        : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — कृपया एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।");
       return;
     }
     setSendingKey(entry.id);
@@ -6634,9 +6642,9 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   const bookDriver = (entry) => {
     setBookingError("");
     if (isSameLocation(pickup, drop, pickupCoords, dropCoords)) {
-      setBookingError(lang === "en" ? "Pickup and Drop can't be the same place — please change one of them."
-        : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण असू शकत नाही — कृपया एक बदला."
-        : "पिकअप और ड्रॉप एक ही जगह नहीं हो सकते — कृपया एक बदलें।");
+      setBookingError(lang === "en" ? "Pickup and Drop look like the same place — please enter a more specific address (area, landmark or street) for one of them."
+        : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — कृपया एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
+        : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — कृपया एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।");
       return;
     }
     const scheduled = parseScheduledFor(scheduledForValue);
