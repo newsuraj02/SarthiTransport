@@ -153,6 +153,34 @@ jobs:
           sed -i 's/minifyEnabled true/minifyEnabled true\n            shrinkResources true/' twa/project/app/build.gradle
           grep -q 'shrinkResources true' twa/project/app/build.gradle || { echo "::error::Failed to patch in shrinkResources — Bubblewrap's build.gradle template must have changed."; exit 1; }
 
+      - name: Add ProGuard/R8 keep rules (Bubblewrap's template turns on minifyEnabled with NO proguardFiles at all)
+        # Owner-reported: a previous small/aggressively-shrunk .aab crashed
+        # on real devices. The generated build.gradle enables minifyEnabled
+        # but never declares proguardFiles -- not even Android's own
+        # recommended proguard-android-optimize.txt baseline -- so R8 had
+        # nothing protecting this app's classes beyond whatever consumer
+        # rules androidbrowserhelper/androidx.browser happen to bundle
+        # themselves. That's exactly the setup that produces a build which
+        # installs fine but crashes at runtime (ClassNotFoundException/
+        # NoSuchMethodError) the moment it hits a reflection- or Binder-
+        # service-based code path R8 decided looked unused -- Trusted Web
+        # Activity's launcher resolution and its TrustedWebActivityService
+        # notification delegation are both exactly that kind of code path.
+        # Kept wholesale rather than rule-by-rule: these libraries are
+        # small, and a partial keep list is how this exact crash slips
+        # back in on the next dependency bump.
+        run: |
+          printf '%s\n' \
+            "-keep class com.google.androidbrowserhelper.** { *; }" \
+            "-keep class androidx.browser.** { *; }" \
+            "-dontwarn com.google.androidbrowserhelper.**" \
+            "-dontwarn androidx.browser.**" \
+            "-keepattributes Signature" \
+            "-keepattributes *Annotation*" \
+            > twa/project/app/proguard-rules.pro
+          sed -i "s/shrinkResources true/shrinkResources true\n            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'/" twa/project/app/build.gradle
+          grep -q 'proguardFiles' twa/project/app/build.gradle || { echo "::error::Failed to patch in proguardFiles — Bubblewrap's build.gradle template must have changed."; exit 1; }
+
       - name: Bump androidbrowserhelper to 2.7.3 (Bubblewrap 1.25.0 still defaults to the older 2.6.2)
         # LauncherActivity -- the class that decides whether to launch as a
         # real Trusted Web Activity or fall back to a plain Custom Tab (URL
