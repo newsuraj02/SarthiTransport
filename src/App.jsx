@@ -2495,8 +2495,12 @@ async function consumePendingRingAction() {
 // PermissionGate's own unrelated Settings redirect on that exact same
 // resume, stealing focus away from the booking the driver just acted
 // on. This flag lets the ring-consuming effect tell PermissionGate
-// "a ring action is being handled right now, sit this one out" --
-// PermissionGate simply retries on the NEXT resume instead, same as it
+// "a ring action is being handled right now, sit this one out" -- held
+// for a few seconds after the response resolves (not just the single
+// in-flight instant), since a follow-up resume/re-render right after
+// landing on the main page was enough to let a second PermissionGate
+// check slip in and bounce the driver to Settings anyway. PermissionGate
+// simply retries on the NEXT resume after that window instead, same as it
 // already does for every other skipped cycle, so nothing about its own
 // "won't go until it's turned on" behavior changes, it's just not
 // allowed to fire in the middle of a ring response.
@@ -11671,10 +11675,16 @@ export default function App() {
         // See ringActionInFlight's own comment -- tells PermissionGate (a
         // different component, same resume) to sit this cycle out instead
         // of racing its own Settings redirect against this response.
+        // Owner-reported follow-up: the driver would still land on the main
+        // page and then get bounced to Settings a beat later -- the respond
+        // call resolving (or the re-render it triggers) was enough to let a
+        // SECOND PermissionGate check slip in right after this flag reset.
+        // A few seconds' grace after landing on the main page, not just the
+        // single in-flight moment, covers that follow-up check too.
         ringActionInFlight = true;
         driverRespondBookingRef.current(bookingId, action === "acceptBooking")
           .catch((e) => console.error("[ringingBridge] respond", e))
-          .finally(() => { ringActionInFlight = false; });
+          .finally(() => { setTimeout(() => { ringActionInFlight = false; }, 5000); });
       });
     };
     check();
