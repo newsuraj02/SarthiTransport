@@ -193,6 +193,39 @@ jobs:
           sed -i "s/androidbrowserhelper:androidbrowserhelper:2\.6\.2/androidbrowserhelper:androidbrowserhelper:2.7.3/" twa/project/app/build.gradle
           grep -q 'androidbrowserhelper:androidbrowserhelper:2.7.3' twa/project/app/build.gradle || { echo "::error::Failed to patch androidbrowserhelper version — Bubblewrap's default dependency version must have changed."; exit 1; }
 
+      - name: Wire in Firebase Crashlytics (real crash reports instead of guessing at symptoms)
+        # Owner-reported real-device crash on a previous build, with no
+        # actual stack trace to go on -- this gets one next time, instead
+        # of continuing to reason from symptoms alone. Reuses the same
+        # google-services.json already checked in for the Capacitor app
+        # (android/app/google-services.json) rather than needing a new
+        # one -- both apps share the identical applicationId
+        # (com.apnatransport.app) in the same Firebase project
+        # (sarthi-transport-74865), and this file is keyed by package
+        # name + project, so it's valid for this TWA build as-is.
+        # Catches native-layer crashes (ClassNotFoundException, Activity
+        # launch failures, the exact failure mode the ProGuard fix above
+        # targets) -- it does NOT catch JS/website errors, which run
+        # inside Chrome's own separate renderer process, out of this
+        # app's native process entirely.
+        # The Crashlytics Gradle plugin also uploads the R8 mapping file
+        # on every build, so a crash in the now-minified build above
+        # still shows real class/method names in Firebase Console instead
+        # of obfuscated a/b/c symbols.
+        run: |
+          cp android/app/google-services.json twa/project/app/google-services.json
+
+          sed -i "s/classpath 'com.android.tools.build:gradle:8.9.1'/classpath 'com.android.tools.build:gradle:8.9.1'\n        classpath 'com.google.gms:google-services:4.4.2'\n        classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.2'/" twa/project/build.gradle
+          grep -q 'google-services:4.4.2' twa/project/build.gradle || { echo "::error::Failed to patch in Google Services classpath — Bubblewrap's root build.gradle template must have changed."; exit 1; }
+
+          sed -i "/^dependencies {\$/a\\
+              implementation platform('com.google.firebase:firebase-bom:33.7.0')\\
+              implementation 'com.google.firebase:firebase-crashlytics'" twa/project/app/build.gradle
+          grep -q 'firebase-crashlytics' twa/project/app/build.gradle || { echo "::error::Failed to patch in Crashlytics dependency — Bubblewrap's app build.gradle template must have changed."; exit 1; }
+
+          printf '\napply plugin: "com.google.gms.google-services"\napply plugin: "com.google.firebase.crashlytics"\n' >> twa/project/app/build.gradle
+          grep -q 'com.google.firebase.crashlytics' twa/project/app/build.gradle || { echo "::error::Failed to append Crashlytics plugin application."; exit 1; }
+
       - name: Build + sign .aab and .apk
         working-directory: twa/project
         env:
