@@ -10990,7 +10990,17 @@ export default function App() {
   const logoutRole = (targetRole) => {
     if (targetRole === "admin") { setAdminAuth(false); if (adminFirebaseAuth) signOut(adminFirebaseAuth).catch((e) => console.error(e)); }
     if (targetRole === "customer") { setCustomerAuth({ verified: false, mobile: "" }); if (customerFirebaseAuth) signOut(customerFirebaseAuth).catch((e) => console.error(e)); }
-    if (targetRole === "driver") { setDriverAuth({ verified: false, mobile: "" }); if (driverFirebaseAuth) signOut(driverFirebaseAuth).catch((e) => console.error(e)); }
+    if (targetRole === "driver") {
+      setDriverAuth({ verified: false, mobile: "" });
+      if (driverFirebaseAuth) signOut(driverFirebaseAuth).catch((e) => console.error(e));
+      // Clears the SEPARATE native FirebaseAuth session mintLocationServiceToken
+      // established (see LocationTrackerPlugin.signOutNative's own comment) --
+      // signing out driverFirebaseAuth above only ends the web-side session;
+      // without this, PushTokenSync keeps re-associating this phone's FCM
+      // token with the driver who just logged out, on every future app
+      // resume, regardless of who uses this phone next.
+      if (isNativeApp) LocationTrackerNative.signOutNative().catch((e) => console.error("[driver logout] native sign-out failed", e));
+    }
     setRole(null);
   };
   const logout = () => {

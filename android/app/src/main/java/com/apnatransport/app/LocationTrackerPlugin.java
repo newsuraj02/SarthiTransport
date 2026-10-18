@@ -6,6 +6,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.firebase.auth.FirebaseAuth;
 
 // Thin JS-facing control surface for LocationTrackerService -- see that
 // class for the actual tracking/throttling/Firestore-write logic. Kept
@@ -54,6 +55,28 @@ public class LocationTrackerPlugin extends Plugin {
         Intent intent = new Intent(getContext(), LocationTrackerService.class);
         intent.setAction(LocationTrackerService.ACTION_STOP);
         getContext().startService(intent);
+        call.resolve();
+    }
+
+    // Owner-reported bug (2026-10-18): a customer on a phone that had
+    // earlier been used to test the DRIVER role kept receiving that
+    // driver's load-ring pushes. Root cause: mintLocationServiceToken's
+    // native FirebaseAuth session (signInWithCustomToken, same uid as the
+    // driver's own login -- see that function and PushTokenSync) is
+    // completely separate from the web-side driverFirebaseAuth the JS
+    // logout button signs out, and nothing ever cleared it -- so once a
+    // phone had ever gone on duty as a given driver, PushTokenSync kept
+    // re-writing THIS phone's current FCM token into THAT driver's
+    // Firestore doc on every app resume, forever, even after the web-side
+    // logout and even on a completely different person's device going
+    // forward. Called from App.jsx's logoutRole("driver") only -- a real,
+    // explicit driver logout -- not from the online/offline duty toggle,
+    // which must keep working exactly as before (a driver who's merely
+    // off duty, not logged out, should still be reachable while the app
+    // is closed).
+    @PluginMethod
+    public void signOutNative(PluginCall call) {
+        FirebaseAuth.getInstance().signOut();
         call.resolve();
     }
 }
