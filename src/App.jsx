@@ -8571,6 +8571,30 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   const pushTokenSavedRef = useRef(false);
   const locationPermRef = useRef(locationPermission);
   locationPermRef.current = locationPermission;
+  // Owner-reported (2026-10-18): this gate's automatic Settings redirects
+  // kept firing in places they shouldn't -- racing the ring Accept/Reject
+  // flow, firing again right after landing on the main page, firing on a
+  // plain notification tap -- every narrower guard closed one path and
+  // another one showed up, because it was re-checking and re-redirecting
+  // on EVERY single resume, forever. Owner's actual ask: walk the driver
+  // through every permission automatically ONCE, right after install --
+  // same as before -- then stop touching Settings on its own entirely,
+  // leaving the in-app checklist (LoadBellButton, which already does its
+  // own independent checks and only opens Settings when explicitly
+  // tapped) as the only way to revisit anything later. tried below is
+  // PERSISTED (survives app restarts/kills), unlike the old session-only
+  // ref it replaces -- so each permission's one-time auto-redirect really
+  // only ever fires once across this install's whole lifetime, not once
+  // per app open.
+  const [tried, setTried] = usePersistedState(`sarthi_permGateTriedEver_${driver.mobile || "x"}`, {});
+  const triedRef = useRef(tried);
+  triedRef.current = tried;
+  const firstTimeEver = (key) => {
+    if (triedRef.current[key]) return false;
+    triedRef.current = { ...triedRef.current, [key]: true };
+    setTried(triedRef.current);
+    return true;
+  };
   useEffect(() => {
     if (!isNativeApp || !driver.mobile) return;
     let busy = false;
@@ -8580,36 +8604,27 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       if (busy || cancelled) return;
       busy = true;
       try {
-        // Owner-reported (2026-10-18): this gate's automatic Settings
-        // redirects kept firing in places they shouldn't -- racing the ring
-        // Accept/Reject flow, firing again right after landing on the main
-        // page, firing on a plain notification tap -- every narrower guard
-        // (ringActionInFlight, the grace-period hold) closed one path and
-        // another one showed up. The in-app checklist below (LoadBellButton)
-        // already does its own independent checks and ONLY opens Settings
-        // when the driver explicitly taps a button for that one step --
-        // nothing here depends on this gate at all. So this gate no longer
-        // navigates anywhere by itself: it only drives the two things that
-        // don't involve leaving whatever screen the driver is already on --
-        // the real OS permission dialogs for location/push (steps 1-2's
-        // "prompt" branch, a quick popup, not a navigation) and saving the
-        // FCM token once push is granted. Every step that can only be
-        // completed via a Settings screen (push/location once denied,
-        // battery, full-screen, overlay, autostart) is now the checklist's
-        // job alone, opened only when the driver taps it themselves.
         // 1. लोकेशन
         const locPerm = locationPermRef.current?.permission;
-        if (locPerm !== "granted" && locPerm !== "denied") {
-          await locationPermRef.current?.enable?.();
-          return;
+        if (locPerm !== "granted") {
+          if (locPerm === "denied") {
+            if (firstTimeEver("location-denied")) openNativeSettingsBridge("location");
+          } else {
+            await locationPermRef.current?.enable?.();
+            return;
+          }
         }
         // 2. नोटिफिकेशन (+ इसी फोन का FCM टोकन सर्वर पर)
         const pushPerm = await checkPushPermission();
-        if (pushPerm !== "granted" && pushPerm !== "denied") {
-          const r = await requestPushToken();
-          if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
-          return;
-        } else if (pushPerm === "granted" && !pushTokenSavedRef.current) {
+        if (pushPerm !== "granted") {
+          if (pushPerm === "denied") {
+            if (firstTimeEver("push-denied")) openNativeSettingsBridge("notifications");
+          } else {
+            const r = await requestPushToken();
+            if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+            return;
+          }
+        } else if (!pushTokenSavedRef.current) {
           // Permission already granted (e.g. given before login, or on an
           // earlier install): the branch above never ran, so nothing here
           // ever saved THIS phone's token. Save it once per app session,
@@ -8623,6 +8638,18 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
           } else {
             console.error("[push token] not obtained:", r.reason);
           }
+        }
+        // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
+        const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
+        if (battery?.ignoring === false && firstTimeEver("battery")) { await requestBatteryOptimizationExemption(); return; }
+        // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+)
+        if (!(await canUseFullScreenIntent()) && firstTimeEver("full_screen_intent")) { openNativeSettingsBridge("full_screen_intent"); return; }
+        // 5. दूसरे ऐप के ऊपर दिखना
+        if (!(await canDrawOverlays()) && firstTimeEver("overlay")) { await openOverlaySettings(); return; }
+        // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...)
+        if (firstTimeEver("autostart")) {
+          const { needed } = await needsAutoStartSettings();
+          if (needed) { await openAutoStartSettings(); return; }
         }
       } catch (e) {
         console.error("[permission gate]", e);
