@@ -2482,29 +2482,6 @@ async function consumePendingRingAction() {
   }
 }
 
-// Owner-reported bug (2026-10-18): tapping Accept/Reject on the full-
-// screen ring sometimes landed on the app's main page (correct) but
-// sometimes landed in the phone's own System Settings instead. Root
-// cause: MainActivity.onResume fires BOTH the ring-action effect below
-// (which reads this tap's decision) AND DriverHome's PermissionGate
-// effect (which re-checks every single resume and deep-links to
-// Settings the instant it finds ANY permission still not granted) at
-// the same time, in two different, uncoordinated components. Whenever a
-// driver's setup wasn't 100% complete yet (very plausible mid-setup on
-// a hard OEM like ColorOS), accepting a ring would ALSO trigger
-// PermissionGate's own unrelated Settings redirect on that exact same
-// resume, stealing focus away from the booking the driver just acted
-// on. This flag lets the ring-consuming effect tell PermissionGate
-// "a ring action is being handled right now, sit this one out" -- held
-// for a few seconds after the response resolves (not just the single
-// in-flight instant), since a follow-up resume/re-render right after
-// landing on the main page was enough to let a second PermissionGate
-// check slip in and bounce the driver to Settings anyway. PermissionGate
-// simply retries on the NEXT resume after that window instead, same as it
-// already does for every other skipped cycle, so nothing about its own
-// "won't go until it's turned on" behavior changes, it's just not
-// allowed to fire in the middle of a ring response.
-let ringActionInFlight = false;
 
 // Real, re-checkable state of Android 14's separate "Full screen
 // notifications" permission (see RingingBridgePlugin.java's
@@ -8591,7 +8568,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   // reasoning as autostart) and fall through to the next step in the
   // SAME call instead of blocking the rest of the gate behind a
   // permission that will never self-resolve through this path again.
-  const permGateTried = useRef(new Set()); // "autostart", "location-denied", "push-denied" -- see above
   const pushTokenSavedRef = useRef(false);
   const locationPermRef = useRef(locationPermission);
   locationPermRef.current = locationPermission;
@@ -8600,39 +8576,40 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     let busy = false;
     let cancelled = false;
     let handle = null;
-    const tried = permGateTried.current;
-    const firstTime = (key) => { if (tried.has(key)) return false; tried.add(key); return true; };
     const step = async () => {
       if (busy || cancelled) return;
-      // See ringActionInFlight's own comment -- a ring Accept/Reject tap is
-      // being handled on this exact resume; don't also redirect to Settings
-      // for an unrelated denied permission right now. Just sits this one
-      // cycle out -- the next resume re-checks normally, same "won't go
-      // until it's turned on" behavior as always, just not mid-response.
-      if (ringActionInFlight) return;
       busy = true;
       try {
+        // Owner-reported (2026-10-18): this gate's automatic Settings
+        // redirects kept firing in places they shouldn't -- racing the ring
+        // Accept/Reject flow, firing again right after landing on the main
+        // page, firing on a plain notification tap -- every narrower guard
+        // (ringActionInFlight, the grace-period hold) closed one path and
+        // another one showed up. The in-app checklist below (LoadBellButton)
+        // already does its own independent checks and ONLY opens Settings
+        // when the driver explicitly taps a button for that one step --
+        // nothing here depends on this gate at all. So this gate no longer
+        // navigates anywhere by itself: it only drives the two things that
+        // don't involve leaving whatever screen the driver is already on --
+        // the real OS permission dialogs for location/push (steps 1-2's
+        // "prompt" branch, a quick popup, not a navigation) and saving the
+        // FCM token once push is granted. Every step that can only be
+        // completed via a Settings screen (push/location once denied,
+        // battery, full-screen, overlay, autostart) is now the checklist's
+        // job alone, opened only when the driver taps it themselves.
         // 1. लोकेशन
         const locPerm = locationPermRef.current?.permission;
-        if (locPerm !== "granted") {
-          if (locPerm === "denied") {
-            if (firstTime("location-denied")) openNativeSettingsBridge("location");
-          } else {
-            await locationPermRef.current?.enable?.();
-            return;
-          }
+        if (locPerm !== "granted" && locPerm !== "denied") {
+          await locationPermRef.current?.enable?.();
+          return;
         }
         // 2. नोटिफिकेशन (+ इसी फोन का FCM टोकन सर्वर पर)
         const pushPerm = await checkPushPermission();
-        if (pushPerm !== "granted") {
-          if (pushPerm === "denied") {
-            if (firstTime("push-denied")) openNativeSettingsBridge("notifications");
-          } else {
-            const r = await requestPushToken();
-            if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
-            return;
-          }
-        } else if (!pushTokenSavedRef.current) {
+        if (pushPerm !== "granted" && pushPerm !== "denied") {
+          const r = await requestPushToken();
+          if (r.ok) patchDoc("drivers", driver.mobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+          return;
+        } else if (pushPerm === "granted" && !pushTokenSavedRef.current) {
           // Permission already granted (e.g. given before login, or on an
           // earlier install): the branch above never ran, so nothing here
           // ever saved THIS phone's token. Save it once per app session,
@@ -8646,18 +8623,6 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
           } else {
             console.error("[push token] not obtained:", r.reason);
           }
-        }
-        // 3. बैटरी (Android का अपना हाँ/ना डायलॉग)
-        const battery = await PowerBridgeNative.isIgnoringBatteryOptimizations().catch(() => ({ ignoring: true }));
-        if (battery?.ignoring === false) { await requestBatteryOptimizationExemption(); return; }
-        // 4. लॉक स्क्रीन पर पूरा लोड कार्ड (Android 14+) -- Settings > Apps > Apna Transport > "Full screen notifications" पर ले जाता है
-        if (!(await canUseFullScreenIntent())) { openNativeSettingsBridge("full_screen_intent"); return; }
-        // 5. दूसरे ऐप के ऊपर दिखना -- घंटी वाली स्क्रीन अपने आप खुले -- Settings > Apps > Apna Transport > "Display over other apps" पर ले जाता है
-        if (!(await canDrawOverlays())) { await openOverlaySettings(); return; }
-        // 6. Autostart (Xiaomi/Oppo/Vivo/Honor...): फोन इसकी हालत बताता नहीं (कोई OS API नहीं), इसलिए हर ऐप-ओपन पर एक बार -- उस OEM की अपनी Autostart/Startup Manager स्क्रीन पर ले जाता है
-        if (firstTime("autostart")) {
-          const { needed } = await needsAutoStartSettings();
-          if (needed) { await openAutoStartSettings(); return; }
         }
       } catch (e) {
         console.error("[permission gate]", e);
@@ -11672,19 +11637,8 @@ export default function App() {
         if (!bookingId || (action !== "acceptBooking" && action !== "rejectBooking")) return;
         // "टेस्ट घंटी" (sendTestRing) -- nothing to claim; just confirm it worked.
         if (String(bookingId).startsWith("TEST-")) { try { localStorage.setItem("sarthi_testRingOkAt", String(Date.now())); } catch { /* storage off */ } window.dispatchEvent(new Event("sarthi-test-ring-ok")); return; }
-        // See ringActionInFlight's own comment -- tells PermissionGate (a
-        // different component, same resume) to sit this cycle out instead
-        // of racing its own Settings redirect against this response.
-        // Owner-reported follow-up: the driver would still land on the main
-        // page and then get bounced to Settings a beat later -- the respond
-        // call resolving (or the re-render it triggers) was enough to let a
-        // SECOND PermissionGate check slip in right after this flag reset.
-        // A few seconds' grace after landing on the main page, not just the
-        // single in-flight moment, covers that follow-up check too.
-        ringActionInFlight = true;
         driverRespondBookingRef.current(bookingId, action === "acceptBooking")
-          .catch((e) => console.error("[ringingBridge] respond", e))
-          .finally(() => { setTimeout(() => { ringActionInFlight = false; }, 5000); });
+          .catch((e) => console.error("[ringingBridge] respond", e));
       });
     };
     check();
