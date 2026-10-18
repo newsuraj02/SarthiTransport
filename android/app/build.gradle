@@ -105,6 +105,15 @@ dependencies {
     // compile classpath -- this app's own FCM subclass needs it declared
     // here too. Version comes from the firebase-bom platform() above.
     implementation "com.google.firebase:firebase-messaging"
+    // Owner-reported real-device bug (2026-10-18): Accept from the full-
+    // screen ring fails to reach MainActivity every single time when the
+    // app was fully killed, landing on the home screen instead, even with
+    // autostart/background-activity both confirmed allowed on the test
+    // device -- ruling out the device-config gaps already chased down
+    // this session. Real diagnostic data beats another guess at native
+    // code that might not actually be the problem; version comes from the
+    // firebase-bom platform() already declared above.
+    implementation "com.google.firebase:firebase-crashlytics"
 }
 
 apply from: 'capacitor.build.gradle'
@@ -113,6 +122,7 @@ try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {
         apply plugin: 'com.google.gms.google-services'
+        apply plugin: 'com.google.firebase.crashlytics'
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
