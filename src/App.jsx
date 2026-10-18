@@ -2482,6 +2482,26 @@ async function consumePendingRingAction() {
   }
 }
 
+// Owner-reported bug (2026-10-18): tapping Accept/Reject on the full-
+// screen ring sometimes landed on the app's main page (correct) but
+// sometimes landed in the phone's own System Settings instead. Root
+// cause: MainActivity.onResume fires BOTH the ring-action effect below
+// (which reads this tap's decision) AND DriverHome's PermissionGate
+// effect (which re-checks every single resume and deep-links to
+// Settings the instant it finds ANY permission still not granted) at
+// the same time, in two different, uncoordinated components. Whenever a
+// driver's setup wasn't 100% complete yet (very plausible mid-setup on
+// a hard OEM like ColorOS), accepting a ring would ALSO trigger
+// PermissionGate's own unrelated Settings redirect on that exact same
+// resume, stealing focus away from the booking the driver just acted
+// on. This flag lets the ring-consuming effect tell PermissionGate
+// "a ring action is being handled right now, sit this one out" --
+// PermissionGate simply retries on the NEXT resume instead, same as it
+// already does for every other skipped cycle, so nothing about its own
+// "won't go until it's turned on" behavior changes, it's just not
+// allowed to fire in the middle of a ring response.
+let ringActionInFlight = false;
+
 // Real, re-checkable state of Android 14's separate "Full screen
 // notifications" permission (see RingingBridgePlugin.java's
 // canUseFullScreenIntent) -- unlike the one-shot asks elsewhere, there's
@@ -8580,6 +8600,12 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     const firstTime = (key) => { if (tried.has(key)) return false; tried.add(key); return true; };
     const step = async () => {
       if (busy || cancelled) return;
+      // See ringActionInFlight's own comment -- a ring Accept/Reject tap is
+      // being handled on this exact resume; don't also redirect to Settings
+      // for an unrelated denied permission right now. Just sits this one
+      // cycle out -- the next resume re-checks normally, same "won't go
+      // until it's turned on" behavior as always, just not mid-response.
+      if (ringActionInFlight) return;
       busy = true;
       try {
         // 1. लोकेशन
@@ -11642,7 +11668,13 @@ export default function App() {
         if (!bookingId || (action !== "acceptBooking" && action !== "rejectBooking")) return;
         // "टेस्ट घंटी" (sendTestRing) -- nothing to claim; just confirm it worked.
         if (String(bookingId).startsWith("TEST-")) { try { localStorage.setItem("sarthi_testRingOkAt", String(Date.now())); } catch { /* storage off */ } window.dispatchEvent(new Event("sarthi-test-ring-ok")); return; }
-        driverRespondBookingRef.current(bookingId, action === "acceptBooking").catch((e) => console.error("[ringingBridge] respond", e));
+        // See ringActionInFlight's own comment -- tells PermissionGate (a
+        // different component, same resume) to sit this cycle out instead
+        // of racing its own Settings redirect against this response.
+        ringActionInFlight = true;
+        driverRespondBookingRef.current(bookingId, action === "acceptBooking")
+          .catch((e) => console.error("[ringingBridge] respond", e))
+          .finally(() => { ringActionInFlight = false; });
       });
     };
     check();
