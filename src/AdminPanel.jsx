@@ -406,21 +406,26 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
   const registrationTrendRangeInvalid = !trendFrom || !trendTo || trendFrom > trendTo;
   const registrationTrendTooWide = !registrationTrendRangeInvalid
     && (new Date(trendTo) - new Date(trendFrom)) / 86400000 + 1 > REGISTRATION_TREND_MAX_DAYS;
+  // Owner request (2026-10-19): merged into the "New Registrations" view --
+  // each day row shows the ACTUAL people who signed up (name/mobile, plus
+  // status for drivers: form not completed, or their real kyc value once
+  // it is), not just a count, so this holds the real records per day, not
+  // just totals. Newest day first, matching how the merged view reads it.
   const registrationTrend = (() => {
     if (registrationTrendRangeInvalid || registrationTrendTooWide) return [];
     const days = [];
     const cursor = new Date(trendFrom);
     const end = new Date(trendTo);
     while (cursor <= end) {
-      days.push({ key: toDateInputStr(cursor), label: cursor.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }), customers: 0, drivers: 0 });
+      days.push({ key: toDateInputStr(cursor), label: cursor.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }), customers: [], drivers: [] });
       cursor.setDate(cursor.getDate() + 1);
     }
     const byKey = Object.fromEntries(days.map((d) => [d.key, d]));
-    (customers || []).forEach((c) => { const k = dateKey(c.createdAt); if (byKey[k]) byKey[k].customers++; });
-    (drivers || []).forEach((d) => { const k = dateKey(d.createdAt); if (byKey[k]) byKey[k].drivers++; });
-    return days;
+    (customers || []).forEach((c) => { const k = dateKey(c.createdAt); if (byKey[k]) byKey[k].customers.push(c); });
+    (drivers || []).forEach((d) => { const k = dateKey(d.createdAt); if (byKey[k]) byKey[k].drivers.push(d); });
+    return days.reverse();
   })();
-  const registrationTrendTotal = registrationTrend.reduce((sum, d) => sum + d.customers + d.drivers, 0);
+  const registrationTrendTotal = registrationTrend.reduce((sum, d) => sum + d.customers.length + d.drivers.length, 0);
   // Always the fixed, real last-7-calendar-days count (independent of
   // whatever range the admin has picked in the detail view) -- what the
   // Live Dashboard tile itself shows, so it stays a stable, predictable
@@ -873,174 +878,34 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
   }
 
   if (detailView === "newRegistrations") {
-    return (
-      <div>
-        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-          <ChevronLeft size={18} strokeWidth={3} />
-        </button>
-        <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"}</h2>
-        <div className="flex gap-2 mb-4">
-          <button onClick={() => setNewRegTab("customer")} className="flex-1 rounded-lg py-3 text-sm font-bold"
-            style={{ background: newRegTab === "customer" ? C.navy : C.paper, color: newRegTab === "customer" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "customer" ? C.navy : C.line}` }}>
-            {lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}{newCustomersToday.length > 0 ? ` (${newCustomersToday.length})` : ""}
-          </button>
-          <button onClick={() => setNewRegTab("driver")} className="flex-1 rounded-lg py-3 text-sm font-bold"
-            style={{ background: newRegTab === "driver" ? C.navy : C.paper, color: newRegTab === "driver" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "driver" ? C.navy : C.line}` }}>
-            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{driverRegistrations.length > 0 ? ` (${driverRegistrations.length})` : ""}
-          </button>
-        </div>
-        {newRegTab === "customer" ? (
-          newCustomersToday.length === 0 ? (
-            <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No new customer signups today yet." : lang === "mr" ? "आज अद्याप कोणताही नवीन कस्टमर साइनअप झाला नाही." : "आज तक कोई नया कस्टमर साइनअप नहीं हुआ।"}</p>
-          ) : (
-            <div className="space-y-1.5">
-              {newCustomersToday.map((c) => (
-                <div key={c.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                  <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name}</div>
-                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
-                </div>
-              ))}
-            </div>
-          )
-        ) : driverRegistrations.length === 0 ? (
-          <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "Every driver's KYC is resolved." : lang === "mr" ? "सर्व ड्रायव्हरांची KYC निकाली काढली आहे." : "सभी ड्राइवरों की KYC निपटा दी गई है।"}</p>
-        ) : (
-          <div className="space-y-1.5">
-            {driverRegistrations.map((d) => {
-              // Not yet submitted (signed up within the last few days, no
-              // vehicleSpec) -- nothing to approve/reject/edit here, just a
-              // visibility row so a fresh signup never looks like it
-              // silently disappeared. See notSubmittedRecentList above.
-              if (!d.vehicleSpec) {
-                return (
-                  <div key={d.id} className="rounded-lg p-3 flex items-center justify-between gap-2" style={{ border: `1px solid ${C.line}`, background: C.bg }}>
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
-                      <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: C.inkSoft, background: "#E0E0E0" }}>
-                      {lang === "en" ? "Form not submitted yet" : lang === "mr" ? "फॉर्म अद्याप भरलेला नाही" : "फॉर्म अभी भरा नहीं गया"}
-                    </span>
-                  </div>
-                );
-              }
-              const expanded = approvalExpandedId === d.id;
-              const editing = approvalEditingId === d.id;
-              return (
-                <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
-                      <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-                      {lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                        <button onClick={() => setApprovalExpandedId(expanded ? null : d.id)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>
-                          {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
-                        </button>
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => (editing ? cancelApprovalEdit() : startApprovalEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
-                            {editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}
-                          </button>
-                          <button onClick={() => updateDriverKyc(d.id, "Rejected")} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: C.safety, color: "#FFFFFF" }}>{lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "नकारें"}</button>
-                          <button onClick={() => updateDriverKyc(d.id, "Approved")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: C.metallicGreen }}>{lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}</button>
-                        </div>
-                      </div>
-                      {editing ? (
-                        <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                          <div className="grid grid-cols-2 gap-2 mb-2">
-                            <label className="text-[11px] col-span-2">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle type" : lang === "mr" ? "गाडीचा प्रकार" : "गाड़ी का प्रकार"}</span>
-                              <select value={approvalEditDraft.type} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, type: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
-                                {!vehicleTypes.some((v) => v.key === approvalEditDraft.type) && <option value={approvalEditDraft.type}>{approvalEditDraft.type || "—"}</option>}
-                                {vehicleTypes.map((v) => <option key={v.key} value={v.key}>{lang === "en" ? (v.labelEn || v.label) : v.label}</option>)}
-                              </select>
-                            </label>
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
-                              <input value={approvalEditDraft.vehicleNumber} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
-                              <input type="number" value={approvalEditDraft.capacityKg} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
-                              <input value={approvalEditDraft.length} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, length: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
-                              <input value={approvalEditDraft.width} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, width: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                            <label className="text-[11px]">
-                              <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
-                              <input value={approvalEditDraft.height} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, height: e.target.value }))}
-                                className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
-                            </label>
-                          </div>
-                          {approvalEditError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{approvalEditError}</p>}
-                          <div className="flex justify-end">
-                            <button onClick={() => saveApprovalEdit(d)} className="rounded-lg px-5 py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
-                              {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
-                            </button>
-                          </div>
-                        </div>
-                      ) : expanded && (
-                        <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                          <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
-                          <div className="grid grid-cols-2 gap-2 mb-2">
-                            {Object.entries(approvalDocLabels).map(([key, label]) => {
-                              const doc = d.docs?.[key];
-                              return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${d.name}-${key}.jpg`} />;
-                            })}
-                          </div>
-                          {(d.vehicleSpec?.photo || d.vehicleSpec?.photoSide) && (
-                            <>
-                              <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
-                              <div className="grid grid-cols-2 gap-2 mb-2">
-                                {d.vehicleSpec?.photo && <KycDocThumb url={d.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${d.name}-vehicle-front.jpg`} />}
-                                {d.vehicleSpec?.photoSide && <KycDocThumb url={d.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${d.name}-vehicle-side.jpg`} />}
-                              </div>
-                            </>
-                          )}
-                          <div className="text-[11px]" style={{ color: C.ink }}>
-                            <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
-                            <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
-                          </div>
-                        </div>
-                      )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (detailView === "registrationTrend") {
-    const maxCount = Math.max(1, ...registrationTrend.map((d) => d.customers + d.drivers));
     const setQuickRange = (days) => {
       const start = new Date(); start.setDate(start.getDate() - (days - 1));
       setTrendFrom(toDateInputStr(start));
       setTrendTo(toDateInputStr(new Date()));
+    };
+    // Owner request (2026-10-19): merged the old fixed-7-days "Registrations
+    // (7 Days)" view into this one -- From/To range picker up top, then the
+    // same Customer/Driver tabs as before, but now grouped by the date each
+    // person actually signed up instead of a flat "today only" list. Status
+    // only here per explicit request -- no Approve/Reject/Edit (that used to
+    // live only in this view; see the comment above approvalQueue. Until it's
+    // put back somewhere, driver KYC can't actually be approved/rejected
+    // anywhere in the app -- flagged, not fixed here, since this was asked
+    // for explicitly).
+    const rangeCustomersTotal = registrationTrend.reduce((sum, d) => sum + d.customers.length, 0);
+    const rangeDriversTotal = registrationTrend.reduce((sum, d) => sum + d.drivers.length, 0);
+    const driverStatusBadge = (d) => {
+      if (!d.vehicleSpec) return { text: lang === "en" ? "Form not completed" : lang === "mr" ? "फॉर्म पूर्ण नाही" : "फॉर्म पूरा नहीं", bg: "#E0E0E0", color: C.inkSoft };
+      if (d.kyc === "Approved") return { text: lang === "en" ? "Approved" : lang === "mr" ? "अप्रूव्ह्ड" : "अप्रूव्ड", bg: C.metallicGreen, color: "#FFFFFF" };
+      if (d.kyc === "Rejected") return { text: lang === "en" ? "Rejected" : lang === "mr" ? "नाकारले" : "रिजेक्टेड", bg: C.safety, color: "#FFFFFF" };
+      return { text: lang === "en" ? "Form completed — Pending" : lang === "mr" ? "फॉर्म पूर्ण — प्रलंबित" : "फॉर्म पूरा — लंबित", bg: C.marigoldDeep, color: "#FFFFFF" };
     };
     return (
       <div>
         <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
-        <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>
-          {lang === "en" ? "Registrations by Date" : lang === "mr" ? "तारखेनुसार रजिस्ट्रेशन" : "तारीख के अनुसार रजिस्ट्रेशन"}
-        </h2>
+        <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"}</h2>
         <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
           {lang === "en" ? "Line this up against Google Ads' own date-ranged spend/conversions graph to check whether installs are actually turning into real signups." :
             lang === "mr" ? "इंस्टॉल्स खरोखर साइनअपमध्ये बदलत आहेत का हे तपासण्यासाठी हे Google Ads च्या डेट-रेंज खर्च/कन्व्हर्जन ग्राफशी जुळवा." :
@@ -1065,6 +930,16 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
             </button>
           ))}
         </div>
+        <div className="flex gap-2 mb-4">
+          <button onClick={() => setNewRegTab("customer")} className="flex-1 rounded-lg py-3 text-sm font-bold"
+            style={{ background: newRegTab === "customer" ? C.navy : C.paper, color: newRegTab === "customer" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "customer" ? C.navy : C.line}` }}>
+            {lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}{rangeCustomersTotal > 0 ? ` (${rangeCustomersTotal})` : ""}
+          </button>
+          <button onClick={() => setNewRegTab("driver")} className="flex-1 rounded-lg py-3 text-sm font-bold"
+            style={{ background: newRegTab === "driver" ? C.navy : C.paper, color: newRegTab === "driver" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "driver" ? C.navy : C.line}` }}>
+            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{rangeDriversTotal > 0 ? ` (${rangeDriversTotal})` : ""}
+          </button>
+        </div>
         {registrationTrendRangeInvalid ? (
           <p className="text-xs text-center py-10" style={{ color: C.safety }}>
             {lang === "en" ? "Pick a valid range — \"From\" must be on or before \"To\"." : lang === "mr" ? "वैध रेंज निवडा — \"पासून\" हे \"पर्यंत\" च्या आधी किंवा त्याच दिवशी असावे." : "सही रेंज चुनें — \"से\" की तारीख \"तक\" से पहले या उसी दिन होनी चाहिए।"}
@@ -1073,36 +948,50 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
           <p className="text-xs text-center py-10" style={{ color: C.safety }}>
             {lang === "en" ? `Pick a shorter range — up to ${REGISTRATION_TREND_MAX_DAYS} days at a time.` : lang === "mr" ? `कमी कालावधी निवडा — एका वेळी जास्तीत जास्त ${REGISTRATION_TREND_MAX_DAYS} दिवस.` : `कम अवधि चुनें — एक बार में अधिकतम ${REGISTRATION_TREND_MAX_DAYS} दिन।`}
           </p>
-        ) : (
-          <>
-            <div className="rounded-lg p-3 mb-3 flex items-center justify-between" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-              <span className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Total in range" : lang === "mr" ? "रेंजमधील एकूण" : "रेंज में कुल"}</span>
-              <span className="text-base font-black" style={{ color: C.pimpri }}>{registrationTrendTotal}</span>
-            </div>
-            <div className="space-y-2">
-              {registrationTrend.map((d) => {
-                const total = d.customers + d.drivers;
-                return (
-                  <div key={d.key} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-bold" style={{ color: C.ink }}>{d.label}</span>
-                      <span className="text-xs font-bold" style={{ color: total > 0 ? C.success : C.inkSoft }}>
-                        {total} {lang === "en" ? "total" : lang === "mr" ? "एकूण" : "कुल"}
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full overflow-hidden flex" style={{ background: C.bg }}>
-                      {d.customers > 0 && <div style={{ width: `${(d.customers / maxCount) * 100}%`, background: C.navy }} />}
-                      {d.drivers > 0 && <div style={{ width: `${(d.drivers / maxCount) * 100}%`, background: C.marigoldDeep }} />}
-                    </div>
-                    <div className="flex gap-3 mt-1.5 text-[10px]" style={{ color: C.inkSoft }}>
-                      <span><span style={{ color: C.navy }}>●</span> {lang === "en" ? "Customers" : lang === "mr" ? "कस्टमर" : "कस्टमर"}: {d.customers}</span>
-                      <span><span style={{ color: C.marigoldDeep }}>●</span> {lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: {d.drivers}</span>
-                    </div>
+        ) : newRegTab === "customer" ? (
+          rangeCustomersTotal === 0 ? (
+            <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer signups in this range." : lang === "mr" ? "या रेंजमध्ये कोणताही कस्टमर साइनअप नाही." : "इस रेंज में कोई कस्टमर साइनअप नहीं।"}</p>
+          ) : (
+            <div className="space-y-3">
+              {registrationTrend.filter((d) => d.customers.length > 0).map((d) => (
+                <div key={d.key}>
+                  <div className="text-xs font-bold mb-1.5" style={{ color: C.inkSoft }}>{d.label}</div>
+                  <div className="space-y-1.5">
+                    {d.customers.map((c) => (
+                      <div key={c.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                        <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name}</div>
+                        <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
-          </>
+          )
+        ) : rangeDriversTotal === 0 ? (
+          <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver signups in this range." : lang === "mr" ? "या रेंजमध्ये कोणताही ड्रायव्हर साइनअप नाही." : "इस रेंज में कोई ड्राइवर साइनअप नहीं।"}</p>
+        ) : (
+          <div className="space-y-3">
+            {registrationTrend.filter((d) => d.drivers.length > 0).map((d) => (
+              <div key={d.key}>
+                <div className="text-xs font-bold mb-1.5" style={{ color: C.inkSoft }}>{d.label}</div>
+                <div className="space-y-1.5">
+                  {d.drivers.map((dr) => {
+                    const badge = driverStatusBadge(dr);
+                    return (
+                      <div key={dr.id} className="rounded-lg p-3 flex items-center justify-between gap-2" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold" style={{ color: C.ink }}>{dr.name}</div>
+                          <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{dr.vehicleSpec?.vehicleNumber ? `${dr.vehicleSpec.vehicleNumber} · ` : ""}{dr.mobile}</div>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: badge.color, background: badge.bg }}>{badge.text}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     );
@@ -1229,8 +1118,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
           so this stays a fixed color instead of flagging red off however
           many are still Pending. */}
       <div className="grid grid-cols-2 gap-3 mb-5">
-        <StatTile label={lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"} value={newCustomersToday.length + newDriversToday.length} color={C.pimpri} onClick={() => setDetailView("newRegistrations")} />
-        <StatTile label={lang === "en" ? "Registrations (7 Days)" : lang === "mr" ? "रजिस्ट्रेशन (7 दिवस)" : "रजिस्ट्रेशन (7 दिन)"} value={registrationTrendLast7Total} color={C.pimpri} onClick={() => setDetailView("registrationTrend")} />
+        <StatTile label={lang === "en" ? "New Registrations (7 Days)" : lang === "mr" ? "नवीन रजिस्ट्रेशन (7 दिवस)" : "नए रजिस्ट्रेशन (7 दिन)"} value={registrationTrendLast7Total} color={C.pimpri} onClick={() => setDetailView("newRegistrations")} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
         <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
