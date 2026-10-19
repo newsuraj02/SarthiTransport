@@ -884,14 +884,15 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
       setTrendTo(toDateInputStr(new Date()));
     };
     // Owner request (2026-10-19): merged the old fixed-7-days "Registrations
-    // (7 Days)" view into this one -- From/To range picker up top, then the
-    // same Customer/Driver tabs as before, but now grouped by the date each
-    // person actually signed up instead of a flat "today only" list. Status
-    // only here per explicit request -- no Approve/Reject/Edit (that used to
-    // live only in this view; see the comment above approvalQueue. Until it's
-    // put back somewhere, driver KYC can't actually be approved/rejected
-    // anywhere in the app -- flagged, not fixed here, since this was asked
-    // for explicitly).
+    // (7 Days)" view into this one -- From/To range picker up top, grouped
+    // by the date each person actually signed up instead of a flat "today
+    // only" list. Customer/Driver tab toggle deliberately removed per
+    // follow-up request -- one combined list per date instead, each row
+    // tagged Customer or (for drivers) its status badge. Status only, no
+    // Approve/Reject/Edit (that used to live only in this view; see the
+    // comment above approvalQueue). Until it's put back somewhere, driver
+    // KYC can't actually be approved/rejected anywhere in the app --
+    // flagged, not fixed here, since this was asked for explicitly.
     const rangeCustomersTotal = registrationTrend.reduce((sum, d) => sum + d.customers.length, 0);
     const rangeDriversTotal = registrationTrend.reduce((sum, d) => sum + d.drivers.length, 0);
     const driverStatusBadge = (d) => {
@@ -930,16 +931,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
             </button>
           ))}
         </div>
-        <div className="flex gap-2 mb-4">
-          <button onClick={() => setNewRegTab("customer")} className="flex-1 rounded-lg py-3 text-sm font-bold"
-            style={{ background: newRegTab === "customer" ? C.navy : C.paper, color: newRegTab === "customer" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "customer" ? C.navy : C.line}` }}>
-            {lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}{rangeCustomersTotal > 0 ? ` (${rangeCustomersTotal})` : ""}
-          </button>
-          <button onClick={() => setNewRegTab("driver")} className="flex-1 rounded-lg py-3 text-sm font-bold"
-            style={{ background: newRegTab === "driver" ? C.navy : C.paper, color: newRegTab === "driver" ? "#fff" : C.inkSoft, border: `1.5px solid ${newRegTab === "driver" ? C.navy : C.line}` }}>
-            {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}{rangeDriversTotal > 0 ? ` (${rangeDriversTotal})` : ""}
-          </button>
-        </div>
         {registrationTrendRangeInvalid ? (
           <p className="text-xs text-center py-10" style={{ color: C.safety }}>
             {lang === "en" ? "Pick a valid range — \"From\" must be on or before \"To\"." : lang === "mr" ? "वैध रेंज निवडा — \"पासून\" हे \"पर्यंत\" च्या आधी किंवा त्याच दिवशी असावे." : "सही रेंज चुनें — \"से\" की तारीख \"तक\" से पहले या उसी दिन होनी चाहिए।"}
@@ -948,34 +939,25 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
           <p className="text-xs text-center py-10" style={{ color: C.safety }}>
             {lang === "en" ? `Pick a shorter range — up to ${REGISTRATION_TREND_MAX_DAYS} days at a time.` : lang === "mr" ? `कमी कालावधी निवडा — एका वेळी जास्तीत जास्त ${REGISTRATION_TREND_MAX_DAYS} दिवस.` : `कम अवधि चुनें — एक बार में अधिकतम ${REGISTRATION_TREND_MAX_DAYS} दिन।`}
           </p>
-        ) : newRegTab === "customer" ? (
-          rangeCustomersTotal === 0 ? (
-            <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer signups in this range." : lang === "mr" ? "या रेंजमध्ये कोणताही कस्टमर साइनअप नाही." : "इस रेंज में कोई कस्टमर साइनअप नहीं।"}</p>
-          ) : (
-            <div className="space-y-3">
-              {registrationTrend.filter((d) => d.customers.length > 0).map((d) => (
-                <div key={d.key}>
-                  <div className="text-xs font-bold mb-1.5" style={{ color: C.inkSoft }}>{d.label}</div>
-                  <div className="space-y-1.5">
-                    {d.customers.map((c) => (
-                      <div key={c.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                        <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name}</div>
-                        <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        ) : rangeDriversTotal === 0 ? (
-          <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver signups in this range." : lang === "mr" ? "या रेंजमध्ये कोणताही ड्रायव्हर साइनअप नाही." : "इस रेंज में कोई ड्राइवर साइनअप नहीं।"}</p>
+        ) : rangeCustomersTotal + rangeDriversTotal === 0 ? (
+          <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No signups in this range." : lang === "mr" ? "या रेंजमध्ये कोणताही साइनअप नाही." : "इस रेंज में कोई साइनअप नहीं।"}</p>
         ) : (
           <div className="space-y-3">
-            {registrationTrend.filter((d) => d.drivers.length > 0).map((d) => (
+            {registrationTrend.filter((d) => d.customers.length > 0 || d.drivers.length > 0).map((d) => (
               <div key={d.key}>
                 <div className="text-xs font-bold mb-1.5" style={{ color: C.inkSoft }}>{d.label}</div>
                 <div className="space-y-1.5">
+                  {d.customers.map((c) => (
+                    <div key={c.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name}</div>
+                        <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: "#FFFFFF", background: C.navy }}>
+                        {lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}
+                      </span>
+                    </div>
+                  ))}
                   {d.drivers.map((dr) => {
                     const badge = driverStatusBadge(dr);
                     return (
