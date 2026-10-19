@@ -568,6 +568,135 @@ exports.onBookingTaken = onDocumentUpdated("bookings/{bookingId}", async (event)
   }));
 });
 
+// ---------------- Nearby-driver escalation (new, 2026-10-19) ----------------
+// Owner spec (developer guide, Step 15): onDirectRequestBroadcast above
+// already pings every eligible driver within DIRECT_REQUEST_RADIUS_KM
+// (30km) the instant a booking is created, with no duty-on filter (an
+// earlier deliberate choice -- see its own comment). This is a DELIBERATE
+// SECOND NUDGE, not a search for new territory: once a booking has sat
+// unmatched for a while, re-ring specifically the drivers who are
+// currently on duty (so a driver who had the app backgrounded/ignored the
+// first ring gets another, louder chance), widening the radius in stages
+// instead of blasting everyone at full radius again. "Won't go again to
+// who already received it" is scoped to each booking's own escalation --
+// a driver nudged at the 5km tier is never nudged again at 10km/20km for
+// the SAME booking -- not a block on ever re-pinging someone from the
+// original broadcast, since re-pinging the already-alerted-but-silent
+// drivers is the entire point here.
+//
+// Deliberately does NOT repeat onDirectRequestBroadcast's own 20s/25s
+// rapid re-ring loop (RING_RETRY_DELAYS_MS) -- that loop holds one
+// function invocation open per booking for ~45s, which is fine for a
+// single just-created booking but not for a scheduled pass that may be
+// escalating several unmatched bookings in the same run.
+const ESCALATION_RADII_KM = [5, 10, 20];
+// How old (from createdAt) a still-unmatched booking must be before the
+// FIRST escalation nudge goes out -- matches the owner's "2 minutes"
+// spec. Subsequent tiers (10km, then 20km) fire on later scheduled passes
+// once eligible, not instantly one after another.
+const ESCALATION_FIRST_NUDGE_SEC = 120;
+// Escalation only trusts a GPS fix fresher than this -- deliberately
+// tighter than the main broadcast's 24h BROADCAST_LOCATION_STALE_MS,
+// since this nudge is specifically about who is actually near the pickup
+// point right now, not who was near it up to a day ago.
+const ESCALATION_LOCATION_STALE_MS = 30 * 60 * 1000;
+
+async function escalateOneBooking(bookingId, load, radiusKm, tierIndex) {
+  const [driversSnap, ongoingSnap] = await Promise.all([
+    db.collection("drivers").get(),
+    db.collection("bookings").where("status", "==", "Ongoing").get(),
+  ]);
+  const ongoingByDriver = {};
+  ongoingSnap.forEach((d) => {
+    const b = d.data();
+    const key = b.driverMobile || (b.driverName ? `name:${b.driverName}` : null);
+    if (!key) return;
+    (ongoingByDriver[key] ||= []).push(b);
+  });
+
+  const alreadyAlerted = new Set(load.alertedDriverMobiles || []);
+  const newlyAlerted = [];
+  const sends = [];
+  const ringKeys = {};
+  const skipLog = [];
+
+  driversSnap.forEach((doc) => {
+    const driver = doc.data();
+    const tag = `${doc.id} (${driver.name || "?"})`;
+    if (alreadyAlerted.has(doc.id)) { skipLog.push(`${tag}: already alerted for this booking`); return; }
+    if (!driver.online) { skipLog.push(`${tag}: off duty`); return; }
+    if (driver.kyc !== "Approved") { skipLog.push(`${tag}: kyc=${driver.kyc}`); return; }
+    if (driver.blacklisted) { skipLog.push(`${tag}: blacklisted`); return; }
+
+    const capacityKg = Number(driver.vehicleSpec?.capacityKg) || 0;
+    const loadWeightKg = Number(load.weight) || 0;
+    if (capacityKg < loadWeightKg || capacityKg > loadWeightKg + BROADCAST_WEIGHT_HEADROOM_KG) { skipLog.push(`${tag}: capacity ${capacityKg}kg outside window for load ${loadWeightKg}kg`); return; }
+
+    if (load.pickupLat == null) { skipLog.push(`${tag}: load has no pickupLat/Lng`); return; }
+    if (!driver.lastKnownLocation) { skipLog.push(`${tag}: no lastKnownLocation`); return; }
+    if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > ESCALATION_LOCATION_STALE_MS) { skipLog.push(`${tag}: lastKnownLocation stale (>30min)`); return; }
+    const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng);
+    if (distKm > radiusKm) { skipLog.push(`${tag}: ${distKm.toFixed(1)}km away, outside ${radiusKm}km tier`); return; }
+
+    const lockHours = notificationLockHours(capacityKg);
+    const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
+    if (hasLoadConflict(load, mine, lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
+
+    if (!driver.fcmToken) { skipLog.push(`${tag}: no fcmToken`); return; }
+    skipLog.push(`${tag}: NUDGING at ${radiusKm}km tier`);
+    newlyAlerted.push(doc.id);
+    const ackKey = crypto.randomBytes(12).toString("hex");
+    ringKeys[doc.id] = { key: ackKey, token: driver.fcmToken };
+    sends.push(() => sendDirectRequestAlert(driver.fcmToken, load, bookingId, doc.id));
+    sends.push(() => sendDirectRequestRingAlert(driver.fcmToken, load, bookingId, doc.id, ackKey));
+  });
+
+  console.log(`[escalateUnmatchedBookings] booking ${bookingId}: tier ${tierIndex} (${radiusKm}km) -- ${newlyAlerted.length} duty-on driver(s) newly nudged\n${skipLog.join("\n")}`);
+
+  // Record the attempted tier even with zero matches, so the next
+  // scheduled pass moves on to the next radius instead of retrying this
+  // same one forever.
+  const updates = { escalatedTierIndex: tierIndex + 1 };
+  if (newlyAlerted.length) {
+    updates.alertedDriverMobiles = [...(load.alertedDriverMobiles || []), ...newlyAlerted];
+  }
+  await db.collection("bookings").doc(bookingId).update(updates).catch((e) => console.error("[escalateUnmatchedBookings] update", e.message));
+  if (!newlyAlerted.length) return;
+
+  const batch = db.batch();
+  for (const [mobile, { key }] of Object.entries(ringKeys)) {
+    batch.set(db.collection("ringDeliveries").doc(`${bookingId}_${mobile}`), { bookingId, driverMobile: mobile, key, sentAt: Date.now(), attempts: 1, ackAt: null });
+  }
+  await batch.commit().catch((e) => console.error("[escalateUnmatchedBookings] ringDeliveries", e.message));
+  await Promise.all(sends.map((send) => send()));
+}
+
+exports.escalateUnmatchedBookings = onSchedule(
+  { schedule: "every 2 minutes", timeZone: "Asia/Kolkata", region: "asia-south1" },
+  async () => {
+    const snap = await db.collection("bookings").where("status", "==", "AwaitingDriver").get();
+    if (snap.empty) return;
+
+    const now = Date.now();
+    const jobs = [];
+    snap.forEach((doc) => {
+      const load = doc.data();
+      const bookingId = doc.id;
+      const createdAtMs = load.createdAt?.toMillis ? load.createdAt.toMillis() : null;
+      if (!createdAtMs) return;
+      const ageSec = (now - createdAtMs) / 1000;
+      if (ageSec < ESCALATION_FIRST_NUDGE_SEC) return;
+
+      // escalatedTierIndex: how many of ESCALATION_RADII_KM have already
+      // been tried for this booking -- 0 = none yet, 1 = 5km done, etc.
+      const tierIndex = load.escalatedTierIndex || 0;
+      if (tierIndex >= ESCALATION_RADII_KM.length) return; // every tier already tried
+      jobs.push(escalateOneBooking(bookingId, load, ESCALATION_RADII_KM[tierIndex], tierIndex));
+    });
+    await Promise.all(jobs);
+  }
+);
+
 // Text for every customer alert. "arriving" and "loading" added 2026-10-13
 // (owner: the customer must hear about their booking whether the app is
 // open or closed) -- before that a customer only got "accepted" and
