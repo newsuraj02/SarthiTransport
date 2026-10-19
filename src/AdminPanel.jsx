@@ -382,25 +382,31 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
   // Drivers tab (see AdminDriverList), not through this tile.
   const newDriversToday = drivers.filter((d) => isToday(d.createdAt));
   // Owner-reported (2026-10-19): Google Ads showed conversions (installs)
-  // accumulating across a whole week, but the dashboard only ever had a
-  // "today" counter -- no way to actually check whether those installs
-  // turned into real signups on the days they happened, since checking
-  // "New Registrations" the morning after always just shows that day's
-  // count starting fresh at 0. This gives the real, per-day picture: the
-  // last 7 calendar days, customer/driver signups grouped by the date
-  // their record was actually created, so it can be lined up directly
-  // against Google Ads' own daily spend/conversion graph.
-  const REGISTRATION_TREND_DAYS = 7;
+  // accumulating over whatever window a campaign report covers, but the
+  // dashboard only ever had a "today" counter -- no way to actually check
+  // whether those installs turned into real signups on the days they
+  // happened, since checking "New Registrations" the morning after always
+  // just shows that day's count starting fresh at 0. This gives the real,
+  // per-day picture over an admin-chosen From/To range (trendFrom/trendTo
+  // state, defaulting to the last 7 days), customer/driver signups grouped
+  // by the date their record was actually created, so it can be lined up
+  // directly against Google Ads' own date-ranged spend/conversion graph.
+  const REGISTRATION_TREND_MAX_DAYS = 92; // ~3 months -- a sane cap so a huge range doesn't render thousands of rows
   const dateKey = (ts) => {
     const d = ts?.toDate ? ts.toDate() : null;
     return d ? d.toISOString().slice(0, 10) : null;
   };
+  const registrationTrendRangeInvalid = !trendFrom || !trendTo || trendFrom > trendTo;
+  const registrationTrendTooWide = !registrationTrendRangeInvalid
+    && (new Date(trendTo) - new Date(trendFrom)) / 86400000 + 1 > REGISTRATION_TREND_MAX_DAYS;
   const registrationTrend = (() => {
+    if (registrationTrendRangeInvalid || registrationTrendTooWide) return [];
     const days = [];
-    for (let i = REGISTRATION_TREND_DAYS - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      days.push({ key: d.toISOString().slice(0, 10), label: d.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short" }), customers: 0, drivers: 0 });
+    const cursor = new Date(trendFrom);
+    const end = new Date(trendTo);
+    while (cursor <= end) {
+      days.push({ key: toDateInputStr(cursor), label: cursor.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }), customers: 0, drivers: 0 });
+      cursor.setDate(cursor.getDate() + 1);
     }
     const byKey = Object.fromEntries(days.map((d) => [d.key, d]));
     (customers || []).forEach((c) => { const k = dateKey(c.createdAt); if (byKey[k]) byKey[k].customers++; });
@@ -408,6 +414,20 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
     return days;
   })();
   const registrationTrendTotal = registrationTrend.reduce((sum, d) => sum + d.customers + d.drivers, 0);
+  // Always the fixed, real last-7-calendar-days count (independent of
+  // whatever range the admin has picked in the detail view) -- what the
+  // Live Dashboard tile itself shows, so it stays a stable, predictable
+  // number rather than changing based on detail-view state the admin may
+  // not currently have open.
+  const registrationTrendLast7Total = (() => {
+    const start = new Date(); start.setDate(start.getDate() - 6);
+    const startKey = toDateInputStr(start);
+    const todayKey = toDateInputStr(new Date());
+    let total = 0;
+    (customers || []).forEach((c) => { const k = dateKey(c.createdAt); if (k && k >= startKey && k <= todayKey) total++; });
+    (drivers || []).forEach((d) => { const k = dateKey(d.createdAt); if (k && k >= startKey && k <= todayKey) total++; });
+    return total;
+  })();
 
   const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b.cancelledAt));
   // Any not-yet-finished booking scheduled for a future date, regardless of
@@ -638,6 +658,14 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
   // approval (the thing that actually needs admin action) lives there;
   // Customer is purely informational.
   const [newRegTab, setNewRegTab] = useState("driver");
+  // Owner request (2026-10-19): a custom From/To range instead of a fixed
+  // 7 days, for lining registrations up against whatever exact window
+  // Google Ads reports a given campaign's spend/conversions over. Default
+  // mirrors the original fixed-7-days view (today minus 6, through today)
+  // so nothing looks different until the admin actually picks a range.
+  const toDateInputStr = (d) => d.toISOString().slice(0, 10);
+  const [trendFrom, setTrendFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return toDateInputStr(d); });
+  const [trendTo, setTrendTo] = useState(() => toDateInputStr(new Date()));
 
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
@@ -1001,42 +1029,82 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
 
   if (detailView === "registrationTrend") {
     const maxCount = Math.max(1, ...registrationTrend.map((d) => d.customers + d.drivers));
+    const setQuickRange = (days) => {
+      const start = new Date(); start.setDate(start.getDate() - (days - 1));
+      setTrendFrom(toDateInputStr(start));
+      setTrendTo(toDateInputStr(new Date()));
+    };
     return (
       <div>
         <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>
-          {lang === "en" ? "Registrations — Last 7 Days" : lang === "mr" ? "रजिस्ट्रेशन — मागील 7 दिवस" : "रजिस्ट्रेशन — पिछले 7 दिन"}
+          {lang === "en" ? "Registrations by Date" : lang === "mr" ? "तारखेनुसार रजिस्ट्रेशन" : "तारीख के अनुसार रजिस्ट्रेशन"}
         </h2>
-        <p className="text-xs mb-4" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "Line this up against Google Ads' own daily spend/conversions graph to check whether installs are actually turning into real signups." :
-            lang === "mr" ? "इंस्टॉल्स खरोखर साइनअपमध्ये बदलत आहेत का हे तपासण्यासाठी हे Google Ads च्या दैनंदिन खर्च/कन्व्हर्जन ग्राफशी जुळवा." :
-            "यह देखने के लिए कि इंस्टॉल वाकई साइनअप में बदल रहे हैं या नहीं, इसे Google Ads के अपने डेली खर्च/कन्वर्शन ग्राफ से मिलाएं।"}
+        <p className="text-xs mb-3" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Line this up against Google Ads' own date-ranged spend/conversions graph to check whether installs are actually turning into real signups." :
+            lang === "mr" ? "इंस्टॉल्स खरोखर साइनअपमध्ये बदलत आहेत का हे तपासण्यासाठी हे Google Ads च्या डेट-रेंज खर्च/कन्व्हर्जन ग्राफशी जुळवा." :
+            "यह देखने के लिए कि इंस्टॉल वाकई साइनअप में बदल रहे हैं या नहीं, इसे Google Ads के अपने डेट-रेंज खर्च/कन्वर्शन ग्राफ से मिलाएं।"}
         </p>
-        <div className="space-y-2">
-          {registrationTrend.map((d) => {
-            const total = d.customers + d.drivers;
-            return (
-              <div key={d.key} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold" style={{ color: C.ink }}>{d.label}</span>
-                  <span className="text-xs font-bold" style={{ color: total > 0 ? C.success : C.inkSoft }}>
-                    {total} {lang === "en" ? "total" : lang === "mr" ? "एकूण" : "कुल"}
-                  </span>
-                </div>
-                <div className="h-2 rounded-full overflow-hidden flex" style={{ background: C.bg }}>
-                  {d.customers > 0 && <div style={{ width: `${(d.customers / maxCount) * 100}%`, background: C.navy }} />}
-                  {d.drivers > 0 && <div style={{ width: `${(d.drivers / maxCount) * 100}%`, background: C.marigoldDeep }} />}
-                </div>
-                <div className="flex gap-3 mt-1.5 text-[10px]" style={{ color: C.inkSoft }}>
-                  <span><span style={{ color: C.navy }}>●</span> {lang === "en" ? "Customers" : lang === "mr" ? "कस्टमर" : "कस्टमर"}: {d.customers}</span>
-                  <span><span style={{ color: C.marigoldDeep }}>●</span> {lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: {d.drivers}</span>
-                </div>
-              </div>
-            );
-          })}
+        <div className="flex gap-2 mb-2">
+          <div className="flex-1">
+            <label className="text-[10px] font-bold block mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "From" : lang === "mr" ? "पासून" : "से"}</label>
+            <input type="date" value={trendFrom} max={trendTo || undefined} onChange={(e) => setTrendFrom(e.target.value)}
+              className="w-full rounded-lg py-2.5 px-2 text-xs font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }} />
+          </div>
+          <div className="flex-1">
+            <label className="text-[10px] font-bold block mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "To" : lang === "mr" ? "पर्यंत" : "तक"}</label>
+            <input type="date" value={trendTo} min={trendFrom || undefined} max={toDateInputStr(new Date())} onChange={(e) => setTrendTo(e.target.value)}
+              className="w-full rounded-lg py-2.5 px-2 text-xs font-bold" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink }} />
+          </div>
         </div>
+        <div className="flex gap-2 mb-4">
+          {[[7, lang === "en" ? "7 days" : lang === "mr" ? "7 दिवस" : "7 दिन"], [30, lang === "en" ? "30 days" : lang === "mr" ? "30 दिवस" : "30 दिन"], [90, lang === "en" ? "90 days" : lang === "mr" ? "90 दिवस" : "90 दिन"]].map(([days, label]) => (
+            <button key={days} onClick={() => setQuickRange(days)} className="flex-1 rounded-lg py-2 text-[11px] font-bold" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.inkSoft }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {registrationTrendRangeInvalid ? (
+          <p className="text-xs text-center py-10" style={{ color: C.safety }}>
+            {lang === "en" ? "Pick a valid range — \"From\" must be on or before \"To\"." : lang === "mr" ? "वैध रेंज निवडा — \"पासून\" हे \"पर्यंत\" च्या आधी किंवा त्याच दिवशी असावे." : "सही रेंज चुनें — \"से\" की तारीख \"तक\" से पहले या उसी दिन होनी चाहिए।"}
+          </p>
+        ) : registrationTrendTooWide ? (
+          <p className="text-xs text-center py-10" style={{ color: C.safety }}>
+            {lang === "en" ? `Pick a shorter range — up to ${REGISTRATION_TREND_MAX_DAYS} days at a time.` : lang === "mr" ? `कमी कालावधी निवडा — एका वेळी जास्तीत जास्त ${REGISTRATION_TREND_MAX_DAYS} दिवस.` : `कम अवधि चुनें — एक बार में अधिकतम ${REGISTRATION_TREND_MAX_DAYS} दिन।`}
+          </p>
+        ) : (
+          <>
+            <div className="rounded-lg p-3 mb-3 flex items-center justify-between" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+              <span className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Total in range" : lang === "mr" ? "रेंजमधील एकूण" : "रेंज में कुल"}</span>
+              <span className="text-base font-black" style={{ color: C.pimpri }}>{registrationTrendTotal}</span>
+            </div>
+            <div className="space-y-2">
+              {registrationTrend.map((d) => {
+                const total = d.customers + d.drivers;
+                return (
+                  <div key={d.key} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold" style={{ color: C.ink }}>{d.label}</span>
+                      <span className="text-xs font-bold" style={{ color: total > 0 ? C.success : C.inkSoft }}>
+                        {total} {lang === "en" ? "total" : lang === "mr" ? "एकूण" : "कुल"}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full overflow-hidden flex" style={{ background: C.bg }}>
+                      {d.customers > 0 && <div style={{ width: `${(d.customers / maxCount) * 100}%`, background: C.navy }} />}
+                      {d.drivers > 0 && <div style={{ width: `${(d.drivers / maxCount) * 100}%`, background: C.marigoldDeep }} />}
+                    </div>
+                    <div className="flex gap-3 mt-1.5 text-[10px]" style={{ color: C.inkSoft }}>
+                      <span><span style={{ color: C.navy }}>●</span> {lang === "en" ? "Customers" : lang === "mr" ? "कस्टमर" : "कस्टमर"}: {d.customers}</span>
+                      <span><span style={{ color: C.marigoldDeep }}>●</span> {lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: {d.drivers}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -1163,7 +1231,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
           many are still Pending. */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         <StatTile label={lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"} value={newCustomersToday.length + newDriversToday.length} color={C.pimpri} onClick={() => setDetailView("newRegistrations")} />
-        <StatTile label={lang === "en" ? "Registrations (7 Days)" : lang === "mr" ? "रजिस्ट्रेशन (7 दिवस)" : "रजिस्ट्रेशन (7 दिन)"} value={registrationTrendTotal} color={C.pimpri} onClick={() => setDetailView("registrationTrend")} />
+        <StatTile label={lang === "en" ? "Registrations (7 Days)" : lang === "mr" ? "रजिस्ट्रेशन (7 दिवस)" : "रजिस्ट्रेशन (7 दिन)"} value={registrationTrendLast7Total} color={C.pimpri} onClick={() => setDetailView("registrationTrend")} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
         <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
