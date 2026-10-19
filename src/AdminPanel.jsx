@@ -391,6 +391,13 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
   // state, defaulting to the last 7 days), customer/driver signups grouped
   // by the date their record was actually created, so it can be lined up
   // directly against Google Ads' own date-ranged spend/conversion graph.
+  // Declared here (not down near the other useState calls) because the
+  // "Cannot access before initialization" TDZ error fires if a `const`
+  // declared later in the component is referenced by code earlier in the
+  // same function body -- this whole block depends on trendFrom/trendTo.
+  const toDateInputStr = (d) => d.toISOString().slice(0, 10);
+  const [trendFrom, setTrendFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return toDateInputStr(d); });
+  const [trendTo, setTrendTo] = useState(() => toDateInputStr(new Date()));
   const REGISTRATION_TREND_MAX_DAYS = 92; // ~3 months -- a sane cap so a huge range doesn't render thousands of rows
   const dateKey = (ts) => {
     const d = ts?.toDate ? ts.toDate() : null;
@@ -658,14 +665,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
   // approval (the thing that actually needs admin action) lives there;
   // Customer is purely informational.
   const [newRegTab, setNewRegTab] = useState("driver");
-  // Owner request (2026-10-19): a custom From/To range instead of a fixed
-  // 7 days, for lining registrations up against whatever exact window
-  // Google Ads reports a given campaign's spend/conversions over. Default
-  // mirrors the original fixed-7-days view (today minus 6, through today)
-  // so nothing looks different until the admin actually picks a range.
-  const toDateInputStr = (d) => d.toISOString().slice(0, 10);
-  const [trendFrom, setTrendFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return toDateInputStr(d); });
-  const [trendTo, setTrendTo] = useState(() => toDateInputStr(new Date()));
 
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
