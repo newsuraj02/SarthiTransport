@@ -2527,6 +2527,17 @@ async function openOverlaySettings() {
   try { await RingingBridgeNative.openOverlaySettings(); } catch (e) { console.error("[ringingBridge] overlay", e); }
 }
 
+// Owner request (2026-10-19): real driver/customer signup-completion
+// events for Google Ads conversion tracking (see AnalyticsBridgePlugin.java
+// for why this goes through a native plugin rather than firebase/analytics
+// in JS). Fire-and-forget by design -- a failed analytics log should never
+// block or error out an actual signup.
+const AnalyticsBridgeNative = registerPlugin("AnalyticsBridge");
+function logAnalyticsEvent(name) {
+  if (!isNativeApp) return;
+  AnalyticsBridgeNative.logEvent({ name }).catch((e) => console.error("[analytics]", name, e));
+}
+
 const PowerBridgeNative = registerPlugin("PowerBridge");
 async function requestBatteryOptimizationExemption() {
   if (!isNativeApp) return { granted: null };
@@ -11957,6 +11968,9 @@ export default function App() {
               // First-ever creation of this customer's doc — stamp their real
               // signup date so their own 30-day trial can be calculated from it.
               if (firestoreReady && signedUpMobile) replaceDoc("customers", signedUpMobile, { ...addr, mobile: signedUpMobile, createdAt: serverTimestamp() }).catch((e) => console.error(e));
+              // Real conversion event for Google Ads (see AnalyticsBridgePlugin) --
+              // fired at the exact moment this is a genuinely NEW customer record.
+              logAnalyticsEvent("customer_signup_complete");
               // Brand-new signup — prompt for a language once, right after.
               setLangPromptPending(true);
             }} />
@@ -11973,7 +11987,7 @@ export default function App() {
             onOtpVerified={(mobile) => setDriverAuth({ verified: true, mobile })}
             onLogout={() => (driverAuth.verified ? logoutRole("driver") : goHome())}
             driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType}
-            onFirstSignupComplete={() => setLangPromptPending(true)} />
+            onFirstSignupComplete={() => { logAnalyticsEvent("driver_signup_complete"); setLangPromptPending(true); }} />
         )}
         {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && driverResubmitting && (
           <div className="flex-1 overflow-y-auto">

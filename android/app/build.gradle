@@ -105,6 +105,13 @@ dependencies {
     // compile classpath -- this app's own FCM subclass needs it declared
     // here too. Version comes from the firebase-bom platform() above.
     implementation "com.google.firebase:firebase-messaging"
+    // Owner request (2026-10-19): real driver/customer signup-completion
+    // events for Google Ads conversion tracking -- see AnalyticsBridgePlugin.
+    // An App campaign's conversion import needs this app's OWN Firebase
+    // Analytics instance (tied to the installed app via the Play Store),
+    // not a website's web-analytics instance, which is why this goes
+    // through the native SDK rather than firebase/analytics in JS.
+    implementation "com.google.firebase:firebase-analytics"
     // Owner-reported real-device bug (2026-10-18): Accept from the full-
     // screen ring fails to reach MainActivity every single time when the
     // app was fully killed, landing on the home screen instead, even with

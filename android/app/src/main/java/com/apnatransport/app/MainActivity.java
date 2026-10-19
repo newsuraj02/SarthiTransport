@@ -34,6 +34,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PowerBridgePlugin.class);
         registerPlugin(RingingBridgePlugin.class);
         registerPlugin(NativePushPlugin.class);
+        registerPlugin(AnalyticsBridgePlugin.class);
         super.onCreate(savedInstanceState);
         createLoadAlertNotificationChannel();
     }
