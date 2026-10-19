@@ -381,6 +381,33 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
   // reviewing/approving those signups now happens entirely in the
   // Drivers tab (see AdminDriverList), not through this tile.
   const newDriversToday = drivers.filter((d) => isToday(d.createdAt));
+  // Owner-reported (2026-10-19): Google Ads showed conversions (installs)
+  // accumulating across a whole week, but the dashboard only ever had a
+  // "today" counter -- no way to actually check whether those installs
+  // turned into real signups on the days they happened, since checking
+  // "New Registrations" the morning after always just shows that day's
+  // count starting fresh at 0. This gives the real, per-day picture: the
+  // last 7 calendar days, customer/driver signups grouped by the date
+  // their record was actually created, so it can be lined up directly
+  // against Google Ads' own daily spend/conversion graph.
+  const REGISTRATION_TREND_DAYS = 7;
+  const dateKey = (ts) => {
+    const d = ts?.toDate ? ts.toDate() : null;
+    return d ? d.toISOString().slice(0, 10) : null;
+  };
+  const registrationTrend = (() => {
+    const days = [];
+    for (let i = REGISTRATION_TREND_DAYS - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push({ key: d.toISOString().slice(0, 10), label: d.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short" }), customers: 0, drivers: 0 });
+    }
+    const byKey = Object.fromEntries(days.map((d) => [d.key, d]));
+    (customers || []).forEach((c) => { const k = dateKey(c.createdAt); if (byKey[k]) byKey[k].customers++; });
+    (drivers || []).forEach((d) => { const k = dateKey(d.createdAt); if (byKey[k]) byKey[k].drivers++; });
+    return days;
+  })();
+  const registrationTrendTotal = registrationTrend.reduce((sum, d) => sum + d.customers + d.drivers, 0);
 
   const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b.cancelledAt));
   // Any not-yet-finished booking scheduled for a future date, regardless of
@@ -972,6 +999,48 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
     );
   }
 
+  if (detailView === "registrationTrend") {
+    const maxCount = Math.max(1, ...registrationTrend.map((d) => d.customers + d.drivers));
+    return (
+      <div>
+        <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>
+          {lang === "en" ? "Registrations — Last 7 Days" : lang === "mr" ? "रजिस्ट्रेशन — मागील 7 दिवस" : "रजिस्ट्रेशन — पिछले 7 दिन"}
+        </h2>
+        <p className="text-xs mb-4" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Line this up against Google Ads' own daily spend/conversions graph to check whether installs are actually turning into real signups." :
+            lang === "mr" ? "इंस्टॉल्स खरोखर साइनअपमध्ये बदलत आहेत का हे तपासण्यासाठी हे Google Ads च्या दैनंदिन खर्च/कन्व्हर्जन ग्राफशी जुळवा." :
+            "यह देखने के लिए कि इंस्टॉल वाकई साइनअप में बदल रहे हैं या नहीं, इसे Google Ads के अपने डेली खर्च/कन्वर्शन ग्राफ से मिलाएं।"}
+        </p>
+        <div className="space-y-2">
+          {registrationTrend.map((d) => {
+            const total = d.customers + d.drivers;
+            return (
+              <div key={d.key} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold" style={{ color: C.ink }}>{d.label}</span>
+                  <span className="text-xs font-bold" style={{ color: total > 0 ? C.success : C.inkSoft }}>
+                    {total} {lang === "en" ? "total" : lang === "mr" ? "एकूण" : "कुल"}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden flex" style={{ background: C.bg }}>
+                  {d.customers > 0 && <div style={{ width: `${(d.customers / maxCount) * 100}%`, background: C.navy }} />}
+                  {d.drivers > 0 && <div style={{ width: `${(d.drivers / maxCount) * 100}%`, background: C.marigoldDeep }} />}
+                </div>
+                <div className="flex gap-3 mt-1.5 text-[10px]" style={{ color: C.inkSoft }}>
+                  <span><span style={{ color: C.navy }}>●</span> {lang === "en" ? "Customers" : lang === "mr" ? "कस्टमर" : "कस्टमर"}: {d.customers}</span>
+                  <span><span style={{ color: C.marigoldDeep }}>●</span> {lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: {d.drivers}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   if (detailView === "routeFares") {
     return (
       <div>
@@ -1094,6 +1163,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
           many are still Pending. */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         <StatTile label={lang === "en" ? "New Registrations" : lang === "mr" ? "नवीन रजिस्ट्रेशन" : "नए रजिस्ट्रेशन"} value={newCustomersToday.length + newDriversToday.length} color={C.pimpri} onClick={() => setDetailView("newRegistrations")} />
+        <StatTile label={lang === "en" ? "Registrations (7 Days)" : lang === "mr" ? "रजिस्ट्रेशन (7 दिवस)" : "रजिस्ट्रेशन (7 दिन)"} value={registrationTrendTotal} color={C.pimpri} onClick={() => setDetailView("registrationTrend")} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
         <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
         <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
