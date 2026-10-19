@@ -2313,7 +2313,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
 // Dispute-resolution audit trail for masked calls (see functions/index.js:
 // initiateMaskedCall) -- who called who, on which booking, when. Only the
 // initial connect request gets logged (no duration/answer status, since
-// Kaleyra's click-to-call response is all this reads -- a call-status
+// MSG91's click-to-call response is all this reads -- a call-status
 // webhook would be needed for more than that, which isn't wired up).
 function AdminCallLogs({ callLogs, bookings, lang }) {
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
@@ -2341,8 +2341,8 @@ function AdminCallLogs({ callLogs, bookings, lang }) {
                 ) : (
                   <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Booking" : lang === "mr" ? "बुकिंग" : "बुकिंग"}: {log.bookingId}</div>
                 )}
-                {/* kaleyraCallId is the current field (Kaleyra); exotelCallSid is kept for any call log written before the Exotel->Kaleyra switch. */}
-                {(log.kaleyraCallId || log.exotelCallSid) && <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>ID: {log.kaleyraCallId || log.exotelCallSid}</div>}
+                {/* msg91CallId is the current field (MSG91); kaleyraCallId/exotelCallSid are kept for any call log written before the Kaleyra->MSG91 / Exotel->Kaleyra switches. */}
+                {(log.msg91CallId || log.kaleyraCallId || log.exotelCallSid) && <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>ID: {log.msg91CallId || log.kaleyraCallId || log.exotelCallSid}</div>}
               </div>
             );
           })}

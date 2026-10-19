@@ -155,9 +155,9 @@ const functionsByRole = {
 };
 
 // Bridges a call between this booking's customer and driver through
-// Kaleyra (see functions/index.js) so neither side sees the other's real
+// MSG91 (see functions/index.js) so neither side sees the other's real
 // number. Always resolves (never throws) with { ok, reason? } — reason
-// "not_configured" means Kaleyra's secrets haven't been set on the backend
+// "not_configured" means MSG91's secrets haven't been set on the backend
 // yet, which callers should treat as "fall back to a plain tel: link",
 // not as an error to surface to the user.
 export async function initiateMaskedCall(bookingId) {

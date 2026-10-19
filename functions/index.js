@@ -176,15 +176,16 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // SMS's DLT registration was for the earlier, reverted attempt -- until
 // this and the other secrets below are set, this just logs and returns
 // rather than throwing, so push keeps working on its own either way.
-// WhatsApp channel: MSG91, not Kaleyra -- see the migration note further
-// down by KALEYRA_VOICE_SID (masked calling stayed on Kaleyra; only
-// WhatsApp moved, once MSG91's account setup -- AuthKey, WhatsApp number,
-// namespace, approved "direct_booking_request" template -- was finished).
+// WhatsApp channel: MSG91 (see the migration note further down by
+// MSG91_VOICE_CALLER_ID -- masked calling also moved to MSG91, once the
+// Kaleyra account was closed; this account's setup -- AuthKey, WhatsApp
+// number, namespace, approved "direct_booking_request" template -- was
+// finished first, for WhatsApp).
 // Declared here, ahead of sendDirectRequestWhatsApp/onDirectRequestBroadcast
 // below (both reference these in their eagerly-
 // evaluated `secrets: [...]` option, at module-load time), same
-// avoid-a-TDZ-ReferenceError-on-deploy reasoning as the old KALEYRA_API_KEY
-// placement had.
+// avoid-a-TDZ-ReferenceError-on-deploy reasoning as initiateMaskedCall's
+// secrets further down.
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
 const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
 const MSG91_DIRECT_REQUEST_TEMPLATE = defineSecret("MSG91_DIRECT_REQUEST_TEMPLATE");
@@ -1033,7 +1034,7 @@ const RESOLVE_ACTIONS = {
 
 // Anthropic API key (set via `firebase functions:secrets:set ANTHROPIC_API_KEY`,
 // never hardcoded or committed) — same not_configured fallback pattern as
-// GEMINI_API_KEY/KALEYRA_* above: until it's set, this returns reason:
+// GEMINI_API_KEY/MSG91_* above: until it's set, this returns reason:
 // "not_configured" instead of throwing.
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
@@ -1130,33 +1131,26 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
   }
 });
 
-// ---------------- Number masking (Kaleyra) + WhatsApp (MSG91) ----------------
-// Replaces Exotel for masked calling below -- Kaleyra was picked
-// specifically because it offers a Voice click-to-call/bridge API. (An SMS
-// channel via Kaleyra was also built and shipped here briefly, then
-// removed -- India's TRAI DLT entity/sender/template registration turned
-// out to be more setup than wanted right now. The WhatsApp direct-request
-// alert further up has since moved off Kaleyra entirely, onto MSG91 --
-// see the MSG91_* secrets and sendDirectRequestWhatsApp above -- once
-// Kaleyra's WhatsApp product accounted for both Voice and WhatsApp under
-// one vendor; now only Voice/masked-calling still uses Kaleyra.)
+// ---------------- Number masking + WhatsApp (both MSG91) ----------------
+// Replaces Kaleyra for masked calling below -- the owner closed their
+// Kaleyra account, and MSG91 (already in use for WhatsApp direct-request
+// alerts above) offers the same kind of Voice click-to-call/bridge API
+// under the same account/AuthKey, so this moved onto MSG91 too rather than
+// picking a third vendor.
 //
 // Secrets (set via `firebase functions:secrets:set NAME`, never hardcoded
 // or committed):
-//   KALEYRA_API_KEY        -- the account's api-key (see developers.kaleyra.io).
-//   KALEYRA_VOICE_SID      -- the Voice product's SID (masked calling).
-//   KALEYRA_CALLER_ID      -- the bridge/masking number provisioned on
-//                             Kaleyra's Voice dashboard for this account.
-// Until these are set, initiateMaskedCall returns reason: "not_configured"
+//   MSG91_AUTH_KEY           -- reused from the WhatsApp integration above
+//                                (one AuthKey per MSG91 account, shared
+//                                across all of that account's channels).
+//   MSG91_VOICE_CALLER_ID    -- the Voice number provisioned on MSG91's
+//                                dashboard for this account (the number
+//                                both sides see as caller ID).
+// Until both are set, initiateMaskedCall returns reason: "not_configured"
 // and the client falls back to a plain tel: link, instead of throwing.
-// (MSG91_AUTH_KEY/MSG91_WHATSAPP_NUMBER/MSG91_DIRECT_REQUEST_TEMPLATE/
-// MSG91_WHATSAPP_NAMESPACE are declared earlier, alongside
-// sendDirectRequestWhatsApp -- see the comment there.)
-const KALEYRA_API_KEY = defineSecret("KALEYRA_API_KEY");
-const KALEYRA_VOICE_SID = defineSecret("KALEYRA_VOICE_SID");
-const KALEYRA_CALLER_ID = defineSecret("KALEYRA_CALLER_ID");
+const MSG91_VOICE_CALLER_ID = defineSecret("MSG91_VOICE_CALLER_ID");
 
-exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [KALEYRA_API_KEY, KALEYRA_VOICE_SID, KALEYRA_CALLER_ID] }, async (request) => {
+exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [MSG91_AUTH_KEY, MSG91_VOICE_CALLER_ID] }, async (request) => {
   const { bookingId } = request.data || {};
   // Real Firebase Phone Auth sessions carry the verified number as
   // request.auth.token.phone_number automatically (e.g. "+919876543210").
@@ -1178,27 +1172,39 @@ exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [KALEYRA_A
   const otherMobile = isCustomer ? booking.driverMobile : booking.customerMobile;
   if (!otherMobile) return { ok: false, reason: "no_other_party" };
 
-  const sid = KALEYRA_VOICE_SID.value(), apiKey = KALEYRA_API_KEY.value(), bridge = KALEYRA_CALLER_ID.value();
-  if (!sid || !apiKey || !bridge) return { ok: false, reason: "not_configured" };
+  const authKey = MSG91_AUTH_KEY.value(), callerId = MSG91_VOICE_CALLER_ID.value();
+  if (!authKey || !callerId) return { ok: false, reason: "not_configured" };
 
-  // Kaleyra's click-to-call: `from` is rung first, then on answer `to` is
-  // dialed and the two are bridged together through `bridge` (the masking
-  // number both sides see as caller ID) -- see
-  // developers.kaleyra.io/docs/click-to-call-api.
-  const body = new URLSearchParams({ from: callerPhone, to: `+91${otherMobile}`, bridge });
-  let kaleyraCallId = null;
+  // MSG91's click-to-call ("2-way call"): `destination` is rung first,
+  // then on answer each number in `destinationB` is dialed and bridged in
+  // -- the same shape as Kaleyra's old from/to, just destination(A)/
+  // destinationB(array) instead. caller_id is the registered Voice number
+  // both sides see as caller ID -- see
+  // control.msg91.com/api/v5/voice/call/ctc docs.
+  const body = JSON.stringify({
+    caller_id: callerId,
+    destination: callerPhone.replace(/^\+/, ""),
+    destinationB: [`91${otherMobile}`],
+  });
+  let msg91CallId = null;
   try {
-    const res = await fetch(`https://api.in.kaleyra.io/v1/${sid}/voice/click-to-call`, {
+    const res = await fetch("https://control.msg91.com/api/v5/voice/call/ctc", {
       method: "POST",
-      headers: { "api-key": apiKey, "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { accept: "application/json", authkey: authKey, "content-type": "application/json" },
       body,
     });
     const data = await res.json();
-    if (!res.ok) { console.error("[maskedCall] Kaleyra rejected the request:", data); return { ok: false, reason: "kaleyra_error" }; }
-    kaleyraCallId = data?.id || data?.data?.id || null;
+    if (!res.ok) { console.error("[maskedCall] MSG91 rejected the request:", data); return { ok: false, reason: "msg91_error" }; }
+    // MSG91's click-to-call response shape for the call-id field hasn't
+    // been confirmed against their docs yet (only the request shape was
+    // available when this was written) -- tried in order of how MSG91's
+    // other v5 APIs name this field. Worst case this stays null and the
+    // call itself still goes through; it only affects the ID shown in the
+    // audit log below.
+    msg91CallId = data?.data?.call_id || data?.call_id || data?.request_id || data?.data?.id || data?.id || null;
   } catch (e) {
-    console.error("[maskedCall] Kaleyra request failed:", e.message);
-    return { ok: false, reason: "kaleyra_error" };
+    console.error("[maskedCall] MSG91 request failed:", e.message);
+    return { ok: false, reason: "msg91_error" };
   }
 
   // Audit trail for dispute resolution -- which booking, who initiated,
@@ -1207,7 +1213,7 @@ exports.initiateMaskedCall = onCall({ region: "asia-south1", secrets: [KALEYRA_A
   await db.collection("callLogs").add({
     bookingId,
     initiatedBy: isCustomer ? "customer" : "driver",
-    kaleyraCallId,
+    msg91CallId,
     createdAt: FieldValue.serverTimestamp(),
   });
 
