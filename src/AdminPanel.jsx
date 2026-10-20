@@ -7,7 +7,7 @@
 // one of the imports here.
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronLeft,
+  Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronLeft, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
   MessageCircle, Phone, PhoneCall, Plus, Settings2, Siren, Truck, UserCircle2, Users,
   Wallet, Weight, X, XCircle,
@@ -328,7 +328,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
   );
 }
 
-function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, bugs, systemHealth }) {
   // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
   // pick the field that actually answers "did this happen today" for that
   // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
@@ -587,6 +587,14 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
   const activityTime = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleTimeString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" }) : "—");
 
   const [vehicleQuery, setVehicleQuery] = useState("");
+
+  // Dashboard charts (Install vs Uninstall, Bookings by Status, Earnings vs
+  // Expenses) -- each "Change time range" button cycles the same 7/30/90
+  // day window used elsewhere in this app (see AdminFinance/AdminFleet's
+  // other range controls), independently per chart.
+  const [bookingChartRangeDays, setBookingChartRangeDays] = useState(7);
+  const [financeChartRangeDays, setFinanceChartRangeDays] = useState(7);
+  const cycleRangeDays = (setter) => setter((d) => (d === 7 ? 30 : d === 30 ? 90 : 7));
   const q = vehicleQuery.trim().toUpperCase();
   const matchedDriver = q ? drivers.find((d) => d.vehicleSpec?.vehicleNumber?.toUpperCase() === q) : null;
   const vehicleHistory = matchedDriver ? tripLog.filter((t) => t.driverName === matchedDriver.name) : [];
@@ -907,6 +915,103 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
     ? (lang === "en" ? `Daily health check passed — ${healthTimeStr}` : lang === "mr" ? `डेली हेल्थ चेक पास झाला — ${healthTimeStr}` : `डेली हेल्थ चेक पास हुआ — ${healthTimeStr}`)
     : (lang === "en" ? `Daily health check found issues — ${healthTimeStr}` : lang === "mr" ? `डेली हेल्थ चेकमध्ये समस्या आढळल्या — ${healthTimeStr}` : `डेली हेल्थ चेक में समस्याएं मिलीं — ${healthTimeStr}`);
 
+  // --- Install vs Uninstall (horizontal bars) -- real installed/uninstalled
+  // driver counts, same partitionDriversByInstallStatus split the stat
+  // tiles above already use (installedDriversList/uninstalledDrivers).
+  const installCount = installedDriversList.length;
+  const uninstallCount = uninstalledDrivers.length;
+  const installUninstallMax = Math.max(installCount, uninstallCount, 1);
+  const installPct = Math.round((installCount / installUninstallMax) * 100);
+  const uninstallPct = Math.round((uninstallCount / installUninstallMax) * 100);
+
+  // --- Bookings by Status (vertical columns) -- real counts over the
+  // selected window, scoped by createdAt like every other "today/this
+  // period" tile on this dashboard. Completed is deliberately excluded from
+  // this chart (it dwarfs the rest and defeats the comparison) but is still
+  // the real total shown in full on the Bookings tab via "View Details".
+  const bookingChartSince = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - (bookingChartRangeDays - 1));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  })();
+  const bookingsInChartRange = (bookings || []).filter((b) => {
+    const d = b.createdAt?.toDate ? b.createdAt.toDate() : null;
+    return d && d >= bookingChartSince;
+  });
+  const BOOKING_STATUS_BARS_DEF = [
+    { key: "Ongoing", label: lang === "en" ? "Ongoing" : lang === "mr" ? "चालू" : "चालू", color: "#2a78d6",
+      count: bookingsInChartRange.filter((b) => b.status === "Ongoing").length },
+    { key: "Bidding", label: lang === "en" ? "Searching" : lang === "mr" ? "शोध सुरू" : "खोज जारी", color: "#eb6834",
+      count: bookingsInChartRange.filter((b) => b.status === "Bidding").length },
+    { key: "Cancelled", label: lang === "en" ? "Cancelled" : lang === "mr" ? "रद्द" : "रद्द", color: "#eda100",
+      count: bookingsInChartRange.filter((b) => b.status === "Cancelled").length },
+    { key: "Advance", label: lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस", color: "#e87ba4",
+      count: bookingsInChartRange.filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed").length },
+  ];
+  const BOOKING_BAR_MAX_PX = 96;
+  const bookingBarMaxCount = Math.max(...BOOKING_STATUS_BARS_DEF.map((b) => b.count), 1);
+  const bookingChartBars = BOOKING_STATUS_BARS_DEF.map((b) => ({
+    ...b,
+    barPx: Math.max(10, Math.round(BOOKING_BAR_MAX_PX * (b.count / bookingBarMaxCount))),
+  }));
+
+  // --- Earnings vs Expenses (line chart) -- real tripLog fares vs real
+  // AdminExpenses entries, grouped by calendar day over the selected
+  // window. One shared y-axis (never dual-axis -- see the dataviz skill):
+  // Expenses reading low/flat against Earnings' scale is the accurate
+  // story (healthy margin), not something to "fix" with a second axis.
+  const dayKey = (d) => d.toISOString().slice(0, 10);
+  const financeDays = (() => {
+    const out = [];
+    for (let i = financeChartRangeDays - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      out.push({ key: dayKey(d), label: d.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short" }) });
+    }
+    return out;
+  })();
+  const earningsByDay = {};
+  (tripLog || []).forEach((t) => {
+    if (t.status !== "Ongoing" && t.status !== "Completed") return;
+    const d = t.createdAt?.toDate ? t.createdAt.toDate() : null;
+    if (!d) return;
+    const k = dayKey(d);
+    earningsByDay[k] = (earningsByDay[k] || 0) + (Number(t.fare) || 0);
+  });
+  const expensesByDay = {};
+  (expenses || []).forEach((e) => {
+    if (!e.date) return;
+    expensesByDay[e.date] = (expensesByDay[e.date] || 0) + (Number(e.amount) || 0);
+  });
+  const financeEarningsSeries = financeDays.map((d) => earningsByDay[d.key] || 0);
+  const financeExpensesSeries = financeDays.map((d) => expensesByDay[d.key] || 0);
+  const niceCeil = (v) => {
+    if (v <= 0) return 10;
+    const exp = Math.floor(Math.log10(v));
+    const base = Math.pow(10, exp);
+    const mult = v / base;
+    const niceMult = mult <= 1 ? 1 : mult <= 2 ? 2 : mult <= 5 ? 5 : 10;
+    return niceMult * base;
+  };
+  const financeAxisMax = niceCeil(Math.max(...financeEarningsSeries, ...financeExpensesSeries, 1));
+  // Plot area x:36-296 y:20(=max)-100(=0) within a 300x120 viewBox -- same
+  // geometry on every range, since preserveAspectRatio="none" stretches it
+  // to the container's real width regardless of point count.
+  const financeValToY = (v) => 100 - (v / financeAxisMax) * 80;
+  const financeIdxToX = (i, n) => (n <= 1 ? 36 : 36 + (296 - 36) * (i / (n - 1)));
+  const toPoints = (series) => series.map((v, i) => `${financeIdxToX(i, series.length).toFixed(1)},${financeValToY(v).toFixed(1)}`).join(" ");
+  const financeEarningsPoints = toPoints(financeEarningsSeries);
+  const financeExpensesPoints = toPoints(financeExpensesSeries);
+  // Thin the x-axis day labels so 30/90-day ranges don't crowd -- at most
+  // ~7 evenly spaced labels regardless of range.
+  const financeLabelCount = Math.min(financeDays.length, 7);
+  const financeLabelIdx = new Set(
+    Array.from({ length: financeLabelCount }, (_, i) => Math.round(i * (financeDays.length - 1) / Math.max(1, financeLabelCount - 1)))
+  );
+  const financeVisibleLabels = financeDays.map((d, i) => ({ ...d, show: financeLabelIdx.has(i) }));
+
   return (
     <div>
       <div className="w-full rounded-xl p-3 mb-3 flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${healthColor}` }}>
@@ -950,6 +1055,113 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
         <StatTile label={lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"} value={liveMapLocatedCount} color={C.navy} onClick={() => setDetailView("liveMap")} />
         <StatTile label={lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी"} value={offDutyDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("offDuty")} />
         <StatTile label={lang === "en" ? "Uninstalled / Blocked" : lang === "mr" ? "अनइन्स्टॉल्ड / ब्लॉक्ड" : "अनइंस्टॉल्ड / ब्लॉक्ड"} value={inactiveDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
+      </div>
+
+      {/* Installs vs Uninstalls -- horizontal bars, real counts from
+          partitionDriversByInstallStatus (same split the stat tiles above
+          already use). */}
+      <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="text-sm font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Installs vs Uninstalls" : lang === "mr" ? "इन्स्टॉल्स वि अनइन्स्टॉल्स" : "इंस्टॉल्स बनाम अनइंस्टॉल्स"}</div>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[10.5px] font-bold" style={{ width: 62, color: C.inkSoft }}>{lang === "en" ? "Install" : lang === "mr" ? "इन्स्टॉल" : "इंस्टॉल"}</span>
+            <div className="flex-1 rounded" style={{ height: 16, background: "#E0E0E0" }}>
+              <div className="rounded" style={{ height: "100%", width: `${installPct}%`, background: "#2a78d6" }} title={`${installCount}`} />
+            </div>
+            <span className="shrink-0 text-[10.5px] font-extrabold text-right" style={{ width: 28, color: C.ink, fontFamily: monoFont }}>{installCount}</span>
+            <button onClick={() => onNavigate("drivers")} className="shrink-0 text-[10px] font-bold underline">
+              <span style={{ color: "#2a78d6" }}>{lang === "en" ? "Details" : lang === "mr" ? "तपशील" : "विवरण"}</span>
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[10.5px] font-bold" style={{ width: 62, color: C.inkSoft }}>{lang === "en" ? "Uninstall" : lang === "mr" ? "अनइन्स्टॉल" : "अनइंस्टॉल"}</span>
+            <div className="flex-1 rounded" style={{ height: 16, background: "#E0E0E0" }}>
+              <div className="rounded" style={{ height: "100%", width: `${uninstallPct}%`, background: "#eb6834" }} title={`${uninstallCount}`} />
+            </div>
+            <span className="shrink-0 text-[10.5px] font-extrabold text-right" style={{ width: 28, color: C.ink, fontFamily: monoFont }}>{uninstallCount}</span>
+            <button onClick={() => setDetailView("uninstalled")} className="shrink-0 text-[10px] font-bold underline">
+              <span style={{ color: "#eb6834" }}>{lang === "en" ? "Details" : lang === "mr" ? "तपशील" : "विवरण"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Bookings by Status -- vertical columns, real counts from bookings
+          over the selected window. Completed excluded (dwarfs the rest);
+          still shown in full on the Bookings tab via View Details. */}
+      <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Bookings by Status" : lang === "mr" ? "स्टेटसनुसार बुकिंग्स" : "स्टेटस के अनुसार बुकिंग"}</div>
+          <div className="flex items-center gap-2.5">
+            <button onClick={() => cycleRangeDays(setBookingChartRangeDays)} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold" style={{ border: `1px solid ${C.line}`, color: C.inkSoft }}>
+              <Clock size={11} /> {bookingChartRangeDays} {lang === "en" ? "Days" : lang === "mr" ? "दिवस" : "दिन"}
+            </button>
+            <button onClick={() => onNavigate("bookings")} className="text-[11px] font-bold underline" style={{ color: C.navy }}>
+              {lang === "en" ? "View Details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें"}
+            </button>
+          </div>
+        </div>
+        <div className="flex items-end gap-5" style={{ height: 132, paddingLeft: 4 }}>
+          {bookingChartBars.map((b) => (
+            <div key={b.key} className="flex flex-col items-center gap-1.5">
+              <span className="text-[11px] font-extrabold" style={{ color: C.ink }}>{b.count}</span>
+              <div style={{ width: 24, height: b.barPx, background: b.color, borderRadius: "4px 4px 0 0" }} title={`${b.label}: ${b.count}`} />
+              <span className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{b.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Earnings vs Expenses -- line chart, real tripLog fares vs real
+          AdminExpenses entries, grouped by day over the selected window.
+          Single shared y-axis (never dual-axis). */}
+      <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Earnings vs Expenses" : lang === "mr" ? "कमाई वि खर्च" : "कमाई बनाम खर्च"}</div>
+          <div className="flex items-center gap-2.5">
+            <button onClick={() => cycleRangeDays(setFinanceChartRangeDays)} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold" style={{ border: `1px solid ${C.line}`, color: C.inkSoft }}>
+              <Clock size={11} /> {financeChartRangeDays} {lang === "en" ? "Days" : lang === "mr" ? "दिवस" : "दिन"}
+            </button>
+            <button onClick={() => onNavigate("finance")} className="text-[11px] font-bold underline" style={{ color: C.navy }}>
+              {lang === "en" ? "View Details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें"}
+            </button>
+          </div>
+        </div>
+        <div className="flex gap-3.5 mb-1.5">
+          <span className="flex items-center gap-1.5 text-[10.5px] font-bold" style={{ color: C.inkSoft }}>
+            <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: "#2a78d6" }} />
+            {lang === "en" ? "Earnings" : lang === "mr" ? "कमाई" : "कमाई"}
+          </span>
+          <span className="flex items-center gap-1.5 text-[10.5px] font-bold" style={{ color: C.inkSoft }}>
+            <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: "#eb6834" }} />
+            {lang === "en" ? "Expenses" : lang === "mr" ? "खर्च" : "खर्च"}
+          </span>
+        </div>
+        <svg width="100%" height="120" viewBox="0 0 300 120" preserveAspectRatio="none" style={{ overflow: "visible" }}>
+          <text x="32" y="24" textAnchor="end" fontSize="9" fill="#9AA3B0">{fmt(financeAxisMax)}</text>
+          <text x="32" y="64" textAnchor="end" fontSize="9" fill="#9AA3B0">{fmt(financeAxisMax / 2)}</text>
+          <text x="32" y="104" textAnchor="end" fontSize="9" fill="#9AA3B0">0</text>
+          <line x1="36" y1="20" x2="296" y2="20" stroke="#E0E0E0" strokeWidth="1" />
+          <line x1="36" y1="60" x2="296" y2="60" stroke="#E0E0E0" strokeWidth="1" />
+          <line x1="36" y1="100" x2="296" y2="100" stroke="#9AA3B0" strokeWidth="1" />
+          <polyline points={financeEarningsPoints} fill="none" stroke="#2a78d6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <polyline points={financeExpensesPoints} fill="none" stroke="#eb6834" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          {financeEarningsSeries.map((v, i) => {
+            const n = financeEarningsSeries.length;
+            const x = (n <= 1 ? 36 : 36 + (296 - 36) * (i / (n - 1))).toFixed(1);
+            return <circle key={`e${i}`} cx={x} cy={financeValToY(v).toFixed(1)} r="4.5" fill="#2a78d6" stroke="#FFFFFF" strokeWidth="2"><title>{`${financeDays[i].label}: ${fmt(v)}`}</title></circle>;
+          })}
+          {financeExpensesSeries.map((v, i) => {
+            const n = financeExpensesSeries.length;
+            const x = (n <= 1 ? 36 : 36 + (296 - 36) * (i / (n - 1))).toFixed(1);
+            return <circle key={`x${i}`} cx={x} cy={financeValToY(v).toFixed(1)} r="4.5" fill="#eb6834" stroke="#FFFFFF" strokeWidth="2"><title>{`${financeDays[i].label}: ${fmt(v)}`}</title></circle>;
+          })}
+        </svg>
+        <div className="flex justify-between" style={{ paddingLeft: "12%" }}>
+          {financeVisibleLabels.map((d) => (
+            <span key={d.key} className="text-[9px] font-semibold" style={{ color: "#9AA3B0", opacity: d.show ? 1 : 0 }}>{d.label}</span>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -3667,7 +3879,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} bugs={bugs} systemHealth={systemHealth} />}
       {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
