@@ -356,14 +356,14 @@ export const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_E
 export const EN_LABELS = {
   book: "Book Now", rides: "My Rides", home: "Home", wallet: "Wallet", history: "History",
   kyc: "KYC", sos: "SOS", fleet: "Live Dashboard", drivers: "Drivers", settings: "Settings",
-  finance: "Reports", notify: "Notify", alerts: "Alerts", customers: "Customers", expenses: "Expenses",
-  callLogs: "Call Logs",
+  finance: "Finance", notify: "Notify", alerts: "Alerts", customers: "Customers", expenses: "Expenses",
+  callLogs: "Call Logs", bookings: "Bookings", rates: "Rates & Diesel", changelog: "Change Log",
 };
 export const MR_LABELS = {
   book: "आत्ता बुक करा", rides: "माझ्या राइड्स", home: "होम", wallet: "वॉलेट", history: "हिस्टरी",
   kyc: "KYC", sos: "SOS", fleet: "लाइव्ह डॅशबोर्ड", drivers: "ड्रायव्हर", settings: "सेटिंग्स",
-  finance: "रिपोर्ट्स", notify: "सूचना पाठवा", alerts: "अलर्ट्स", customers: "कस्टमर", expenses: "खर्च",
-  callLogs: "कॉल लॉग्स",
+  finance: "फायनान्स", notify: "सूचना पाठवा", alerts: "अलर्ट्स", customers: "कस्टमर", expenses: "खर्च",
+  callLogs: "कॉल लॉग्स", bookings: "बुकिंग्स", rates: "रेट्स व डिझेल", changelog: "चेंज लॉग",
 };
 
 // Default business-expense categories for Admin's Expenses tab — admin can

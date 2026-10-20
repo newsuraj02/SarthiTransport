@@ -7,8 +7,8 @@
 // one of the imports here.
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Activity, AlertTriangle, BarChart3, Bell, Calculator, Camera, CheckCircle2, ChevronLeft,
-  ClipboardList, Download, Eye, EyeOff, IndianRupee, LayoutDashboard, MapPin, MapPinned,
+  Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronLeft,
+  ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
   MessageCircle, Phone, PhoneCall, Plus, Settings2, Siren, Truck, UserCircle2, Users,
   Wallet, Weight, X, XCircle,
 } from "lucide-react";
@@ -328,7 +328,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
   );
 }
 
-function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, routeFares, adminRouteFares, adminRouteFaresError, fareTiers, returnPct, setReturnPct, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, bugs, systemHealth }) {
   // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
   // pick the field that actually answers "did this happen today" for that
   // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
@@ -340,10 +340,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
     const now = new Date();
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
   };
-  // "Booked today" previously counted every Ongoing/Completed trip ever
-  // logged (no date filter) despite the label — scope it to today like the
-  // other trip-based tiles below.
-  const bookedTodayList = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t.createdAt));
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
   // Single partition, used for every installed/uninstalled/blacklisted
   // count on this dashboard (see partitionDriversByInstallStatus) -- these
@@ -440,11 +436,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
     (drivers || []).forEach((d) => { const k = dateKey(d.createdAt); if (k && k >= startKey && k <= todayKey) total++; });
     return total;
   })();
-
-  const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b.cancelledAt));
-  // Any not-yet-finished booking scheduled for a future date, regardless of
-  // whether it's still awaiting bids or already has a driver assigned.
-  const advanceBookingsList = (bookings || []).filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed");
 
   // Tapping one of the "drill-down" tiles opens a dedicated full page (with
   // its own Back button) showing the live record list behind that count —
@@ -581,88 +572,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
     if (result.ok) markSent(d.mobile);
     setSingleSendResult({ mobile: d.mobile, kind, ok: result.ok, reason: result.reason });
     setSingleSendingMobile(null);
-  };
-
-  // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) when
-  // the diesel price per litre changes, up or down. Driver-submitted quotes
-  // (routeFares) are untouched by this since commit ae40cb4 dropped them as
-  // a customer-pricing layer entirely -- Diesel has no reason to move a
-  // number that no longer affects what anyone is charged.
-  //
-  // Per-tier, not a flat ₹/km for everyone -- a heavier vehicle burns more
-  // diesel per km, so the same price-per-litre move should shift its rate
-  // more than a tempo's. DIESEL_MILEAGE_BY_TIER_MAX_KG (km/litre, admin-
-  // reviewed reference figures) converts a ₹/litre change into each tier's
-  // own ₹/km delta: perKmDelta = priceDelta / mileage. These are fuel-cost
-  // mileage figures only, not the tier's actual perKmRate (DEFAULT_FARE_TIERS)
-  // -- that already bakes in driver earnings + margin on top of fuel, so
-  // this formula only sizes the ADJUSTMENT, it never replaces the rate.
-  //
-  // Still a flat totalFare += perKmDelta*estimatedKm rather than nudging a
-  // displayed per-km rate and rebuilding Total from it, which was tried
-  // first: that approach amplifies any per-km change by dividing it by 0.75
-  // (the first 5km is a fixed 25% SLICE of the total, not a flat rupee
-  // amount) -- a real bug: "+₹1/km" on a 201km entry landed as +₹271, not
-  // +₹201. Entries with no usable distance are left untouched -- there's no
-  // per-km rate to move. Entries missing/with an unrecognized tierMaxKg fall
-  // back to the heaviest tier's mileage -- the smallest, most conservative
-  // per-km move.
-  //
-  // Tapping +/- only ever changes dieselStagedPrice (in-memory, no network)
-  // so repeated taps are instant -- nothing actually writes to Firestore
-  // until "Save Diesel Rate" commits the accumulated change in a single
-  // pass, using bulkUpdateDocs (chunked Firestore batches) rather than one
-  // write per document, since a several-hundred-doc bulk operation from a
-  // mobile browser is exactly the kind of long-running write that kept
-  // failing halfway during the Maharashtra import.
-  // Re-keyed to DEFAULT_FARE_TIERS' new 24-vehicle maxKg set (see
-  // admin-rate-calculator-developer-guide.md) -- the old 8-tier keys here
-  // no longer exist, which would've silently fallen every tier but the
-  // smallest/largest to the most conservative (heaviest-tier) mileage.
-  const DIESEL_MILEAGE_BY_TIER_MAX_KG = {
-    500: 18, 750: 16.5, 800: 16, 900: 15.2, 1000: 14.5, 1200: 13, 1250: 12.5,
-    1500: 11, 2000: 9.8, 2500: 9, 3500: 7.2, 5000: 6, 7000: 5.4, 7500: 5.2,
-    9000: 4.8, 9500: 4.6, 10000: 4.5, 12000: 4.2, 16000: 3.8, 18000: 3.6,
-    21000: 3.4, 25000: 3.2, 30000: 3,
-    [FARE_TIER_MAX_KG_UNCAPPED]: 2.8,
-  };
-  const [dieselPricePerLitre, setDieselPricePerLitre] = usePersistedState("sarthi_dieselPricePerLitre", 90);
-  const [dieselStagedPrice, setDieselStagedPrice] = useState(null);
-  const dieselDisplayPrice = dieselStagedPrice ?? dieselPricePerLitre;
-  const dieselPending = dieselStagedPrice != null ? dieselStagedPrice - dieselPricePerLitre : 0;
-  const [dieselAdjusting, setDieselAdjusting] = useState(false);
-  const [dieselFlash, setDieselFlash] = useState("");
-  const [dieselError, setDieselError] = useState("");
-  const saveDiesel = async () => {
-    if (dieselAdjusting || dieselPending === 0) return;
-    const oldPrice = dieselPricePerLitre;
-    const newPrice = dieselStagedPrice;
-    setDieselAdjusting(true);
-    setDieselFlash("");
-    setDieselError("");
-    try {
-      // Admin's own rates only, now that driver-submitted quotes (routeFares)
-      // no longer feed into customer pricing at all -- see resolveFare.
-      const adminUpdates = (adminRouteFares || [])
-        .filter((r) => r.estimatedKm > 0)
-        .map((r) => {
-          const mileage = DIESEL_MILEAGE_BY_TIER_MAX_KG[r.tierMaxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED];
-          const perKmDelta = (newPrice - oldPrice) / mileage;
-          return {
-            id: r.id,
-            patch: { totalFare: Math.max(1, Math.round((Number(r.totalFare) || 0) + perKmDelta * r.estimatedKm)) },
-          };
-        });
-      await bulkUpdateDocs("adminRouteFares", adminUpdates);
-      const count = adminUpdates.length;
-      setDieselPricePerLitre(newPrice);
-      setDieselStagedPrice(null);
-      setDieselFlash(lang === "en" ? `Adjusted ${count} rates for diesel ₹${oldPrice} → ₹${newPrice}/L.` : lang === "mr" ? `डिझेल ₹${oldPrice} → ₹${newPrice}/L साठी ${count} दर बदलले.` : `डीज़ल ₹${oldPrice} → ₹${newPrice}/L के लिए ${count} दरों को बदला गया।`);
-    } catch (e) {
-      console.error(e);
-      setDieselError(lang === "en" ? "Couldn't adjust rates -- try again." : lang === "mr" ? "दर बदलता आले नाहीत — पुन्हा प्रयत्न करा." : "दर बदले नहीं जा सके — फिर कोशिश करें।");
-    }
-    setDieselAdjusting(false);
   };
 
   // Which side of the merged New Registrations screen is showing — see
@@ -814,28 +723,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
         </div>
       ),
     },
-    booked: {
-      title: lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं",
-      emptyMsg: lang === "en" ? "No vehicles booked today yet." : lang === "mr" ? "आज अद्याप कोणतीही गाडी बुक झाली नाही." : "आज तक कोई गाड़ी बुक नहीं हुई।",
-      items: bookedTodayList,
-      renderItem: (t) => (
-        <div key={t.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fmt(t.fare)} · {statusMeta[t.status]?.label || t.status}</div>
-        </div>
-      ),
-    },
-    cancelled: {
-      title: lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं",
-      emptyMsg: lang === "en" ? "Nothing cancelled today." : lang === "mr" ? "आज काहीही रद्द झाले नाही." : "आज कुछ भी रद्द नहीं हुआ।",
-      items: cancelledTodayList,
-      renderItem: (b) => (
-        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : lang === "mr" ? "कोणताही ड्रायव्हर निश्चित झाला नाही" : "कोई ड्राइवर तय नहीं हुआ")}</div>
-        </div>
-      ),
-    },
     lowWallet: {
       title: lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर",
       emptyMsg: lang === "en" ? "No online driver is below the minimum wallet balance." : lang === "mr" ? "कोणताही ऑनलाइन ड्रायव्हर किमान वॉलेटपेक्षा कमी नाही." : "कोई भी ऑनलाइन ड्राइवर न्यूनतम वॉलेट से कम नहीं है।",
@@ -844,17 +731,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.safety}` }}>
           <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
           <div className="text-[11px] font-bold" style={{ color: C.safety, fontFamily: monoFont }}>{fmt(d.wallet)}</div>
-        </div>
-      ),
-    },
-    advance: {
-      title: lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग",
-      emptyMsg: lang === "en" ? "No advance bookings yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही." : "अभी तक कोई एडवांस बुकिंग नहीं है।",
-      items: advanceBookingsList,
-      renderItem: (b) => (
-        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}</div>
         </div>
       ),
     },
@@ -979,38 +855,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
     );
   }
 
-  if (detailView === "routeFares") {
-    return (
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <button onClick={() => setDetailView(null)} className="shrink-0 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
-            <ChevronLeft size={18} strokeWidth={3} />
-          </button>
-          <div className="flex-1 grid grid-cols-3 gap-2">
-            <button onClick={() => setDieselStagedPrice((p) => (p ?? dieselPricePerLitre) - 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.safety, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>−</button>
-            <div className="h-11 rounded-lg flex items-center justify-center text-sm font-bold" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}>
-              {lang === "en" ? "Diesel" : lang === "mr" ? "डिझेल" : "डीज़ल"} ₹{dieselDisplayPrice}/L
-            </div>
-            <button onClick={() => setDieselStagedPrice((p) => (p ?? dieselPricePerLitre) + 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.success, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>+</button>
-          </div>
-        </div>
-        {dieselPending !== 0 && (
-          <button onClick={saveDiesel} disabled={dieselAdjusting} className="w-full rounded-lg py-2.5 mb-2 text-sm font-bold" style={{ background: dieselAdjusting ? "#E0E0E0" : C.navy, color: dieselAdjusting ? "#9AA3B0" : "#fff" }}>
-            {dieselAdjusting
-              ? "…"
-              : (lang === "en" ? `Save Diesel Rate (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)` : lang === "mr" ? `डिझेल दर सेव्ह करा (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)` : `डीज़ल दर सेव करें (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)`)}
-          </button>
-        )}
-        {(dieselFlash || dieselError) && (
-          <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: dieselError ? C.safety : C.success, color: "#fff" }}>
-            {dieselError || dieselFlash}
-          </div>
-        )}
-        <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />
-      </div>
-    );
-  }
-
   if (detailView) {
     const page = detailPages[detailView];
     return (
@@ -1035,7 +879,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
   // Dashboard, just where the bug tracker was placed before." Only renders
   // when there's actually something open (including anything the daily
   // health-check Routine logs here) -- tapping it jumps straight into
-  // Settings, where the full Change Log (AdminBugTracker) now lives.
+  // the Change Log tab (AdminBugTracker).
   const openChangeLogCount = (bugs || []).filter((b) => b.status !== "fixed").length;
   const criticalChangeLogCount = (bugs || []).filter((b) => b.status !== "fixed" && (b.severity === "critical" || b.severity === "high")).length;
 
@@ -1075,7 +919,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
         </div>
       </div>
       {openChangeLogCount > 0 && (
-        <button onClick={() => onNavigate("settings")} className="w-full rounded-xl p-4 mb-5 shadow-sm text-left" style={{ background: criticalChangeLogCount > 0 ? C.safety : C.marigold, border: `1.5px solid ${criticalChangeLogCount > 0 ? C.safety : C.marigoldDeep}` }}>
+        <button onClick={() => onNavigate("changelog")} className="w-full rounded-xl p-4 mb-5 shadow-sm text-left" style={{ background: criticalChangeLogCount > 0 ? C.safety : C.marigold, border: `1.5px solid ${criticalChangeLogCount > 0 ? C.safety : C.marigoldDeep}` }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-sm font-bold" style={{ color: criticalChangeLogCount > 0 ? "#FFFFFF" : "#000000" }}>
               <ClipboardList size={16} /> {lang === "en" ? "Change Log needs attention" : lang === "mr" ? "चेंज लॉगकडे लक्ष द्या" : "चेंज लॉग पर ध्यान दें"}
@@ -1085,7 +929,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
             </span>
           </div>
           <p className="text-[11px] font-semibold mt-1" style={{ color: criticalChangeLogCount > 0 ? "#FFFFFF" : "#000000" }}>
-            {lang === "en" ? `${openChangeLogCount} open (${criticalChangeLogCount} high/critical) — tap to review in Settings` : lang === "mr" ? `${openChangeLogCount} उघड्या (${criticalChangeLogCount} हाय/क्रिटिकल) — Settings मध्ये पाहण्यासाठी टॅप करा` : `${openChangeLogCount} खुले (${criticalChangeLogCount} हाई/क्रिटिकल) — Settings में देखने के लिए टैप करें`}
+            {lang === "en" ? `${openChangeLogCount} open (${criticalChangeLogCount} high/critical) — tap to review in Change Log` : lang === "mr" ? `${openChangeLogCount} उघड्या (${criticalChangeLogCount} हाय/क्रिटिकल) — Change Log मध्ये पाहण्यासाठी टॅप करा` : `${openChangeLogCount} खुले (${criticalChangeLogCount} हाई/क्रिटिकल) — Change Log में देखने के लिए टैप करें`}
           </p>
         </button>
       )}
@@ -1102,14 +946,10 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
       <div className="grid grid-cols-2 gap-3 mb-5">
         <StatTile label={lang === "en" ? "New Registrations (7 Days)" : lang === "mr" ? "नवीन रजिस्ट्रेशन (7 दिवस)" : "नए रजिस्ट्रेशन (7 दिन)"} value={registrationTrendLast7Total} color={C.pimpri} onClick={() => setDetailView("newRegistrations")} />
         <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
-        <StatTile label={lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं"} value={cancelledTodayList.length} color={cancelledTodayList.length > 0 ? C.safety : C.success} onClick={() => setDetailView("cancelled")} />
-        <StatTile label={lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं"} value={bookedTodayList.length} color={C.pimpri} onClick={() => setDetailView("booked")} />
         <StatTile label={lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
         <StatTile label={lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"} value={liveMapLocatedCount} color={C.navy} onClick={() => setDetailView("liveMap")} />
         <StatTile label={lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी"} value={offDutyDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("offDuty")} />
         <StatTile label={lang === "en" ? "Uninstalled / Blocked" : lang === "mr" ? "अनइन्स्टॉल्ड / ब्लॉक्ड" : "अनइंस्टॉल्ड / ब्लॉक्ड"} value={inactiveDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
-        <StatTile label={lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग"} value={advanceBookingsList.length} color={C.pimpri} onClick={() => setDetailView("advance")} />
-        <StatTile label={lang === "en" ? "Driver Ride Entries" : lang === "mr" ? "ड्रायव्हर राइड एंट्री" : "ड्राइवर राइड एंट्री"} value={(routeFares || []).length} color={C.pimpri} onClick={() => setDetailView("routeFares")} />
       </div>
 
       <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -1167,6 +1007,88 @@ function AdminFleet({ drivers, customers, bookings, tripLog, minWallet, lang, on
       <button onClick={onLogout} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold flex items-center justify-center gap-1.5" style={{ color: "#FFFFFF", background: C.safety }}>
         <XCircle size={14} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
       </button>
+    </div>
+  );
+}
+
+// Booked today / Cancelled today / Advance bookings -- moved out of the
+// Live Dashboard's drill-down tiles (see AdminFleet) into their own
+// top-level tab. Same isToday/isFutureAdvance-based derivations and the
+// same RouteLine-based row rendering as before, just given a permanent
+// home instead of a tap-to-drill-down page.
+function AdminBookings({ bookings, tripLog, lang }) {
+  const isToday = (ts) => {
+    const d = ts?.toDate ? ts.toDate() : null;
+    if (!d) return false;
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  };
+  const statusMeta = lang === "en"
+    ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
+    : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
+  // "Booked today" previously counted every Ongoing/Completed trip ever
+  // logged (no date filter) despite the label — scoped to today like the
+  // other trip-based tiles.
+  const bookedTodayList = tripLog.filter((t) => (t.status === "Ongoing" || t.status === "Completed") && isToday(t.createdAt));
+  const cancelledTodayList = (bookings || []).filter((b) => b.status === "Cancelled" && isToday(b.cancelledAt));
+  // Any not-yet-finished booking scheduled for a future date, regardless of
+  // whether it's still awaiting bids or already has a driver assigned.
+  const advanceBookingsList = (bookings || []).filter((b) => isFutureAdvance(b.scheduledFor) && b.status !== "Cancelled" && b.status !== "Completed");
+
+  const sections = [
+    {
+      key: "booked",
+      title: lang === "en" ? "Booked today" : lang === "mr" ? "आज किती गाड्या बुक झाल्या" : "आज कितनी गाड़ियां बुक हुईं",
+      emptyMsg: lang === "en" ? "No vehicles booked today yet." : lang === "mr" ? "आज अद्याप कोणतीही गाडी बुक झाली नाही." : "आज तक कोई गाड़ी बुक नहीं हुई।",
+      items: bookedTodayList,
+      renderItem: (t) => (
+        <div key={t.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fmt(t.fare)} · {statusMeta[t.status]?.label || t.status}</div>
+        </div>
+      ),
+    },
+    {
+      key: "cancelled",
+      title: lang === "en" ? "Cancelled today" : lang === "mr" ? "आज रद्द झाल्या" : "आज रद्द हुईं",
+      emptyMsg: lang === "en" ? "Nothing cancelled today." : lang === "mr" ? "आज काहीही रद्द झाले नाही." : "आज कुछ भी रद्द नहीं हुआ।",
+      items: cancelledTodayList,
+      renderItem: (b) => (
+        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : lang === "mr" ? "कोणताही ड्रायव्हर निश्चित झाला नाही" : "कोई ड्राइवर तय नहीं हुआ")}</div>
+        </div>
+      ),
+    },
+    {
+      key: "advance",
+      title: lang === "en" ? "Total advance bookings" : lang === "mr" ? "एकूण अ‍ॅडव्हान्स बुकिंग" : "कुल एडवांस बुकिंग",
+      emptyMsg: lang === "en" ? "No advance bookings yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही." : "अभी तक कोई एडवांस बुकिंग नहीं है।",
+      items: advanceBookingsList,
+      renderItem: (b) => (
+        <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}</div>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      {sections.map((s) => (
+        <div key={s.key} className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold" style={{ color: C.ink }}>{s.title}</h3>
+            <span className="text-xs font-black px-2.5 py-1 rounded-full" style={{ background: C.bg, color: C.inkSoft }}>{s.items.length}</span>
+          </div>
+          {s.items.length === 0 ? (
+            <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{s.emptyMsg}</p>
+          ) : (
+            <div className="space-y-1.5">{s.items.map(s.renderItem)}</div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -1459,6 +1381,119 @@ function judgeRate(driverQuote, systemRate) {
   return { diff, a, cls: a <= 15 ? "ok" : a <= 30 ? "warn" : "bad" };
 }
 const JUDGE_COLOR = { ok: C.success, warn: C.marigoldDeep, bad: C.safety };
+
+// Rates & Diesel tab -- the diesel price control (moved out of the Live
+// Dashboard's "Driver Ride Entries" drill-down tile, see AdminFleet) plus
+// AdminRouteFares below it. Persistent tab now, not a drill-down, so no
+// Back button here.
+function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, lang }) {
+  // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) when
+  // the diesel price per litre changes, up or down. Driver-submitted quotes
+  // (routeFares) are untouched by this since commit ae40cb4 dropped them as
+  // a customer-pricing layer entirely -- Diesel has no reason to move a
+  // number that no longer affects what anyone is charged.
+  //
+  // Per-tier, not a flat ₹/km for everyone -- a heavier vehicle burns more
+  // diesel per km, so the same price-per-litre move should shift its rate
+  // more than a tempo's. DIESEL_MILEAGE_BY_TIER_MAX_KG (km/litre, admin-
+  // reviewed reference figures) converts a ₹/litre change into each tier's
+  // own ₹/km delta: perKmDelta = priceDelta / mileage. These are fuel-cost
+  // mileage figures only, not the tier's actual perKmRate (DEFAULT_FARE_TIERS)
+  // -- that already bakes in driver earnings + margin on top of fuel, so
+  // this formula only sizes the ADJUSTMENT, it never replaces the rate.
+  //
+  // Still a flat totalFare += perKmDelta*estimatedKm rather than nudging a
+  // displayed per-km rate and rebuilding Total from it, which was tried
+  // first: that approach amplifies any per-km change by dividing it by 0.75
+  // (the first 5km is a fixed 25% SLICE of the total, not a flat rupee
+  // amount) -- a real bug: "+₹1/km" on a 201km entry landed as +₹271, not
+  // +₹201. Entries with no usable distance are left untouched -- there's no
+  // per-km rate to move. Entries missing/with an unrecognized tierMaxKg fall
+  // back to the heaviest tier's mileage -- the smallest, most conservative
+  // per-km move.
+  //
+  // Tapping +/- only ever changes dieselStagedPrice (in-memory, no network)
+  // so repeated taps are instant -- nothing actually writes to Firestore
+  // until "Save Diesel Rate" commits the accumulated change in a single
+  // pass, using bulkUpdateDocs (chunked Firestore batches) rather than one
+  // write per document, since a several-hundred-doc bulk operation from a
+  // mobile browser is exactly the kind of long-running write that kept
+  // failing halfway during the Maharashtra import.
+  // Re-keyed to DEFAULT_FARE_TIERS' new 24-vehicle maxKg set (see
+  // admin-rate-calculator-developer-guide.md) -- the old 8-tier keys here
+  // no longer exist, which would've silently fallen every tier but the
+  // smallest/largest to the most conservative (heaviest-tier) mileage.
+  const DIESEL_MILEAGE_BY_TIER_MAX_KG = {
+    500: 18, 750: 16.5, 800: 16, 900: 15.2, 1000: 14.5, 1200: 13, 1250: 12.5,
+    1500: 11, 2000: 9.8, 2500: 9, 3500: 7.2, 5000: 6, 7000: 5.4, 7500: 5.2,
+    9000: 4.8, 9500: 4.6, 10000: 4.5, 12000: 4.2, 16000: 3.8, 18000: 3.6,
+    21000: 3.4, 25000: 3.2, 30000: 3,
+    [FARE_TIER_MAX_KG_UNCAPPED]: 2.8,
+  };
+  const [dieselPricePerLitre, setDieselPricePerLitre] = usePersistedState("sarthi_dieselPricePerLitre", 90);
+  const [dieselStagedPrice, setDieselStagedPrice] = useState(null);
+  const dieselDisplayPrice = dieselStagedPrice ?? dieselPricePerLitre;
+  const dieselPending = dieselStagedPrice != null ? dieselStagedPrice - dieselPricePerLitre : 0;
+  const [dieselAdjusting, setDieselAdjusting] = useState(false);
+  const [dieselFlash, setDieselFlash] = useState("");
+  const [dieselError, setDieselError] = useState("");
+  const saveDiesel = async () => {
+    if (dieselAdjusting || dieselPending === 0) return;
+    const oldPrice = dieselPricePerLitre;
+    const newPrice = dieselStagedPrice;
+    setDieselAdjusting(true);
+    setDieselFlash("");
+    setDieselError("");
+    try {
+      // Admin's own rates only, now that driver-submitted quotes (routeFares)
+      // no longer feed into customer pricing at all -- see resolveFare.
+      const adminUpdates = (adminRouteFares || [])
+        .filter((r) => r.estimatedKm > 0)
+        .map((r) => {
+          const mileage = DIESEL_MILEAGE_BY_TIER_MAX_KG[r.tierMaxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED];
+          const perKmDelta = (newPrice - oldPrice) / mileage;
+          return {
+            id: r.id,
+            patch: { totalFare: Math.max(1, Math.round((Number(r.totalFare) || 0) + perKmDelta * r.estimatedKm)) },
+          };
+        });
+      await bulkUpdateDocs("adminRouteFares", adminUpdates);
+      const count = adminUpdates.length;
+      setDieselPricePerLitre(newPrice);
+      setDieselStagedPrice(null);
+      setDieselFlash(lang === "en" ? `Adjusted ${count} rates for diesel ₹${oldPrice} → ₹${newPrice}/L.` : lang === "mr" ? `डिझेल ₹${oldPrice} → ₹${newPrice}/L साठी ${count} दर बदलले.` : `डीज़ल ₹${oldPrice} → ₹${newPrice}/L के लिए ${count} दरों को बदला गया।`);
+    } catch (e) {
+      console.error(e);
+      setDieselError(lang === "en" ? "Couldn't adjust rates -- try again." : lang === "mr" ? "दर बदलता आले नाहीत — पुन्हा प्रयत्न करा." : "दर बदले नहीं जा सके — फिर कोशिश करें।");
+    }
+    setDieselAdjusting(false);
+  };
+
+  return (
+    <div>
+      <div className="grid grid-cols-3 gap-2 mb-2">
+        <button onClick={() => setDieselStagedPrice((p) => (p ?? dieselPricePerLitre) - 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.safety, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>−</button>
+        <div className="h-11 rounded-lg flex items-center justify-center text-sm font-bold" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}>
+          {lang === "en" ? "Diesel" : lang === "mr" ? "डिझेल" : "डीज़ल"} ₹{dieselDisplayPrice}/L
+        </div>
+        <button onClick={() => setDieselStagedPrice((p) => (p ?? dieselPricePerLitre) + 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.success, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>+</button>
+      </div>
+      {dieselPending !== 0 && (
+        <button onClick={saveDiesel} disabled={dieselAdjusting} className="w-full rounded-lg py-2.5 mb-2 text-sm font-bold" style={{ background: dieselAdjusting ? "#E0E0E0" : C.navy, color: dieselAdjusting ? "#9AA3B0" : "#fff" }}>
+          {dieselAdjusting
+            ? "…"
+            : (lang === "en" ? `Save Diesel Rate (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)` : lang === "mr" ? `डिझेल दर सेव्ह करा (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)` : `डीज़ल दर सेव करें (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)`)}
+        </button>
+      )}
+      {(dieselFlash || dieselError) && (
+        <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: dieselError ? C.safety : C.success, color: "#fff" }}>
+          {dieselError || dieselFlash}
+        </div>
+      )}
+      <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />
+    </div>
+  );
+}
 
 // The guide's own home screen (section 1): two buttons, Admin Rate
 // Calculator and Saved Routes (with a live count) -- opens one or the
@@ -3110,24 +3145,22 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
   );
 }
 
-function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, bugs, setBugStatus, addBug, lang }) {
-  // Commission/bonus/min-wallet are edited as a draft and only written to
+function AdminSettings({ latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, lang }) {
+  // Force-update version codes are edited as a draft and only written to
   // Firestore on Save, instead of firing a write on every keystroke. Stays
-  // in sync with the live values as long as there's no unsaved edit, so an
-  // external change (e.g. trial mode toggling commission to 0) still shows
-  // up immediately.
-  const [draft, setDraft] = useState({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
+  // in sync with the live values as long as there's no unsaved edit.
+  // (Commission/Bonus/Min-wallet used to be part of this same draft object
+  // -- they moved to AdminFinance's own "System Settings" section with
+  // their own independent draft/save, since that's where Finance now lives.)
+  const [draft, setDraft] = useState({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
-    if (!dirty) setDraft({ commissionPct, bonusPct, minWallet, latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
+    if (!dirty) setDraft({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commissionPct, bonusPct, minWallet, latestVersionCode, updateUrl, latestAdminVersionCode, adminUpdateUrl, dirty]);
+  }, [latestVersionCode, updateUrl, latestAdminVersionCode, adminUpdateUrl, dirty]);
   const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
   const saveSettings = () => {
-    setCommissionPct(draft.commissionPct);
-    setBonusPct(draft.bonusPct);
-    setMinWallet(draft.minWallet);
     setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
     setUpdateUrl(draft.updateUrl.trim());
     setLatestAdminVersionCode(draft.latestAdminVersionCode === "" ? null : Number(draft.latestAdminVersionCode));
@@ -3138,48 +3171,7 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
   };
   return (
     <div>
-    <div className="rounded-xl p-4 shadow-sm mb-5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : lang === "mr" ? "सिस्टम सेटिंग्स" : "सिस्टम सेटिंग्स"}</div>
-
-      <div className="rounded-lg p-3 mb-4" style={{ background: C.success }}>
-        <div className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : lang === "mr" ? "लॉगिनच्या तारखेपासून, नवीन ड्रायव्हर आणि कस्टमरसाठी 30 दिवसांचा ट्रायल मोड आपोआप सुरू होतो" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
-        <div className="text-[11px] font-bold mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : lang === "mr" ? "त्या ड्रायव्हरच्या ट्रायल दरम्यान कोणतेही कमिशन किंवा किमान बॅलन्स लागू होत नाही. ट्रायल संपल्यावर खाली दिलेले दर आपोआप लागू होतील." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
-      </div>
-
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Commission Percentage" : lang === "mr" ? "कमिशन टक्केवारी" : "कमीशन प्रतिशत"}</div>
-          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted, once their trial has ended" : lang === "mr" ? "ट्रायल संपल्यानंतर, बिड अ‍ॅक्सेप्ट होताच हे % ड्रायव्हरच्या वॉलेटमधून कापले जाईल" : "ट्रायल खत्म होने के बाद, बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <input type="number" value={draft.commissionPct} onChange={(e) => updateDraft({ commissionPct: Math.max(0, Number(e.target.value) || 0) })}
-            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
-          <span className="text-base font-bold" style={{ color: C.ink }}>%</span>
-        </div>
-      </div>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Bonus Percentage" : lang === "mr" ? "ड्रायव्हर बोनस टक्केवारी" : "ड्राइवर बोनस प्रतिशत"}</div>
-          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % out of the commission goes back to the driver's bonus account" : lang === "mr" ? "कमिशनमधून हे % ड्रायव्हरच्या बोनस खात्यात परत जाईल" : "कमीशन में से यह % ड्राइवर के बोनस अकाउंट में वापस जाएगा"}</div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <input type="number" value={draft.bonusPct} onChange={(e) => updateDraft({ bonusPct: Math.max(0, Number(e.target.value) || 0) })}
-            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
-          <span className="text-base font-bold" style={{ color: C.ink }}>%</span>
-        </div>
-      </div>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Minimum Wallet Balance" : lang === "mr" ? "किमान वॉलेट बॅलन्स" : "न्यूनतम वॉलेट बैलेंस"}</div>
-          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver must maintain this balance to keep the app active" : lang === "mr" ? "अ‍ॅप अ‍ॅक्टिव्ह ठेवण्यासाठी ड्रायव्हरला हे बॅलन्स ठेवावे लागेल" : "ऐप एक्टिव रखने के लिए ड्राइवर को यह बैलेंस रखना होगा"}</div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-base font-bold" style={{ color: C.ink }}>₹</span>
-          <input type="number" value={draft.minWallet} onChange={(e) => updateDraft({ minWallet: Math.max(0, Number(e.target.value) || 0) })}
-            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
-        </div>
-      </div>
-
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
         <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Force Update (Play Store)" : lang === "mr" ? "फोर्स अपडेट (Play Store)" : "फोर्स अपडेट (Play Store)"}</div>
         <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>{lang === "en" ? "Set this to the versionCode of whatever you just published to the Production track — anyone on an older install gets blocked until they update. Leave blank to turn this off." : lang === "mr" ? "तुम्ही नुकतीच Production track वर पब्लिश केलेल्या versionCode इथे टाका — जुन्या व्हर्जनवरील सर्वांना अपडेट होईपर्यंत ब्लॉक केले जाईल. बंद करण्यासाठी रिकामे ठेवा." : "आपने अभी-अभी Production track पर publish किया हुआ versionCode यहां डालें — पुराने वर्शन वाले सभी को अपडेट होने तक ब्लॉक कर दिया जाएगा। बंद करने के लिए खाली छोड़ें।"}</div>
@@ -3214,12 +3206,31 @@ function AdminSettings({ commissionPct, setCommissionPct, bonusPct, setBonusPct,
         {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
       </button>
     </div>
-    <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />
     </div>
   );
 }
 
-function AdminFinance({ tripLog, bookings, deleteAllRideHistory, lang }) {
+function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, minWallet, setMinWallet, tripLog, bookings, deleteAllRideHistory, expenses, expenseCategories, addExpense, addExpenseCategory, lang }) {
+  // Commission/Bonus/Min-wallet System Settings form -- moved here from
+  // AdminSettings (see that component's own comment) with its own
+  // independent draft/dirty/Save, same fields/validation/setters as
+  // before, just no longer bundled with the Force-Update draft.
+  const [settingsDraft, setSettingsDraft] = useState({ commissionPct, bonusPct, minWallet });
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  useEffect(() => {
+    if (!settingsDirty) setSettingsDraft({ commissionPct, bonusPct, minWallet });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commissionPct, bonusPct, minWallet, settingsDirty]);
+  const updateSettingsDraft = (patch) => { setSettingsDraft((d) => ({ ...d, ...patch })); setSettingsDirty(true); setSettingsSaved(false); };
+  const saveSystemSettings = () => {
+    setCommissionPct(settingsDraft.commissionPct);
+    setBonusPct(settingsDraft.bonusPct);
+    setMinWallet(settingsDraft.minWallet);
+    setSettingsDirty(false);
+    setSettingsSaved(true);
+    setTimeout(() => setSettingsSaved(false), 3000);
+  };
   // Commission is deliberately held at 0 here too (see driverRespondBooking)
   // — fare is a real, fixed, calculated number again, but this report
   // shouldn't show non-zero "would-be" commission while actual wallet
@@ -3268,8 +3279,57 @@ function AdminFinance({ tripLog, bookings, deleteAllRideHistory, lang }) {
   return (
     <div className="space-y-3">
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Settings2 size={16} /> {lang === "en" ? "System Settings" : lang === "mr" ? "सिस्टम सेटिंग्स" : "सिस्टम सेटिंग्स"}</div>
+
+      <div className="rounded-lg p-3 mb-4" style={{ background: C.success }}>
+        <div className="text-xs font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "On the date of login, a 30-day trial mode is initiated for the new driver and the customer" : lang === "mr" ? "लॉगिनच्या तारखेपासून, नवीन ड्रायव्हर आणि कस्टमरसाठी 30 दिवसांचा ट्रायल मोड आपोआप सुरू होतो" : "लॉगिन की तारीख से, नए ड्राइवर और कस्टमर के लिए 30 दिन का ट्रायल मोड अपने आप शुरू हो जाता है"}</div>
+        <div className="text-[11px] font-bold mt-1" style={{ color: "#FFFFFF" }}>{lang === "en" ? "No commission or minimum balance applies during that driver's own trial. The rates below apply automatically once it ends." : lang === "mr" ? "त्या ड्रायव्हरच्या ट्रायल दरम्यान कोणतेही कमिशन किंवा किमान बॅलन्स लागू होत नाही. ट्रायल संपल्यावर खाली दिलेले दर आपोआप लागू होतील." : "उस ड्राइवर के ट्रायल के दौरान कोई कमीशन या न्यूनतम बैलेंस लागू नहीं होता। ट्रायल खत्म होने पर नीचे दी गई दरें अपने आप लागू हो जाएंगी।"}</div>
+      </div>
+
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Commission Percentage" : lang === "mr" ? "कमिशन टक्केवारी" : "कमीशन प्रतिशत"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % is cut from the driver's wallet the moment a bid is accepted, once their trial has ended" : lang === "mr" ? "ट्रायल संपल्यानंतर, बिड अ‍ॅक्सेप्ट होताच हे % ड्रायव्हरच्या वॉलेटमधून कापले जाईल" : "ट्रायल खत्म होने के बाद, बिड एक्सेप्ट होते ही यह % ड्राइवर के वॉलेट से कटेगा"}</div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <input type="number" value={settingsDraft.commissionPct} onChange={(e) => updateSettingsDraft({ commissionPct: Math.max(0, Number(e.target.value) || 0) })}
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+          <span className="text-base font-bold" style={{ color: C.ink }}>%</span>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Driver Bonus Percentage" : lang === "mr" ? "ड्रायव्हर बोनस टक्केवारी" : "ड्राइवर बोनस प्रतिशत"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "This % out of the commission goes back to the driver's bonus account" : lang === "mr" ? "कमिशनमधून हे % ड्रायव्हरच्या बोनस खात्यात परत जाईल" : "कमीशन में से यह % ड्राइवर के बोनस अकाउंट में वापस जाएगा"}</div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <input type="number" value={settingsDraft.bonusPct} onChange={(e) => updateSettingsDraft({ bonusPct: Math.max(0, Number(e.target.value) || 0) })}
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+          <span className="text-base font-bold" style={{ color: C.ink }}>%</span>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Minimum Wallet Balance" : lang === "mr" ? "किमान वॉलेट बॅलन्स" : "न्यूनतम वॉलेट बैलेंस"}</div>
+          <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Driver must maintain this balance to keep the app active" : lang === "mr" ? "अ‍ॅप अ‍ॅक्टिव्ह ठेवण्यासाठी ड्रायव्हरला हे बॅलन्स ठेवावे लागेल" : "ऐप एक्टिव रखने के लिए ड्राइवर को यह बैलेंस रखना होगा"}</div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-base font-bold" style={{ color: C.ink }}>₹</span>
+          <input type="number" value={settingsDraft.minWallet} onChange={(e) => updateSettingsDraft({ minWallet: Math.max(0, Number(e.target.value) || 0) })}
+            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
+        </div>
+      </div>
+
+      {settingsSaved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
+      <button onClick={saveSystemSettings} disabled={!settingsDirty} className="w-full rounded-lg py-3.5 font-bold text-base"
+        style={{ background: settingsDirty ? "#0052CC" : "#E0E0E0", color: settingsDirty ? "#fff" : "#9AA3B0" }}>
+        {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
+      </button>
+    </div>
+
+    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Reports — Commission & Earnings" : lang === "mr" ? "रिपोर्ट्स — कमिशन आणि कमाई" : "रिपोर्ट्स — कमीशन और कमाई"}</div>
+        <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Earnings" : lang === "mr" ? "कमाई" : "कमाई"}</div>
         <button onClick={downloadReport} disabled={tripLog.length === 0} className="text-sm font-semibold flex items-center gap-1 px-3.5 py-2.5 rounded-lg"
           style={{ color: tripLog.length ? "#FFFFFF" : C.inkSoft, background: tripLog.length ? C.marigoldDeep : "#E5E5E5" }}>
           <Download size={12} /> {lang === "en" ? "Download CSV" : lang === "mr" ? "एक्सेल डाउनलोड करा" : "एक्सेल डाउनलोड करें"}
@@ -3303,6 +3363,8 @@ function AdminFinance({ tripLog, bookings, deleteAllRideHistory, lang }) {
         </table>
       )}
     </div>
+
+    <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />
 
     {/* Separate card, deliberately set apart from the report above --
         this is the one irreversible action on this whole screen. Typed
@@ -3587,7 +3649,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
   // a separate "Pending KYC approvals" tile.
-  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["expenses", "खर्चे (Expenses)", IndianRupee], ["settings", "सिस्टम सेटिंग्स", Settings2], ["finance", "रिपोर्ट्स", BarChart3], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren], ["callLogs", "कॉल लॉग्स", PhoneCall]];
+  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["bookings", "बुकिंग्स", CalendarCheck], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["finance", "फायनान्स", BarChart3], ["rates", "रेट्स व डीज़ल", Fuel], ["changelog", "चेंज लॉग", History], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren], ["callLogs", "कॉल लॉग्स", PhoneCall], ["settings", "सिस्टम सेटिंग्स", Settings2]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
@@ -3605,15 +3667,17 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} returnPct={returnPct} setReturnPct={setReturnPct} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
-      {tab === "expenses" && <AdminExpenses expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
-      {tab === "settings" && <AdminSettings commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
-      {tab === "finance" && <AdminFinance tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} lang={lang} />}
+      {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
+      {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />}
+      {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
+      {tab === "settings" && <AdminSettings latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>
   );
 }
