@@ -26,7 +26,7 @@ import {
   isFutureAdvance, isLikelyUninstalled, locationsNear,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, routeMatchRadiusKm,
   sanitizeForDocId, trialDaysLeft, usePersistedState, uploadPhoto, KycDocThumb,
-  LocationField, PhotoPicker, RouteLine, SafeImage, StatTile,
+  LocationField, PhotoPicker, RouteLine, SafeImage, StatTile, VEHICLE_HEADROOM_KG,
 } from "./App.jsx";
 
 // Owner rule (2026-10-13): every vehicle's current status shows directly
@@ -2441,7 +2441,36 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   );
 }
 
-function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang }) {
+function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang, drivers, unmatchedVehicleRequests, handleUnmatchedVehicleRequest }) {
+  // Smart Load-to-Vehicle Match -- a customer tapped "Doesn't match
+  // requirement? Call Apna Transport directly" below the vehicle list
+  // (CustomerBooking/CustomerAdvanceBooking) because no online vehicle
+  // actually suited them. For each still-pending request, suggest the
+  // nearest OFFLINE (inactive) drivers whose vehicle capacity fits -- same
+  // fit window (VEHICLE_HEADROOM_KG) and KYC/blacklist gates
+  // onDirectRequestBroadcast already uses for the online case, just
+  // computed live here instead of via a Cloud Function. Call only -- no
+  // WhatsApp button, drivers don't respond to it; admin calls personally.
+  const pendingUnmatched = (unmatchedVehicleRequests || []).filter((r) => r.status === "pending");
+  const UNMATCHED_OFFLINE_MAX = 5;
+  const offlineMatchesFor = (req) => {
+    const loadKg = Number(req.weightKg) || 0;
+    const matches = (drivers || []).filter((d) => {
+      if (d.online || d.blacklisted || d.kyc !== "Approved") return false;
+      const capKg = Number(d.vehicleSpec?.capacityKg) || 0;
+      if (loadKg <= 0 || capKg < loadKg || capKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+      return true;
+    });
+    if (req.pickupLat == null || req.pickupLng == null) return matches.slice(0, UNMATCHED_OFFLINE_MAX);
+    return matches
+      .map((d) => ({
+        driver: d,
+        km: d.lastKnownLocation?.lat != null ? haversineKm(req.pickupLat, req.pickupLng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) : null,
+      }))
+      .sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity))
+      .slice(0, UNMATCHED_OFFLINE_MAX)
+      .map((x) => x.driver);
+  };
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
   // Draft reply text per complaint id, so opening one complaint's reply box
   // doesn't touch any other's. Prefilled with the existing adminReply (if
@@ -2462,6 +2491,60 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
   const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   return (
     <div className="space-y-4">
+      {pendingUnmatched.length > 0 && (
+        <div className="space-y-3">
+          {pendingUnmatched.map((req) => {
+            const offlineMatches = offlineMatchesFor(req);
+            return (
+              <div key={req.id} className="rounded-xl p-4 shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: "#000000" }}>
+                    <AlertTriangle size={16} color={C.marigoldDeep} /> {lang === "en" ? "Unmatched Load — Inactive Vehicle Matches" : lang === "mr" ? "न जुळलेला लोड — इनअ‍ॅक्टिव्ह वाहन मॅच" : "असमान लोड — इनएक्टिव वाहन मैच"}
+                  </div>
+                  <span className="text-[10px] font-black px-2.5 py-1 rounded-full shrink-0" style={{ background: C.safety, color: "#FFFFFF" }}>
+                    {lang === "en" ? "Action needed" : lang === "mr" ? "कृती आवश्यक" : "कार्रवाई आवश्यक"}
+                  </span>
+                </div>
+                <div className="rounded-lg p-3 mb-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>
+                    📦 {req.customerName || req.customerMobile} · {req.pickup}{req.drop ? ` → ${req.drop}` : ""}
+                  </div>
+                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
+                    {lang === "en" ? "Needs" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}: {req.weightKg ? `${req.weightKg}${req.weightUnit || "kg"}` : "—"} · {formatTime(req.createdAt)}
+                  </div>
+                </div>
+                <div className="text-[11px] font-bold mb-1.5" style={{ color: C.success }}>
+                  {lang === "en" ? "Inactive vehicle matches" : lang === "mr" ? "इनअ‍ॅक्टिव्ह वाहन मॅच" : "इनएक्टिव वाहन मैच"}
+                </div>
+                {offlineMatches.length === 0 ? (
+                  <p className="text-[11px]" style={{ color: C.inkSoft }}>
+                    {lang === "en" ? "No offline vehicle currently matches this requirement either." : lang === "mr" ? "सध्या कोणतेही इनअ‍ॅक्टिव्ह वाहनही या गरजेशी जुळत नाही." : "फिलहाल कोई इनएक्टिव वाहन भी इस ज़रूरत से मेल नहीं खाता।"}
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {offlineMatches.map((d) => (
+                      <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: "rgba(63,122,84,0.1)", border: `1px solid ${C.success}` }}>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name} · {d.vehicleSpec?.vehicleNumber || "—"}</div>
+                          <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.capacityKg ? `${d.vehicleSpec.capacityKg}kg` : "—"}</div>
+                        </div>
+                        <a href={`tel:+91${d.mobile}`} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
+                          <Phone size={12} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-end mt-2">
+                  <button onClick={() => handleUnmatchedVehicleRequest(req.id)} className="text-[11px] font-bold underline" style={{ color: C.inkSoft }}>
+                    {lang === "en" ? "Mark handled" : lang === "mr" ? "हाताळले म्हणून चिन्हांकित करा" : "हैंडल किया गया चिह्नित करें"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {pendingRecharges.length > 0 && (
         <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : lang === "mr" ? "वॉलेट रिचार्ज रिक्वेस्ट" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
@@ -3915,7 +3998,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, unmatchedVehicleRequests, handleUnmatchedVehicleRequest }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -3946,7 +4029,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
-      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} />}
+      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
       {tab === "settings" && <AdminSettings latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>

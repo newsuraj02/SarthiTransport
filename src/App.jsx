@@ -1009,7 +1009,9 @@ const CURRENT_BID_RADIUS_KM = 30;
 const ADVANCE_BID_RADIUS_KM = 50;
 // Vehicle-fit window: a driver auto-bids only when their vehicle's rated
 // capacity is between the load's weight and weight + this much headroom.
-const VEHICLE_HEADROOM_KG = 5000;
+// Exported so AdminPanel.jsx's offline-vehicle matching (Smart
+// Load-to-Vehicle Match) uses the exact same window, not a duplicated copy.
+export const VEHICLE_HEADROOM_KG = 5000;
 // Broadcast request (requestByCategory, pendingDriverName null): how long
 // ActiveRide waits with every eligible driver already notified at once
 // before showing the customer a "no driver found yet" state instead of
@@ -5882,7 +5884,7 @@ function weightUnitLabel(unit) {
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings }) {
+function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings }) {
   const VEHICLES = vehicleTypes;
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
@@ -6029,6 +6031,18 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
   };
 
   const [bookingError, setBookingError] = useState("");
+  // Smart Load-to-Vehicle Match -- "Doesn't match requirement?" tap below
+  // the vehicle list (see raiseUnmatchedVehicleRequest). One-shot per
+  // screen: once logged, the link swaps for a confirmation and stays that
+  // way rather than letting the customer resubmit.
+  const [unmatchedRequested, setUnmatchedRequested] = useState(false);
+  const sendUnmatchedVehicleRequest = () => {
+    raiseUnmatchedVehicleRequest?.({
+      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "immediate",
+      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+    });
+    setUnmatchedRequested(true);
+  };
   // Which driver's card is tapped/highlighted in the inline list — a
   // separate step from actually booking them (see bookDriver below), so
   // the customer gets a chance to see the highlight + an inline "Book this
@@ -6451,6 +6465,15 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
                   )}
                 </>
               )}
+              {unmatchedRequested ? (
+                <p className="text-center text-xs font-bold py-2" style={{ color: C.success }}>
+                  ✓ {lang === "en" ? "Our team has been notified and will call you shortly." : lang === "mr" ? "आमच्या टीमला कळवले आहे, ते लवकरच कॉल करतील." : "हमारी टीम को सूचित कर दिया गया है, वे जल्द कॉल करेंगे।"}
+                </p>
+              ) : (
+                <button type="button" onClick={sendUnmatchedVehicleRequest} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
+                  {lang === "en" ? "Doesn't match requirement? Call Apna Transport directly" : lang === "mr" ? "गरज जुळत नाही? अपना ट्रान्सपोर्टला थेट कॉल करा" : "ज़रूरत नहीं मिल रही? अपना ट्रांसपोर्ट को सीधे कॉल करें"}
+                </button>
+              )}
             </>
           )}
         </div>
@@ -6473,7 +6496,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
 // (a scheduled driver has time to travel further), and bookDriver's
 // per-category minimum-lead-time check (minAdvanceNoticeHours) before
 // requestByCategory ever runs.
-function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings }) {
+function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -6595,6 +6618,17 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   };
 
   const [bookingError, setBookingError] = useState("");
+  // Smart Load-to-Vehicle Match -- same one-shot "Doesn't match
+  // requirement?" escalation as CustomerBooking, with bookingType
+  // "advance" and the chosen date/time instead of "immediate".
+  const [unmatchedRequested, setUnmatchedRequested] = useState(false);
+  const sendUnmatchedVehicleRequest = () => {
+    raiseUnmatchedVehicleRequest?.({
+      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "advance", scheduledFor: scheduledForValue,
+      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+    });
+    setUnmatchedRequested(true);
+  };
   const [selectedDriverKey, setSelectedDriverKey] = useState(null);
   const [manualMapOpen, setManualMapOpen] = useState(false);
   useEffect(() => { setManualMapOpen(false); }, [weight]);
@@ -7005,6 +7039,15 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                     </button>
                   )}
                 </>
+              )}
+              {unmatchedRequested ? (
+                <p className="text-center text-xs font-bold py-2" style={{ color: C.success }}>
+                  ✓ {lang === "en" ? "Our team has been notified and will call you shortly." : lang === "mr" ? "आमच्या टीमला कळवले आहे, ते लवकरच कॉल करतील." : "हमारी टीम को सूचित कर दिया गया है, वे जल्द कॉल करेंगे।"}
+                </p>
+              ) : (
+                <button type="button" onClick={sendUnmatchedVehicleRequest} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
+                  {lang === "en" ? "Doesn't match requirement? Call Apna Transport directly" : lang === "mr" ? "गरज जुळत नाही? अपना ट्रान्सपोर्टला थेट कॉल करा" : "ज़रूरत नहीं मिल रही? अपना ट्रांसपोर्ट को सीधे कॉल करें"}
+                </button>
               )}
             </>
           )}
@@ -7641,7 +7684,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cancelBooking, rateBooking, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, alerts, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares, bookingExtras }) {
+function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest, drivers, vehicleTypes, cancelBooking, rateBooking, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, alerts, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares, bookingExtras }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Whether the booking-creation screen shown below is CustomerBooking
   // (current/immediate ride) or CustomerAdvanceBooking (scheduled ride) —
@@ -8014,10 +8057,10 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
               customerMobile={customerMobile} bookingExtras={bookingExtras}
               onAddAnother={() => setAddingAnother(true)} />
           ) : advanceOpen ? (
-            <CustomerAdvanceBooking requestByCategory={requestByCategory} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
+            <CustomerAdvanceBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
               locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} />
           ) : (
-            <CustomerBooking requestByCategory={requestByCategory} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
+            <CustomerBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
               locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} />
           )
         ) : (
@@ -11138,6 +11181,7 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
+  const [unmatchedVehicleRequests, setUnmatchedVehicleRequests] = useState([]);
   const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500, returnPct: 15 });
   const commissionPct = settings.commissionPct;
   const bonusPct = settings.bonusPct;
@@ -11293,6 +11337,10 @@ export default function App() {
   useEffect(() => (firestoreReady ? subscribeCollection("alerts", setAlerts) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), authDeps);
+  // Smart Load-to-Vehicle Match -- customer-raised "none of these vehicles
+  // actually suit me" requests (see raiseUnmatchedVehicleRequest), read by
+  // AdminAlerts to suggest offline vehicle matches.
+  useEffect(() => (firestoreReady ? subscribeCollection("unmatchedVehicleRequests", setUnmatchedVehicleRequests) : undefined), authDeps);
   // Masked-call audit trail (see functions/index.js: initiateMaskedCall) —
   // admin-only read, same pattern as alerts above.
   const [callLogs, setCallLogs] = useState([]);
@@ -11861,6 +11909,21 @@ export default function App() {
   // reply to whoever raised this -- alerts previously carried no way to
   // identify who sent them at all.
   const raiseAlert = (role, type, note, mobile) => createDoc("alerts", genId("A"), { role, type, note: note || null, mobile: mobile || null }).catch((e) => console.error(e));
+  // Smart Load-to-Vehicle Match -- customer tap on "Doesn't match
+  // requirement? Call Apna Transport directly" below the vehicle list (see
+  // CustomerBooking/CustomerAdvanceBooking). Logged only; matching offline
+  // drivers and the admin's call action both happen client-side in
+  // AdminAlerts, no Cloud Function involved.
+  const raiseUnmatchedVehicleRequest = ({ pickup, drop, weightKg, weightUnit, bookingType, scheduledFor, pickupLat, pickupLng }) =>
+    createDoc("unmatchedVehicleRequests", genId("UVR"), {
+      customerMobile: customerAuth.mobile || "", customerName: customer?.name || "",
+      pickup: pickup || "", drop: drop || "", weightKg: weightKg ?? null, weightUnit: weightUnit || "kg",
+      bookingType: bookingType || "immediate", scheduledFor: scheduledFor || null,
+      pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null,
+      status: "pending", createdAt: serverTimestamp(),
+    }).catch((e) => console.error(e));
+  // Admin's "Mark handled" action on a Smart Load-to-Vehicle Match card.
+  const handleUnmatchedVehicleRequest = (id) => patchDoc("unmatchedVehicleRequests", id, { status: "handled" }).catch((e) => console.error(e));
   // Admin's in-app reply to a complaint (see AdminAlerts) -- for a
   // complaint with a mobile on file, this is what SosScreen's "My
   // Complaints" list shows back to that customer/driver. For a complaint
@@ -12029,7 +12092,7 @@ export default function App() {
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
-          <CustomerApp bookings={bookings} requestByCategory={requestByCategory} drivers={drivers} vehicleTypes={vehicleTypes}
+          <CustomerApp bookings={bookings} requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} alerts={alerts} onOpenTerms={() => setShowTerms(true)}
             adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookingExtras={bookingExtras} />
@@ -12092,7 +12155,7 @@ export default function App() {
         {role === "admin" && adminAuth && (!isNativeApp || adminUnlocked) && (
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<AdminLoadingFallback />}>
-              <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
+              <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct}
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
