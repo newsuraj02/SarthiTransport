@@ -5451,7 +5451,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false }, ref) {
+export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false }, ref) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -5556,7 +5556,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
     <div>
       <div style={highlightWrapStyle}>
         <div className="relative w-full">
-          <input ref={ref} className={inputCls} style={inputStyle} placeholder={placeholder} value={value}
+          <input ref={ref} className={inputCls} style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }} placeholder={placeholder} value={value} disabled={disabled}
             onChange={(e) => { onChange(e); setDropdownOpen(true); }}
             onFocus={(e) => {
               setDropdownOpen(true);
@@ -5564,7 +5564,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
               onFocus?.();
             }}
             onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
-          {value && (
+          {value && !disabled && (
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
               className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
               <X size={20} color={C.inkSoft} strokeWidth={2.5} />
@@ -6263,6 +6263,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
           onFocus={() => setActiveField("drop")}
           highlighted={highlightField === "drop"}
+          disabled={!pickup.trim()}
           ref={dropFieldRef}
         />
 
@@ -6288,7 +6289,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, lang,
               transition: "padding 0.15s ease, background 0.15s ease",
             }}>
             <div className="relative">
-              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108 }} inputMode="decimal"
+              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108, opacity: !drop.trim() ? 0.5 : 1 }} inputMode="decimal" disabled={!drop.trim()}
                 placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
                 onChange={(e) => {
                   // See getWeightInputChange's own comment -- enforces kg's
@@ -6762,7 +6763,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
                 borderRadius: highlightField === "time" ? 12 : 0,
                 transition: "padding 0.15s ease, background 0.15s ease",
               }}>
-              <button ref={timeFieldRef} type="button" onClick={() => { setActiveField("time"); setShowTimeModal(true); }} className={`${inputCls} flex items-center justify-center`} style={inputStyle}>
+              <button ref={timeFieldRef} type="button" disabled={!advanceDate} onClick={() => { setActiveField("time"); setShowTimeModal(true); }} className={`${inputCls} flex items-center justify-center`} style={{ ...inputStyle, opacity: !advanceDate ? 0.5 : 1 }}>
                 <span className="truncate" style={{ color: advanceTime ? C.ink : "#9CA3AF" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
               </button>
             </div>
@@ -6795,15 +6796,19 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
               onFocus={() => setActiveField("pickup")}
               recentItems={recentPickups}
               highlighted={highlightField === "pickup"}
+              disabled={!advanceTime}
               ref={pickupFieldRef}
             />
           </div>
           {/* Same "Use Current Location" box as CustomerBooking -- blue/white
-              blink until tapped or Pickup gets any text, then gone entirely. */}
+              blink until tapped or Pickup gets any text, then gone entirely.
+              Also blocked until Select Time is filled -- it fills Pickup
+              itself, so it has to respect the same gate as the field it
+              fills. */}
           {!pickup.trim() && (
-            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
-              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup ? "" : "current-location-blink"}`}
-              style={{ width: 92, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
+            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup || !advanceTime}
+              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup || !advanceTime ? "" : "current-location-blink"}`}
+              style={{ width: 92, opacity: !advanceTime ? 0.5 : 1, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
               {locatingPickup ? (
                 <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
               ) : (
@@ -6829,6 +6834,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
           onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
           onFocus={() => setActiveField("drop")}
           highlighted={highlightField === "drop"}
+          disabled={!pickup.trim()}
           ref={dropFieldRef}
         />
 
@@ -6854,7 +6860,7 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
               transition: "padding 0.15s ease, background 0.15s ease",
             }}>
             <div className="relative">
-              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108 }} inputMode="decimal"
+              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108, opacity: !drop.trim() ? 0.5 : 1 }} inputMode="decimal" disabled={!drop.trim()}
                 placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
                 onChange={(e) => {
                   // See getWeightInputChange's own comment -- enforces kg's
