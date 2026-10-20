@@ -422,20 +422,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     return days.reverse();
   })();
   const registrationTrendTotal = registrationTrend.reduce((sum, d) => sum + d.customers.length + d.drivers.length, 0);
-  // Always the fixed, real last-7-calendar-days count (independent of
-  // whatever range the admin has picked in the detail view) -- what the
-  // Live Dashboard tile itself shows, so it stays a stable, predictable
-  // number rather than changing based on detail-view state the admin may
-  // not currently have open.
-  const registrationTrendLast7Total = (() => {
-    const start = new Date(); start.setDate(start.getDate() - 6);
-    const startKey = toDateInputStr(start);
-    const todayKey = toDateInputStr(new Date());
-    let total = 0;
-    (customers || []).forEach((c) => { const k = dateKey(c.createdAt); if (k && k >= startKey && k <= todayKey) total++; });
-    (drivers || []).forEach((d) => { const k = dateKey(d.createdAt); if (k && k >= startKey && k <= todayKey) total++; });
-    return total;
-  })();
 
   // Tapping one of the "drill-down" tiles opens a dedicated full page (with
   // its own Back button) showing the live record list behind that count —
@@ -586,8 +572,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   const recentActivity = (bookings || []).slice(0, 5);
   const activityTime = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleTimeString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { hour: "2-digit", minute: "2-digit" }) : "—");
 
-  const [vehicleQuery, setVehicleQuery] = useState("");
-
   // Dashboard charts (Install vs Uninstall, Bookings by Status, Earnings vs
   // Expenses) -- each "Change time range" button cycles the same 7/30/90
   // day window used elsewhere in this app (see AdminFinance/AdminFleet's
@@ -595,9 +579,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   const [bookingChartRangeDays, setBookingChartRangeDays] = useState(7);
   const [financeChartRangeDays, setFinanceChartRangeDays] = useState(7);
   const cycleRangeDays = (setter) => setter((d) => (d === 7 ? 30 : d === 30 ? 90 : 7));
-  const q = vehicleQuery.trim().toUpperCase();
-  const matchedDriver = q ? drivers.find((d) => d.vehicleSpec?.vehicleNumber?.toUpperCase() === q) : null;
-  const vehicleHistory = matchedDriver ? tripLog.filter((t) => t.driverName === matchedDriver.name) : [];
 
   // Each drill-down tile's dedicated detail page: title, empty-state
   // message, the live items array, and how to render one row.
@@ -1142,24 +1123,16 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           </p>
         </button>
       )}
-      {/* Most to least important: New Registrations (today's total
-          Customer+Driver signups, see newCustomersToday/newDriversToday
-          above) comes first, then today's health signals (at-risk
-          wallets, cancellations, earnings, bookings, capacity), then
-          pipeline (advance bookings), then growth metrics (trial) last —
-          those are useful context, not something to act on today. A
-          plain today's-signups counter, not a KYC-backlog alert --
-          reviewing/approving a driver's KYC lives in the Drivers tab now,
-          so this stays a fixed color instead of flagging red off however
-          many are still Pending. */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
-        <StatTile label={lang === "en" ? "New Registrations (7 Days)" : lang === "mr" ? "नवीन रजिस्ट्रेशन (7 दिवस)" : "नए रजिस्ट्रेशन (7 दिन)"} value={registrationTrendLast7Total} color={C.pimpri} onClick={() => setDetailView("newRegistrations")} />
-        <StatTile label={lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर"} value={lowWalletDrivers.length} color={lowWalletDrivers.length > 0 ? C.safety : C.success} onClick={() => setDetailView("lowWallet")} />
-        <StatTile label={lang === "en" ? "Online — ready for bookings" : lang === "mr" ? "ऑनलाइन — बुकिंगसाठी तयार" : "ऑनलाइन — बुकिंग के लिए तैयार"} value={readyOnlineDrivers.length} color={C.success} onClick={() => setDetailView("online")} />
-        <StatTile label={lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"} value={liveMapLocatedCount} color={C.navy} onClick={() => setDetailView("liveMap")} />
-        <StatTile label={lang === "en" ? "Off duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी"} value={offDutyDrivers.length} color={C.marigoldDeep} onClick={() => setDetailView("offDuty")} />
-        <StatTile label={lang === "en" ? "Uninstalled / Blocked" : lang === "mr" ? "अनइन्स्टॉल्ड / ब्लॉक्ड" : "अनइंस्टॉल्ड / ब्लॉक्ड"} value={inactiveDrivers.length} color={C.safety} onClick={() => setDetailView("uninstalled")} />
-      </div>
+      {/* Live Map -- the one KPI tile kept from the old stat-tile grid,
+          restyled full-width/horizontal (title + subtitle + chevron) and
+          shorter vertically instead of the square StatTile shape. */}
+      <button onClick={() => setDetailView("liveMap")} className="w-full rounded-xl p-4 mb-5 shadow-sm flex items-center justify-between gap-3 text-left" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div>
+          <div className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"}</div>
+          <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{liveMapLocatedCount} {lang === "en" ? "drivers online right now" : lang === "mr" ? "ड्रायव्हर सध्या ऑनलाइन आहेत" : "ड्राइवर अभी ऑनलाइन हैं"}</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+      </button>
 
       {/* Installs vs Uninstalls -- horizontal bars, real counts from
           partitionDriversByInstallStatus (same split the stat tiles above
@@ -1266,36 +1239,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
             <span key={d.key} className="text-[9px] font-semibold" style={{ color: "#9AA3B0", opacity: d.show ? 1 : 0 }}>{d.label}</span>
           ))}
         </div>
-      </div>
-
-      <div className="rounded-xl p-4 mb-5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-        <div className="text-sm font-bold mb-2 flex items-center gap-1.5" style={{ color: C.ink }}><Truck size={16} /> {lang === "en" ? "Search history by vehicle number" : lang === "mr" ? "गाडी नंबरने हिस्टरी पहा" : "गाड़ी नंबर से हिस्ट्री देखें"}</div>
-        <input value={vehicleQuery} onChange={(e) => setVehicleQuery(e.target.value)} placeholder="जैसे: MH-14-AB-4521"
-          className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
-        {q && !matchedDriver && (
-          <div className="text-[11px] mt-2" style={{ color: C.safety }}>{lang === "en" ? "No vehicle found with this number." : lang === "mr" ? "या नंबरची कोणतीही गाडी सापडली नाही." : "इस नंबर की कोई गाड़ी नहीं मिली।"}</div>
-        )}
-        {matchedDriver && (
-          <div className="mt-3">
-            <div className="text-xs font-bold" style={{ color: C.ink }}>{matchedDriver.name} · {matchedDriver.vehicleSpec?.vehicleNumber || "—"}</div>
-            <div className="text-[10px] mb-2" style={{ color: C.inkSoft }}>{lang === "en" ? "Total trips" : lang === "mr" ? "एकूण ट्रिप्स" : "कुल ट्रिप्स"}: {vehicleHistory.length}</div>
-            {vehicleHistory.length === 0 ? (
-              <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No trip history for this vehicle yet." : lang === "mr" ? "या गाडीची अजून कोणतीही ट्रिप हिस्टरी नाही." : "इस गाड़ी की अभी कोई ट्रिप हिस्ट्री नहीं है।"}</p>
-            ) : (
-              <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
-                {vehicleHistory.map((t) => (
-                  <div key={t.id} className="rounded-lg p-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                    <div>
-                      <div className="text-[11px] font-bold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
-                      <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status}</div>
-                    </div>
-                    <div className="text-sm font-bold" style={{ color: C.pimpri, fontFamily: monoFont }}>{fmt(t.fare)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
