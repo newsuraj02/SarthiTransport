@@ -6495,10 +6495,15 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
-  const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | 'weight' | null
-  // Real DOM refs for the three fields -- see CustomerBooking's identical
+  const [activeField, setActiveField] = useState(null); // 'date' | 'time' | 'pickup' | 'drop' | 'weight' | null
+  // Real DOM refs for the fields -- see CustomerBooking's identical
   // ones for the full reasoning (moves the keyboard cursor, not just the
-  // highlight, on an actual place selection).
+  // highlight, on an actual place selection). dateFieldRef/timeFieldRef
+  // added so Select Date -> Select Time -> Pickup -> Drop -> Enter Weight
+  // is one continuous highlight+auto-shift sequence, not just the last
+  // three steps of it.
+  const dateFieldRef = useRef(null);
+  const timeFieldRef = useRef(null);
   const pickupFieldRef = useRef(null);
   const dropFieldRef = useRef(null);
   const weightInputRef = useRef(null);
@@ -6602,10 +6607,13 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
   const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
   const mapCollapsed = !!weight.trim() && !manualMapOpen;
   const scheduledForValue = `${advanceDate} ${advanceTime}`;
-  // Which ONE of Pickup/Drop/Enter Weight gets the golden "current step"
-  // ring -- see CustomerBooking's identical highlightField for the full
-  // reasoning.
-  const highlightField = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : !weightReady ? "weight" : null);
+  // Which ONE of Select Date/Select Time/Pickup/Drop/Enter Weight gets the
+  // golden "current step" ring -- owner request 2026-10-20: the sequence
+  // used to start at Pickup (date/time weren't part of this at all), so
+  // the golden ring appeared to "skip" straight past them. Date and time
+  // now lead the chain, same sticky-activeField-overrides-the-default
+  // pattern as CustomerBooking's identical highlightField.
+  const highlightField = activeField || (!advanceDate ? "date" : !advanceTime ? "time" : !pickup.trim() ? "pickup" : !drop.trim() ? "drop" : !weightReady ? "weight" : null);
 
   const loadKg = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1);
   const maxFleetCapacityKg = maxFleetVehicleCapacityKg(drivers, VEHICLES);
@@ -6713,25 +6721,64 @@ function CustomerAdvanceBooking({ requestByCategory, vehicleTypes, recentPickups
       <div className="px-5 pt-4 space-y-4">
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            {/* A native date input can't take a real placeholder — this
-                overlay label sits on top and lets clicks pass through
-                (pointer-events-none) to still open the native picker; it
-                disappears once a date is chosen. */}
-            <div className="relative">
-              <input type="date" value={advanceDate} min={new Date().toISOString().slice(0, 10)}
-                onChange={(e) => { if (!e.target.value || e.target.value >= new Date().toISOString().slice(0, 10)) setAdvanceDate(e.target.value); }}
-                className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
-              {!advanceDate && (
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#9CA3AF" }}>
-                  {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
-                </span>
-              )}
+            {/* Same golden-frame wrapper technique as the weight field
+                below/LocationField's highlighted prop -- padded, colored
+                outer div around the untouched inner block, so Select Date
+                and Select Time join the same highlight+auto-shift chain
+                as Pickup/Drop/Enter Weight. */}
+            <div style={{
+                padding: highlightField === "date" ? 4 : 0,
+                background: highlightField === "date" ? C.marigold : "transparent",
+                borderRadius: highlightField === "date" ? 12 : 0,
+                transition: "padding 0.15s ease, background 0.15s ease",
+              }}>
+              {/* A native date input can't take a real placeholder — this
+                  overlay label sits on top and lets clicks pass through
+                  (pointer-events-none) to still open the native picker; it
+                  disappears once a date is chosen. */}
+              <div className="relative">
+                <input ref={dateFieldRef} type="date" value={advanceDate} min={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => {
+                    if (!e.target.value || e.target.value >= new Date().toISOString().slice(0, 10)) {
+                      setAdvanceDate(e.target.value);
+                      // Auto-shift to Select Time the instant a valid date is
+                      // picked -- same "advance the golden highlight" rule as
+                      // a place selection in Pickup/Drop below.
+                      if (e.target.value) { setActiveField("time"); timeFieldRef.current?.focus(); }
+                    }
+                  }}
+                  onFocus={() => setActiveField("date")}
+                  className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
+                {!advanceDate && (
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#9CA3AF" }}>
+                    {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
+                  </span>
+                )}
+              </div>
             </div>
-            <button type="button" onClick={() => setShowTimeModal(true)} className={`${inputCls} flex items-center justify-center`} style={inputStyle}>
-              <span className="truncate" style={{ color: advanceTime ? C.ink : "#9CA3AF" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
-            </button>
+            <div style={{
+                padding: highlightField === "time" ? 4 : 0,
+                background: highlightField === "time" ? C.marigold : "transparent",
+                borderRadius: highlightField === "time" ? 12 : 0,
+                transition: "padding 0.15s ease, background 0.15s ease",
+              }}>
+              <button ref={timeFieldRef} type="button" onClick={() => { setActiveField("time"); setShowTimeModal(true); }} className={`${inputCls} flex items-center justify-center`} style={inputStyle}>
+                <span className="truncate" style={{ color: advanceTime ? C.ink : "#9CA3AF" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
+              </button>
+            </div>
           </div>
-          <TimeSlotModal open={showTimeModal} value={advanceTime} onSelect={setAdvanceTime} onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
+          <TimeSlotModal open={showTimeModal} value={advanceTime}
+            onSelect={(t) => {
+              setAdvanceTime(t);
+              // Auto-shift to Pickup the instant a time is actually
+              // confirmed (TimeSlotModal's own Done button calls onSelect
+              // then onClose together -- see that component) -- cancelling
+              // out of the modal (✕/backdrop) only fires onClose, never
+              // this, so an abandoned pick never steals focus.
+              setActiveField("pickup");
+              pickupFieldRef.current?.focus();
+            }}
+            onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
         </div>
 
         <div className="flex items-start gap-2">
