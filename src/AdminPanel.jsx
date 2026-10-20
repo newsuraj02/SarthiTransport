@@ -772,11 +772,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     // by the date each person actually signed up instead of a flat "today
     // only" list. Customer/Driver tab toggle deliberately removed per
     // follow-up request -- one combined list per date instead, each row
-    // tagged Customer or (for drivers) its status badge. Status only, no
-    // Approve/Reject/Edit (that used to live only in this view; see the
-    // comment above approvalQueue). Until it's put back somewhere, driver
-    // KYC can't actually be approved/rejected anywhere in the app --
-    // flagged, not fixed here, since this was asked for explicitly.
+    // tagged Customer or Driver. Driver rows carry Approve/Reject (plus an
+    // expand-to-view-documents and Edit, same pattern as AdminDriverList's
+    // own expanded card) using the approvalQueue/approvalExpandedId/
+    // approvalEditingId state declared above -- this is the only place in
+    // the app driver KYC can be approved/rejected.
     const rangeCustomersTotal = registrationTrend.reduce((sum, d) => sum + d.customers.length, 0);
     const rangeDriversTotal = registrationTrend.reduce((sum, d) => sum + d.drivers.length, 0);
     const driverStatusBadge = (d) => {
@@ -844,13 +844,117 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                   ))}
                   {d.drivers.map((dr) => {
                     const badge = driverStatusBadge(dr);
+                    const expanded = approvalExpandedId === dr.id;
+                    const editing = approvalEditingId === dr.id;
+                    const canDecide = !!dr.vehicleSpec && dr.kyc === "Pending";
                     return (
-                      <div key={dr.id} className="rounded-lg p-3 flex items-center justify-between gap-2" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-                        <div className="min-w-0">
-                          <div className="text-sm font-bold" style={{ color: C.ink }}>{dr.name}</div>
-                          <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{dr.vehicleSpec?.vehicleNumber ? `${dr.vehicleSpec.vehicleNumber} · ` : ""}{dr.mobile}</div>
-                        </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: badge.color, background: badge.bg }}>{badge.text}</span>
+                      <div key={dr.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+                        <button onClick={() => setApprovalExpandedId(expanded ? null : dr.id)} className="w-full flex items-center justify-between gap-2 text-left">
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold" style={{ color: C.ink }}>{dr.name}</div>
+                            <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{dr.vehicleSpec?.vehicleNumber ? `${dr.vehicleSpec.vehicleNumber} · ` : ""}{dr.mobile}</div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>
+                              {lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: badge.color, background: badge.bg }}>{badge.text}</span>
+                          </div>
+                        </button>
+
+                        {expanded && dr.vehicleSpec && !editing && (
+                          <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                            <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                              {Object.entries(approvalDocLabels).map(([key, label]) => {
+                                const doc = dr.docs?.[key];
+                                return <KycDocThumb key={key} url={doc?.url} label={label} lang={lang} fileName={`${dr.name}-${key}.jpg`} />;
+                              })}
+                            </div>
+                            {(dr.vehicleSpec?.photo || dr.vehicleSpec?.photoSide) && (
+                              <>
+                                <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle photos:" : lang === "mr" ? "गाडीचा फोटो:" : "गाड़ी की फोटो:"}</div>
+                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                  {dr.vehicleSpec?.photo && <KycDocThumb url={dr.vehicleSpec.photo.url} label={lang === "en" ? "Vehicle - Front" : lang === "mr" ? "गाडी - पुढे" : "गाड़ी - आगे"} lang={lang} fileName={`${dr.name}-vehicle-front.jpg`} />}
+                                  {dr.vehicleSpec?.photoSide && <KycDocThumb url={dr.vehicleSpec.photoSide.url} label={lang === "en" ? "Vehicle - Side" : lang === "mr" ? "गाडी - बाजू" : "गाड़ी - साइड"} lang={lang} fileName={`${dr.name}-vehicle-side.jpg`} />}
+                                </div>
+                              </>
+                            )}
+                            <div className="text-[11px] mb-2" style={{ color: C.ink }}>
+                              <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{dr.vehicleSpec.vehicleNumber || "—"}</span><br />
+                              <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {dr.vehicleSpec.capacityKg ? `${dr.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} · {dr.vehicleSpec.length || "—"}×{dr.vehicleSpec.width || "—"}×{dr.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
+                            </div>
+                            <button onClick={() => startApprovalEdit(dr)} className="text-[11px] font-bold underline mb-1" style={{ color: C.navy }}>
+                              {lang === "en" ? "Edit details" : lang === "mr" ? "माहिती बदला" : "विवरण बदलें"}
+                            </button>
+                          </div>
+                        )}
+
+                        {expanded && !dr.vehicleSpec && (
+                          <p className="text-[11px] mt-2 pt-2" style={{ color: C.inkSoft, borderTop: `1px solid ${C.line}` }}>
+                            {lang === "en" ? "KYC form not submitted yet." : lang === "mr" ? "KYC फॉर्म अजून सबमिट झाला नाही." : "KYC फॉर्म अभी जमा नहीं हुआ।"}
+                          </p>
+                        )}
+
+                        {expanded && editing && approvalEditDraft && (
+                          <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                              <label className="text-[11px] col-span-2">
+                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle type" : lang === "mr" ? "गाडीचा प्रकार" : "गाड़ी का प्रकार"}</span>
+                                <select value={approvalEditDraft.type} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, type: e.target.value }))}
+                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }}>
+                                  {!vehicleTypes.some((v) => v.key === approvalEditDraft.type) && <option value={approvalEditDraft.type}>{approvalEditDraft.type || "—"}</option>}
+                                  {vehicleTypes.map((v) => <option key={v.key} value={v.key}>{lang === "en" ? (v.labelEn || v.label) : v.label}</option>)}
+                                </select>
+                              </label>
+                              <label className="text-[11px]">
+                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}</span>
+                                <input value={approvalEditDraft.vehicleNumber} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, vehicleNumber: e.target.value }))}
+                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                              </label>
+                              <label className="text-[11px]">
+                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलो)" : "क्षमता (किग्रा)"}</span>
+                                <input type="number" value={approvalEditDraft.capacityKg} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, capacityKg: e.target.value }))}
+                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                              </label>
+                              <label className="text-[11px]">
+                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Length (ft)" : lang === "mr" ? "लांबी (फूट)" : "लंबाई (फीट)"}</span>
+                                <input value={approvalEditDraft.length} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, length: e.target.value }))}
+                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                              </label>
+                              <label className="text-[11px]">
+                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Width (ft)" : lang === "mr" ? "रुंदी (फूट)" : "चौड़ाई (फीट)"}</span>
+                                <input value={approvalEditDraft.width} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, width: e.target.value }))}
+                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                              </label>
+                              <label className="text-[11px]">
+                                <span className="block mb-1 font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Height (ft)" : lang === "mr" ? "उंची (फूट)" : "ऊंचाई (फीट)"}</span>
+                                <input value={approvalEditDraft.height} onChange={(e) => setApprovalEditDraft((p) => ({ ...p, height: e.target.value }))}
+                                  className="w-full rounded-lg px-2.5 py-2 text-sm outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+                              </label>
+                            </div>
+                            {approvalEditError && <p className="text-[11px] mb-2" style={{ color: C.safety }}>{approvalEditError}</p>}
+                            <div className="flex justify-end gap-2">
+                              <button onClick={cancelApprovalEdit} className="rounded-lg px-4 py-2.5 text-sm font-bold" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+                                {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द" : "रद्द"}
+                              </button>
+                              <button onClick={() => saveApprovalEdit(dr)} className="rounded-lg px-5 py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
+                                {lang === "en" ? "Save changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {canDecide && (
+                          <div className="flex gap-2 mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                            <button onClick={() => updateDriverKyc(dr.mobile, "Rejected")} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.paper, color: C.safety, border: `1.5px solid ${C.safety}` }}>
+                              {lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "रिजेक्ट करें"}
+                            </button>
+                            <button onClick={() => updateDriverKyc(dr.mobile, "Approved")} className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
+                              {lang === "en" ? "Approve" : lang === "mr" ? "अप्रूव्ह करा" : "अप्रूव करें"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1069,7 +1173,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               <div className="rounded" style={{ height: "100%", width: `${installPct}%`, background: "#2a78d6" }} title={`${installCount}`} />
             </div>
             <span className="shrink-0 text-[10.5px] font-extrabold text-right" style={{ width: 28, color: C.ink, fontFamily: monoFont }}>{installCount}</span>
-            <button onClick={() => onNavigate("drivers")} className="shrink-0 text-[10px] font-bold underline">
+            <button onClick={() => setDetailView("newRegistrations")} className="shrink-0 text-[10px] font-bold underline">
               <span style={{ color: "#2a78d6" }}>{lang === "en" ? "Details" : lang === "mr" ? "तपशील" : "विवरण"}</span>
             </button>
           </div>
