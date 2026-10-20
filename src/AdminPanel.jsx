@@ -2653,7 +2653,7 @@ function AdminCallLogs({ callLogs, bookings, lang }) {
 // Merged so every action for a given driver lives on that driver's own
 // row here, instead of admin having to jump between two different
 // screens to finish reviewing one signup.
-function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverVehicleSpec, vehicleTypes, lang }) {
+function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverVehicleSpec, vehicleTypes, minWallet, lang }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -2728,7 +2728,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // Each section is its own collapsible accordion (see expandedSections)
   // instead of a click-to-switch tab, so admin can open more than one at
   // once, or none, without losing the others' place.
-  const [expandedSections, setExpandedSections] = useState({ gpsOn: false, gpsOff: false, incomplete: true, complete: false });
+  const [expandedSections, setExpandedSections] = useState({ gpsOn: false, gpsOff: false, incomplete: true, complete: false, lowWallet: false, online: false, offDuty: false });
   const toggleSection = (key) => setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const allSectionsExpanded = Object.values(expandedSections).every(Boolean);
   const actionRank = (d) => (d.vehicleSpec && d.kyc === "Pending" ? 0 : !d.vehicleSpec ? 1 : 2);
@@ -2755,6 +2755,13 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const isIncompleteKyc = (d) => !d.vehicleSpec || d.kyc === "Pending";
   const incompleteSection = bySection(totalInstalled.filter(isIncompleteKyc));
   const completeSection = bySection(totalInstalled.filter((d) => !isIncompleteKyc(d)));
+  // Low Wallet / Online / Off Duty -- same filters the Live Dashboard's own
+  // tiles used before those tiles were removed from there; surfaced here
+  // instead as 3 more accordion sections over the same totalInstalled
+  // population, rather than dropped.
+  const lowWalletSection = bySection(totalInstalled.filter((d) => d.online && d.wallet < minWallet));
+  const onlineSection = bySection(totalInstalled.filter((d) => d.online && d.kyc === "Approved"));
+  const offDutySection = bySection(totalInstalled.filter((d) => !d.online && d.kyc === "Approved" && !isLikelyUninstalled(d)));
   // Same reasoning as AdminKyc's WhatsApp reminder queue -- a push
   // notification only reaches a driver who's already granted notification
   // permission, exactly the kind of driver whose GPS/location permission
@@ -3022,15 +3029,20 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
       </div>
     );
   };
-  // Section metadata for the 4 accordions below -- a driver naturally
-  // belongs to exactly one GPS section and one KYC section, so it can
-  // appear in up to 2 of these 4 lists at once (see the big comment above
-  // expandedSections).
+  // Section metadata for the accordions below -- a driver naturally belongs
+  // to exactly one GPS section and one KYC section, so it can appear in up
+  // to 2 of the first 4 lists at once (see the big comment above
+  // expandedSections). Low Wallet / Online / Off Duty are 3 more
+  // independent dimensions layered on top -- same filters the Live
+  // Dashboard's own tiles used before those tiles were removed from there.
   const sections = [
     { key: "gpsOn", label: lang === "en" ? "GPS ON" : lang === "mr" ? "GPS ऑन" : "GPS ऑन", list: gpsOnSection },
     { key: "gpsOff", label: lang === "en" ? "GPS OFF" : lang === "mr" ? "GPS ऑफ" : "GPS ऑफ", list: gpsOffSection },
     { key: "incomplete", label: lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरी", list: incompleteSection },
     { key: "complete", label: lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी", list: completeSection },
+    { key: "lowWallet", label: lang === "en" ? "Low Wallet" : lang === "mr" ? "कमी वॉलेट" : "कम वॉलेट", list: lowWalletSection },
+    { key: "online", label: lang === "en" ? "Online — Ready" : lang === "mr" ? "ऑनलाइन — तयार" : "ऑनलाइन — तैयार", list: onlineSection },
+    { key: "offDuty", label: lang === "en" ? "Off Duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी", list: offDutySection },
   ];
 
   return (
@@ -3040,7 +3052,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             reset button) -- with sections replacing tabs below, its job is
             now to open or close every section at once, in place of the old
             "reset both tabs to all" action. */}
-        <button onClick={() => { const next = !allSectionsExpanded; setExpandedSections({ gpsOn: next, gpsOff: next, incomplete: next, complete: next }); }}
+        <button onClick={() => { const next = !allSectionsExpanded; setExpandedSections({ gpsOn: next, gpsOff: next, incomplete: next, complete: next, lowWallet: next, online: next, offDuty: next }); }}
           className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: allSectionsExpanded ? C.navy : C.bg, color: allSectionsExpanded ? "#fff" : C.ink, border: `1px solid ${allSectionsExpanded ? C.navy : C.line}` }}>
           <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"} ({totalInstalled.length})
         </button>
@@ -3928,7 +3940,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       </div>
       {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} bugs={bugs} systemHealth={systemHealth} />}
       {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} />}
-      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} />}
+      {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />}
