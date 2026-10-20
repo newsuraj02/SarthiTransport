@@ -211,6 +211,17 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Smart Load-to-Vehicle Match -- customer-raised "none of the shown
+    // vehicles suit me" requests (see src/App.jsx: raiseUnmatchedVehicleRequest).
+    // Only AdminAlerts reads these (to suggest offline vehicle matches) --
+    // the customer who raised one never reads it back, so read stays
+    // admin-only, same scoping as withdrawals/rechargeRequests above.
+    match /unmatchedVehicleRequests/{id} {
+      allow read: if isAdmin();
+      allow create: if isOwnPhone(request.resource.data.customerMobile);
+      allow update, delete: if isAdmin();
+    }
+
     // Masked-call audit trail (see functions/index.js: initiateMaskedCall)
     // — written only by that Cloud Function via the Admin SDK, which
     // bypasses these rules entirely, so no client write path is needed or
