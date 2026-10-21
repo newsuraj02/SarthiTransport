@@ -2903,8 +2903,21 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const [expandedSections, setExpandedSections] = useState({ gpsOn: false, gpsOff: false, incomplete: true, complete: false, lowWallet: false, online: false, offDuty: false });
   const toggleSection = (key) => setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const allSectionsExpanded = Object.values(expandedSections).every(Boolean);
+  // "Already called today" tracking for every driver card's Call button
+  // (see renderRow) -- same pattern as detailPages.uninstalled in
+  // AdminFleet: tapping Call ticks the row and sinks it to the bottom of
+  // whichever section(s) it's in for the rest of the day, ahead of
+  // actionRank, so a just-called driver never sits at the top demanding
+  // attention again until tomorrow.
+  const todayStrDriverCall = () => new Date().toISOString().slice(0, 10);
+  const [driverCalledMap, setDriverCalledMap] = usePersistedState("sarthi_driverCalled", {});
+  const markDriverCalled = (mobile) => setDriverCalledMap((prev) => ({ ...prev, [mobile]: todayStrDriverCall() }));
+  const calledDriverToday = (mobile) => driverCalledMap[mobile] === todayStrDriverCall();
   const actionRank = (d) => (d.vehicleSpec && d.kyc === "Pending" ? 0 : !d.vehicleSpec ? 1 : 2);
-  const bySection = (arr) => [...arr].sort((a, b) => actionRank(a) - actionRank(b));
+  const bySection = (arr) => [...arr].sort((a, b) => {
+    const calledDiff = Number(calledDriverToday(a.mobile)) - Number(calledDriverToday(b.mobile));
+    return calledDiff !== 0 ? calledDiff : actionRank(a) - actionRank(b);
+  });
   // GPS ON vs GPS OFF, computed live from the same gpsStatus diagnostic as
   // each driver's own "GPS {label}" badge below (!stale == reported a
   // location within the last 2 minutes) -- replaces the old Free Trial/
@@ -2993,17 +3006,21 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     const expanded = expandedId === d.id;
     const editing = editingId === d.id;
     const gps = gpsStatus(d, lang);
+    const called = calledDriverToday(d.mobile);
     return (
-      <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper }}>
+      <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper, opacity: called ? 0.6 : 1 }}>
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
             <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <a href={`tel:+91${d.mobile}`} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
-              <Phone size={14} color="#FFFFFF" />
-            </a>
+            <div className="flex items-center gap-1">
+              <a href={`tel:+91${d.mobile}`} onClick={() => markDriverCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                <Phone size={14} color="#FFFFFF" />
+              </a>
+              {called && <CheckCircle2 size={14} color={C.success} />}
+            </div>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5" style={{ color: gps.color, background: gps.bg }} title={lang === "en" ? "GPS status" : lang === "mr" ? "GPS स्थिती" : "GPS स्थिति"}>
               <MapPin size={9} /> GPS {gps.label}
             </span>
