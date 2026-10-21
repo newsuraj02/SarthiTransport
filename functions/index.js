@@ -162,77 +162,17 @@ async function sendDirectRequestAlert(token, load, bookingId, driverMobile) {
 // missing notification channel, OEM battery/autostart restrictions)
 // doesn't apply to it.
 //
-// Needs MSG91_DIRECT_REQUEST_TEMPLATE: the EXACT name of a WhatsApp
-// message template already created AND approved by Meta on MSG91's
-// WhatsApp Template dashboard ("direct_booking_request", Hindi, UTILITY),
-// with 3 body variables in this order -- {{1}} pickup, {{2}} drop,
-// {{3}} weight -- e.g. a template body of:
-//   "🚨 आपके लिए सीधी बुकिंग रिक्वेस्ट!
-//    लोडिंग: {{1}}
-//    अनलोडिंग: {{2}}
-//    वज़न: {{3}} किग्रा
-//    Apna Transport खोलें और 120 सेकंड में जवाब दें।"
-// Template approval is a manual step outside this code, same as Exotel
-// SMS's DLT registration was for the earlier, reverted attempt -- until
-// this and the other secrets below are set, this just logs and returns
-// rather than throwing, so push keeps working on its own either way.
-// WhatsApp channel: MSG91 (see the migration note further down by
-// MSG91_VOICE_CALLER_ID -- masked calling also moved to MSG91, once the
-// Kaleyra account was closed; this account's setup -- AuthKey, WhatsApp
-// number, namespace, approved "direct_booking_request" template -- was
-// finished first, for WhatsApp).
-// Declared here, ahead of sendDirectRequestWhatsApp/onDirectRequestBroadcast
-// below (both reference these in their eagerly-
-// evaluated `secrets: [...]` option, at module-load time), same
-// avoid-a-TDZ-ReferenceError-on-deploy reasoning as initiateMaskedCall's
-// secrets further down.
+// sendDirectRequestWhatsApp (the per-booking WhatsApp alert this secret was
+// for) was removed as dead code -- it had already been disabled in
+// onDirectRequestBroadcast below per the 2026-10-15 owner request (see that
+// function's own comment). MSG91_DIRECT_REQUEST_TEMPLATE stays declared here
+// solely because onDirectRequestBroadcast's `secrets: [...]` list still
+// references it; that function is frozen (CLAUDE.md), so this declaration
+// isn't removed along with the rest.
 const MSG91_AUTH_KEY = defineSecret("MSG91_AUTH_KEY");
 const MSG91_WHATSAPP_NUMBER = defineSecret("MSG91_WHATSAPP_NUMBER");
 const MSG91_DIRECT_REQUEST_TEMPLATE = defineSecret("MSG91_DIRECT_REQUEST_TEMPLATE");
 const MSG91_WHATSAPP_NAMESPACE = defineSecret("MSG91_WHATSAPP_NAMESPACE");
-async function sendDirectRequestWhatsApp(driverMobile, load) {
-  const authKey = MSG91_AUTH_KEY.value(), fromNumber = MSG91_WHATSAPP_NUMBER.value(),
-    template = MSG91_DIRECT_REQUEST_TEMPLATE.value(), namespace = MSG91_WHATSAPP_NAMESPACE.value();
-  if (!authKey || !fromNumber || !template || !namespace) {
-    console.error("[whatsapp] direct-request alert skipped: MSG91 WhatsApp not configured.");
-    return;
-  }
-  try {
-    // "direct_booking_request" is an approved Hindi-language template with
-    // 3 body variables (pickup, drop, weight) -- language/variable count
-    // are fixed by the approved template itself, not admin-configurable,
-    // so hardcoded here rather than pulled from a secret like the account
-    // identifiers above.
-    const res = await fetch("https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/", {
-      method: "POST",
-      headers: { authkey: authKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        integrated_number: fromNumber,
-        content_type: "template",
-        payload: {
-          messaging_product: "whatsapp",
-          type: "template",
-          template: {
-            name: template,
-            language: { code: "hi", policy: "deterministic" },
-            namespace,
-            to_and_components: [{
-              to: [`91${driverMobile}`],
-              components: {
-                body_1: { type: "text", value: load.pickup || "-" },
-                body_2: { type: "text", value: load.drop || "-" },
-                body_3: { type: "text", value: load.weight ? String(load.weight) : "-" },
-              },
-            }],
-          },
-        },
-      }),
-    });
-    if (!res.ok) console.error("[whatsapp] direct-request alert rejected by MSG91:", await res.text());
-  } catch (e) {
-    console.error("[whatsapp] direct-request alert send failed:", e.message);
-  }
-}
 
 // Bulk WhatsApp sends for Admin's retention/reminder tiles (Uninstalled/
 // Blocked, Off duty, and AdminDriverList's Incomplete-KYC and GPS-off
@@ -495,10 +435,10 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       // the ring is now confirmed reliable (open/closed/locked, see
       // CLAUDE.md's frozen note on commit f8f7f50), so this WhatsApp
       // "Load Alert!!" message every eligible driver got for every single
-      // load is now just noise. sendDirectRequestWhatsApp (above) is left
-      // defined but unused rather than deleted, to keep this change to
-      // exactly the one line that needed to change in a function this
-      // repo has marked frozen.
+      // load is now just noise. sendDirectRequestWhatsApp itself (which
+      // sent it) was later deleted as dead code; MSG91_DIRECT_REQUEST_TEMPLATE
+      // above stays declared only because this function's own
+      // `secrets: [...]` list still references it.
     });
     console.log(`[onDirectRequestBroadcast] booking ${event.params.bookingId} (tier=${load.tierMaxKg}, pickup=${load.pickupLat},${load.pickupLng}): ${driversSnap.size} drivers checked\n${skipLog.join("\n")}`);
     // Saved BEFORE anything rings, so onBookingTaken always knows whose
@@ -1543,94 +1483,3 @@ exports.dailyHealthCheckNight = onSchedule({ schedule: "0 23 * * *", timeZone: "
   await runDailyHealthCheck("lastNightRun");
 });
 
-// Daily business snapshot -- a frozen copy of every KPI tile on
-// AdminFleet's Live Dashboard (src/App.jsx), written once a day so admin
-// has a real day-by-day record of how the business is trending instead
-// of only ever seeing "right now" numbers that can't be compared across
-// days once they change. Runs just after midnight IST, so by the time it
-// fires the previous day (targetDate below) is fully over -- no risk of
-// capturing a partial day the way running at 23:55 or earlier would.
-//
-// Mirrors the dashboard's own logic (isLikelyUninstalled/driverInstallStatus,
-// isInTrial, isFutureAdvance, isToday) by hand -- same manual-sync-required
-// duplication as FARE_TIER_MAX_KGS/haversineKm elsewhere in this file,
-// since Cloud Functions can't import src/App.jsx directly. If any of those
-// definitions change on the client, this needs the same change made here.
-const SNAPSHOT_UNINSTALL_INACTIVE_DAYS = 14;
-const SNAPSHOT_TRIAL_DAYS = 30;
-const SNAPSHOT_DAY_MS = 24 * 60 * 60 * 1000;
-function snapshotIsLikelyUninstalled(driver) {
-  const ts = driver.lastActiveAt?.toMillis ? driver.lastActiveAt : driver.createdAt;
-  if (!ts?.toMillis) return false;
-  return (Date.now() - ts.toMillis()) >= SNAPSHOT_UNINSTALL_INACTIVE_DAYS * SNAPSHOT_DAY_MS;
-}
-function snapshotIsInTrial(createdAt) {
-  return createdAt?.toMillis ? (Date.now() - createdAt.toMillis()) < SNAPSHOT_TRIAL_DAYS * SNAPSHOT_DAY_MS : true;
-}
-// scheduledFor is stored as "YYYY-MM-DD HH:MM" -- matches isFutureAdvance's
-// own plain string comparison against a UTC ISO date exactly (see its
-// comment in App.jsx for why this doesn't need timezone math), not the IST
-// dates used everywhere else in this function, to stay faithful to what
-// the live dashboard itself actually shows admin today.
-function snapshotIsFutureAdvance(scheduledFor, utcTodayStr) {
-  if (!scheduledFor) return false;
-  return scheduledFor.split(" ")[0] > utcTodayStr;
-}
-// India has no DST, so this is a safe, simple way to get a Firestore
-// Timestamp's calendar date in the business's own timezone -- "en-CA"
-// purely because that locale's date format is already "YYYY-MM-DD".
-function istDateStr(date) {
-  return date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-}
-exports.dailyAdminSnapshot = onSchedule({ schedule: "5 0 * * *", timeZone: "Asia/Kolkata", region: "asia-south1" }, async () => {
-  const targetDate = istDateStr(new Date(Date.now() - SNAPSHOT_DAY_MS)); // "yesterday", now fully over
-  const utcTodayStr = new Date().toISOString().slice(0, 10);
-
-  const [driversSnap, customersSnap, bookingsSnap, settingsSnap] = await Promise.all([
-    db.collection("drivers").get(),
-    db.collection("customers").get(),
-    db.collection("bookings").get(),
-    db.collection("settings").doc("main").get(),
-  ]);
-  const drivers = driversSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const customers = customersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const bookings = bookingsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const minWallet = settingsSnap.data()?.minWallet ?? 500;
-
-  const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
-  const notReadyApprovedDrivers = drivers.filter((d) => !d.online && d.kyc === "Approved" && !d.blacklisted);
-  const offDutyDrivers = notReadyApprovedDrivers.filter((d) => !snapshotIsLikelyUninstalled(d));
-  const uninstalledDrivers = drivers.filter((d) => !d.blacklisted && snapshotIsLikelyUninstalled(d));
-  const blacklistedDrivers = drivers.filter((d) => d.blacklisted);
-  const installedDrivers = drivers.filter((d) => !d.blacklisted && !snapshotIsLikelyUninstalled(d));
-  const liveMapLocatedCount = installedDrivers.filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null).length;
-  const lowWalletDrivers = drivers.filter((d) => d.online && !d.blacklisted && (d.wallet || 0) < minWallet);
-  const newCustomersToday = customers.filter((c) => c.createdAt?.toDate && istDateStr(c.createdAt.toDate()) === targetDate);
-  const newDriversToday = drivers.filter((d) => d.createdAt?.toDate && istDateStr(d.createdAt.toDate()) === targetDate);
-  const trialDrivers = drivers.filter((d) => snapshotIsInTrial(d.createdAt) && d.name && d.name !== d.mobile && d.kyc === "Approved");
-  const cancelledTodayList = bookings.filter((b) => b.status === "Cancelled" && b.cancelledAt?.toDate && istDateStr(b.cancelledAt.toDate()) === targetDate);
-  const bookedTodayList = bookings.filter((b) => (b.status === "Ongoing" || b.status === "Completed") && b.createdAt?.toDate && istDateStr(b.createdAt.toDate()) === targetDate);
-  const advanceBookingsList = bookings.filter((b) => snapshotIsFutureAdvance(b.scheduledFor, utcTodayStr) && b.status !== "Cancelled" && b.status !== "Completed");
-
-  await db.collection("dailyAdminSnapshots").doc(targetDate).set({
-    date: targetDate,
-    generatedAt: FieldValue.serverTimestamp(),
-    newRegistrations: newCustomersToday.length + newDriversToday.length,
-    newCustomers: newCustomersToday.length,
-    newDrivers: newDriversToday.length,
-    lowWalletOnlineDrivers: lowWalletDrivers.length,
-    cancelledToday: cancelledTodayList.length,
-    bookedToday: bookedTodayList.length,
-    onlineReadyDrivers: readyOnlineDrivers.length,
-    liveMapLocatedDrivers: liveMapLocatedCount,
-    offDutyDrivers: offDutyDrivers.length,
-    uninstalledDrivers: uninstalledDrivers.length,
-    blacklistedDrivers: blacklistedDrivers.length,
-    uninstalledOrBlockedDrivers: uninstalledDrivers.length + blacklistedDrivers.length,
-    advanceBookings: advanceBookingsList.length,
-    trialDrivers: trialDrivers.length,
-    totalDrivers: drivers.length,
-    totalInstalledDrivers: installedDrivers.length,
-    totalCustomers: customers.length,
-  });
-});

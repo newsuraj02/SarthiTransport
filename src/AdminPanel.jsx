@@ -9,22 +9,22 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronLeft, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
-  MessageCircle, Phone, PhoneCall, Plus, Settings2, Siren, Truck, UserCircle2, Users,
-  Wallet, Weight, X, XCircle,
+  MessageCircle, Phone, PhoneCall, Plus, Settings2, Siren, UserCircle2, Users,
+  Wallet, Weight, XCircle,
 } from "lucide-react";
 import { GoogleMap, MarkerF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp } from "./firebaseClient";
-import { createDoc, patchDoc, removeDoc, bulkUpdateDocs } from "./firestoreStore";
+import { createDoc, removeDoc, bulkUpdateDocs } from "./firestoreStore";
 import {
   C, DEFAULT_EXPENSE_CATEGORIES, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
-  describeAdminRateSaveError, driverTruckIcon, driverTruckIconInactive, estimateDistanceKm,
+  describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
   getRouteScaleRatio, gpsStatus, greetingWord, haversineKm, installedDrivers, zoneFor,
-  isFutureAdvance, isLikelyUninstalled, locationsNear,
-  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, routeMatchRadiusKm,
+  isFutureAdvance, isLikelyUninstalled,
+  monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, SafeImage, StatTile, VEHICLE_HEADROOM_KG,
 } from "./App.jsx";

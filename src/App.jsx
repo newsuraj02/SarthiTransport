@@ -241,7 +241,6 @@ function lookupVehicleModelSpec(name) {
 // Vehicle types added via "+ Add new type" only have one name (like custom
 // materials), so English falls back to the same string when no labelEn exists.
 const vehicleLabel = (v, lang) => (v ? (lang === "en" ? (v.labelEn || v.label) : v.label) : "");
-const vehicleCapacity = (v, lang) => (v ? (lang === "en" ? (v.capacityEn || v.capacity) : v.capacity) : "");
 
 // A curated slot picker (period -> a handful of round-hour times) instead of
 // a native <input type="time"> clock/dial, which testers found fiddly —
