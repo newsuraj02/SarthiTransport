@@ -2441,7 +2441,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   );
 }
 
-function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang, drivers, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, fareTiers }) {
+function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang, drivers, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, fareTiers, adminRouteFares }) {
   // Smart Load-to-Vehicle Match -- a customer tapped "Doesn't match
   // requirement? Call Apna Transport directly" below the vehicle list
   // (CustomerBooking/CustomerAdvanceBooking) because no online vehicle
@@ -2488,17 +2488,27 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
       time: dt.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
     };
   };
-  // Admin-editable estimate, prefilled from the same fare formula the
-  // customer's own booking screen uses (calculateFare) -- only possible
-  // once both weight and a distance estimate exist; otherwise left blank
-  // for admin to fill in by hand.
+  // Admin-editable estimate -- same resolution order AdminRateCalculator's
+  // own stdRateFor (above) uses to judge a driver-submitted rate: an exact
+  // admin-saved rate for this route+tier wins outright (no distance
+  // needed); failing that, the formula fare scaled by nearby admin
+  // routes' ratio, or the plain formula if there's nothing nearby to scale
+  // from. Only truly blank (left for admin to fill in by hand) when there's
+  // no weight, no matching tier, and no distance to fall back on.
   const [estimateDrafts, setEstimateDrafts] = useState({});
   const estimateFor = (req) => {
     const loadKg = Number(req.weightKg) || 0;
+    if (loadKg <= 0) return "";
+    const tier = findFareTier(loadKg, fareTiers);
+    if (!tier) return "";
     const km = Number(req.distanceKm) || 0;
-    if (loadKg <= 0 || km <= 0) return "";
     const zone = zoneFor(req.pickupLat ?? null, req.pickupLng ?? null, null, null, km);
-    return calculateFare(loadKg, km, fareTiers, zone, 0);
+    const exact = findExactAdminRoute(req.pickup, req.drop, tier.maxKg, zone, false, adminRouteFares, req.pickupLat, req.pickupLng, null, null);
+    if (exact) return Number(exact.totalFare) || "";
+    if (km <= 0) return "";
+    const ratio = getRouteScaleRatio(req.pickup, req.drop, zone, false, adminRouteFares, fareTiers);
+    const formulaFare = calculateFare(tier.maxKg, km, fareTiers, zone, 0);
+    return ratio != null ? Math.round(formulaFare * ratio) : formulaFare;
   };
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
   // Draft reply text per complaint id, so opening one complaint's reply box
@@ -4075,7 +4085,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
-      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} fareTiers={fareTiers} />}
+      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} fareTiers={fareTiers} adminRouteFares={adminRouteFares} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
       {tab === "settings" && <AdminSettings latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>
