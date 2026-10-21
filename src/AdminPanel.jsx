@@ -3001,6 +3001,9 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
           </div>
           <div className="flex flex-col items-end gap-1">
+            <a href={`tel:+91${d.mobile}`} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+              <Phone size={14} color="#FFFFFF" />
+            </a>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5" style={{ color: gps.color, background: gps.bg }} title={lang === "en" ? "GPS status" : lang === "mr" ? "GPS स्थिती" : "GPS स्थिति"}>
               <MapPin size={9} /> GPS {gps.label}
             </span>
