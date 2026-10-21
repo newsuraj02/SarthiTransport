@@ -2488,6 +2488,17 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
       time: dt.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
     };
   };
+  // Distance shown and used for the fare estimate -- prefer the value
+  // captured at request time (distanceKm), but a request raised before
+  // dropLat/dropLng were captured (or whose road-distance fetch never
+  // resolved on the customer's end) can still fall back to a straight-line
+  // estimate here, same formula as estimateDistanceKm (App.jsx), as long
+  // as both ends' coordinates made it onto the doc.
+  const kmFor = (req) => {
+    if (req.distanceKm != null) return Number(req.distanceKm) || 0;
+    if (req.pickupLat == null || req.dropLat == null) return 0;
+    return Math.round(haversineKm(req.pickupLat, req.pickupLng, req.dropLat, req.dropLng) * 1.3 * 100) / 100;
+  };
   // Admin-editable estimate -- same resolution order AdminRateCalculator's
   // own stdRateFor (above) uses to judge a driver-submitted rate: an exact
   // admin-saved rate for this route+tier wins outright (no distance
@@ -2501,9 +2512,9 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
     if (loadKg <= 0) return "";
     const tier = findFareTier(loadKg, fareTiers);
     if (!tier) return "";
-    const km = Number(req.distanceKm) || 0;
-    const zone = zoneFor(req.pickupLat ?? null, req.pickupLng ?? null, null, null, km);
-    const exact = findExactAdminRoute(req.pickup, req.drop, tier.maxKg, zone, false, adminRouteFares, req.pickupLat, req.pickupLng, null, null);
+    const km = kmFor(req);
+    const zone = zoneFor(req.pickupLat ?? null, req.pickupLng ?? null, req.dropLat ?? null, req.dropLng ?? null, km);
+    const exact = findExactAdminRoute(req.pickup, req.drop, tier.maxKg, zone, false, adminRouteFares, req.pickupLat, req.pickupLng, req.dropLat, req.dropLng);
     if (exact) return Number(exact.totalFare) || "";
     if (km <= 0) return "";
     const ratio = getRouteScaleRatio(req.pickup, req.drop, zone, false, adminRouteFares, fareTiers);
@@ -2535,6 +2546,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
           {pendingUnmatched.map((req) => {
             const offlineMatches = offlineMatchesFor(req);
             const dt = dateTimeFor(req);
+            const km = kmFor(req);
             const estimate = estimateFor(req);
             return (
               <div key={req.id} className="rounded-xl p-4 shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
@@ -2560,7 +2572,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                     <b style={{ color: C.ink }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}:</b> {req.drop || "—"}
                   </div>
                   <div className="text-[11px] mt-2" style={{ color: C.inkSoft }}>
-                    <b style={{ color: C.ink }}>{lang === "en" ? "Requirement" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}:</b> {dt.date}, {dt.time}, {req.weightKg ? `${req.weightKg}${req.weightUnit || "kg"}` : "—"}, {req.distanceKm ? `${Math.round(req.distanceKm)}km` : "—"}
+                    <b style={{ color: C.ink }}>{lang === "en" ? "Requirement" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}:</b> {dt.date}, {dt.time}, {req.weightKg ? `${req.weightKg}${req.weightUnit || "kg"}` : "—"}, {km > 0 ? `${Math.round(km)}km` : "—"}
                   </div>
                   <div className="flex items-center gap-1.5 mt-2">
                     <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}:</span>

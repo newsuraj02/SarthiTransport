@@ -6037,9 +6037,16 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // way rather than letting the customer resubmit.
   const [unmatchedRequested, setUnmatchedRequested] = useState(false);
   const sendUnmatchedVehicleRequest = () => {
+    // distance (state) is set async by the road-distance fetch and can
+    // still be null at the moment of this tap -- recompute a straight-line
+    // fallback fresh from the coords themselves rather than trust whatever
+    // distance currently holds, so this never ships null just because the
+    // Directions call hadn't resolved yet.
+    const distanceKm = distance ?? estimateDistanceKm(pickupCoords, dropCoords);
     raiseUnmatchedVehicleRequest?.({
-      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "immediate", distanceKm: distance,
+      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "immediate", distanceKm,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
     setUnmatchedRequested(true);
   };
@@ -6623,9 +6630,13 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
   // "advance" and the chosen date/time instead of "immediate".
   const [unmatchedRequested, setUnmatchedRequested] = useState(false);
   const sendUnmatchedVehicleRequest = () => {
+    // Same fresh-recompute fallback as CustomerBooking's copy of this --
+    // see its comment.
+    const distanceKm = distance ?? estimateDistanceKm(pickupCoords, dropCoords);
     raiseUnmatchedVehicleRequest?.({
-      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "advance", scheduledFor: scheduledForValue, distanceKm: distance,
+      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "advance", scheduledFor: scheduledForValue, distanceKm,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
+      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
     setUnmatchedRequested(true);
   };
@@ -11914,12 +11925,13 @@ export default function App() {
   // CustomerBooking/CustomerAdvanceBooking). Logged only; matching offline
   // drivers and the admin's call action both happen client-side in
   // AdminAlerts, no Cloud Function involved.
-  const raiseUnmatchedVehicleRequest = ({ pickup, drop, weightKg, weightUnit, bookingType, scheduledFor, distanceKm, pickupLat, pickupLng }) =>
+  const raiseUnmatchedVehicleRequest = ({ pickup, drop, weightKg, weightUnit, bookingType, scheduledFor, distanceKm, pickupLat, pickupLng, dropLat, dropLng }) =>
     createDoc("unmatchedVehicleRequests", genId("UVR"), {
       customerMobile: customerAuth.mobile || "", customerName: customer?.name || "",
       pickup: pickup || "", drop: drop || "", weightKg: weightKg ?? null, weightUnit: weightUnit || "kg",
       bookingType: bookingType || "immediate", scheduledFor: scheduledFor || null, distanceKm: distanceKm ?? null,
       pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null,
+      dropLat: dropLat ?? null, dropLng: dropLng ?? null,
       status: "pending", createdAt: serverTimestamp(),
     }).catch((e) => console.error(e));
   // Admin's "Mark handled" action on a Smart Load-to-Vehicle Match card.
