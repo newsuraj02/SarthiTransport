@@ -102,6 +102,19 @@ select {
   border: 1.5px solid #0052CC;
 }
 
+/* "Not seeing the right vehicle?" link (CustomerBooking/
+   CustomerAdvanceBooking) -- same spirit as current-location-blink above,
+   a yellow/white swap instead of blue/white, to draw the eye to this
+   escape hatch once the vehicle list is showing. */
+@keyframes unmatchedVehicleLinkBlink {
+  0%, 100% { background-color: #FFCC00; }
+  50%      { background-color: #FFFFFF; }
+}
+.unmatched-vehicle-link-blink {
+  animation: unmatchedVehicleLinkBlink 1.4s ease-in-out infinite;
+  border: 1.5px solid #FFCC00;
+}
+
 /* App-wide tap feedback — every button presses down very slightly on tap
    instead of giving no visual response at all. Pure CSS (no JS), so it
    costs nothing on a slow phone. Disabled buttons are excluded so a

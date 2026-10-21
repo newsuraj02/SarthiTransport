@@ -6477,7 +6477,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   ✓ {lang === "en" ? "Our team has been notified and will call you shortly." : lang === "mr" ? "आमच्या टीमला कळवले आहे, ते लवकरच कॉल करतील." : "हमारी टीम को सूचित कर दिया गया है, वे जल्द कॉल करेंगे।"}
                 </p>
               ) : (
-                <button type="button" onClick={sendUnmatchedVehicleRequest} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
+                <button type="button" onClick={sendUnmatchedVehicleRequest} className="w-full text-center text-xs font-bold py-2.5 rounded-xl unmatched-vehicle-link-blink" style={{ color: "#000000" }}>
                   {lang === "en" ? "Not seeing the right vehicle? Click here" : lang === "mr" ? "योग्य गाडी दिसत नाही? इथे क्लिक करा" : "सही गाड़ी नहीं दिख रही? यहाँ क्लिक करें"}
                 </button>
               )}
@@ -7056,7 +7056,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                   ✓ {lang === "en" ? "Our team has been notified and will call you shortly." : lang === "mr" ? "आमच्या टीमला कळवले आहे, ते लवकरच कॉल करतील." : "हमारी टीम को सूचित कर दिया गया है, वे जल्द कॉल करेंगे।"}
                 </p>
               ) : (
-                <button type="button" onClick={sendUnmatchedVehicleRequest} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
+                <button type="button" onClick={sendUnmatchedVehicleRequest} className="w-full text-center text-xs font-bold py-2.5 rounded-xl unmatched-vehicle-link-blink" style={{ color: "#000000" }}>
                   {lang === "en" ? "Not seeing the right vehicle? Click here" : lang === "mr" ? "योग्य गाडी दिसत नाही? इथे क्लिक करा" : "सही गाड़ी नहीं दिख रही? यहाँ क्लिक करें"}
                 </button>
               )}
