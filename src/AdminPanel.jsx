@@ -2838,8 +2838,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [showCall, setShowCall] = useState(false);
-  const [callQ, setCallQ] = useState("");
   // Editing a submitted driver's vehicle KYC fields (see AdminKyc's old
   // Edit -- lets admin fix a typo'd vehicle number or wrong capacity
   // before approving, instead of only being able to Block-or-accept-as-is).
@@ -2873,18 +2871,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     });
     cancelEdit();
   };
-  // Not-yet-submitted WhatsApp nudge queue. Scoped to installedDrivers(drivers)
-  // (same population the sections above use), NOT the raw drivers array --
-  // that mismatch is exactly what made this queue's count disagree with
-  // the Incomplete section's count (a driver who's long gone quiet/
-  // uninstalled, or blacklisted, was still being counted and re-nudged
-  // here forever, on top of never showing up in Incomplete at all).
-  const notSubmittedKyc = installedDrivers(drivers).filter((d) => !d.vehicleSpec);
-  const todayStrKyc = () => new Date().toISOString().slice(0, 10);
-  const [kycWhatsappSentMap, setKycWhatsappSentMap] = usePersistedState("sarthi_kycWhatsappSent", {});
-  const markKycWhatsappSent = (mobile) => setKycWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrKyc() }));
-  const sentKycToday = (mobile) => kycWhatsappSentMap[mobile] === todayStrKyc();
-  const notSubmittedUnsent = notSubmittedKyc.filter((d) => !sentKycToday(d.mobile));
   // "Total Drivers" and every tab/count below it all report the SAME
   // installed-drivers population (see installedDrivers) -- how many
   // actually still have the app on their phone, not how many driver docs
@@ -2924,12 +2910,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // Main Routine split.
   const gpsOnSection = bySection(totalInstalled.filter((d) => !gpsStatus(d, lang).stale));
   const gpsOffSectionAll = totalInstalled.filter((d) => gpsStatus(d, lang).stale);
-  // GPS diagnostic (see gpsStatus) -- an Online driver whose lastKnownLocation
-  // is stale/missing is the exact "is this actually tracking?" question,
-  // used below for the WhatsApp reminder queue (the GPS OFF section itself
-  // already covers seeing these drivers, so there's no separate filter
-  // toggle for them here).
-  const onlineNoLiveGps = totalInstalled.filter((d) => d.online && gpsStatus(d, lang).stale);
   const gpsOffSection = bySection(gpsOffSectionAll);
   // Incomplete vs Complete, independent of the GPS split above -- a driver
   // shows up in one of these AND one of the GPS sections. Same
@@ -2947,35 +2927,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const lowWalletSection = bySection(totalInstalled.filter((d) => d.online && d.wallet < minWallet));
   const onlineSection = bySection(totalInstalled.filter((d) => d.online && d.kyc === "Approved"));
   const offDutySection = bySection(totalInstalled.filter((d) => !d.online && d.kyc === "Approved" && !isLikelyUninstalled(d)));
-  // Same reasoning as AdminKyc's WhatsApp reminder queue -- a push
-  // notification only reaches a driver who's already granted notification
-  // permission, exactly the kind of driver whose GPS/location permission
-  // is also plausibly off. WhatsApp reaches them regardless. Persisted (not
-  // plain useState) so tapping WhatsApp -- which switches away to the
-  // WhatsApp app -- doesn't lose the "already reminded today" tick if the
-  // tab gets reloaded when admin switches back.
-  const todayStrGps = () => new Date().toISOString().slice(0, 10);
-  const [gpsWhatsappSentMap, setGpsWhatsappSentMap] = usePersistedState("sarthi_gpsWhatsappSent", {});
-  const markGpsWhatsappSent = (mobile) => setGpsWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrGps() }));
-  const sentGpsToday = (mobile) => gpsWhatsappSentMap[mobile] === todayStrGps();
-  const gpsUnsent = onlineNoLiveGps.filter((d) => !sentGpsToday(d.mobile));
-
-  // Real bulk send (see sendBulkDriverWhatsApp in functions/index.js) --
-  // same reasoning/shape as AdminFleet's own copy of this (Off duty,
-  // Uninstalled/Blocked) -- a separate component instance needs its own
-  // copy of this state, not shared, but the logic is identical.
-  const [bulkSendingKind, setBulkSendingKind] = useState(null);
-  const [bulkSendResult, setBulkSendResult] = useState(null);
-  const sendBulkWhatsAppNow = async (kind, targets, markSent) => {
-    if (bulkSendingKind) return;
-    setBulkSendingKind(kind);
-    setBulkSendResult(null);
-    const mobiles = targets.map((d) => d.mobile).filter(Boolean);
-    const result = await sendBulkDriverWhatsApp(kind, mobiles);
-    if (result.ok) targets.forEach((d) => markSent(d.mobile));
-    setBulkSendResult({ kind, ...result });
-    setBulkSendingKind(null);
-  };
   // Scoped to totalInstalled, same as the 4 sections above -- only active,
   // installed drivers are ever listed here, full stop. A blacklisted or
   // likely-uninstalled driver isn't findable from this screen at all
@@ -3171,79 +3122,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: allSectionsExpanded ? C.navy : C.bg, color: allSectionsExpanded ? "#fff" : C.ink, border: `1px solid ${allSectionsExpanded ? C.navy : C.line}` }}>
           <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"} ({totalInstalled.length})
         </button>
-        <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
-          {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Driver" : lang === "mr" ? "ड्रायव्हरला कॉल करा" : "ड्राइवर को कॉल करें"}</>}
-        </button>
       </div>
-      {onlineNoLiveGps.length > 0 && (
-        gpsUnsent.length > 0 ? (
-          <button onClick={() => sendBulkWhatsAppNow("gpsOff", gpsUnsent, markGpsWhatsappSent)} disabled={!!bulkSendingKind}
-            className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.success, opacity: bulkSendingKind && bulkSendingKind !== "gpsOff" ? 0.6 : 1 }}>
-            <MessageCircle size={14} />
-            {bulkSendingKind === "gpsOff"
-              ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-              : (lang === "en" ? `Bulk GPS reminder on WhatsApp to all ${gpsUnsent.length} at once` : lang === "mr" ? `सर्व ${gpsUnsent.length} ना GPS रिमाइंडरचा बल्क WhatsApp एका साथ पाठवा` : `सभी ${gpsUnsent.length} को GPS रिमाइंडर का बल्क WhatsApp एक साथ भेजें`)}
-          </button>
-        ) : (
-          <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
-            <CheckCircle2 size={14} />
-            {lang === "en" ? "Everyone reminded today" : lang === "mr" ? "आज सर्वांना आठवण दिली" : "आज सभी को याद दिलाया गया"}
-          </div>
-        )
-      )}
-      {bulkSendResult?.kind === "gpsOff" && (
-        <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
-          {bulkSendResult.ok
-            ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
-            : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
-        </div>
-      )}
-      {notSubmittedKyc.length > 0 && (
-        notSubmittedUnsent.length > 0 ? (
-          <button onClick={() => sendBulkWhatsAppNow("kycIncomplete", notSubmittedUnsent, markKycWhatsappSent)} disabled={!!bulkSendingKind}
-            className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.marigoldDeep, opacity: bulkSendingKind && bulkSendingKind !== "kycIncomplete" ? 0.6 : 1 }}>
-            <XCircle size={14} />
-            {bulkSendingKind === "kycIncomplete"
-              ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-              : (lang === "en" ? `Bulk KYC reminder on WhatsApp to all ${notSubmittedUnsent.length} at once` : lang === "mr" ? `सर्व ${notSubmittedUnsent.length} ना KYC रिमाइंडरचा बल्क WhatsApp एका साथ पाठवा` : `सभी ${notSubmittedUnsent.length} को KYC रिमाइंडर का बल्क WhatsApp एक साथ भेजें`)}
-          </button>
-        ) : (
-          <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
-            <CheckCircle2 size={14} />
-            {lang === "en" ? "Everyone reminded today" : lang === "mr" ? "आज सर्वांना आठवण दिली" : "आज सभी को याद दिलाया गया"}
-          </div>
-        )
-      )}
-      {bulkSendResult?.kind === "kycIncomplete" && (
-        <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
-          {bulkSendResult.ok
-            ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
-            : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
-        </div>
-      )}
-      {showCall && (() => {
-        const callFiltered = totalInstalled.filter((d) => d.name.includes(callQ) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(callQ.toLowerCase()) || (d.mobile || "").includes(callQ));
-        return (
-          <div className="rounded-lg p-2 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : lang === "mr" ? "नाव, गाडी नंबर किंवा मोबाइलने शोधा..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."}
-              className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
-            <div className="space-y-1.5 max-h-64 overflow-y-auto">
-              {callFiltered.length === 0 ? (
-                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver found." : lang === "mr" ? "कोणताही ड्रायव्हर सापडला नाही." : "कोई ड्राइवर नहीं मिला।"}</p>
-              ) : callFiltered.map((d) => (
-                <a key={d.id} href={`tel:${d.mobile}`} onClick={() => setShowCall(false)}
-                  className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
-                    <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-                  </div>
-                  <Phone size={16} color={C.success} className="shrink-0" />
-                </a>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name, vehicle number or mobile..." : lang === "mr" ? "नाव, गाडी नंबर किंवा मोबाइलने शोधा..." : "नाम, गाड़ी नंबर या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       {q.trim() ? (
         <div className="space-y-2">
