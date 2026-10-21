@@ -493,20 +493,15 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
 
-  // Retention nudge for "App uninstalled (likely)" -- "already reminded
-  // today" tracked per driver so switching away to WhatsApp and back
-  // doesn't lose track or double-message anyone.
+  // Same "already messaged today" tracking the off-duty retention nudge
+  // below uses -- "Uninstalled / Blocked" no longer has a WhatsApp nudge of
+  // its own (Call replaced it; see detailPages.uninstalled), only this
+  // shared timestamp helper is still needed here.
   const todayStrUninstalled = () => new Date().toISOString().slice(0, 10);
-  const [uninstalledWhatsappSentMap, setUninstalledWhatsappSentMap] = usePersistedState("sarthi_uninstalledWhatsappSent", {});
-  const markUninstalledWhatsappSent = (mobile) => setUninstalledWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
-  const sentUninstalledToday = (mobile) => uninstalledWhatsappSentMap[mobile] === todayStrUninstalled();
-  const uninstalledUnsent = uninstalledDrivers.filter((d) => !sentUninstalledToday(d.mobile));
 
-  // Same "already messaged today" tracking as the uninstalled-driver
-  // retention nudge above, but for approved drivers who still have the app
-  // and just haven't toggled online -- a distinct message and a separate
-  // sent-today map since these are two different asks (come back vs. go
-  // online) and a driver could plausibly need both reminders on the same day.
+  // "Already messaged today" tracking for approved drivers who still have
+  // the app and just haven't toggled online -- distinct from the above
+  // since this is a different ask (go online, not come back at all).
   const [offDutyWhatsappSentMap, setOffDutyWhatsappSentMap] = usePersistedState("sarthi_offDutyWhatsappSent", {});
   const markOffDutyWhatsappSent = (mobile) => setOffDutyWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
   const sentOffDutyToday = (mobile) => offDutyWhatsappSentMap[mobile] === todayStrUninstalled();
@@ -518,7 +513,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // (bulkSendingKind), which is fine -- these are rare, deliberate admin
   // actions, not something fired off in parallel. markSent is whichever
   // per-kind "already sent today" setter applies (e.g.
-  // markUninstalledWhatsappSent) so a successful bulk send updates the same
+  // markOffDutyWhatsappSent) so a successful bulk send updates the same
   // persisted map the per-row individual button below also uses -- either
   // path correctly marks a driver as reminded for the day.
   const [bulkSendingKind, setBulkSendingKind] = useState(null);
@@ -652,37 +647,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       // see inactiveDrivers above for why (AdminDriverList is installed-
       // only now, so this is their only remaining home).
       items: inactiveDrivers,
-      // Retention queue -- same "send next one, one tap at a time" pattern
-      // as AdminDriverList's GPS reminder, so admin can work through the
-      // whole list without hunting for who's already been messaged today.
-      // Scoped to uninstalledDrivers only (not blacklisted) -- "we miss
-      // you, come back" makes no sense to send someone who was blocked on
-      // purpose, not someone who just went quiet.
-      headerExtra: uninstalledDrivers.length > 0 && (
-        <>
-          {uninstalledUnsent.length > 0 ? (
-            <button onClick={() => sendBulkWhatsAppNow("reinstall", uninstalledUnsent, markUninstalledWhatsappSent)} disabled={!!bulkSendingKind}
-              className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.success, opacity: bulkSendingKind && bulkSendingKind !== "reinstall" ? 0.6 : 1 }}>
-              <MessageCircle size={14} />
-              {bulkSendingKind === "reinstall"
-                ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-                : (lang === "en" ? `Bulk WhatsApp to all ${uninstalledUnsent.length} drivers at once` : lang === "mr" ? `सर्व ${uninstalledUnsent.length} ड्रायव्हर्सना एका साथ बल्क WhatsApp पाठवा` : `सभी ${uninstalledUnsent.length} ड्राइवरों को एक साथ बल्क WhatsApp भेजें`)}
-            </button>
-          ) : (
-            <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
-              <CheckCircle2 size={14} />
-              {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
-            </div>
-          )}
-          {bulkSendResult?.kind === "reinstall" && (
-            <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
-              {bulkSendResult.ok
-                ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
-                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
-            </div>
-          )}
-        </>
-      ),
       renderItem: (d) => (
         <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}` }}>
           <div>
@@ -695,19 +659,9 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
             </button>
           ) : (
-            <div className="shrink-0 flex flex-col items-end gap-0.5">
-              <button onClick={() => sendSingleWhatsAppNow("reinstall", d, markUninstalledWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
-                className="p-2 rounded-full" style={{ background: sentUninstalledToday(d.mobile) ? "#E0E0E0" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
-                <MessageCircle size={14} color={sentUninstalledToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
-              </button>
-              {singleSendResult?.mobile === d.mobile && (
-                <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : singleSendResult.reason}>
-                  {singleSendResult.ok
-                    ? (lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया")
-                    : (lang === "en" ? "Failed" : lang === "mr" ? "अयशस्वी" : "विफल")}
-                </span>
-              )}
-            </div>
+            <a href={`tel:+91${d.mobile}`} className="shrink-0 p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+              <Phone size={14} color="#FFFFFF" />
+            </a>
           )}
         </div>
       ),
