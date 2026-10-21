@@ -2507,6 +2507,55 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
   // from. Only truly blank (left for admin to fill in by hand) when there's
   // no weight, no matching tier, and no distance to fall back on.
   const [estimateDrafts, setEstimateDrafts] = useState({});
+  // Save button beside the Fare box -- admin calls the customer, agrees a
+  // (possibly edited) number, taps Save: sends that exact figure to the
+  // customer via the existing admin-notification channel, AND writes it
+  // into adminRouteFares for this route+tier+zone (same doc shape/id
+  // scheme as AdminRateCalculator's own "Save as Route Rate" button, see
+  // stdRateFor above and the save() in AdminRateCalculator), so the next
+  // request on a similar route surfaces this same figure automatically via
+  // findExactAdminRoute instead of only ever falling back to the formula.
+  const [savingFareIds, setSavingFareIds] = useState({});
+  const [savedFareIds, setSavedFareIds] = useState({});
+  const [fareSendError, setFareSendError] = useState({});
+  const saveFareAndNotify = async (req) => {
+    const fareNum = Number(estimateDrafts[req.id] ?? estimateFor(req));
+    if (!fareNum || fareNum <= 0 || savingFareIds[req.id]) return;
+    const loadKg = Number(req.weightKg) || 0;
+    const tier = findFareTier(loadKg, fareTiers);
+    if (!tier) return;
+    setSavingFareIds((p) => ({ ...p, [req.id]: true }));
+    setFareSendError((p) => ({ ...p, [req.id]: "" }));
+    try {
+      const km = kmFor(req);
+      const zone = zoneFor(req.pickupLat ?? null, req.pickupLng ?? null, req.dropLat ?? null, req.dropLng ?? null, km);
+      const docId = `${sanitizeForDocId(req.pickup)}__${sanitizeForDocId(req.drop)}__${tier.maxKg}__${zone}`;
+      await createDoc("adminRouteFares", docId, {
+        pickupName: req.pickup, dropName: req.drop,
+        pickupKey: normalizeRouteText(req.pickup), dropKey: normalizeRouteText(req.drop),
+        pickupLat: req.pickupLat ?? null, pickupLng: req.pickupLng ?? null,
+        dropLat: req.dropLat ?? null, dropLng: req.dropLng ?? null,
+        estimatedKm: km, tierMaxKg: tier.maxKg, veh: tier.label, zone,
+        fix: fareNum, per: 0, totalFare: fareNum, manual: true,
+        isReturn: false, returnPct: null, driverEntry: null, updatedAt: Date.now(),
+      });
+      const message = lang === "en"
+        ? `Your estimated fare for ${req.pickup} to ${req.drop}: ₹${fareNum}. Our team will arrange a vehicle shortly.`
+        : lang === "mr"
+        ? `${req.pickup} ते ${req.drop} साठी अंदाजे भाडे: ₹${fareNum}. आमची टीम लवकरच गाडी व्यवस्था करेल.`
+        : `${req.pickup} से ${req.drop} के लिए अनुमानित भाड़ा: ₹${fareNum}. हमारी टीम जल्द ही गाड़ी व्यवस्था करेगी.`;
+      const result = await sendAdminNotification(req.customerMobile, message, "customer");
+      if (result?.ok === false) {
+        setFareSendError((p) => ({ ...p, [req.id]: lang === "en" ? "Saved the rate, but couldn't notify the customer — try again." : lang === "mr" ? "दर सेव्ह झाला, पण कस्टमरला कळवता आले नाही — पुन्हा प्रयत्न करा." : "दर सेव हो गया, पर कस्टमर को सूचित नहीं कर सके — फिर कोशिश करें।" }));
+      } else {
+        setSavedFareIds((p) => ({ ...p, [req.id]: true }));
+      }
+    } catch (e) {
+      console.error(e);
+      setFareSendError((p) => ({ ...p, [req.id]: lang === "en" ? "Couldn't save — try again." : lang === "mr" ? "सेव्ह होऊ शकले नाही — पुन्हा प्रयत्न करा." : "सेव नहीं हो सका — फिर कोशिश करें।" }));
+    }
+    setSavingFareIds((p) => ({ ...p, [req.id]: false }));
+  };
   const estimateFor = (req) => {
     const loadKg = Number(req.weightKg) || 0;
     if (loadKg <= 0) return "";
@@ -2577,9 +2626,20 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                   <div className="flex items-center gap-1.5 mt-2">
                     <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}:</span>
                     <span className="text-[11px] font-bold" style={{ color: C.ink }}>₹</span>
-                    <input type="number" value={estimateDrafts[req.id] ?? estimate} onChange={(e) => setEstimateDrafts((p) => ({ ...p, [req.id]: e.target.value }))}
+                    <input type="number" value={estimateDrafts[req.id] ?? estimate} onChange={(e) => { setEstimateDrafts((p) => ({ ...p, [req.id]: e.target.value })); setSavedFareIds((p) => ({ ...p, [req.id]: false })); }}
                       className="w-20 rounded-lg px-2 py-1 text-xs font-bold" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
+                    <button onClick={() => saveFareAndNotify(req)} disabled={savingFareIds[req.id]}
+                      className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white" style={{ background: savedFareIds[req.id] ? C.success : C.navy, opacity: savingFareIds[req.id] ? 0.6 : 1 }}>
+                      {savingFareIds[req.id]
+                        ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
+                        : savedFareIds[req.id]
+                        ? `✓ ${lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया"}`
+                        : (lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें")}
+                    </button>
                   </div>
+                  {fareSendError[req.id] && (
+                    <div className="text-[10.5px] font-bold mt-1" style={{ color: C.safety }}>{fareSendError[req.id]}</div>
+                  )}
                 </div>
                 <div className="text-[11px] font-bold mb-1.5" style={{ color: C.success }}>
                   {lang === "en" ? "Inactive vehicle matches" : lang === "mr" ? "इनअ‍ॅक्टिव्ह वाहन मॅच" : "इनएक्टिव वाहन मैच"}
