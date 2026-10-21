@@ -493,11 +493,18 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     ? { photo: "ड्रायव्हर फोटो", dl: "ड्रायव्हिंग लायसन्स" }
     : { photo: "ड्राइवर फोटो", dl: "ड्राइविंग लाइसेंस" };
 
-  // Same "already messaged today" tracking the off-duty retention nudge
-  // below uses -- "Uninstalled / Blocked" no longer has a WhatsApp nudge of
-  // its own (Call replaced it; see detailPages.uninstalled), only this
-  // shared timestamp helper is still needed here.
+  // Shared timestamp helper for the "already contacted today" trackers
+  // below.
   const todayStrUninstalled = () => new Date().toISOString().slice(0, 10);
+
+  // "Already called today" tracking for Uninstalled/Blocked (see
+  // detailPages.uninstalled) -- tapping Call marks it, which both shows a
+  // tick on that row and sinks it to the bottom of the list for the rest
+  // of the day, so admin can work down the list without re-calling the
+  // same person twice in one sitting.
+  const [uninstalledCalledMap, setUninstalledCalledMap] = usePersistedState("sarthi_uninstalledCalled", {});
+  const markUninstalledCalled = (mobile) => setUninstalledCalledMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
+  const calledUninstalledToday = (mobile) => uninstalledCalledMap[mobile] === todayStrUninstalled();
 
   // "Already messaged today" tracking for approved drivers who still have
   // the app and just haven't toggled online -- distinct from the above
@@ -645,26 +652,35 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       emptyMsg: lang === "en" ? "No driver has gone quiet this long, and none are blocked." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही, आणि कोणीही ब्लॉक्ड नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है, और कोई ब्लॉक्ड नहीं है।",
       // Blacklisted drivers folded in alongside likely-uninstalled ones --
       // see inactiveDrivers above for why (AdminDriverList is installed-
-      // only now, so this is their only remaining home).
-      items: inactiveDrivers,
-      renderItem: (d) => (
-        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}` }}>
-          <div>
-            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-            <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+      // only now, so this is their only remaining home). Called-today
+      // drivers sink to the bottom so admin can work down the list without
+      // re-calling the same person twice; blacklisted entries (no Call
+      // button at all) keep their relative order among the not-yet-called.
+      items: [...inactiveDrivers].sort((a, b) => Number(calledUninstalledToday(a.mobile)) - Number(calledUninstalledToday(b.mobile))),
+      renderItem: (d) => {
+        const called = calledUninstalledToday(d.mobile);
+        return (
+          <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}`, opacity: called ? 0.6 : 1 }}>
+            <div>
+              <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+              <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+              <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+            </div>
+            {d.blacklisted ? (
+              <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white" style={{ background: C.success }}>
+                {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
+              </button>
+            ) : (
+              <div className="shrink-0 flex flex-col items-center gap-0.5">
+                <a href={`tel:+91${d.mobile}`} onClick={() => markUninstalledCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                  <Phone size={14} color="#FFFFFF" />
+                </a>
+                {called && <CheckCircle2 size={14} color={C.success} />}
+              </div>
+            )}
           </div>
-          {d.blacklisted ? (
-            <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white" style={{ background: C.success }}>
-              {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
-            </button>
-          ) : (
-            <a href={`tel:+91${d.mobile}`} className="shrink-0 p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
-              <Phone size={14} color="#FFFFFF" />
-            </a>
-          )}
-        </div>
-      ),
+        );
+      },
     },
     lowWallet: {
       title: lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर",
