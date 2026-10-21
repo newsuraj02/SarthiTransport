@@ -2530,7 +2530,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
               <div key={req.id} className="rounded-xl p-4 shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: "#000000" }}>
-                    <AlertTriangle size={16} color={C.marigoldDeep} /> {lang === "en" ? "Unmatched Load — Inactive Vehicle Matches" : lang === "mr" ? "न जुळलेला लोड — इनअ‍ॅक्टिव्ह वाहन मॅच" : "असमान लोड — इनएक्टिव वाहन मैच"}
+                    <AlertTriangle size={16} color={C.marigoldDeep} /> {lang === "en" ? "Unmatched load" : lang === "mr" ? "न जुळलेला लोड" : "असमान लोड"}
                   </div>
                   <span className="text-[10px] font-black px-2.5 py-1 rounded-full shrink-0" style={{ background: C.safety, color: "#FFFFFF" }}>
                     {lang === "en" ? "Action needed" : lang === "mr" ? "कृती आवश्यक" : "कार्रवाई आवश्यक"}
@@ -2543,17 +2543,17 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                       <Phone size={11} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
                     </a>
                   </div>
-                  <div className="text-[11px] mt-1.5" style={{ color: C.inkSoft }}>📍 {req.pickup || "—"}</div>
-                  <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>🏁 {req.drop || "—"}</div>
-
-                  <div className="text-[11px] font-bold mt-2.5" style={{ color: C.ink }}>
-                    {lang === "en" ? "Requirement" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}
+                  <div className="text-[11px] mt-1.5" style={{ color: C.inkSoft }}>
+                    <b style={{ color: C.ink }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}:</b> {req.pickup || "—"}
                   </div>
-                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
-                    {dt.date} · {dt.time} · {req.weightKg ? `${req.weightKg}${req.weightUnit || "kg"}` : "—"} · {req.distanceKm ? `${Math.round(req.distanceKm)}km` : "—"}
+                  <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
+                    <b style={{ color: C.ink }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}:</b> {req.drop || "—"}
+                  </div>
+                  <div className="text-[11px] mt-2" style={{ color: C.inkSoft }}>
+                    <b style={{ color: C.ink }}>{lang === "en" ? "Requirement" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}:</b> {dt.date}, {dt.time}, {req.weightKg ? `${req.weightKg}${req.weightUnit || "kg"}` : "—"}, {req.distanceKm ? `${Math.round(req.distanceKm)}km` : "—"}
                   </div>
                   <div className="flex items-center gap-1.5 mt-2">
-                    <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Estimated Rate" : lang === "mr" ? "अंदाजे दर" : "अनुमानित दर"}:</span>
+                    <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}:</span>
                     <span className="text-[11px] font-bold" style={{ color: C.ink }}>₹</span>
                     <input type="number" value={estimateDrafts[req.id] ?? estimate} onChange={(e) => setEstimateDrafts((p) => ({ ...p, [req.id]: e.target.value }))}
                       className="w-20 rounded-lg px-2 py-1 text-xs font-bold" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
