@@ -6478,7 +6478,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 </p>
               ) : (
                 <button type="button" onClick={sendUnmatchedVehicleRequest} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
-                  {lang === "en" ? "Doesn't match requirement? Call Apna Transport directly" : lang === "mr" ? "गरज जुळत नाही? अपना ट्रान्सपोर्टला थेट कॉल करा" : "ज़रूरत नहीं मिल रही? अपना ट्रांसपोर्ट को सीधे कॉल करें"}
+                  {lang === "en" ? "Not seeing the right vehicle? Click here" : lang === "mr" ? "योग्य गाडी दिसत नाही? इथे क्लिक करा" : "सही गाड़ी नहीं दिख रही? यहाँ क्लिक करें"}
                 </button>
               )}
             </>
@@ -7057,7 +7057,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                 </p>
               ) : (
                 <button type="button" onClick={sendUnmatchedVehicleRequest} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
-                  {lang === "en" ? "Doesn't match requirement? Call Apna Transport directly" : lang === "mr" ? "गरज जुळत नाही? अपना ट्रान्सपोर्टला थेट कॉल करा" : "ज़रूरत नहीं मिल रही? अपना ट्रांसपोर्ट को सीधे कॉल करें"}
+                  {lang === "en" ? "Not seeing the right vehicle? Click here" : lang === "mr" ? "योग्य गाडी दिसत नाही? इथे क्लिक करा" : "सही गाड़ी नहीं दिख रही? यहाँ क्लिक करें"}
                 </button>
               )}
             </>
