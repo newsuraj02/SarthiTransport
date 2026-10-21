@@ -6038,7 +6038,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const [unmatchedRequested, setUnmatchedRequested] = useState(false);
   const sendUnmatchedVehicleRequest = () => {
     raiseUnmatchedVehicleRequest?.({
-      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "immediate",
+      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "immediate", distanceKm: distance,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
     });
     setUnmatchedRequested(true);
@@ -6624,7 +6624,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
   const [unmatchedRequested, setUnmatchedRequested] = useState(false);
   const sendUnmatchedVehicleRequest = () => {
     raiseUnmatchedVehicleRequest?.({
-      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "advance", scheduledFor: scheduledForValue,
+      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "advance", scheduledFor: scheduledForValue, distanceKm: distance,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
     });
     setUnmatchedRequested(true);
@@ -11914,11 +11914,11 @@ export default function App() {
   // CustomerBooking/CustomerAdvanceBooking). Logged only; matching offline
   // drivers and the admin's call action both happen client-side in
   // AdminAlerts, no Cloud Function involved.
-  const raiseUnmatchedVehicleRequest = ({ pickup, drop, weightKg, weightUnit, bookingType, scheduledFor, pickupLat, pickupLng }) =>
+  const raiseUnmatchedVehicleRequest = ({ pickup, drop, weightKg, weightUnit, bookingType, scheduledFor, distanceKm, pickupLat, pickupLng }) =>
     createDoc("unmatchedVehicleRequests", genId("UVR"), {
       customerMobile: customerAuth.mobile || "", customerName: customer?.name || "",
       pickup: pickup || "", drop: drop || "", weightKg: weightKg ?? null, weightUnit: weightUnit || "kg",
-      bookingType: bookingType || "immediate", scheduledFor: scheduledFor || null,
+      bookingType: bookingType || "immediate", scheduledFor: scheduledFor || null, distanceKm: distanceKm ?? null,
       pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null,
       status: "pending", createdAt: serverTimestamp(),
     }).catch((e) => console.error(e));

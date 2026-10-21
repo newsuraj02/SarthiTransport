@@ -2441,7 +2441,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   );
 }
 
-function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang, drivers, unmatchedVehicleRequests, handleUnmatchedVehicleRequest }) {
+function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang, drivers, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, fareTiers }) {
   // Smart Load-to-Vehicle Match -- a customer tapped "Doesn't match
   // requirement? Call Apna Transport directly" below the vehicle list
   // (CustomerBooking/CustomerAdvanceBooking) because no online vehicle
@@ -2471,6 +2471,35 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
       .slice(0, UNMATCHED_OFFLINE_MAX)
       .map((x) => x.driver);
   };
+  // Date/time shown under "Requirement" -- advance bookings carry their
+  // own scheduledFor ("YYYY-MM-DD HH:MM", see CustomerAdvanceBooking's
+  // scheduledForValue); an immediate booking has no such field, so its
+  // "when" is simply when the request itself was raised (createdAt).
+  const dateTimeFor = (req) => {
+    if (req.bookingType === "advance" && req.scheduledFor) {
+      const [d, t] = String(req.scheduledFor).split(" ");
+      return { date: d || "—", time: t || "—" };
+    }
+    const dt = req.createdAt?.toDate ? req.createdAt.toDate() : null;
+    if (!dt) return { date: "—", time: "—" };
+    const locale = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
+    return {
+      date: dt.toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }),
+      time: dt.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
+    };
+  };
+  // Admin-editable estimate, prefilled from the same fare formula the
+  // customer's own booking screen uses (calculateFare) -- only possible
+  // once both weight and a distance estimate exist; otherwise left blank
+  // for admin to fill in by hand.
+  const [estimateDrafts, setEstimateDrafts] = useState({});
+  const estimateFor = (req) => {
+    const loadKg = Number(req.weightKg) || 0;
+    const km = Number(req.distanceKm) || 0;
+    if (loadKg <= 0 || km <= 0) return "";
+    const zone = zoneFor(req.pickupLat ?? null, req.pickupLng ?? null, null, null, km);
+    return calculateFare(loadKg, km, fareTiers, zone, 0);
+  };
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
   // Draft reply text per complaint id, so opening one complaint's reply box
   // doesn't touch any other's. Prefilled with the existing adminReply (if
@@ -2495,6 +2524,8 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
         <div className="space-y-3">
           {pendingUnmatched.map((req) => {
             const offlineMatches = offlineMatchesFor(req);
+            const dt = dateTimeFor(req);
+            const estimate = estimateFor(req);
             return (
               <div key={req.id} className="rounded-xl p-4 shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
                 <div className="flex items-center justify-between gap-2 mb-2">
@@ -2506,11 +2537,26 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                   </span>
                 </div>
                 <div className="rounded-lg p-3 mb-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                  <div className="text-xs font-bold" style={{ color: C.ink }}>
-                    📦 {req.customerName || req.customerMobile} · {req.pickup}{req.drop ? ` → ${req.drop}` : ""}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-bold" style={{ color: C.ink }}>{req.customerName || req.customerMobile}</div>
+                    <a href={`tel:+91${req.customerMobile}`} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
+                      <Phone size={11} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
+                    </a>
+                  </div>
+                  <div className="text-[11px] mt-1.5" style={{ color: C.inkSoft }}>📍 {req.pickup || "—"}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>🏁 {req.drop || "—"}</div>
+
+                  <div className="text-[11px] font-bold mt-2.5" style={{ color: C.ink }}>
+                    {lang === "en" ? "Requirement" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}
                   </div>
                   <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>
-                    {lang === "en" ? "Needs" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}: {req.weightKg ? `${req.weightKg}${req.weightUnit || "kg"}` : "—"} · {formatTime(req.createdAt)}
+                    {dt.date} · {dt.time} · {req.weightKg ? `${req.weightKg}${req.weightUnit || "kg"}` : "—"} · {req.distanceKm ? `${Math.round(req.distanceKm)}km` : "—"}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Estimated Rate" : lang === "mr" ? "अंदाजे दर" : "अनुमानित दर"}:</span>
+                    <span className="text-[11px] font-bold" style={{ color: C.ink }}>₹</span>
+                    <input type="number" value={estimateDrafts[req.id] ?? estimate} onChange={(e) => setEstimateDrafts((p) => ({ ...p, [req.id]: e.target.value }))}
+                      className="w-20 rounded-lg px-2 py-1 text-xs font-bold" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
                   </div>
                 </div>
                 <div className="text-[11px] font-bold mb-1.5" style={{ color: C.success }}>
@@ -4029,7 +4075,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
-      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} />}
+      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} fareTiers={fareTiers} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
       {tab === "settings" && <AdminSettings latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>
