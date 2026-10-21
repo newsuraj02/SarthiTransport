@@ -25,7 +25,7 @@ import {
   getRouteScaleRatio, gpsStatus, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, locationsNear,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus, routeMatchRadiusKm,
-  sanitizeForDocId, trialDaysLeft, usePersistedState, uploadPhoto, KycDocThumb,
+  sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, SafeImage, StatTile, VEHICLE_HEADROOM_KG,
 } from "./App.jsx";
 
@@ -2885,15 +2885,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const markKycWhatsappSent = (mobile) => setKycWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrKyc() }));
   const sentKycToday = (mobile) => kycWhatsappSentMap[mobile] === todayStrKyc();
   const notSubmittedUnsent = notSubmittedKyc.filter((d) => !sentKycToday(d.mobile));
-  const capacityWhatsappLink = (mobile) => {
-    const portalLink = `${window.location.origin}${window.location.pathname}?driverKyc=1&mobile=${mobile}`;
-    const msg = lang === "en"
-      ? `Your vehicle's carrying capacity is missing from your KYC — please add it here so you can be matched and paid the right fare for loads: ${portalLink}\nYour photo, license and vehicle details are already saved — you'll just need to fill in the capacity.`
-      : lang === "mr"
-      ? `तुमच्या KYC मध्ये गाडीची क्षमता (कॅपॅसिटी) नमूद केलेली नाही — योग्य लोड आणि भाडे मिळण्यासाठी कृपया इथे भरा: ${portalLink}\nतुमचा फोटो, लायसन्स आणि गाडीची माहिती आधीच सेव्ह आहे — फक्त क्षमता भरायची आहे.`
-      : `आपकी KYC में गाड़ी की क्षमता (कैपेसिटी) दर्ज नहीं है — सही लोड और भाड़ा पाने के लिए कृपया यहां भरें: ${portalLink}\nआपका फोटो, लाइसेंस और गाड़ी की जानकारी पहले से सेव है — बस क्षमता भरनी है।`;
-    return `https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`;
-  };
   // "Total Drivers" and every tab/count below it all report the SAME
   // installed-drivers population (see installedDrivers) -- how many
   // actually still have the app on their phone, not how many driver docs
@@ -2972,31 +2963,6 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     setBulkSendResult({ kind, ...result });
     setBulkSendingKind(null);
   };
-  // Per-row "message just this one driver" -- same MSG91 template as the
-  // bulk button above (a bulk send of one), not the old wa.me plain-text
-  // links this replaces for the GPS-off and not-submitted-KYC cases (the
-  // two that have an approved MSG91 template). The old links were never
-  // actually removed when the bulk buttons were added, so messaging a
-  // single driver here kept firing an unreviewed, outdated message instead
-  // -- a real bug caught by the admin testing it on themselves. The
-  // "needsCapacity" KYC case below has no approved template yet, so it
-  // keeps its original wa.me link.
-  const [singleSendingMobile, setSingleSendingMobile] = useState(null);
-  // Surfaced next to the row's own button (see renderRow below) -- see
-  // AdminFleet's copy of this same state for why: a failed silent send
-  // and a successful one otherwise look identical, which is very likely
-  // what was actually behind the repeated "still shows the old message"
-  // reports on this feature.
-  const [singleSendResult, setSingleSendResult] = useState(null);
-  const sendSingleWhatsAppNow = async (kind, d, markSent) => {
-    if (bulkSendingKind || singleSendingMobile) return;
-    setSingleSendingMobile(d.mobile);
-    setSingleSendResult(null);
-    const result = await sendBulkDriverWhatsApp(kind, [d.mobile]);
-    if (result.ok) markSent(d.mobile);
-    setSingleSendResult({ mobile: d.mobile, kind, ok: result.ok, reason: result.reason });
-    setSingleSendingMobile(null);
-  };
   // Scoped to totalInstalled, same as the 4 sections above -- only active,
   // installed drivers are ever listed here, full stop. A blacklisted or
   // likely-uninstalled driver isn't findable from this screen at all
@@ -3026,71 +2992,19 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     const km = kycMeta[d.kyc] || kycMeta.none;
     const expanded = expandedId === d.id;
     const editing = editingId === d.id;
-    const daysLeft = trialDaysLeft(d.createdAt);
     const gps = gpsStatus(d, lang);
-    const notSubmitted = !d.vehicleSpec;
-    const needsCapacity = !!d.vehicleSpec && !d.vehicleSpec.capacityKg;
     return (
       <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper }}>
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
-            <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile} · {lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"} {fmt(d.wallet)}</div>
+            <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: d.online ? C.success : C.marigoldDeep }}>{d.online ? (lang === "en" ? "Online" : lang === "mr" ? "ऑनलाइन" : "ऑनलाइन") : (lang === "en" ? "Offline" : lang === "mr" ? "ऑफलाइन" : "ऑफलाइन")}</span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5" style={{ color: gps.color, background: gps.bg }} title={lang === "en" ? "GPS status" : lang === "mr" ? "GPS स्थिती" : "GPS स्थिति"}>
               <MapPin size={9} /> GPS {gps.label}
             </span>
-            {d.online && gps.stale && (
-              sentGpsToday(d.mobile) ? (
-                <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
-              ) : (
-                <button onClick={() => sendSingleWhatsAppNow("gpsOff", d, markGpsWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
-                  <MessageCircle size={9} /> WhatsApp
-                </button>
-              )
-            )}
-            {singleSendResult?.mobile === d.mobile && singleSendResult.kind === "gpsOff" && (
-              <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : singleSendResult.reason}>
-                {singleSendResult.ok
-                  ? (lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया")
-                  : (lang === "en" ? "Failed" : lang === "mr" ? "अयशस्वी" : "विफल")}
-              </span>
-            )}
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
-            {(notSubmitted || needsCapacity) && (
-              sentKycToday(d.mobile) ? (
-                <span className="text-[10px] font-semibold" style={{ color: C.navy }}>✓ {lang === "en" ? "Reminded" : lang === "mr" ? "आठवण दिली" : "याद दिलाया"}</span>
-              ) : (
-                notSubmitted ? (
-                  <button onClick={() => sendSingleWhatsAppNow("kycIncomplete", d, markKycWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.marigoldDeep, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
-                    <MessageCircle size={9} /> {lang === "en" ? "KYC WhatsApp" : lang === "mr" ? "KYC व्हॉट्सअ‍ॅप" : "KYC व्हाट्सएप"}
-                  </button>
-                ) : (
-                  <a href={capacityWhatsappLink(d.mobile)} target="_blank" rel="noreferrer" onClick={() => markKycWhatsappSent(d.mobile)}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: C.marigoldDeep }}>
-                    <MessageCircle size={9} /> {lang === "en" ? "Capacity WhatsApp" : lang === "mr" ? "क्षमता व्हॉट्सअ‍ॅप" : "क्षमता व्हाट्सएप"}
-                  </a>
-                )
-              )
-            )}
-            {singleSendResult?.mobile === d.mobile && singleSendResult.kind === "kycIncomplete" && (
-              <span className="text-[9px] font-bold" style={{ color: singleSendResult.ok ? C.success : C.safety }} title={singleSendResult.ok ? undefined : singleSendResult.reason}>
-                {singleSendResult.ok
-                  ? (lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया")
-                  : (lang === "en" ? "Failed" : lang === "mr" ? "अयशस्वी" : "विफल")}
-              </span>
-            )}
-            {daysLeft != null ? (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-                {lang === "en" ? `Trial · ${daysLeft}d left` : lang === "mr" ? `ट्रायल · ${daysLeft} दिवस बाकी` : `ट्रायल · ${daysLeft} दिन बाकी`}
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: C.inkSoft, background: "#E5E5E5" }}>{lang === "en" ? "Main Routine" : lang === "mr" ? "मुख्य रुटीन" : "मुख्य रूटीन"}</span>
-            )}
           </div>
         </div>
 
