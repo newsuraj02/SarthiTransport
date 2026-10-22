@@ -356,11 +356,32 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // a blacklisted driver again, let alone Unblock them, so it can't be
   // left out of that list.
   const inactiveDrivers = [...uninstalledDrivers, ...blacklistedDrivers];
-  // Same isLikelyUninstalled inactivity check as drivers above, reused
-  // as-is since it's generic over any lastActiveAt/createdAt-bearing
-  // record (see App.jsx) -- customers don't have a blacklist concept, so
-  // this is just the inactivity half, no blacklisted customers to fold in.
-  const uninstalledCustomers = (customers || []).filter(isLikelyUninstalled);
+  // NOT the same plain isLikelyUninstalled(c) used for drivers -- that
+  // only looks at lastActiveAt/createdAt, and customers' lastActiveAt
+  // bump only started recording once that shipped. A genuinely active
+  // customer who just hasn't happened to reopen the app since then would
+  // otherwise fall back to their (often months-old) account createdAt and
+  // get wrongly flagged as uninstalled on day one -- exactly the "active
+  // users showing up in the uninstalled list" bug this replaced. Their
+  // own booking history is a second, independent "still using the app"
+  // signal that doesn't depend on that new field at all, so the most
+  // recent of lastActiveAt/createdAt vs their latest booking's createdAt
+  // decides. Customers don't have a blacklist concept, so this is just
+  // the inactivity half, no blacklisted customers to fold in.
+  const CUSTOMER_UNINSTALL_INACTIVE_DAYS = 14;
+  const customerLastActiveMs = (c) => {
+    const candidates = [];
+    const ownTs = c.lastActiveAt?.toMillis ? c.lastActiveAt : c.createdAt;
+    if (ownTs?.toMillis) candidates.push(ownTs.toMillis());
+    for (const b of bookings || []) {
+      if (b.customerMobile === c.mobile && b.createdAt?.toMillis) candidates.push(b.createdAt.toMillis());
+    }
+    return candidates.length ? Math.max(...candidates) : null;
+  };
+  const uninstalledCustomers = (customers || []).filter((c) => {
+    const lastActiveMs = customerLastActiveMs(c);
+    return lastActiveMs != null && (Date.now() - lastActiveMs) >= CUSTOMER_UNINSTALL_INACTIVE_DAYS * 24 * 60 * 60 * 1000;
+  });
   // Matches AdminLiveMap's own "located" count exactly (installed,
   // non-blacklisted, has a lastKnownLocation) -- this tile's number and
   // what the map shows after tapping it must never diverge again.
