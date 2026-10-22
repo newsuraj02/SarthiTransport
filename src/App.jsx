@@ -2222,18 +2222,10 @@ function useRideNotifications(collectionName, docId, lang) {
   // once. The driver app doesn't need either: its own PermissionGate
   // asks instead.
 
-  // Clears fcmUnregisteredAt (see clearStaleFcmTokenOnFailure in
-  // functions/index.js) whenever a fresh token saves successfully, so a
-  // customer who reinstalls and re-grants permission doesn't stay flagged
-  // as "confirmed uninstalled" forever. Scoped to customers only -- this
-  // hook also runs for drivers (collectionName === "drivers"), whose own
-  // push-token save is covered by DriverHome's PermissionGate, a frozen
-  // path this intentionally leaves untouched.
-  const freshTokenPatch = (token) => ({ fcmToken: token, ...(collectionName === "customers" ? { fcmUnregisteredAt: null } : {}) });
   const enable = async () => {
     const result = await requestPushToken();
     if (result.ok && docId) {
-      patchDoc(collectionName, docId, freshTokenPatch(result.token)).catch((e) => console.error("[push token]", e));
+      patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
       setPermission("granted");
     } else if (isNativeApp) {
       setPermission(result.reason === "unsupported" ? "unsupported" : await checkPushPermission());
@@ -2252,7 +2244,7 @@ function useRideNotifications(collectionName, docId, lang) {
         : (typeof Notification !== "undefined" && Notification.permission === "granted");
       if (!granted || cancelled) return;
       const result = await requestPushToken();
-      if (result.ok) patchDoc(collectionName, docId, freshTokenPatch(result.token)).catch((e) => console.error("[push token]", e));
+      if (result.ok) patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
       const fn = await listenForegroundPush((payload) => {
         // A new-load alert gets an actual spoken "New Trip Alert" instead
         // of a beep — same reasoning as the direct-request Accept/Reject
@@ -7742,15 +7734,6 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
   // lands (myBookings.length changes).
   const [addingAnother, setAddingAnother] = useState(false);
   useEffect(() => { setAddingAnother(false); }, [myBookings.length]);
-  // Bumped once per mount (i.e. once per real app open, not on every
-  // re-render) -- mirrors DriverHome's own lastActiveAt bump below, the
-  // only signal AdminFleet's Uninstalled/Blocked split (see
-  // isLikelyUninstalled) has for "this customer actually opened the app
-  // recently," since there's no way to detect a real uninstall directly.
-  useEffect(() => {
-    patchDoc("customers", customerMobile, { lastActiveAt: serverTimestamp() }).catch((e) => console.error("[customer lastActiveAt]", e));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   // A booking scheduled for a future date shouldn't hog the home screen or
   // block posting today's ride — it stays reachable via the Current/Advance
   // toggle in the header instead (see rideView below).
@@ -7837,7 +7820,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
           if (!custPushGateTried.current) { custPushGateTried.current = true; openNativeSettingsBridge("notifications"); }
         } else if (pushPerm !== "granted") {
           const r = await requestPushToken();
-          if (r.ok) patchDoc("customers", customerMobile, { fcmToken: r.token, fcmUnregisteredAt: null }).catch((e) => console.error("[push token]", e));
+          if (r.ok) patchDoc("customers", customerMobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
         }
       } catch (e) {
         console.error("[customer push gate]", e);
