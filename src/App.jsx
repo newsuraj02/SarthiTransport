@@ -2222,10 +2222,18 @@ function useRideNotifications(collectionName, docId, lang) {
   // once. The driver app doesn't need either: its own PermissionGate
   // asks instead.
 
+  // Clears fcmUnregisteredAt (see clearStaleFcmTokenOnFailure in
+  // functions/index.js) whenever a fresh token saves successfully, so a
+  // customer who reinstalls and re-grants permission doesn't stay flagged
+  // as "confirmed uninstalled" forever. Scoped to customers only -- this
+  // hook also runs for drivers (collectionName === "drivers"), whose own
+  // push-token save is covered by DriverHome's PermissionGate, a frozen
+  // path this intentionally leaves untouched.
+  const freshTokenPatch = (token) => ({ fcmToken: token, ...(collectionName === "customers" ? { fcmUnregisteredAt: null } : {}) });
   const enable = async () => {
     const result = await requestPushToken();
     if (result.ok && docId) {
-      patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+      patchDoc(collectionName, docId, freshTokenPatch(result.token)).catch((e) => console.error("[push token]", e));
       setPermission("granted");
     } else if (isNativeApp) {
       setPermission(result.reason === "unsupported" ? "unsupported" : await checkPushPermission());
@@ -2244,7 +2252,7 @@ function useRideNotifications(collectionName, docId, lang) {
         : (typeof Notification !== "undefined" && Notification.permission === "granted");
       if (!granted || cancelled) return;
       const result = await requestPushToken();
-      if (result.ok) patchDoc(collectionName, docId, { fcmToken: result.token }).catch((e) => console.error("[push token]", e));
+      if (result.ok) patchDoc(collectionName, docId, freshTokenPatch(result.token)).catch((e) => console.error("[push token]", e));
       const fn = await listenForegroundPush((payload) => {
         // A new-load alert gets an actual spoken "New Trip Alert" instead
         // of a beep — same reasoning as the direct-request Accept/Reject
@@ -7829,7 +7837,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
           if (!custPushGateTried.current) { custPushGateTried.current = true; openNativeSettingsBridge("notifications"); }
         } else if (pushPerm !== "granted") {
           const r = await requestPushToken();
-          if (r.ok) patchDoc("customers", customerMobile, { fcmToken: r.token }).catch((e) => console.error("[push token]", e));
+          if (r.ok) patchDoc("customers", customerMobile, { fcmToken: r.token, fcmUnregisteredAt: null }).catch((e) => console.error("[push token]", e));
         }
       } catch (e) {
         console.error("[customer push gate]", e);

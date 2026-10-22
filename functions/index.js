@@ -56,7 +56,15 @@ async function clearStaleFcmTokenOnFailure(collectionName, docId, error) {
     || /unregistered/i.test(error?.message || "");
   if (!isUnregistered) return;
   try {
-    await db.collection(collectionName).doc(docId).update({ fcmToken: null });
+    // fcmUnregisteredAt is FCM's own confirmation that this exact device
+    // uninstalled/unregistered -- not an inactivity guess. AdminFleet's
+    // Uninstalled/Blocked -> Customers section (owner request, 2026-10-22:
+    // "only confirmed uninstall customer users") filters on this field
+    // instead of a lastActiveAt/createdAt-age heuristic, which was
+    // wrongly flagging customers who simply hadn't reopened the app since
+    // lastActiveAt tracking shipped. Written for drivers too (same signal,
+    // same confidence) even though nothing reads it for drivers yet.
+    await db.collection(collectionName).doc(docId).update({ fcmToken: null, fcmUnregisteredAt: FieldValue.serverTimestamp() });
   } catch (e) {
     console.error(`[push] failed to clear stale token for ${collectionName}/${docId}:`, e.message);
   }

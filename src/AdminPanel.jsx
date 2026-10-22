@@ -356,32 +356,22 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // a blacklisted driver again, let alone Unblock them, so it can't be
   // left out of that list.
   const inactiveDrivers = [...uninstalledDrivers, ...blacklistedDrivers];
-  // NOT the same plain isLikelyUninstalled(c) used for drivers -- that
-  // only looks at lastActiveAt/createdAt, and customers' lastActiveAt
-  // bump only started recording once that shipped. A genuinely active
-  // customer who just hasn't happened to reopen the app since then would
-  // otherwise fall back to their (often months-old) account createdAt and
-  // get wrongly flagged as uninstalled on day one -- exactly the "active
-  // users showing up in the uninstalled list" bug this replaced. Their
-  // own booking history is a second, independent "still using the app"
-  // signal that doesn't depend on that new field at all, so the most
-  // recent of lastActiveAt/createdAt vs their latest booking's createdAt
-  // decides. Customers don't have a blacklist concept, so this is just
-  // the inactivity half, no blacklisted customers to fold in.
-  const CUSTOMER_UNINSTALL_INACTIVE_DAYS = 14;
-  const customerLastActiveMs = (c) => {
-    const candidates = [];
-    const ownTs = c.lastActiveAt?.toMillis ? c.lastActiveAt : c.createdAt;
-    if (ownTs?.toMillis) candidates.push(ownTs.toMillis());
-    for (const b of bookings || []) {
-      if (b.customerMobile === c.mobile && b.createdAt?.toMillis) candidates.push(b.createdAt.toMillis());
-    }
-    return candidates.length ? Math.max(...candidates) : null;
-  };
-  const uninstalledCustomers = (customers || []).filter((c) => {
-    const lastActiveMs = customerLastActiveMs(c);
-    return lastActiveMs != null && (Date.now() - lastActiveMs) >= CUSTOMER_UNINSTALL_INACTIVE_DAYS * 24 * 60 * 60 * 1000;
-  });
+  // NOT an inactivity guess (that was the bug -- a plain lastActiveAt/
+  // createdAt-age check flagged plenty of genuinely active customers,
+  // since customers' lastActiveAt only started recording once that
+  // shipped). Owner request (2026-10-22): only list a customer here once
+  // there's a CONFIRMED signal, not an inference -- fcmUnregisteredAt is
+  // set server-side (see clearStaleFcmTokenOnFailure in functions/index.js)
+  // only when a push to that customer's device actually failed with FCM's
+  // own "token not registered" error, which Firebase's docs call out as
+  // the real-world signal for an actual uninstall/reinstall. Cleared again
+  // the moment a fresh token saves (see freshTokenPatch/the push gate in
+  // App.jsx), so a customer who reinstalls doesn't stay stuck on this list.
+  // Narrower than the driver list by design -- this will miss a customer
+  // who uninstalled but never had an app-side push attempt fail (e.g. no
+  // active booking since), which is the right trade-off here: better to
+  // under-list than to list someone who's still actively using the app.
+  const uninstalledCustomers = (customers || []).filter((c) => !!c.fcmUnregisteredAt);
   // Matches AdminLiveMap's own "located" count exactly (installed,
   // non-blacklisted, has a lastKnownLocation) -- this tile's number and
   // what the map shows after tapping it must never diverge again.
