@@ -355,7 +355,25 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // strictly installed-only, this tile is the only place left to even see
   // a blacklisted driver again, let alone Unblock them, so it can't be
   // left out of that list.
-  const inactiveDrivers = [...uninstalledDrivers, ...blacklistedDrivers];
+  // A driver doc is created automatically the instant anyone verifies OTP
+  // on the Driver login screen (see "My own driver profile" below) -- a
+  // bare stub (kyc: null, vehicleSpec: null), no real driver signal at
+  // all. Someone who only ever actually used the Customer side, but once
+  // tapped into Driver login (curiosity, a shared/test device, a wrong
+  // tab), gets stuck with this permanent inert stub forever, which then
+  // ages into isLikelyUninstalled and wrongly shows up here as an
+  // "uninstalled driver" even though they're really a customer -- reported
+  // live (2026-10-23): plenty of this list's ~129 entries were actually
+  // customers. Only uninstalledDrivers (the inactivity-inferred half)
+  // needs this check filtered OUT before display -- NOT re-derived into
+  // uninstalledDrivers itself, which every other KPI/tile on this
+  // dashboard (Total Drivers, etc.) also reads and must keep agreeing
+  // with (see partitionDriversByInstallStatus's own comment). Submitting
+  // vehicleSpec at least once is the real "I signed up to drive" signal;
+  // blacklistedDrivers is exempt since blocking is always a deliberate
+  // admin action on the driver side, a real signal regardless of
+  // vehicleSpec.
+  const inactiveDrivers = [...uninstalledDrivers.filter((d) => !!d.vehicleSpec), ...blacklistedDrivers];
   // NOT an inactivity guess (that was the bug -- a plain lastActiveAt/
   // createdAt-age check flagged plenty of genuinely active customers,
   // since customers' lastActiveAt only started recording once that
