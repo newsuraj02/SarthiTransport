@@ -356,6 +356,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // a blacklisted driver again, let alone Unblock them, so it can't be
   // left out of that list.
   const inactiveDrivers = [...uninstalledDrivers, ...blacklistedDrivers];
+  // Same isLikelyUninstalled inactivity check as drivers above, reused
+  // as-is since it's generic over any lastActiveAt/createdAt-bearing
+  // record (see App.jsx) -- customers don't have a blacklist concept, so
+  // this is just the inactivity half, no blacklisted customers to fold in.
+  const uninstalledCustomers = (customers || []).filter(isLikelyUninstalled);
   // Matches AdminLiveMap's own "located" count exactly (installed,
   // non-blacklisted, has a lastKnownLocation) -- this tile's number and
   // what the map shows after tapping it must never diverge again.
@@ -649,38 +654,76 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     },
     uninstalled: {
       title: lang === "en" ? "Uninstalled / Blocked" : lang === "mr" ? "अनइन्स्टॉल्ड / ब्लॉक्ड" : "अनइंस्टॉल्ड / ब्लॉक्ड",
-      emptyMsg: lang === "en" ? "No driver has gone quiet this long, and none are blocked." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही, आणि कोणीही ब्लॉक्ड नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है, और कोई ब्लॉक्ड नहीं है।",
-      // Blacklisted drivers folded in alongside likely-uninstalled ones --
-      // see inactiveDrivers above for why (AdminDriverList is installed-
-      // only now, so this is their only remaining home). Called-today
-      // drivers sink to the bottom so admin can work down the list without
-      // re-calling the same person twice; blacklisted entries (no Call
-      // button at all) keep their relative order among the not-yet-called.
-      items: [...inactiveDrivers].sort((a, b) => Number(calledUninstalledToday(a.mobile)) - Number(calledUninstalledToday(b.mobile))),
-      renderItem: (d) => {
-        const called = calledUninstalledToday(d.mobile);
-        return (
-          <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}`, opacity: called ? 0.6 : 1 }}>
-            <div>
-              <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-              <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
-              <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
-            </div>
-            {d.blacklisted ? (
-              <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white" style={{ background: C.success }}>
-                {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
-              </button>
-            ) : (
-              <div className="shrink-0 flex flex-col items-center gap-0.5">
-                <a href={`tel:+91${d.mobile}`} onClick={() => markUninstalledCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
-                  <Phone size={14} color="#FFFFFF" />
-                </a>
-                {called && <CheckCircle2 size={14} color={C.success} />}
+      // Split into two clearly separate sections (owner request, 2026-10-22)
+      // instead of one mixed list -- a driver and a customer are called for
+      // completely different reasons (reinstall for a job vs. reinstall to
+      // book a ride again), so admin needs to know which role they're
+      // dialing before the call connects, not figure it out mid-conversation.
+      // Both sections share the same calledUninstalledToday/
+      // markUninstalledCalled map (keyed by mobile) -- the point of that
+      // tracker is "have I already rung this number today," which doesn't
+      // change based on which role the number is being called about.
+      sections: [
+        {
+          key: "drivers",
+          label: lang === "en" ? "Drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर",
+          emptyMsg: lang === "en" ? "No driver has gone quiet this long, and none are blocked." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही, आणि कोणीही ब्लॉक्ड नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है, और कोई ब्लॉक्ड नहीं है।",
+          // Blacklisted drivers folded in alongside likely-uninstalled ones --
+          // see inactiveDrivers above for why (AdminDriverList is installed-
+          // only now, so this is their only remaining home). Called-today
+          // drivers sink to the bottom so admin can work down the list without
+          // re-calling the same person twice; blacklisted entries (no Call
+          // button at all) keep their relative order among the not-yet-called.
+          items: [...inactiveDrivers].sort((a, b) => Number(calledUninstalledToday(a.mobile)) - Number(calledUninstalledToday(b.mobile))),
+          renderItem: (d) => {
+            const called = calledUninstalledToday(d.mobile);
+            return (
+              <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}`, opacity: called ? 0.6 : 1 }}>
+                <div>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.mobile}</div>
+                  <div className="text-[11px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"}</div>
+                </div>
+                {d.blacklisted ? (
+                  <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white" style={{ background: C.success }}>
+                    {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
+                  </button>
+                ) : (
+                  <div className="shrink-0 flex flex-col items-center gap-0.5">
+                    <a href={`tel:+91${d.mobile}`} onClick={() => markUninstalledCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                      <Phone size={14} color="#FFFFFF" />
+                    </a>
+                    {called && <CheckCircle2 size={14} color={C.success} />}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        );
-      },
+            );
+          },
+        },
+        {
+          key: "customers",
+          label: lang === "en" ? "Customers" : lang === "mr" ? "कस्टमर" : "कस्टमर",
+          emptyMsg: lang === "en" ? "No customer has gone quiet this long." : lang === "mr" ? "कोणताही कस्टमर इतका काळ गप्प नाही." : "कोई भी कस्टमर इतने दिन से खामोश नहीं है।",
+          items: [...uninstalledCustomers].sort((a, b) => Number(calledUninstalledToday(a.mobile)) - Number(calledUninstalledToday(b.mobile))),
+          renderItem: (c) => {
+            const called = calledUninstalledToday(c.mobile);
+            return (
+              <div key={c.mobile} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}`, opacity: called ? 0.6 : 1 }}>
+                <div>
+                  <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name || "—"}</div>
+                  <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                </div>
+                <div className="shrink-0 flex flex-col items-center gap-0.5">
+                  <a href={`tel:+91${c.mobile}`} onClick={() => markUninstalledCalled(c.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                    <Phone size={14} color="#FFFFFF" />
+                  </a>
+                  {called && <CheckCircle2 size={14} color={C.success} />}
+                </div>
+              </div>
+            );
+          },
+        },
+      ],
     },
     lowWallet: {
       title: lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर",
@@ -927,7 +970,20 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         </button>
         <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{page.title}</h2>
         {page.headerExtra}
-        {page.items.length === 0 ? (
+        {page.sections ? (
+          page.sections.map((section) => (
+            <div key={section.key} className="mb-4">
+              <div className="text-xs font-bold mb-1.5 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
+                {section.label} <span className="px-1.5 py-0.5 rounded-full" style={{ background: C.bg, color: C.ink }}>{section.items.length}</span>
+              </div>
+              {section.items.length === 0 ? (
+                <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{section.emptyMsg}</p>
+              ) : (
+                <div className="space-y-1.5">{section.items.map(section.renderItem)}</div>
+              )}
+            </div>
+          ))
+        ) : page.items.length === 0 ? (
           <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{page.emptyMsg}</p>
         ) : (
           <div className="space-y-1.5">{page.items.map(page.renderItem)}</div>

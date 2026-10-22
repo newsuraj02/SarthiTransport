@@ -7734,6 +7734,15 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
   // lands (myBookings.length changes).
   const [addingAnother, setAddingAnother] = useState(false);
   useEffect(() => { setAddingAnother(false); }, [myBookings.length]);
+  // Bumped once per mount (i.e. once per real app open, not on every
+  // re-render) -- mirrors DriverHome's own lastActiveAt bump below, the
+  // only signal AdminFleet's Uninstalled/Blocked split (see
+  // isLikelyUninstalled) has for "this customer actually opened the app
+  // recently," since there's no way to detect a real uninstall directly.
+  useEffect(() => {
+    patchDoc("customers", customerMobile, { lastActiveAt: serverTimestamp() }).catch((e) => console.error("[customer lastActiveAt]", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // A booking scheduled for a future date shouldn't hog the home screen or
   // block posting today's ride — it stays reachable via the Current/Advance
   // toggle in the header instead (see rideView below).
