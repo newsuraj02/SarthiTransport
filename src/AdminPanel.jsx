@@ -432,6 +432,15 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // its own Back button) showing the live record list behind that count —
   // a separate screen, not an inline panel on the dashboard itself.
   const [detailView, setDetailView] = useState(null);
+  // Which of a sectioned detail page's sections is showing -- e.g.
+  // Uninstalled/Blocked's Drivers vs Customers split (see detailPages.
+  // uninstalled below) -- a toggle between the two instead of both
+  // stacked at once. Keyed by the page's first section on open (reset
+  // whenever a different detailView opens, see the effect below), not
+  // hardcoded to "drivers", so this stays generic for any future
+  // sectioned page.
+  const [activeSectionKey, setActiveSectionKey] = useState(null);
+  useEffect(() => { setActiveSectionKey(null); }, [detailView]);
 
   // KYC approval queue for "New Registrations" -> Driver (see
   // detailView === "newRegistrations" below) -- only drivers who've
@@ -970,20 +979,30 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         </button>
         <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{page.title}</h2>
         {page.headerExtra}
-        {page.sections ? (
-          page.sections.map((section) => (
-            <div key={section.key} className="mb-4">
-              <div className="text-xs font-bold mb-1.5 flex items-center gap-1.5" style={{ color: C.inkSoft }}>
-                {section.label} <span className="px-1.5 py-0.5 rounded-full" style={{ background: C.bg, color: C.ink }}>{section.items.length}</span>
+        {page.sections ? (() => {
+          const activeSection = page.sections.find((s) => s.key === activeSectionKey) || page.sections[0];
+          return (
+            <>
+              <div className="flex gap-2 mb-3">
+                {page.sections.map((section) => {
+                  const active = section.key === activeSection.key;
+                  return (
+                    <button key={section.key} onClick={() => setActiveSectionKey(section.key)}
+                      className="flex-1 text-xs font-bold px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5"
+                      style={{ background: active ? C.navy : C.bg, color: active ? "#fff" : C.ink, border: `1px solid ${active ? C.navy : C.line}` }}>
+                      {section.label} <span className="px-1.5 py-0.5 rounded-full" style={{ background: active ? "rgba(255,255,255,0.2)" : "#FFFFFF", color: active ? "#fff" : C.ink }}>{section.items.length}</span>
+                    </button>
+                  );
+                })}
               </div>
-              {section.items.length === 0 ? (
-                <p className="text-xs text-center py-6" style={{ color: C.inkSoft }}>{section.emptyMsg}</p>
+              {activeSection.items.length === 0 ? (
+                <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{activeSection.emptyMsg}</p>
               ) : (
-                <div className="space-y-1.5">{section.items.map(section.renderItem)}</div>
+                <div className="space-y-1.5">{activeSection.items.map(activeSection.renderItem)}</div>
               )}
-            </div>
-          ))
-        ) : page.items.length === 0 ? (
+            </>
+          );
+        })() : page.items.length === 0 ? (
           <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{page.emptyMsg}</p>
         ) : (
           <div className="space-y-1.5">{page.items.map(page.renderItem)}</div>
