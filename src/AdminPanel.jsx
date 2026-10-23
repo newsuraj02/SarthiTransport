@@ -3254,7 +3254,22 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   const [expandedId, setExpandedId] = useState(null);
   const [statusExpandedId, setStatusExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q));
+  // Owner request: whoever has the most recent ride activity (any status --
+  // Searching/Ongoing/Completed/Cancelled) should float to the top of the
+  // list, instead of whatever order the customers collection happens to
+  // come back in. One pass over bookings finds each customer's single most
+  // recent booking; customers with no bookings at all sink to the bottom
+  // (their "latest activity" timestamp is 0).
+  const latestRideByMobile = {};
+  for (const b of bookings || []) {
+    if (!b.customerMobile) continue;
+    const t = b.createdAt?.toMillis?.() || 0;
+    const cur = latestRideByMobile[b.customerMobile];
+    if (!cur || t > (cur.createdAt?.toMillis?.() || 0)) latestRideByMobile[b.customerMobile] = b;
+  }
+  const filtered = (customers || [])
+    .filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q))
+    .sort((a, b) => (latestRideByMobile[b.mobile]?.createdAt?.toMillis?.() || 0) - (latestRideByMobile[a.mobile]?.createdAt?.toMillis?.() || 0));
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Searching", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
     : lang === "mr"
@@ -3278,8 +3293,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
           const expanded = expandedId === c.mobile;
           const statusExpanded = statusExpandedId === c.mobile;
           const rides = (bookings || []).filter((b) => b.customerMobile === c.mobile);
-          const sortedRides = [...rides].sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-          const latestRide = sortedRides[0] || null;
+          const latestRide = latestRideByMobile[c.mobile] || null;
           const currentStatusMeta = latestRide ? (statusMeta[latestRide.status] || statusMeta.Cancelled) : noActivityMeta;
           return (
             <div key={c.mobile} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
