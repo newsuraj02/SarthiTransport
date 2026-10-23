@@ -1347,72 +1347,134 @@ export function priceCorrectionFactor(tierMaxKg) {
   return 1;
 }
 
-// Price Corrector (outstation) -- v2, owner request 2026-10-23. The
-// earlier flat multiplier only matched Porter's level at one reference
-// distance; it couldn't fix the SHAPE, since a constant multiplier
-// preserves whatever curve the underlying formula already has, and the
-// old outstation formula (max(km×outerPer, outerMin, c30) + km×tollPerKm)
-// is purely proportional once past its floors -- flat effective ₹/km at
-// every distance. Porter's own real pricing has a large persistent
-// fixed/base charge plus a comparatively small per-km rate, so their
-// EFFECTIVE ₹/km rate genuinely drops as trips get longer -- confirmed
-// from two real Porter data points per tier (113km and 199km): a 500kg
-// trip was ₹31.69/km at 113km but only ₹21.92/km at 199km, same pattern
-// on every tier. That's the actual pattern the old formula was missing,
-// not just a level mismatch -- so this REPLACES the outstation branch of
-// calculateFare entirely with a true fix+perKm line per tier (the same
-// additive shape the in-city formula already uses), solved directly from
-// Porter's own two real points × 0.95, instead of layering a multiplier
-// on top of the old proportional shape. outerMin/outerPer/tollPerKm on
-// DEFAULT_FARE_TIERS are no longer read for outstation pricing at all
-// (still used by AdminRateCalculator's own manual-entry "suggestion"
-// preview in AdminPanel.jsx, a separate, pre-existing, formula-only tool
-// -- not touched here, same as the in-city corrector never fed into it).
+// Price Corrector (outstation) -- v3, owner request 2026-10-23: "changes
+// the prices according to the porter graph increase across all the
+// tiers," including tiers above 5000kg where no Porter data exists at
+// all. v2 fit one straight line per tier from 2 Porter points (113km,
+// 199km); this replaces it with a genuine PIECEWISE curve built from
+// every real Porter point collected per tier (40km-743km, up to 6 points
+// each), so the shape actually follows Porter's real growth instead of a
+// single straight-line approximation of it.
 //
-// Porter's own 3500kg/5000kg(4500kg-class) lines cross near 134km --
-// 3500kg costs more below that, 5000kg costs more above it, confirmed
-// consistent across both real data points, a genuine feature of Porter's
-// own pricing, not a data error. Owner's explicit rule: 5000kg must never
-// show cheaper than 3500kg at any distance. Since 5000kg's own per-km
-// slope is already higher than 3500kg's, raising just 5000kg's fixed base
-// to match 3500kg's (running-max-by-capacity clamp, applied to `fix` and
-// `perKm` independently, same philosophy as enforceMonotonicFares) is
-// enough to guarantee 5000kg's line sits at or above 3500kg's for every
-// km >= 0 -- 5000kg's own per-km rate is untouched, only its fixed base
-// moved up. A no-op for every other tier in this data -- perKm was
-// already monotonic ascending by capacity on its own.
-const OUTSTATION_CURVE_ANCHORS = (() => {
-  const raw = [
-    { maxKg: 500, porter113: 3581, porter199: 4363 },
-    { maxKg: 750, porter113: 4129, porter199: 5173 },
-    { maxKg: 1200, porter113: 4867, porter199: 6130 },
-    { maxKg: 2000, porter113: 5387, porter199: 6768 },
-    { maxKg: 3500, porter113: 6767, porter199: 8437 },
-    { maxKg: 5000, porter113: 6510, porter199: 9264 },
-  ].map((a) => {
-    const perKm = (a.porter199 - a.porter113) / (199 - 113);
-    const fix = a.porter113 - perKm * 113;
-    return { maxKg: a.maxKg, fix: fix * 0.95, perKm: perKm * 0.95 };
-  });
-  let maxFix = -Infinity, maxPerKm = -Infinity;
-  return raw.map((a) => {
-    maxFix = Math.max(maxFix, a.fix);
-    maxPerKm = Math.max(maxPerKm, a.perKm);
-    return { maxKg: a.maxKg, fix: maxFix, perKm: maxPerKm };
-  });
-})();
-function outstationCurveFor(tierMaxKg) {
-  const anchors = OUTSTATION_CURVE_ANCHORS;
-  if (tierMaxKg <= anchors[0].maxKg) return anchors[0];
-  if (tierMaxKg >= anchors[anchors.length - 1].maxKg) return anchors[anchors.length - 1];
-  for (let i = 0; i < anchors.length - 1; i++) {
-    const a = anchors[i], b = anchors[i + 1];
-    if (tierMaxKg >= a.maxKg && tierMaxKg <= b.maxKg) {
-      const frac = (tierMaxKg - a.maxKg) / (b.maxKg - a.maxKg);
-      return { maxKg: tierMaxKg, fix: a.fix + (b.fix - a.fix) * frac, perKm: a.perKm + (b.perKm - a.perKm) * frac };
+// PORTER_OUTSTATION_RAW: every real data point collected this session, by
+// tier, sorted by km. 6 tiers have 2+ points (enough for their own
+// piecewise curve); 2500kg has only 1 (40km) -- not enough to fit a line,
+// so it's treated as an interpolation target between 2000kg and 3500kg
+// instead (see priceOutstation below), same as every untested tier.
+//
+// Two real traps already hit and fixed while building this -- both stay
+// fixed here:
+// 1. Never extrapolate a tier's own long-haul segment slope BACKWARD past
+//    its lowest real point down to short distances -- that's exactly what
+//    produced a 137% overshoot at 40km earlier (a fixed+perKm line fit
+//    from 113-199km data has no business being evaluated at 40km). 500kg
+//    and 3500kg have no real 40km point of their own; SHORT_DISTANCE_DONOR
+//    below borrows the real short-distance shape from the nearest tier
+//    that DOES have 40km coverage (750kg, 5000kg respectively), scaled by
+//    the old base formula's ratio, instead of extrapolating backward.
+// 2. Porter's own data isn't internally consistent across tiers -- at
+//    537km/743km their 750kg quote is actually HIGHER than their 1200kg
+//    quote for the same trip (confirmed at both distances, not a
+//    transcription error -- genuine volatility in Porter's own long-range
+//    pricing). Owner's standing rule: a bigger-capacity tier must never
+//    show cheaper than a smaller one, at ANY distance. priceOutstation
+//    enforces this as a running max over every tier up to and including
+//    the requested one, evaluated fresh at the actual km each time --
+//    not a one-time clamp on a fixed anchor table -- so it holds
+//    regardless of where in Porter's own (sometimes inconsistent) data
+//    the inconsistency shows up. The direct, unavoidable consequence:
+//    1200kg and 2000kg sometimes get pulled UP above their OWN real
+//    Porter quote at long range, to stay above 750kg's inflated one -- a
+//    known, accepted trade-off of the monotonicity rule, not a bug.
+const PORTER_OUTSTATION_RAW = {
+  500: [[113, 3581], [199, 4363], [362, 5065], [537, 6164], [743, 7396]],
+  750: [[40, 1297], [113, 4129], [199, 5173], [362, 7435], [537, 14195], [743, 24179]],
+  1200: [[40, 1589], [113, 4867], [199, 6130], [362, 8463], [537, 13343], [743, 17575]],
+  2000: [[40, 1743], [113, 5387], [199, 6768], [362, 9416], [537, 15530], [743, 20174]],
+  3500: [[113, 6767], [199, 8437], [362, 12251], [537, 21149], [743, 35650]],
+  5000: [[40, 4439], [113, 6510], [199, 9264], [362, 15285], [537, 21103], [743, 24343]],
+};
+const OUTSTATION_ANCHOR_TIER_KGS = [500, 750, 1200, 2000, 3500, 5000]; // ascending
+const SHORT_DISTANCE_DONOR_KG = { 500: 750, 3500: 5000 };
+const OUTSTATION_CORRECTION = 0.95;
+const OUTSTATION_ANCHOR_CURVES = Object.fromEntries(
+  OUTSTATION_ANCHOR_TIER_KGS.map((kg) => [kg, PORTER_OUTSTATION_RAW[kg].map(([km, p]) => [km, p * OUTSTATION_CORRECTION])])
+);
+// Old (pre-corrector) outstation formula -- no longer used for live
+// pricing, kept only as a relative-sizing reference for tiers with zero
+// Porter data (the short-distance donor scaling above, and every tier
+// above 5000kg below), since it's already tuned to be sensibly monotonic
+// across all 24 tiers (see DEFAULT_FARE_TIERS' own isotonic-regression
+// note).
+function oldBaseOutstationFormula(tierMaxKg, km) {
+  const t = findFareTier(tierMaxKg, DEFAULT_FARE_TIERS);
+  const c30 = t.innerFix + 27 * t.innerPer;
+  return Math.max(km * t.outerPer, t.outerMin, c30) + km * t.tollPerKm;
+}
+// One anchor tier's own piecewise curve, NOT yet clamped against sibling
+// tiers -- interpolates between its own real points, extrapolates past
+// its last real point using that final segment's own slope (a forward
+// extrapolation past 743km, the longest real data available, is a much
+// smaller leap than extrapolating backward below 40km was).
+function evalOutstationAnchorCurve(tierMaxKg, km) {
+  const pts = OUTSTATION_ANCHOR_CURVES[tierMaxKg];
+  if (km < pts[0][0]) {
+    const donorKg = SHORT_DISTANCE_DONOR_KG[tierMaxKg];
+    if (donorKg != null) {
+      const ratio = oldBaseOutstationFormula(tierMaxKg, km) / oldBaseOutstationFormula(donorKg, km);
+      return evalOutstationAnchorCurve(donorKg, km) * ratio;
     }
+    const [km1, p1] = pts[0], [km2, p2] = pts[1];
+    return Math.max(0, p1 + ((p2 - p1) / (km2 - km1)) * (km - km1));
   }
-  return anchors[anchors.length - 1];
+  if (km >= pts[pts.length - 1][0]) {
+    const [km1, p1] = pts[pts.length - 2], [km2, p2] = pts[pts.length - 1];
+    return p2 + ((p2 - p1) / (km2 - km1)) * (km - km2);
+  }
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [km1, p1] = pts[i], [km2, p2] = pts[i + 1];
+    if (km >= km1 && km <= km2) return p1 + (p2 - p1) * ((km - km1) / (km2 - km1));
+  }
+  return pts[pts.length - 1][1];
+}
+// Raw (not yet clamped against siblings) value for ANY tier, anchored,
+// interpolated between two anchors by capacity (same technique as
+// interpolateOutlierFare, now applied per-km instead of to one factor),
+// or -- for every tier above the heaviest anchor (5000kg), where zero
+// Porter data exists at any distance -- scaled from the 5000kg anchor's
+// own real curve by the old base formula's ratio, so a 12000kg or 30000kg
+// trip still follows Porter's real observed shape, just sized up using
+// the formula's own already-tuned relative tier sizing.
+function rawOutstationValue(tierMaxKg, km) {
+  if (OUTSTATION_ANCHOR_TIER_KGS.includes(tierMaxKg)) return evalOutstationAnchorCurve(tierMaxKg, km);
+  const topAnchorKg = OUTSTATION_ANCHOR_TIER_KGS[OUTSTATION_ANCHOR_TIER_KGS.length - 1];
+  if (tierMaxKg > topAnchorKg) {
+    const ratio = oldBaseOutstationFormula(tierMaxKg, km) / oldBaseOutstationFormula(topAnchorKg, km);
+    return evalOutstationAnchorCurve(topAnchorKg, km) * ratio;
+  }
+  let belowKg = null, aboveKg = null;
+  for (const kg of OUTSTATION_ANCHOR_TIER_KGS) {
+    if (kg <= tierMaxKg) belowKg = kg;
+    if (kg >= tierMaxKg && aboveKg === null) aboveKg = kg;
+  }
+  if (belowKg === null) return evalOutstationAnchorCurve(aboveKg, km);
+  if (aboveKg === null || belowKg === aboveKg) return evalOutstationAnchorCurve(belowKg, km);
+  const frac = (tierMaxKg - belowKg) / (aboveKg - belowKg);
+  return evalOutstationAnchorCurve(belowKg, km) * (1 - frac) + evalOutstationAnchorCurve(aboveKg, km) * frac;
+}
+// Public entry point -- running max over every tier up to and including
+// tierMaxKg, so a bigger vehicle can never price below a smaller one at
+// this km, no matter where in the underlying (sometimes inconsistent)
+// Porter data the inconsistency comes from. tiers is assumed sorted
+// ascending by maxKg (true of DEFAULT_FARE_TIERS and any admin-edited copy
+// of it, same assumption the rest of this formula already makes).
+function priceOutstation(tierMaxKg, km, tiers) {
+  let best = -Infinity;
+  for (const t of tiers) {
+    if (t.maxKg > tierMaxKg) break;
+    best = Math.max(best, rawOutstationValue(t.maxKg, km));
+  }
+  return best;
 }
 // `dieselPricePerLitre`: the live price (Admin's Rates & Diesel tab,
 // settings/main.dieselPricePerLitre) — null (the default, every existing
@@ -1430,8 +1492,7 @@ export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS
   const effectiveZone = zone || (km > CITY_KM ? "out" : "in");
   let total;
   if (effectiveZone === "out") {
-    const curve = outstationCurveFor(tier.maxKg);
-    total = curve.fix + curve.perKm * km;
+    total = priceOutstation(tier.maxKg, km, tiers);
   } else {
     total = tier.innerFix + Math.max(0, km - 3) * tier.innerPer;
     total *= priceCorrectionFactor(tier.maxKg);
