@@ -455,7 +455,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // driver who signed up yesterday and is still Pending needs this
   // exactly as much as one who signed up an hour ago. Approve/Reject/Edit
   // live only here now; the Drivers tab (AdminDriverList) keeps Edit alone.
-  const approvalQueue = drivers.filter((d) => d.vehicleSpec && d.kyc === "Pending");
+  // Also includes Rejected (not just Pending) -- a Reject was previously
+  // treated as final, which meant a mistaken/accidental reject had no way
+  // back short of editing the database directly. Keeping a Rejected entry
+  // here lets admin reconsider and flip it to Approved.
+  const approvalQueue = drivers.filter((d) => d.vehicleSpec && (d.kyc === "Pending" || d.kyc === "Rejected"));
   // A driver who signed up but hasn't submitted the KYC form yet has
   // nothing to approve/reject -- but hiding them completely made a fresh
   // signup look like it vanished/got silently auto-approved (real confusion
@@ -842,7 +846,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                     const badge = driverStatusBadge(dr);
                     const expanded = approvalExpandedId === dr.id;
                     const editing = approvalEditingId === dr.id;
-                    const canDecide = !!dr.vehicleSpec && dr.kyc === "Pending";
+                    const canDecide = !!dr.vehicleSpec && (dr.kyc === "Pending" || dr.kyc === "Rejected");
                     return (
                       <div key={dr.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                         <button onClick={() => setApprovalExpandedId(expanded ? null : dr.id)} className="w-full flex items-center justify-between gap-2 text-left">
