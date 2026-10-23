@@ -6450,7 +6450,13 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                               {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
                             </div>
                             <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {lang === "en" ? `${Math.round(entry.km)} km from Pickup` : lang === "mr" ? `पिकअपपासून ${Math.round(entry.km)} किमी` : `पिकअप से ${Math.round(entry.km)} किमी`}
+                              {lang === "en" ? (
+                                <><span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} km</span> from Pickup</>
+                              ) : lang === "mr" ? (
+                                <>पिकअपपासून <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
+                              ) : (
+                                <>पिकअप से <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
+                              )}
                             </div>
                           </div>
                           <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
@@ -7032,7 +7038,13 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                               {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
                             </div>
                             <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {lang === "en" ? `${Math.round(entry.km)} km from Pickup` : lang === "mr" ? `पिकअपपासून ${Math.round(entry.km)} किमी` : `पिकअप से ${Math.round(entry.km)} किमी`}
+                              {lang === "en" ? (
+                                <><span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} km</span> from Pickup</>
+                              ) : lang === "mr" ? (
+                                <>पिकअपपासून <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
+                              ) : (
+                                <>पिकअप से <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
+                              )}
                             </div>
                           </div>
                           <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
