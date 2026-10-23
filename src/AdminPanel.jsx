@@ -515,22 +515,23 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // below.
   const todayStrUninstalled = () => new Date().toISOString().slice(0, 10);
 
-  // "Called, on a 3-day cooldown" tracking for Uninstalled/Blocked (see
-  // detailPages.uninstalled) -- owner request (2026-10-24): once someone
-  // here gets called, don't let admin call that same number again for 3
-  // days, and keep the existing rotation -- a called entry still sinks to
-  // the bottom of the list, just for the length of the cooldown now
-  // instead of only the rest of the day. A real timestamp (not a date
-  // string like todayStrUninstalled above, which only supports an exact
-  // "is it still today" check) so the 3-day elapsed-time math is exact
-  // regardless of when during the day the call happened.
-  const UNINSTALLED_CALL_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
+  // "Called this round" tracking for Uninstalled/Blocked (see
+  // detailPages.uninstalled) -- owner request (2026-10-24, revised): once
+  // someone here gets called, admin can't call that same number again
+  // until EVERY other callable (non-blacklisted) entry in the list has
+  // also been called -- a full round-robin rather than a fixed time
+  // window. The moment the last not-yet-called entry is called, the whole
+  // round resets and everyone becomes callable again immediately. A
+  // called entry still sinks to the bottom so admin works down the list
+  // in order without repeats.
   const [uninstalledCalledMap, setUninstalledCalledMap] = usePersistedState("sarthi_uninstalledCalled", {});
-  const markUninstalledCalled = (mobile) => setUninstalledCalledMap((prev) => ({ ...prev, [mobile]: Date.now() }));
-  const uninstalledCallCooldownActive = (mobile) => {
-    const calledAt = uninstalledCalledMap[mobile];
-    return !!calledAt && (Date.now() - calledAt) < UNINSTALLED_CALL_COOLDOWN_MS;
-  };
+  const uninstalledCallableMobiles = inactiveDrivers.filter((d) => !d.blacklisted).map((d) => d.mobile).filter(Boolean);
+  const markUninstalledCalled = (mobile) => setUninstalledCalledMap((prev) => {
+    const next = { ...prev, [mobile]: true };
+    const roundComplete = uninstalledCallableMobiles.length > 0 && uninstalledCallableMobiles.every((m) => next[m]);
+    return roundComplete ? {} : next;
+  });
+  const uninstalledCallCooldownActive = (mobile) => !!uninstalledCalledMap[mobile];
 
   // "Already messaged today" tracking for approved drivers who still have
   // the app and just haven't toggled online -- distinct from the above
@@ -686,9 +687,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       items: [...inactiveDrivers].sort((a, b) => Number(uninstalledCallCooldownActive(a.mobile)) - Number(uninstalledCallCooldownActive(b.mobile))),
       renderItem: (d) => {
         const onCooldown = uninstalledCallCooldownActive(d.mobile);
-        const cooldownDaysLeft = onCooldown
-          ? Math.max(1, Math.ceil((UNINSTALLED_CALL_COOLDOWN_MS - (Date.now() - uninstalledCalledMap[d.mobile])) / (24 * 60 * 60 * 1000)))
-          : 0;
         const roleTag = inactiveDriverRoleTag(d);
         return (
           <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}`, opacity: onCooldown ? 0.6 : 1 }}>
@@ -716,7 +714,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                 <div className="flex items-center gap-0.5">
                   <CheckCircle2 size={12} color={C.success} />
                   <span className="text-[9px] font-bold" style={{ color: C.inkSoft }}>
-                    {lang === "en" ? `${cooldownDaysLeft}d` : lang === "mr" ? `${cooldownDaysLeft}दि` : `${cooldownDaysLeft}दि`}
+                    {lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया"}
                   </span>
                 </div>
               </div>
