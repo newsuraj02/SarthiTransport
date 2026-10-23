@@ -767,6 +767,15 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       setTrendFrom(toDateInputStr(start));
       setTrendTo(toDateInputStr(new Date()));
     };
+    // Which quick-range button (if any) matches the current From/To --
+    // highlights that one as "selected"; if From/To was hand-edited (or
+    // simply doesn't land on any of 7/30/90 days ending today) none of the
+    // three light up, and the From/To date inputs above are the only
+    // indication of the active range.
+    const selectedQuickRangeDays = [7, 30, 90].find((days) => {
+      const start = new Date(); start.setDate(start.getDate() - (days - 1));
+      return trendFrom === toDateInputStr(start) && trendTo === toDateInputStr(new Date());
+    }) ?? null;
     // Owner request (2026-10-19): merged the old fixed-7-days "Registrations
     // (7 Days)" view into this one -- From/To range picker up top, grouped
     // by the date each person actually signed up instead of a flat "today
@@ -809,11 +818,14 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           </div>
         </div>
         <div className="flex gap-2 mb-4">
-          {[[7, lang === "en" ? "7 days" : lang === "mr" ? "7 दिवस" : "7 दिन"], [30, lang === "en" ? "30 days" : lang === "mr" ? "30 दिवस" : "30 दिन"], [90, lang === "en" ? "90 days" : lang === "mr" ? "90 दिवस" : "90 दिन"]].map(([days, label]) => (
-            <button key={days} onClick={() => setQuickRange(days)} className="flex-1 rounded-lg py-2 text-[11px] font-bold" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.inkSoft }}>
-              {label}
-            </button>
-          ))}
+          {[[7, lang === "en" ? "7 days" : lang === "mr" ? "7 दिवस" : "7 दिन"], [30, lang === "en" ? "30 days" : lang === "mr" ? "30 दिवस" : "30 दिन"], [90, lang === "en" ? "90 days" : lang === "mr" ? "90 दिवस" : "90 दिन"]].map(([days, label]) => {
+            const selected = selectedQuickRangeDays === days;
+            return (
+              <button key={days} onClick={() => setQuickRange(days)} className="flex-1 rounded-lg py-2 text-[11px] font-bold" style={{ background: selected ? C.navy : C.bg, border: `1px solid ${selected ? C.navy : C.line}`, color: selected ? "#FFFFFF" : C.inkSoft }}>
+                {label}
+              </button>
+            );
+          })}
         </div>
         {registrationTrendRangeInvalid ? (
           <p className="text-xs text-center py-10" style={{ color: C.safety }}>
