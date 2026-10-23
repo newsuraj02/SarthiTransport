@@ -2508,6 +2508,15 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
       .sort((a, b) => a.km - b.km)
       .slice(0, UNMATCHED_OFFLINE_MAX);
   };
+  // "Already called today" tracking for this screen's Call buttons (the
+  // unmatched customer themselves, and each offline driver match) -- owner
+  // request: grey out whoever admin already called today so a busy admin
+  // working down a long list of unmatched loads doesn't lose track of who
+  // they've already reached out to.
+  const todayStrAlertCall = () => new Date().toISOString().slice(0, 10);
+  const [alertCalledMap, setAlertCalledMap] = usePersistedState("sarthi_alertCalled", {});
+  const markAlertCalled = (mobile) => setAlertCalledMap((prev) => ({ ...prev, [mobile]: todayStrAlertCall() }));
+  const calledAlertToday = (mobile) => alertCalledMap[mobile] === todayStrAlertCall();
   // Date/time shown under "Requirement" -- advance bookings carry their
   // own scheduledFor ("YYYY-MM-DD HH:MM", see CustomerAdvanceBooking's
   // scheduledForValue); an immediate booking has no such field, so its
@@ -2647,8 +2656,8 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                 <div className="rounded-lg p-3 mb-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs font-bold" style={{ color: C.ink }}>{req.customerName || req.customerMobile}</div>
-                    <a href={`tel:+91${req.customerMobile}`} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
-                      <Phone size={11} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
+                    <a href={`tel:+91${req.customerMobile}`} onClick={() => markAlertCalled(req.customerMobile)} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: calledAlertToday(req.customerMobile) ? "#9AA3B0" : C.metallicGreen }}>
+                      <Phone size={11} /> {calledAlertToday(req.customerMobile) ? (lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया") : (lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल")}
                     </a>
                   </div>
                   <div className="text-[11px] mt-1.5" style={{ color: C.inkSoft }}>
@@ -2687,20 +2696,23 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                   </p>
                 ) : (
                   <div className="space-y-1.5">
-                    {offlineMatches.map(({ driver: d, km }) => (
-                      <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: "rgba(63,122,84,0.1)", border: `1px solid ${C.success}` }}>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name} · {d.vehicleSpec?.vehicleNumber || "—"}</div>
-                          <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.capacityKg ? `${d.vehicleSpec.capacityKg}kg` : "—"}</div>
-                          <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>
-                            {lang === "en" ? `${Math.round(km)} km from Pickup` : lang === "mr" ? `पिकअपपासून ${Math.round(km)} किमी` : `पिकअप से ${Math.round(km)} किमी`}
+                    {offlineMatches.map(({ driver: d, km }) => {
+                      const called = calledAlertToday(d.mobile);
+                      return (
+                        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: "rgba(63,122,84,0.1)", border: `1px solid ${C.success}`, opacity: called ? 0.6 : 1 }}>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name} · {d.vehicleSpec?.vehicleNumber || "—"}</div>
+                            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.capacityKg ? `${d.vehicleSpec.capacityKg}kg` : "—"}</div>
+                            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>
+                              {lang === "en" ? `${Math.round(km)} km from Pickup` : lang === "mr" ? `पिकअपपासून ${Math.round(km)} किमी` : `पिकअप से ${Math.round(km)} किमी`}
+                            </div>
                           </div>
+                          <a href={`tel:+91${d.mobile}`} onClick={() => markAlertCalled(d.mobile)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white flex items-center gap-1" style={{ background: called ? "#9AA3B0" : C.metallicGreen }}>
+                            <Phone size={12} /> {called ? (lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया") : (lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल")}
+                          </a>
                         </div>
-                        <a href={`tel:+91${d.mobile}`} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
-                          <Phone size={12} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
-                        </a>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 <div className="flex justify-end mt-2">
