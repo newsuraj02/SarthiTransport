@@ -1304,6 +1304,70 @@ export const DIESEL_MILEAGE_BY_TIER_MAX_KG = {
   21000: 3.4, 25000: 3.2, 30000: 3,
   [FARE_TIER_MAX_KG_UNCAPPED]: 2.8,
 };
+// Price Corrector -- a competitive-pricing multiplier on top of the plain
+// master formula, owner request 2026-10-23: "keep everything 5% lower than
+// Porter." PRICE_CORRECTOR_ANCHORS holds the real market data points this
+// is actually built from: Porter's own published rate (full/undiscounted
+// price -- a visible promo discount isn't their real sustained rate) × 0.95,
+// at the one reference trip distance each zone was actually compared at
+// (13km in-city, 113km outstation -- the only distances real competitor
+// quotes exist for). `factor` is that target divided by what calculateFare
+// alone (no correction, no diesel -- diesel is a separate real-cost
+// pass-through, applied after this, not inflated by a competitive markup)
+// already said for that exact tier at that exact distance, so applying the
+// factor at ANY distance reproduces the target exactly at the reference
+// point while preserving the formula's own existing per-km shape elsewhere.
+//
+// Porter's own outstation quote for 4500kg (₹6,510) undercut their own
+// 3500kg quote (₹6,767) -- the same "bigger vehicle cheaper" inconsistency
+// enforceMonotonicFares exists to catch in our own output -- so the 5000kg
+// outstation target is clamped up to the 3500kg tier's own target (running
+// max by capacity) rather than carrying that inconsistency into our table.
+//
+// Only 6-7 of our 24 tiers have a real Porter data point in each zone.
+// priceCorrectionFactor interpolates the factor LINEARLY BY CAPACITY
+// between the two nearest known tiers for everything in between (same
+// technique as interpolateOutlierFare) -- owner's own framing: "if the
+// vehicle weight increase, price must increase too but the price tiers in
+// between must not cross the one which we got from the Porter rate for the
+// next tier." A tier past every known anchor (nothing heavier than 5000kg
+// has a Porter data point in either zone) holds flat at the heaviest
+// anchor's own factor rather than extrapolating further with no data to
+// extrapolate from.
+const PRICE_CORRECTOR_ANCHORS = {
+  in: [
+    { maxKg: 500, factor: (506 * 0.95) / 380 },
+    { maxKg: 750, factor: (601 * 0.95) / 450 },
+    { maxKg: 1200, factor: (756 * 0.95) / 630 },
+    { maxKg: 2000, factor: (906 * 0.95) / 980 },
+    { maxKg: 2500, factor: (2039 * 0.95) / 1150 },
+    { maxKg: 3500, factor: (2383 * 0.95) / 1540 },
+    { maxKg: 5000, factor: (2832 * 0.95) / 2320 },
+  ],
+  out: [
+    { maxKg: 500, factor: (3581 * 0.95) / 1808 },
+    { maxKg: 750, factor: (4129 * 0.95) / 2429.5 },
+    { maxKg: 1200, factor: (4867 * 0.95) / 2881.5 },
+    { maxKg: 2000, factor: (5387 * 0.95) / 3559.5 },
+    { maxKg: 3500, factor: (6767 * 0.95) / 3785.5 },
+    // Clamped to the 3500kg tier's own target (6767*0.95) -- see comment
+    // above -- instead of 6510*0.95, which would undercut it.
+    { maxKg: 5000, factor: (6767 * 0.95) / 4124.5 },
+  ],
+};
+export function priceCorrectionFactor(tierMaxKg, zone) {
+  const anchors = PRICE_CORRECTOR_ANCHORS[zone === "out" ? "out" : "in"];
+  if (tierMaxKg <= anchors[0].maxKg) return anchors[0].factor;
+  if (tierMaxKg >= anchors[anchors.length - 1].maxKg) return anchors[anchors.length - 1].factor;
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const a = anchors[i], b = anchors[i + 1];
+    if (tierMaxKg >= a.maxKg && tierMaxKg <= b.maxKg) {
+      const frac = (tierMaxKg - a.maxKg) / (b.maxKg - a.maxKg);
+      return a.factor + (b.factor - a.factor) * frac;
+    }
+  }
+  return 1;
+}
 // `dieselPricePerLitre`: the live price (Admin's Rates & Diesel tab,
 // settings/main.dieselPricePerLitre) — null (the default, every existing
 // caller that doesn't know/care about live fuel price) means "no
@@ -1328,6 +1392,7 @@ export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS
   } else {
     total = tier.innerFix + Math.max(0, km - 3) * tier.innerPer;
   }
+  total *= priceCorrectionFactor(tier.maxKg, effectiveZone);
   if (dieselPricePerLitre != null) {
     const mileage = DIESEL_MILEAGE_BY_TIER_MAX_KG[tier.maxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED];
     total += km * ((dieselPricePerLitre - DIESEL_BASELINE_PRICE_PER_LITRE) / mileage);
