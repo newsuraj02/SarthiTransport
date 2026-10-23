@@ -1309,31 +1309,24 @@ export const DIESEL_MILEAGE_BY_TIER_MAX_KG = {
 // Porter." PRICE_CORRECTOR_ANCHORS holds the real market data points this
 // is actually built from: Porter's own published rate (full/undiscounted
 // price -- a visible promo discount isn't their real sustained rate) × 0.95,
-// at the one reference trip distance each zone was actually compared at
-// (13km in-city, 113km outstation -- the only distances real competitor
-// quotes exist for). `factor` is that target divided by what calculateFare
-// alone (no correction, no diesel -- diesel is a separate real-cost
-// pass-through, applied after this, not inflated by a competitive markup)
-// already said for that exact tier at that exact distance, so applying the
-// factor at ANY distance reproduces the target exactly at the reference
-// point while preserving the formula's own existing per-km shape elsewhere.
+// at the one reference trip distance each zone was actually compared at.
+// `factor` is that target divided by what calculateFare alone (no
+// correction, no diesel -- diesel is a separate real-cost pass-through,
+// applied after this, not inflated by a competitive markup) already said
+// for that exact tier at that exact distance, so applying the factor at
+// ANY distance reproduces the target exactly at the reference point while
+// preserving the formula's own existing per-km shape elsewhere.
 //
-// Porter's own outstation quote for 4500kg (₹6,510) undercuts their own
-// 3500kg quote (₹6,767) -- owner decision (2026-10-23): use Porter's real
-// 4500kg number as-is rather than clamping it up to match 3500kg's. This
-// means our own 5000kg-tier outstation fare now sits BELOW our own
-// 3500kg-tier outstation fare at every distance (the two tiers' per-km
-// slopes, 36.5 vs 33.5 rupees/km after toll, mean this gap doesn't
-// disappear or cross back the other way as distance grows) -- a real,
-// accepted "bigger vehicle cheaper" case in calculateFare's own raw
-// output. CustomerBooking/CustomerAdvanceBooking's vehicle list still
-// self-corrects this via enforceMonotonicFares before a customer ever
-// sees it; a caller that reads calculateFare's raw output directly for a
-// single tier with nothing to compare against (e.g. AdminAlerts'
-// estimateFor, one weight/one fare, no sibling tiers in that computation)
-// has no such correction and will show the raw, uncorrected number.
+// in: reference 13km. out: reference 123km (replaces an earlier 113km
+// pass -- same owner, fresher/more complete data covering all 6 tiers
+// cleanly, see below). Porter's own 3500kg/4500kg outstation quotes were
+// inconsistent at the first (113km) pass -- 4500kg undercut 3500kg,
+// clamped at the time, then owner chose to unclamp it and accept our own
+// 5000kg tier pricing below our 3500kg tier instead. At 123km Porter's
+// own numbers are properly monotonic on their own (8048 at 3500kg, 8733
+// at 4500kg), so no clamp is needed this time.
 //
-// Only 6-7 of our 24 tiers have a real Porter data point in each zone.
+// Only 6 of our 24 tiers have a real Porter data point in each zone.
 // priceCorrectionFactor interpolates the factor LINEARLY BY CAPACITY
 // between the two nearest known tiers for everything in between (same
 // technique as interpolateOutlierFare) -- owner's own framing: "if the
@@ -1353,14 +1346,15 @@ const PRICE_CORRECTOR_ANCHORS = {
     { maxKg: 3500, factor: (2383 * 0.95) / 1540 },
     { maxKg: 5000, factor: (2832 * 0.95) / 2320 },
   ],
+  // Reference 123km. Raw (no-correction) bases at 123km: 500→1968,
+  // 750→2644.5, 1200→3136.5, 2000→3874.5, 3500→4120.5, 5000→4489.5.
   out: [
-    { maxKg: 500, factor: (3581 * 0.95) / 1808 },
-    { maxKg: 750, factor: (4129 * 0.95) / 2429.5 },
-    { maxKg: 1200, factor: (4867 * 0.95) / 2881.5 },
-    { maxKg: 2000, factor: (5387 * 0.95) / 3559.5 },
-    { maxKg: 3500, factor: (6767 * 0.95) / 3785.5 },
-    // Porter's own raw 4500kg quote, unclamped -- see comment above.
-    { maxKg: 5000, factor: (6510 * 0.95) / 4124.5 },
+    { maxKg: 500, factor: (3303 * 0.95) / 1968 },
+    { maxKg: 750, factor: (3870 * 0.95) / 2644.5 },
+    { maxKg: 1200, factor: (4533 * 0.95) / 3136.5 },
+    { maxKg: 2000, factor: (4940 * 0.95) / 3874.5 },
+    { maxKg: 3500, factor: (8048 * 0.95) / 4120.5 },
+    { maxKg: 5000, factor: (8733 * 0.95) / 4489.5 },
   ],
 };
 export function priceCorrectionFactor(tierMaxKg, zone) {
