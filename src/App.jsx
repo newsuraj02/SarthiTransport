@@ -1280,7 +1280,41 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
 // real coordinates). `returnPct` (0-100) is the guide's post-floor
 // return-load discount (section 7) — applied after everything else,
 // including the toll, never before it.
-export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS, zone = null, returnPct = 0) {
+// The price-per-litre DEFAULT_FARE_TIERS' innerFix/innerPer/outerMin/outerPer
+// numbers already assume (owner confirmed, 2026-10-23: today's real price).
+// calculateFare's own diesel adjustment below is a DELTA from this baseline —
+// at exactly this price, the adjustment is zero and every fare is exactly
+// what the table alone says; it only moves once the live price diverges
+// from here. Changing this constant later would retroactively reprice
+// every quote, not just future diesel moves — only touch it if the table
+// itself gets re-tuned around a new reference price.
+export const DIESEL_BASELINE_PRICE_PER_LITRE = 98;
+// km/litre reference mileage per vehicle tier (admin-reviewed figures) —
+// NOT the tier's actual perKmRate (that already bakes in driver earnings +
+// margin on top of fuel); this only sizes how many rupees a 1₹/litre
+// diesel move is worth per km for THIS tier, since a heavier vehicle burns
+// more fuel per km than a tempo. Shared by calculateFare's live formula
+// adjustment below and AdminRatesDiesel's "Save Diesel Rate" bulk nudge of
+// already-saved adminRouteFares entries (AdminPanel.jsx) — one table, kept
+// in one place, so the two mechanisms can never quietly drift apart.
+export const DIESEL_MILEAGE_BY_TIER_MAX_KG = {
+  500: 18, 750: 16.5, 800: 16, 900: 15.2, 1000: 14.5, 1200: 13, 1250: 12.5,
+  1500: 11, 2000: 9.8, 2500: 9, 3500: 7.2, 5000: 6, 7000: 5.4, 7500: 5.2,
+  9000: 4.8, 9500: 4.6, 10000: 4.5, 12000: 4.2, 16000: 3.8, 18000: 3.6,
+  21000: 3.4, 25000: 3.2, 30000: 3,
+  [FARE_TIER_MAX_KG_UNCAPPED]: 2.8,
+};
+// `dieselPricePerLitre`: the live price (Admin's Rates & Diesel tab,
+// settings/main.dieselPricePerLitre) — null (the default, every existing
+// caller that doesn't know/care about live fuel price) means "no
+// adjustment," so this stays exactly backward compatible. Owner request
+// (2026-10-23): diesel must move every quote computed by this formula, not
+// just previously-saved Admin route overrides (see the bulk nudge in
+// AdminRatesDiesel, which this intentionally mirrors — same mileage
+// table, same perKmDelta×km shape — so a route that gets manually saved
+// right after a diesel change lands on the same number the live formula
+// would already have quoted it).
+export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS, zone = null, returnPct = 0, dieselPricePerLitre = null) {
   const tier = findFareTier(capacityKg, tiers);
   const km = distanceKm || 0;
   const effectiveZone = zone || (km > CITY_KM ? "out" : "in");
@@ -1293,6 +1327,10 @@ export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS
     total = Math.max(km * tier.outerPer, tier.outerMin, c30) + km * tier.tollPerKm;
   } else {
     total = tier.innerFix + Math.max(0, km - 3) * tier.innerPer;
+  }
+  if (dieselPricePerLitre != null) {
+    const mileage = DIESEL_MILEAGE_BY_TIER_MAX_KG[tier.maxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED];
+    total += km * ((dieselPricePerLitre - DIESEL_BASELINE_PRICE_PER_LITRE) / mileage);
   }
   if (returnPct > 0) total = total * (1 - returnPct / 100);
   return Math.round(total);
@@ -1470,10 +1508,10 @@ export function buildBill({ fare, isReturn = false, returnPct = 0, haltingCharge
 // CustomerBooking vehicle-picker's live per-tier fares (the interpolation
 // fix), each entry's own estimatedKm/distance used for its own ratio.
 const FARE_OUTLIER_RATIO_MULTIPLE = 1.8;
-export function findFareOutliers(entries, tiers = DEFAULT_FARE_TIERS) {
+export function findFareOutliers(entries, tiers = DEFAULT_FARE_TIERS, dieselPricePerLitre = null) {
   const valid = (entries || []).filter((e) => e.totalFare > 0 && e.estimatedKm > 0);
   if (valid.length < 3) return new Set();
-  const withRatio = valid.map((e) => ({ ...e, ratio: e.totalFare / Math.max(1, calculateFare(e.tierMaxKg, e.estimatedKm, tiers)) }));
+  const withRatio = valid.map((e) => ({ ...e, ratio: e.totalFare / Math.max(1, calculateFare(e.tierMaxKg, e.estimatedKm, tiers, null, 0, dieselPricePerLitre)) }));
   const outliers = new Set();
   withRatio.forEach((e) => {
     const others = withRatio.filter((o) => o.id !== e.id).map((o) => o.ratio).sort((a, b) => a - b);
@@ -1491,7 +1529,7 @@ export function findFareOutliers(entries, tiers = DEFAULT_FARE_TIERS) {
 // adminRouteFares document -- this is display-only, so the bad entry still
 // shows up for Admin to actually fix (see the Saved Routes warning flag).
 // `sorted` must already exclude `entry` and be ascending by tierMaxKg.
-export function interpolateOutlierFare(entry, sorted, distanceKm, tiers = DEFAULT_FARE_TIERS) {
+export function interpolateOutlierFare(entry, sorted, distanceKm, tiers = DEFAULT_FARE_TIERS, dieselPricePerLitre = null) {
   const below = [...sorted].reverse().find((x) => x.tierMaxKg < entry.tierMaxKg);
   const above = sorted.find((x) => x.tierMaxKg > entry.tierMaxKg);
   if (below && above) {
@@ -1504,7 +1542,7 @@ export function interpolateOutlierFare(entry, sorted, distanceKm, tiers = DEFAUL
   if (below) return Math.round(below.fare * (entry.tierMaxKg / below.tierMaxKg));
   if (above) return Math.round(above.fare * (entry.tierMaxKg / above.tierMaxKg));
   // No usable sibling at all -- fall back to the plain formula.
-  return calculateFare(entry.tierMaxKg, distanceKm, tiers);
+  return calculateFare(entry.tierMaxKg, distanceKm, tiers, null, 0, dieselPricePerLitre);
 }
 
 // Real-world report (2026-10-23): a 2000kg vehicle showed cheaper than a
@@ -1728,12 +1766,12 @@ export function getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares
 // to log what they're charging, and Admin's Driver Entries still shows it
 // (now compared against this same resolved rate via judge()), but it has
 // zero effect on what a customer is actually quoted.
-function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, zone = null, isReturn = false) {
+function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, zone = null, isReturn = false, dieselPricePerLitre = null) {
   const effectiveZone = zone || zoneFor(pickupLat, pickupLng, dropLat, dropLng, distanceKm);
   const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm, effectiveZone, isReturn);
   if (adminOverride != null) return adminOverride;
   const scaleRatio = getRouteScaleRatio(pickup, drop, effectiveZone, isReturn, adminRouteFares, tiers);
-  const formulaFare = calculateFare(capacityKg, distanceKm, tiers, effectiveZone, 0);
+  const formulaFare = calculateFare(capacityKg, distanceKm, tiers, effectiveZone, 0, dieselPricePerLitre);
   return scaleRatio != null ? Math.round(formulaFare * scaleRatio) : formulaFare;
 }
 function resolveFare(driver, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares) {
@@ -1745,8 +1783,8 @@ function resolveFare(driver, pickup, drop, distanceKm, tiers, pickupLat, pickupL
 // (requestByCategory) where the customer picks a vehicle category before
 // any specific driver is chosen, so there's no driver object yet to read a
 // capacityKg from.
-function resolveFareForTier(tierMaxKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares) {
-  return resolveFareForCapacity(tierMaxKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
+function resolveFareForTier(tierMaxKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, dieselPricePerLitre = null) {
+  return resolveFareForCapacity(tierMaxKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, null, false, dieselPricePerLitre);
 }
 // Firestore document IDs can't contain "/" and have a length cap — routes
 // are short place names in practice (Set Fare is meant for city-level
@@ -5814,7 +5852,7 @@ function maxFleetVehicleCapacityKg(drivers, VEHICLES) {
 // at a time instead of the normal flat capacity-headroom window -- shared
 // by CustomerBooking and CustomerAdvanceBooking, which both build
 // `withFare` the same way before calling this.
-function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCoords, radiusKm, pickup, drop, distance, dropCoords, adminRouteFares, minCategories = 3, loadKg = 0, bookings = [], lang = "hi", scheduledFor = null }) {
+function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCoords, radiusKm, pickup, drop, distance, dropCoords, adminRouteFares, minCategories = 3, loadKg = 0, bookings = [], lang = "hi", scheduledFor = null, dieselPricePerLitre = null }) {
   const coveredTiers = new Set(withFare.map((e) => e.tier.maxKg));
   if (coveredTiers.size >= minCategories || !pickupCoords) return withFare;
   const sortedTiers = [...fareTiers].sort((a, b) => a.maxKg - b.maxKg);
@@ -5846,7 +5884,7 @@ function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCo
     if (!matches.length) continue;
     coveredTiers.add(tier.maxKg);
     const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
-    const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+    const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares, dieselPricePerLitre);
     for (const d of matches) {
       const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
       const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
@@ -5909,7 +5947,7 @@ function weightUnitLabel(unit) {
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings }) {
+function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
   const VEHICLES = vehicleTypes;
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
@@ -6158,7 +6196,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
         const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
         const id = d.mobile || d.id;
-        const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+        const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares, dieselPricePerLitre);
         return { driver: d, capacityKg, tier, tierIndex, km, id, fare };
       })
       .sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km);
@@ -6168,7 +6206,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // real choices (see padVehicleCategories above).
     withFare = padVehicleCategories(withFare, {
       drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: CURRENT_BID_RADIUS_KM,
-      pickup, drop, distance, dropCoords, adminRouteFares, loadKg, bookings, lang,
+      pickup, drop, distance, dropCoords, adminRouteFares, loadKg, bookings, lang, dieselPricePerLitre,
     });
 
     // A bad Admin override for just one tier on this route (a stray digit,
@@ -6180,12 +6218,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // source, not just papered over for whoever books next.
     const outlierIds = findFareOutliers(
       withFare.map((e) => ({ id: e.id, tierMaxKg: e.tier.maxKg, totalFare: e.fare, estimatedKm: distance })),
-      fareTiers
+      fareTiers, dieselPricePerLitre
     );
     const afterOutliers = outlierIds.size === 0 ? withFare : (() => {
       const clean = withFare.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tier.maxKg, fare: e.fare }));
       return withFare.map((e) => outlierIds.has(e.id)
-        ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers) }
+        ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers, dieselPricePerLitre) }
         : e);
     })();
     // Last pass, after outlier correction -- see enforceMonotonicFares:
@@ -6541,7 +6579,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
 // (a scheduled driver has time to travel further), and bookDriver's
 // per-category minimum-lead-time check (minAdvanceNoticeHours) before
 // requestByCategory ever runs.
-function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings }) {
+function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
   const VEHICLES = vehicleTypes;
   const [advanceDate, setAdvanceDate] = useState("");
   const [advanceTime, setAdvanceTime] = useState("");
@@ -6722,24 +6760,24 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
         const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
         const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
         const id = d.mobile || d.id;
-        const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares);
+        const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares, dieselPricePerLitre);
         return { driver: d, capacityKg, tier, tierIndex, km, id, fare };
       })
       .sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km);
 
     withFare = padVehicleCategories(withFare, {
       drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: ADVANCE_BID_RADIUS_KM,
-      pickup, drop, distance, dropCoords, adminRouteFares, loadKg, bookings, lang, scheduledFor: scheduledForValue,
+      pickup, drop, distance, dropCoords, adminRouteFares, loadKg, bookings, lang, scheduledFor: scheduledForValue, dieselPricePerLitre,
     });
 
     const outlierIds = findFareOutliers(
       withFare.map((e) => ({ id: e.id, tierMaxKg: e.tier.maxKg, totalFare: e.fare, estimatedKm: distance })),
-      fareTiers
+      fareTiers, dieselPricePerLitre
     );
     const afterOutliers = outlierIds.size === 0 ? withFare : (() => {
       const clean = withFare.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tier.maxKg, fare: e.fare }));
       return withFare.map((e) => outlierIds.has(e.id)
-        ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers) }
+        ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers, dieselPricePerLitre) }
         : e);
     })();
     // Last pass, after outlier correction -- see enforceMonotonicFares:
@@ -7746,7 +7784,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest, drivers, vehicleTypes, cancelBooking, rateBooking, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, alerts, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares, bookingExtras }) {
+function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest, drivers, vehicleTypes, cancelBooking, rateBooking, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, alerts, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares, bookingExtras, dieselPricePerLitre }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Whether the booking-creation screen shown below is CustomerBooking
   // (current/immediate ride) or CustomerAdvanceBooking (scheduled ride) —
@@ -8120,10 +8158,10 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
               onAddAnother={() => setAddingAnother(true)} />
           ) : advanceOpen ? (
             <CustomerAdvanceBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
-              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} />
+              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} />
           ) : (
             <CustomerBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
-              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} />
+              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} />
           )
         ) : (
           <div>
@@ -11244,7 +11282,7 @@ export default function App() {
   const [withdrawals, setWithdrawals] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
   const [unmatchedVehicleRequests, setUnmatchedVehicleRequests] = useState([]);
-  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500, returnPct: 15 });
+  const [settings, setSettingsLocal] = useState({ commissionPct: 0, bonusPct: 2, minWallet: 500, returnPct: 15, dieselPricePerLitre: DIESEL_BASELINE_PRICE_PER_LITRE });
   const commissionPct = settings.commissionPct;
   const bonusPct = settings.bonusPct;
   const minWallet = settings.minWallet;
@@ -11267,6 +11305,15 @@ export default function App() {
   // neither an Admin override nor a driver-submitted average, so it stays
   // readable everywhere resolveFare needs it, just always from code now.
   const fareTiers = DEFAULT_FARE_TIERS;
+  // Owner request (2026-10-23): diesel price must move every fare quote
+  // calculateFare computes, not just already-saved Admin route overrides
+  // (the old AdminRatesDiesel +/- control's only effect). Moved to
+  // settings/main (same pattern returnPct already uses, same reason: a
+  // live price has to be readable on every customer's own device, not
+  // just sit in one admin's browser localStorage) -- `?? DIESEL_BASELINE...`
+  // covers a settings/main doc created before this field existed.
+  const dieselPricePerLitre = settings.dieselPricePerLitre ?? DIESEL_BASELINE_PRICE_PER_LITRE;
+  const setDieselPricePerLitre = (v) => patchDoc("settings", "main", { dieselPricePerLitre: typeof v === "function" ? v(dieselPricePerLitre) : v }).catch((e) => console.error(e));
   const setCommissionPct = (v) => patchDoc("settings", "main", { commissionPct: typeof v === "function" ? v(commissionPct) : v }).catch((e) => console.error(e));
   const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
   const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
@@ -11460,7 +11507,7 @@ export default function App() {
     // create before subscribing would leave everyone stuck on defaults
     // forever if that one initial call is slow on a flaky connection.
     const unsub = subscribeDoc("settings", "main", (data) => { if (data) setSettingsLocal(data); });
-    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500, returnPct: 15 })
+    getOrCreateDoc("settings", "main", { commissionPct: 0, bonusPct: 2, minWallet: 500, returnPct: 15, dieselPricePerLitre: DIESEL_BASELINE_PRICE_PER_LITRE })
       .catch((e) => console.error("[settings init]", e));
     return unsub;
   }, []);
@@ -11697,7 +11744,7 @@ export default function App() {
     // shown and tapped to accept. Only re-resolved here for a caller with no
     // specific card shown (there currently isn't one, but this keeps the
     // function safe to call without one).
-    const fare = fareOverride ?? resolveFareForTier(tierMaxKg, pickup, drop, distance, fareTiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
+    const fare = fareOverride ?? resolveFareForTier(tierMaxKg, pickup, drop, distance, fareTiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, dieselPricePerLitre);
     createDoc("bookings", bookingId, {
       // tierMaxKg is the source of truth for dispatch/eligibility (see
       // isDriverBroadcastEligible) -- weight is only ever shown to
@@ -12158,7 +12205,7 @@ export default function App() {
           <CustomerApp bookings={bookings} requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} alerts={alerts} onOpenTerms={() => setShowTerms(true)}
-            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookingExtras={bookingExtras} />
+            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookingExtras={bookingExtras} dieselPricePerLitre={dieselPricePerLitre} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth}
@@ -12221,6 +12268,7 @@ export default function App() {
               <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct}
+                dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
                 latestAdminVersionCode={settings.latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={settings.adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl}
                 fareTiers={fareTiers} lang={lang} onLogout={logout}

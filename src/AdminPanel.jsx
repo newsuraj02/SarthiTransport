@@ -18,7 +18,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp } from "./firebaseClient";
 import { createDoc, removeDoc, bulkUpdateDocs } from "./firestoreStore";
 import {
-  ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
+  ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
@@ -1640,31 +1640,38 @@ const JUDGE_COLOR = { ok: C.success, warn: C.marigoldDeep, bad: C.safety };
 // Dashboard's "Driver Ride Entries" drill-down tile, see AdminFleet) plus
 // AdminRouteFares below it. Persistent tab now, not a drill-down, so no
 // Back button here.
-function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, lang }) {
-  // Global fuel-price nudge -- moves every Admin rate (adminRouteFares) when
-  // the diesel price per litre changes, up or down. Driver-submitted quotes
-  // (routeFares) are untouched by this since commit ae40cb4 dropped them as
-  // a customer-pricing layer entirely -- Diesel has no reason to move a
-  // number that no longer affects what anyone is charged.
+function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, lang, dieselPricePerLitre, setDieselPricePerLitre }) {
+  // Global fuel-price control -- two separate effects, both from the same
+  // Save tap, since there are two separate kinds of fare that need it:
+  // 1. Live quotes (calculateFare in App.jsx, used by every route with no
+  //    saved Admin override): now READS dieselPricePerLitre directly
+  //    (settings/main, synced here via the dieselPricePerLitre/
+  //    setDieselPricePerLitre props from the root App component -- same
+  //    pattern returnPct already uses) -- owner request, 2026-10-23:
+  //    diesel must move every quote, not just previously-saved ones.
+  // 2. Already-saved Admin rates (adminRouteFares) -- a saved totalFare is
+  //    a frozen number that never re-reads the live formula again, so it
+  //    needs this explicit one-time bulk nudge to catch up, same as before.
   //
   // Per-tier, not a flat ₹/km for everyone -- a heavier vehicle burns more
   // diesel per km, so the same price-per-litre move should shift its rate
   // more than a tempo's. DIESEL_MILEAGE_BY_TIER_MAX_KG (km/litre, admin-
-  // reviewed reference figures) converts a ₹/litre change into each tier's
+  // reviewed reference figures, shared with calculateFare's own live
+  // adjustment -- see App.jsx) converts a ₹/litre change into each tier's
   // own ₹/km delta: perKmDelta = priceDelta / mileage. These are fuel-cost
   // mileage figures only, not the tier's actual perKmRate (DEFAULT_FARE_TIERS)
   // -- that already bakes in driver earnings + margin on top of fuel, so
   // this formula only sizes the ADJUSTMENT, it never replaces the rate.
   //
-  // Still a flat totalFare += perKmDelta*estimatedKm rather than nudging a
-  // displayed per-km rate and rebuilding Total from it, which was tried
-  // first: that approach amplifies any per-km change by dividing it by 0.75
-  // (the first 5km is a fixed 25% SLICE of the total, not a flat rupee
-  // amount) -- a real bug: "+₹1/km" on a 201km entry landed as +₹271, not
-  // +₹201. Entries with no usable distance are left untouched -- there's no
-  // per-km rate to move. Entries missing/with an unrecognized tierMaxKg fall
-  // back to the heaviest tier's mileage -- the smallest, most conservative
-  // per-km move.
+  // The bulk nudge below is still a flat totalFare += perKmDelta*estimatedKm
+  // rather than nudging a displayed per-km rate and rebuilding Total from
+  // it, which was tried first: that approach amplifies any per-km change by
+  // dividing it by 0.75 (the first 5km is a fixed 25% SLICE of the total,
+  // not a flat rupee amount) -- a real bug: "+₹1/km" on a 201km entry
+  // landed as +₹271, not +₹201. Entries with no usable distance are left
+  // untouched -- there's no per-km rate to move. Entries missing/with an
+  // unrecognized tierMaxKg fall back to the heaviest tier's mileage -- the
+  // smallest, most conservative per-km move.
   //
   // Tapping +/- only ever changes dieselStagedPrice (in-memory, no network)
   // so repeated taps are instant -- nothing actually writes to Firestore
@@ -1673,18 +1680,6 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
   // write per document, since a several-hundred-doc bulk operation from a
   // mobile browser is exactly the kind of long-running write that kept
   // failing halfway during the Maharashtra import.
-  // Re-keyed to DEFAULT_FARE_TIERS' new 24-vehicle maxKg set (see
-  // admin-rate-calculator-developer-guide.md) -- the old 8-tier keys here
-  // no longer exist, which would've silently fallen every tier but the
-  // smallest/largest to the most conservative (heaviest-tier) mileage.
-  const DIESEL_MILEAGE_BY_TIER_MAX_KG = {
-    500: 18, 750: 16.5, 800: 16, 900: 15.2, 1000: 14.5, 1200: 13, 1250: 12.5,
-    1500: 11, 2000: 9.8, 2500: 9, 3500: 7.2, 5000: 6, 7000: 5.4, 7500: 5.2,
-    9000: 4.8, 9500: 4.6, 10000: 4.5, 12000: 4.2, 16000: 3.8, 18000: 3.6,
-    21000: 3.4, 25000: 3.2, 30000: 3,
-    [FARE_TIER_MAX_KG_UNCAPPED]: 2.8,
-  };
-  const [dieselPricePerLitre, setDieselPricePerLitre] = usePersistedState("sarthi_dieselPricePerLitre", 90);
   const [dieselStagedPrice, setDieselStagedPrice] = useState(null);
   const dieselDisplayPrice = dieselStagedPrice ?? dieselPricePerLitre;
   const dieselPending = dieselStagedPrice != null ? dieselStagedPrice - dieselPricePerLitre : 0;
@@ -2436,7 +2431,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   );
 }
 
-function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang, drivers, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, fareTiers, adminRouteFares }) {
+function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang, drivers, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, fareTiers, adminRouteFares, dieselPricePerLitre }) {
   // Smart Load-to-Vehicle Match -- a customer tapped "Doesn't match
   // requirement? Call Apna Transport directly" below the vehicle list
   // (CustomerBooking/CustomerAdvanceBooking) because no online vehicle
@@ -2572,7 +2567,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
     if (exact) return Number(exact.totalFare) || "";
     if (km <= 0) return "";
     const ratio = getRouteScaleRatio(req.pickup, req.drop, zone, false, adminRouteFares, fareTiers);
-    const formulaFare = calculateFare(tier.maxKg, km, fareTiers, zone, 0);
+    const formulaFare = calculateFare(tier.maxKg, km, fareTiers, zone, 0, dieselPricePerLitre);
     return ratio != null ? Math.round(formulaFare * ratio) : formulaFare;
   };
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
@@ -3947,7 +3942,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, unmatchedVehicleRequests, handleUnmatchedVehicleRequest }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, dieselPricePerLitre, setDieselPricePerLitre }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -3975,10 +3970,10 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
-      {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />}
+      {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
-      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} fareTiers={fareTiers} adminRouteFares={adminRouteFares} />}
+      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
       {tab === "settings" && <AdminSettings latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>
