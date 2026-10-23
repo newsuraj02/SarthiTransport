@@ -514,14 +514,22 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // below.
   const todayStrUninstalled = () => new Date().toISOString().slice(0, 10);
 
-  // "Already called today" tracking for Uninstalled/Blocked (see
-  // detailPages.uninstalled) -- tapping Call marks it, which both shows a
-  // tick on that row and sinks it to the bottom of the list for the rest
-  // of the day, so admin can work down the list without re-calling the
-  // same person twice in one sitting.
+  // "Called, on a 3-day cooldown" tracking for Uninstalled/Blocked (see
+  // detailPages.uninstalled) -- owner request (2026-10-24): once someone
+  // here gets called, don't let admin call that same number again for 3
+  // days, and keep the existing rotation -- a called entry still sinks to
+  // the bottom of the list, just for the length of the cooldown now
+  // instead of only the rest of the day. A real timestamp (not a date
+  // string like todayStrUninstalled above, which only supports an exact
+  // "is it still today" check) so the 3-day elapsed-time math is exact
+  // regardless of when during the day the call happened.
+  const UNINSTALLED_CALL_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
   const [uninstalledCalledMap, setUninstalledCalledMap] = usePersistedState("sarthi_uninstalledCalled", {});
-  const markUninstalledCalled = (mobile) => setUninstalledCalledMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
-  const calledUninstalledToday = (mobile) => uninstalledCalledMap[mobile] === todayStrUninstalled();
+  const markUninstalledCalled = (mobile) => setUninstalledCalledMap((prev) => ({ ...prev, [mobile]: Date.now() }));
+  const uninstalledCallCooldownActive = (mobile) => {
+    const calledAt = uninstalledCalledMap[mobile];
+    return !!calledAt && (Date.now() - calledAt) < UNINSTALLED_CALL_COOLDOWN_MS;
+  };
 
   // "Already messaged today" tracking for approved drivers who still have
   // the app and just haven't toggled online -- distinct from the above
@@ -669,16 +677,20 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       emptyMsg: lang === "en" ? "No driver has gone quiet this long, and none are blocked." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही, आणि कोणीही ब्लॉक्ड नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है, और कोई ब्लॉक्ड नहीं है।",
       // Blacklisted drivers folded in alongside likely-uninstalled ones --
       // see inactiveDrivers above for why (AdminDriverList is installed-
-      // only now, so this is their only remaining home). Called-today
-      // drivers sink to the bottom so admin can work down the list without
-      // re-calling the same person twice; blacklisted entries (no Call
-      // button at all) keep their relative order among the not-yet-called.
-      items: [...inactiveDrivers].sort((a, b) => Number(calledUninstalledToday(a.mobile)) - Number(calledUninstalledToday(b.mobile))),
+      // only now, so this is their only remaining home). An entry still on
+      // its call cooldown sinks to the bottom so admin can work down the
+      // list without re-calling the same person twice in the same window;
+      // blacklisted entries (no Call button at all) keep their relative
+      // order among the not-on-cooldown ones.
+      items: [...inactiveDrivers].sort((a, b) => Number(uninstalledCallCooldownActive(a.mobile)) - Number(uninstalledCallCooldownActive(b.mobile))),
       renderItem: (d) => {
-        const called = calledUninstalledToday(d.mobile);
+        const onCooldown = uninstalledCallCooldownActive(d.mobile);
+        const cooldownDaysLeft = onCooldown
+          ? Math.max(1, Math.ceil((UNINSTALLED_CALL_COOLDOWN_MS - (Date.now() - uninstalledCalledMap[d.mobile])) / (24 * 60 * 60 * 1000)))
+          : 0;
         const roleTag = inactiveDriverRoleTag(d);
         return (
-          <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}`, opacity: called ? 0.6 : 1 }}>
+          <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}`, opacity: onCooldown ? 0.6 : 1 }}>
             <div>
               <div className="flex items-center gap-1.5">
                 <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
@@ -695,13 +707,22 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               <button onClick={() => toggleBlacklist(d.mobile || d.id)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white" style={{ background: C.success }}>
                 {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
               </button>
-            ) : (
+            ) : onCooldown ? (
               <div className="shrink-0 flex flex-col items-center gap-0.5">
-                <a href={`tel:+91${d.mobile}`} onClick={() => markUninstalledCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
-                  <Phone size={14} color="#FFFFFF" />
-                </a>
-                {called && <CheckCircle2 size={14} color={C.success} />}
+                <div className="p-2 rounded-full flex items-center justify-center" style={{ background: "#E0E0E0" }}>
+                  <Phone size={14} color="#9AA3B0" />
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <CheckCircle2 size={12} color={C.success} />
+                  <span className="text-[9px] font-bold" style={{ color: C.inkSoft }}>
+                    {lang === "en" ? `${cooldownDaysLeft}d` : lang === "mr" ? `${cooldownDaysLeft}दि` : `${cooldownDaysLeft}दि`}
+                  </span>
+                </div>
               </div>
+            ) : (
+              <a href={`tel:+91${d.mobile}`} onClick={() => markUninstalledCalled(d.mobile)} className="shrink-0 p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                <Phone size={14} color="#FFFFFF" />
+              </a>
             )}
           </div>
         );
