@@ -475,6 +475,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   const driverRegistrations = [...approvalQueue, ...notSubmittedRecentList];
   const [approvalExpandedId, setApprovalExpandedId] = useState(null);
   const [approvalEditingId, setApprovalEditingId] = useState(null);
+  const [confirmRejectId, setConfirmRejectId] = useState(null);
   const [approvalEditDraft, setApprovalEditDraft] = useState(null);
   const [approvalEditError, setApprovalEditError] = useState("");
   const startApprovalEdit = (d) => {
@@ -942,9 +943,22 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                           </div>
                         )}
 
-                        {canDecide && (
+                        {canDecide && confirmRejectId === dr.id && (
+                          <div className="flex items-center gap-2 mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                            <span className="text-[11px] flex-1" style={{ color: C.safety }}>
+                              {lang === "en" ? "Reject this KYC?" : lang === "mr" ? "हे KYC नाकारायचे?" : "यह KYC रिजेक्ट करें?"}
+                            </span>
+                            <button onClick={() => { updateDriverKyc(dr.mobile, "Rejected"); setConfirmRejectId(null); }} className="rounded-lg px-3 py-2 text-xs font-bold text-white" style={{ background: C.safety }}>
+                              {lang === "en" ? "Yes, reject" : lang === "mr" ? "हो, नाकारा" : "हाँ, रिजेक्ट करें"}
+                            </button>
+                            <button onClick={() => setConfirmRejectId(null)} className="rounded-lg px-3 py-2 text-xs font-bold" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
+                              {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द" : "रद्द"}
+                            </button>
+                          </div>
+                        )}
+                        {canDecide && confirmRejectId !== dr.id && (
                           <div className="flex gap-2 mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                            <button onClick={() => updateDriverKyc(dr.mobile, "Rejected")} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.paper, color: C.safety, border: `1.5px solid ${C.safety}` }}>
+                            <button onClick={() => setConfirmRejectId(dr.id)} className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: C.paper, color: C.safety, border: `1.5px solid ${C.safety}` }}>
                               {lang === "en" ? "Reject" : lang === "mr" ? "नाकारा" : "रिजेक्ट करें"}
                             </button>
                             <button onClick={() => updateDriverKyc(dr.mobile, "Approved")} className="flex-1 rounded-lg py-2.5 text-sm font-bold text-white" style={{ background: C.metallicGreen }}>
