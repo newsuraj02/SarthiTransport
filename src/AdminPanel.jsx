@@ -18,7 +18,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp } from "./firebaseClient";
 import { createDoc, removeDoc, bulkUpdateDocs } from "./firestoreStore";
 import {
-  C, DEFAULT_EXPENSE_CATEGORIES, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
+  ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
@@ -2448,23 +2448,33 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
   // WhatsApp button, drivers don't respond to it; admin calls personally.
   const pendingUnmatched = (unmatchedVehicleRequests || []).filter((r) => r.status === "pending");
   const UNMATCHED_OFFLINE_MAX = 5;
+  // Owner request (2026-10-23): this previously only filtered by capacity --
+  // with no pickup coordinates it returned ANY offline driver fleet-wide,
+  // and even WITH coordinates it only sorted nearest-first and capped at 5
+  // with no actual radius cutoff, so a driver hundreds of km away could
+  // still show up as a "nearby" suggestion whenever fewer than 5 closer
+  // matches existed. Now requires a real pickup location to return anything
+  // at all, and only counts a driver as a match within the same radius live
+  // dispatch itself already uses for this exact booking type
+  // (CURRENT_BID_RADIUS_KM/ADVANCE_BID_RADIUS_KM, see App.jsx) -- an
+  // offline driver admin calls personally should be realistically reachable
+  // for the job, not just the least-far of whoever happens to fit.
   const offlineMatchesFor = (req) => {
     const loadKg = Number(req.weightKg) || 0;
+    if (req.pickupLat == null || req.pickupLng == null) return [];
+    const radiusKm = req.bookingType === "advance" ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
     const matches = (drivers || []).filter((d) => {
       if (d.online || d.blacklisted || d.kyc !== "Approved") return false;
       const capKg = Number(d.vehicleSpec?.capacityKg) || 0;
       if (loadKg <= 0 || capKg < loadKg || capKg > loadKg + VEHICLE_HEADROOM_KG) return false;
       return true;
     });
-    if (req.pickupLat == null || req.pickupLng == null) return matches.slice(0, UNMATCHED_OFFLINE_MAX);
     return matches
-      .map((d) => ({
-        driver: d,
-        km: d.lastKnownLocation?.lat != null ? haversineKm(req.pickupLat, req.pickupLng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) : null,
-      }))
-      .sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity))
-      .slice(0, UNMATCHED_OFFLINE_MAX)
-      .map((x) => x.driver);
+      .filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null)
+      .map((d) => ({ driver: d, km: haversineKm(req.pickupLat, req.pickupLng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) }))
+      .filter((x) => x.km <= radiusKm)
+      .sort((a, b) => a.km - b.km)
+      .slice(0, UNMATCHED_OFFLINE_MAX);
   };
   // Date/time shown under "Requirement" -- advance bookings carry their
   // own scheduledFor ("YYYY-MM-DD HH:MM", see CustomerAdvanceBooking's
@@ -2645,11 +2655,14 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                   </p>
                 ) : (
                   <div className="space-y-1.5">
-                    {offlineMatches.map((d) => (
+                    {offlineMatches.map(({ driver: d, km }) => (
                       <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: "rgba(63,122,84,0.1)", border: `1px solid ${C.success}` }}>
                         <div className="min-w-0">
                           <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name} · {d.vehicleSpec?.vehicleNumber || "—"}</div>
                           <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.capacityKg ? `${d.vehicleSpec.capacityKg}kg` : "—"}</div>
+                          <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>
+                            {lang === "en" ? `${Math.round(km)} km from Pickup` : lang === "mr" ? `पिकअपपासून ${Math.round(km)} किमी` : `पिकअप से ${Math.round(km)} किमी`}
+                          </div>
                         </div>
                         <a href={`tel:+91${d.mobile}`} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
                           <Phone size={12} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}

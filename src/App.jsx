@@ -1004,8 +1004,8 @@ const MIN_LOCATION_HEARTBEAT_MS = 30000;
 // Auto-bid proximity: a Current (immediate) load only reaches drivers
 // within CURRENT_BID_RADIUS_KM of its pickup; an Advance load reaches a
 // wider ring since the driver has time to travel there.
-const CURRENT_BID_RADIUS_KM = 30;
-const ADVANCE_BID_RADIUS_KM = 50;
+export const CURRENT_BID_RADIUS_KM = 30;
+export const ADVANCE_BID_RADIUS_KM = 50;
 // Vehicle-fit window: a driver auto-bids only when their vehicle's rated
 // capacity is between the load's weight and weight + this much headroom.
 // Exported so AdminPanel.jsx's offline-vehicle matching (Smart
@@ -6449,6 +6449,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                             <div className="text-[11px]" style={{ color: C.inkSoft }}>
                               {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
                             </div>
+                            <div className="text-[11px]" style={{ color: C.inkSoft }}>
+                              {lang === "en" ? `${Math.round(entry.km)} km from Pickup` : lang === "mr" ? `पिकअपपासून ${Math.round(entry.km)} किमी` : `पिकअप से ${Math.round(entry.km)} किमी`}
+                            </div>
                           </div>
                           <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
                         </button>
@@ -7027,6 +7030,9 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                             <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
                             <div className="text-[11px]" style={{ color: C.inkSoft }}>
                               {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
+                            </div>
+                            <div className="text-[11px]" style={{ color: C.inkSoft }}>
+                              {lang === "en" ? `${Math.round(entry.km)} km from Pickup` : lang === "mr" ? `पिकअपपासून ${Math.round(entry.km)} किमी` : `पिकअप से ${Math.round(entry.km)} किमी`}
                             </div>
                           </div>
                           <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
