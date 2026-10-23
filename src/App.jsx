@@ -1507,6 +1507,32 @@ export function interpolateOutlierFare(entry, sorted, distanceKm, tiers = DEFAUL
   return calculateFare(entry.tierMaxKg, distanceKm, tiers);
 }
 
+// Real-world report (2026-10-23): a 2000kg vehicle showed cheaper than a
+// 1500kg one on the same route/distance -- two independently-set admin
+// rates (or formula results) for different tiers on the same route have no
+// built-in relationship to each other, so nothing before this stopped a
+// bigger-capacity tier from landing below a smaller one. findFareOutliers
+// above only catches a tier whose rate is wildly off from its OWN sibling
+// tiers' ratio-to-formula trend -- it doesn't check capacity ordering at
+// all, so two individually "reasonable-looking" rates can still be
+// non-monotonic against each other. This is a last pass, after outlier
+// correction, directly enforcing the one rule that should never break: a
+// bigger vehicle never costs less than a smaller one for the same trip.
+// Walks tiers ascending by capacity and clamps each one's fare up to at
+// least the running max seen so far -- never lowers a fare, only raises a
+// too-cheap bigger tier to match. `entries`: [{ tier: { maxKg }, fare }].
+export function enforceMonotonicFares(entries) {
+  const tierKgsAscending = [...new Set((entries || []).map((e) => e.tier.maxKg))].sort((a, b) => a - b);
+  const clampedFareByTierKg = {};
+  let runningMax = 0;
+  for (const tierKg of tierKgsAscending) {
+    const tierFare = entries.find((e) => e.tier.maxKg === tierKg)?.fare || 0;
+    runningMax = Math.max(runningMax, tierFare);
+    clampedFareByTierKg[tierKg] = runningMax;
+  }
+  return entries.map((e) => ({ ...e, fare: clampedFareByTierKg[e.tier.maxKg] }));
+}
+
 // Route fares are matched by loose substring containment rather than exact
 // equality: a driver typing "Kolhapur" into Set Fare should match a
 // customer's fully resolved pickup address like "MG Road, Kolhapur,
@@ -6156,11 +6182,15 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       withFare.map((e) => ({ id: e.id, tierMaxKg: e.tier.maxKg, totalFare: e.fare, estimatedKm: distance })),
       fareTiers
     );
-    if (outlierIds.size === 0) return withFare;
-    const clean = withFare.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tier.maxKg, fare: e.fare }));
-    return withFare.map((e) => outlierIds.has(e.id)
-      ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers) }
-      : e);
+    const afterOutliers = outlierIds.size === 0 ? withFare : (() => {
+      const clean = withFare.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tier.maxKg, fare: e.fare }));
+      return withFare.map((e) => outlierIds.has(e.id)
+        ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers) }
+        : e);
+    })();
+    // Last pass, after outlier correction -- see enforceMonotonicFares:
+    // never show a bigger-capacity vehicle cheaper than a smaller one.
+    return enforceMonotonicFares(afterOutliers);
   })();
 
   // Once a driver is picked, the list collapses down to just that one
@@ -6706,11 +6736,15 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
       withFare.map((e) => ({ id: e.id, tierMaxKg: e.tier.maxKg, totalFare: e.fare, estimatedKm: distance })),
       fareTiers
     );
-    if (outlierIds.size === 0) return withFare;
-    const clean = withFare.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tier.maxKg, fare: e.fare }));
-    return withFare.map((e) => outlierIds.has(e.id)
-      ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers) }
-      : e);
+    const afterOutliers = outlierIds.size === 0 ? withFare : (() => {
+      const clean = withFare.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tier.maxKg, fare: e.fare }));
+      return withFare.map((e) => outlierIds.has(e.id)
+        ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers) }
+        : e);
+    })();
+    // Last pass, after outlier correction -- see enforceMonotonicFares:
+    // never show a bigger-capacity vehicle cheaper than a smaller one.
+    return enforceMonotonicFares(afterOutliers);
   })();
 
   // Once a driver is picked, the list collapses down to just that one
