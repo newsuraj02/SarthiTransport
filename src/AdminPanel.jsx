@@ -3252,13 +3252,15 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
 function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   const [q, setQ] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [statusExpandedId, setStatusExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [showCall, setShowCall] = useState(false);
-  const [callQ, setCallQ] = useState("");
   const filtered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q));
   const statusMeta = lang === "en"
-    ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
-    : { Bidding: { label: "बिड बाकी", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
+    ? { Bidding: { label: "Searching", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
+    : lang === "mr"
+    ? { Bidding: { label: "शोधत आहे", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } }
+    : { Bidding: { label: "खोज रहे हैं", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
+  const noActivityMeta = { label: lang === "en" ? "No activity" : lang === "mr" ? "कोणतीही अ‍ॅक्टिव्हिटी नाही" : "कोई एक्टिविटी नहीं", color: C.inkSoft, bg: "#E5E5E5" };
   const bookingDate = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
   return (
@@ -3268,39 +3270,17 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
           <Users size={16} /> {lang === "en" ? "All Customers" : lang === "mr" ? "सर्व कस्टमर" : "सभी कस्टमर"}
           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{(customers || []).length}</span>
         </div>
-        <button onClick={() => setShowCall((v) => !v)} className="text-sm font-bold px-4 py-2.5 rounded-lg text-white shadow-lg flex items-center gap-1" style={{ background: C.metallicGreen }}>
-          {showCall ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : <><Phone size={12} /> {lang === "en" ? "Call Customer" : lang === "mr" ? "कस्टमरला कॉल करा" : "कस्टमर को कॉल करें"}</>}
-        </button>
       </div>
-      {showCall && (() => {
-        const callFiltered = (customers || []).filter((c) => (c.name || "").toLowerCase().includes(callQ.toLowerCase()) || (c.mobile || "").includes(callQ));
-        return (
-          <div className="rounded-lg p-2 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
-            <input value={callQ} onChange={(e) => setCallQ(e.target.value)} placeholder={lang === "en" ? "Search by name or mobile..." : lang === "mr" ? "नाव किंवा मोबाइलने शोधा..." : "नाम या मोबाइल से खोजें..."}
-              className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
-            <div className="space-y-1.5 max-h-64 overflow-y-auto">
-              {callFiltered.length === 0 ? (
-                <p className="text-xs px-1 py-1" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : lang === "mr" ? "कोणताही कस्टमर सापडला नाही." : "कोई कस्टमर नहीं मिला।"}</p>
-              ) : callFiltered.map((c) => (
-                <a key={c.mobile} href={`tel:${c.mobile}`} onClick={() => setShowCall(false)}
-                  className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
-                    <div className="text-[10px] font-bold" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
-                  </div>
-                  <Phone size={16} color={C.success} className="shrink-0" />
-                </a>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name or mobile..." : lang === "mr" ? "नाव किंवा मोबाइलने शोधा..." : "नाम या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : lang === "mr" ? "कोणताही कस्टमर सापडला नाही." : "कोई कस्टमर नहीं मिला।"}</p>}
         {filtered.map((c) => {
           const expanded = expandedId === c.mobile;
+          const statusExpanded = statusExpandedId === c.mobile;
           const rides = (bookings || []).filter((b) => b.customerMobile === c.mobile);
+          const sortedRides = [...rides].sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+          const latestRide = sortedRides[0] || null;
+          const currentStatusMeta = latestRide ? (statusMeta[latestRide.status] || statusMeta.Cancelled) : noActivityMeta;
           return (
             <div key={c.mobile} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
               <div className="flex items-center gap-2.5">
@@ -3309,9 +3289,38 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
                   <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{c.mobile}</div>
                 </div>
+                <a href={`tel:${c.mobile}`} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success }}>
+                  <Phone size={16} color="#FFFFFF" />
+                </a>
                 <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-sm font-semibold px-3.5 py-2.5 rounded-lg" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
                   {expanded ? (lang === "en" ? "Hide" : lang === "mr" ? "लपवा" : "छुपाएं") : (lang === "en" ? "View Details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें")}
                 </button>
+              </div>
+
+              <div className="mt-2">
+                <button onClick={() => setStatusExpandedId(statusExpanded ? null : c.mobile)} className="text-[10px] font-bold px-2.5 py-1 rounded-full" style={{ color: currentStatusMeta.color, background: currentStatusMeta.bg }}>
+                  {currentStatusMeta.label}
+                </button>
+                {statusExpanded && (
+                  <div className="mt-2 rounded-lg p-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                    {!latestRide ? (
+                      <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No activity yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅक्टिव्हिटी नाही." : "अभी तक कोई एक्टिविटी नहीं।"}</p>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{latestRide.pickup} → {latestRide.drop}</span>
+                        </div>
+                        <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
+                          {latestRide.weight} {lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}
+                        </div>
+                        <div className="text-[10px] flex items-center justify-between mt-1">
+                          <span style={{ color: C.inkSoft }}>{latestRide.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${latestRide.driverName}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(latestRide)}</span>
+                          {latestRide.fare != null && <span className="font-bold" style={{ color: C.marigoldDeep, fontFamily: monoFont }}>{fmt(latestRide.fare)}</span>}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               {expanded && (
