@@ -7,7 +7,7 @@
 // one of the imports here.
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronLeft, Clock,
+  Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
   MessageCircle, Phone, PhoneCall, Plus, Settings2, Siren, UserCircle2, Users,
   Wallet, Weight, XCircle,
@@ -3097,10 +3097,10 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
               </a>
               {called && <CheckCircle2 size={14} color={C.success} />}
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5" style={{ color: gps.color, background: gps.bg }} title={lang === "en" ? "GPS status" : lang === "mr" ? "GPS स्थिती" : "GPS स्थिति"}>
-              <MapPin size={9} /> GPS {gps.label}
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: gps.stale ? C.safety : C.success }} title={lang === "en" ? `GPS: ${gps.label}` : lang === "mr" ? `GPS: ${gps.label}` : `GPS: ${gps.label}`}>
+              <MapPin size={9} /> GPS
             </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: km.color, background: km.bg }}>{km.label}</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>
           </div>
         </div>
 
@@ -3354,8 +3354,9 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                 <a href={`tel:${c.mobile}`} onClick={() => markCustomerCalled(c.mobile)} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: called ? "#9AA3B0" : C.success }}>
                   <Phone size={16} color="#FFFFFF" />
                 </a>
-                <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-sm font-semibold px-3.5 py-2.5 rounded-lg" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
-                  {expanded ? (lang === "en" ? "Hide" : lang === "mr" ? "लपवा" : "छुपाएं") : (lang === "en" ? "View Details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें")}
+                <button onClick={() => setExpandedId(expanded ? null : c.mobile)} aria-label={expanded ? (lang === "en" ? "Hide details" : lang === "mr" ? "तपशील लपवा" : "विवरण छुपाएं") : (lang === "en" ? "View details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें")}
+                  className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.marigoldDeep }}>
+                  <ChevronDown size={16} color="#FFFFFF" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
                 </button>
               </div>
 
