@@ -17,7 +17,7 @@ import {
   Settings2, Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Plus, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, LocateFixed,
-  AlertTriangle, Volume2, VolumeX,
+  AlertTriangle,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs, bulkDeleteDocs,
@@ -2414,33 +2414,12 @@ function speakAlert(text, lang = "hi") {
 
 // Spoken onboarding guidance (Role Select, Customer/Driver sign-up, Driver
 // Home's off-duty toggle) -- same Web Speech API speakAlert already uses
-// above, but calm (no chime, slightly slower) and spoken at MOST ONCE per
-// device per prompt (onceKey), so revisiting a screen never replays the
-// same line -- the main thing standing between "helpful" and "annoying."
-// Also gated by the user's own mute toggle (sarthi_voiceGuideOn, default
-// on -- see the speaker icon on RoleSelect) so anyone who doesn't want
-// voice guidance can turn it off once, permanently.
-function voiceGuideSeenSet() {
-  try { return new Set(JSON.parse(localStorage.getItem("sarthi_voiceGuideSeen") || "[]")); }
-  catch { return new Set(); }
-}
-function markVoiceGuideSeen(onceKey) {
-  try {
-    const seen = voiceGuideSeenSet();
-    seen.add(onceKey);
-    localStorage.setItem("sarthi_voiceGuideSeen", JSON.stringify([...seen]));
-  } catch { /* localStorage not available */ }
-}
-function voiceGuideOn() {
-  try { return localStorage.getItem("sarthi_voiceGuideOn") !== "false"; }
-  catch { return true; }
-}
-function speakGuide(text, lang, onceKey) {
-  if (!voiceGuideOn()) return;
-  if (onceKey) {
-    if (voiceGuideSeenSet().has(onceKey)) return;
-    markVoiceGuideSeen(onceKey);
-  }
+// above, but calm (no chime, slightly slower). Owner request (2026-10-24):
+// mandatory on the start page through the full login/signup procedure for
+// both Customer and Driver -- no mute option, no "only once" gate (an
+// earlier version had both; dropped per this request), so it speaks every
+// single time a prompt's screen/condition is reached.
+function speakGuide(text, lang) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   try {
     window.speechSynthesis.cancel();
@@ -4191,7 +4170,6 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
   // WHO should pick it, which is the more likely reason for that mix-up.
   const driverWho = lang === "en" ? "If you drive a truck or vehicle" : lang === "mr" ? "जर तुम्ही ट्रक/गाडी चालवता" : "अगर आप ट्रक/गाड़ी चलाते हैं";
   const customerWho = lang === "en" ? "If you need to send goods" : lang === "mr" ? "जर तुम्हाला सामान पाठवायचे आहे" : "अगर आपको सामान भेजना है";
-  const [voiceOn, setVoiceOn] = usePersistedState("sarthi_voiceGuideOn", true);
   useEffect(() => {
     if (anyVerified) return; // "continue where you left off" -- not the first-time flow this guidance is for
     const welcome = lang === "en" ? "Welcome to Apna Transport." : lang === "mr" ? "अपना ट्रान्सपोर्टमध्ये आपले स्वागत आहे." : "अपना ट्रांसपोर्ट में आपका स्वागत है।";
@@ -4200,26 +4178,18 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
       : lang === "mr"
       ? "तुम्ही ड्रायव्हर आहात की कस्टमर? जर तुम्ही गाडी चालवता तर ड्रायव्हर अ‍ॅप निवडा. जर तुम्हाला सामान पाठवायचे असेल तर कस्टमर अ‍ॅप निवडा."
       : "क्या आप ड्राइवर हैं या कस्टमर? अगर आप गाड़ी चलाते हैं तो ड्राइवर ऐप चुनें। अगर आपको सामान भेजना है तो कस्टमर ऐप चुनें।";
-    speakGuide(welcome, lang, "roleSelect_welcome");
-    const t = setTimeout(() => speakGuide(roleQuestion, lang, "roleSelect_question"), 2600);
+    speakGuide(welcome, lang);
+    const t = setTimeout(() => speakGuide(roleQuestion, lang), 2600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, anyVerified]);
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-5 py-8">
-      <div className="w-full flex items-center justify-center gap-2 mb-6 relative">
-        <p className="text-sm text-center" style={{ color: C.inkSoft }}>
-          {anyVerified
-            ? (lang === "en" ? "Continue where you left off, or logout to switch" : lang === "mr" ? "जिथून सोडले होते तिथून सुरू ठेवा, किंवा स्विच करण्यासाठी लॉगआउट करा" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें")
-            : (lang === "en" ? "Choose your app" : lang === "mr" ? "तुमचे अ‍ॅप निवडा" : "अपनी ऐप चुनें")}
-        </p>
-        {!anyVerified && (
-          <button onClick={() => setVoiceOn((v) => !v)} aria-label={voiceOn ? "Mute voice guidance" : "Unmute voice guidance"}
-            className="absolute right-0 p-1.5 rounded-full" style={{ background: C.bg }}>
-            {voiceOn ? <Volume2 size={14} color={C.inkSoft} /> : <VolumeX size={14} color={C.inkSoft} />}
-          </button>
-        )}
-      </div>
+      <p className="text-sm text-center mb-6" style={{ color: C.inkSoft }}>
+        {anyVerified
+          ? (lang === "en" ? "Continue where you left off, or logout to switch" : lang === "mr" ? "जिथून सोडले होते तिथून सुरू ठेवा, किंवा स्विच करण्यासाठी लॉगआउट करा" : "जहां से छोड़ा था वहां से जारी रखें, या स्विच करने के लिए लॉगआउट करें")
+          : (lang === "en" ? "Choose your app" : lang === "mr" ? "तुमचे अ‍ॅप निवडा" : "अपनी ऐप चुनें")}
+      </p>
 
       <div className={bothShown ? "w-full grid grid-cols-2 gap-3" : "w-full flex flex-col items-center"}>
         {showDriver && (
@@ -4363,21 +4333,21 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
     if (!mode || stage !== "mobile") return;
     speakGuide(
       lang === "en" ? "Please enter your mobile number." : lang === "mr" ? "कृपया तुमचा मोबाइल नंबर टाका." : "कृपया अपना मोबाइल नंबर डालें।",
-      lang, "customer_mobileEntry"
+      lang
     );
   }, [mode, stage, lang]);
   useEffect(() => {
     if (stage !== "pin" || mode !== "signup") return;
     speakGuide(
       lang === "en" ? "Set a 4-digit secret PIN." : lang === "mr" ? "4 अंकी गुप्त PIN सेट करा." : "4 अंकों का गुप्त पिन सेट करें।",
-      lang, "customer_pinSetup"
+      lang
     );
   }, [stage, mode, lang]);
   useEffect(() => {
     if (stage !== "pin" || mode !== "signup" || pin.length !== 4 || pinConfirm) return;
     speakGuide(
       lang === "en" ? "Enter the same PIN again to confirm." : lang === "mr" ? "कन्फर्म करण्यासाठी तोच PIN पुन्हा टाका." : "पुष्टि करने के लिए वही पिन फिर से डालें।",
-      lang, "customer_pinConfirm"
+      lang
     );
   }, [pin, pinConfirm, stage, mode, lang]);
 
@@ -4513,7 +4483,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
     // doc ID, so the next refresh found no profile and re-asked for sign-up.
     speakGuide(
       lang === "en" ? "Your profile has been created successfully!" : lang === "mr" ? "तुमची प्रोफाइल यशस्वीरित्या तयार झाली आहे!" : "आपकी प्रोफाइल सफलतापूर्वक बन गई है!",
-      lang, "customer_profileSuccess"
+      lang
     );
     onComplete({ name, photo: finalPhoto, referredBy, referralCredited: false, mobile: ownMobile });
     // Submitted for real — clear the draft so it can't leak into a future
@@ -4841,21 +4811,21 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     if (!mode || stage !== "mobile") return;
     speakGuide(
       lang === "en" ? "Please enter your mobile number." : lang === "mr" ? "कृपया तुमचा मोबाइल नंबर टाका." : "कृपया अपना मोबाइल नंबर डालें।",
-      lang, "driver_mobileEntry"
+      lang
     );
   }, [mode, stage, lang]);
   useEffect(() => {
     if (stage !== "pin" || mode !== "signup") return;
     speakGuide(
       lang === "en" ? "Set a 4-digit secret PIN." : lang === "mr" ? "4 अंकी गुप्त PIN सेट करा." : "4 अंकों का गुप्त पिन सेट करें।",
-      lang, "driver_pinSetup"
+      lang
     );
   }, [stage, mode, lang]);
   useEffect(() => {
     if (stage !== "pin" || mode !== "signup" || pin.length !== 4 || pinConfirm) return;
     speakGuide(
       lang === "en" ? "Enter the same PIN again to confirm." : lang === "mr" ? "कन्फर्म करण्यासाठी तोच PIN पुन्हा टाका." : "पुष्टि करने के लिए वही पिन फिर से डालें।",
-      lang, "driver_pinConfirm"
+      lang
     );
   }, [pin, pinConfirm, stage, mode, lang]);
 
@@ -12527,7 +12497,7 @@ export default function App() {
               setLangPromptPending(true);
               speakGuide(
                 lang === "en" ? "Your profile has been created successfully!" : lang === "mr" ? "तुमची प्रोफाइल यशस्वीरित्या तयार झाली आहे!" : "आपकी प्रोफाइल सफलतापूर्वक बन गई है!",
-                lang, "driver_profileSuccess"
+                lang
               );
             }} />
         )}
