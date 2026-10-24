@@ -689,13 +689,14 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       // blacklisted entries (no Call button at all) keep their relative
       // order among the not-on-cooldown ones.
       items: [...inactiveDrivers].sort((a, b) => Number(uninstalledCallCooldownActive(a.mobile)) - Number(uninstalledCallCooldownActive(b.mobile))),
-      renderItem: (d) => {
+      renderItem: (d, i) => {
         const onCooldown = uninstalledCallCooldownActive(d.mobile);
         const roleTag = inactiveDriverRoleTag(d);
         return (
           <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}`, opacity: onCooldown ? 0.6 : 1 }}>
             <div>
               <div className="flex items-center gap-1.5">
+                <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
                 <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: roleTag === "customer" ? C.marigoldDeep : C.navy, color: "#fff" }}>
                   {roleTag === "customer"
@@ -837,24 +838,39 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           </p>
         ) : rangeCustomersTotal + rangeDriversTotal === 0 ? (
           <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{lang === "en" ? "No signups in this range." : lang === "mr" ? "या रेंजमध्ये कोणताही साइनअप नाही." : "इस रेंज में कोई साइनअप नहीं।"}</p>
-        ) : (
+        ) : (() => {
+          // One running count across the whole filtered range (not reset
+          // per date) so every entry shown on this page -- customer or
+          // driver, whichever date it fell on -- gets its own position
+          // number, same as every other list on this screen.
+          let installRowNum = 0;
+          return (
           <div className="space-y-3">
             {registrationTrend.filter((d) => d.customers.length > 0 || d.drivers.length > 0).map((d) => (
               <div key={d.key}>
                 <div className="text-xs font-bold mb-1.5" style={{ color: C.inkSoft }}>{d.label}</div>
                 <div className="space-y-1.5">
-                  {d.customers.map((c) => (
+                  {d.customers.map((c) => {
+                    installRowNum += 1;
+                    const num = installRowNum;
+                    return (
                     <div key={c.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name}</div>
-                        <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{num}</span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name}</div>
+                          <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                        </div>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: "#FFFFFF", background: C.navy }}>
                         {lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                   {d.drivers.map((dr) => {
+                    installRowNum += 1;
+                    const num = installRowNum;
                     const badge = driverStatusBadge(dr);
                     const expanded = approvalExpandedId === dr.id;
                     const editing = approvalEditingId === dr.id;
@@ -862,9 +878,12 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                     return (
                       <div key={dr.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                         <button onClick={() => setApprovalExpandedId(expanded ? null : dr.id)} className="w-full flex items-center justify-between gap-2 text-left">
-                          <div className="min-w-0">
-                            <div className="text-sm font-bold" style={{ color: C.ink }}>{dr.name}</div>
-                            <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{dr.vehicleSpec?.vehicleNumber ? `${dr.vehicleSpec.vehicleNumber} · ` : ""}{dr.mobile}</div>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{num}</span>
+                            <div className="min-w-0">
+                              <div className="text-sm font-bold" style={{ color: C.ink }}>{dr.name}</div>
+                              <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{dr.vehicleSpec?.vehicleNumber ? `${dr.vehicleSpec.vehicleNumber} · ` : ""}{dr.mobile}</div>
+                            </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>
@@ -987,7 +1006,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               </div>
             ))}
           </div>
-        )}
+          );
+        })()}
       </div>
     );
   }
@@ -3046,7 +3066,15 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // One driver's full card -- shared by every section below and by the
   // flat search-results list, instead of five copies of the same ~170
   // lines of JSX.
-  const renderRow = (d) => {
+  // Index comes straight from Array.prototype.map's own (item, index)
+  // signature at every call site below (searchResults.map(renderRow) and
+  // each section's list.map(renderRow)) -- since calledDriverToday already
+  // sinks a just-called driver to the bottom of whichever list(s) it's in
+  // (see bySection), the number shown here (position + 1) automatically
+  // re-numbers itself on every call with zero extra bookkeeping: the called
+  // row becomes the list's last number, and whoever was next in line moves
+  // up to take the vacated numbers, with #1 always the new top entry.
+  const renderRow = (d, i) => {
     const km = kycMeta[d.kyc] || kycMeta.none;
     const expanded = expandedId === d.id;
     const editing = editingId === d.id;
@@ -3055,9 +3083,12 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     return (
       <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper, opacity: called ? 0.6 : 1 }}>
         <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
-            <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
+            <div>
+              <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
+              <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+            </div>
           </div>
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-1">
@@ -3254,6 +3285,17 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   const [expandedId, setExpandedId] = useState(null);
   const [statusExpandedId, setStatusExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  // "Already called today" tracking for this list's Call icon -- same
+  // daily-reset pattern as the Drivers tab's own Call button
+  // (driverCalledMap/calledDriverToday). A called customer sinks to the
+  // bottom of the list (ahead of the recency sort below), so the visible
+  // row numbers re-shuffle on every call with no extra bookkeeping: the
+  // called row becomes the last number, and whoever was next moves up to
+  // take #1.
+  const todayStrCustomerCall = () => new Date().toISOString().slice(0, 10);
+  const [customerCalledMap, setCustomerCalledMap] = usePersistedState("sarthi_customerCalled", {});
+  const markCustomerCalled = (mobile) => setCustomerCalledMap((prev) => ({ ...prev, [mobile]: todayStrCustomerCall() }));
+  const calledCustomerToday = (mobile) => customerCalledMap[mobile] === todayStrCustomerCall();
   // Owner request: whoever has the most recent ride activity (any status --
   // Searching/Ongoing/Completed/Cancelled) should float to the top of the
   // list, instead of whatever order the customers collection happens to
@@ -3269,7 +3311,11 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   }
   const filtered = (customers || [])
     .filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || (c.mobile || "").includes(q))
-    .sort((a, b) => (latestRideByMobile[b.mobile]?.createdAt?.toMillis?.() || 0) - (latestRideByMobile[a.mobile]?.createdAt?.toMillis?.() || 0));
+    .sort((a, b) => {
+      const calledDiff = Number(calledCustomerToday(a.mobile)) - Number(calledCustomerToday(b.mobile));
+      if (calledDiff !== 0) return calledDiff;
+      return (latestRideByMobile[b.mobile]?.createdAt?.toMillis?.() || 0) - (latestRideByMobile[a.mobile]?.createdAt?.toMillis?.() || 0);
+    });
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Searching", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
     : lang === "mr"
@@ -3289,21 +3335,23 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === "en" ? "Search by name or mobile..." : lang === "mr" ? "नाव किंवा मोबाइलने शोधा..." : "नाम या मोबाइल से खोजें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-3" style={{ border: `1px solid ${C.line}`, background: C.paper, color: C.ink }} />
       <div className="space-y-2">
         {filtered.length === 0 && <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No customer found." : lang === "mr" ? "कोणताही कस्टमर सापडला नाही." : "कोई कस्टमर नहीं मिला।"}</p>}
-        {filtered.map((c) => {
+        {filtered.map((c, i) => {
           const expanded = expandedId === c.mobile;
           const statusExpanded = statusExpandedId === c.mobile;
           const rides = (bookings || []).filter((b) => b.customerMobile === c.mobile);
           const latestRide = latestRideByMobile[c.mobile] || null;
           const currentStatusMeta = latestRide ? (statusMeta[latestRide.status] || statusMeta.Cancelled) : noActivityMeta;
+          const called = calledCustomerToday(c.mobile);
           return (
-            <div key={c.mobile} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}` }}>
+            <div key={c.mobile} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, opacity: called ? 0.6 : 1 }}>
               <div className="flex items-center gap-2.5">
+                <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
                 <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
                   <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{c.mobile}</div>
                 </div>
-                <a href={`tel:${c.mobile}`} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success }}>
+                <a href={`tel:${c.mobile}`} onClick={() => markCustomerCalled(c.mobile)} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: called ? "#9AA3B0" : C.success }}>
                   <Phone size={16} color="#FFFFFF" />
                 </a>
                 <button onClick={() => setExpandedId(expanded ? null : c.mobile)} className="shrink-0 text-sm font-semibold px-3.5 py-2.5 rounded-lg" style={{ color: "#FFFFFF", background: C.marigoldDeep }}>
