@@ -3430,9 +3430,33 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                         </button>
                       </>
                     ) : (
-                      <button onClick={() => setConfirmDeleteId(c.mobile)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
-                        {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
-                      </button>
+                      <>
+                        {/* Owner request (2026-10-24): calling down this list
+                            turned up a lot of people who are really Drivers,
+                            just signed up as a Customer by mistake. No MSG91
+                            WhatsApp template exists/is approved for this yet
+                            (every other bulk WhatsApp send in this app goes
+                            through one, see sendBulkDriverWhatsApp), so this
+                            is a plain wa.me deep link instead -- opens
+                            WhatsApp with the message pre-filled, admin just
+                            taps Send. The link carries ?open=driver, which
+                            the app's own root component already reads to
+                            jump straight to the Driver app, skipping the
+                            role-selection screen entirely. */}
+                        <a
+                          href={`https://wa.me/91${c.mobile}?text=${encodeURIComponent(
+                            lang === "en"
+                              ? "Hi! It looks like you're a truck driver. If so, please use our Driver app instead to register and start getting loads: https://sarthi-transport-74865.web.app/?open=driver"
+                              : "नमस्ते! लगता है आप ट्रक ड्राइवर हैं। अगर हां, तो कृपया ड्राइवर के रूप में रजिस्टर करने और लोड पाने के लिए हमारा ड्राइवर ऐप इस्तेमाल करें: https://sarthi-transport-74865.web.app/?open=driver"
+                          )}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="text-sm font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 text-white" style={{ background: C.success }}>
+                          <MessageCircle size={14} /> {lang === "en" ? "Redirect to Driver App" : lang === "mr" ? "ड्रायव्हर अ‍ॅपकडे पाठवा" : "ड्राइवर ऐप पर भेजें"}
+                        </a>
+                        <button onClick={() => setConfirmDeleteId(c.mobile)} className="text-sm font-bold px-3.5 py-2 rounded-lg" style={{ color: C.inkSoft, background: C.bg, border: `1px solid ${C.line}` }}>
+                          {lang === "en" ? "Delete" : lang === "mr" ? "काढा" : "हटाएं"}
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
