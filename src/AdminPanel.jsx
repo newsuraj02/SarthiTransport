@@ -693,12 +693,12 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         const onCooldown = uninstalledCallCooldownActive(d.mobile);
         const roleTag = inactiveDriverRoleTag(d);
         return (
-          <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}`, opacity: onCooldown ? 0.6 : 1 }}>
-            <div>
+          <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: C.paper, border: `1px solid ${d.blacklisted ? C.safety : C.line}`, opacity: onCooldown ? 0.6 : 1 }}>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
-                <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name}</div>
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: roleTag === "customer" ? C.marigoldDeep : C.navy, color: "#fff" }}>
+                <div className="text-xs font-bold truncate min-w-0" style={{ color: C.ink }}>{d.name}</div>
+                <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: roleTag === "customer" ? C.marigoldDeep : C.navy, color: "#fff" }}>
                   {roleTag === "customer"
                     ? (lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")
                     : (lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
@@ -855,11 +855,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                     const num = installRowNum;
                     return (
                     <div key={c.id} className="rounded-lg p-2.5 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{num}</span>
                         <div className="min-w-0">
-                          <div className="text-xs font-bold" style={{ color: C.ink }}>{c.name}</div>
-                          <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
+                          <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name}</div>
+                          <div className="text-[10px] truncate" style={{ color: C.inkSoft, fontFamily: monoFont }}>{c.mobile}</div>
                         </div>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0" style={{ color: "#FFFFFF", background: C.navy }}>
@@ -878,11 +878,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                     return (
                       <div key={dr.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                         <button onClick={() => setApprovalExpandedId(expanded ? null : dr.id)} className="w-full flex items-center justify-between gap-2 text-left">
-                          <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{num}</span>
                             <div className="min-w-0">
-                              <div className="text-sm font-bold" style={{ color: C.ink }}>{dr.name}</div>
-                              <div className="text-xs" style={{ color: C.inkSoft, fontFamily: monoFont }}>{dr.vehicleSpec?.vehicleNumber ? `${dr.vehicleSpec.vehicleNumber} · ` : ""}{dr.mobile}</div>
+                              <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{dr.name}</div>
+                              <div className="text-xs truncate" style={{ color: C.inkSoft, fontFamily: monoFont }}>{dr.vehicleSpec?.vehicleNumber ? `${dr.vehicleSpec.vehicleNumber} · ` : ""}{dr.mobile}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -3082,15 +3082,15 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     const called = calledDriverToday(d.mobile);
     return (
       <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper, opacity: called ? 0.6 : 1 }}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
-            <div>
-              <div className="text-sm font-bold" style={{ color: C.ink }}>{d.name}</div>
-              <div className="text-xs font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
+            <div className="min-w-0">
+              <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
+              <div className="text-xs font-bold truncate" style={{ color: C.ink, fontFamily: monoFont }}>{d.vehicleSpec?.vehicleNumber || "—"} · {d.mobile}</div>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-end gap-1 shrink-0">
             <div className="flex items-center gap-1">
               <a href={`tel:+91${d.mobile}`} onClick={() => markDriverCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
                 <Phone size={14} color="#FFFFFF" />
