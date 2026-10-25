@@ -1183,13 +1183,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       {pendingUnmatchedCount > 0 && (
         <button onClick={() => onNavigate("alerts")} className="w-full rounded-xl p-4 mb-3 shadow-sm text-left flex items-center gap-2.5" style={{ background: C.safety, border: `1.5px solid ${C.safety}` }}>
           <AlertTriangle size={20} color="#FFFFFF" className="shrink-0" />
-          <div className="flex-1">
-            <div className="text-sm font-bold text-white">
-              {lang === "en" ? `${pendingUnmatchedCount} unmatched load${pendingUnmatchedCount > 1 ? "s" : ""} need attention` : lang === "mr" ? `${pendingUnmatchedCount} न जुळलेले लोड लक्ष हवे आहे` : `${pendingUnmatchedCount} न जुळे लोड पर ध्यान चाहिए`}
-            </div>
-            <div className="text-[11px]" style={{ color: "#FFFFFF", opacity: 0.9 }}>
-              {lang === "en" ? "Tap to view and assign" : lang === "mr" ? "पाहण्यासाठी आणि नियुक्त करण्यासाठी टॅप करा" : "देखने और असाइन करने के लिए टैप करें"}
-            </div>
+          <div className="text-sm font-bold text-white">
+            {lang === "en" ? `${pendingUnmatchedCount} Direct request${pendingUnmatchedCount > 1 ? "s" : ""} from customer` : lang === "mr" ? `${pendingUnmatchedCount} कस्टमरकडून डायरेक्ट रिक्वेस्ट` : `${pendingUnmatchedCount} कस्टमर से डायरेक्ट रिक्वेस्ट`}
           </div>
         </button>
       )}
