@@ -2622,7 +2622,7 @@ function useLocationPermission() {
 // with AnnouncementAlertBanner (auto-popup) and a hamburger-menu badge —
 // either one calling markSeen() clears both at once, since they're the same
 // underlying "have you seen the latest one" state.
-function useAnnouncementAlerts(adminNotifications, myMobile, toRole) {
+function useAnnouncementAlerts(adminNotifications, myMobile, toRole, lang) {
   const mine = myMobile
     ? (adminNotifications || []).filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile || (Array.isArray(n.target) && n.target.includes(myMobile))))
       .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
@@ -2633,6 +2633,28 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole) {
     const newest = mine[0]?.createdAt?.toMillis?.() || Date.now();
     if (newest > lastSeenAt) setLastSeenAt(newest);
   };
+  // Owner request (2026-10-25): an Admin Notification sent with its "🔊
+  // Also read this aloud" checkbox on (see sendAdminNotification,
+  // functions/index.js -- speak: true) speaks aloud via speakGuide the
+  // moment it arrives, for whoever has the app open right now. JS-only,
+  // app-open-only by design (owner declined a native build for the
+  // closed/backgrounded-app version) -- reuses the exact same TTS helper
+  // already powering onboarding voice guidance, no new mechanism. The
+  // session's own mount time is the speak baseline (sessionStartRef), so
+  // opening the app fresh never cascades through old backlog; a persisted
+  // "last spoken" watermark (separate from lastSeenAt, which only tracks
+  // the inbox's unread badge) stops the same message replaying on re-render.
+  const sessionStartRef = useRef(Date.now());
+  const [lastSpokenAt, setLastSpokenAt] = usePersistedState(`sarthi_announcementsLastSpoken_${toRole}_${myMobile || "none"}`, 0);
+  useEffect(() => {
+    const toSpeak = mine
+      .filter((n) => n.speak === true && (n.createdAt?.toMillis?.() || 0) > Math.max(lastSpokenAt, sessionStartRef.current))
+      .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+    if (toSpeak.length === 0) return;
+    toSpeak.forEach((n) => speakGuide(n.message, lang));
+    setLastSpokenAt(toSpeak[toSpeak.length - 1].createdAt?.toMillis?.() || Date.now());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine.length]);
   return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen };
 }
 
@@ -8132,7 +8154,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
   // list by name, not this device's own driver session (a customer's phone
   // usually isn't also logged in as the driver who accepted their load).
   const activeDriverVehicle = findBookingDriver(drivers, activeBooking)?.vehicleSpec;
-  const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer");
+  const announcementAlerts = useAnnouncementAlerts(adminNotifications, customerMobile, "customer", lang);
   // Lifted up here (rather than owned inside CustomerBooking) so the same
   // permission state/banner carries across from the booking-entry screen
   // into the Ongoing-trip GPS sharing below, instead of resetting the
@@ -10853,7 +10875,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
   const rideNotifications = useRideNotifications("drivers", driver.mobile, lang);
   useReportInstalledVersion("drivers", driver.mobile);
   const locationPermission = useLocationPermission();
-  const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver");
+  const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver", lang);
 
   // Badge + "View your Booking here" callout, shown the moment one of this
   // driver's ADVANCE bids gets accepted (see HamburgerHint/

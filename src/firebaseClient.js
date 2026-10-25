@@ -178,14 +178,17 @@ export async function initiateMaskedCall(bookingId) {
 // of them (target = an array of mobiles, e.g. Admin's KYC desk "Send to
 // all incomplete" button), or every driver/customer (target = "all" or
 // omitted), depending on audience ("driver", the default, or "customer").
-// Purely in-app now — no push is sent. Always resolves (never throws)
-// with { ok, reason? }.
-export async function sendAdminNotification(target, message, audience = "driver") {
+// Always logged in-app; speak = true (owner request, 2026-10-25) ALSO sends
+// an FCM data push that gets spoken aloud on the recipient's device via
+// TextToSpeech, even app-closed/killed -- see AdminBroadcastSpeakService.java
+// and the "admin_broadcast" message type in AppFirebaseMessagingService.java.
+// Always resolves (never throws) with { ok, reason? }.
+export async function sendAdminNotification(target, message, audience = "driver", speak = false) {
   const functions = functionsByRole[activeRole];
   if (!functions) return { ok: false, reason: "not_configured" };
   try {
     const call = httpsCallable(functions, "sendAdminNotification");
-    const result = await call({ target, message, audience });
+    const result = await call({ target, message, audience, speak });
     return result.data;
   } catch (e) {
     console.error("[adminNotify] callable failed", e);

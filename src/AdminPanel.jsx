@@ -3542,6 +3542,18 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
   const [audience, setAudience] = useState("driver"); // 'driver' | 'customer'
   const [target, setTarget] = useState("all");
   const [message, setMessage] = useState("");
+  // Owner request (2026-10-25): an opt-in per message, not every admin
+  // notification -- most are routine and belong quietly in-app only; this
+  // is for the rare one worth reading aloud. JS-only for now (owner
+  // declined a native Android build): marks the adminNotifications doc
+  // with speak: true (see sendAdminNotification, functions/index.js),
+  // which useAnnouncementAlerts (App.jsx) picks up and speaks via
+  // speakGuide the moment it arrives -- but only for a recipient who
+  // already has the app open right now. Does NOT reach a closed/
+  // backgrounded app -- that would need a real FCM push + native
+  // TextToSpeech playback, which needs a new native build the owner isn't
+  // ready to ship yet.
+  const [speak, setSpeak] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -3565,9 +3577,9 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
     if (!message.trim() || sending) return;
     setSending(true);
     setError("");
-    const result = await sendAdminNotification(target, message.trim(), audience);
+    const result = await sendAdminNotification(target, message.trim(), audience, speak);
     setSending(false);
-    if (result.ok) setMessage("");
+    if (result.ok) { setMessage(""); setSpeak(false); }
     else setError(lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवू शकलो नाही — पुन्हा प्रयत्न करा." : "भेज नहीं सका — फिर कोशिश करें।");
   };
   const notifLabel = (n) => {
@@ -3617,6 +3629,10 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
         )}
       </div>
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={lang === "en" ? "Write a message..." : lang === "mr" ? "संदेश लिहा..." : "संदेश लिखें..."} className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" rows={3} style={{ border: `1px solid ${C.line}`, color: C.ink }} />
+      <label className="flex items-center gap-2 mb-2 text-xs font-semibold cursor-pointer" style={{ color: C.ink }}>
+        <input type="checkbox" checked={speak} onChange={(e) => setSpeak(e.target.checked)} className="w-4 h-4" />
+        🔊 {lang === "en" ? "Also read this aloud (only if their app is already open)" : lang === "mr" ? "हे मोठ्याने वाचूनही सांगा (फक्त त्यांचे अ‍ॅप आधीच उघडे असेल तर)" : "इसे बोलकर भी सुनाएं (सिर्फ अगर उनका ऐप पहले से खुला है)"}
+      </label>
       {error && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
       <button onClick={send} disabled={!message.trim() || sending} className="w-full rounded-lg py-3.5 font-bold text-base mb-4" style={{ background: message.trim() && !sending ? C.marigold : "#E0E0E0", color: message.trim() && !sending ? "#000000" : "#9AA3B0" }}>
         {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send" : lang === "mr" ? "पाठवा" : "भेजें")}

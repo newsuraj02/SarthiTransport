@@ -711,13 +711,23 @@ exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", asyn
 // Admin's "Send Notification" screen (AdminNotify) -- logs a message to
 // adminNotifications so it becomes a genuine, persisted announcement both
 // the admin's "Sent Notifications" list AND the recipient's own "Admin
-// Announcements" inbox (hamburger menu, both roles) read from. Purely
-// in-app now -- no push is sent, so a recipient only sees it once they
-// open the app (banner/badge/inbox), not as an OS notification while
-// it's closed.
+// Announcements" inbox (hamburger menu, both roles) read from. This part
+// is always in-app -- a recipient always sees it next time they open the
+// app, no matter what.
+//
+// speak = true (owner request, 2026-10-25, "🔊 Also read this aloud"
+// checkbox in AdminNotify) marks the doc so the recipient's own open app
+// speaks it aloud the moment it arrives -- see useAnnouncementAlerts in
+// App.jsx, which watches this same adminNotifications read for any new
+// entry with speak === true and calls speakGuide. Deliberately JS-only
+// for now (owner declined a native build for this): this reaches a
+// recipient ONLY while their app is open, not closed/backgrounded/killed
+// -- that would need a real FCM data push + native TextToSpeech playback,
+// which needs a new native Android build the owner doesn't want to ship
+// yet. No push is sent here at all; speak is just a flag on the doc.
 exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request) => {
   if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
-  const { target, message, audience } = request.data || {};
+  const { target, message, audience, speak } = request.data || {};
   const text = (message || "").trim();
   if (!text) throw new HttpsError("invalid-argument", "message is required.");
   const toRole = audience === "customer" ? "customer" : "driver";
@@ -757,6 +767,7 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
     targetEmails,
     targetPhones,
     message: text,
+    speak: speak === true,
     recipientCount,
     createdAt: FieldValue.serverTimestamp(),
   });
