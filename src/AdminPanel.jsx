@@ -535,6 +535,15 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     const roundComplete = uninstalledCallableMobiles.length > 0 && uninstalledCallableMobiles.every((m) => next[m]);
     return roundComplete ? {} : next;
   });
+  // Owner request (2026-10-25): a double-tap on a cooldown-disabled Call
+  // control re-enables just that one entry immediately, without waiting
+  // for the rest of the round to finish and without affecting anyone
+  // else's cooldown state.
+  const unmarkUninstalledCalled = (mobile) => setUninstalledCalledMap((prev) => {
+    const next = { ...prev };
+    delete next[mobile];
+    return next;
+  });
   const uninstalledCallCooldownActive = (mobile) => !!uninstalledCalledMap[mobile];
 
   // "Already messaged today" tracking for approved drivers who still have
@@ -712,7 +721,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                 {lang === "en" ? "Unblock" : lang === "mr" ? "अनब्लॉक करा" : "अनब्लॉक करें"}
               </button>
             ) : onCooldown ? (
-              <div className="shrink-0 flex flex-col items-center gap-0.5">
+              <div onDoubleClick={() => unmarkUninstalledCalled(d.mobile)} className="shrink-0 flex flex-col items-center gap-0.5">
                 <div className="p-2 rounded-full flex items-center justify-center" style={{ background: "#E0E0E0" }}>
                   <Phone size={14} color="#9AA3B0" />
                 </div>
@@ -3003,16 +3012,30 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const [expandedSections, setExpandedSections] = useState({ gpsOn: false, gpsOff: false, incomplete: true, complete: false, lowWallet: false, online: false, offDuty: false });
   const toggleSection = (key) => setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const allSectionsExpanded = Object.values(expandedSections).every(Boolean);
-  // "Already called today" tracking for every driver card's Call button
-  // (see renderRow) -- same pattern as detailPages.uninstalled in
-  // AdminFleet: tapping Call ticks the row and sinks it to the bottom of
-  // whichever section(s) it's in for the rest of the day, ahead of
-  // actionRank, so a just-called driver never sits at the top demanding
-  // attention again until tomorrow.
-  const todayStrDriverCall = () => new Date().toISOString().slice(0, 10);
+  // "Called this round" tracking for every driver card's Call button (see
+  // renderRow) -- same round-robin pattern as detailPages.uninstalled in
+  // AdminFleet (owner request, 2026-10-25): tapping Call disables that
+  // driver's Call button and sinks them to the bottom of whichever
+  // section(s) they're in, ahead of actionRank, until every other driver
+  // across the WHOLE Drivers tab (totalInstalled -- shared by every
+  // section and the search-results list, since a driver can appear in more
+  // than one section at once) has also been called; the round then resets
+  // and everyone becomes callable again. Double-tapping a disabled Call
+  // control re-enables just that one driver immediately (unmarkDriverCalled),
+  // without waiting for the rest of the round.
   const [driverCalledMap, setDriverCalledMap] = usePersistedState("sarthi_driverCalled", {});
-  const markDriverCalled = (mobile) => setDriverCalledMap((prev) => ({ ...prev, [mobile]: todayStrDriverCall() }));
-  const calledDriverToday = (mobile) => driverCalledMap[mobile] === todayStrDriverCall();
+  const driverCallableMobiles = totalInstalled.map((d) => d.mobile).filter(Boolean);
+  const markDriverCalled = (mobile) => setDriverCalledMap((prev) => {
+    const next = { ...prev, [mobile]: true };
+    const roundComplete = driverCallableMobiles.length > 0 && driverCallableMobiles.every((m) => next[m]);
+    return roundComplete ? {} : next;
+  });
+  const unmarkDriverCalled = (mobile) => setDriverCalledMap((prev) => {
+    const next = { ...prev };
+    delete next[mobile];
+    return next;
+  });
+  const calledDriverToday = (mobile) => !!driverCalledMap[mobile];
   const actionRank = (d) => (d.vehicleSpec && d.kyc === "Pending" ? 0 : !d.vehicleSpec ? 1 : 2);
   const bySection = (arr) => [...arr].sort((a, b) => {
     const calledDiff = Number(calledDriverToday(a.mobile)) - Number(calledDriverToday(b.mobile));
@@ -3092,9 +3115,15 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <div className="flex items-center gap-1">
-              <a href={`tel:+91${d.mobile}`} onClick={() => markDriverCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
-                <Phone size={14} color="#FFFFFF" />
-              </a>
+              {called ? (
+                <div onDoubleClick={() => unmarkDriverCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: "#E0E0E0" }}>
+                  <Phone size={14} color="#9AA3B0" />
+                </div>
+              ) : (
+                <a href={`tel:+91${d.mobile}`} onClick={() => markDriverCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
+                  <Phone size={14} color="#FFFFFF" />
+                </a>
+              )}
               {called && <CheckCircle2 size={14} color={C.success} />}
             </div>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: gps.stale ? C.safety : C.success }} title={lang === "en" ? `GPS: ${gps.label}` : lang === "mr" ? `GPS: ${gps.label}` : `GPS: ${gps.label}`}>
@@ -3285,17 +3314,29 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
   const [expandedId, setExpandedId] = useState(null);
   const [statusExpandedId, setStatusExpandedId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  // "Already called today" tracking for this list's Call icon -- same
-  // daily-reset pattern as the Drivers tab's own Call button
-  // (driverCalledMap/calledDriverToday). A called customer sinks to the
-  // bottom of the list (ahead of the recency sort below), so the visible
-  // row numbers re-shuffle on every call with no extra bookkeeping: the
-  // called row becomes the last number, and whoever was next moves up to
-  // take #1.
-  const todayStrCustomerCall = () => new Date().toISOString().slice(0, 10);
+  // "Called this round" tracking for this list's Call icon -- same
+  // round-robin pattern as AdminFleet's Uninstalled/Blocked and the
+  // Drivers tab (owner request, 2026-10-25): tapping Call disables that
+  // customer's Call button and sinks them to the bottom of the list (ahead
+  // of the recency sort below) until every other customer has also been
+  // called, then the whole round resets. The visible row numbers re-shuffle
+  // on every call with no extra bookkeeping: the called row becomes the
+  // last number, and whoever was next moves up to take #1. Double-tapping
+  // a disabled Call control re-enables just that one customer immediately
+  // (unmarkCustomerCalled), without waiting for the rest of the round.
   const [customerCalledMap, setCustomerCalledMap] = usePersistedState("sarthi_customerCalled", {});
-  const markCustomerCalled = (mobile) => setCustomerCalledMap((prev) => ({ ...prev, [mobile]: todayStrCustomerCall() }));
-  const calledCustomerToday = (mobile) => customerCalledMap[mobile] === todayStrCustomerCall();
+  const customerCallableMobiles = (customers || []).map((c) => c.mobile).filter(Boolean);
+  const markCustomerCalled = (mobile) => setCustomerCalledMap((prev) => {
+    const next = { ...prev, [mobile]: true };
+    const roundComplete = customerCallableMobiles.length > 0 && customerCallableMobiles.every((m) => next[m]);
+    return roundComplete ? {} : next;
+  });
+  const unmarkCustomerCalled = (mobile) => setCustomerCalledMap((prev) => {
+    const next = { ...prev };
+    delete next[mobile];
+    return next;
+  });
+  const calledCustomerToday = (mobile) => !!customerCalledMap[mobile];
   // Owner request: whoever has the most recent ride activity (any status --
   // Searching/Ongoing/Completed/Cancelled) should float to the top of the
   // list, instead of whatever order the customers collection happens to
@@ -3351,9 +3392,15 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{c.name || "—"}</div>
                   <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{c.mobile}</div>
                 </div>
-                <a href={`tel:${c.mobile}`} onClick={() => markCustomerCalled(c.mobile)} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: called ? "#9AA3B0" : C.success }}>
-                  <Phone size={16} color="#FFFFFF" />
-                </a>
+                {called ? (
+                  <div onDoubleClick={() => unmarkCustomerCalled(c.mobile)} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: "#9AA3B0" }}>
+                    <Phone size={16} color="#FFFFFF" />
+                  </div>
+                ) : (
+                  <a href={`tel:${c.mobile}`} onClick={() => markCustomerCalled(c.mobile)} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success }}>
+                    <Phone size={16} color="#FFFFFF" />
+                  </a>
+                )}
                 <button onClick={() => setExpandedId(expanded ? null : c.mobile)} aria-label={expanded ? (lang === "en" ? "Hide details" : lang === "mr" ? "तपशील लपवा" : "विवरण छुपाएं") : (lang === "en" ? "View details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें")}
                   className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.marigoldDeep }}>
                   <ChevronDown size={16} color="#FFFFFF" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
