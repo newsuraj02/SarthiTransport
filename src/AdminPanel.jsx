@@ -2549,15 +2549,25 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
       .sort((a, b) => a.km - b.km)
       .slice(0, UNMATCHED_OFFLINE_MAX);
   };
-  // "Already called today" tracking for this screen's Call buttons (the
-  // unmatched customer themselves, and each offline driver match) -- owner
-  // request: grey out whoever admin already called today so a busy admin
-  // working down a long list of unmatched loads doesn't lose track of who
-  // they've already reached out to.
-  const todayStrAlertCall = () => new Date().toISOString().slice(0, 10);
+  // "Called" tracking for this screen's Call buttons (the unmatched
+  // customer themselves, and each offline driver match) -- owner request
+  // (2026-10-25): consistent with every other Call button in the app now
+  // (Uninstalled/Blocked, Customers tab, Drivers tab), this disables a
+  // called entry's Call control and keeps it disabled indefinitely, not
+  // just for the rest of the day. Unlike those other three lists, this
+  // screen has no single stable roster to complete a "round" over -- the
+  // offline-driver matches are a different, ad hoc top-5 subset per
+  // unmatched request, not one fixed population -- so there's no automatic
+  // reset-when-everyone's-called here. Double-tapping a disabled Call
+  // control re-enables just that one entry immediately (unmarkAlertCalled).
   const [alertCalledMap, setAlertCalledMap] = usePersistedState("sarthi_alertCalled", {});
-  const markAlertCalled = (mobile) => setAlertCalledMap((prev) => ({ ...prev, [mobile]: todayStrAlertCall() }));
-  const calledAlertToday = (mobile) => alertCalledMap[mobile] === todayStrAlertCall();
+  const markAlertCalled = (mobile) => setAlertCalledMap((prev) => ({ ...prev, [mobile]: true }));
+  const unmarkAlertCalled = (mobile) => setAlertCalledMap((prev) => {
+    const next = { ...prev };
+    delete next[mobile];
+    return next;
+  });
+  const calledAlertToday = (mobile) => !!alertCalledMap[mobile];
   // Date/time shown under "Requirement" -- advance bookings carry their
   // own scheduledFor ("YYYY-MM-DD HH:MM", see CustomerAdvanceBooking's
   // scheduledForValue); an immediate booking has no such field, so its
@@ -2697,9 +2707,15 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                 <div className="rounded-lg p-3 mb-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs font-bold" style={{ color: C.ink }}>{req.customerName || req.customerMobile}</div>
-                    <a href={`tel:+91${req.customerMobile}`} onClick={() => markAlertCalled(req.customerMobile)} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: calledAlertToday(req.customerMobile) ? "#9AA3B0" : C.metallicGreen }}>
-                      <Phone size={11} /> {calledAlertToday(req.customerMobile) ? (lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया") : (lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल")}
-                    </a>
+                    {calledAlertToday(req.customerMobile) ? (
+                      <div onDoubleClick={() => unmarkAlertCalled(req.customerMobile)} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: "#9AA3B0" }}>
+                        <Phone size={11} /> {lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया"}
+                      </div>
+                    ) : (
+                      <a href={`tel:+91${req.customerMobile}`} onClick={() => markAlertCalled(req.customerMobile)} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
+                        <Phone size={11} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
+                      </a>
+                    )}
                   </div>
                   <div className="text-[11px] mt-1.5" style={{ color: C.inkSoft }}>
                     <b style={{ color: C.ink }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}:</b> {req.pickup || "—"}
@@ -2748,9 +2764,15 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                               {lang === "en" ? `${Math.round(km)} km from Pickup` : lang === "mr" ? `पिकअपपासून ${Math.round(km)} किमी` : `पिकअप से ${Math.round(km)} किमी`}
                             </div>
                           </div>
-                          <a href={`tel:+91${d.mobile}`} onClick={() => markAlertCalled(d.mobile)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white flex items-center gap-1" style={{ background: called ? "#9AA3B0" : C.metallicGreen }}>
-                            <Phone size={12} /> {called ? (lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया") : (lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल")}
-                          </a>
+                          {called ? (
+                            <div onDoubleClick={() => unmarkAlertCalled(d.mobile)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white flex items-center gap-1" style={{ background: "#9AA3B0" }}>
+                              <Phone size={12} /> {lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया"}
+                            </div>
+                          ) : (
+                            <a href={`tel:+91${d.mobile}`} onClick={() => markAlertCalled(d.mobile)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
+                              <Phone size={12} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
+                            </a>
+                          )}
                         </div>
                       );
                     })}
