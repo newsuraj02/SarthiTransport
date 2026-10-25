@@ -720,9 +720,22 @@ exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", asyn
 // rollout plan. Synthesizing a real MP3 server-side and just playing it
 // back with a plain <audio> element sidesteps the problem entirely: audio
 // playback is universally supported, unlike each device's own TTS engine.
-const ttsClient = new textToSpeech.TextToSpeechClient();
+//
+// ttsClient is created lazily (NOT at module load time) -- its constructor
+// does credential auto-discovery, which hung long enough on a Windows dev
+// machine with no GCP metadata server reachable to blow right through the
+// Firebase CLI's 10s "load and analyze the file" budget on deploy
+// (deploy's own local analysis step requires()s this whole file, so
+// anything slow at the top level delays every function, not just this
+// one -- real bug this caused, not a flaky CLI timeout). Built once, on
+// first actual use, inside a real function invocation instead.
+let ttsClient = null;
+function getTtsClient() {
+  if (!ttsClient) ttsClient = new textToSpeech.TextToSpeechClient();
+  return ttsClient;
+}
 async function synthesizeBroadcastAudio(text, docId) {
-  const [response] = await ttsClient.synthesizeSpeech({
+  const [response] = await getTtsClient().synthesizeSpeech({
     input: { text },
     voice: { languageCode: "hi-IN", ssmlGender: "NEUTRAL" },
     audioConfig: { audioEncoding: "MP3" },
