@@ -17,7 +17,7 @@ import {
   Settings2, Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Plus, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, LocateFixed,
-  AlertTriangle,
+  AlertTriangle, Volume2,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs, bulkDeleteDocs,
@@ -2636,44 +2636,51 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole, lang) {
   // Owner request (2026-10-25): an Admin Notification sent with its "🔊
   // Also read this aloud" checkbox on (see sendAdminNotification,
   // functions/index.js) plays aloud the moment it arrives, for whoever has
-  // the app open right now. Originally built on the Web Speech API
-  // (speakGuide/speechSynthesis, same as onboarding voice guidance), but
-  // real-device testing found window.speechSynthesis missing entirely on
-  // at least one phone's WebView -- not fixable in JS, and not something
-  // every driver/customer can be asked to fix on their own device. Switched
-  // to a real MP3 synthesized server-side (functions/index.js's
-  // synthesizeBroadcastAudio, stored as audioUrl on the doc) played back
-  // with a plain <audio> element, which works on any WebView regardless of
-  // local TTS support. The session's own mount time is the playback
-  // baseline (sessionStartRef), so opening the app fresh never cascades
-  // through old backlog; a persisted "last played" watermark (separate
-  // from lastSeenAt, which only tracks the inbox's unread badge) stops the
-  // same message replaying on re-render.
+  // the app open right now. A real MP3 synthesized server-side
+  // (functions/index.js's synthesizeBroadcastAudio, stored as audioUrl on
+  // the doc) played back with a plain <audio> element, which works on any
+  // WebView regardless of local TTS support -- replaced an earlier Web
+  // Speech API attempt after a real device turned out to have no
+  // window.speechSynthesis at all. The session's own mount time is the
+  // playback baseline (sessionStartRef), so opening the app fresh never
+  // cascades through old backlog; a persisted "last played" watermark
+  // (separate from lastSeenAt, which only tracks the inbox's unread badge)
+  // stops the same message replaying on re-render.
+  //
+  // Deliberately no separate toast/banner of its own here (there used to
+  // be one) -- AnnouncementAlertBanner below already shows the exact same
+  // message for every notification, spoken or not, so a second banner just
+  // for the spoken ones was two UI elements saying the same thing at once.
+  // This effect's only job is to play the audio; AnnouncementAlertBanner's
+  // own 🔊 replay button (see its onReplay prop) covers "I didn't catch
+  // that" for both the popup and the Admin Announcements inbox list.
   const sessionStartRef = useRef(Date.now());
   const [lastSpokenAt, setLastSpokenAt] = usePersistedState(`sarthi_announcementsLastSpoken_${toRole}_${myMobile || "none"}`, 0);
-  // Visible toast alongside playback -- not just a debugging leftover this
-  // time, genuinely useful so a recipient who glances away still sees what
-  // the spoken message said, same spirit as ForegroundToast's other uses.
-  const [speakToast, setSpeakToast] = useState(null);
   useEffect(() => {
     const toPlay = mine
       .filter((n) => n.audioUrl && (n.createdAt?.toMillis?.() || 0) > Math.max(lastSpokenAt, sessionStartRef.current))
       .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
     if (toPlay.length === 0) return;
-    toPlay.forEach((n) => {
-      try {
-        const audio = new Audio(n.audioUrl);
-        audio.play().catch((e) => console.error("[admin broadcast audio] play failed:", e.message));
-      } catch (e) {
-        console.error("[admin broadcast audio] setup failed:", e.message);
-      }
-    });
-    setSpeakToast({ title: "🔊 Admin message", body: toPlay[toPlay.length - 1].message });
-    setTimeout(() => setSpeakToast(null), 8000);
+    toPlay.forEach((n) => playAnnouncementAudio(n.audioUrl));
     setLastSpokenAt(toPlay[toPlay.length - 1].createdAt?.toMillis?.() || Date.now());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine.length]);
-  return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen, speakToast };
+  return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen };
+}
+
+// Shared by useAnnouncementAlerts' auto-play effect and the 🔊 replay
+// button on both AnnouncementAlertBanner and the Admin Announcements inbox
+// list (so "didn't catch that" has a fix from either place) -- plays a
+// synthesized admin-broadcast MP3 (see synthesizeBroadcastAudio,
+// functions/index.js) via a plain <audio> element.
+function playAnnouncementAudio(url) {
+  if (!url) return;
+  try {
+    const audio = new Audio(url);
+    audio.play().catch((e) => console.error("[admin broadcast audio] play failed:", e.message));
+  } catch (e) {
+    console.error("[admin broadcast audio] setup failed:", e.message);
+  }
 }
 
 // A direct intent:// link to a system "android.settings.*" screen (tried
@@ -3103,6 +3110,15 @@ function AnnouncementAlertBanner({ announcement, onView, onDismiss, lang }) {
           <div className="text-[11px] font-bold text-white mb-0.5">📢 {lang === "en" ? "New message from Admin" : lang === "mr" ? "अ‍ॅडमिनकडून नवीन संदेश" : "एडमिन से नया संदेश"}</div>
           <div className="text-xs" style={{ color: "#FFFFFF" }}>{announcement.message}</div>
         </div>
+        {/* Owner request (2026-10-25): replay the spoken version in case it
+            was missed the first time -- only shown for a notification that
+            was actually sent with the "read aloud" checkbox on
+            (announcement.audioUrl set, see sendAdminNotification). */}
+        {announcement.audioUrl && (
+          <button onClick={() => playAnnouncementAudio(announcement.audioUrl)} className="shrink-0 p-1 rounded-full" style={{ background: C.marigold }} aria-label={lang === "en" ? "Play again" : lang === "mr" ? "पुन्हा वाजवा" : "फिर से सुनें"}>
+            <Volume2 size={14} color="#000000" />
+          </button>
+        )}
         <button onClick={onDismiss} className="shrink-0" style={{ color: "#FFFFFF", opacity: 0.75 }}><X size={16} /></button>
       </div>
       <button onClick={onView} className="w-full mt-2 rounded-lg py-2 text-xs font-bold" style={{ background: C.marigold, color: "#000000" }}>
@@ -3140,7 +3156,14 @@ function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang, onOpen
                 <span className="text-[11px] font-bold" style={{ color: C.marigoldDeep }}>📢 {lang === "en" ? "Admin" : lang === "mr" ? "अ‍ॅडमिन" : "एडमिन"}</span>
                 <span className="text-[10px] shrink-0" style={{ color: C.inkSoft }}>{formatTime(n.createdAt)}</span>
               </div>
-              <div className="text-sm" style={{ color: C.ink }}>{n.message}</div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-sm flex-1 min-w-0" style={{ color: C.ink }}>{n.message}</div>
+                {n.audioUrl && (
+                  <button onClick={() => playAnnouncementAudio(n.audioUrl)} className="shrink-0 p-1.5 rounded-full" style={{ background: C.marigoldDeep }} aria-label={lang === "en" ? "Play again" : lang === "mr" ? "पुन्हा वाजवा" : "फिर से सुनें"}>
+                    <Volume2 size={13} color="#FFFFFF" />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -8395,7 +8418,6 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="customer" />
         <ForegroundToast toast={rideNotifications.toast} />
-        <ForegroundToast toast={announcementAlerts.speakToast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
           onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
           onDismiss={announcementAlerts.markSeen} lang={lang} />
@@ -11025,7 +11047,6 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
         {tab === "home" && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="driver" />}
         {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="driver" />}
         <ForegroundToast toast={rideNotifications.toast} />
-        <ForegroundToast toast={announcementAlerts.speakToast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
           onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
           onDismiss={announcementAlerts.markSeen} lang={lang} />
