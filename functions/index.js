@@ -7,6 +7,8 @@ const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const { getAuth } = require("firebase-admin/auth");
+const { getStorage } = require("firebase-admin/storage");
+const textToSpeech = require("@google-cloud/text-to-speech");
 
 initializeApp();
 const db = getFirestore();
@@ -708,6 +710,30 @@ exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", asyn
   await sendCustomerBookingAlert(token, after, event.params.bookingId, kind, after.customerMobile);
 });
 
+// Server-side speech synthesis for AdminNotify's "🔊 Also read this aloud"
+// checkbox -- owner request (2026-10-25), replacing an earlier client-side
+// Web Speech API attempt after a real device turned out to have no
+// window.speechSynthesis at all (confirmed via an on-screen diagnostic:
+// synth=false). That's not fixable in JS -- the whole capability was
+// missing from that WebView -- and asking every driver/customer to
+// manually update system components before a feature works isn't a real
+// rollout plan. Synthesizing a real MP3 server-side and just playing it
+// back with a plain <audio> element sidesteps the problem entirely: audio
+// playback is universally supported, unlike each device's own TTS engine.
+const ttsClient = new textToSpeech.TextToSpeechClient();
+async function synthesizeBroadcastAudio(text, docId) {
+  const [response] = await ttsClient.synthesizeSpeech({
+    input: { text },
+    voice: { languageCode: "hi-IN", ssmlGender: "NEUTRAL" },
+    audioConfig: { audioEncoding: "MP3" },
+  });
+  const bucket = getStorage().bucket();
+  const file = bucket.file(`adminBroadcasts/${docId}.mp3`);
+  await file.save(response.audioContent, { metadata: { contentType: "audio/mpeg" } });
+  await file.makePublic();
+  return `https://storage.googleapis.com/${bucket.name}/${file.name}`;
+}
+
 // Admin's "Send Notification" screen (AdminNotify) -- logs a message to
 // adminNotifications so it becomes a genuine, persisted announcement both
 // the admin's "Sent Notifications" list AND the recipient's own "Admin
@@ -715,16 +741,14 @@ exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", asyn
 // is always in-app -- a recipient always sees it next time they open the
 // app, no matter what.
 //
-// speak = true (owner request, 2026-10-25, "🔊 Also read this aloud"
-// checkbox in AdminNotify) marks the doc so the recipient's own open app
-// speaks it aloud the moment it arrives -- see useAnnouncementAlerts in
-// App.jsx, which watches this same adminNotifications read for any new
-// entry with speak === true and calls speakGuide. Deliberately JS-only
-// for now (owner declined a native build for this): this reaches a
-// recipient ONLY while their app is open, not closed/backgrounded/killed
-// -- that would need a real FCM data push + native TextToSpeech playback,
-// which needs a new native Android build the owner doesn't want to ship
-// yet. No push is sent here at all; speak is just a flag on the doc.
+// speak = true additionally synthesizes the message into a real MP3 (see
+// synthesizeBroadcastAudio above) and stores its public URL on the doc as
+// audioUrl. useAnnouncementAlerts (App.jsx) watches for any new entry with
+// audioUrl set and plays it via a plain <audio> element the moment it
+// arrives -- but only for a recipient who already has the app open right
+// now. Does NOT reach a closed/backgrounded app -- that would need a real
+// FCM push + a native service to trigger playback, which needs a new
+// native Android build the owner doesn't want to ship yet.
 exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request) => {
   if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
   const { target, message, audience, speak } = request.data || {};
@@ -732,6 +756,7 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
   if (!text) throw new HttpsError("invalid-argument", "message is required.");
   const toRole = audience === "customer" ? "customer" : "driver";
   const col = toRole === "customer" ? "customers" : "drivers";
+  const wantSpeak = speak === true;
 
   let recipientCount;
   let targetName = null;
@@ -760,14 +785,28 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
     recipientCount = 1;
   }
 
-  await db.collection("adminNotifications").add({
+  const docRef = db.collection("adminNotifications").doc();
+  let audioUrl = null;
+  if (wantSpeak) {
+    try {
+      audioUrl = await synthesizeBroadcastAudio(text, docRef.id);
+    } catch (e) {
+      // Still deliver the plain in-app notification even if speech
+      // synthesis fails for some reason -- that part must never be
+      // blocked by this best-effort extra.
+      console.error("[sendAdminNotification] speech synthesis failed:", e.message);
+    }
+  }
+
+  await docRef.set({
     toRole,
     target: target && target !== "all" ? target : "all",
     targetName,
     targetEmails,
     targetPhones,
     message: text,
-    speak: speak === true,
+    speak: wantSpeak,
+    audioUrl,
     recipientCount,
     createdAt: FieldValue.serverTimestamp(),
   });

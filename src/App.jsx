@@ -2635,52 +2635,42 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole, lang) {
   };
   // Owner request (2026-10-25): an Admin Notification sent with its "🔊
   // Also read this aloud" checkbox on (see sendAdminNotification,
-  // functions/index.js -- speak: true) speaks aloud via speakGuide the
-  // moment it arrives, for whoever has the app open right now. JS-only,
-  // app-open-only by design (owner decided against a native build for the
-  // closed/backgrounded-app version) -- reuses the exact same TTS helper
-  // already powering onboarding voice guidance, no new mechanism. The
-  // session's own mount time is the speak baseline (sessionStartRef), so
-  // opening the app fresh never cascades through old backlog; a persisted
-  // "last spoken" watermark (separate from lastSeenAt, which only tracks
-  // the inbox's unread badge) stops the same message replaying on re-render.
+  // functions/index.js) plays aloud the moment it arrives, for whoever has
+  // the app open right now. Originally built on the Web Speech API
+  // (speakGuide/speechSynthesis, same as onboarding voice guidance), but
+  // real-device testing found window.speechSynthesis missing entirely on
+  // at least one phone's WebView -- not fixable in JS, and not something
+  // every driver/customer can be asked to fix on their own device. Switched
+  // to a real MP3 synthesized server-side (functions/index.js's
+  // synthesizeBroadcastAudio, stored as audioUrl on the doc) played back
+  // with a plain <audio> element, which works on any WebView regardless of
+  // local TTS support. The session's own mount time is the playback
+  // baseline (sessionStartRef), so opening the app fresh never cascades
+  // through old backlog; a persisted "last played" watermark (separate
+  // from lastSeenAt, which only tracks the inbox's unread badge) stops the
+  // same message replaying on re-render.
   const sessionStartRef = useRef(Date.now());
   const [lastSpokenAt, setLastSpokenAt] = usePersistedState(`sarthi_announcementsLastSpoken_${toRole}_${myMobile || "none"}`, 0);
-  // Temporary diagnostic (owner report, 2026-10-25: sent with speak=true,
-  // never heard) -- a visible toast fires the instant this effect detects
-  // a speak-flagged entry, independent of whether audio actually plays.
-  // speakGuide's own failure modes are all silent by design (no voice
-  // installed, speechSynthesis missing, etc.), so there was no way to tell
-  // "the trigger never fired" from "it fired but no sound came out" on a
-  // real device with no console access. This toast answers that on the
-  // next test; remove once the root cause is confirmed.
+  // Visible toast alongside playback -- not just a debugging leftover this
+  // time, genuinely useful so a recipient who glances away still sees what
+  // the spoken message said, same spirit as ForegroundToast's other uses.
   const [speakToast, setSpeakToast] = useState(null);
   useEffect(() => {
-    const toSpeak = mine
-      .filter((n) => n.speak === true && (n.createdAt?.toMillis?.() || 0) > Math.max(lastSpokenAt, sessionStartRef.current))
+    const toPlay = mine
+      .filter((n) => n.audioUrl && (n.createdAt?.toMillis?.() || 0) > Math.max(lastSpokenAt, sessionStartRef.current))
       .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
-    if (toSpeak.length === 0) return;
-    toSpeak.forEach((n) => speakGuide(n.message, lang));
-    // Diagnostic round 2 (owner report: toast appeared, no sound) --
-    // speakGuide's own try/catch swallows everything, so there was still
-    // no way to see WHY speak() produced no audio. Surfaces the actual
-    // speechSynthesis environment (supported? how many voices installed?
-    // does calling speak() itself throw?) directly in the toast, since
-    // there's no console access on a real device. Remove once the root
-    // cause is confirmed.
-    let diag;
-    try {
-      const hasSynth = typeof window !== "undefined" && !!window.speechSynthesis;
-      const voiceCount = hasSynth ? window.speechSynthesis.getVoices().length : -1;
-      const speaking = hasSynth ? window.speechSynthesis.speaking : "n/a";
-      const pending = hasSynth ? window.speechSynthesis.pending : "n/a";
-      diag = `synth=${hasSynth} voices=${voiceCount} speaking=${speaking} pending=${pending}`;
-    } catch (e) {
-      diag = `diag threw: ${e.message}`;
-    }
-    setSpeakToast({ title: "🔊 Speaking admin message", body: `${toSpeak[toSpeak.length - 1].message}\n[${diag}]` });
-    setTimeout(() => setSpeakToast(null), 10000);
-    setLastSpokenAt(toSpeak[toSpeak.length - 1].createdAt?.toMillis?.() || Date.now());
+    if (toPlay.length === 0) return;
+    toPlay.forEach((n) => {
+      try {
+        const audio = new Audio(n.audioUrl);
+        audio.play().catch((e) => console.error("[admin broadcast audio] play failed:", e.message));
+      } catch (e) {
+        console.error("[admin broadcast audio] setup failed:", e.message);
+      }
+    });
+    setSpeakToast({ title: "🔊 Admin message", body: toPlay[toPlay.length - 1].message });
+    setTimeout(() => setSpeakToast(null), 8000);
+    setLastSpokenAt(toPlay[toPlay.length - 1].createdAt?.toMillis?.() || Date.now());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine.length]);
   return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen, speakToast };

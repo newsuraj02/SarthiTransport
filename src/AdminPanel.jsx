@@ -3544,15 +3544,16 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
   const [message, setMessage] = useState("");
   // Owner request (2026-10-25): an opt-in per message, not every admin
   // notification -- most are routine and belong quietly in-app only; this
-  // is for the rare one worth reading aloud. JS-only for now (owner
-  // declined a native Android build): marks the adminNotifications doc
-  // with speak: true (see sendAdminNotification, functions/index.js),
-  // which useAnnouncementAlerts (App.jsx) picks up and speaks via
-  // speakGuide the moment it arrives -- but only for a recipient who
-  // already has the app open right now. Does NOT reach a closed/
-  // backgrounded app -- that would need a real FCM push + native
-  // TextToSpeech playback, which needs a new native build the owner isn't
-  // ready to ship yet.
+  // is for the rare one worth reading aloud. Synthesizes a real MP3
+  // server-side (see sendAdminNotification/synthesizeBroadcastAudio,
+  // functions/index.js) rather than relying on each device's own
+  // text-to-speech engine -- real-device testing found at least one phone
+  // had no Web Speech API support in its WebView at all, which isn't
+  // fixable in JS and isn't something every driver/customer can be asked
+  // to fix themselves. useAnnouncementAlerts (App.jsx) plays the generated
+  // audio the moment it arrives, but only for a recipient who already has
+  // the app open right now -- does NOT reach a closed/backgrounded app
+  // (that would need a native build the owner isn't ready to ship yet).
   const [speak, setSpeak] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
