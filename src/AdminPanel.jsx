@@ -328,7 +328,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
   );
 }
 
-function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, bugs, systemHealth }) {
+function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, bugs, systemHealth, unmatchedVehicleRequests }) {
   // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
   // pick the field that actually answers "did this happen today" for that
   // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
@@ -1169,9 +1169,30 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     Array.from({ length: financeLabelCount }, (_, i) => Math.round(i * (financeDays.length - 1) / Math.max(1, financeLabelCount - 1)))
   );
   const financeVisibleLabels = financeDays.map((d, i) => ({ ...d, show: financeLabelIdx.has(i) }));
+  // Owner request (2026-10-25): an unmatched load (AdminAlerts' own detail/
+  // action screen) used to only surface once admin manually opened the
+  // Alerts tab -- easy to miss for a while. Pops right here on the Live
+  // Dashboard, the first thing admin sees on opening the app, instead.
+  // Deliberately a summary banner, not the full interactive card (fare
+  // entry, offline-driver matches, Call buttons) -- that detail/action
+  // stays on AdminAlerts; tapping this just jumps there.
+  const pendingUnmatchedCount = (unmatchedVehicleRequests || []).filter((r) => r.status === "pending").length;
 
   return (
     <div>
+      {pendingUnmatchedCount > 0 && (
+        <button onClick={() => onNavigate("alerts")} className="w-full rounded-xl p-4 mb-3 shadow-sm text-left flex items-center gap-2.5" style={{ background: C.safety, border: `1.5px solid ${C.safety}` }}>
+          <AlertTriangle size={20} color="#FFFFFF" className="shrink-0" />
+          <div className="flex-1">
+            <div className="text-sm font-bold text-white">
+              {lang === "en" ? `${pendingUnmatchedCount} unmatched load${pendingUnmatchedCount > 1 ? "s" : ""} need attention` : lang === "mr" ? `${pendingUnmatchedCount} न जुळलेले लोड लक्ष हवे आहे` : `${pendingUnmatchedCount} न जुळे लोड पर ध्यान चाहिए`}
+            </div>
+            <div className="text-[11px]" style={{ color: "#FFFFFF", opacity: 0.9 }}>
+              {lang === "en" ? "Tap to view and assign" : lang === "mr" ? "पाहण्यासाठी आणि नियुक्त करण्यासाठी टॅप करा" : "देखने और असाइन करने के लिए टैप करें"}
+            </div>
+          </div>
+        </button>
+      )}
       <div className="w-full rounded-xl p-3 mb-3 flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${healthColor}` }}>
         {healthIsStale ? <AlertTriangle size={16} color={healthColor} /> : latestHealthStatus === "pass" ? <CheckCircle2 size={16} color={healthColor} /> : <XCircle size={16} color={healthColor} />}
         <div className="flex-1">
@@ -4208,7 +4229,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} bugs={bugs} systemHealth={systemHealth} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} bugs={bugs} systemHealth={systemHealth} unmatchedVehicleRequests={unmatchedVehicleRequests} />}
       {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
