@@ -61,13 +61,6 @@ public class AppFirebaseMessagingService extends MessagingService {
         Map<String, String> data = remoteMessage.getData();
         String type = data.get("type");
         if ("load_taken".equals(type)) { closeLoad(this, data.get("bookingId")); return; }
-        // Admin Notification's opt-in "read aloud" checkbox (see
-        // sendAdminNotification, functions/index.js) -- a separate message
-        // type handled by its own service, not RingingBookingActivity
-        // (that's booking-specific Accept/Reject UI that doesn't fit a
-        // plain announcement). Does not touch the direct_request_ring path
-        // below at all.
-        if ("admin_broadcast".equals(type)) { AdminBroadcastSpeakService.start(this, data.get("message")); return; }
         if (!"direct_request_ring".equals(type)) return;
         showRingingNotification(this, data);
         sendRingAck(data);

@@ -2636,15 +2636,14 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole, lang) {
   // Owner request (2026-10-25): an Admin Notification sent with its "🔊
   // Also read this aloud" checkbox on (see sendAdminNotification,
   // functions/index.js -- speak: true) speaks aloud via speakGuide the
-  // moment it arrives, for whoever has the app open right now -- reuses
-  // the exact same TTS helper already powering onboarding voice guidance,
-  // no new mechanism. This is the app-open path only; a closed/
-  // backgrounded app is reached separately, by a real FCM push to
-  // AdminBroadcastSpeakService.java (native). The session's own mount
-  // time is the speak baseline (sessionStartRef), so opening the app
-  // fresh never cascades through old backlog; a persisted "last spoken"
-  // watermark (separate from lastSeenAt, which only tracks the inbox's
-  // unread badge) stops the same message replaying on re-render.
+  // moment it arrives, for whoever has the app open right now. JS-only,
+  // app-open-only by design (owner decided against a native build for the
+  // closed/backgrounded-app version) -- reuses the exact same TTS helper
+  // already powering onboarding voice guidance, no new mechanism. The
+  // session's own mount time is the speak baseline (sessionStartRef), so
+  // opening the app fresh never cascades through old backlog; a persisted
+  // "last spoken" watermark (separate from lastSeenAt, which only tracks
+  // the inbox's unread badge) stops the same message replaying on re-render.
   const sessionStartRef = useRef(Date.now());
   const [lastSpokenAt, setLastSpokenAt] = usePersistedState(`sarthi_announcementsLastSpoken_${toRole}_${myMobile || "none"}`, 0);
   // Temporary diagnostic (owner report, 2026-10-25: sent with speak=true,

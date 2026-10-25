@@ -92,16 +92,6 @@
             android:name=".LocationTrackerService"
             android:exported="false"
             android:foregroundServiceType="location" />
-
-        <!-- See AdminBroadcastSpeakService.java -- the opt-in "read aloud"
-             checkbox on Admin's Send Notification screen. foregroundServiceType
-             ="mediaPlayback" is required on Android 10+ and must match the
-             FOREGROUND_SERVICE_MEDIA_PLAYBACK permission below, same pattern
-             LocationTrackerService above follows for its own "location" type. -->
-        <service
-            android:name=".AdminBroadcastSpeakService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
     </application>
 
     <!-- Permissions -->
@@ -139,10 +129,6 @@
          service element's android:foregroundServiceType. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <!-- Required for AdminBroadcastSpeakService (see above) to legally run
-         as a foreground service on Android 14 (API 34)+, matching its
-         foregroundServiceType="mediaPlayback". -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- See PowerBridgePlugin.java, which lets this app ASK (a real system
          dialog, not silently grant itself) to be exempted from Android's
          own battery-optimization killing, which is the actual reason a
