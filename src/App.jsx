@@ -3100,7 +3100,7 @@ function FloatingHamburgerHint({ show, onOpenMenu, lang }) {
 // themselves. Either button clears it (see useAnnouncementAlerts.markSeen):
 // "View" also opens the full inbox, "dismiss" just acknowledges it in place
 // since the message text is already fully readable right here.
-function AnnouncementAlertBanner({ announcement, onView, onDismiss, lang }) {
+function AnnouncementAlertBanner({ announcement, onView, lang }) {
   if (!announcement) return null;
   return (
     <div className="mx-5 mb-2 rounded-lg p-3 shadow-lg" style={{ background: C.navy, border: `1.5px solid ${C.marigold}` }}>
@@ -3115,11 +3115,10 @@ function AnnouncementAlertBanner({ announcement, onView, onDismiss, lang }) {
             was actually sent with the "read aloud" checkbox on
             (announcement.audioUrl set, see sendAdminNotification). */}
         {announcement.audioUrl && (
-          <button onClick={() => playAnnouncementAudio(announcement.audioUrl)} className="shrink-0 p-1 rounded-full" style={{ background: C.marigold }} aria-label={lang === "en" ? "Play again" : lang === "mr" ? "पुन्हा वाजवा" : "फिर से सुनें"}>
-            <Volume2 size={14} color="#000000" />
+          <button onClick={() => playAnnouncementAudio(announcement.audioUrl)} className="shrink-0 p-1.5 rounded-full" style={{ background: C.marigold }} aria-label={lang === "en" ? "Play again" : lang === "mr" ? "पुन्हा वाजवा" : "फिर से सुनें"}>
+            <Volume2 size={22} color="#000000" />
           </button>
         )}
-        <button onClick={onDismiss} className="shrink-0" style={{ color: "#FFFFFF", opacity: 0.75 }}><X size={16} /></button>
       </div>
       <button onClick={onView} className="w-full mt-2 rounded-lg py-2 text-xs font-bold" style={{ background: C.marigold, color: "#000000" }}>
         {lang === "en" ? "View" : lang === "mr" ? "पहा" : "देखें"}
@@ -8419,8 +8418,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="customer" />
         <ForegroundToast toast={rideNotifications.toast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
-          onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
-          onDismiss={announcementAlerts.markSeen} lang={lang} />
+          onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }} lang={lang} />
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
@@ -11048,8 +11046,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
         {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="driver" />}
         <ForegroundToast toast={rideNotifications.toast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
-          onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
-          onDismiss={announcementAlerts.markSeen} lang={lang} />
+          onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }} lang={lang} />
         {menuOpen && (
           <div className="fixed inset-0 z-50 flex" onClick={() => setMenuOpen(false)}>
             <div className="w-72 max-w-[82%] h-full overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
