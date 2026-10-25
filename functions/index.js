@@ -716,15 +716,16 @@ exports.onCustomerBookingUpdate = onDocumentWritten("bookings/{bookingId}", asyn
 // app, no matter what.
 //
 // speak = true (owner request, 2026-10-25, "🔊 Also read this aloud"
-// checkbox in AdminNotify) marks the doc so the recipient's own open app
-// speaks it aloud the moment it arrives -- see useAnnouncementAlerts in
-// App.jsx, which watches this same adminNotifications read for any new
-// entry with speak === true and calls speakGuide. Deliberately JS-only
-// for now (owner declined a native build for this): this reaches a
-// recipient ONLY while their app is open, not closed/backgrounded/killed
-// -- that would need a real FCM data push + native TextToSpeech playback,
-// which needs a new native Android build the owner doesn't want to ship
-// yet. No push is sent here at all; speak is just a flag on the doc.
+// checkbox in AdminNotify) does two things: (1) marks the doc so a
+// recipient whose app is ALREADY OPEN right now speaks it immediately via
+// useAnnouncementAlerts/speakGuide (App.jsx) -- pure JS, no push involved;
+// (2) ALSO sends a real FCM data push (type: "admin_broadcast") so a
+// recipient whose app is closed/backgrounded/killed gets woken and hears
+// it too, via AdminBroadcastSpeakService.java, dispatched from the one
+// existing AppFirebaseMessagingService.java (NOT a second messaging
+// service -- Firebase only ever delivers to one per app). This is a NEW
+// message type alongside the existing direct_request_ring one; the
+// driver-ring feature itself is untouched.
 exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request) => {
   if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
   const { target, message, audience, speak } = request.data || {};
@@ -732,14 +733,25 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
   if (!text) throw new HttpsError("invalid-argument", "message is required.");
   const toRole = audience === "customer" ? "customer" : "driver";
   const col = toRole === "customer" ? "customers" : "drivers";
+  const wantSpeak = speak === true;
 
   let recipientCount;
   let targetName = null;
   let targetEmails = null;
   let targetPhones = null;
+  const fcmTokens = [];
   if (!target || target === "all") {
-    const snap = await db.collection(col).count().get();
-    recipientCount = snap.data().count;
+    if (wantSpeak) {
+      // Need every recipient's own token to actually reach them -- a full
+      // collection scan instead of the cheap count() aggregate below, same
+      // tradeoff notifyForceUpdate already accepts for the same reason.
+      const snap = await db.collection(col).get();
+      recipientCount = snap.size;
+      snap.forEach((doc) => { const t = doc.data()?.fcmToken; if (t) fcmTokens.push(t); });
+    } else {
+      const snap = await db.collection(col).count().get();
+      recipientCount = snap.data().count;
+    }
   } else if (Array.isArray(target)) {
     // A specific list of mobiles (e.g. Admin's KYC desk "Send reminder to
     // all incomplete" button) rather than a single recipient or everyone.
@@ -753,11 +765,16 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
     // parse/reformat request.auth.token itself (which rules can't do).
     targetEmails = target.map((m) => `${m}@${toRole}.apnatransport.local`);
     targetPhones = target.map((m) => `+91${m}`);
+    if (wantSpeak) {
+      const docs = await Promise.all(target.map((m) => db.collection(col).doc(m).get()));
+      docs.forEach((d) => { const t = d.data()?.fcmToken; if (t) fcmTokens.push(t); });
+    }
   } else {
     const snap = await db.collection(col).doc(target).get();
     if (!snap.exists) throw new HttpsError("not-found", `${toRole} not found.`);
     targetName = snap.data().name || target;
     recipientCount = 1;
+    if (wantSpeak) { const t = snap.data()?.fcmToken; if (t) fcmTokens.push(t); }
   }
 
   await db.collection("adminNotifications").add({
@@ -767,10 +784,25 @@ exports.sendAdminNotification = onCall({ region: "asia-south1" }, async (request
     targetEmails,
     targetPhones,
     message: text,
-    speak: speak === true,
+    speak: wantSpeak,
     recipientCount,
     createdAt: FieldValue.serverTimestamp(),
   });
+
+  if (wantSpeak && fcmTokens.length > 0) {
+    for (let i = 0; i < fcmTokens.length; i += 500) {
+      const batch = fcmTokens.slice(i, i + 500);
+      try {
+        await getMessaging().sendEachForMulticast({
+          tokens: batch,
+          android: { priority: "high", ttl: 120 * 1000 },
+          data: { type: "admin_broadcast", message: text },
+        });
+      } catch (e) {
+        console.error("[sendAdminNotification] voice broadcast send failed:", e.message);
+      }
+    }
+  }
 
   return { ok: true, sentCount: recipientCount };
 });

@@ -2636,26 +2636,38 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole, lang) {
   // Owner request (2026-10-25): an Admin Notification sent with its "🔊
   // Also read this aloud" checkbox on (see sendAdminNotification,
   // functions/index.js -- speak: true) speaks aloud via speakGuide the
-  // moment it arrives, for whoever has the app open right now. JS-only,
-  // app-open-only by design (owner declined a native build for the
-  // closed/backgrounded-app version) -- reuses the exact same TTS helper
-  // already powering onboarding voice guidance, no new mechanism. The
-  // session's own mount time is the speak baseline (sessionStartRef), so
-  // opening the app fresh never cascades through old backlog; a persisted
-  // "last spoken" watermark (separate from lastSeenAt, which only tracks
-  // the inbox's unread badge) stops the same message replaying on re-render.
+  // moment it arrives, for whoever has the app open right now -- reuses
+  // the exact same TTS helper already powering onboarding voice guidance,
+  // no new mechanism. This is the app-open path only; a closed/
+  // backgrounded app is reached separately, by a real FCM push to
+  // AdminBroadcastSpeakService.java (native). The session's own mount
+  // time is the speak baseline (sessionStartRef), so opening the app
+  // fresh never cascades through old backlog; a persisted "last spoken"
+  // watermark (separate from lastSeenAt, which only tracks the inbox's
+  // unread badge) stops the same message replaying on re-render.
   const sessionStartRef = useRef(Date.now());
   const [lastSpokenAt, setLastSpokenAt] = usePersistedState(`sarthi_announcementsLastSpoken_${toRole}_${myMobile || "none"}`, 0);
+  // Temporary diagnostic (owner report, 2026-10-25: sent with speak=true,
+  // never heard) -- a visible toast fires the instant this effect detects
+  // a speak-flagged entry, independent of whether audio actually plays.
+  // speakGuide's own failure modes are all silent by design (no voice
+  // installed, speechSynthesis missing, etc.), so there was no way to tell
+  // "the trigger never fired" from "it fired but no sound came out" on a
+  // real device with no console access. This toast answers that on the
+  // next test; remove once the root cause is confirmed.
+  const [speakToast, setSpeakToast] = useState(null);
   useEffect(() => {
     const toSpeak = mine
       .filter((n) => n.speak === true && (n.createdAt?.toMillis?.() || 0) > Math.max(lastSpokenAt, sessionStartRef.current))
       .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
     if (toSpeak.length === 0) return;
     toSpeak.forEach((n) => speakGuide(n.message, lang));
+    setSpeakToast({ title: "🔊 Speaking admin message", body: toSpeak[toSpeak.length - 1].message });
+    setTimeout(() => setSpeakToast(null), 6000);
     setLastSpokenAt(toSpeak[toSpeak.length - 1].createdAt?.toMillis?.() || Date.now());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine.length]);
-  return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen };
+  return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen, speakToast };
 }
 
 // A direct intent:// link to a system "android.settings.*" screen (tried
@@ -8377,6 +8389,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="customer" />
         <ForegroundToast toast={rideNotifications.toast} />
+        <ForegroundToast toast={announcementAlerts.speakToast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
           onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
           onDismiss={announcementAlerts.markSeen} lang={lang} />
@@ -11006,6 +11019,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
         {tab === "home" && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="driver" />}
         {tab === "home" && <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="driver" />}
         <ForegroundToast toast={rideNotifications.toast} />
+        <ForegroundToast toast={announcementAlerts.speakToast} />
         <AnnouncementAlertBanner announcement={announcementAlerts.latestUnread}
           onView={() => { announcementAlerts.markSeen(); setSettingsView("messages"); }}
           onDismiss={announcementAlerts.markSeen} lang={lang} />
