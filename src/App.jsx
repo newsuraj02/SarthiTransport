@@ -10125,17 +10125,17 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
 
   return (
     <div className="px-5 py-5">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"}</h2>
-      <div className="rounded-xl p-4 mb-3" style={{ background: C.navy }}>
-        <div className="text-[11px]" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Wallet Balance" : lang === "mr" ? "वॉलेट बॅलन्स" : "वॉलेट बैलेंस"}</div>
-        <div className="text-3xl font-bold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(displayWallet)}</div>
+      <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Wallet" : lang === "mr" ? "वॉलेट" : "वॉलेट"}</h2>
+      <div className="rounded-2xl p-5 mb-3 shadow-lg" style={{ background: C.navy }}>
+        <div className="text-xs font-semibold" style={{ color: "#FFFFFF", opacity: 0.85 }}>{lang === "en" ? "Wallet Balance" : lang === "mr" ? "वॉलेट बॅलन्स" : "वॉलेट बैलेंस"}</div>
+        <div className="text-4xl font-extrabold text-white mt-1" style={{ fontFamily: monoFont }}>{fmt(displayWallet)}</div>
         {!inTrial && driver.wallet < minWallet && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `Minimum ${fmt(minWallet)} balance required — app may be deactivated` : lang === "mr" ? `किमान ${fmt(minWallet)} बॅलन्स आवश्यक आहे — अ‍ॅप बंद होऊ शकते` : `न्यूनतम ${fmt(minWallet)} बैलेंस ज़रूरी है — ऐप बंद हो सकता है`}</div>
         )}
         {(driver.heldCredit || 0) > 0 && (
           <div className="text-[11px] mt-2 font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? `${fmt(driver.heldCredit)} held from a cancelled trip — will auto-adjust against your next trip's commission.` : lang === "mr" ? `रद्द झालेल्या ट्रिपमधून ${fmt(driver.heldCredit)} होल्डमध्ये आहे — पुढील ट्रिपच्या कमिशनमध्ये आपोआप अ‍ॅडजस्ट होईल.` : `रद्द हुई ट्रिप से ${fmt(driver.heldCredit)} होल्ड में है — अगली ट्रिप के कमीशन में अपने आप एडजस्ट होगा।`}</div>
         )}
-        <button onClick={() => setShowComingSoon(true)} className="w-full mt-3 rounded-lg py-3.5 font-bold text-base flex items-center justify-center gap-1.5" style={{ background: "#FFFFFF", color: C.navy }}>
+        <button onClick={() => setShowComingSoon(true)} className="w-full mt-4 rounded-xl py-3.5 font-bold text-base flex items-center justify-center gap-1.5 shadow-md" style={{ background: "#FFFFFF", color: C.navy }}>
           <IndianRupee size={14} /> {lang === "en" ? "Recharge" : lang === "mr" ? "रिचार्ज करा" : "रीचार्ज करें"}
         </button>
         {showComingSoon && (
@@ -10143,7 +10143,7 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
             {lang === "en" ? "Online payments are coming soon." : lang === "mr" ? "ऑनलाइन पेमेंट लवकरच येत आहे." : "ऑनलाइन पेमेंट जल्द आ रहा है।"}
           </div>
         )}
-        <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-lg py-3 text-base font-bold flex items-center justify-center gap-1.5" style={{ background: "#000000", color: "#fff" }}>
+        <button onClick={() => setShowHistory((v) => !v)} className="w-full mt-3 rounded-xl py-3 text-base font-bold flex items-center justify-center gap-1.5" style={{ background: "rgba(255,255,255,0.16)", color: "#fff", border: "1px solid rgba(255,255,255,0.35)" }}>
           <ClipboardList size={13} /> {showHistory ? (lang === "en" ? "Hide Transaction History" : lang === "mr" ? "व्यवहार हिस्टरी लपवा" : "लेन-देन हिस्ट्री छुपाएं") : (lang === "en" ? "Transaction History" : lang === "mr" ? "व्यवहार हिस्टरी" : "लेन-देन हिस्ट्री")}
         </button>
       </div>
@@ -10154,9 +10154,10 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
           ) : (
             <div className="space-y-1.5 max-h-64 overflow-y-auto">
               {walletTransactions.map((tx) => (
-                <div key={tx.id} className="rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold truncate" style={{ color: C.ink }}>{tx.label}</div>
+                <div key={tx.id} className="rounded-lg p-2.5 flex items-center gap-2.5" style={{ background: C.bg }}>
+                  <span className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black" style={{ color: tx.type === "credit" ? C.success : C.safety, background: tx.type === "credit" ? "rgba(0,168,84,0.12)" : "rgba(255,42,42,0.12)" }}>{tx.type === "credit" ? "+" : "−"}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold truncate" style={{ color: C.ink }}>{tx.label}</div>
                     <div className="text-[10px]" style={{ color: C.inkSoft }}>{txTime(tx.createdAt)}</div>
                   </div>
                   <span className="text-xs font-bold shrink-0" style={{ color: tx.type === "credit" ? C.success : C.safety, fontFamily: monoFont }}>
@@ -10168,15 +10169,15 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
           )}
         </div>
       )}
-      <div className="rounded-xl p-4 mb-2" style={{ background: C.success }}>
+      <div className="rounded-2xl p-5 mb-3 shadow-lg" style={{ background: C.success }}>
         <div className="flex items-center justify-between mb-1">
           <div className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Driver Bonus" : lang === "mr" ? "ड्रायव्हर बोनस" : "ड्राइवर बोनस"}</div>
-          <div className="text-xl font-bold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(displayBonus)}</div>
+          <div className="text-2xl font-extrabold" style={{ color: "#FFFFFF", fontFamily: monoFont }}>{fmt(displayBonus)}</div>
         </div>
         <div className="text-[11px] font-semibold mb-2" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Withdraw anytime" : lang === "mr" ? "कधीही काढा" : "कभी भी निकालें"}</div>
         <button onClick={() => requestWithdrawal(driver.bonus || 0)} disabled={!driver.bonus}
-          className={`w-full rounded-lg py-3 text-base font-bold text-white flex items-center justify-center gap-1.5 ${driver.bonus ? "shadow-lg" : ""}`}
-          style={{ background: driver.bonus ? C.metallicGreen : "#E0E0E0", color: driver.bonus ? "#fff" : "#9AA3B0" }}>
+          className={`w-full rounded-xl py-3 text-base font-bold flex items-center justify-center gap-1.5 ${driver.bonus ? "shadow-md" : ""}`}
+          style={{ background: driver.bonus ? "#FFFFFF" : "rgba(255,255,255,0.28)", color: driver.bonus ? C.success : "rgba(255,255,255,0.8)" }}>
           <Wallet size={13} /> {lang === "en" ? "Send to Bank" : lang === "mr" ? "बँकेत पाठवा" : "बैंक में भेजें"}
         </button>
       </div>
@@ -10186,7 +10187,7 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
           <div className="text-[11px] font-bold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Withdrawal Requests" : lang === "mr" ? "विड्रॉल रिक्वेस्ट" : "विड्रॉल रिक्वेस्ट"}</div>
           <div className="space-y-1.5">
             {myWithdrawals.map((w) => (
-              <div key={w.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div key={w.id} className="rounded-xl px-3 py-2.5 flex items-center justify-between shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <span className="text-xs font-semibold" style={{ color: C.ink, fontFamily: monoFont }}>{fmt(w.amount)}</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: w.status === "Approved" ? C.success : C.marigoldDeep }}>
                   {w.status === "Approved" ? (lang === "en" ? "Sent to bank ✓" : lang === "mr" ? "बँकेत पाठवले ✓" : "बैंक में भेज दिया ✓") : (lang === "en" ? "Pending admin approval" : lang === "mr" ? "अ‍ॅडमिन अप्रूव्हल बाकी" : "एडमिन अप्रूवल बाकी")}
@@ -10206,19 +10207,21 @@ function DriverHistory({ tripLog, driver, lang }) {
   const [docsTrip, setDocsTrip] = useState(null);
   return (
     <div className="px-5 py-5">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Trip History" : lang === "mr" ? "ट्रिप हिस्टरी" : "ट्रिप हिस्ट्री"}</h2>
+      <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Trip History" : lang === "mr" ? "ट्रिप हिस्टरी" : "ट्रिप हिस्ट्री"}</h2>
       <div className="space-y-2">
         {myTrips.length === 0 && (
           <div className="text-center py-10">
-            <Package size={28} color={C.inkSoft} className="mx-auto mb-2" />
-            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid accepted yet." : lang === "mr" ? "अजून कोणतीही बिड अ‍ॅक्सेप्ट झाली नाही." : "अभी कोई बिड एक्सेप्ट नहीं हुई।"}</p>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "rgba(71,85,105,0.10)" }}>
+              <Package size={28} color={C.inkSoft} />
+            </div>
+            <p className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid accepted yet." : lang === "mr" ? "अजून कोणतीही बिड अ‍ॅक्सेप्ट झाली नाही." : "अभी कोई बिड एक्सेप्ट नहीं हुई।"}</p>
           </div>
         )}
         {myTrips.map((t) => (
-          <div key={t.id} className="rounded-lg px-3 py-2.5" style={{ background: C.paper, border: `1px solid ${t.status === "Cancelled" ? C.safety : C.line}` }}>
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
-              <div className="text-sm font-bold" style={{ color: t.status === "Cancelled" ? C.safety : C.success, fontFamily: monoFont }}>
+          <div key={t.id} className="rounded-xl px-3.5 py-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${t.status === "Cancelled" ? C.safety : C.line}` }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-bold min-w-0" style={{ color: C.ink }}>{t.pickup} → {t.drop}</div>
+              <div className="text-sm font-extrabold shrink-0 rounded-full px-2.5 py-1" style={{ color: t.status === "Cancelled" ? C.safety : C.success, background: t.status === "Cancelled" ? "rgba(255,42,42,0.10)" : "rgba(0,168,84,0.10)", fontFamily: monoFont }}>
                 {t.status === "Cancelled" ? (lang === "en" ? "Cancelled" : lang === "mr" ? "रद्द" : "रद्द") : fmt(t.fare)}
               </div>
             </div>
@@ -10235,8 +10238,8 @@ function DriverHistory({ tripLog, driver, lang }) {
               {t.status === "Cancelled" ? null : t.rating ? <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{stars(t.rating)}</div> : <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status === "Ongoing" ? (lang === "en" ? "In progress" : lang === "mr" ? "चालू" : "चालू") : (lang === "en" ? "Rating pending" : lang === "mr" ? "रेटिंग बाकी" : "रेटिंग बाकी")}</div>}
             </div>
             {t.status === "Completed" && (
-              <button onClick={() => setDocsTrip(t)} className="text-sm font-semibold mt-1.5 flex items-center gap-1"
-                style={{ color: t.documents?.file?.url ? C.success : C.marigoldDeep }}>
+              <button onClick={() => setDocsTrip(t)} className="text-sm font-bold mt-2 flex items-center gap-1.5 rounded-full px-3 py-1.5"
+                style={{ color: t.documents?.file?.url ? C.success : C.marigoldDeep, background: t.documents?.file?.url ? "rgba(0,168,84,0.10)" : "rgba(255,102,0,0.10)" }}>
                 <FileText size={12} /> {lang === "en" ? "Receive Bill" : lang === "mr" ? "बिल मिळवा" : "बिल प्राप्त करें"}
               </button>
             )}
