@@ -1217,7 +1217,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           shorter vertically instead of the square StatTile shape. */}
       <button onClick={() => setDetailView("liveMap")} className="w-full rounded-xl p-4 mb-5 shadow-sm flex items-center justify-between gap-3 text-left" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div>
-          <div className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"}</div>
+          <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
+            {/* Green dot = at least one driver is sharing a live location. */}
+            <span className={`inline-block rounded-full ${liveMapLocatedCount > 0 ? "live-pulse" : ""}`} style={{ width: 8, height: 8, background: liveMapLocatedCount > 0 ? C.success : C.line }} />
+            {lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"}
+          </div>
           <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{liveMapLocatedCount} {lang === "en" ? "drivers online right now" : lang === "mr" ? "ड्रायव्हर सध्या ऑनलाइन आहेत" : "ड्राइवर अभी ऑनलाइन हैं"}</div>
         </div>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
@@ -1231,8 +1235,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <span className="shrink-0 text-[10.5px] font-bold" style={{ width: 62, color: C.inkSoft }}>{lang === "en" ? "Install" : lang === "mr" ? "इन्स्टॉल" : "इंस्टॉल"}</span>
-            <div className="flex-1 rounded" style={{ height: 16, background: "#E0E0E0" }}>
-              <div className="rounded" style={{ height: "100%", width: `${installPct}%`, background: "#2a78d6" }} title={`${installCount}`} />
+            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, background: "#E8EDF5" }}>
+              <div className="rounded-full" style={{ height: "100%", width: `${installPct}%`, background: "#2a78d6" }} title={`${installCount}`} />
             </div>
             <span className="shrink-0 text-[10.5px] font-extrabold text-right" style={{ width: 28, color: C.ink, fontFamily: monoFont }}>{installCount}</span>
             <button onClick={() => setDetailView("newRegistrations")} className="shrink-0 text-[10px] font-bold underline">
@@ -1241,8 +1245,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           </div>
           <div className="flex items-center gap-2">
             <span className="shrink-0 text-[10.5px] font-bold" style={{ width: 62, color: C.inkSoft }}>{lang === "en" ? "Uninstall" : lang === "mr" ? "अनइन्स्टॉल" : "अनइंस्टॉल"}</span>
-            <div className="flex-1 rounded" style={{ height: 16, background: "#E0E0E0" }}>
-              <div className="rounded" style={{ height: "100%", width: `${uninstallPct}%`, background: "#eb6834" }} title={`${uninstallCount}`} />
+            <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, background: "#E8EDF5" }}>
+              <div className="rounded-full" style={{ height: "100%", width: `${uninstallPct}%`, background: "#eb6834" }} title={`${uninstallCount}`} />
             </div>
             <span className="shrink-0 text-[10.5px] font-extrabold text-right" style={{ width: 28, color: C.ink, fontFamily: monoFont }}>{uninstallCount}</span>
             <button onClick={() => setDetailView("uninstalled")} className="shrink-0 text-[10px] font-bold underline">
@@ -1271,7 +1275,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           {bookingChartBars.map((b) => (
             <div key={b.key} className="flex flex-col items-center gap-1.5">
               <span className="text-[11px] font-extrabold" style={{ color: C.ink }}>{b.count}</span>
-              <div style={{ width: 24, height: b.barPx, background: b.color, borderRadius: "4px 4px 0 0" }} title={`${b.label}: ${b.count}`} />
+              <div style={{ width: 24, height: b.barPx, background: b.color, borderRadius: "8px 8px 0 0" }} title={`${b.label}: ${b.count}`} />
               <span className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{b.label}</span>
             </div>
           ))}
@@ -1307,8 +1311,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           <text x="32" y="24" textAnchor="end" fontSize="9" fill="#9AA3B0">{fmt(financeAxisMax)}</text>
           <text x="32" y="64" textAnchor="end" fontSize="9" fill="#9AA3B0">{fmt(financeAxisMax / 2)}</text>
           <text x="32" y="104" textAnchor="end" fontSize="9" fill="#9AA3B0">0</text>
-          <line x1="36" y1="20" x2="296" y2="20" stroke="#E0E0E0" strokeWidth="1" />
-          <line x1="36" y1="60" x2="296" y2="60" stroke="#E0E0E0" strokeWidth="1" />
+          <line x1="36" y1="20" x2="296" y2="20" stroke="#E8EDF5" strokeWidth="1" />
+          <line x1="36" y1="60" x2="296" y2="60" stroke="#E8EDF5" strokeWidth="1" />
           <line x1="36" y1="100" x2="296" y2="100" stroke="#9AA3B0" strokeWidth="1" />
           <polyline points={financeEarningsPoints} fill="none" stroke="#2a78d6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           <polyline points={financeExpensesPoints} fill="none" stroke="#eb6834" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -1339,7 +1343,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
             {recentActivity.map((b) => {
               const sm = statusMeta[b.status] || statusMeta.Bidding;
               return (
-                <div key={b.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <div key={b.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: C.bg }}>
                   <div className="min-w-0">
                     <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</div>
                     <div className="text-[10px]" style={{ color: C.inkSoft }}>{b.driverName ? `${b.driverName} · ` : ""}{activityTime(b)}</div>
@@ -1352,7 +1356,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         )}
       </div>
 
-      <button onClick={onLogout} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold flex items-center justify-center gap-1.5" style={{ color: "#FFFFFF", background: C.safety }}>
+      <button onClick={onLogout} className="w-full mt-5 rounded-lg py-3.5 text-base font-semibold flex items-center justify-center gap-1.5" style={{ color: C.safety, background: C.paper, border: `1.5px solid ${C.safety}` }}>
         <XCircle size={14} /> {lang === "en" ? "Logout" : lang === "mr" ? "लॉगआउट" : "लॉगआउट"}
       </button>
     </div>
@@ -4216,8 +4220,8 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
           <h2 className="text-base font-bold" style={{ color: C.ink }}>{lang === "en" ? "Admin Control Panel" : lang === "mr" ? "अ‍ॅडमिन कंट्रोल पॅनल" : "एडमिन कंट्रोल पैनल"}</h2>
         </div>
       </div>
-      {tab === "fleet" && <div className="text-sm font-bold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : lang === "mr" ? "अ‍ॅडमिन" : "एडमिन"} 👋</div>}
-      <div className="flex gap-2 mb-5 overflow-x-auto">
+      {tab === "fleet" && <div className="text-base font-extrabold mb-4" style={{ color: C.ink }}>{greetingWord(lang)}, {lang === "en" ? "Admin" : lang === "mr" ? "अ‍ॅडमिन" : "एडमिन"} 👋</div>}
+      <div className="flex gap-2 mb-5 overflow-x-auto no-scrollbar -mx-5 px-5 pb-1">
         {tabs.map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-4 py-3 rounded-full text-base font-black whitespace-nowrap shadow-sm"
             style={{ background: tab === k ? C.navy : C.marigold, color: tab === k ? "#fff" : "#000000", border: `1.5px solid ${tab === k ? C.navy : C.marigoldDeep}` }}>

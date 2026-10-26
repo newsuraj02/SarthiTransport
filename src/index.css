@@ -77,6 +77,10 @@ input, textarea { text-overflow: ellipsis; }
 }
 .live-pulse { animation: livePulse 2.2s ease-out infinite; }
 
+/* Horizontally scrolling pill rows (Admin tabs): swipe works, scrollbar hidden. */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Anyone whose phone is set to "reduce motion" (or "remove animations")
    gets calm screens: the attention-grabbing pulses/blinks stop, tap
    feedback stays instant. Purely a CSS media query -- no behaviour change. */
