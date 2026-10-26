@@ -6100,7 +6100,7 @@ function GuidedStep({ active, completed, stepRef, children, lang, onFocusStep, o
     <div ref={stepRef} className={`relative rounded-2xl h-full ${active ? "guided-step-active" : ""}`}
       style={{ border: `2px solid ${active ? C.marigoldDeep : "transparent"}`, background: active ? C.marigold : "transparent", padding: 10 }}
       onFocus={onFocusStep} onBlur={onBlurStep} onInput={onFieldInput} onChange={onFieldInput}>
-      <div inert={locked ? "" : undefined} className="h-full" style={locked ? { pointerEvents: "none", userSelect: "none", opacity: 0.45 } : undefined}>
+      <div inert={locked ? "" : undefined} className="h-full" style={locked ? { pointerEvents: "none", userSelect: "none", opacity: 0.6 } : undefined}>
         {children}
       </div>
     </div>
@@ -6927,8 +6927,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                     return (
                       <div key={key}>
                         <button onClick={() => setSelectedDriverKey(isSelected ? null : key)} disabled={isSending}
-                          className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
-                          style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : C.paper }}>
+                          className={`w-full flex items-center gap-3 rounded-xl p-3 text-left shadow-sm ${isSelected ? "driver-selected-bounce" : ""}`}
+                          style={{ border: `2px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isSelected ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
                           <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
                             <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
                               <VehicleCategoryIcon tierIndex={entry.tierIndex} />
@@ -6949,7 +6949,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                               )}
                             </div>
                           </div>
-                          <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
+                          <div className="text-sm font-black shrink-0 rounded-full px-2.5 py-1" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(fare)}</div>
                         </button>
                         {isSelected && (
                           <button onClick={() => bookDriver(entry)} disabled={isSending}
@@ -7531,8 +7531,8 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                     return (
                       <div key={key}>
                         <button onClick={() => setSelectedDriverKey(isSelected ? null : key)} disabled={isSending}
-                          className={`w-full flex items-center gap-3 rounded-xl p-3 text-left ${isSelected ? "driver-selected-bounce" : ""}`}
-                          style={{ border: `${isSelected ? 3.5 : 1.5}px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(63,122,84,0.1)" : C.paper }}>
+                          className={`w-full flex items-center gap-3 rounded-xl p-3 text-left shadow-sm ${isSelected ? "driver-selected-bounce" : ""}`}
+                          style={{ border: `2px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isSelected ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
                           <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
                             <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
                               <VehicleCategoryIcon tierIndex={entry.tierIndex} />
@@ -7553,7 +7553,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                               )}
                             </div>
                           </div>
-                          <div className="text-sm font-black shrink-0" style={{ color: C.navy }}>{fmt(fare)}</div>
+                          <div className="text-sm font-black shrink-0 rounded-full px-2.5 py-1" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(fare)}</div>
                         </button>
                         {isSelected && (
                           <button onClick={() => bookDriver(entry)} disabled={isSending}
@@ -9825,17 +9825,22 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 
       {driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
         <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
-          <p className="text-lg font-black mb-10" style={{ color: C.navy }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
-          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: C.success }}>
-            <IndianRupee size={24} color="#FFFFFF" />
+          <p className="text-base font-black mb-10 rounded-full px-4 py-1.5" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
+          {/* Gentle radar ring (.live-pulse, index.css) so a driver glancing
+              at the phone can tell at once that the app is online and
+              listening. Calm, slow, and stops under reduce-motion. */}
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 live-pulse" style={{ background: C.success }}>
+            <IndianRupee size={26} color="#FFFFFF" />
           </div>
-          <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "You're live" : lang === "mr" ? "तुम्ही लाइव्ह आहात" : "आप लाइव हैं"}</p>
+          <p className="text-lg font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "You're live" : lang === "mr" ? "तुम्ही लाइव्ह आहात" : "आप लाइव हैं"}</p>
           <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Stay online — a load will be sent to you here." : lang === "mr" ? "ऑनलाइन रहा — इथे तुम्हाला लोड पाठवला जाईल." : "ऑनलाइन रहें — यहां आपको लोड भेजा जाएगा।"}</p>
         </div>
       ) : (
         <div className="text-center py-10">
-          <Truck size={28} color={C.inkSoft} className="mx-auto mb-2" />
-          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : lang === "mr" ? "लोड मिळवण्यासाठी ड्युटी ऑन करा" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "rgba(71,85,105,0.10)" }}>
+            <Truck size={28} color={C.inkSoft} />
+          </div>
+          <p className="text-sm font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Turn duty on to get loads" : lang === "mr" ? "लोड मिळवण्यासाठी ड्युटी ऑन करा" : "ड्यूटी ऑन करें लोड पाने के लिए"}</p>
         </div>
       )}
 
@@ -9845,8 +9850,8 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       {/* My Wallet + Driver Duty switch — moved down here from the header
           row above DriverHome (see DriverApp) so the Get Estimate card can
           take that top spot instead. */}
-      <div className="flex items-center gap-2.5 mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
-        <button onClick={() => onOpenWallet?.()} className="flex-1 rounded-full px-4 py-3 text-base font-black text-white text-center flex items-center justify-center gap-1.5" style={{ background: "#0052CC" }}>
+      <div className="flex items-center gap-2.5 mt-5 p-2.5 rounded-full shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <button onClick={() => onOpenWallet?.()} className="flex-1 rounded-full px-4 py-3 text-base font-black text-white text-center flex items-center justify-center gap-1.5 shadow-sm" style={{ background: "#0052CC" }}>
           <Wallet size={16} color="#fff" /> {lang === "en" ? "My Wallet" : lang === "mr" ? "माझे वॉलेट" : "मेरा वॉलेट"}
         </button>
         <div className="flex items-center gap-1.5 shrink-0 rounded-full px-2.5 py-1.5" style={{ background: C.marigoldDeep }}>

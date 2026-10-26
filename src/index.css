@@ -63,12 +63,26 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: #C3CCDA; border-radius: 999px; }
 
+/* Long placeholders ("Where to pick up the load from? (Pickup)") end in an
+   ellipsis instead of being chopped mid-word; and are a quieter grey so
+   typed text stands out from hints. */
+input, textarea { text-overflow: ellipsis; }
+::placeholder { color: #94A3B8; opacity: 1; }
+
+/* Driver Home "You're live" badge -- a slow radar ring (not a blink). */
+@keyframes livePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 168, 84, 0.45); }
+  70%  { box-shadow: 0 0 0 16px rgba(0, 168, 84, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 168, 84, 0); }
+}
+.live-pulse { animation: livePulse 2.2s ease-out infinite; }
+
 /* Anyone whose phone is set to "reduce motion" (or "remove animations")
    gets calm screens: the attention-grabbing pulses/blinks stop, tap
    feedback stays instant. Purely a CSS media query -- no behaviour change. */
 @media (prefers-reduced-motion: reduce) {
   .guided-step-active, .guided-submit-ready, .current-location-blink,
-  .unmatched-vehicle-link-blink, .driver-selected-bounce {
+  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse {
     animation: none !important;
   }
 }
