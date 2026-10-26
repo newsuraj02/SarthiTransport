@@ -15,6 +15,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(root, p), "utf8");
 const app = read("src/App.jsx");
 const admin = read("src/AdminPanel.jsx");
+const css = read("src/index.css");
 const fns = read("functions/index.js");
 const manifest = read("android/app/src/main/AndroidManifest.xml");
 const count = (src, needle) => src.split(needle).length - 1;
@@ -99,6 +100,11 @@ const checks = [
     api.toggleAnnouncementAudio("a"); api.toggleAnnouncementAudio("b"); // another message -> replaces it
     return live() === 1 && api.state() === "b";
   }],
+
+  // ---- Look & feel (2026-10-26 refresh) ----
+  ["borders/dividers use the soft C.line token, never hard black", () => app.includes('line: "#D5DCE8"') && !app.includes("solid #000000") && !admin.includes("solid #000000")],
+  ["brand colours unchanged (marigold, orange, blue, green, red)", () => ["marigold: \"#FFCC00\"", "marigoldDeep: \"#FF6600\"", "navy: \"#0052CC\"", "success: \"#00A854\"", "safety: \"#FF2A2A\""].every((t) => app.includes(t))],
+  ["Inter + Noto Sans Devanagari font is loaded and applied app-wide", () => css.includes('"Inter", "Noto Sans Devanagari"') && read("index.html").includes("family=Inter") && !css.includes("font-family: \"Arial Black\"")],
 
   // ---- Role selection ----
   ["role select cards say WHO should pick them", () => app.includes('"If you drive a truck or vehicle"') && app.includes('"If you need to send goods"')],

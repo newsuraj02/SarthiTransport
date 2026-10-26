@@ -113,15 +113,22 @@ export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com
 // gold/maroon — every screen already references these by name, so this is
 // a value-only swap.
 export const C = {
-  bg: "#FFFFFF",
+  // 2026-10-26 look refresh (owner: "same brand colour, fresher feel"): the
+  // brand hues (marigold / orange / blue / green / red) are unchanged. What
+  // changed is the neutrals -- the page is a faint cool tint so white cards
+  // lift off it, text is a deep navy-black instead of pure #000, secondary
+  // text is a readable slate, and `line` (every card/input/divider border,
+  // ~250 uses) is a soft grey-blue instead of a hard black outline. Because
+  // every screen reads these tokens, this one block restyles the whole app.
+  bg: "#F4F7FB",
   paper: "#FFFFFF",
-  ink: "#000000",
-  inkSoft: "#333333",
+  ink: "#0F1B2D",
+  inkSoft: "#475569",
   marigold: "#FFCC00",
   marigoldDeep: "#FF6600",
   safety: "#FF2A2A",
   success: "#00A854",
-  line: "#000000",
+  line: "#D5DCE8",
   navy: "#0052CC",
   pimpri: "#FF6600",
   chinchwad: "#00A854",
@@ -4318,10 +4325,10 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
       <div className={bothShown ? "w-full grid grid-cols-2 gap-3" : "w-full flex flex-col items-center"}>
         {showDriver && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col"}>
-            <button onClick={() => onSelect("driver")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
+            <button onClick={() => onSelect("driver")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center shadow-md" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
               <img src="/role-driver.png" alt="" className="h-16 w-auto rounded-xl mb-3" />
               <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver App" : lang === "mr" ? "ड्रायव्हर अ‍ॅप" : "ड्राइवर ऐप"}</div>
-              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{driverWho}</div>
+              <div className="text-xs font-semibold text-balance" style={{ color: C.inkSoft }}>{driverWho}</div>
             </button>
             {driverVerified && logoutLink("driver", lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर")}
           </div>
@@ -4329,10 +4336,10 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
 
         {showCustomer && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col mt-3"}>
-            <button onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center" style={{ background: "#FFFFFF", border: `2px solid ${C.success}` }}>
+            <button onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center shadow-md" style={{ background: "#FFFFFF", border: `2px solid ${C.success}` }}>
               <img src="/role-customer.png" alt="" className="h-16 w-auto rounded-xl mb-3" />
               <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : lang === "mr" ? "कस्टमर अ‍ॅप" : "कस्टमर ऐप"}</div>
-              <div className="text-xs font-semibold" style={{ color: C.inkSoft }}>{customerWho}</div>
+              <div className="text-xs font-semibold text-balance" style={{ color: C.inkSoft }}>{customerWho}</div>
             </button>
             {customerVerified && logoutLink("customer", lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर")}
           </div>
@@ -8661,7 +8668,7 @@ function tripHourBreakdown(trip) {
 // agreed design, not the app's usual thin grey hairlines.
 function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }) {
   const { totalMs, loadingUnloadingMs, waitingMs } = tripHourBreakdown(trip);
-  const cellStyle = { border: "1.5px solid #000000", padding: "8px 10px", fontSize: 13, textAlign: "left" };
+  const cellStyle = { border: `1.5px solid ${C.line}`, padding: "8px 10px", fontSize: 13, textAlign: "left" };
   const Row = ({ context, time, charges, bold, zebra }) => (
     <tr style={{ background: bold ? C.success : zebra ? C.bg : C.paper }}>
       <td style={{ ...cellStyle, fontFamily: bodyFont, fontWeight: bold ? 900 : 700, color: bold ? "#fff" : "#000000" }}>{context}</td>
@@ -8670,7 +8677,7 @@ function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }
     </tr>
   );
   return (
-    <div className="rounded-xl overflow-hidden mb-2.5 shadow-sm" style={{ border: "2px solid #000000" }}>
+    <div className="rounded-xl overflow-hidden mb-2.5 shadow-sm" style={{ border: `2px solid ${C.line}` }}>
       <table className="w-full" style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: C.marigold }}>
@@ -8705,7 +8712,7 @@ function TripBreakdownTable({ baseFareLabel, baseFare, totalAmount, trip, lang }
         </tbody>
       </table>
       {trip.bill && (
-        <div className="px-3 py-2.5 text-[11px]" style={{ background: C.bg, color: C.inkSoft, borderTop: "1.5px solid #000000" }}>{trip.bill.note}</div>
+        <div className="px-3 py-2.5 text-[11px]" style={{ background: C.bg, color: C.inkSoft, borderTop: `1.5px solid ${C.line}` }}>{trip.bill.note}</div>
       )}
     </div>
   );

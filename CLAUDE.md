@@ -191,6 +191,16 @@ Text-to-Speech API must be enabled on the GCP project.
 **Role selection.** Cards say WHO should pick them ("If you drive a truck or
 vehicle" / "If you need to send goods") — matches the spoken prompt.
 
+**Look & feel (owner 2026-10-26: "same brand colour, fresher feel").** Brand hues
+(marigold #FFCC00, orange, blue #0052CC, green, red) are unchanged. All screens
+read neutrals from the `C` tokens in `App.jsx` — page `bg` #F4F7FB (white `paper`
+cards lift off it), `ink` #0F1B2D, `inkSoft` #475569, soft grey-blue `line`
+#D5DCE8 (NOT black). Never hard-code a black (`#000000`) border/outline; use
+`C.line`. Font = Inter + Noto Sans Devanagari (`index.html` link, `index.css`);
+real 700/800 bold, not Arial Black. Global polish lives in `index.css` (focus
+ring, tap feedback, reduced-motion) and `tailwind.config.js` (layered shadows,
+round corners) — restyle there, not screen by screen. Layouts were NOT changed.
+
 **Working agreement.** Push automatically after build + invariants pass, EXCEPT
 GPS/notification-related changes — ask first (owner rule, 2026-10-23). After a
 push, give the deploy commands: `git checkout claude/app-from-document-njzc58 &&

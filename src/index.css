@@ -20,18 +20,57 @@ html, body, #root {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* App-wide font unification: Arial for every plain-text element, Arial
-   Black wherever one of the weight utilities above applies. !important on
-   both rules — the universal `*` selector needs it to win over the
-   handful of components that set their own fontFamily inline (bodyFont/
-   monoFont, e.g. fare and OTP digit displays), and the class selectors
-   need it to then win back over `*` for anything bold (class specificity
-   already puts them ahead of `*`, this just keeps the override explicit). */
+/* App-wide font (2026-10-26 look refresh): Inter for English/numbers and
+   Noto Sans Devanagari for Hindi/Marathi, both loaded from Google Fonts in
+   index.html with display=swap (text shows instantly in the system font and
+   upgrades when the font arrives; fully offline it just stays on the system
+   font). Replaces the old Arial + "Arial Black" for everything bold, which
+   made every label look heavy and dated -- bold is now a real 700, black a
+   real 800. !important on the universal rule for the same reason as before:
+   a few components set their own inline fontFamily (bodyFont/monoFont, e.g.
+   fare and OTP digits) and the whole app should read as one typeface. */
 * {
-  font-family: Arial, Helvetica, sans-serif !important;
+  font-family: "Inter", "Noto Sans Devanagari", "Noto Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif !important;
+  -webkit-tap-highlight-color: transparent;
 }
-.font-normal, .font-medium, .font-semibold, .font-bold, .font-extrabold, .font-black {
-  font-family: "Arial Black", Arial, Helvetica, sans-serif !important;
+body {
+  background: #F4F7FB;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+.font-black { font-weight: 800; }
+.font-extrabold { font-weight: 800; }
+
+/* A clear "you are typing here" state on every field -- one global rule so
+   current and future inputs all get it. A soft blue ring instead of the
+   browser's default (or, since the fields use outline-none, no indicator at
+   all). */
+input:focus, textarea:focus, select:focus {
+  border-color: #0052CC !important;
+  outline: 3px solid rgba(0, 82, 204, 0.18) !important;
+  outline-offset: 0 !important;
+}
+/* Keyboard / switch-access users get the same ring on buttons and links. */
+button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
+  outline: 3px solid rgba(0, 82, 204, 0.35);
+  outline-offset: 2px;
+}
+
+/* Cleaner scrolling inside sheets and lists: thin, light scrollbar on
+   desktop browsers (Android's overlay scrollbars are unaffected). */
+* { scrollbar-width: thin; scrollbar-color: #C3CCDA transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #C3CCDA; border-radius: 999px; }
+
+/* Anyone whose phone is set to "reduce motion" (or "remove animations")
+   gets calm screens: the attention-grabbing pulses/blinks stop, tap
+   feedback stays instant. Purely a CSS media query -- no behaviour change. */
+@media (prefers-reduced-motion: reduce) {
+  .guided-step-active, .guided-submit-ready, .current-location-blink,
+  .unmatched-vehicle-link-blink, .driver-selected-bounce {
+    animation: none !important;
+  }
 }
 
 /* Every <select> across the app gets one bigger, higher-contrast dropdown
@@ -120,8 +159,13 @@ select {
    costs nothing on a slow phone. Disabled buttons are excluded so a
    greyed-out button never looks tappable. */
 button:not(:disabled) {
-  transition: transform 0.08s ease;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
 button:not(:disabled):active {
-  transform: scale(0.96);
+  transform: scale(0.97);
+  filter: brightness(0.96);
+}
+/* Disabled buttons read clearly as unavailable. */
+button:disabled {
+  cursor: not-allowed;
 }
