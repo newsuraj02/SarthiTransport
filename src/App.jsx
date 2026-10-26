@@ -6237,30 +6237,44 @@ function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCo
 // that overflow is reported back as mismatchUnit so the UI can offer to
 // switch instead of just silently refusing the keystroke with no
 // explanation.
+// Hard ceiling on any weight a customer can enter: the biggest vehicle
+// category is 35 ton (owner rule, 2026-10-26: "don't take any number above
+// the 35 ton / 35000 kg mark"). Applied three ways so there is no gap --
+// a keystroke that would push the field past it is refused outright (the
+// field keeps its previous value and `capped` comes back true so the UI
+// can say why), isWeightValid rejects anything over it however the value
+// got there, and both forms' fleet-max check (exceedsFleetMax) still sits
+// on top of that for a fleet whose real biggest vehicle is smaller.
+const MAX_BOOKING_WEIGHT_KG = 35000;
+const MAX_BOOKING_WEIGHT_TON = MAX_BOOKING_WEIGHT_KG / 1000;
 const KG_WEIGHT_RE = /^\d{3,5}$/;
 const TON_WEIGHT_RE = /^\d{1,2}(\.\d{1,3})?$/;
-function getWeightInputChange(rawValue, unit) {
+function getWeightInputChange(rawValue, unit, previous = "") {
   if (unit === "kg") {
     const digitsOnly = rawValue.replace(/[^0-9]/g, "");
     const clean = digitsOnly.slice(0, 5);
+    if (Number(clean) > MAX_BOOKING_WEIGHT_KG) return { clean: previous, mismatchUnit: null, capped: true };
     // A decimal point typed at all, or more than 5 digits, isn't a bigger
     // kg value (kg is capped at 5 digits/99999kg on purpose) -- it's almost
     // certainly a tons value (e.g. "2.5" or "12000" meant as 12 tons).
     const mismatchUnit = (/\./.test(rawValue) || digitsOnly.length > 5) ? "ton" : null;
-    return { clean, mismatchUnit };
+    return { clean, mismatchUnit, capped: false };
   }
   // At most one decimal point (same filter as every other decimal input
   // in this app), up to 2 integer digits and 3 decimal digits.
   const noJunk = rawValue.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
   const [intPart, decPart] = noJunk.split(".");
   const clean = intPart.slice(0, 2) + (noJunk.includes(".") ? "." + (decPart || "").slice(0, 3) : "");
+  if (Number(clean) > MAX_BOOKING_WEIGHT_TON) return { clean: previous, mismatchUnit: null, capped: true };
   // More than 2 integer digits before any decimal point -- almost
   // certainly a kg-sized number (e.g. "750") typed while still on tons.
   const mismatchUnit = intPart.length > 2 ? "kg" : null;
-  return { clean, mismatchUnit };
+  return { clean, mismatchUnit, capped: false };
 }
 function isWeightValid(weight, unit) {
-  return unit === "kg" ? KG_WEIGHT_RE.test(weight) : TON_WEIGHT_RE.test(weight) && Number(weight) > 0;
+  return unit === "kg"
+    ? KG_WEIGHT_RE.test(weight) && Number(weight) <= MAX_BOOKING_WEIGHT_KG
+    : TON_WEIGHT_RE.test(weight) && Number(weight) > 0 && Number(weight) <= MAX_BOOKING_WEIGHT_TON;
 }
 // "kg"/"ton" label -- always the plain Latin abbreviation, same as "kg",
 // regardless of app language. Previously ton/टन switched to Devanagari in
@@ -6291,6 +6305,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // offer switching to, cleared the instant they either switch or edit the
   // field back under the cap.
   const [weightUnitHint, setWeightUnitHint] = useState(null);
+  // True right after a keystroke was refused for pushing the weight past
+  // MAX_BOOKING_WEIGHT_KG/TON (see getWeightInputChange) -- drives the "max
+  // weight" note under the field; cleared on any accepted keystroke or unit switch.
+  const [weightCapHit, setWeightCapHit] = useState(false);
+  useEffect(() => { setWeightCapHit(false); }, [weightUnit]);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6711,9 +6730,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   // 3-5 digit / tons' 2+2-digit shape as you type, and flags
                   // mismatchUnit (surfaced below) the moment what's typed
                   // looks like it belongs in the OTHER unit instead.
-                  const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
+                  const { clean, mismatchUnit, capped } = getWeightInputChange(e.target.value, weightUnit, weight);
                   setWeight(clean);
                   setWeightUnitHint(mismatchUnit);
+                  setWeightCapHit(capped);
                 }}
                 onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
               {/* Both units shown at once now (a real segmented toggle, not a
@@ -6735,6 +6755,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             </div>
           </div>
         </div>
+
+        {weightCapHit && (
+          <div className="text-xs font-bold -mt-1" style={{ color: C.safety }}>
+            {lang === "en" ? `Maximum weight is ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg.` : lang === "mr" ? `कमाल वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg आहे.` : `अधिकतम वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg है।`}
+          </div>
+        )}
 
         {!locationsReady && (
           <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
@@ -6926,6 +6952,11 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
   // offer switching to, cleared the instant they either switch or edit the
   // field back under the cap.
   const [weightUnitHint, setWeightUnitHint] = useState(null);
+  // True right after a keystroke was refused for pushing the weight past
+  // MAX_BOOKING_WEIGHT_KG/TON (see getWeightInputChange) -- drives the "max
+  // weight" note under the field; cleared on any accepted keystroke or unit switch.
+  const [weightCapHit, setWeightCapHit] = useState(false);
+  useEffect(() => { setWeightCapHit(false); }, [weightUnit]);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -7319,9 +7350,10 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                   // 3-5 digit / tons' 2+2-digit shape as you type, and flags
                   // mismatchUnit (surfaced below) the moment what's typed
                   // looks like it belongs in the OTHER unit instead.
-                  const { clean, mismatchUnit } = getWeightInputChange(e.target.value, weightUnit);
+                  const { clean, mismatchUnit, capped } = getWeightInputChange(e.target.value, weightUnit, weight);
                   setWeight(clean);
                   setWeightUnitHint(mismatchUnit);
+                  setWeightCapHit(capped);
                 }}
                 onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
               {/* Both units shown at once now (a real segmented toggle, not a
@@ -7343,6 +7375,12 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
             </div>
           </div>
         </div>
+
+        {weightCapHit && (
+          <div className="text-xs font-bold -mt-1" style={{ color: C.safety }}>
+            {lang === "en" ? `Maximum weight is ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg.` : lang === "mr" ? `कमाल वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg आहे.` : `अधिकतम वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg है।`}
+          </div>
+        )}
 
         {!locationsReady && (
           <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>

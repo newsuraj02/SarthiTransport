@@ -127,9 +127,17 @@ treat a regression here as MY bug, found and fixed by me, not by the owner.
    commit/cause — no excuses, no quiet fixes.
 
 **Booking weight (customer app).** kg input = 3–5 digits; ton input = max 2
-integer + 3 decimal digits (so "9000 ton" can never be typed). Both
+integer + 3 decimal digits (so "9000 ton" can never be typed). HARD CAP (owner
+rule 2026-10-26, "we have vehicles only up to 35 ton / 35000 kg"): nothing above
+`MAX_BOOKING_WEIGHT_KG = 35000` (35 ton) is ever accepted — a keystroke that
+would exceed it is refused (field keeps its previous value, red "Maximum weight
+is 35 ton / 35000 kg" note shows), pasting an over-cap number leaves the field
+empty, and `isWeightValid` rejects over-cap values on every path. This is pinned
+by BEHAVIOR checks in `verifyInvariants.mjs` that run the real functions. Both
 `CustomerBooking` and `CustomerAdvanceBooking` convert ton→kg (`loadKg`), save
-`weightKg` ALWAYS in kilograms, and block loads above the biggest vehicle.
+`weightKg` ALWAYS in kilograms, and also block loads above the live fleet's
+biggest vehicle (`exceedsFleetMax`, a separate, softer check). Driver/admin
+vehicle-capacity fields are a different thing and are NOT capped by this.
 `weightUnit` is only the label the customer picked — never print it as the
 suffix of `weightKg` (2026-10-26: Alerts showed "9000ton" for a 9-ton load;
 validation was fine, the label was wrong, bug since 207b028).

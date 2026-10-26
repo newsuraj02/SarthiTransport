@@ -19,7 +19,32 @@ const fns = read("functions/index.js");
 const manifest = read("android/app/src/main/AndroidManifest.xml");
 const count = (src, needle) => src.split(needle).length - 1;
 
+// Runs the REAL weight functions out of App.jsx (the slice between the cap
+// constant and weightUnitLabel is pure JS, no JSX) so the weight rules are
+// pinned by behavior, not just by matching their source text.
+function loadWeightFns() {
+  const start = app.indexOf("const MAX_BOOKING_WEIGHT_KG");
+  const end = app.indexOf("function weightUnitLabel");
+  return new Function(app.slice(start, end) + "; return { getWeightInputChange, isWeightValid, MAX_KG: MAX_BOOKING_WEIGHT_KG };")();
+}
+// Types a string into the field one character at a time, as onChange sees it.
+function typeInto(w, unit, text) {
+  let value = "";
+  for (const ch of text) value = w.getWeightInputChange(value + ch, unit, value).clean;
+  return value;
+}
+const toKg = (v, unit) => (Number(v) || 0) * (unit === "ton" ? 1000 : 1);
+
 const checks = [
+  // ---- Weight cap: nothing above 35 ton / 35000 kg is ever accepted (owner rule 2026-10-26) ----
+  ["weight cap constant is 35000 kg", () => app.includes("const MAX_BOOKING_WEIGHT_KG = 35000;") && loadWeightFns().MAX_KG === 35000],
+  ["typing past 35000 kg is refused, 35000 itself allowed", () => { const w = loadWeightFns(); return typeInto(w, "kg", "35000") === "35000" && typeInto(w, "kg", "35001") === "3500" && typeInto(w, "kg", "99999") === "9999"; }],
+  ["typing past 35 ton is refused (incl. the reported 9000), 35 itself allowed", () => { const w = loadWeightFns(); return typeInto(w, "ton", "35") === "35" && typeInto(w, "ton", "36") === "3" && typeInto(w, "ton", "9000") === "9" && typeInto(w, "ton", "35.5") === "35."; }],
+  ["pasting an over-cap number leaves the field empty", () => { const w = loadWeightFns(); return w.getWeightInputChange("99999", "kg", "").clean === "" && w.getWeightInputChange("90", "ton", "").clean === ""; }],
+  ["isWeightValid rejects everything above the cap, on any path", () => { const w = loadWeightFns(); return w.isWeightValid("35000", "kg") && !w.isWeightValid("35001", "kg") && !w.isWeightValid("99999", "kg") && w.isWeightValid("35", "ton") && !w.isWeightValid("35.001", "ton") && !w.isWeightValid("9000", "ton") && w.isWeightValid("0.5", "ton"); }],
+  ["no typed input of any shape can end above the cap", () => { const w = loadWeightFns(); const samples = ["1", "123", "12345", "123456", "99999", "40000", "36000", "99", "36", "35.5", "99.999", "12345678", "35.001"]; return ["kg", "ton"].every((u) => samples.every((s) => toKg(typeInto(w, u, s), u) <= w.MAX_KG)); }],
+  ["both booking forms hand over the previous value and show the 'Maximum weight' note", () => count(app, "getWeightInputChange(e.target.value, weightUnit, weight)") >= 2 && count(app, "Maximum weight is ") >= 2 && count(app, "setWeightCapHit(capped)") >= 2],
+
   // ---- Weight input rules (customer booking) ----
   ["kg input is 3-5 digits", () => app.includes("const KG_WEIGHT_RE = /^\\d{3,5}$/;")],
   ["ton input is max 2 integer + 3 decimal digits (so 9000 ton can never be typed)", () => app.includes("const TON_WEIGHT_RE = /^\\d{1,2}(\\.\\d{1,3})?$/;")],
