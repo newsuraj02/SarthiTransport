@@ -17,7 +17,7 @@ import {
   Settings2, Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Plus, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, LocateFixed,
-  AlertTriangle, Volume2,
+  AlertTriangle, Volume2, Square,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs, bulkDeleteDocs,
@@ -2398,6 +2398,11 @@ function playChime() {
 // it's not actually running, not something this function can work around.
 // Silently no-ops if the browser/WebView has no speech synthesis support,
 // or no installed voice for the given language.
+// One speed for EVERY spoken sound in the app (this alert, speakGuide's
+// onboarding prompts, and the admin-announcement MP3 player) -- owner
+// request 2026-10-26: the announcements were a bit fast. 1 = normal speed;
+// change this one number to retune all of them together.
+const SPEECH_RATE = 0.85;
 function speakAlert(text, lang = "hi") {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   try {
@@ -2405,7 +2410,7 @@ function speakAlert(text, lang = "hi") {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
-    utterance.rate = 1.05;
+    utterance.rate = SPEECH_RATE;
     utterance.pitch = 1;
     utterance.volume = 1;
     setTimeout(() => window.speechSynthesis.speak(utterance), 220);
@@ -2425,7 +2430,7 @@ function speakGuide(text, lang) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
-    utterance.rate = 1;
+    utterance.rate = SPEECH_RATE;
     utterance.pitch = 1;
     utterance.volume = 1;
     setTimeout(() => window.speechSynthesis.speak(utterance), 150);
@@ -2651,9 +2656,10 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole, lang) {
   // be one) -- AnnouncementAlertBanner below already shows the exact same
   // message for every notification, spoken or not, so a second banner just
   // for the spoken ones was two UI elements saying the same thing at once.
-  // This effect's only job is to play the audio; AnnouncementAlertBanner's
-  // own 🔊 replay button (see its onReplay prop) covers "I didn't catch
-  // that" for both the popup and the Admin Announcements inbox list.
+  // This effect's only job is to play the audio; the 🔊 button on
+  // AnnouncementAlertBanner and on every Admin Announcements inbox row
+  // (toggleAnnouncementAudio -- a real play/stop toggle) covers "I didn't
+  // catch that" / "stop it".
   const sessionStartRef = useRef(Date.now());
   const [lastSpokenAt, setLastSpokenAt] = usePersistedState(`sarthi_announcementsLastSpoken_${toRole}_${myMobile || "none"}`, 0);
   useEffect(() => {
@@ -2661,26 +2667,79 @@ function useAnnouncementAlerts(adminNotifications, myMobile, toRole, lang) {
       .filter((n) => n.audioUrl && (n.createdAt?.toMillis?.() || 0) > Math.max(lastSpokenAt, sessionStartRef.current))
       .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
     if (toPlay.length === 0) return;
-    toPlay.forEach((n) => playAnnouncementAudio(n.audioUrl));
+    // Several arriving at once: only the newest plays (one at a time, never
+    // overlapping); the older ones stay replayable from the inbox.
+    playAnnouncementAudio(toPlay[toPlay.length - 1].audioUrl);
     setLastSpokenAt(toPlay[toPlay.length - 1].createdAt?.toMillis?.() || Date.now());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine.length]);
   return { unreadCount: unread.length, latestUnread: unread[0] || null, markSeen };
 }
 
-// Shared by useAnnouncementAlerts' auto-play effect and the 🔊 replay
-// button on both AnnouncementAlertBanner and the Admin Announcements inbox
-// list (so "didn't catch that" has a fix from either place) -- plays a
-// synthesized admin-broadcast MP3 (see synthesizeBroadcastAudio,
+// Shared by useAnnouncementAlerts' auto-play effect and the 🔊 button on
+// both AnnouncementAlertBanner and the Admin Announcements inbox list --
+// plays a synthesized admin-broadcast MP3 (see synthesizeBroadcastAudio,
 // functions/index.js) via a plain <audio> element.
+//
+// Owner request (2026-10-26): the speaker button is a strict on/off switch.
+// Tapping it twice used to start a second copy on top of the first (two
+// overlapping announcements), because every tap built a brand-new Audio.
+// Now there is exactly ONE player for the whole app: starting any
+// announcement stops whatever is already playing first, and tapping the
+// button of the one that is playing stops it. The button shows a stop
+// square while its announcement is playing (useAnnouncementPlayingUrl).
+// Speed is SPEECH_RATE (same slower pace as every other spoken sound).
+let announcementAudio = null;
+let announcementPlayingUrl = null;
+const announcementPlayingListeners = new Set();
+function setAnnouncementPlayingUrl(url) {
+  announcementPlayingUrl = url;
+  announcementPlayingListeners.forEach((fn) => fn(url));
+}
+function stopAnnouncementAudio() {
+  const audio = announcementAudio;
+  announcementAudio = null;
+  if (audio) {
+    audio.onended = null;
+    audio.onerror = null;
+    try { audio.pause(); } catch { /* nothing to stop */ }
+  }
+  setAnnouncementPlayingUrl(null);
+}
 function playAnnouncementAudio(url) {
   if (!url) return;
+  stopAnnouncementAudio();
   try {
     const audio = new Audio(url);
-    audio.play().catch((e) => console.error("[admin broadcast audio] play failed:", e.message));
+    audio.defaultPlaybackRate = SPEECH_RATE;
+    audio.playbackRate = SPEECH_RATE;
+    audio.preservesPitch = true;
+    const finished = () => { if (announcementAudio === audio) stopAnnouncementAudio(); };
+    audio.onended = finished;
+    audio.onerror = finished;
+    announcementAudio = audio;
+    setAnnouncementPlayingUrl(url);
+    audio.play().catch((e) => {
+      console.error("[admin broadcast audio] play failed:", e.message);
+      finished();
+    });
   } catch (e) {
     console.error("[admin broadcast audio] setup failed:", e.message);
+    stopAnnouncementAudio();
   }
+}
+function toggleAnnouncementAudio(url) {
+  if (announcementPlayingUrl === url) stopAnnouncementAudio();
+  else playAnnouncementAudio(url);
+}
+function useAnnouncementPlayingUrl() {
+  const [url, setUrl] = useState(announcementPlayingUrl);
+  useEffect(() => {
+    announcementPlayingListeners.add(setUrl);
+    setUrl(announcementPlayingUrl);
+    return () => { announcementPlayingListeners.delete(setUrl); };
+  }, []);
+  return url;
 }
 
 // A direct intent:// link to a system "android.settings.*" screen (tried
@@ -3101,7 +3160,9 @@ function FloatingHamburgerHint({ show, onOpenMenu, lang }) {
 // "View" also opens the full inbox, "dismiss" just acknowledges it in place
 // since the message text is already fully readable right here.
 function AnnouncementAlertBanner({ announcement, onView, lang }) {
+  const playingUrl = useAnnouncementPlayingUrl();
   if (!announcement) return null;
+  const isPlaying = !!announcement.audioUrl && playingUrl === announcement.audioUrl;
   return (
     <div className="mx-5 mb-2 rounded-lg p-3 shadow-lg" style={{ background: C.navy, border: `1.5px solid ${C.marigold}` }}>
       <div className="flex items-start gap-2">
@@ -3115,8 +3176,8 @@ function AnnouncementAlertBanner({ announcement, onView, lang }) {
             was actually sent with the "read aloud" checkbox on
             (announcement.audioUrl set, see sendAdminNotification). */}
         {announcement.audioUrl && (
-          <button onClick={() => playAnnouncementAudio(announcement.audioUrl)} className="shrink-0 p-1.5 rounded-full" style={{ background: C.marigold }} aria-label={lang === "en" ? "Play again" : lang === "mr" ? "पुन्हा वाजवा" : "फिर से सुनें"}>
-            <Volume2 size={22} color="#000000" />
+          <button onClick={() => toggleAnnouncementAudio(announcement.audioUrl)} className="shrink-0 p-1.5 rounded-full" style={{ background: C.marigold }} aria-label={isPlaying ? (lang === "en" ? "Stop" : lang === "mr" ? "थांबवा" : "रोकें") : (lang === "en" ? "Play" : lang === "mr" ? "वाजवा" : "सुनें")}>
+            {isPlaying ? <Square size={22} color="#000000" fill="#000000" /> : <Volume2 size={22} color="#000000" />}
           </button>
         )}
       </div>
@@ -3134,6 +3195,7 @@ function AnnouncementAlertBanner({ announcement, onView, lang }) {
 // role or to this person specifically. Read-only; there's no reply/compose
 // here, only what Admin has sent out.
 function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang, onOpen }) {
+  const playingUrl = useAnnouncementPlayingUrl();
   const mine = (adminNotifications || [])
     .filter((n) => n.toRole === toRole && (n.target === "all" || n.target === myMobile || (Array.isArray(n.target) && n.target.includes(myMobile))))
     .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
@@ -3158,8 +3220,8 @@ function AnnouncementsInbox({ adminNotifications, myMobile, toRole, lang, onOpen
               <div className="flex items-start justify-between gap-2">
                 <div className="text-sm flex-1 min-w-0" style={{ color: C.ink }}>{n.message}</div>
                 {n.audioUrl && (
-                  <button onClick={() => playAnnouncementAudio(n.audioUrl)} className="shrink-0 p-1.5 rounded-full" style={{ background: C.marigoldDeep }} aria-label={lang === "en" ? "Play again" : lang === "mr" ? "पुन्हा वाजवा" : "फिर से सुनें"}>
-                    <Volume2 size={13} color="#FFFFFF" />
+                  <button onClick={() => toggleAnnouncementAudio(n.audioUrl)} className="shrink-0 p-1.5 rounded-full" style={{ background: C.marigoldDeep }} aria-label={playingUrl === n.audioUrl ? (lang === "en" ? "Stop" : lang === "mr" ? "थांबवा" : "रोकें") : (lang === "en" ? "Play" : lang === "mr" ? "वाजवा" : "सुनें")}>
+                    {playingUrl === n.audioUrl ? <Square size={13} color="#FFFFFF" fill="#FFFFFF" /> : <Volume2 size={13} color="#FFFFFF" />}
                   </button>
                 )}
               </div>

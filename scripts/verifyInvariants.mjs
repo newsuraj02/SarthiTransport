@@ -78,7 +78,27 @@ const checks = [
   ["onboarding voice guidance is mandatory (no mute/once gating)", () => !app.includes("sarthi_voiceGuideOn") && !app.includes("sarthi_voiceGuideSeen")],
   ["admin broadcast audio is server-generated, played by playAnnouncementAudio", () => fns.includes("async function synthesizeBroadcastAudio") && app.includes("function playAnnouncementAudio(url)")],
   ["TTS client is lazy (an eager one broke 'firebase deploy' with a 10s timeout)", () => fns.includes("function getTtsClient()") && !fns.includes("\nconst ttsClient = new textToSpeech.TextToSpeechClient();")],
-  ["admin message banner has the replay speaker and no X dismiss", () => app.includes("playAnnouncementAudio(announcement.audioUrl)") && !app.includes("onDismiss={announcementAlerts.markSeen}")],
+  ["admin message banner has the play/stop speaker toggle and no X dismiss", () => app.includes("toggleAnnouncementAudio(announcement.audioUrl)") && app.includes("toggleAnnouncementAudio(n.audioUrl)") && !app.includes("onDismiss={announcementAlerts.markSeen}")],
+  ["every spoken sound uses the one slower SPEECH_RATE (0.85); nothing sets its own speed", () => app.includes("const SPEECH_RATE = 0.85;") && count(app, "utterance.rate = SPEECH_RATE;") === 2 && !/utterance\.rate = (?!SPEECH_RATE)/.test(app) && app.includes("audio.playbackRate = SPEECH_RATE;")],
+  ["speaker is a strict on/off: tapping twice never overlaps, new audio replaces old", () => {
+    const start = app.indexOf("let announcementAudio = null;");
+    const end = app.indexOf("function useAnnouncementPlayingUrl");
+    const made = [];
+    class FakeAudio {
+      constructor(url) { this.url = url; this.paused = false; made.push(this); }
+      play() { return Promise.resolve(); }
+      pause() { this.paused = true; }
+    }
+    const SPEECH_RATE = 0.85;
+    const api = new Function("Audio", "SPEECH_RATE", app.slice(start, end) + "; return { toggleAnnouncementAudio, playAnnouncementAudio, state: () => announcementPlayingUrl };")(FakeAudio, SPEECH_RATE);
+    const live = () => made.filter((a) => !a.paused).length;
+    api.toggleAnnouncementAudio("a");                       // tap -> plays
+    if (live() !== 1 || api.state() !== "a" || made[0].playbackRate !== SPEECH_RATE) return false;
+    api.toggleAnnouncementAudio("a");                       // tap again -> stops, no second copy
+    if (live() !== 0 || api.state() !== null || made.length !== 1) return false;
+    api.toggleAnnouncementAudio("a"); api.toggleAnnouncementAudio("b"); // another message -> replaces it
+    return live() === 1 && api.state() === "b";
+  }],
 
   // ---- Role selection ----
   ["role select cards say WHO should pick them", () => app.includes('"If you drive a truck or vehicle"') && app.includes('"If you need to send goods"')],

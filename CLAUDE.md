@@ -177,7 +177,13 @@ in Chrome; device-dependent in the app). Admin "🔊 Also read this aloud" does 
 use device TTS: `sendAdminNotification` synthesizes an MP3 server-side (Google
 Cloud TTS → Storage → `audioUrl`), played by `playAnnouncementAudio` for a
 recipient whose app is OPEN (closed-app delivery needs a native build — owner
-declined). One merged banner, big 🔊 replay button (banner + inbox), no X.
+declined). One merged banner, big 🔊 button (banner + inbox), no X.
+The 🔊 button is a strict play/stop toggle (owner 2026-10-26): ONE shared player
+(`toggleAnnouncementAudio`), tapping twice stops it and never layers a second
+copy; a new announcement replaces the old one; the icon becomes a stop square
+while playing. EVERY spoken sound (`speakAlert`, `speakGuide`, the MP3 player)
+uses the one `SPEECH_RATE` (0.85, slower than normal) — retune that one number,
+never set a speed on an individual sound.
 Deploy gotchas: run `npm install` in `functions/` after pulling new deps; keep
 the TTS client lazy (eager creation timed out `firebase deploy`); Cloud
 Text-to-Speech API must be enabled on the GCP project.
