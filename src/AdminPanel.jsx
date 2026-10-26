@@ -253,7 +253,7 @@ export function AdminLogin({ onVerified, lang, onBack }) {
           </div>
         )}
         <button onClick={submit} disabled={!email.trim() || !password.trim() || submitting} className="w-full rounded-lg py-4 font-bold text-base"
-          style={{ background: email.trim() && password.trim() && !submitting ? C.marigold : "#E0E0E0", color: email.trim() && password.trim() && !submitting ? "#000000" : "#9AA3B0" }}>
+          style={{ background: email.trim() && password.trim() && !submitting ? C.marigold : "#E5EAF2", color: email.trim() && password.trim() && !submitting ? "#000000" : "#9AA3B0" }}>
           {submitting ? (lang === "en" ? "Logging in..." : lang === "mr" ? "लॉगिन होत आहे..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें")}
         </button>
       </div>
@@ -651,7 +651,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                 : (lang === "en" ? `Bulk WhatsApp to all ${offDutyUnsent.length} off-duty drivers at once` : lang === "mr" ? `सर्व ${offDutyUnsent.length} ऑफ ड्युटी ड्रायव्हर्सना एका साथ बल्क WhatsApp पाठवा` : `सभी ${offDutyUnsent.length} ऑफ ड्यूटी ड्राइवरों को एक साथ बल्क WhatsApp भेजें`)}
             </button>
           ) : (
-            <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+            <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
               <CheckCircle2 size={14} />
               {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
             </div>
@@ -673,7 +673,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           </div>
           <div className="shrink-0 flex flex-col items-end gap-0.5">
             <button onClick={() => sendSingleWhatsAppNow("offDuty", d, markOffDutyWhatsappSent)} disabled={!!bulkSendingKind || !!singleSendingMobile}
-              className="p-2 rounded-full" style={{ background: sentOffDutyToday(d.mobile) ? "#E0E0E0" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
+              className="p-2 rounded-full" style={{ background: sentOffDutyToday(d.mobile) ? "#E5EAF2" : C.success, opacity: singleSendingMobile && singleSendingMobile !== d.mobile ? 0.6 : 1 }}>
               <MessageCircle size={14} color={sentOffDutyToday(d.mobile) ? "#9AA3B0" : "#FFFFFF"} />
             </button>
             {singleSendResult?.mobile === d.mobile && (
@@ -722,7 +722,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               </button>
             ) : onCooldown ? (
               <div onDoubleClick={() => unmarkUninstalledCalled(d.mobile)} className="shrink-0 flex flex-col items-center gap-0.5">
-                <div className="p-2 rounded-full flex items-center justify-center" style={{ background: "#E0E0E0" }}>
+                <div className="p-2 rounded-full flex items-center justify-center" style={{ background: "#E5EAF2" }}>
                   <Phone size={14} color="#9AA3B0" />
                 </div>
                 <div className="flex items-center gap-0.5">
@@ -765,7 +765,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
-        <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"}</h2>
+        <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Live Map" : lang === "mr" ? "लाइव्ह मॅप" : "लाइव मैप"}</h2>
         <AdminLiveMap drivers={drivers} bookings={bookings} lang={lang} />
       </div>
     );
@@ -799,7 +799,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     const rangeCustomersTotal = registrationTrend.reduce((sum, d) => sum + d.customers.length, 0);
     const rangeDriversTotal = registrationTrend.reduce((sum, d) => sum + d.drivers.length, 0);
     const driverStatusBadge = (d) => {
-      if (!d.vehicleSpec) return { text: lang === "en" ? "Form not completed" : lang === "mr" ? "फॉर्म पूर्ण नाही" : "फॉर्म पूरा नहीं", bg: "#E0E0E0", color: C.inkSoft };
+      if (!d.vehicleSpec) return { text: lang === "en" ? "Form not completed" : lang === "mr" ? "फॉर्म पूर्ण नाही" : "फॉर्म पूरा नहीं", bg: "#E5EAF2", color: C.inkSoft };
       if (d.kyc === "Approved") return { text: lang === "en" ? "Approved" : lang === "mr" ? "अप्रूव्ह्ड" : "अप्रूव्ड", bg: C.metallicGreen, color: "#FFFFFF" };
       if (d.kyc === "Rejected") return { text: lang === "en" ? "Rejected" : lang === "mr" ? "नाकारले" : "रिजेक्टेड", bg: C.safety, color: "#FFFFFF" };
       return { text: lang === "en" ? "Form completed — Pending" : lang === "mr" ? "फॉर्म पूर्ण — प्रलंबित" : "फॉर्म पूरा — लंबित", bg: C.marigoldDeep, color: "#FFFFFF" };
@@ -1028,7 +1028,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         <button onClick={() => setDetailView(null)} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
-        <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{page.title}</h2>
+        <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{page.title}</h2>
         {page.headerExtra}
         {page.items.length === 0 ? (
           <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{page.emptyMsg}</p>
@@ -1635,7 +1635,7 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
             ))}
           </div>
           <button onClick={submit} disabled={!draft.title.trim()} className="w-full rounded-lg py-2.5 text-sm font-bold"
-            style={{ background: draft.title.trim() ? C.metallicGreen : "#E0E0E0", color: draft.title.trim() ? "#fff" : "#9AA3B0" }}>
+            style={{ background: draft.title.trim() ? C.metallicGreen : "#E5EAF2", color: draft.title.trim() ? "#fff" : "#9AA3B0" }}>
             {lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें"}
           </button>
         </div>
@@ -1826,7 +1826,7 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
         <button onClick={() => setDieselStagedPrice((p) => (p ?? dieselPricePerLitre) + 1)} disabled={dieselAdjusting} className="h-11 rounded-lg font-black text-lg flex items-center justify-center" style={{ background: C.paper, color: C.success, border: `1px solid ${C.line}`, opacity: dieselAdjusting ? 0.5 : 1 }}>+</button>
       </div>
       {dieselPending !== 0 && (
-        <button onClick={saveDiesel} disabled={dieselAdjusting} className="w-full rounded-lg py-2.5 mb-2 text-sm font-bold" style={{ background: dieselAdjusting ? "#E0E0E0" : C.navy, color: dieselAdjusting ? "#9AA3B0" : "#fff" }}>
+        <button onClick={saveDiesel} disabled={dieselAdjusting} className="w-full rounded-lg py-2.5 mb-2 text-sm font-bold" style={{ background: dieselAdjusting ? "#E5EAF2" : C.navy, color: dieselAdjusting ? "#9AA3B0" : "#fff" }}>
           {dieselAdjusting
             ? "…"
             : (lang === "en" ? `Save Diesel Rate (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)` : lang === "mr" ? `डिझेल दर सेव्ह करा (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)` : `डीज़ल दर सेव करें (₹${dieselPricePerLitre} → ₹${dieselDisplayPrice}/L)`)}
@@ -2287,7 +2287,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               explicit "लागू करें", never just by picking a pill (section 7b). */}
           {isReturn && (
             <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${C.success}` }}>
-              <div className="px-3.5 py-2.5" style={{ background: "rgba(63,122,84,0.1)" }}>
+              <div className="px-3.5 py-2.5" style={{ background: "rgba(0,168,84,0.1)" }}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-bold" style={{ color: C.success }}>
                     {lang === "en" ? `Return fare (${returnPct}% less)` : lang === "mr" ? `रिटर्न भाडे (${returnPct}% कमी)` : `रिटर्न भाड़ा (${returnPct}% कम)`}
@@ -2371,7 +2371,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               <div className="text-[11px] font-bold mb-1 min-h-[28px] flex items-end" style={{ color: C.inkSoft }}>{lang === "en" ? "Rate for this route" : lang === "mr" ? "या रूटसाठी दर" : "इस रूट के लिए दर"}</div>
               <input type="number" inputMode="numeric" value={totalFare}
                 onChange={(e) => { setTotalFare(e.target.value); setManual(true); setSavedFlash(false); setSaveError(""); }}
-                className={inputCls} style={{ ...inputStyle, borderColor: manual ? C.marigoldDeep : C.navy, background: manual ? "rgba(239,108,26,0.08)" : "rgba(21,89,214,0.08)", color: manual ? C.marigoldDeep : C.navy, fontWeight: 800 }}
+                className={inputCls} style={{ ...inputStyle, borderColor: manual ? C.marigoldDeep : C.navy, background: manual ? "rgba(239,108,26,0.08)" : "rgba(0,82,204,0.08)", color: manual ? C.marigoldDeep : C.navy, fontWeight: 800 }}
                 placeholder={lang === "en" ? "Rate" : lang === "mr" ? "दर" : "दर"} />
             </div>
           </div>
@@ -2475,7 +2475,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
             </div>
           )}
           <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
-            style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
+            style={{ background: canSave ? C.success : "#E5EAF2", color: canSave ? "#fff" : "#9AA3B0" }}>
             {saving ? "…" : editingId ? (lang === "en" ? "Update Route" : lang === "mr" ? "रूट अपडेट करा" : "रूट अपडेट करें") : (lang === "en" ? "Save Rate" : lang === "mr" ? "दर सेव्ह करा" : "दर सेव करें")}
           </button>
           {savedFlash && (
@@ -2501,12 +2501,12 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               <button onClick={() => setKgPickerOpen(false)} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
             </div>
             <div className="p-4 overflow-y-auto flex-1 space-y-1.5">
-              <div className="rounded-lg px-3 py-2 text-xs font-black" style={{ background: C.navySoft || "rgba(21,89,214,0.1)", color: C.navy, border: `1.5px solid ${C.navy}` }}>
+              <div className="rounded-lg px-3 py-2 text-xs font-black" style={{ background: C.navySoft || "rgba(0,82,204,0.1)", color: C.navy, border: `1.5px solid ${C.navy}` }}>
                 {lang === "en" ? "Light/Medium: Fixed (1-3km) + per km" : lang === "mr" ? "लोकल/मीडियम: बेस (1-3 km) + किमी" : "लोकल/मीडियम: बेस (1–3 km) + किमी"}
               </div>
               {lightTiers.map((t) => (
                 <button key={t.maxKg} onClick={() => { setSelectedMaxKg(t.maxKg); setKgPickerOpen(false); }}
-                  className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedMaxKg === t.maxKg ? 2 : 1.5}px solid ${selectedMaxKg === t.maxKg ? C.navy : C.line}`, background: selectedMaxKg === t.maxKg ? "rgba(21,89,214,0.08)" : C.bg }}>
+                  className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedMaxKg === t.maxKg ? 2 : 1.5}px solid ${selectedMaxKg === t.maxKg ? C.navy : C.line}`, background: selectedMaxKg === t.maxKg ? "rgba(0,82,204,0.08)" : C.bg }}>
                   <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{t.weightLabel}</span>
                   <span className="text-xs font-semibold" style={{ color: C.inkSoft }}>{t.label}</span>
                 </button>
@@ -2516,7 +2516,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               </div>
               {heavyTiers.map((t) => (
                 <button key={t.maxKg} onClick={() => { setSelectedMaxKg(t.maxKg); setKgPickerOpen(false); }}
-                  className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedMaxKg === t.maxKg ? 2 : 1.5}px solid ${selectedMaxKg === t.maxKg ? C.navy : C.line}`, background: selectedMaxKg === t.maxKg ? "rgba(21,89,214,0.08)" : C.bg }}>
+                  className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedMaxKg === t.maxKg ? 2 : 1.5}px solid ${selectedMaxKg === t.maxKg ? C.navy : C.line}`, background: selectedMaxKg === t.maxKg ? "rgba(0,82,204,0.08)" : C.bg }}>
                   <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{t.weightLabel}</span>
                   <span className="text-xs font-semibold" style={{ color: C.inkSoft }}>{t.label}</span>
                 </button>
@@ -2777,7 +2777,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                     {offlineMatches.map(({ driver: d, km }) => {
                       const called = calledAlertToday(d.mobile);
                       return (
-                        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: "rgba(63,122,84,0.1)", border: `1px solid ${C.success}`, opacity: called ? 0.6 : 1 }}>
+                        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: "rgba(0,168,84,0.1)", border: `1px solid ${C.success}`, opacity: called ? 0.6 : 1 }}>
                           <div className="min-w-0">
                             <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name} · {d.vehicleSpec?.vehicleNumber || "—"}</div>
                             <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.capacityKg ? `${d.vehicleSpec.capacityKg}kg` : "—"}</div>
@@ -3119,10 +3119,10 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     ? bySection(totalInstalled.filter((d) => d.name.includes(q) || (d.vehicleSpec?.vehicleNumber || "").toLowerCase().includes(q.toLowerCase()) || (d.mobile || "").includes(q)))
     : [];
   const kycMeta = lang === "en"
-    ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E5E5E5" } }
+    ? { Approved: { label: "Verified", color: "#FFFFFF", bg: C.success }, Pending: { label: "Pending", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "Blocked", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC not submitted", color: C.inkSoft, bg: "#E2E8F0" } }
     : lang === "mr"
-    ? { Approved: { label: "सत्यापित", color: "#FFFFFF", bg: C.success }, Pending: { label: "प्रलंबित", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "ब्लॉक्ड", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC सबमिट झाले नाही", color: C.inkSoft, bg: "#E5E5E5" } }
-    : { Approved: { label: "सत्यापित", color: "#FFFFFF", bg: C.success }, Pending: { label: "लंबित", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "ब्लॉक्ड", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC सबमिट नहीं हुआ", color: C.inkSoft, bg: "#E5E5E5" } };
+    ? { Approved: { label: "सत्यापित", color: "#FFFFFF", bg: C.success }, Pending: { label: "प्रलंबित", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "ब्लॉक्ड", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC सबमिट झाले नाही", color: C.inkSoft, bg: "#E2E8F0" } }
+    : { Approved: { label: "सत्यापित", color: "#FFFFFF", bg: C.success }, Pending: { label: "लंबित", color: "#FFFFFF", bg: C.marigoldDeep }, Rejected: { label: "ब्लॉक्ड", color: "#FFFFFF", bg: C.safety }, none: { label: "KYC सबमिट नहीं हुआ", color: C.inkSoft, bg: "#E2E8F0" } };
   const docLabels = lang === "en"
     ? { photo: "Driver Photo", dl: "Driving License" }
     : lang === "mr"
@@ -3159,7 +3159,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           <div className="flex flex-col items-end gap-1 shrink-0">
             <div className="flex items-center gap-1">
               {called ? (
-                <div onDoubleClick={() => unmarkDriverCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: "#E0E0E0" }}>
+                <div onDoubleClick={() => unmarkDriverCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: "#E5EAF2" }}>
                   <Phone size={14} color="#9AA3B0" />
                 </div>
               ) : (
@@ -3405,7 +3405,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
     : lang === "mr"
     ? { Bidding: { label: "शोधत आहे", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } }
     : { Bidding: { label: "खोज रहे हैं", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "चालू", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "पूर्ण", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "रद्द", color: "#FFFFFF", bg: C.safety } };
-  const noActivityMeta = { label: lang === "en" ? "No activity" : lang === "mr" ? "कोणतीही अ‍ॅक्टिव्हिटी नाही" : "कोई एक्टिविटी नहीं", color: C.inkSoft, bg: "#E5E5E5" };
+  const noActivityMeta = { label: lang === "en" ? "No activity" : lang === "mr" ? "कोणतीही अ‍ॅक्टिव्हिटी नाही" : "कोई एक्टिविटी नहीं", color: C.inkSoft, bg: "#E2E8F0" };
   const bookingDate = (b) => (b.createdAt?.toDate ? b.createdAt.toDate().toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
   return (
@@ -3656,7 +3656,7 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
         🔊 {lang === "en" ? "Also read this aloud (only if their app is already open)" : lang === "mr" ? "हे मोठ्याने वाचूनही सांगा (फक्त त्यांचे अ‍ॅप आधीच उघडे असेल तर)" : "इसे बोलकर भी सुनाएं (सिर्फ अगर उनका ऐप पहले से खुला है)"}
       </label>
       {error && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
-      <button onClick={send} disabled={!message.trim() || sending} className="w-full rounded-lg py-3.5 font-bold text-base mb-4" style={{ background: message.trim() && !sending ? C.marigold : "#E0E0E0", color: message.trim() && !sending ? "#000000" : "#9AA3B0" }}>
+      <button onClick={send} disabled={!message.trim() || sending} className="w-full rounded-lg py-3.5 font-bold text-base mb-4" style={{ background: message.trim() && !sending ? C.marigold : "#E5EAF2", color: message.trim() && !sending ? "#000000" : "#9AA3B0" }}>
         {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send" : lang === "mr" ? "पाठवा" : "भेजें")}
       </button>
       <div className="text-[11px] font-semibold mb-2" style={{ color: C.inkSoft }}>
@@ -3764,7 +3764,7 @@ function AdminSettings({ latestVersionCode, setLatestVersionCode, updateUrl, set
 
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
       <button onClick={saveSettings} disabled={!dirty} className="w-full rounded-lg py-3.5 font-bold text-base"
-        style={{ background: dirty ? "#0052CC" : "#E0E0E0", color: dirty ? "#fff" : "#9AA3B0" }}>
+        style={{ background: dirty ? "#0052CC" : "#E5EAF2", color: dirty ? "#fff" : "#9AA3B0" }}>
         {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
       </button>
     </div>
@@ -3884,7 +3884,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
 
       {settingsSaved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
       <button onClick={saveSystemSettings} disabled={!settingsDirty} className="w-full rounded-lg py-3.5 font-bold text-base"
-        style={{ background: settingsDirty ? "#0052CC" : "#E0E0E0", color: settingsDirty ? "#fff" : "#9AA3B0" }}>
+        style={{ background: settingsDirty ? "#0052CC" : "#E5EAF2", color: settingsDirty ? "#fff" : "#9AA3B0" }}>
         {lang === "en" ? "Save Changes" : lang === "mr" ? "बदल सेव्ह करा" : "बदलाव सेव करें"}
       </button>
     </div>
@@ -3893,7 +3893,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}><BarChart3 size={16} /> {lang === "en" ? "Earnings" : lang === "mr" ? "कमाई" : "कमाई"}</div>
         <button onClick={downloadReport} disabled={tripLog.length === 0} className="text-sm font-semibold flex items-center gap-1 px-3.5 py-2.5 rounded-lg"
-          style={{ color: tripLog.length ? "#FFFFFF" : C.inkSoft, background: tripLog.length ? C.marigoldDeep : "#E5E5E5" }}>
+          style={{ color: tripLog.length ? "#FFFFFF" : C.inkSoft, background: tripLog.length ? C.marigoldDeep : "#E2E8F0" }}>
           <Download size={12} /> {lang === "en" ? "Download CSV" : lang === "mr" ? "एक्सेल डाउनलोड करा" : "एक्सेल डाउनलोड करें"}
         </button>
       </div>
@@ -3952,7 +3952,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
       )}
       {!confirmingDelete ? (
         <button onClick={() => { setConfirmingDelete(true); setJustDeleted(0); }} disabled={deletableCount === 0}
-          className="w-full rounded-lg py-3 text-sm font-bold" style={{ background: deletableCount ? C.safety : "#E5E5E5", color: deletableCount ? "#FFFFFF" : C.inkSoft }}>
+          className="w-full rounded-lg py-3 text-sm font-bold" style={{ background: deletableCount ? C.safety : "#E2E8F0", color: deletableCount ? "#FFFFFF" : C.inkSoft }}>
           {lang === "en" ? `Delete All Ride History (${deletableCount})` : lang === "mr" ? `सर्व राइड हिस्टरी डिलीट करा (${deletableCount})` : `सभी राइड हिस्ट्री डिलीट करें (${deletableCount})`}
         </button>
       ) : (
@@ -3973,7 +3973,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
               {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
             </button>
             <button onClick={runDelete} disabled={confirmText !== CONFIRM_WORD || deleting}
-              className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: confirmText === CONFIRM_WORD ? C.safety : "#E5E5E5", color: confirmText === CONFIRM_WORD ? "#FFFFFF" : C.inkSoft }}>
+              className="flex-1 rounded-lg py-2.5 text-sm font-bold" style={{ background: confirmText === CONFIRM_WORD ? C.safety : "#E2E8F0", color: confirmText === CONFIRM_WORD ? "#FFFFFF" : C.inkSoft }}>
               {deleting ? (lang === "en" ? "Deleting…" : lang === "mr" ? "डिलीट होत आहे…" : "डिलीट हो रहा है…") : (lang === "en" ? "Permanently Delete" : lang === "mr" ? "कायमचे डिलीट करा" : "स्थायी रूप से डिलीट करें")}
             </button>
           </div>

@@ -200,6 +200,13 @@ cards lift off it), `ink` #0F1B2D, `inkSoft` #475569, soft grey-blue `line`
 real 700/800 bold, not Arial Black. Global polish lives in `index.css` (focus
 ring, tap feedback, reduced-motion) and `tailwind.config.js` (layered shadows,
 round corners) — restyle there, not screen by screen. Layouts were NOT changed.
+Whole-app pass (2026-10-26) also covered booking, advance booking (time sheet),
+driver home, wallet, trip history, admin tabs. Palette rules for new UI: disabled
+fill `#E5EAF2`, hint/placeholder grey `#94A3B8`, modal scrim `rgba(15,27,45,0.55)`,
+page headings `text-lg font-extrabold`, cards `shadow-sm`/`shadow-md`, selected
+states ring + tint instead of thicker borders (no layout jump). GPS/ring-frozen
+blocks (LoadBellButton, BackgroundLocationDisclosure, AdminLiveMap) were left
+exactly as they were.
 
 **Working agreement.** Push automatically after build + invariants pass, EXCEPT
 GPS/notification-related changes — ask first (owner rule, 2026-10-23). After a

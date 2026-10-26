@@ -104,6 +104,7 @@ const checks = [
   // ---- Look & feel (2026-10-26 refresh) ----
   ["borders/dividers use the soft C.line token, never hard black", () => app.includes('line: "#D5DCE8"') && !app.includes("solid #000000") && !admin.includes("solid #000000")],
   ["brand colours unchanged (marigold, orange, blue, green, red)", () => ["marigold: \"#FFCC00\"", "marigoldDeep: \"#FF6600\"", "navy: \"#0052CC\"", "success: \"#00A854\"", "safety: \"#FF2A2A\""].every((t) => app.includes(t))],
+  ["no leftover old-palette greys/browns in App.jsx (use C tokens, #E5EAF2 disabled, #94A3B8 hints)", () => !/"#E0E0E0"|#C7B8B3|#E5E5E5|rgba\(42,33,28/.test(app) && !admin.includes("rgba(42,33,28")],
   ["Inter + Noto Sans Devanagari font is loaded and applied app-wide", () => css.includes('"Inter", "Noto Sans Devanagari"') && read("index.html").includes("family=Inter") && !css.includes("font-family: \"Arial Black\"")],
 
   // ---- Role selection ----

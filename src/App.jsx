@@ -3339,7 +3339,7 @@ export function partitionDriversByInstallStatus(drivers) {
 export function gpsStatus(driver, lang) {
   const updatedAt = driver.lastKnownLocation?.updatedAt;
   if (!updatedAt) {
-    return { label: lang === "en" ? "Never" : lang === "mr" ? "कधीच नाही" : "कभी नहीं", bg: "#E5E5E5", color: C.inkSoft, stale: true };
+    return { label: lang === "en" ? "Never" : lang === "mr" ? "कधीच नाही" : "कभी नहीं", bg: "#E2E8F0", color: C.inkSoft, stale: true };
   }
   const ageMs = Date.now() - updatedAt;
   if (ageMs < 2 * 60 * 1000) {
@@ -3364,13 +3364,13 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
   const tx = p2 ? p1.x + (p2.x - p1.x) * (progress ?? 0) / 100 : p1.x;
   const ty = p2 ? p1.y + (p2.y - p1.y) * (progress ?? 0) / 100 : p1.y;
   return (
-    <div className="relative rounded-lg overflow-hidden" style={{ height, background: "#E5E5E5", border: `1px solid ${C.line}` }}>
+    <div className="relative rounded-lg overflow-hidden" style={{ height, background: "#E2E8F0", border: `1px solid ${C.line}` }}>
       <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
         {Array.from({ length: 6 }).map((_, i) => (
-          <line key={"h" + i} x1="0" y1={i * 18} x2="100" y2={i * 18} stroke="#CCCCCC" strokeWidth="0.4" />
+          <line key={"h" + i} x1="0" y1={i * 18} x2="100" y2={i * 18} stroke="#CBD5E1" strokeWidth="0.4" />
         ))}
         {Array.from({ length: 6 }).map((_, i) => (
-          <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#CCCCCC" strokeWidth="0.4" />
+          <line key={"v" + i} x1={i * 18} y1="0" x2={i * 18} y2="100" stroke="#CBD5E1" strokeWidth="0.4" />
         ))}
         {p2 && <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={zoneColor || C.marigoldDeep} strokeWidth="1" strokeDasharray="2,2" />}
         <circle cx={p1.x} cy={p1.y} r="2.2" fill={C.marigoldDeep} />
@@ -3838,12 +3838,12 @@ export function driverTruckIconInactive() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="46" viewBox="0 0 40 46">
     <ellipse cx="20" cy="39" rx="11" ry="4" fill="#B9BEC7"/>
     <rect x="6" y="15" width="18" height="13" rx="2.2" fill="#E3E5E9" stroke="#9AA3B0" stroke-width="1"/>
-    <rect x="23" y="11" width="10" height="17" rx="2.2" fill="#C5CAD2" stroke="#9AA3B0" stroke-width="1"/>
+    <rect x="23" y="11" width="10" height="17" rx="2.2" fill="#CBD5E1" stroke="#9AA3B0" stroke-width="1"/>
     <rect x="26" y="14" width="5" height="5" rx="1" fill="#F0F1F3"/>
     <circle cx="12" cy="29" r="3.3" fill="#6B7280"/>
-    <circle cx="12" cy="29" r="1.3" fill="#C5CAD2"/>
+    <circle cx="12" cy="29" r="1.3" fill="#CBD5E1"/>
     <circle cx="27" cy="29" r="3.3" fill="#6B7280"/>
-    <circle cx="27" cy="29" r="1.3" fill="#C5CAD2"/>
+    <circle cx="27" cy="29" r="1.3" fill="#CBD5E1"/>
   </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
@@ -3932,10 +3932,10 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
     const scale = 900; // px-per-degree, tuned for a city-block-ish spread
     const toXY = (lat, lng) => ({ x: 50 + (lng - center.lng) * scale, y: 50 - (lat - center.lat) * scale });
     return (
-      <div className="relative overflow-hidden" style={{ height, background: "#E5E5E5" }}>
+      <div className="relative overflow-hidden" style={{ height, background: "#E2E8F0" }}>
         <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
-          {Array.from({ length: 8 }).map((_, i) => <line key={"h" + i} x1="0" y1={i * 14} x2="100" y2={i * 14} stroke="#D8D8D8" strokeWidth="0.4" />)}
-          {Array.from({ length: 8 }).map((_, i) => <line key={"v" + i} x1={i * 14} y1="0" x2={i * 14} y2="100" stroke="#D8D8D8" strokeWidth="0.4" />)}
+          {Array.from({ length: 8 }).map((_, i) => <line key={"h" + i} x1="0" y1={i * 14} x2="100" y2={i * 14} stroke="#CBD5E1" strokeWidth="0.4" />)}
+          {Array.from({ length: 8 }).map((_, i) => <line key={"v" + i} x1={i * 14} y1="0" x2={i * 14} y2="100" stroke="#CBD5E1" strokeWidth="0.4" />)}
           <circle cx="50" cy="50" r="3" fill={C.success} stroke="#fff" strokeWidth="1" />
           {nearbyInactive.map((d) => {
             const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
@@ -4241,7 +4241,7 @@ function SosScreen({ role = "customer", raiseAlert, alerts, lang, tripLocked, mo
           className="w-full rounded-lg px-3 py-2 text-xs outline-none mb-2" style={{ border: `1px solid ${C.line}`, color: C.ink }} />
         {sent && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Complaint sent to admin" : lang === "mr" ? "तक्रार अ‍ॅडमिनला पाठवली गेली" : "शिकायत एडमिन को भेज दी गई"}</div>}
         <button onClick={submitComplaint} disabled={!complaint.trim()} className="w-full rounded-lg py-3.5 font-bold text-base"
-          style={{ background: complaint.trim() ? "#0052CC" : "#E0E0E0", color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : lang === "mr" ? "तक्रार पाठवा" : "शिकायत भेजें"}</button>
+          style={{ background: complaint.trim() ? "#0052CC" : "#E5EAF2", color: complaint.trim() ? "#fff" : "#9AA3B0" }}>{lang === "en" ? "Send Complaint" : lang === "mr" ? "तक्रार पाठवा" : "शिकायत भेजें"}</button>
       </div>
       {myComplaints.length > 0 && (
         <div className="rounded-xl p-4 mt-5 shadow-sm" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
@@ -4437,7 +4437,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   const forgotConfirmationRef = useRef(null);
   const forgotRecaptchaRef = useRef(null);
 
-  const otpInputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center placeholder:text-[#C7B8B3]";
+  const otpInputCls = "w-full rounded-lg px-3 py-3 text-sm outline-none text-center placeholder:text-[#94A3B8]";
   const otpInputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
   const fieldCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const fieldStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -4703,7 +4703,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
 
         {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा" : "आगे बढ़ने के लिए ऊपर नाम भरें"}</div>}
         <button onClick={submitProfile} disabled={!detailsValid || photoUploading} className={`w-full rounded-lg py-4 font-bold text-base mt-3 ${detailsValid && !photoUploading ? "guided-submit-ready" : ""}`}
-          style={{ background: detailsValid && !photoUploading ? C.marigold : "#E0E0E0", color: detailsValid && !photoUploading ? "#000000" : "#9AA3B0" }}>
+          style={{ background: detailsValid && !photoUploading ? C.marigold : "#E5EAF2", color: detailsValid && !photoUploading ? "#000000" : "#9AA3B0" }}>
           {photoUploading ? (lang === "en" ? "Uploading photo..." : lang === "mr" ? "फोटो अपलोड होत आहे..." : "फोटो अपलोड हो रही है...") : (lang === "en" ? "Complete Registration" : lang === "mr" ? "रजिस्ट्रेशन पूर्ण करा" : "रजिस्ट्रेशन पूरा करें")}
         </button>
       </div>
@@ -4758,7 +4758,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={goToPinStage} disabled={mobile.length !== 10}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: mobile.length === 10 ? C.marigold : "#E0E0E0", color: mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: mobile.length === 10 ? C.marigold : "#E5EAF2", color: mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
                 {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
               </button>
             </div>
@@ -4768,12 +4768,12 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
                 <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to +91${mobile} to verify it's really you.` : lang === "mr" ? `तुम्हीच आहात याची खात्री करण्यासाठी +91${mobile} वर OTP पाठवला.` : `यह सच में आप हैं यह जांचने के लिए +91${mobile} पर OTP भेजा गया।`}</p>
                 <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                   <ShieldCheck size={16} color={C.inkSoft} />
-                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={forgotOtp}
+                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#94A3B8" }} placeholder="• • • • • •" value={forgotOtp}
                     onChange={(e) => { setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
                 </div>
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
                 <button onClick={verifyForgotOtp} disabled={forgotOtp.length !== 6 || forgotSending}
-                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotOtp.length === 6 && !forgotSending ? C.marigold : "#E0E0E0", color: forgotOtp.length === 6 && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotOtp.length === 6 && !forgotSending ? C.marigold : "#E5EAF2", color: forgotOtp.length === 6 && !forgotSending ? "#000000" : "#9AA3B0" }}>
                   {forgotSending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : lang === "mr" ? "व्हेरिफाय करा" : "वेरीफाई करें")}
                 </button>
                 <div className="flex items-center justify-between">
@@ -4784,27 +4784,27 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
             ) : (
               <div className="space-y-3">
                 <p className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
-                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
                   value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
-                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
                   value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
                 {forgotNewPin && forgotNewPinConfirm && forgotNewPin !== forgotNewPinConfirm && (
                   <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
                 )}
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
                 <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
-                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E5EAF2", color: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
                   {forgotSending ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें")}
                 </button>
               </div>
             )
           ) : (
             <div className="space-y-3">
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
                 value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={submitPin} disabled={pin.length !== 4 || sending}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E5EAF2", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Logging in..." : lang === "mr" ? "लॉगिन होत आहे..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें")}
               </button>
               <div className="flex items-center justify-between">
@@ -4860,23 +4860,23 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : lang === "mr" ? "आधी वरील सर्व माहिती भरा" : "पहले ऊपर सारी जानकारी भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={goToPinStage} disabled={!detailsValid || mobile.length !== 10}
-                className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 ? C.marigold : "#E0E0E0", color: detailsValid && mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
+                className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 ? C.marigold : "#E5EAF2", color: detailsValid && mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
                 {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 4-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 4-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 4-अंकों का PIN सेट करें।"}</p>
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
                 value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
                 value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               {pin && pinConfirm && pin !== pinConfirm && (
                 <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
               )}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={submitPin} disabled={pin.length !== 4 || pin !== pinConfirm || sending}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm && !sending ? C.marigold : "#E5EAF2", color: pin.length === 4 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Creating account..." : lang === "mr" ? "खाते तयार होत आहे..." : "खाता बन रहा है...") : (lang === "en" ? "Create Account" : lang === "mr" ? "खाते तयार करा" : "खाता बनाएं")}
               </button>
               <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
@@ -4933,7 +4933,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   const forgotConfirmationRef = useRef(null);
   const forgotRecaptchaRef = useRef(null);
 
-  const otpInputCls = "w-full rounded-lg py-3 px-3 text-sm outline-none text-center placeholder:text-[#C7B8B3]";
+  const otpInputCls = "w-full rounded-lg py-3 px-3 text-sm outline-none text-center placeholder:text-[#94A3B8]";
   const otpInputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, letterSpacing: 2 };
   const fieldCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const fieldStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
@@ -5203,7 +5203,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
         </div>
         {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above and accept the document responsibility clause to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "आगे बढ़ने के लिए ऊपर नाम भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
         <button onClick={completeDetails} disabled={!detailsValid} className={`w-full rounded-lg py-4 font-bold text-base mt-3 ${detailsValid ? "guided-submit-ready" : ""}`}
-          style={{ background: detailsValid ? C.marigold : "#E0E0E0", color: detailsValid ? "#000000" : "#9AA3B0" }}>
+          style={{ background: detailsValid ? C.marigold : "#E5EAF2", color: detailsValid ? "#000000" : "#9AA3B0" }}>
           {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
         </button>
       </div>
@@ -5258,7 +5258,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
               </div>
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={goToPinStage} disabled={mobile.length !== 10}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: mobile.length === 10 ? C.marigold : "#E0E0E0", color: mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: mobile.length === 10 ? C.marigold : "#E5EAF2", color: mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
                 {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
               </button>
             </div>
@@ -5268,12 +5268,12 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
                 <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? `OTP sent to +91${mobile} to verify it's really you.` : lang === "mr" ? `तुम्हीच आहात याची खात्री करण्यासाठी +91${mobile} वर OTP पाठवला.` : `यह सच में आप हैं यह जांचने के लिए +91${mobile} पर OTP भेजा गया।`}</p>
                 <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
                   <ShieldCheck size={16} color={C.inkSoft} />
-                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#C7B8B3" }} placeholder="• • • • • •" value={forgotOtp}
+                  <input className={otpInputCls} style={{ ...otpInputStyle, border: "none", color: forgotOtp ? "#000000" : "#94A3B8" }} placeholder="• • • • • •" value={forgotOtp}
                     onChange={(e) => { setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setForgotError(""); }} />
                 </div>
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
                 <button onClick={verifyForgotOtp} disabled={forgotOtp.length !== 6 || forgotSending}
-                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotOtp.length === 6 && !forgotSending ? C.marigold : "#E0E0E0", color: forgotOtp.length === 6 && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotOtp.length === 6 && !forgotSending ? C.marigold : "#E5EAF2", color: forgotOtp.length === 6 && !forgotSending ? "#000000" : "#9AA3B0" }}>
                   {forgotSending ? (lang === "en" ? "Verifying..." : lang === "mr" ? "व्हेरिफाय होत आहे..." : "वेरीफाई हो रहा है...") : (lang === "en" ? "Verify" : lang === "mr" ? "व्हेरिफाय करा" : "वेरीफाई करें")}
                 </button>
                 <div className="flex items-center justify-between">
@@ -5284,27 +5284,27 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
             ) : (
               <div className="space-y-3">
                 <p className="text-xs font-bold" style={{ color: C.success }}>{lang === "en" ? "Number verified — now set a new PIN." : lang === "mr" ? "नंबर व्हेरिफाय झाला — आता नवीन PIN सेट करा." : "नंबर वेरीफाई हो गया — अब नया PIN सेट करें।"}</p>
-                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "New 4-digit PIN" : lang === "mr" ? "नवीन 4-अंकी PIN" : "नया 4-अंकों का PIN"}
                   value={forgotNewPin} onChange={(e) => { setForgotNewPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
-                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
+                <input className={otpInputCls} style={{ ...otpInputStyle, color: forgotNewPinConfirm ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "Confirm new PIN" : lang === "mr" ? "नवीन PIN कन्फर्म करा" : "नया PIN कन्फर्म करें"}
                   value={forgotNewPinConfirm} onChange={(e) => { setForgotNewPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setForgotError(""); }} />
                 {forgotNewPin && forgotNewPinConfirm && forgotNewPin !== forgotNewPinConfirm && (
                   <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
                 )}
                 {forgotError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{forgotError}</div>}
                 <button onClick={submitForgotNewPin} disabled={forgotNewPin.length !== 4 || forgotNewPin !== forgotNewPinConfirm || forgotSending}
-                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E0E0E0", color: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
+                  className="w-full rounded-lg py-4 font-bold text-base" style={{ background: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? C.marigold : "#E5EAF2", color: forgotNewPin.length === 4 && forgotNewPin === forgotNewPinConfirm && !forgotSending ? "#000000" : "#9AA3B0" }}>
                   {forgotSending ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें")}
                 </button>
               </div>
             )
           ) : (
             <div className="space-y-3">
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
                 value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={submitPin} disabled={pin.length !== 4 || sending}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && !sending ? C.marigold : "#E5EAF2", color: pin.length === 4 && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Logging in..." : lang === "mr" ? "लॉगिन होत आहे..." : "लॉगिन हो रहा है...") : (lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें")}
               </button>
               <div className="flex items-center justify-between">
@@ -5364,23 +5364,23 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above and accept the document responsibility clause first" : lang === "mr" ? "आधी वरील नाव भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "पहले ऊपर नाम भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={goToPinStage} disabled={!detailsValid || mobile.length !== 10}
-                className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 ? C.marigold : "#E0E0E0", color: detailsValid && mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
+                className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 ? C.marigold : "#E5EAF2", color: detailsValid && mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
                 {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "Set a 4-digit PIN you'll use to log in next time." : lang === "mr" ? "पुढच्या वेळी लॉगिनसाठी वापरण्यासाठी 4-अंकी PIN सेट करा." : "अगली बार लॉगिन के लिए इस्तेमाल होने वाला 4-अंकों का PIN सेट करें।"}</p>
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pin ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "4-digit PIN" : lang === "mr" ? "4-अंकी PIN" : "4-अंकों का PIN"}
                 value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
-              <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#C7B8B3" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
+              <input className={otpInputCls} style={{ ...otpInputStyle, color: pinConfirm ? "#000000" : "#94A3B8" }} placeholder={lang === "en" ? "Confirm PIN" : lang === "mr" ? "PIN कन्फर्म करा" : "PIN कन्फर्म करें"}
                 value={pinConfirm} onChange={(e) => { setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }} />
               {pin && pinConfirm && pin !== pinConfirm && (
                 <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
               )}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={submitPin} disabled={pin.length !== 4 || pin !== pinConfirm || sending}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm && !sending ? C.marigold : "#E0E0E0", color: pin.length === 4 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm && !sending ? C.marigold : "#E5EAF2", color: pin.length === 4 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
                 {sending ? (lang === "en" ? "Creating account..." : lang === "mr" ? "खाते तयार होत आहे..." : "खाता बन रहा है...") : (lang === "en" ? "Create Account" : lang === "mr" ? "खाते तयार करा" : "खाता बनाएं")}
               </button>
               <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
@@ -5427,7 +5427,7 @@ function DriverKycPortal({ lang, vehicleTypes, addVehicleType }) {
   const [editingName, setEditingName] = useState(false);
 
   return (
-    <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+    <div className="min-h-screen flex justify-center" style={{ background: "#E2E8F0", fontFamily: bodyFont }}>
       <div className="w-full max-w-sm min-h-screen flex flex-col" style={{ background: C.bg }}>
         <div className="px-5 py-3" style={{ background: C.safety }}>
           <p className="text-xs font-bold text-center" style={{ color: "#FFFFFF" }}>
@@ -5508,7 +5508,7 @@ function DriverKycPortalNameEdit({ driver, setDriver, lang, onDone }) {
         placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
       {!valid && <div className="text-[11px] font-semibold mt-2" style={{ color: C.safety }}>{lang === "en" ? "Name must be at least 3 characters" : lang === "mr" ? "नाव किमान 3 अक्षरांचे असावे" : "नाम कम से कम 3 अक्षर का होना चाहिए"}</div>}
       <button onClick={save} disabled={!valid} className="w-full rounded-lg py-4 font-bold text-base mt-4"
-        style={{ background: valid ? C.marigold : "#E0E0E0", color: valid ? "#000000" : "#9AA3B0" }}>
+        style={{ background: valid ? C.marigold : "#E5EAF2", color: valid ? "#000000" : "#9AA3B0" }}>
         {lang === "en" ? "Save & Continue" : lang === "mr" ? "सेव्ह करा आणि पुढे जा" : "सेव करें और आगे बढ़ें"}
       </button>
     </div>
@@ -5759,7 +5759,7 @@ export function PhotoPicker({ label, lang = "hi", onSelect, children }) {
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
       <input ref={libraryRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
       {choosing && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={() => setChoosing(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={() => setChoosing(false)}>
           <div className="w-full max-w-sm rounded-t-2xl p-4" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
             <div className="text-sm font-bold mb-3 text-center" style={{ color: C.ink }}>{label}</div>
             <button type="button" onClick={() => cameraRef.current?.click()} className="w-full rounded-lg py-4 mb-2 font-bold text-base flex items-center justify-center gap-2" style={{ background: C.marigold, color: "#fff" }}>
@@ -5819,7 +5819,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Send Invoice" : lang === "mr" ? "इनव्हॉइस पाठवा" : "इनवॉइस भेजें"}</h3>
@@ -5867,7 +5867,7 @@ function BillDocumentsModal({ booking, onClose, lang }) {
         {error && <div className="text-xs font-bold mb-2" style={{ color: C.safety }}>{error}</div>}
 
         <button onClick={send} disabled={!file?.url || sending} className={`w-full rounded-xl py-4 text-base font-black text-white ${file?.url ? "shadow-lg" : ""}`}
-          style={{ background: file?.url ? C.metallicGreen : "#E0E0E0", color: file?.url ? "#fff" : "#9AA3B0" }}>
+          style={{ background: file?.url ? C.metallicGreen : "#E5EAF2", color: file?.url ? "#fff" : "#9AA3B0" }}>
           {sending ? (lang === "en" ? "Sending..." : lang === "mr" ? "पाठवले जात आहे..." : "भेजा जा रहा है...") : (lang === "en" ? "Send to Driver" : lang === "mr" ? "ड्रायव्हरला पाठवा" : "ड्राइवर को भेजें")}
         </button>
       </div>
@@ -5885,7 +5885,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
   const file = trip.documents?.file;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(92,31,31,0.55)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm max-h-[88vh] overflow-y-auto rounded-t-2xl p-4" style={{ background: C.bg }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Receive Bill" : lang === "mr" ? "बिल मिळवा" : "बिल प्राप्त करें"}</h3>
@@ -6908,7 +6908,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           ) : (
             <>
               {!selectedEntry && (
-                <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(21,89,214,0.08)", border: `1.5px solid rgba(21,89,214,0.3)` }}>
+                <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1.5px solid rgba(0,82,204,0.3)` }}>
                   👇 {lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}
                 </div>
               )}
@@ -7513,7 +7513,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
           ) : (
             <>
               {!selectedEntry && (
-                <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(21,89,214,0.08)", border: `1.5px solid rgba(21,89,214,0.3)` }}>
+                <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1.5px solid rgba(0,82,204,0.3)` }}>
                   👇 {lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}
                 </div>
               )}
@@ -7975,7 +7975,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
 
   return (
     <div className="px-5 py-4">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Ride History" : lang === "mr" ? "राइड हिस्टरी" : "राइड हिस्ट्री"}</h2>
+      <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Ride History" : lang === "mr" ? "राइड हिस्टरी" : "राइड हिस्ट्री"}</h2>
       {others.length === 0 ? (
         <div className="text-center py-12 px-6">
           <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.marigoldDeep }}>
@@ -8085,7 +8085,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
 
   return (
     <div className="px-5 py-4">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}</h2>
+      <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}</h2>
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
           <PhotoPicker label={lang === "en" ? "Profile Photo" : lang === "mr" ? "प्रोफाइल फोटो" : "प्रोफाइल फोटो"} lang={lang} onSelect={(f) => {
@@ -8148,7 +8148,7 @@ function CustomerProfileEdit({ customerProfile, customerMobile, onSave, lang, on
               {newPin && newPinConfirm && newPin !== newPinConfirm && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>}
               {pinError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{pinError}</div>}
               <button onClick={setUpPin} disabled={newPin.length !== 4 || newPin !== newPinConfirm || pinSaving}
-                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E0E0E0", color: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
+                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E5EAF2", color: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
                 {pinSaving ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save PIN" : lang === "mr" ? "PIN सेव्ह करा" : "PIN सेव करें")}
               </button>
             </div>
@@ -8777,7 +8777,7 @@ function TripExtras({ booking, myRole, myMobile, extras, lang }) {
             placeholder={lang === "en" ? "Short note" : lang === "mr" ? "छोटी नोंद" : "छोटा नोट"}
             className="w-full rounded-lg p-2.5 text-sm font-semibold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} />
           <button type="button" onClick={submit} disabled={!Number(amount)} className="w-full rounded-lg py-2.5 text-sm font-bold"
-            style={{ background: Number(amount) ? C.success : "#E0E0E0", color: Number(amount) ? "#fff" : "#9AA3B0" }}>
+            style={{ background: Number(amount) ? C.success : "#E5EAF2", color: Number(amount) ? "#fff" : "#9AA3B0" }}>
             {lang === "en" ? "Send for approval" : lang === "mr" ? "मंजुरीसाठी पाठवा" : "मंज़ूरी के लिए भेजें"}
           </button>
         </div>
@@ -10596,7 +10596,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       </div>
 
       {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle name & number to submit" : lang === "mr" ? "सबमिट करण्यासाठी तुमचा फोटो, लायसन्स, गाडीचे दोन्ही फोटो, गाडीचे नाव आणि नंबर टाका" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो, गाड़ी का नाम और नंबर डालें"}</div>}
-      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-4 font-bold text-base ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : "#E0E0E0", color: canSubmit ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Submit" : lang === "mr" ? "सबमिट करा" : "सबमिट करें"}</button>
+      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-4 font-bold text-base ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : "#E5EAF2", color: canSubmit ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Submit" : lang === "mr" ? "सबमिट करा" : "सबमिट करें"}</button>
     </div>
   );
 }
@@ -10653,7 +10653,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
 
   return (
     <div className="px-5 py-4">
-      <h2 className="text-base font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}</h2>
+      <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{lang === "en" ? "My Profile" : lang === "mr" ? "माझी प्रोफाइल" : "मेरी प्रोफाइल"}</h2>
       <div className="rounded-xl p-4 mb-3 shadow-sm space-y-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <div className="flex justify-center">
           <div className="w-28 h-28 rounded-full flex items-center justify-center overflow-hidden" style={{ background: C.paper, border: `2px solid ${C.marigoldDeep}` }}>
@@ -10729,7 +10729,7 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
               {newPin && newPinConfirm && newPin !== newPinConfirm && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>}
               {pinError && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{pinError}</div>}
               <button onClick={setUpPin} disabled={newPin.length !== 4 || newPin !== newPinConfirm || pinSaving}
-                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E0E0E0", color: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
+                className="w-full rounded-lg py-2.5 font-bold text-sm" style={{ background: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? C.marigold : "#E5EAF2", color: newPin.length === 4 && newPin === newPinConfirm && !pinSaving ? "#000000" : "#9AA3B0" }}>
                 {pinSaving ? (lang === "en" ? "Saving..." : lang === "mr" ? "सेव्ह होत आहे..." : "सेव हो रहा है...") : (lang === "en" ? "Save PIN" : lang === "mr" ? "PIN सेव्ह करा" : "PIN सेव करें")}
               </button>
             </div>
@@ -10986,7 +10986,7 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
             </div>
           )}
           <button onClick={save} disabled={!canSave} className="w-full rounded-lg py-3 font-bold text-sm"
-            style={{ background: canSave ? C.success : "#E0E0E0", color: canSave ? "#fff" : "#9AA3B0" }}>
+            style={{ background: canSave ? C.success : "#E5EAF2", color: canSave ? "#fff" : "#9AA3B0" }}>
             {saving ? "…" : (lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें")}
           </button>
           {savedFlash && (
@@ -12537,7 +12537,7 @@ export default function App() {
   // No skip/dismiss option: deliberately a hard stop, not a banner.
   if (nativeVersionState.outdated) {
     return (
-      <div className="min-h-screen flex justify-center items-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+      <div className="min-h-screen flex justify-center items-center" style={{ background: "#E2E8F0", fontFamily: bodyFont }}>
         <div className="w-full max-w-sm min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: C.bg }}>
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 shadow-sm" style={{ background: C.navy }}>
             <Download size={28} color="#FFFFFF" />
@@ -12571,7 +12571,7 @@ export default function App() {
   // needs no network.
   if (langPromptPending) {
     return (
-      <div className="min-h-screen flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+      <div className="min-h-screen flex justify-center" style={{ background: "#E2E8F0", fontFamily: bodyFont }}>
         <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} min-h-screen flex flex-col`} style={{ background: C.bg }}>
           <LanguageSelect onSelect={chooseLang} />
         </div>
@@ -12585,7 +12585,7 @@ export default function App() {
   // nothing interactive underneath, just this message until reconnected.
   if (!connectivityChecked || !isOnline) {
     return (
-      <div className="min-h-screen flex justify-center items-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+      <div className="min-h-screen flex justify-center items-center" style={{ background: "#E2E8F0", fontFamily: bodyFont }}>
         <div className="w-full max-w-sm min-h-screen flex flex-col items-center justify-center px-8 text-center" style={{ background: C.bg }}>
           {connectivityChecked ? (
             <>
@@ -12612,7 +12612,7 @@ export default function App() {
     // such problem: every screen below already scrolls its own content
     // via an inner flex-1 overflow-y-auto region (see CustomerHome/
     // DriverHome/AdminPanel), not by growing this outer shell.
-    <div className="h-full flex justify-center" style={{ background: "#E5E5E5", fontFamily: bodyFont }}>
+    <div className="h-full flex justify-center" style={{ background: "#E2E8F0", fontFamily: bodyFont }}>
       <button onClick={refreshButton.refresh} disabled={refreshButton.refreshing}
         className="fixed right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
         style={{ background: C.marigoldDeep, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
