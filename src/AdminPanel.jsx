@@ -2739,8 +2739,9 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                   <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
                     <b style={{ color: C.ink }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}:</b> {req.drop || "—"}
                   </div>
+                  {/* weightKg is ALWAYS kilograms (see raiseUnmatchedVehicleRequest); weightUnit is only the label the customer picked -- never print one as the other's suffix ("9000ton" bug). */}
                   <div className="text-[11px] mt-2" style={{ color: C.inkSoft }}>
-                    <b style={{ color: C.ink }}>{lang === "en" ? "Requirement" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}:</b> {dt.date}, {dt.time}, {req.weightKg ? `${req.weightKg}${req.weightUnit || "kg"}` : "—"}, {km > 0 ? `${Math.round(km)}km` : "—"}
+                    <b style={{ color: C.ink }}>{lang === "en" ? "Requirement" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}:</b> {dt.date}, {dt.time}, {req.weightKg ? (req.weightUnit === "ton" ? `${req.weightKg / 1000}ton` : `${req.weightKg}kg`) : "—"}, {km > 0 ? `${Math.round(km)}km` : "—"}
                   </div>
                   <div className="flex items-center gap-1.5 mt-2">
                     <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}:</span>

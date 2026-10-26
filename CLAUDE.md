@@ -107,3 +107,79 @@ capacitor.config.ts) require a real CI build + reinstall to test at all
   `firebase deploy --only functions`) is enough, since this app runs in
   remote-URL mode. Don't confuse the two or bump a versionCode for a
   JS-only change.
+
+## Verified-working behavior — KEEP INTACT (owner standing rule, 2026-10-26)
+
+Everything in this section was built, deployed and confirmed working by the
+owner. It must stay exactly as it is. This is the memory of "what works" —
+treat a regression here as MY bug, found and fixed by me, not by the owner.
+
+**Before every push:**
+1. `npm run verify:invariants` (every line must PASS) and `npm run build`.
+2. Ask: "could this edit change anything below, even indirectly — a shared
+   helper, shared state, the same component?" If yes, re-read the affected
+   code and fix the side effect myself.
+3. When the owner confirms a new feature works, add it to this list AND a
+   matching check in `scripts/verifyInvariants.mjs`, in the same commit.
+   When the owner explicitly asks to change a listed behavior, change it on
+   purpose and update the list + check together.
+4. If I find a real bug (mine or inherited), say so plainly with the
+   commit/cause — no excuses, no quiet fixes.
+
+**Booking weight (customer app).** kg input = 3–5 digits; ton input = max 2
+integer + 3 decimal digits (so "9000 ton" can never be typed). Both
+`CustomerBooking` and `CustomerAdvanceBooking` convert ton→kg (`loadKg`), save
+`weightKg` ALWAYS in kilograms, and block loads above the biggest vehicle.
+`weightUnit` is only the label the customer picked — never print it as the
+suffix of `weightKg` (2026-10-26: Alerts showed "9000ton" for a 9-ton load;
+validation was fine, the label was wrong, bug since 207b028).
+
+**Fares.** `calculateFare` (App.jsx): in-city = master formula × `priceCorrectionFactor`
+(anchored 5% below Porter at 13 km); outstation = `priceOutstation`, a piecewise
+curve from real Porter quotes (500/750/1200/2000/3500/5000 kg, ×0.95), tiers
+above 5000 kg scaled from the 5000 curve, with a LIVE running max so a bigger
+vehicle is never cheaper than a smaller one at any distance
+(`enforceMonotonicFares` is the display backstop in both booking flows).
+Diesel baseline ₹98/L; live price in Firestore `settings/main.dieselPricePerLitre`
+adds km × Δprice ÷ tier mileage to every fare. Resolution order: admin's saved
+route rate → scaled by the admin's other-tier ratio → formula.
+
+**Admin lists** (Drivers tab's 7 sections + search, Customers, Uninstalled/Blocked,
+New Registrations): numbered rows; name truncates but icons are never cut; driver
+GPS/KYC are compact "GPS"/"KYC" badges (green ok, red not); Call really disables
+after a tap (not just greys) and stays disabled until EVERY entry in that list
+has been called, then the round resets; double-tapping a disabled Call re-enables
+just that entry; called entries sink to the bottom so numbers re-shuffle.
+Customers: Call icon per row, status pill (Searching/Ongoing/Completed/Cancelled)
+that expands the latest booking, chevron-only details button, sorted by latest
+ride, "Redirect to Driver App" WhatsApp (`wa.me`, link carries `?open=driver`).
+Alerts → Unmatched load: persistent Call + double-tap too; offline-driver matches
+only within the pickup radius (30 km immediate / 50 km advance) with "N km from
+Pickup". New Registrations: 7/30/90-day button matching the From/To dates is
+highlighted. KYC: Reject needs a second confirm tap; Rejected drivers stay in the
+approval queue so a mistaken reject can be reversed.
+
+**Live Dashboard.** First thing at the top: red box "N Direct request(s) from
+customer" (pending unmatched loads), tapping it opens Alerts.
+
+**Voice.** Onboarding prompts (role question, mobile, PIN, confirm PIN, success,
+off-duty reminder) are MANDATORY — no mute toggle, no once-per-device gate; they
+use the device's Web Speech API, which some phones' WebView lacks entirely (works
+in Chrome; device-dependent in the app). Admin "🔊 Also read this aloud" does NOT
+use device TTS: `sendAdminNotification` synthesizes an MP3 server-side (Google
+Cloud TTS → Storage → `audioUrl`), played by `playAnnouncementAudio` for a
+recipient whose app is OPEN (closed-app delivery needs a native build — owner
+declined). One merged banner, big 🔊 replay button (banner + inbox), no X.
+Deploy gotchas: run `npm install` in `functions/` after pulling new deps; keep
+the TTS client lazy (eager creation timed out `firebase deploy`); Cloud
+Text-to-Speech API must be enabled on the GCP project.
+
+**Role selection.** Cards say WHO should pick them ("If you drive a truck or
+vehicle" / "If you need to send goods") — matches the spoken prompt.
+
+**Working agreement.** Push automatically after build + invariants pass, EXCEPT
+GPS/notification-related changes — ask first (owner rule, 2026-10-23). After a
+push, give the deploy commands: `git checkout claude/app-from-document-njzc58 &&
+git pull && npm run build && firebase deploy --only hosting` (add `,functions`
+when `functions/` changed). `scripts/package-lock.json` is permanently untracked
+on purpose — the stop-hook nagging about it is expected; leave it alone.
