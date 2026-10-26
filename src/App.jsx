@@ -305,12 +305,13 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
   const period = TIME_PERIODS.find((p) => p.key === activePeriod);
   const canConfirm = periodPicked && slotPicked && !!pending;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
-      <div className="w-full max-w-sm rounded-t-2xl overflow-hidden" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-4" style={{ background: C.navy }}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-3xl overflow-hidden shadow-lg sheet-up" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 pt-3 pb-4" style={{ background: C.navy }}>
+          <div className="mx-auto mb-2.5 rounded-full" style={{ width: 36, height: 4, background: "rgba(255,255,255,0.35)" }} />
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Choose Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें"}</h3>
-            <button onClick={onClose} className="text-base font-bold" style={{ color: "#fff" }}>✕</button>
+            <h3 className="text-base font-extrabold" style={{ color: "#fff" }}>{lang === "en" ? "Choose Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें"}</h3>
+            <button onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold" style={{ color: "#fff", background: "rgba(255,255,255,0.18)" }}>✕</button>
           </div>
           <p className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Pick a period, then only that period's slots will show." : lang === "mr" ? "जो प्रहर निवडाल, फक्त तीच वेळ दिसेल" : "जो पहर चुनेंगे, सिर्फ वही समय दिखेगा"}</p>
         </div>
@@ -322,7 +323,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
               return (
                 <button key={p.key} type="button" onClick={() => { setActivePeriod(p.key); setPeriodPicked(true); }}
                   className="rounded-lg py-3.5 flex flex-col items-center gap-1 text-sm font-bold"
-                  style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.inkSoft }}>
+                  style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.inkSoft, boxShadow: active ? "0 4px 12px -2px rgba(255,102,0,0.45)" : undefined }}>
                   <span className="text-lg leading-none">{p.icon}</span>
                   {periodLabel(p, lang)}
                 </button>
@@ -338,9 +339,10 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
                 <button key={s} type="button" disabled={past} onClick={() => { setPending(s); setSlotPicked(true); }}
                   className="rounded-lg py-3.5 text-base font-bold text-left px-4"
                   style={{
-                    background: past ? "#F0F0F0" : active ? C.marigoldDeep : C.paper,
-                    border: `1.5px solid ${past ? "#E0E0E0" : active ? C.marigoldDeep : C.line}`,
-                    color: past ? "#B0B0B0" : active ? "#FFFFFF" : C.ink,
+                    background: past ? "#F1F4F9" : active ? C.marigoldDeep : C.paper,
+                    border: `1.5px solid ${past ? "#E8EDF5" : active ? C.marigoldDeep : C.line}`,
+                    color: past ? "#B4BDCB" : active ? "#FFFFFF" : C.ink,
+                    boxShadow: active ? "0 4px 12px -2px rgba(255,102,0,0.45)" : undefined,
                   }}>
                   {period.icon} {formatSlotShort(s, lang)}
                 </button>
@@ -348,7 +350,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
             })}
           </div>
           <button onClick={() => { if (canConfirm) { onSelect(pending); onClose(); } }} disabled={!canConfirm}
-            className="w-full rounded-lg py-4 font-bold text-base" style={{ background: canConfirm ? "#0052CC" : "#E0E0E0", color: canConfirm ? "#fff" : "#9AA3B0" }}>
+            className="w-full rounded-lg py-4 font-bold text-base" style={{ background: canConfirm ? "#0052CC" : "#E5EAF2", color: canConfirm ? "#fff" : "#9AA3B0" }}>
             {lang === "en" ? "Done" : lang === "mr" ? "ठीक आहे (Done)" : "ठीक है (Done)"}
           </button>
         </div>
@@ -6792,7 +6794,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               transition: "padding 0.15s ease, background 0.15s ease",
             }}>
             <div className="relative">
-              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108, opacity: !drop.trim() ? 0.5 : 1 }} inputMode="decimal" disabled={!drop.trim()}
+              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108, opacity: !drop.trim() ? 0.6 : 1 }} inputMode="decimal" disabled={!drop.trim()}
                 placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
                 onChange={(e) => {
                   // See getWeightInputChange's own comment -- enforces kg's
@@ -6832,7 +6834,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         )}
 
         {!locationsReady && (
-          <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+          <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
             🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
           </button>
         )}
@@ -7303,7 +7305,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                   onFocus={() => setActiveField("date")}
                   className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
                 {!advanceDate && (
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#9CA3AF" }}>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#94A3B8" }}>
                     {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
                   </span>
                 )}
@@ -7315,8 +7317,9 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                 borderRadius: highlightField === "time" ? 12 : 0,
                 transition: "padding 0.15s ease, background 0.15s ease",
               }}>
-              <button ref={timeFieldRef} type="button" disabled={!advanceDate} onClick={() => { setActiveField("time"); setShowTimeModal(true); }} className={`${inputCls} flex items-center justify-center`} style={{ ...inputStyle, opacity: !advanceDate ? 0.5 : 1 }}>
-                <span className="truncate" style={{ color: advanceTime ? C.ink : "#9CA3AF" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
+              <button ref={timeFieldRef} type="button" disabled={!advanceDate} onClick={() => { setActiveField("time"); setShowTimeModal(true); }} className={`${inputCls} flex items-center justify-between gap-1`} style={{ ...inputStyle, opacity: !advanceDate ? 0.6 : 1 }}>
+                <span className="truncate" style={{ color: advanceTime ? C.ink : "#94A3B8" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
+                <Clock3 size={16} color={C.inkSoft} className="shrink-0" />
               </button>
             </div>
           </div>
@@ -7360,7 +7363,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
           {!pickup.trim() && (
             <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup || !advanceTime}
               className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup || !advanceTime ? "" : "current-location-blink"}`}
-              style={{ width: 92, opacity: !advanceTime ? 0.5 : 1, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
+              style={{ width: 92, opacity: !advanceTime ? 0.6 : 1, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
               {locatingPickup ? (
                 <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
               ) : (
@@ -7412,7 +7415,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
               transition: "padding 0.15s ease, background 0.15s ease",
             }}>
             <div className="relative">
-              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108, opacity: !drop.trim() ? 0.5 : 1 }} inputMode="decimal" disabled={!drop.trim()}
+              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108, opacity: !drop.trim() ? 0.6 : 1 }} inputMode="decimal" disabled={!drop.trim()}
                 placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
                 onChange={(e) => {
                   // See getWeightInputChange's own comment -- enforces kg's
@@ -7452,7 +7455,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
         )}
 
         {!locationsReady && (
-          <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E0E0E0", color: "#9AA3B0" }}>
+          <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
             📅 {lang === "en" ? "Book Advance" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें"}
           </button>
         )}
@@ -8581,7 +8584,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
                 <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : lang === "mr" ? "गोपनीयता धोरण" : "गोपनीयता नीति"}
               </a>
             </div>
-            <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
+            <div className="flex-1" style={{ background: "rgba(15,27,45,0.5)" }} />
           </div>
         )}
         {rideView === "current" ? (
@@ -10881,7 +10884,7 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
           <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Set Fare" : lang === "mr" ? "भाडे सेट करा" : "किराया सेट करें"}</h3>
@@ -11233,7 +11236,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
                 <ShieldCheck size={16} color={C.marigoldDeep} /> {lang === "en" ? "Privacy Policy" : lang === "mr" ? "गोपनीयता धोरण" : "गोपनीयता नीति"}
               </a>
             </div>
-            <div className="flex-1" style={{ background: "rgba(42,33,28,0.5)" }} />
+            <div className="flex-1" style={{ background: "rgba(15,27,45,0.5)" }} />
           </div>
         )}
         {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} bookingExtras={bookingExtras} />}
@@ -11435,7 +11438,7 @@ function TermsModal({ open, onClose, commissionPct, bonusPct, lang, role }) {
     .filter(([, , driverOnly]) => role !== "customer" || !driverOnly)
     .map(([title, text], i) => [`${i + 1}. ${title}`, text]);
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Terms & Conditions" : lang === "mr" ? "नियम व अटी (Terms & Conditions)" : "नियम व शर्तें (Terms & Conditions)"}</h3>

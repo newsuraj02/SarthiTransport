@@ -1899,7 +1899,7 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditA
   const sorted = [...(adminRouteFares || [])].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
           <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Saved Routes" : lang === "mr" ? "सेव्ह केलेले रूट्स" : "सेव किए गए रूट्स"}</h3>
@@ -2235,7 +2235,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   const inputStyle = { background: C.bg, border: `1px solid ${C.line}`, color: C.ink };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col relative" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between shrink-0" style={{ background: C.navy }}>
           <h3 className="text-sm font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Admin Rate Calculator" : lang === "mr" ? "अ‍ॅडमिन दर कॅल्क्युलेटर" : "एडमिन रेट कैलकुलेटर"}</h3>
@@ -4128,7 +4128,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
       </div>
 
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(42,33,28,0.6)" }} onClick={() => setShowAdd(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={() => setShowAdd(false)}>
           <div className="w-full max-w-sm rounded-t-2xl max-h-[85vh] overflow-y-auto" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 flex items-center justify-between" style={{ background: C.navy }}>
               <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: "#fff" }}><ClipboardList size={15} /> {lang === "en" ? "Add New Expense" : lang === "mr" ? "नवीन खर्च नोंदवा" : "नया खर्च दर्ज करें"}</h3>

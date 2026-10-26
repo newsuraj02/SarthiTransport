@@ -77,6 +77,14 @@ input, textarea { text-overflow: ellipsis; }
 }
 .live-pulse { animation: livePulse 2.2s ease-out infinite; }
 
+/* Bottom sheets (time picker, etc.) slide up instead of popping in. */
+@keyframes sheetUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.sheet-up { animation: sheetUp 0.22s ease-out; }
+
+/* Native date field: quieter, tinted calendar icon that matches the clock
+   icon on the time field next to it. */
+input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: pointer; }
+
 /* Horizontally scrolling pill rows (Admin tabs): swipe works, scrollbar hidden. */
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -86,7 +94,7 @@ input, textarea { text-overflow: ellipsis; }
    feedback stays instant. Purely a CSS media query -- no behaviour change. */
 @media (prefers-reduced-motion: reduce) {
   .guided-step-active, .guided-submit-ready, .current-location-blink,
-  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse {
+  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse, .sheet-up {
     animation: none !important;
   }
 }
