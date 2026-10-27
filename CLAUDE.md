@@ -152,7 +152,7 @@ Diesel baseline ₹98/L; live price in Firestore `settings/main.dieselPricePerLi
 adds km × Δprice ÷ tier mileage to every fare. Resolution order: admin's saved
 route rate → scaled by the admin's other-tier ratio → formula.
 
-**Admin lists** (Drivers tab's 7 sections + search, Customers, Uninstalled/Blocked,
+**Admin lists** (Drivers tab's 7 sections + search, Customers, Uninstalled, Blocked,
 New Registrations): numbered rows; name truncates but icons are never cut; driver
 GPS/KYC are compact "GPS"/"KYC" badges (green ok, red not); Call really disables
 after a tap (not just greys) and stays disabled until EVERY entry in that list
@@ -168,7 +168,10 @@ highlighted. "Uninstalled" = no sign of life for 14 days (owner 2026-10-27 after
 calls found "installed" drivers in it): the NEWEST of `lastActiveAt` (root `App`
 stamps it on every app open/foreground for every driver state, at most every 6h),
 `lastKnownLocation.updatedAt` and `fcmTokenSavedAt`; `createdAt` only if none
-exist (`isLikelyUninstalled`, pinned by a behavior check). KYC: Reject needs a second confirm tap; Rejected drivers stay in the
+exist (`isLikelyUninstalled`, pinned by a behavior check). The Uninstall bar keeps its name,
+labelled "Inactive 14+ days" (Install = "Active in last 14 days"); the Uninstalled page
+holds ONLY those drivers. Blocked drivers have their own full-width Live-Map-style
+tile + page ("Blocked", with Unblock) on the Live Dashboard (owner 2026-10-27). KYC: Reject needs a second confirm tap; Rejected drivers stay in the
 approval queue so a mistaken reject can be reversed.
 
 **Live Dashboard.** First thing at the top: red box "N Direct request(s) from

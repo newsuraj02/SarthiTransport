@@ -350,12 +350,12 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // Total Drivers/tabs/Live Map/uninstalled-tile numbers to disagree
   // before.
   const { installed: installedDriversList, uninstalled: uninstalledDrivers, blacklisted: blacklistedDrivers } = partitionDriversByInstallStatus(drivers);
-  // Blacklisted drivers are folded into the same "Uninstalled" KPI/page as
-  // likely-uninstalled ones -- with AdminDriverList (and its search) now
-  // strictly installed-only, this tile is the only place left to even see
-  // a blacklisted driver again, let alone Unblock them, so it can't be
-  // left out of that list.
-  const inactiveDrivers = [...uninstalledDrivers, ...blacklistedDrivers];
+  // Owner rule (2026-10-27): the Uninstalled page holds ONLY the drivers
+  // inactive 14+ days (uninstalledDrivers); Blocked drivers have their own
+  // tile + page ("blocked" in detailPages) -- they used to be folded into
+  // the Uninstalled page, mixing two unrelated lists. AdminDriverList (and
+  // its search) is installed-only, so the Blocked page is the only place to
+  // see a blacklisted driver and Unblock them.
   // A driver doc is created automatically the instant anyone verifies OTP
   // on the Driver login screen (see "My own driver profile" below) -- a
   // bare stub (kyc: null, vehicleSpec: null) with no real driver signal at
@@ -529,7 +529,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // called entry still sinks to the bottom so admin works down the list
   // in order without repeats.
   const [uninstalledCalledMap, setUninstalledCalledMap] = usePersistedState("sarthi_uninstalledCalled", {});
-  const uninstalledCallableMobiles = inactiveDrivers.filter((d) => !d.blacklisted).map((d) => d.mobile).filter(Boolean);
+  const uninstalledCallableMobiles = uninstalledDrivers.map((d) => d.mobile).filter(Boolean);
   const markUninstalledCalled = (mobile) => setUninstalledCalledMap((prev) => {
     const next = { ...prev, [mobile]: true };
     const roundComplete = uninstalledCallableMobiles.length > 0 && uninstalledCallableMobiles.every((m) => next[m]);
@@ -688,16 +688,19 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       ),
     },
     uninstalled: {
-      title: lang === "en" ? "Uninstalled / Blocked" : lang === "mr" ? "अनइन्स्टॉल्ड / ब्लॉक्ड" : "अनइंस्टॉल्ड / ब्लॉक्ड",
-      emptyMsg: lang === "en" ? "No driver has gone quiet this long, and none are blocked." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही, आणि कोणीही ब्लॉक्ड नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है, और कोई ब्लॉक्ड नहीं है।",
-      // Blacklisted drivers folded in alongside likely-uninstalled ones --
-      // see inactiveDrivers above for why (AdminDriverList is installed-
-      // only now, so this is their only remaining home). An entry still on
-      // its call cooldown sinks to the bottom so admin can work down the
-      // list without re-calling the same person twice in the same window;
-      // blacklisted entries (no Call button at all) keep their relative
-      // order among the not-on-cooldown ones.
-      items: [...inactiveDrivers].sort((a, b) => Number(uninstalledCallCooldownActive(a.mobile)) - Number(uninstalledCallCooldownActive(b.mobile))),
+      title: lang === "en" ? "Uninstalled" : lang === "mr" ? "अनइन्स्टॉल्ड" : "अनइंस्टॉल्ड",
+      emptyMsg: lang === "en" ? "No driver has gone quiet this long." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है।",
+      headerExtra: (
+        <p className="text-[11px] font-bold mb-3 -mt-1.5" style={{ color: "#eb6834" }}>
+          {lang === "en" ? "Inactive 14+ days" : lang === "mr" ? "14+ दिवस निष्क्रिय" : "14+ दिन से निष्क्रिय"}
+          <span className="font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? " — no app open, live GPS or push activity" : lang === "mr" ? " — अ‍ॅप उघडणे, लाइव्ह GPS किंवा पुश अ‍ॅक्टिव्हिटी नाही" : " — ऐप खुला नहीं, लाइव GPS या पुश गतिविधि नहीं"}</span>
+        </p>
+      ),
+      // An entry still on its call cooldown sinks to the bottom so admin can
+      // work down the list without re-calling the same person twice in the
+      // same window. (The "blocked" page below reuses this row renderer for
+      // its Unblock button.)
+      items: [...uninstalledDrivers].sort((a, b) => Number(uninstalledCallCooldownActive(a.mobile)) - Number(uninstalledCallCooldownActive(b.mobile))),
       renderItem: (d, i) => {
         const onCooldown = uninstalledCallCooldownActive(d.mobile);
         const roleTag = inactiveDriverRoleTag(d);
@@ -740,6 +743,12 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           </div>
         );
       },
+    },
+    blocked: {
+      title: lang === "en" ? "Blocked" : lang === "mr" ? "ब्लॉक्ड" : "ब्लॉक्ड",
+      emptyMsg: lang === "en" ? "No driver is blocked." : lang === "mr" ? "कोणताही ड्रायव्हर ब्लॉक्ड नाही." : "कोई भी ड्राइवर ब्लॉक्ड नहीं है।",
+      items: blacklistedDrivers,
+      renderItem: (d, i) => detailPages.uninstalled.renderItem(d, i),
     },
     lowWallet: {
       title: lang === "en" ? "Online drivers below min. wallet" : lang === "mr" ? "किमान वॉलेटपेक्षा कमी — ऑनलाइन ड्रायव्हर" : "न्यूनतम वॉलेट से कम — ऑनलाइन ड्राइवर",
@@ -1234,7 +1243,10 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
         <div className="text-sm font-bold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Installs vs Uninstalls" : lang === "mr" ? "इन्स्टॉल्स वि अनइन्स्टॉल्स" : "इंस्टॉल्स बनाम अनइंस्टॉल्स"}</div>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <span className="shrink-0 text-[10.5px] font-bold" style={{ width: 62, color: C.inkSoft }}>{lang === "en" ? "Install" : lang === "mr" ? "इन्स्टॉल" : "इंस्टॉल"}</span>
+            <span className="shrink-0 flex flex-col" style={{ width: 92, color: C.inkSoft }}>
+              <span className="text-[10.5px] font-bold">{lang === "en" ? "Install" : lang === "mr" ? "इन्स्टॉल" : "इंस्टॉल"}</span>
+              <span className="text-[9px] font-semibold leading-tight">{lang === "en" ? "Active in last 14 days" : lang === "mr" ? "गेल्या 14 दिवसांत सक्रिय" : "पिछले 14 दिन में सक्रिय"}</span>
+            </span>
             <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, background: "#E8EDF5" }}>
               <div className="rounded-full" style={{ height: "100%", width: `${installPct}%`, background: "#2a78d6" }} title={`${installCount}`} />
             </div>
@@ -1244,7 +1256,10 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <span className="shrink-0 text-[10.5px] font-bold" style={{ width: 62, color: C.inkSoft }}>{lang === "en" ? "Uninstall" : lang === "mr" ? "अनइन्स्टॉल" : "अनइंस्टॉल"}</span>
+            <span className="shrink-0 flex flex-col" style={{ width: 92, color: C.inkSoft }}>
+              <span className="text-[10.5px] font-bold">{lang === "en" ? "Uninstall" : lang === "mr" ? "अनइन्स्टॉल" : "अनइंस्टॉल"}</span>
+              <span className="text-[9px] font-semibold leading-tight">{lang === "en" ? "Inactive 14+ days" : lang === "mr" ? "14+ दिवस निष्क्रिय" : "14+ दिन से निष्क्रिय"}</span>
+            </span>
             <div className="flex-1 rounded-full overflow-hidden" style={{ height: 14, background: "#E8EDF5" }}>
               <div className="rounded-full" style={{ height: "100%", width: `${uninstallPct}%`, background: "#eb6834" }} title={`${uninstallCount}`} />
             </div>
@@ -1255,6 +1270,20 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           </div>
         </div>
       </div>
+
+      {/* Blocked -- same full-width horizontal tile as Live Map; opens the
+          Blocked page (blacklisted drivers + Unblock). Owner rule 2026-10-27:
+          Blocked drivers no longer live inside the Uninstalled page. */}
+      <button onClick={() => setDetailView("blocked")} className="w-full rounded-xl p-4 mb-5 shadow-sm flex items-center justify-between gap-3 text-left" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+        <div>
+          <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: C.ink }}>
+            <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: blacklistedDrivers.length > 0 ? C.safety : C.line }} />
+            {lang === "en" ? "Blocked" : lang === "mr" ? "ब्लॉक्ड" : "ब्लॉक्ड"}
+          </div>
+          <div className="text-xs mt-0.5" style={{ color: C.inkSoft }}>{blacklistedDrivers.length} {lang === "en" ? "drivers blocked" : lang === "mr" ? "ड्रायव्हर ब्लॉक्ड आहेत" : "ड्राइवर ब्लॉक्ड हैं"}</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+      </button>
 
       {/* Bookings by Status -- vertical columns, real counts from bookings
           over the selected window. Completed excluded (dwarfs the rest);
@@ -3110,8 +3139,9 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // Scoped to totalInstalled, same as the 4 sections above -- only active,
   // installed drivers are ever listed here, full stop. A blacklisted or
   // likely-uninstalled driver isn't findable from this screen at all
-  // anymore (search included); the Live Dashboard's "Uninstalled /
-  // Blocked" KPI is their only remaining home, Unblock button included.
+  // anymore (search included); the Live Dashboard's "Uninstall" bar and
+  // "Blocked" tile are their only remaining homes (Unblock lives on the
+  // Blocked page).
   // A search collapses the 4 sections into one flat result list (see the
   // render below); with an empty query there's nothing to search and the
   // sections render instead.

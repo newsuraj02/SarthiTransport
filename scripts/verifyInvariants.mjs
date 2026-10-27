@@ -183,6 +183,7 @@ const checks = [
       && f({}) === false;                                                                // nothing known -> never flagged
   }],
   ["lastActiveAt is stamped by the root App for EVERY signed-in driver state (not only the Approved dashboard), on open and on return to foreground", () => app.includes("const lastActiveWriteRef = useRef(0);") && app.includes('document.addEventListener("visibilitychange", onVisible);\n    return () => document.removeEventListener("visibilitychange", onVisible);\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [driverAuth.verified, driverAuth.mobile, !!driver]);') && count(app, "{ lastActiveAt: serverTimestamp() }") === 1],
+  ["Admin: 'Uninstall' keeps its name, labelled 'Inactive 14+ days'; the Uninstalled page holds ONLY inactive drivers; Blocked drivers have their own Live-Map-style tile + page with Unblock (owner 2026-10-27)", () => admin.includes('items: [...uninstalledDrivers].sort(') && !admin.includes("inactiveDrivers") && admin.includes('"Inactive 14+ days"') && admin.includes('onClick={() => setDetailView("blocked")}') && admin.includes("items: blacklistedDrivers,") && admin.includes('title: lang === "en" ? "Uninstalled" :')],
   ["admin KYC badge is plain green for Approved (completeness doesn't change it)", () => admin.includes('background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>') && !admin.includes("isDriverKycComplete")],
 
   // ---- Role selection ----
