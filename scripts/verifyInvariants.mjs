@@ -53,6 +53,12 @@ function loadUninstallFn() {
   const end = app.indexOf("// Single source of truth for \"which of the three buckets");
   return new Function("DAY_MS", app.slice(start, end).replace(/\bexport /g, "") + "; return isLikelyUninstalled;")(86400000);
 }
+// Runs the REAL Meta-export helpers out of AdminPanel.jsx (pure JS between toMetaPhone and the END marker).
+function loadMetaExportFn() {
+  const start = admin.indexOf("const toMetaPhone");
+  const end = admin.indexOf("// END Meta users export helpers");
+  return new Function(admin.slice(start, end) + "; return { toMetaPhone, buildMetaUsersCsv };")();
+}
 const photo = (n) => ({ name: `${n}.jpg`, url: `https://example.test/${n}.jpg` });
 const fullDriver = () => ({
   name: "Ramesh", mobile: "9999999999", kyc: "Approved", photo: photo("p"), docs: { dl: photo("dl"), photo: photo("p") },
@@ -184,6 +190,18 @@ const checks = [
   }],
   ["lastActiveAt is stamped by the root App for EVERY signed-in driver state (not only the Approved dashboard), on open and on return to foreground", () => app.includes("const lastActiveWriteRef = useRef(0);") && app.includes('document.addEventListener("visibilitychange", onVisible);\n    return () => document.removeEventListener("visibilitychange", onVisible);\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [driverAuth.verified, driverAuth.mobile, !!driver]);') && count(app, "{ lastActiveAt: serverTimestamp() }") === 1],
   ["Admin: 'Uninstall' keeps its name, labelled 'Inactive 14+ days'; the Uninstalled page holds ONLY inactive drivers; Blocked drivers have their own Live-Map-style tile + page with Unblock (owner 2026-10-27)", () => admin.includes('items: [...uninstalledDrivers].sort(') && !admin.includes("inactiveDrivers") && admin.includes('"Inactive 14+ days"') && admin.includes('onClick={() => setDetailView("blocked")}') && admin.includes("items: blacklistedDrivers,") && admin.includes('title: lang === "en" ? "Uninstalled" :')],
+  ["Meta export: one `phone` column, 91+10 digits, drivers + customers, everyone included, duplicates merged, junk skipped (not guessed)", () => {
+    const { toMetaPhone, buildMetaUsersCsv } = loadMetaExportFn();
+    const r = buildMetaUsersCsv(
+      [{ mobile: "9812345678" }, { id: "9822222222", blacklisted: true }, { mobile: "+91 98765 43210" }, { mobile: "12345" }, { mobile: "" }],
+      [{ mobile: "9812345678" }, { mobile: "09833333333" }, { id: "5000000000" }, null]
+    );
+    return toMetaPhone("9812345678") === "919812345678" && toMetaPhone("919812345678") === "919812345678" && toMetaPhone("5123456789") === null && toMetaPhone("abc") === null
+      && r.csv === "phone\n919812345678\n919822222222\n919833333333\n919876543210\n"
+      && r.driverCount === 3 && r.customerCount === 2 && r.total === 4 && r.skipped === 4
+      && buildMetaUsersCsv([], []).csv === "phone\n" && buildMetaUsersCsv([], []).total === 0;
+  }],
+  ["Admin Settings has the 'Export app users for ads (Meta)' card wired to the real driver + customer lists", () => admin.includes("const metaExport = buildMetaUsersCsv(drivers, customers);") && admin.includes("<AdminSettings drivers={drivers} customers={customers} ") && admin.includes("Download CSV for Meta")],
   ["admin KYC badge is plain green for Approved (completeness doesn't change it)", () => admin.includes('background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>') && !admin.includes("isDriverKycComplete")],
 
   // ---- Role selection ----

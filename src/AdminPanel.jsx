@@ -3737,7 +3737,29 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
   );
 }
 
-function AdminSettings({ latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, lang }) {
+// Mobile numbers of everyone who already has the app (drivers + customers),
+// in the format Meta's "Customer list" audience upload wants: one `phone`
+// column, digits only with the country code (919812345678). Used to EXCLUDE
+// existing users from install ads (owner request 2026-10-27) -- Meta can't
+// tell who already has the app without its SDK. Everyone is included
+// (blocked and inactive too); a person who is both a driver and a customer
+// appears once. Anything that isn't a valid Indian mobile is skipped, not
+// guessed at.
+const toMetaPhone = (v) => {
+  const digits = String(v ?? "").replace(/\D/g, "");
+  const ten = digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits.length === 11 && digits.startsWith("0") ? digits.slice(1) : digits;
+  return /^[6-9]\d{9}$/.test(ten) ? "91" + ten : null;
+};
+function buildMetaUsersCsv(drivers, customers) {
+  const uniq = (list) => new Set((list || []).map((x) => toMetaPhone(x?.mobile || x?.id)).filter(Boolean));
+  const d = uniq(drivers), c = uniq(customers);
+  const all = [...new Set([...d, ...c])].sort();
+  const skipped = (drivers || []).length + (customers || []).length - (drivers || []).filter((x) => toMetaPhone(x?.mobile || x?.id)).length - (customers || []).filter((x) => toMetaPhone(x?.mobile || x?.id)).length;
+  return { csv: "phone\n" + all.join("\n") + (all.length ? "\n" : ""), driverCount: d.size, customerCount: c.size, total: all.length, skipped };
+}
+// END Meta users export helpers
+
+function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, lang }) {
   // Force-update version codes are edited as a draft and only written to
   // Firestore on Save, instead of firing a write on every keystroke. Stays
   // in sync with the live values as long as there's no unsaved edit.
@@ -3752,6 +3774,14 @@ function AdminSettings({ latestVersionCode, setLatestVersionCode, updateUrl, set
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestVersionCode, updateUrl, latestAdminVersionCode, adminUpdateUrl, dirty]);
   const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
+  const metaExport = buildMetaUsersCsv(drivers, customers);
+  const downloadMetaUsers = () => {
+    const blob = new Blob([metaExport.csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `app-users-meta-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
   const saveSettings = () => {
     setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
     setUpdateUrl(draft.updateUrl.trim());
@@ -3790,6 +3820,21 @@ function AdminSettings({ latestVersionCode, setLatestVersionCode, updateUrl, set
         <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "APK download link" : lang === "mr" ? "APK डाउनलोड लिंक" : "APK डाउनलोड लिंक"}</div>
         <input type="text" placeholder="https://..." value={draft.adminUpdateUrl} onChange={(e) => updateDraft({ adminUpdateUrl: e.target.value })}
           className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
+      </div>
+
+      <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Export app users for ads (Meta)" : lang === "mr" ? "जाहिरातींसाठी अ‍ॅप वापरकर्ते एक्सपोर्ट करा (Meta)" : "विज्ञापनों के लिए ऐप यूज़र एक्सपोर्ट करें (Meta)"}</div>
+        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Downloads the mobile numbers of every driver and customer (blocked and inactive too) as a CSV in Meta's format. In Meta: Audiences → Create audience → Custom audience → Customer list → upload it, then EXCLUDE that audience in your ad set so existing users never see your install ads." : lang === "mr" ? "प्रत्येक ड्रायव्हर आणि कस्टमरचे (ब्लॉक्ड व निष्क्रिय सुद्धा) मोबाइल नंबर Meta च्या फॉरमॅटमध्ये CSV म्हणून डाउनलोड करते. Meta मध्ये: Audiences → Create audience → Custom audience → Customer list → अपलोड करा, मग जाहिरातीच्या ad set मध्ये ती ऑडियन्स EXCLUDE करा, म्हणजे विद्यमान वापरकर्त्यांना इन्स्टॉल जाहिराती दिसणार नाहीत." : "हर ड्राइवर और कस्टमर (ब्लॉक्ड और निष्क्रिय भी) के मोबाइल नंबर Meta के फॉर्मेट में CSV के रूप में डाउनलोड करता है। Meta में: Audiences → Create audience → Custom audience → Customer list → इसे अपलोड करें, फिर अपने ad set में उस ऑडियंस को EXCLUDE करें ताकि मौजूदा यूज़र को इंस्टॉल विज्ञापन कभी न दिखें।"}
+        </div>
+        <div className="text-[11px] font-bold mb-2" style={{ color: C.ink, fontFamily: monoFont }}>
+          {metaExport.driverCount} {lang === "en" ? "drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"} + {metaExport.customerCount} {lang === "en" ? "customers" : lang === "mr" ? "कस्टमर" : "कस्टमर"} = {metaExport.total} {lang === "en" ? "unique numbers" : lang === "mr" ? "युनिक नंबर" : "यूनिक नंबर"}
+          {metaExport.skipped > 0 && <span style={{ color: C.safety }}> · {metaExport.skipped} {lang === "en" ? "skipped (not a valid mobile)" : lang === "mr" ? "वगळले (वैध मोबाइल नाही)" : "छोड़े गए (वैध मोबाइल नहीं)"}</span>}
+        </div>
+        <button onClick={downloadMetaUsers} disabled={metaExport.total === 0} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-3 font-bold text-sm"
+          style={{ background: metaExport.total ? C.marigold : "#E5EAF2", color: metaExport.total ? "#000000" : "#9AA3B0" }}>
+          <Download size={15} /> {lang === "en" ? "Download CSV for Meta" : lang === "mr" ? "Meta साठी CSV डाउनलोड करा" : "Meta के लिए CSV डाउनलोड करें"}
+        </button>
       </div>
 
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
@@ -4269,7 +4314,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
-      {tab === "settings" && <AdminSettings latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
+      {tab === "settings" && <AdminSettings drivers={drivers} customers={customers} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>
   );
 }

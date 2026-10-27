@@ -223,6 +223,12 @@ drivers keep their own "resubmit" screen. Everyone else's submission lands in
 refused. The GPS/ring code itself is untouched; the gate simply means a gated
 driver never reaches `DriverHome`.
 
+**Meta ads export (owner 2026-10-27).** Admin Settings -> "Export app users for ads
+(Meta)" downloads every driver + customer mobile (blocked/inactive included, duplicates
+merged, junk skipped) as a one-column `phone` CSV (`91XXXXXXXXXX`), to upload as a Meta
+Customer-list audience and EXCLUDE from install ads. Logic is `buildMetaUsersCsv`
+(pinned by a behavior check).
+
 **Look & feel (owner 2026-10-26: "same brand colour, fresher feel").** Brand hues
 (marigold #FFCC00, orange, blue #0052CC, green, red) are unchanged. All screens
 read neutrals from the `C` tokens in `App.jsx` — page `bg` #F4F7FB (white `paper`
