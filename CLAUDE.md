@@ -223,6 +223,16 @@ drivers keep their own "resubmit" screen. Everyone else's submission lands in
 refused. The GPS/ring code itself is untouched; the gate simply means a gated
 driver never reaches `DriverHome`.
 
+**Force-update TEST mode (owner 2026-10-27 -- built, not yet tried on a device).**
+Admin Settings -> "Test update (your phones only)": a test versionCode + a list of
+10-digit phones. The phones get `forceUpdateTest: true` on their driver/customer doc
+(flagged BEFORE the version is written); `notifyForceUpdate` pushes `testVersionCode`
+ONLY to flagged docs, and the app's Update Required gate applies it ONLY to a flagged
+user (`isForceUpdateTester`) -- so the flow can be rehearsed on the owner's phones
+without blocking or notifying anyone else. The real `latestVersionCode` path is
+unchanged. Pinned by `scripts/verifyForceUpdatePush.cjs` (runs the real function
+offline; part of `verify:invariants`). Needs `firebase deploy --only functions`.
+
 **Look & feel (owner 2026-10-26: "same brand colour, fresher feel").** Brand hues
 (marigold #FFCC00, orange, blue #0052CC, green, red) are unchanged. All screens
 read neutrals from the `C` tokens in `App.jsx` — page `bg` #F4F7FB (white `paper`
