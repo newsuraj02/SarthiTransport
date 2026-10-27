@@ -16,7 +16,7 @@ import { GoogleMap, MarkerF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp } from "./firebaseClient";
-import { createDoc, removeDoc, bulkUpdateDocs, patchDoc } from "./firestoreStore";
+import { createDoc, removeDoc, bulkUpdateDocs } from "./firestoreStore";
 import {
   ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
@@ -3737,66 +3737,26 @@ function AdminNotify({ drivers, customers, adminNotifications, deleteAdminNotifi
   );
 }
 
-function AdminSettings({ drivers, customers, testVersionCode, setTestVersionCode, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, lang }) {
+function AdminSettings({ latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, lang }) {
   // Force-update version codes are edited as a draft and only written to
   // Firestore on Save, instead of firing a write on every keystroke. Stays
   // in sync with the live values as long as there's no unsaved edit.
   // (Commission/Bonus/Min-wallet used to be part of this same draft object
   // -- they moved to AdminFinance's own "System Settings" section with
   // their own independent draft/save, since that's where Finance now lives.)
-  // Test mode (see notifyForceUpdate in functions/index.js): the phones
-  // currently flagged forceUpdateTest on their driver/customer doc.
-  const flaggedPhones = [...new Set([...(drivers || []), ...(customers || [])].filter((x) => x.forceUpdateTest).map((x) => x.mobile || x.id))].sort();
-  const flaggedKey = flaggedPhones.join(", ");
-  const [draft, setDraft] = useState({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "", testVersionCode: testVersionCode || "", testPhones: flaggedKey });
+  const [draft, setDraft] = useState({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [testResult, setTestResult] = useState(null);
   useEffect(() => {
-    if (!dirty) setDraft({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "", testVersionCode: testVersionCode || "", testPhones: flaggedKey });
+    if (!dirty) setDraft({ latestVersionCode: latestVersionCode || "", updateUrl: updateUrl || "", latestAdminVersionCode: latestAdminVersionCode || "", adminUpdateUrl: adminUpdateUrl || "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestVersionCode, updateUrl, latestAdminVersionCode, adminUpdateUrl, testVersionCode, flaggedKey, dirty]);
+  }, [latestVersionCode, updateUrl, latestAdminVersionCode, adminUpdateUrl, dirty]);
   const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
-  // Flags exactly the typed phones (and un-flags any previously flagged ones
-  // no longer listed) BEFORE the test version is written, so the push and the
-  // app's gate only ever reach flagged phones. A phone that isn't found has
-  // never logged in as a driver/customer yet -- reported, not silently ignored.
-  const applyTestPhones = async () => {
-    const tokens = draft.testPhones.split(/[\s,;]+/).filter(Boolean);
-    const wanted = [...new Set(tokens.filter((n) => /^\d{10}$/.test(n)))];
-    const invalid = tokens.filter((n) => !/^\d{10}$/.test(n));
-    const idOf = (x) => x.id || x.mobile;
-    const mobileOf = (x) => x.mobile || x.id;
-    const writes = [];
-    const notFound = [];
-    wanted.forEach((n) => {
-      const d = (drivers || []).find((x) => mobileOf(x) === n);
-      const c = (customers || []).find((x) => mobileOf(x) === n);
-      if (!d && !c) { notFound.push(n); return; }
-      if (d && !d.forceUpdateTest) writes.push(patchDoc("drivers", idOf(d), { forceUpdateTest: true }));
-      if (c && !c.forceUpdateTest) writes.push(patchDoc("customers", idOf(c), { forceUpdateTest: true }));
-    });
-    (drivers || []).filter((x) => x.forceUpdateTest && !wanted.includes(mobileOf(x))).forEach((x) => writes.push(patchDoc("drivers", idOf(x), { forceUpdateTest: false })));
-    (customers || []).filter((x) => x.forceUpdateTest && !wanted.includes(mobileOf(x))).forEach((x) => writes.push(patchDoc("customers", idOf(x), { forceUpdateTest: false })));
-    const results = await Promise.allSettled(writes);
-    return { flagged: wanted.length - notFound.length, notFound, invalid, failed: results.filter((r) => r.status === "rejected").length };
-  };
-  const saveSettings = async () => {
+  const saveSettings = () => {
     setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
     setUpdateUrl(draft.updateUrl.trim());
     setLatestAdminVersionCode(draft.latestAdminVersionCode === "" ? null : Number(draft.latestAdminVersionCode));
     setAdminUpdateUrl(draft.adminUpdateUrl.trim());
-    const testPhonesChanged = draft.testPhones.trim() !== flaggedKey;
-    const testCodeChanged = String(draft.testVersionCode ?? "") !== String(testVersionCode ?? "");
-    if (testPhonesChanged || testCodeChanged) {
-      const result = await applyTestPhones();
-      setTestResult(result);
-      // A failed phone write means the flags aren't what the admin typed --
-      // don't arm the test version on top of that; leave the form dirty so
-      // Save can simply be tapped again.
-      if (result.failed > 0) return;
-      setTestVersionCode(draft.testVersionCode === "" ? null : Number(draft.testVersionCode));
-    }
     setDirty(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -3815,29 +3775,6 @@ function AdminSettings({ drivers, customers, testVersionCode, setTestVersionCode
         <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Play Store link (optional)" : lang === "mr" ? "Play Store लिंक (ऐच्छिक)" : "Play Store लिंक (वैकल्पिक)"}</div>
         <input type="text" placeholder={PLAY_STORE_URL} value={draft.updateUrl} onChange={(e) => updateDraft({ updateUrl: e.target.value })}
           className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }} />
-      </div>
-
-      <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1.5px dashed ${C.marigoldDeep}` }}>
-        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Test update (your phones only)" : lang === "mr" ? "टेस्ट अपडेट (फक्त तुमचे फोन)" : "टेस्ट अपडेट (सिर्फ़ आपके फ़ोन)"}</div>
-        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "Rehearse a force update on your own phones without touching anyone else: the push and the Update Required screen reach ONLY the phones listed here. Each phone must have logged in once as a driver or customer. Leave the version blank to switch the test off." : lang === "mr" ? "इतर कोणालाही स्पर्श न करता तुमच्याच फोनवर फोर्स अपडेटची चाचणी करा: पुश आणि अपडेट आवश्यक स्क्रीन फक्त इथे दिलेल्या फोनना जाते. प्रत्येक फोनने ड्रायव्हर किंवा कस्टमर म्हणून एकदा लॉगिन केलेले असावे. चाचणी बंद करण्यासाठी व्हर्जन रिकामे ठेवा." : "किसी और को छुए बिना अपने ही फ़ोन पर फोर्स अपडेट आज़माएं: पुश और अपडेट आवश्यक स्क्रीन सिर्फ़ यहां लिखे फ़ोन तक जाती है। हर फ़ोन से एक बार ड्राइवर या कस्टमर के तौर पर लॉगिन किया होना चाहिए। टेस्ट बंद करने के लिए वर्शन खाली छोड़ें।"}
-        </div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{lang === "en" ? "Test versionCode" : lang === "mr" ? "टेस्ट versionCode" : "टेस्ट versionCode"}</div>
-          <input type="number" placeholder={lang === "en" ? "Off" : lang === "mr" ? "बंद" : "बंद"} value={draft.testVersionCode} onChange={(e) => updateDraft({ testVersionCode: e.target.value })}
-            className="w-24 rounded-lg px-3 py-2 text-lg font-bold text-right" style={{ fontFamily: monoFont, border: `1.5px solid ${C.line}`, color: C.ink }} />
-        </div>
-        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Test phones (10-digit mobile numbers, comma-separated)" : lang === "mr" ? "टेस्ट फोन (10 अंकी मोबाइल नंबर, स्वल्पविरामाने)" : "टेस्ट फ़ोन (10 अंकों के मोबाइल नंबर, कॉमा से)"}</div>
-        <input type="text" placeholder="98XXXXXXXX, 97XXXXXXXX" value={draft.testPhones} onChange={(e) => updateDraft({ testPhones: e.target.value })}
-          className="w-full rounded-lg px-3 py-2 text-sm font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
-        {testResult && (
-          <div className="text-[11px] font-bold mt-2" style={{ color: testResult.notFound.length || testResult.invalid.length || testResult.failed ? C.safety : C.success }}>
-            {lang === "en" ? `${testResult.flagged} test phone(s) set.` : lang === "mr" ? `${testResult.flagged} टेस्ट फोन सेट झाले.` : `${testResult.flagged} टेस्ट फ़ोन सेट हुए।`}
-            {testResult.notFound.length > 0 && (lang === "en" ? ` Not found (never logged in): ${testResult.notFound.join(", ")}.` : lang === "mr" ? ` सापडले नाहीत (कधीही लॉगिन नाही): ${testResult.notFound.join(", ")}.` : ` नहीं मिले (कभी लॉगिन नहीं किया): ${testResult.notFound.join(", ")}।`)}
-            {testResult.invalid.length > 0 && (lang === "en" ? ` Not a 10-digit number: ${testResult.invalid.join(", ")}.` : lang === "mr" ? ` 10 अंकी नंबर नाही: ${testResult.invalid.join(", ")}.` : ` 10 अंकों का नंबर नहीं: ${testResult.invalid.join(", ")}।`)}
-            {testResult.failed > 0 && (lang === "en" ? ` ${testResult.failed} save(s) failed — try again.` : lang === "mr" ? ` ${testResult.failed} सेव्ह अयशस्वी — पुन्हा प्रयत्न करा.` : ` ${testResult.failed} सेव विफल — फिर कोशिश करें।`)}
-          </div>
-        )}
       </div>
 
       <div className="rounded-lg p-3 mt-2 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
@@ -4299,7 +4236,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, testVersionCode, setTestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, dieselPricePerLitre, setDieselPricePerLitre }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, dieselPricePerLitre, setDieselPricePerLitre }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -4332,7 +4269,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
-      {tab === "settings" && <AdminSettings drivers={drivers} customers={customers} testVersionCode={testVersionCode} setTestVersionCode={setTestVersionCode} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
+      {tab === "settings" && <AdminSettings latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>
   );
 }

@@ -849,23 +849,20 @@ exports.expireOldAdminNotifications = onSchedule({ schedule: "0 * * * *", timeZo
 // useReportInstalledVersion (src/App.jsx); missing entirely (an install
 // from before that existed, or one that's never reported yet) is treated
 // as "old" so it's never skipped by accident.
-// TEST MODE (owner request, 2026-10-27): settings/main.testVersionCode works
-// exactly like latestVersionCode but only for drivers/customers whose own doc
-// has forceUpdateTest: true (Admin Settings -> "Test update (your phones
-// only)" flags them) -- the push below goes ONLY to those docs, and the app's
-// "Update Required" gate (src/App.jsx: relevantLatestVersionCode) applies
-// testVersionCode ONLY to a flagged user too. So the whole force-update flow
-// can be rehearsed on the owner's own phones without touching anyone else.
-async function sendForceUpdatePush(requiredCode, onlyTestDevices) {
+exports.notifyForceUpdate = onDocumentWritten("settings/main", async (event) => {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  const latest = Number(after?.latestVersionCode);
+  if (!latest || Number(before?.latestVersionCode) === latest) return;
+
   for (const collectionName of ["drivers", "customers"]) {
-    const query = onlyTestDevices ? db.collection(collectionName).where("forceUpdateTest", "==", true) : db.collection(collectionName);
-    const snap = await query.get();
+    const snap = await db.collection(collectionName).get();
     const tokens = [];
     snap.forEach((doc) => {
       const d = doc.data();
       if (!d.fcmToken) return;
       const mine = Number(d.appVersionCode);
-      if (!Number.isFinite(mine) || mine < requiredCode) tokens.push(d.fcmToken);
+      if (!Number.isFinite(mine) || mine < latest) tokens.push(d.fcmToken);
     });
 
     for (let i = 0; i < tokens.length; i += 500) {
@@ -889,19 +886,10 @@ async function sendForceUpdatePush(requiredCode, onlyTestDevices) {
           data: { type: "force_update" },
         });
       } catch (e) {
-        console.error("[push] force-update send failed:", collectionName, onlyTestDevices ? "(test)" : "", e.message);
+        console.error("[push] force-update send failed:", collectionName, e.message);
       }
     }
   }
-}
-
-exports.notifyForceUpdate = onDocumentWritten("settings/main", async (event) => {
-  const before = event.data?.before?.data();
-  const after = event.data?.after?.data();
-  const latest = Number(after?.latestVersionCode);
-  if (latest && Number(before?.latestVersionCode) !== latest) await sendForceUpdatePush(latest, false);
-  const testLatest = Number(after?.testVersionCode);
-  if (testLatest && Number(before?.testVersionCode) !== testLatest) await sendForceUpdatePush(testLatest, true);
 });
 
 // bookingOtps (see verifyPickupOtp below) is only ever needed for the

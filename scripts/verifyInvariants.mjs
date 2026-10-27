@@ -8,7 +8,6 @@
 // Firebase can't be loaded in bare Node) -- each one pins the exact source
 // text of a rule that was hard-won and verified on real devices.
 import { readFileSync, existsSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -185,9 +184,6 @@ const checks = [
   }],
   ["lastActiveAt is stamped by the root App for EVERY signed-in driver state (not only the Approved dashboard), on open and on return to foreground", () => app.includes("const lastActiveWriteRef = useRef(0);") && app.includes('document.addEventListener("visibilitychange", onVisible);\n    return () => document.removeEventListener("visibilitychange", onVisible);\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [driverAuth.verified, driverAuth.mobile, !!driver]);') && count(app, "{ lastActiveAt: serverTimestamp() }") === 1],
   ["Admin: 'Uninstall' keeps its name, labelled 'Inactive 14+ days'; the Uninstalled page holds ONLY inactive drivers; Blocked drivers have their own Live-Map-style tile + page with Unblock (owner 2026-10-27)", () => admin.includes('items: [...uninstalledDrivers].sort(') && !admin.includes("inactiveDrivers") && admin.includes('"Inactive 14+ days"') && admin.includes('onClick={() => setDetailView("blocked")}') && admin.includes("items: blacklistedDrivers,") && admin.includes('title: lang === "en" ? "Uninstalled" :')],
-  ["force-update push: real notifyForceUpdate run offline -- production bump hits everyone behind, TEST mode (testVersionCode) hits ONLY phones flagged forceUpdateTest", () => spawnSync(process.execPath, [join(root, "scripts", "verifyForceUpdatePush.cjs")], { encoding: "utf8" }).status === 0],
-  ["force-update test mode: the app's Update Required gate applies testVersionCode ONLY to a flagged user (never admin app, never anyone else)", () => app.includes("const isForceUpdateTester = !!(driver?.forceUpdateTest || customer?.forceUpdateTest);") && app.includes("Math.max(Number(settings.latestVersionCode) || 0, isForceUpdateTester ? (Number(settings.testVersionCode) || 0) : 0)") && app.includes("? settings.latestAdminVersionCode\n    : Math.max(")],
-  ["Admin Settings 'Test update (your phones only)': phones are flagged BEFORE the test version is written, and a failed flag write blocks it", () => admin.includes("if (result.failed > 0) return;") && admin.indexOf("await applyTestPhones()") > 0 && admin.indexOf("await applyTestPhones()") < admin.indexOf("setTestVersionCode(draft.testVersionCode")],
   ["admin KYC badge is plain green for Approved (completeness doesn't change it)", () => admin.includes('background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>') && !admin.includes("isDriverKycComplete")],
 
   // ---- Role selection ----

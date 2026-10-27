@@ -11943,10 +11943,6 @@ export default function App() {
   // against and simply never blocks — see the version-check effect.
   const setLatestVersionCode = (v) => patchDoc("settings", "main", { latestVersionCode: typeof v === "function" ? v(settings.latestVersionCode) : v }).catch((e) => console.error(e));
   const setUpdateUrl = (v) => patchDoc("settings", "main", { updateUrl: typeof v === "function" ? v(settings.updateUrl) : v }).catch((e) => console.error(e));
-  // Test mode for the force-update flow (see notifyForceUpdate in
-  // functions/index.js): this version only applies to drivers/customers
-  // flagged forceUpdateTest in Admin Settings, never to anyone else.
-  const setTestVersionCode = (v) => patchDoc("settings", "main", { testVersionCode: v }).catch((e) => console.error(e));
   // Separate from latestVersionCode/updateUrl above — the Admin app is a
   // completely different native install (its own applicationId, its own
   // versionCode sequence, sideloaded rather than Play Store) running the
@@ -12147,14 +12143,7 @@ export default function App() {
   // the update and comes back doesn't stay stuck if they happened to
   // background the app instead of fully closing it.
   const [nativeVersionState, setNativeVersionState] = useState({ checked: false, outdated: false });
-  // Test mode (see notifyForceUpdate in functions/index.js): a user whose own
-  // driver/customer doc is flagged forceUpdateTest ALSO has to be on
-  // settings.testVersionCode; everyone else only ever sees latestVersionCode,
-  // so rehearsing an update on the owner's phones can't block anyone else.
-  const isForceUpdateTester = !!(driver?.forceUpdateTest || customer?.forceUpdateTest);
-  const relevantLatestVersionCode = adminEntry
-    ? settings.latestAdminVersionCode
-    : Math.max(Number(settings.latestVersionCode) || 0, isForceUpdateTester ? (Number(settings.testVersionCode) || 0) : 0);
+  const relevantLatestVersionCode = adminEntry ? settings.latestAdminVersionCode : settings.latestVersionCode;
   useEffect(() => {
     if (!isNativeApp) { setNativeVersionState({ checked: true, outdated: false }); return; }
     let cancelled = false;
@@ -12946,7 +12935,7 @@ export default function App() {
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
                 returnPct={returnPct} setReturnPct={setReturnPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}
-                bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} testVersionCode={settings.testVersionCode} setTestVersionCode={setTestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
+                bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
                 latestAdminVersionCode={settings.latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={settings.adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl}
                 fareTiers={fareTiers} lang={lang} onLogout={logout}
                 withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
