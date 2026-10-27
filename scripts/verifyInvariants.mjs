@@ -47,6 +47,12 @@ function loadKycFns() {
   const code = app.slice(start, end).replace(/\bexport /g, "");
   return new Function(code + "; return { DRIVER_KYC_FIELDS, getKycMissingFromValues, getDriverKycMissing, isDriverKycComplete };")();
 }
+// Runs the REAL isLikelyUninstalled (pure JS between UNINSTALL_INACTIVE_DAYS and driverInstallStatus).
+function loadUninstallFn() {
+  const start = app.indexOf("const UNINSTALL_INACTIVE_DAYS");
+  const end = app.indexOf("// Single source of truth for \"which of the three buckets");
+  return new Function("DAY_MS", app.slice(start, end).replace(/\bexport /g, "") + "; return isLikelyUninstalled;")(86400000);
+}
 const photo = (n) => ({ name: `${n}.jpg`, url: `https://example.test/${n}.jpg` });
 const fullDriver = () => ({
   name: "Ramesh", mobile: "9999999999", kyc: "Approved", photo: photo("p"), docs: { dl: photo("dl"), photo: photo("p") },
@@ -167,6 +173,16 @@ const checks = [
   ["Firestore lets a driver's own session set kyc only to 'Pending' (never Approved/Rejected)", () => rules.includes("request.resource.data.kyc == resource.data.kyc || request.resource.data.kyc == 'Pending'") && !/request\.resource\.data\.kyc == 'Approved'|request\.resource\.data\.kyc == 'Rejected'/.test(rules)],
   ["Approved drivers stay Approved: never gated, and submitting the KYC form never demotes them to Pending (owner 2026-10-27)", () => app.includes('kyc: driver.kyc === "Approved" ? "Approved" : "Pending", photo, docs: { dl, photo },') && !app.includes('...driver, kyc: "Pending", photo, docs')],
   ["Approved drivers missing documents get a dismissible reminder (not a lock): idle home only, 'Later' hides it for the session, 'Complete now' opens the KYC form", () => app.includes("function KycReminderBanner(") && app.includes("const [kycReminderDismissed, setKycReminderDismissed] = useState(false);") && app.includes("{realHamburgerVisible && !kycReminderDismissed && !isDriverKycComplete(driver) && (") && app.includes('onComplete={() => setSettingsView("kyc")} onDismiss={() => setKycReminderDismissed(true)}')],
+  ["Uninstalled list: any recent sign of life (app open, live GPS, push-token save) keeps a driver OUT of it; only 14+ days of total silence puts them in", () => {
+    const f = loadUninstallFn(); const D = 86400000; const ago = (d) => Date.now() - d * D; const ts = (d) => ({ toMillis: () => ago(d) });
+    return f({ createdAt: ts(60), lastActiveAt: ts(20) }) === true                       // silent 20 days
+      && f({ createdAt: ts(60), lastActiveAt: ts(2) }) === false                         // opened the app 2 days ago
+      && f({ createdAt: ts(60), lastActiveAt: ts(30), lastKnownLocation: { updatedAt: ago(1) } }) === false   // old open, but GPS reported yesterday
+      && f({ createdAt: ts(60), fcmTokenSavedAt: ago(3) }) === false                     // push token saved 3 days ago
+      && f({ createdAt: ts(60) }) === true && f({ createdAt: ts(5) }) === false           // no signal at all -> signup date decides
+      && f({}) === false;                                                                // nothing known -> never flagged
+  }],
+  ["lastActiveAt is stamped by the root App for EVERY signed-in driver state (not only the Approved dashboard), on open and on return to foreground", () => app.includes("const lastActiveWriteRef = useRef(0);") && app.includes('document.addEventListener("visibilitychange", onVisible);\n    return () => document.removeEventListener("visibilitychange", onVisible);\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [driverAuth.verified, driverAuth.mobile, !!driver]);') && count(app, "{ lastActiveAt: serverTimestamp() }") === 1],
   ["admin KYC badge is plain green for Approved (completeness doesn't change it)", () => admin.includes('background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>') && !admin.includes("isDriverKycComplete")],
 
   // ---- Role selection ----

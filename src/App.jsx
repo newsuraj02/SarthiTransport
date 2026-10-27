@@ -3310,17 +3310,31 @@ export const trialDaysLeft = (createdAt) => {
 
 // There's no direct signal telling the backend a driver actually uninstalled
 // the app -- this infers it from inactivity instead, for AdminFleet's
-// Off Duty/App Uninstalled split (see lastActiveAt, bumped once per app open
-// in DriverApp below). Falls back to createdAt when lastActiveAt hasn't been
-// recorded yet (a driver who signed up before this field existed, or simply
-// hasn't reopened the app since it shipped) so the entire existing fleet
-// doesn't get mislabeled "uninstalled" the moment this ships -- only once a
-// driver, tracked or not, genuinely goes quiet for UNINSTALL_INACTIVE_DAYS.
+// Off Duty/App Uninstalled split (see lastActiveAt, stamped by the root App
+// on every app open/foreground). Falls back to createdAt only when there is
+// no activity signal at all (a driver who signed up before these fields
+// existed, or simply hasn't reopened the app since they shipped) so the
+// entire existing fleet doesn't get mislabeled "uninstalled" the moment this
+// ships -- only once a driver genuinely goes quiet for UNINSTALL_INACTIVE_DAYS.
 const UNINSTALL_INACTIVE_DAYS = 14;
+// "Last sign the app is on this phone": the NEWEST of lastActiveAt (written
+// by the root App on every app open / return to foreground, for every driver
+// state -- not just the Approved dashboard), lastKnownLocation.updatedAt (the
+// GPS service keeps writing it with the app swiped away -- proof of install)
+// and fcmTokenSavedAt; createdAt only when there is no signal at all.
+// (2026-10-27: drivers called from the Uninstalled list said the app was
+// still installed. Until then only DriverApp's one-per-mount lastActiveAt
+// counted, so (a) every not-yet-approved/incomplete driver -- who never
+// reaches DriverApp -- fell back to createdAt and was flagged 14 days after
+// signup no matter how often they opened the app, and (b) approved drivers
+// whose app stayed alive in the background never remounted, and their live
+// GPS was ignored.)
+const timeMs = (v) => (v?.toMillis ? v.toMillis() : typeof v === "number" && Number.isFinite(v) ? v : 0);
 export const isLikelyUninstalled = (driver) => {
-  const ts = driver.lastActiveAt?.toMillis ? driver.lastActiveAt : driver.createdAt;
-  if (!ts?.toMillis) return false;
-  return (Date.now() - ts.toMillis()) >= UNINSTALL_INACTIVE_DAYS * DAY_MS;
+  const lastSignal = Math.max(timeMs(driver.lastActiveAt), timeMs(driver.lastKnownLocation?.updatedAt), timeMs(driver.fcmTokenSavedAt));
+  const ts = lastSignal || timeMs(driver.createdAt);
+  if (!ts) return false;
+  return (Date.now() - ts) >= UNINSTALL_INACTIVE_DAYS * DAY_MS;
 };
 
 // Single source of truth for "which of the three buckets is this driver
@@ -11167,15 +11181,6 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
   // automatically; 'advance' is the driver's own accepted advance bookings,
   // reached via the "View Advance Ride/s" box below.
   const [rideView, setRideView] = useState("current");
-  // Bumped once per mount (i.e. once per real app open, not on every
-  // re-render) -- the only signal AdminFleet's Off Duty/App Uninstalled
-  // split (see isLikelyUninstalled) has for "this driver actually opened
-  // the app recently," since there's no way to detect a real uninstall
-  // directly.
-  useEffect(() => {
-    patchDoc("drivers", driver.mobile, { lastActiveAt: serverTimestamp() }).catch((e) => console.error("[driver lastActiveAt]", e));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Jobs this driver is already assigned to but that are scheduled for a
   // future date — kept out of myTrip (above) so today's home screen isn't
@@ -12191,6 +12196,28 @@ export default function App() {
     }).catch((e) => console.error("[driver init]", e));
     return unsub;
   }, [driverAuth.verified, driverAuth.mobile]);
+
+  // Install-activity signal for Admin's Uninstalled list (see
+  // isLikelyUninstalled): stamp lastActiveAt whenever a signed-in driver opens
+  // the app AND whenever it returns to the foreground (at most once per 6h),
+  // whatever screen they're on -- KYC form, pending, rejected or dashboard.
+  // It used to be written only when DriverApp mounted, so unapproved drivers
+  // never got one and a backgrounded-but-alive app never refreshed it.
+  const lastActiveWriteRef = useRef(0);
+  useEffect(() => {
+    if (!firestoreReady || !driverAuth.verified || !driverAuth.mobile || !driver) return;
+    const mobile = driverAuth.mobile;
+    const bump = () => {
+      if (Date.now() - lastActiveWriteRef.current < 6 * 60 * 60 * 1000) return;
+      lastActiveWriteRef.current = Date.now();
+      patchDoc("drivers", mobile, { lastActiveAt: serverTimestamp() }).catch((e) => console.error("[driver lastActiveAt]", e));
+    };
+    bump();
+    const onVisible = () => { if (document.visibilityState === "visible") bump(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driverAuth.verified, driverAuth.mobile, !!driver]);
 
   // Owner rule (2026-10-13): duty stays ON until the driver himself taps
   // the duty button. So setDriver no longer overwrites the whole profile

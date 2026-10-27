@@ -164,7 +164,11 @@ ride, "Redirect to Driver App" WhatsApp (`wa.me`, link carries `?open=driver`).
 Alerts → Unmatched load: persistent Call + double-tap too; offline-driver matches
 only within the pickup radius (30 km immediate / 50 km advance) with "N km from
 Pickup". New Registrations: 7/30/90-day button matching the From/To dates is
-highlighted. KYC: Reject needs a second confirm tap; Rejected drivers stay in the
+highlighted. "Uninstalled" = no sign of life for 14 days (owner 2026-10-27 after
+calls found "installed" drivers in it): the NEWEST of `lastActiveAt` (root `App`
+stamps it on every app open/foreground for every driver state, at most every 6h),
+`lastKnownLocation.updatedAt` and `fcmTokenSavedAt`; `createdAt` only if none
+exist (`isLikelyUninstalled`, pinned by a behavior check). KYC: Reject needs a second confirm tap; Rejected drivers stay in the
 approval queue so a mistaken reject can be reversed.
 
 **Live Dashboard.** First thing at the top: red box "N Direct request(s) from
