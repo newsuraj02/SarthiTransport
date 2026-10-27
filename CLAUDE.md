@@ -191,6 +191,26 @@ Text-to-Speech API must be enabled on the GCP project.
 **Role selection.** Cards say WHO should pick them ("If you drive a truck or
 vehicle" / "If you need to send goods") — matches the spoken prompt.
 
+**Driver KYC is mandatory (owner rule 2026-10-27 -- built, not yet confirmed on a
+device).** Every KYC field is required except vehicle dimensions (not collected):
+driver photo, driving license photo, vehicle name, vehicle registered number,
+vehicle capacity (kg, a real number > 0), vehicle side photo. ONE definition
+drives everything -- `DRIVER_KYC_FIELDS` / `getKycMissingFromValues` /
+`getDriverKycMissing` / `isDriverKycComplete` in `App.jsx` (pinned by BEHAVIOR
+checks in `verifyInvariants.mjs`): the KYC form's Submit (`draftMissing`), the
+sign-up "Keep these ready" checklist, the Incomplete screen and the admin KYC
+badge (green only when Approved AND complete). A driver who signed up but whose
+saved KYC lacks any field sees the red "Incomplete form -- complete it to start
+your rides / trips" notice (`KycIncompleteNotice`) with the form FIRST, every
+time the app opens, before the Pending/Approved screens and the dashboard
+(`driverKycIncomplete` gate in `App()`; Rejected drivers keep their own
+"resubmit" screen). Completing the form sends the driver back to kyc "Pending"
+for admin to verify. `firestore.rules` lets a driver's own session set `kyc` to
+'Pending' only (never Approved/Rejected) -- deploy it with
+`firebase deploy --only firestore:rules` or re-submits from an already-registered
+driver are refused. The GPS/ring code itself is untouched; the gate simply
+means an incomplete driver never reaches `DriverHome`.
+
 **Look & feel (owner 2026-10-26: "same brand colour, fresher feel").** Brand hues
 (marigold #FFCC00, orange, blue #0052CC, green, red) are unchanged. All screens
 read neutrals from the `C` tokens in `App.jsx` — page `bg` #F4F7FB (white `paper`

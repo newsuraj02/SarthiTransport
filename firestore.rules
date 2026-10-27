@@ -69,8 +69,17 @@ service cloud.firestore {
     // (resource.data.vehicleSpec == null), where DriverKyc's submit()
     // legitimately sets kyc for the very first time as part of onboarding;
     // that path can only ever fire once, before vehicleSpec exists at all.
+    // kyc is the one exception, and only in ONE direction: a driver's own
+    // session may set it to 'Pending' (re-submitting KYC -- a rejected
+    // driver fixing their documents, or an already-registered driver
+    // completing the mandatory fields they skipped, see App.jsx:
+    // getDriverKycMissing) but can never set 'Approved' or 'Rejected'.
+    // Moving to Pending only ever REDUCES what the driver can do until admin
+    // re-approves, so it can't be used to self-approve. Without this, every
+    // such re-submit was refused as a whole (updateDoc is all-or-nothing)
+    // because DriverKyc's submit() always writes kyc: 'Pending'.
     function driverProtectedFieldsUnchanged() {
-      return request.resource.data.kyc == resource.data.kyc &&
+      return (request.resource.data.kyc == resource.data.kyc || request.resource.data.kyc == 'Pending') &&
         request.resource.data.blacklisted == resource.data.blacklisted &&
         request.resource.data.wallet == resource.data.wallet &&
         request.resource.data.heldCredit == resource.data.heldCredit &&

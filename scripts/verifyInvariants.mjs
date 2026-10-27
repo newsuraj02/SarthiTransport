@@ -36,6 +36,23 @@ function typeInto(w, unit, text) {
 }
 const toKg = (v, unit) => (Number(v) || 0) * (unit === "ton" ? 1000 : 1);
 
+// Runs the REAL driver-KYC completeness helpers out of App.jsx (pure JS,
+// between DRIVER_KYC_FIELDS and the END marker) -- the one definition of
+// "KYC complete" the form, the sign-up checklist, the Incomplete screen and
+// the admin badge all share (owner rule 2026-10-27).
+const rules = read("firestore.rules");
+function loadKycFns() {
+  const start = app.indexOf("const DRIVER_KYC_FIELDS");
+  const end = app.indexOf("// END driver KYC completeness helpers");
+  const code = app.slice(start, end).replace(/\bexport /g, "");
+  return new Function(code + "; return { DRIVER_KYC_FIELDS, getKycMissingFromValues, getDriverKycMissing, isDriverKycComplete };")();
+}
+const photo = (n) => ({ name: `${n}.jpg`, url: `https://example.test/${n}.jpg` });
+const fullDriver = () => ({
+  name: "Ramesh", mobile: "9999999999", kyc: "Approved", photo: photo("p"), docs: { dl: photo("dl"), photo: photo("p") },
+  vehicleSpec: { type: "tata-109", vehicleNumber: "MH14XX1234", capacityKg: 2500, photoSide: photo("side") },
+});
+
 const checks = [
   // ---- Weight cap: nothing above 35 ton / 35000 kg is ever accepted (owner rule 2026-10-26) ----
   ["weight cap constant is 35000 kg", () => app.includes("const MAX_BOOKING_WEIGHT_KG = 35000;") && loadWeightFns().MAX_KG === 35000],
@@ -106,6 +123,49 @@ const checks = [
   ["brand colours unchanged (marigold, orange, blue, green, red)", () => ["marigold: \"#FFCC00\"", "marigoldDeep: \"#FF6600\"", "navy: \"#0052CC\"", "success: \"#00A854\"", "safety: \"#FF2A2A\""].every((t) => app.includes(t))],
   ["no leftover old-palette greys/browns in App.jsx (use C tokens, #E5EAF2 disabled, #94A3B8 hints)", () => !/"#E0E0E0"|#C7B8B3|#E5E5E5|rgba\(42,33,28/.test(app) && !admin.includes("rgba(42,33,28")],
   ["Inter + Noto Sans Devanagari font is loaded and applied app-wide", () => css.includes('"Inter", "Noto Sans Devanagari"') && read("index.html").includes("family=Inter") && !css.includes("font-family: \"Arial Black\"")],
+
+  // ---- Driver KYC is mandatory (owner rule 2026-10-27) ----
+  ["KYC mandatory fields are exactly: photo, license, vehicle name/number/capacity, side photo -- no dimensions", () => {
+    const k = loadKycFns();
+    return JSON.stringify(k.DRIVER_KYC_FIELDS.map((f) => f.key)) === JSON.stringify(["photo", "dl", "vehicleName", "vehicleNumber", "capacityKg", "vehicleSide"])
+      && !k.DRIVER_KYC_FIELDS.some((f) => /length|width|height|dimension/i.test(f.key + f.en));
+  }],
+  ["a fully filled driver is complete; missing ANY single mandatory field makes them incomplete", () => {
+    const k = loadKycFns();
+    if (!k.isDriverKycComplete(fullDriver())) return false;
+    const breakers = [
+      (d) => { d.photo = null; d.docs.photo = null; }, (d) => { d.docs.dl = null; },
+      (d) => { d.vehicleSpec.type = ""; }, (d) => { d.vehicleSpec.vehicleNumber = "  "; },
+      (d) => { d.vehicleSpec.capacityKg = null; }, (d) => { d.vehicleSpec.photoSide = null; },
+    ];
+    return breakers.every((brk, i) => { const d = fullDriver(); brk(d); return !k.isDriverKycComplete(d) && k.getDriverKycMissing(d).length === 1 && k.getDriverKycMissing(d)[0] === k.DRIVER_KYC_FIELDS[i].key; });
+  }],
+  ["capacity must be a real positive number ('0', 'abc', '-5' don't count)", () => {
+    const k = loadKycFns();
+    const miss = (c) => k.getKycMissingFromValues({ photo: photo("p"), dl: photo("d"), vehicleName: "x", vehicleNumber: "y", capacityKg: c, vehicleSide: photo("s") }).length;
+    return miss("750") === 0 && miss(750) === 0 && miss("0") === 1 && miss("abc") === 1 && miss("-5") === 1 && miss("") === 1 && miss(null) === 1;
+  }],
+  ["no saved KYC at all (or no driver) is incomplete with every field outstanding; vehicle front photo is NOT required", () => {
+    const k = loadKycFns();
+    const d = fullDriver(); d.vehicleSpec.photoFront = null; d.vehicleSpec.photo = null;
+    return k.getDriverKycMissing({ name: "A", mobile: "1", vehicleSpec: null, docs: null }).length === 6 && k.getDriverKycMissing(null).length === 6 && k.isDriverKycComplete(d);
+  }],
+  ["legacy driver whose only profile photo is driver.photo still counts as having a photo", () => {
+    const k = loadKycFns();
+    const d = fullDriver(); d.docs = { dl: photo("dl") };
+    return k.isDriverKycComplete(d);
+  }],
+  ["KYC form's Submit is gated by the same shared list (getKycMissingFromValues)", () => app.includes("const canSubmit = draftMissing.length === 0 && !anyUploading;") && app.includes("const draftMissing = getKycMissingFromValues({")],
+  ["incomplete drivers see the Incomplete form FIRST: gate sits before the Pending and Approved screens", () => {
+    const gate = app.indexOf("{role === \"driver\" && driverKycIncomplete && !driverResubmitting && (");
+    const pending = app.indexOf("!driverResubmitting && !driverKycIncomplete && driver.kyc !== \"Approved\"");
+    const approved = app.indexOf("!driverResubmitting && !driverKycIncomplete && driver.kyc === \"Approved\"");
+    return gate > 0 && pending > gate && approved > pending && app.includes("const driverKycIncomplete = !!(driverAuth.verified && driver && driver.vehicleSpec && driver.kyc !== \"Rejected\" && !isDriverKycComplete(driver));");
+  }],
+  ["Incomplete notice ('Incomplete form' + 'complete it to start your rides / trips') shows on the gate AND on sign-up step 2", () => count(app, "<KycIncompleteNotice lang={lang} missing={getDriverKycMissing(driver)} />") >= 2 && app.includes('"Incomplete form"') && app.includes("start your rides / trips")],
+  ["driver sign-up lists the mandatory documents before an account is created", () => app.includes("DRIVER_KYC_FIELDS.map((f) => <li key={f.key}>") && app.includes("Keep these ready — all are mandatory")],
+  ["Firestore lets a driver's own session set kyc only to 'Pending' (never Approved/Rejected)", () => rules.includes("request.resource.data.kyc == resource.data.kyc || request.resource.data.kyc == 'Pending'") && !/request\.resource\.data\.kyc == 'Approved'|request\.resource\.data\.kyc == 'Rejected'/.test(rules)],
+  ["admin KYC badge is green only for Approved AND complete KYC", () => admin.includes('d.kyc === "Approved" && isDriverKycComplete(d) ? C.success : C.safety')],
 
   // ---- Role selection ----
   ["role select cards say WHO should pick them", () => app.includes('"If you drive a truck or vehicle"') && app.includes('"If you need to send goods"')],

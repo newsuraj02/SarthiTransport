@@ -2588,6 +2588,53 @@ function isLocationPermissionDeniedError(err) {
 // DriverHome's PermissionGate opens the Android screens directly instead.
 const PERMISSION_CARDS_ENABLED = false;
 
+// Driver KYC completeness (owner rule, 2026-10-27). Every field below is
+// MANDATORY (vehicle dimensions are not collected at all any more): sign-up
+// isn't finished until all of them are saved, and a driver whose saved
+// profile lacks any of them sees the "Incomplete form" screen first every
+// time the app opens -- never the dashboard (see KycIncompleteNotice and the
+// driverKycIncomplete gate in App()). ONE list drives the KYC form's Submit
+// button, the sign-up checklist, that screen and the admin KYC badge, so
+// they can never drift apart.
+const DRIVER_KYC_FIELDS = [
+  { key: "photo", en: "Your photo", hi: "आपकी फोटो", mr: "तुमचा फोटो" },
+  { key: "dl", en: "Driving license photo", hi: "ड्राइविंग लाइसेंस की फोटो", mr: "ड्रायव्हिंग लायसन्सचा फोटो" },
+  { key: "vehicleName", en: "Vehicle name", hi: "गाड़ी का नाम", mr: "गाडीचे नाव" },
+  { key: "vehicleNumber", en: "Vehicle registered number", hi: "गाड़ी रजिस्टर्ड नंबर", mr: "गाडी रजिस्टर्ड नंबर" },
+  { key: "capacityKg", en: "Vehicle capacity (kg)", hi: "गाड़ी की क्षमता (किलोग्राम)", mr: "गाडीची क्षमता (किलोग्राम)" },
+  { key: "vehicleSide", en: "Vehicle photo (side view)", hi: "गाड़ी की फोटो (साइड से)", mr: "गाडीचा फोटो (बाजूने)" },
+];
+const kycHasPhoto = (p) => !!(p && (typeof p === "string" ? p.trim() : p.url));
+// Keys of the mandatory fields still empty in `v` (a plain bag of values --
+// used for both the live form draft and, via getDriverKycMissing, a saved
+// driver doc).
+function getKycMissingFromValues(v = {}) {
+  const missing = [];
+  if (!kycHasPhoto(v.photo)) missing.push("photo");
+  if (!kycHasPhoto(v.dl)) missing.push("dl");
+  if (!String(v.vehicleName ?? "").trim()) missing.push("vehicleName");
+  if (!String(v.vehicleNumber ?? "").trim()) missing.push("vehicleNumber");
+  // "0", "abc" and "-5" are non-empty strings but not a capacity.
+  if (!(Number(String(v.capacityKg ?? "").trim()) > 0)) missing.push("capacityKg");
+  if (!kycHasPhoto(v.vehicleSide)) missing.push("vehicleSide");
+  return missing;
+}
+export function getDriverKycMissing(driver) {
+  if (!driver) return DRIVER_KYC_FIELDS.map((f) => f.key);
+  const spec = driver.vehicleSpec || {};
+  return getKycMissingFromValues({
+    photo: driver.docs?.photo || driver.photo, dl: driver.docs?.dl,
+    vehicleName: spec.type, vehicleNumber: spec.vehicleNumber, capacityKg: spec.capacityKg,
+    vehicleSide: spec.photoSide,
+  });
+}
+export const isDriverKycComplete = (driver) => getDriverKycMissing(driver).length === 0;
+export const kycFieldLabel = (key, lang) => {
+  const f = DRIVER_KYC_FIELDS.find((x) => x.key === key);
+  return f ? (lang === "en" ? f.en : lang === "mr" ? f.mr : f.hi) : key;
+};
+// END driver KYC completeness helpers
+
 function changedProfileFields(prev, next) {
   const patch = {};
   if (!next) return patch;
@@ -5147,6 +5194,9 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     return (
       <div className="flex-1 overflow-y-auto">
         <div className="px-5 pt-4">{backButton}</div>
+        {/* Signed up but KYC never submitted: the first thing they see is
+            that the form is incomplete (owner rule, 2026-10-27). */}
+        <KycIncompleteNotice lang={lang} missing={getDriverKycMissing(driver)} />
         <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
           stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : lang === "mr" ? "स्टेप 2 / 2 — कागदपत्रे आणि गाडी" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"}
           onFirstSubmit={onFirstSignupComplete} />
@@ -5332,6 +5382,22 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
       <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
         {lang === "en" ? "Step 1 of 2 — Fill in your details, then set a PIN below." : lang === "mr" ? "स्टेप 1 / 2 — तुमची माहिती भरा, नंतर खाली PIN सेट करा." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे PIN सेट करें।"}
       </p>
+
+      {/* Owner rule (2026-10-27): the documents are mandatory and sign-up
+          isn't finished without them -- say so BEFORE anyone creates an
+          account, so they arrive at step 2 with everything in hand. */}
+      <div className="rounded-xl p-3 mb-5" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
+        <div className="text-xs font-bold mb-1 flex items-center gap-1.5" style={{ color: C.ink }}>
+          <ClipboardList size={14} color={C.marigoldDeep} />
+          {lang === "en" ? "Keep these ready — all are mandatory" : lang === "mr" ? "हे तयार ठेवा — सर्व अनिवार्य आहे" : "ये तैयार रखें — सब अनिवार्य है"}
+        </div>
+        <ul className="text-[11px] mb-2" style={{ color: C.inkSoft, lineHeight: 1.7 }}>
+          {DRIVER_KYC_FIELDS.map((f) => <li key={f.key}>• {kycFieldLabel(f.key, lang)}</li>)}
+        </ul>
+        <p className="text-[11px] font-semibold" style={{ color: C.safety }}>
+          {lang === "en" ? "Sign-up isn't complete without these, and you can't start rides until it is." : lang === "mr" ? "यांशिवाय साइन-अप पूर्ण होत नाही, आणि ते पूर्ण होईपर्यंत तुम्ही राइड सुरू करू शकत नाही." : "इनके बिना साइन-अप पूरा नहीं होता, और जब तक पूरा न हो आप राइड शुरू नहीं कर सकते।"}
+        </p>
+      </div>
 
       <div className="space-y-3">
         <GuidedStep {...regStepProps(0)} lang={lang}>
@@ -10251,6 +10317,40 @@ function DriverHistory({ tripLog, driver, lang }) {
   );
 }
 
+// The first thing a driver with an unfinished sign-up/KYC sees every time the
+// app opens (owner rule, 2026-10-27) -- shown above the KYC form by
+// DriverOnboarding (signed up, never submitted) and by App()'s
+// driverKycIncomplete gate (submitted before every field was mandatory).
+// `missing` is getDriverKycMissing(driver): exactly what's still outstanding.
+function KycIncompleteNotice({ lang, missing }) {
+  const t = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  return (
+    <div className="mx-5 mt-3 rounded-xl p-4 shadow-md" style={{ background: C.safety }} role="alert">
+      <div className="flex items-center gap-2 mb-1">
+        <AlertTriangle size={20} color="#FFFFFF" />
+        <h2 className="text-base font-extrabold" style={{ color: "#FFFFFF" }}>{t("Incomplete form", "फॉर्म अधूरा है", "फॉर्म अपूर्ण आहे")}</h2>
+      </div>
+      <p className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>
+        {t(
+          "Your sign-up isn't finished yet. Complete this form to start your rides / trips.",
+          "आपका साइन-अप अभी पूरा नहीं हुआ है। अपनी राइड / ट्रिप शुरू करने के लिए यह फॉर्म पूरा करें।",
+          "तुमचे साइन-अप अजून पूर्ण झालेले नाही. तुमच्या राइड / ट्रिप सुरू करण्यासाठी हा फॉर्म पूर्ण करा."
+        )}
+      </p>
+      {missing.length > 0 && (
+        <div className="mt-2.5">
+          <div className="text-[11px] font-bold mb-1" style={{ color: "#FFFFFF" }}>{t("Still needed:", "अभी बाकी:", "अजून बाकी आहे:")}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {missing.map((k) => (
+              <span key={k} className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.2)", color: "#FFFFFF" }}>{kycFieldLabel(k, lang)}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, onFirstSubmit }) {
   const VEHICLES = vehicleTypes;
   // Persisted to localStorage so a refresh mid-fill (slow connection,
@@ -10258,8 +10358,16 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // cleared once submit() actually attaches them to the driver doc. Falls
   // back to whatever's already saved on the driver (e.g. on KYC
   // resubmission after a rejection) only when there's no in-progress draft.
-  const [dl, setDl] = usePersistedPhoto("sarthi_driverKyc_dl", null);
-  const [photo, setPhoto] = usePersistedPhoto("sarthi_driverKyc_photo", null);
+  // A driver finishing a half-filled KYC (a saved vehicleSpec exists but not
+  // every mandatory field -- see getDriverKycMissing) keeps what they already
+  // submitted, so only the missing items need doing; KycIncompleteNotice
+  // above the form lists exactly those. Everyone else (first submission, a
+  // resubmission after a rejection, an edit from Settings) still starts the
+  // two document tiles empty, as before.
+  const savedKycComplete = isDriverKycComplete(driver);
+  const keepSavedDocs = !!driver.vehicleSpec && driver.kyc !== "Rejected" && !savedKycComplete;
+  const [dl, setDl] = usePersistedPhoto("sarthi_driverKyc_dl", keepSavedDocs ? (driver.docs?.dl || null) : null);
+  const [photo, setPhoto] = usePersistedPhoto("sarthi_driverKyc_photo", keepSavedDocs ? (driver.docs?.photo || driver.photo || null) : null);
   // Which photo tiles are mid-upload — a set, not a single value, so
   // uploading two photos at once (e.g. tapping Front then Side before the
   // first finishes) doesn't make one tile's "uploading" indicator vanish
@@ -10292,7 +10400,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // The driver just types their vehicle's name — no dropdown of preset
   // types to pick from. Resolved to a vehicleTypes entry (reusing a
   // matching one by name, or creating a new one) only at submit time.
-  const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : "");
+  const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : (driver.vehicleSpec?.type || ""));
   const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
   const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
   // vehicleSpec.capacityKg is stored as a number (see resolveVehicleTypeKey
@@ -10399,7 +10507,12 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // supposedly being required. Requiring a real positive number here closes
   // that gap for every future submission.
   const capacityKgValid = Number(capacityKgStr.trim()) > 0;
-  const canSubmit = !!(photo && dl && vehiclePhotoSide && vehicleNumber.trim() && capacityKgValid && vehicleTypeName.trim() && !anyUploading);
+  // Owner rule (2026-10-27): every KYC field is mandatory except vehicle
+  // dimensions. Same list (getKycMissingFromValues) the sign-up checklist,
+  // the Incomplete screen and the admin KYC badge use, so Submit can never
+  // accept less than what the app later treats as "complete".
+  const draftMissing = getKycMissingFromValues({ photo, dl, vehicleName: vehicleTypeName, vehicleNumber, capacityKg: capacityKgStr, vehicleSide: vehiclePhotoSide });
+  const canSubmit = draftMissing.length === 0 && !anyUploading;
   // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
   // Front isn't required here — see the photo tile below, same reasoning as
   // DriverProfileEdit's document list already applied: the side profile is
@@ -10451,14 +10564,16 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     <div className="px-5 py-5">
       {stepLabel && <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{stepLabel}</div>}
       <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : lang === "mr" ? "कागदपत्रे (KYC)" : "दस्तावेज़ (KYC)"}</h2>
-      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Upload your photo and driving license, and enter your vehicle's number and dimensions." : lang === "mr" ? "तुमचा फोटो आणि ड्रायव्हिंग लायसन्स अपलोड करा, आणि तुमच्या गाडीचा नंबर व साइझ टाका." : "अपनी फोटो और ड्राइविंग लाइसेंस अपलोड करें, और अपनी गाड़ी का नंबर व साइज़ डालें।"}</p>
+      <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Everything below is mandatory — upload your photo, driving license and vehicle side photo, and enter your vehicle's name, number and capacity." : lang === "mr" ? "खालील सर्व माहिती अनिवार्य आहे — तुमचा फोटो, ड्रायव्हिंग लायसन्स आणि गाडीचा बाजूचा फोटो अपलोड करा, आणि गाडीचे नाव, नंबर व क्षमता टाका." : "नीचे दी गई सारी जानकारी अनिवार्य है — अपनी फोटो, ड्राइविंग लाइसेंस और गाड़ी की साइड वाली फोटो अपलोड करें, और गाड़ी का नाम, नंबर व क्षमता डालें।"}</p>
 
-      <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: driver.kyc === "Approved" ? C.success : C.marigoldDeep }}>
+      {/* Saved-doc status. "Incomplete" wins over Verified/Pending: an Approved
+          driver whose saved KYC lacks a mandatory field isn't verified yet. */}
+      <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: !savedKycComplete ? C.safety : driver.kyc === "Approved" ? C.success : C.marigoldDeep }}>
         <ShieldCheck size={16} color="#FFFFFF" />
-        <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Status" : lang === "mr" ? "स्टेटस" : "स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित") : (lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित")}</span>
+        <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Status" : lang === "mr" ? "स्टेटस" : "स्टेटस"}: {!savedKycComplete ? (lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरा") : driver.kyc === "Approved" ? (lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित") : (lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित")}</span>
       </div>
 
-      <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Documents" : lang === "mr" ? "कागदपत्रे" : "दस्तावेज़"}</div>
+      <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Documents" : lang === "mr" ? "कागदपत्रे" : "दस्तावेज़"} <span style={{ color: C.safety }}>*</span></div>
       <div className="grid grid-cols-2 gap-2 mb-3">
         {[
           ["photo", docLabels.photo, photo, setPhoto], ["dl", docLabels.dl, dl, setDl],
@@ -10508,13 +10623,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       </div>
 
       <GuidedStep {...kycStepProps(2)} lang={lang}>
-        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : lang === "mr" ? "गाडी रजिस्टर्ड नंबर" : "गाड़ी रजिस्टर्ड नंबर"}</label>
+        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Registered Number" : lang === "mr" ? "गाडी रजिस्टर्ड नंबर" : "गाड़ी रजिस्टर्ड नंबर"} <span style={{ color: C.safety }}>*</span></label>
         <input className={inputCls} style={{ ...inputStyle, fontFamily: monoFont, textTransform: "uppercase", marginBottom: 12 }} placeholder="MH-14-XX-XXXX" value={vehicleNumber}
           onChange={(e) => setVehicleNumber(e.target.value)} />
       </GuidedStep>
 
       <GuidedStep {...kycStepProps(3)} lang={lang}>
-        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलोग्राम)" : "क्षमता (किलोग्राम)"}</label>
+        <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Capacity (kg)" : lang === "mr" ? "क्षमता (किलोग्राम)" : "क्षमता (किलोग्राम)"} <span style={{ color: C.safety }}>*</span></label>
         {matchedModelSpec && (
           <p className="text-[10px] font-semibold mb-1.5" style={{ color: C.success }}>
             {lang === "en" ? "Auto-filled for this vehicle model — edit if yours differs." : lang === "mr" ? "या गाडी मॉडेलनुसार आपोआप भरले गेले आहे — वेगळे असल्यास बदलू शकता." : "इस गाड़ी मॉडल के हिसाब से अपने आप भर दिया गया है — अलग हो तो बदल सकते हैं।"}
@@ -10530,11 +10645,11 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         <div className="text-xs font-bold mb-2 flex items-center gap-1.5" style={{ color: "#000000" }}><Truck size={14} /> {lang === "en" ? "Fill this clearly — customer will see this" : lang === "mr" ? "स्पष्ट भरा — कस्टमरला हीच दिसेल" : "साफ-साफ भरें — कस्टमर को यही दिखेगी"}</div>
 
         <GuidedStep {...kycStepProps(4)} lang={lang}>
-          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : lang === "mr" ? "गाडीचे नाव" : "गाड़ी का नाम"}</label>
+          <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Name" : lang === "mr" ? "गाडीचे नाव" : "गाड़ी का नाम"} <span style={{ color: C.safety }}>*</span></label>
           <input className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. Tata 109" : lang === "mr" ? "उदा: Tata 109" : "जैसे: Tata 109"} value={vehicleTypeName} onChange={(e) => setVehicleTypeName(e.target.value)} />
         </GuidedStep>
 
-        <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo (Side)" : lang === "mr" ? "गाडीचा फोटो (बाजूने)" : "गाड़ी की फोटो (साइड से)"}</label>
+        <label className="text-xs font-semibold mb-1 mt-2 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Vehicle Photo (Side)" : lang === "mr" ? "गाडीचा फोटो (बाजूने)" : "गाड़ी की फोटो (साइड से)"} <span style={{ color: C.safety }}>*</span></label>
         {/* Front used to be required here too — dropped (see kycStepCompleted
             above) since the side profile is the only vehicle photo a
             customer ever sees on a bid card, same reasoning already applied
@@ -10595,7 +10710,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         </div>
       </div>
 
-      {!canSubmit && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "Upload your photo, license, both vehicle photos, and enter the vehicle name & number to submit" : lang === "mr" ? "सबमिट करण्यासाठी तुमचा फोटो, लायसन्स, गाडीचे दोन्ही फोटो, गाडीचे नाव आणि नंबर टाका" : "सबमिट करने के लिए अपनी फोटो, लाइसेंस, गाड़ी की दोनों फोटो, गाड़ी का नाम और नंबर डालें"}</div>}
+      {draftMissing.length > 0 && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "To submit, still needed: " : lang === "mr" ? "सबमिट करण्यासाठी अजून बाकी: " : "सबमिट करने के लिए अभी बाकी: "}{draftMissing.map((k) => kycFieldLabel(k, lang)).join(", ")}</div>}
       <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-4 font-bold text-base ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : "#E5EAF2", color: canSubmit ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Submit" : lang === "mr" ? "सबमिट करा" : "सबमिट करें"}</button>
     </div>
   );
@@ -12087,6 +12202,15 @@ export default function App() {
   useEffect(() => {
     if (driver?.kyc !== "Rejected") setDriverResubmitting(false);
   }, [driver?.kyc]);
+  // Owner rule (2026-10-27): a driver who submitted the sign-up form but
+  // whose saved KYC lacks any mandatory field (see getDriverKycMissing) sees
+  // the "Incomplete form" screen FIRST, every time the app opens -- before
+  // the Pending/Approved screens and the dashboard, whatever their kyc
+  // status says. Rejected drivers keep their own, more specific "KYC
+  // rejected -- resubmit" screen, whose form enforces the same fields.
+  // (Drivers with no vehicleSpec at all never get here -- DriverOnboarding
+  // already shows them the KYC form, with the same notice.)
+  const driverKycIncomplete = !!(driverAuth.verified && driver && driver.vehicleSpec && driver.kyc !== "Rejected" && !isDriverKycComplete(driver));
 
   const addVehicleType = (v) => createDoc("vehicleTypes", v.key, v).catch((e) => console.error(e));
 
@@ -12691,7 +12815,16 @@ export default function App() {
             <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
           </div>
         )}
-        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc !== "Approved" && (
+        {role === "driver" && driverKycIncomplete && !driverResubmitting && (
+          <div className="flex-1 overflow-y-auto pb-6">
+            <button onClick={() => logoutRole("driver")} className="flex items-center gap-1 mx-5 mt-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+              <ChevronLeft size={18} strokeWidth={3} />
+            </button>
+            <KycIncompleteNotice lang={lang} missing={getDriverKycMissing(driver)} />
+            <DriverKyc driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang} />
+          </div>
+        )}
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && !driverKycIncomplete && driver.kyc !== "Approved" && (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center relative">
             <button onClick={() => logoutRole("driver")} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
               <ChevronLeft size={18} strokeWidth={3} />
@@ -12714,7 +12847,7 @@ export default function App() {
             )}
           </div>
         )}
-        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && driver.kyc === "Approved" && (
+        {role === "driver" && driverAuth.verified && driver && driver.vehicleSpec && !driverResubmitting && !driverKycIncomplete && driver.kyc === "Approved" && (
           <DriverApp driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking}
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert} alerts={alerts}
             minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
