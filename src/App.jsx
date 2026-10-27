@@ -2619,7 +2619,7 @@ function getKycMissingFromValues(v = {}) {
   if (!kycHasPhoto(v.vehicleSide)) missing.push("vehicleSide");
   return missing;
 }
-export function getDriverKycMissing(driver) {
+function getDriverKycMissing(driver) {
   if (!driver) return DRIVER_KYC_FIELDS.map((f) => f.key);
   const spec = driver.vehicleSpec || {};
   return getKycMissingFromValues({
@@ -2628,8 +2628,8 @@ export function getDriverKycMissing(driver) {
     vehicleSide: spec.photoSide,
   });
 }
-export const isDriverKycComplete = (driver) => getDriverKycMissing(driver).length === 0;
-export const kycFieldLabel = (key, lang) => {
+const isDriverKycComplete = (driver) => getDriverKycMissing(driver).length === 0;
+const kycFieldLabel = (key, lang) => {
   const f = DRIVER_KYC_FIELDS.find((x) => x.key === key);
   return f ? (lang === "en" ? f.en : lang === "mr" ? f.mr : f.hi) : key;
 };
@@ -10534,7 +10534,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       // The KYC driver photo doubles as the profile photo (see
       // DriverProfileEdit) — kept in sync here every time KYC is
       // submitted/resubmitted, rather than letting the two drift apart.
-      ...driver, kyc: "Pending", photo, docs: { dl, photo },
+      ...driver, kyc: driver.kyc === "Approved" ? "Approved" : "Pending", photo, docs: { dl, photo },
       vehicleSpec: {
         type: resolveVehicleTypeKey(), photo: vehiclePhotoFront, photoFront: vehiclePhotoFront, photoSide: vehiclePhotoSide,
         // canSubmit already guarantees Number(capacityKg) > 0 by this point
@@ -10568,9 +10568,9 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
 
       {/* Saved-doc status. "Incomplete" wins over Verified/Pending: an Approved
           driver whose saved KYC lacks a mandatory field isn't verified yet. */}
-      <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: !savedKycComplete ? C.safety : driver.kyc === "Approved" ? C.success : C.marigoldDeep }}>
+      <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: driver.kyc === "Approved" ? C.success : !savedKycComplete ? C.safety : C.marigoldDeep }}>
         <ShieldCheck size={16} color="#FFFFFF" />
-        <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Status" : lang === "mr" ? "स्टेटस" : "स्टेटस"}: {!savedKycComplete ? (lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरा") : driver.kyc === "Approved" ? (lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित") : (lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित")}</span>
+        <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Status" : lang === "mr" ? "स्टेटस" : "स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित") : !savedKycComplete ? (lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरा") : (lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित")}</span>
       </div>
 
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Documents" : lang === "mr" ? "कागदपत्रे" : "दस्तावेज़"} <span style={{ color: C.safety }}>*</span></div>
@@ -12205,12 +12205,14 @@ export default function App() {
   // Owner rule (2026-10-27): a driver who submitted the sign-up form but
   // whose saved KYC lacks any mandatory field (see getDriverKycMissing) sees
   // the "Incomplete form" screen FIRST, every time the app opens -- before
-  // the Pending/Approved screens and the dashboard, whatever their kyc
-  // status says. Rejected drivers keep their own, more specific "KYC
-  // rejected -- resubmit" screen, whose form enforces the same fields.
+  // the Pending screen and the dashboard. APPROVED drivers are exempt (owner,
+  // same day: "keep approved drivers approved") -- admin already accepted
+  // them, so they go straight to the dashboard. Rejected drivers keep their
+  // own, more specific "KYC rejected -- resubmit" screen, whose form enforces
+  // the same fields.
   // (Drivers with no vehicleSpec at all never get here -- DriverOnboarding
   // already shows them the KYC form, with the same notice.)
-  const driverKycIncomplete = !!(driverAuth.verified && driver && driver.vehicleSpec && driver.kyc !== "Rejected" && !isDriverKycComplete(driver));
+  const driverKycIncomplete = !!(driverAuth.verified && driver && driver.vehicleSpec && driver.kyc !== "Approved" && driver.kyc !== "Rejected" && !isDriverKycComplete(driver));
 
   const addVehicleType = (v) => createDoc("vehicleTypes", v.key, v).catch((e) => console.error(e));
 

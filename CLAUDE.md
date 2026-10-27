@@ -202,14 +202,16 @@ sign-up "Keep these ready" checklist, the Incomplete screen and the admin KYC
 badge (green only when Approved AND complete). A driver who signed up but whose
 saved KYC lacks any field sees the red "Incomplete form -- complete it to start
 your rides / trips" notice (`KycIncompleteNotice`) with the form FIRST, every
-time the app opens, before the Pending/Approved screens and the dashboard
-(`driverKycIncomplete` gate in `App()`; Rejected drivers keep their own
-"resubmit" screen). Completing the form sends the driver back to kyc "Pending"
-for admin to verify. `firestore.rules` lets a driver's own session set `kyc` to
-'Pending' only (never Approved/Rejected) -- deploy it with
-`firebase deploy --only firestore:rules` or re-submits from an already-registered
-driver are refused. The GPS/ring code itself is untouched; the gate simply
-means an incomplete driver never reaches `DriverHome`.
+time the app opens, before the Pending screen and the dashboard
+(`driverKycIncomplete` gate in `App()`). APPROVED drivers are exempt (owner,
+2026-10-27: "keep approved drivers approved") -- never gated, and submitting the
+KYC form never demotes them to Pending; admin's KYC badge is unchanged. Rejected
+drivers keep their own "resubmit" screen. Everyone else's submission lands in
+"Pending" for admin to verify. `firestore.rules` lets a driver's own session set
+`kyc` to 'Pending' only (never Approved/Rejected) -- deploy it with
+`firebase deploy --only firestore:rules` or a Rejected driver's re-submit is
+refused. The GPS/ring code itself is untouched; the gate simply means a gated
+driver never reaches `DriverHome`.
 
 **Look & feel (owner 2026-10-26: "same brand colour, fresher feel").** Brand hues
 (marigold #FFCC00, orange, blue #0052CC, green, red) are unchanged. All screens

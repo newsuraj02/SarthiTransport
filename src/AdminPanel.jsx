@@ -23,7 +23,7 @@ import {
   describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
   getRouteScaleRatio, gpsStatus, greetingWord, haversineKm, installedDrivers, zoneFor,
-  getDriverKycMissing, isDriverKycComplete, isFutureAdvance, isLikelyUninstalled, kycFieldLabel,
+  isFutureAdvance, isLikelyUninstalled,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, SafeImage, StatTile, VEHICLE_HEADROOM_KG,
@@ -3172,10 +3172,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: gps.stale ? C.safety : C.success }} title={lang === "en" ? `GPS: ${gps.label}` : lang === "mr" ? `GPS: ${gps.label}` : `GPS: ${gps.label}`}>
               <MapPin size={9} /> GPS
             </span>
-            {/* Green only when approved AND every mandatory KYC field is saved --
-                an Approved driver missing any (owner rule 2026-10-27) is locked
-                out of the dashboard behind the Incomplete form screen. */}
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: d.kyc === "Approved" && isDriverKycComplete(d) ? C.success : C.safety }} title={d.vehicleSpec && !isDriverKycComplete(d) ? `${lang === "en" ? "KYC form incomplete" : lang === "mr" ? "KYC फॉर्म अपूर्ण" : "KYC फॉर्म अधूरा"}: ${getDriverKycMissing(d).map((k) => kycFieldLabel(k, lang)).join(", ")}` : km.label}>KYC</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>
           </div>
         </div>
 

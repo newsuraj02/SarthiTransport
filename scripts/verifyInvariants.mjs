@@ -160,12 +160,13 @@ const checks = [
     const gate = app.indexOf("{role === \"driver\" && driverKycIncomplete && !driverResubmitting && (");
     const pending = app.indexOf("!driverResubmitting && !driverKycIncomplete && driver.kyc !== \"Approved\"");
     const approved = app.indexOf("!driverResubmitting && !driverKycIncomplete && driver.kyc === \"Approved\"");
-    return gate > 0 && pending > gate && approved > pending && app.includes("const driverKycIncomplete = !!(driverAuth.verified && driver && driver.vehicleSpec && driver.kyc !== \"Rejected\" && !isDriverKycComplete(driver));");
+    return gate > 0 && pending > gate && approved > pending && app.includes("const driverKycIncomplete = !!(driverAuth.verified && driver && driver.vehicleSpec && driver.kyc !== \"Approved\" && driver.kyc !== \"Rejected\" && !isDriverKycComplete(driver));");
   }],
   ["Incomplete notice ('Incomplete form' + 'complete it to start your rides / trips') shows on the gate AND on sign-up step 2", () => count(app, "<KycIncompleteNotice lang={lang} missing={getDriverKycMissing(driver)} />") >= 2 && app.includes('"Incomplete form"') && app.includes("start your rides / trips")],
   ["driver sign-up lists the mandatory documents before an account is created", () => app.includes("DRIVER_KYC_FIELDS.map((f) => <li key={f.key}>") && app.includes("Keep these ready — all are mandatory")],
   ["Firestore lets a driver's own session set kyc only to 'Pending' (never Approved/Rejected)", () => rules.includes("request.resource.data.kyc == resource.data.kyc || request.resource.data.kyc == 'Pending'") && !/request\.resource\.data\.kyc == 'Approved'|request\.resource\.data\.kyc == 'Rejected'/.test(rules)],
-  ["admin KYC badge is green only for Approved AND complete KYC", () => admin.includes('d.kyc === "Approved" && isDriverKycComplete(d) ? C.success : C.safety')],
+  ["Approved drivers stay Approved: never gated, and submitting the KYC form never demotes them to Pending (owner 2026-10-27)", () => app.includes('kyc: driver.kyc === "Approved" ? "Approved" : "Pending", photo, docs: { dl, photo },') && !app.includes('...driver, kyc: "Pending", photo, docs')],
+  ["admin KYC badge is plain green for Approved (completeness doesn't change it)", () => admin.includes('background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>') && !admin.includes("isDriverKycComplete")],
 
   // ---- Role selection ----
   ["role select cards say WHO should pick them", () => app.includes('"If you drive a truck or vehicle"') && app.includes('"If you need to send goods"')],
