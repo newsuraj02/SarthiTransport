@@ -205,7 +205,10 @@ your rides / trips" notice (`KycIncompleteNotice`) with the form FIRST, every
 time the app opens, before the Pending screen and the dashboard
 (`driverKycIncomplete` gate in `App()`). APPROVED drivers are exempt (owner,
 2026-10-27: "keep approved drivers approved") -- never gated, and submitting the
-KYC form never demotes them to Pending; admin's KYC badge is unchanged. Rejected
+KYC form never demotes them to Pending; admin's KYC badge is unchanged. An
+Approved driver who is still missing documents gets a dismissible orange reminder
+(`KycReminderBanner`) at the top of the idle home screen: "Complete now" opens the
+KYC form, "Later" hides only that banner until the app is next opened. Rejected
 drivers keep their own "resubmit" screen. Everyone else's submission lands in
 "Pending" for admin to verify. `firestore.rules` lets a driver's own session set
 `kyc` to 'Pending' only (never Approved/Rejected) -- deploy it with

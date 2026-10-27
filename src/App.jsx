@@ -10351,6 +10351,39 @@ function KycIncompleteNotice({ lang, missing }) {
   );
 }
 
+// Gentle version of KycIncompleteNotice for APPROVED drivers whose saved KYC
+// is still missing something (owner rule, 2026-10-27: approved drivers stay
+// approved and are never blocked). Shown at the top of the idle home screen
+// only; "Later" hides just this banner until the app is next opened, "Complete
+// now" opens the KYC form. Nothing else is ever locked behind it.
+function KycReminderBanner({ lang, missing, onComplete, onDismiss }) {
+  const t = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  return (
+    <div className="mx-5 mt-3 rounded-xl p-3.5 shadow-md" style={{ background: C.marigoldDeep }}>
+      <div className="flex items-center gap-2 mb-1">
+        <AlertTriangle size={18} color="#FFFFFF" />
+        <h2 className="text-sm font-extrabold" style={{ color: "#FFFFFF" }}>{t("Your KYC form is incomplete", "आपका KYC फॉर्म अधूरा है", "तुमचा KYC फॉर्म अपूर्ण आहे")}</h2>
+      </div>
+      <p className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>
+        {t("Please add the missing documents so we can verify you.", "कृपया बाकी दस्तावेज़ जोड़ें ताकि हम आपको वेरीफाई कर सकें।", "कृपया उर्वरित कागदपत्रे जोडा, म्हणजे आम्ही तुम्हाला व्हेरिफाय करू शकू.")}
+      </p>
+      <div className="flex flex-wrap gap-1.5 mt-2">
+        {missing.map((k) => (
+          <span key={k} className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.22)", color: "#FFFFFF" }}>{kycFieldLabel(k, lang)}</span>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 mt-3">
+        <button onClick={onComplete} className="flex-1 rounded-lg py-2.5 text-sm font-extrabold" style={{ background: "#FFFFFF", color: C.marigoldDeep }}>
+          {t("Complete now", "अभी पूरा करें", "आता पूर्ण करा")}
+        </button>
+        <button onClick={onDismiss} className="rounded-lg px-4 py-2.5 text-sm font-bold" style={{ background: "rgba(255,255,255,0.22)", color: "#FFFFFF" }}>
+          {t("Later", "बाद में", "नंतर")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, onFirstSubmit }) {
   const VEHICLES = vehicleTypes;
   // Persisted to localStorage so a refresh mid-fill (slow connection,
@@ -11125,6 +11158,10 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
   // whenever the menu itself closes, so it's always collapsed on reopen.
   const [shareNoteOpen, setShareNoteOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(null); // 'kyc' | 'helpline' | 'profile' | null
+  // "Later" on the incomplete-KYC reminder (see KycReminderBanner) -- plain
+  // component state on purpose: it hides the banner for this app session
+  // only and it's back the next time the app is opened, until the form is done.
+  const [kycReminderDismissed, setKycReminderDismissed] = useState(false);
   const [selectedAdvanceId, setSelectedAdvanceId] = useState(null);
   // 'current' (default) shows the driver's own trip/bidding activity
   // automatically; 'advance' is the driver's own accepted advance bookings,
@@ -11356,6 +11393,9 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
             </div>
             <div className="flex-1" style={{ background: "rgba(15,27,45,0.5)" }} />
           </div>
+        )}
+        {realHamburgerVisible && !kycReminderDismissed && !isDriverKycComplete(driver) && (
+          <KycReminderBanner lang={lang} missing={getDriverKycMissing(driver)} onComplete={() => setSettingsView("kyc")} onDismiss={() => setKycReminderDismissed(true)} />
         )}
         {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} bookingExtras={bookingExtras} />}
         {tab === "home" && rideView === "advance" && (
