@@ -242,6 +242,10 @@ with "Number Already exists. Try login" -- `goToPinStage` asks the callable
 `checkMobileRegistered` (functions/index.js; needs `firebase deploy --only functions`).
 If that check can't run, sign-up continues and account creation shows the same
 message.
+Sign-up forms never remember what was typed (owner 2026-10-28): customer and
+driver sign-up fields (name, firm, photo, mobile, PIN, and the deferred documents
+form) are plain state, not localStorage, and EVERY Back arrow (`resetForm`) wipes
+the whole form so they retype it all. Pinned in `verifyInvariants.mjs`.
 
 **Meta ads export (owner 2026-10-27).** Admin Settings -> "Export app users for ads
 (Meta)" downloads every driver + customer mobile (blocked/inactive included, duplicates

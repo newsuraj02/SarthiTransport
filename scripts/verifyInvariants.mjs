@@ -231,7 +231,8 @@ const checks = [
     const i = k.indexOf("Fill this clearly"), j = k.indexOf("<DocsTermsCheckbox lang={lang}"), l = k.indexOf("To submit, still needed"), m = k.indexOf('"Create Account" : lang === "mr"');
     return i > 0 && j > i && l > j && m > l && count(app, "<DocsTermsCheckbox lang={lang}") === 1;
   }],
-  ["Photos picked before the account exists are held in memory only (never persisted) and uploaded after it", () => count(app, ", !deferred);") === 4 && app.includes("setVal({ name: f.name, url: URL.createObjectURL(f), file: f });") && app.includes("await runDriverSignupFinalize(pendingSignupRef.current, driver, {")],
+  ["sign-up forms never remember typed values and Back wipes them (owner 2026-10-28)", () => !app.includes("sarthi_customerReg_name") && !app.includes("sarthi_customerReg_firmName") && !app.includes("sarthi_customerReg_photo") && !app.includes("sarthi_driverReg_name\"") && count(app, "const resetForm = () => {") === 2 && count(app, "resetForm(); setMode(null);") === 4 && app.includes('<button onClick={resetForm} className="flex items-center gap-1 mb-1 p-3')],
+  ["Photos picked before the account exists are held in memory only (never persisted) and uploaded after it", () => count(app, ", !deferred);") === 8 && app.includes("setVal({ name: f.name, url: URL.createObjectURL(f), file: f });") && app.includes("await runDriverSignupFinalize(pendingSignupRef.current, driver, {")],
   ["runDriverSignupFinalize (real code): uploads first, then ONE complete profile patch (Pending, name, docs, vehicle, side photo) -- the doc a driver ends up with is KYC-complete", async () => {
     const run = loadSignupFinalizeFn(), k = loadKycFns();
     const calls = []; const saved = [];

@@ -2176,8 +2176,9 @@ function useRefreshButton() {
 
 // Persists a piece of state to localStorage under `key`, so the app
 // remembers role choice, bookings, wallet balances etc. across reloads.
-export function usePersistedState(key, initialValue) {
+export function usePersistedState(key, initialValue, persist = true) {
   const [value, setValue] = useState(() => {
+    if (!persist) return initialValue;
     try {
       const raw = window.localStorage.getItem(key);
       return raw !== null ? JSON.parse(raw) : initialValue;
@@ -2186,8 +2187,9 @@ export function usePersistedState(key, initialValue) {
     }
   });
   useEffect(() => {
+    if (!persist) return;
     try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
-  }, [key, value]);
+  }, [key, value, persist]);
   return [value, setValue];
 }
 
@@ -4447,14 +4449,13 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
 // =====================================================================
 function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobile, hasProfile, checking, onOtpVerified, onLogout, onComplete }) {
   // Step 2 fields — profile/address, asked only once, only if needed.
-  // Persisted to localStorage so refreshing mid-registration (a slow
-  // connection, an accidental reload) doesn't force retyping everything —
-  // cleared once submitProfile actually completes.
-  const [name, setName] = usePersistedState("sarthi_customerReg_name", "");
+  // NOT remembered (owner 2026-10-28): leaving the form with Back wipes it, so
+  // sign-up always starts blank (see resetForm).
+  const [name, setName] = useState("");
   // Optional (owner 2026-10-28) -- only the profile photo and this are optional
   // on the customer sign-up form; name, mobile and PIN stay mandatory.
-  const [firmName, setFirmName] = usePersistedState("sarthi_customerReg_firmName", "");
-  const [photo, setPhoto] = usePersistedPhoto("sarthi_customerReg_photo", null);
+  const [firmName, setFirmName] = useState("");
+  const [photo, setPhoto] = useState(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState(false);
   // Sign Up's photo picker runs before OTP verifies, but Storage's security
@@ -4485,6 +4486,11 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   const [stage, setStage] = useState("mobile"); // "mobile" | "pin"
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  // Back arrow = start over (owner 2026-10-28): nothing typed is kept.
+  const resetForm = () => {
+    setName(""); setFirmName(""); setPhoto(null); setPhotoFile(null); setPhotoPreview(null); setPhotoError(false);
+    setMobile(""); setPin(""); setPinConfirm(""); setStage("mobile"); setError("");
+  };
 
   // Forgot-PIN — reachable only from Login's PIN screen. Reuses Firebase's
   // own Phone Auth (reCAPTCHA + real SMS OTP) as the recovery proof instead
@@ -4823,7 +4829,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
     // Login — mobile + PIN, no SMS needed except via the Forgot PIN path.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <button onClick={() => { resetForm(); setMode(null); }} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
@@ -4906,7 +4912,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   // verification at the bottom of this same page.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
-      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+      <button onClick={() => { resetForm(); setMode(null); }} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
         <ChevronLeft size={18} strokeWidth={3} />
       </button>
       <div className="mb-4"><Logo size={96} /></div>
@@ -5025,10 +5031,9 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   // KYC, so there's no real "new here?" choice to ask).
   const [mode, setMode] = useState(forceMode); // null | "login" | "signup"
 
-  // Personal details — only ever asked for AFTER OTP verifies, and only if
-  // this driver doc genuinely has none yet (first-time signup). Persisted
-  // to localStorage so a refresh mid-fill doesn't wipe it.
-  const [name, setName] = usePersistedState("sarthi_driverReg_name", "");
+  // Sign-up name. NOT remembered (owner 2026-10-28): Back wipes the whole
+  // sign-up so it always starts blank (see resetForm).
+  const [name, setName] = useState("");
   // (The "my documents are my responsibility" clause used to be ticked here on
   // step 1; it now sits at the END of the documents form -- see DocsTermsCheckbox.)
   // Sign Up's last step creates the account and saves everything together:
@@ -5048,6 +5053,12 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   const [stage, setStage] = useState(authInstance?.currentUser ? "checking" : "mobile"); // "checking" | "mobile" | "pin"
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  // Back arrow = start over (owner 2026-10-28): nothing typed is kept. Only
+  // reachable before the account exists (the documents form unmounts with it).
+  const resetForm = () => {
+    setName(""); setMobile(""); setPin(""); setPinConfirm(""); setStage("mobile"); setError("");
+    pendingSignupRef.current = null;
+  };
 
   // Forgot-PIN — reachable only from Login's PIN screen. See
   // CustomerOnboarding's identical block for the full explanation (reuses
@@ -5459,7 +5470,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     // Login — mobile + PIN, no SMS needed except via the Forgot PIN path.
     return (
       <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-8 py-10 relative">
-        <button onClick={() => setMode(null)} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+        <button onClick={() => { resetForm(); setMode(null); }} className="absolute top-4 left-4 flex items-center gap-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
           <ChevronLeft size={18} strokeWidth={3} />
         </button>
         <div className="mb-4"><Logo size={96} /></div>
@@ -5544,7 +5555,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     return (
       <div className="flex-1 overflow-y-auto">
         <div className="px-5 pt-4">
-          <button onClick={() => { setError(""); setStage("pin"); }} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <button onClick={resetForm} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
             <ChevronLeft size={18} strokeWidth={3} />
           </button>
         </div>
@@ -5559,7 +5570,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   // verification at the bottom of this same page.
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8 relative">
-      <button onClick={() => setMode(null)} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+      <button onClick={() => { resetForm(); setMode(null); }} className="flex items-center gap-1 mb-4 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
         <ChevronLeft size={18} strokeWidth={3} />
       </button>
       <div className="mb-4"><Logo size={96} /></div>
@@ -10618,13 +10629,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // ticked HERE, after Step 2 Vehicle Details, on a first submission -- not on
   // sign-up step 1. (Edits/re-submissions by an existing driver don't repeat it.)
   const needsTerms = driver.kyc == null;
-  const [acceptedTerms, setAcceptedTerms] = usePersistedState("sarthi_driverKyc_acceptedDocsTerms", false);
+  const [acceptedTerms, setAcceptedTerms] = usePersistedState("sarthi_driverKyc_acceptedDocsTerms", false, !deferred);
 
   const existingVehicleType = VEHICLES.find((v) => v.key === driver.vehicleSpec?.type);
   // The driver just types their vehicle's name — no dropdown of preset
   // types to pick from. Resolved to a vehicleTypes entry (reusing a
   // matching one by name, or creating a new one) only at submit time.
-  const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : (driver.vehicleSpec?.type || ""));
+  const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : (driver.vehicleSpec?.type || ""), !deferred);
   const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null, !deferred);
   const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null, !deferred);
   // vehicleSpec.capacityKg is stored as a number (see resolveVehicleTypeKey
@@ -10633,8 +10644,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // crashed the whole KYC screen (capacityKg.trim is not a function) for
   // any driver whose vehicleSpec already had a numeric capacityKg set --
   // e.g. reopening "Settings (KYC & Vehicle)" after a first submission.
-  const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg != null ? String(driver.vehicleSpec.capacityKg) : "");
-  const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "");
+  const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg != null ? String(driver.vehicleSpec.capacityKg) : "", !deferred);
+  const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "", !deferred);
 
   // Auto-fills capacity from VEHICLE_MODEL_SPECS the moment the typed
   // vehicle name matches a known model — but only if the driver hasn't
