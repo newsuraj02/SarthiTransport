@@ -4401,8 +4401,8 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
 
         {showCustomer && (
           <div className={bothShown ? "flex flex-col" : "w-full max-w-xs flex flex-col mt-3"}>
-            <button onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center shadow-md" style={{ background: "#FFFFFF", border: `2px solid ${C.success}` }}>
-              <img src="/role-customer.png" alt="" className="h-16 w-auto rounded-xl mb-3" />
+            <button onClick={() => onSelect("customer")} className="flex-1 w-full rounded-2xl p-4 flex flex-col items-center text-center shadow-md" style={{ background: "#FFFFFF", border: `2px solid ${C.navy}` }}>
+              <img src="/role-customer.svg" alt="" className="h-16 w-16 mb-3" />
               <div className="text-base font-black mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer App" : lang === "mr" ? "कस्टमर अ‍ॅप" : "कस्टमर ऐप"}</div>
               <div className="text-xs font-semibold text-balance" style={{ color: C.inkSoft }}>{customerWho}</div>
             </button>
