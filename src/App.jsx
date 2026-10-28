@@ -5545,22 +5545,6 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
         {lang === "en" ? "Step 1 of 2 — Fill in your details, then set a PIN below." : lang === "mr" ? "स्टेप 1 / 2 — तुमची माहिती भरा, नंतर खाली PIN सेट करा." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे PIN सेट करें।"}
       </p>
 
-      {/* Owner rule (2026-10-27): the documents are mandatory and sign-up
-          isn't finished without them -- say so BEFORE anyone creates an
-          account, so they arrive at step 2 with everything in hand. */}
-      <div className="rounded-xl p-3 mb-5" style={{ background: C.paper, border: `1.5px solid ${C.marigoldDeep}` }}>
-        <div className="text-xs font-bold mb-1 flex items-center gap-1.5" style={{ color: C.ink }}>
-          <ClipboardList size={14} color={C.marigoldDeep} />
-          {lang === "en" ? "Keep these ready — all are mandatory" : lang === "mr" ? "हे तयार ठेवा — सर्व अनिवार्य आहे" : "ये तैयार रखें — सब अनिवार्य है"}
-        </div>
-        <ul className="text-[11px] mb-2" style={{ color: C.inkSoft, lineHeight: 1.7 }}>
-          {DRIVER_KYC_FIELDS.map((f) => <li key={f.key}>• {kycFieldLabel(f.key, lang)}</li>)}
-        </ul>
-        <p className="text-[11px] font-semibold" style={{ color: C.safety }}>
-          {lang === "en" ? "Sign-up isn't complete without these, and you can't start rides until it is." : lang === "mr" ? "यांशिवाय साइन-अप पूर्ण होत नाही, आणि ते पूर्ण होईपर्यंत तुम्ही राइड सुरू करू शकत नाही." : "इनके बिना साइन-अप पूरा नहीं होता, और जब तक पूरा न हो आप राइड शुरू नहीं कर सकते।"}
-        </p>
-      </div>
-
       <div className="space-y-3">
         <GuidedStep {...regStepProps(0)} lang={lang}>
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Your Name" : lang === "mr" ? "तुमचे नाव" : "आपका नाम"}</label>

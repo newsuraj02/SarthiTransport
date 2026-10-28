@@ -205,7 +205,7 @@ vehicle capacity (kg, a real number > 0), vehicle side photo. ONE definition
 drives everything -- `DRIVER_KYC_FIELDS` / `getKycMissingFromValues` /
 `getDriverKycMissing` / `isDriverKycComplete` in `App.jsx` (pinned by BEHAVIOR
 checks in `verifyInvariants.mjs`): the KYC form's Submit (`draftMissing`), the
-sign-up "Keep these ready" checklist, the Incomplete screen and the admin KYC
+sign-up documents form, the Incomplete screen and the admin KYC
 badge (green only when Approved AND complete). A driver who signed up but whose
 saved KYC lacks any field sees the red "Incomplete form -- complete it to start
 your rides / trips" notice (`KycIncompleteNotice`) with the form FIRST, every
