@@ -202,6 +202,14 @@ const checks = [
       && buildMetaUsersCsv([], []).csv === "phone\n" && buildMetaUsersCsv([], []).total === 0;
   }],
   ["Admin Settings has the 'Export app users for ads (Meta)' card wired to the real driver + customer lists", () => admin.includes("const metaExport = buildMetaUsersCsv(drivers, customers);") && admin.includes("<AdminSettings drivers={drivers} customers={customers} ") && admin.includes("Download CSV for Meta")],
+  ["Customer + Driver first screens: 'Sign Up' sits ABOVE 'Login' and both buttons are yellow (owner 2026-10-28)", () => {
+    const yellow = 'className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>';
+    return ["(New Customer)", "(New Driver)"].every((who) => {
+      const i = app.indexOf(`"Sign Up ${who}"`); const j = app.indexOf('"Login" : lang === "mr" ? "लॉगिन करा"', i);
+      return i > 0 && j > i && j - i < 400 && app.lastIndexOf('onClick={() => setMode("signup")} ' + yellow, i) > i - 700 && app.lastIndexOf('onClick={() => setMode("login")} ' + yellow, j) > i;
+    });
+  }],
+  ["Customer sign-up: optional 'Firm Name' sits under Full Name (before phone + PIN) in both forms, is saved with the profile; only photo + firm name are optional", () => count(app, '"Firm Name (Optional)"') === 2 && app.includes('firmName: firmName.trim() || null,') && app.includes("const detailsValid = name.trim().length >= 3;") && app.indexOf('"Firm Name (Optional)"') > app.indexOf('"Full Name" : lang === "mr" ? "पूर्ण नाव"')],
   ["admin KYC badge is plain green for Approved (completeness doesn't change it)", () => admin.includes('background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>') && !admin.includes("isDriverKycComplete")],
 
   // ---- Role selection ----

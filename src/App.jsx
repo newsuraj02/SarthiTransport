@@ -4449,6 +4449,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   // connection, an accidental reload) doesn't force retyping everything —
   // cleared once submitProfile actually completes.
   const [name, setName] = usePersistedState("sarthi_customerReg_name", "");
+  // Optional (owner 2026-10-28) -- only the profile photo and this are optional
+  // on the customer sign-up form; name, mobile and PIN stay mandatory.
+  const [firmName, setFirmName] = usePersistedState("sarthi_customerReg_firmName", "");
   const [photo, setPhoto] = usePersistedPhoto("sarthi_customerReg_photo", null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState(false);
@@ -4679,10 +4682,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
       lang === "en" ? "Your profile has been created successfully!" : lang === "mr" ? "तुमची प्रोफाइल यशस्वीरित्या तयार झाली आहे!" : "आपकी प्रोफाइल सफलतापूर्वक बन गई है!",
       lang
     );
-    onComplete({ name, photo: finalPhoto, referredBy, referralCredited: false, mobile: ownMobile });
+    onComplete({ name, firmName: firmName.trim() || null, photo: finalPhoto, referredBy, referralCredited: false, mobile: ownMobile });
     // Submitted for real — clear the draft so it can't leak into a future
     // registration attempt on this same device (e.g. a different customer).
-    setName(""); setPhoto(null); setPhotoFile(null);
+    setName(""); setFirmName(""); setPhoto(null); setPhotoFile(null);
   };
 
   const backButton = (
@@ -4760,6 +4763,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
             <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
           </GuidedStep>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Firm Name (Optional)" : lang === "mr" ? "फर्मचे नाव (ऐच्छिक)" : "फर्म का नाम (वैकल्पिक)"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Patel Traders" : lang === "mr" ? "उदा: पटेल ट्रेडर्स" : "जैसे: पटेल ट्रेडर्स"} value={firmName} onChange={(e) => setFirmName(e.target.value)} />
+          </div>
         </div>
 
         {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा" : "आगे बढ़ने के लिए ऊपर नाम भरें"}</div>}
@@ -4787,11 +4794,11 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer" : lang === "mr" ? "कस्टमर" : "कस्टमर"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : lang === "mr" ? "तुम्ही आधीपासून रजिस्टर्ड आहात, की नवीन आहात?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
         <div className="w-full space-y-3">
+          <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
+            {lang === "en" ? "Sign Up (New Customer)" : lang === "mr" ? "साइन अप करा (नवीन कस्टमर)" : "साइन अप करें (नया कस्टमर)"}
+          </button>
           <button onClick={() => setMode("login")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
             {lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें"}
-          </button>
-          <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.paper, color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
-            {lang === "en" ? "Sign Up (New Customer)" : lang === "mr" ? "साइन अप करा (नवीन कस्टमर)" : "साइन अप करें (नया कस्टमर)"}
           </button>
         </div>
       </div>
@@ -4906,6 +4913,10 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
           <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Full Name" : lang === "mr" ? "पूर्ण नाव" : "पूरा नाम"}</label>
           <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
         </GuidedStep>
+          <div>
+            <label className="text-xs font-semibold mb-1 block" style={{ color: C.inkSoft }}>{lang === "en" ? "Firm Name (Optional)" : lang === "mr" ? "फर्मचे नाव (ऐच्छिक)" : "फर्म का नाम (वैकल्पिक)"}</label>
+            <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Patel Traders" : lang === "mr" ? "उदा: पटेल ट्रेडर्स" : "जैसे: पटेल ट्रेडर्स"} value={firmName} onChange={(e) => setFirmName(e.target.value)} />
+          </div>
       </div>
 
       <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
@@ -5290,11 +5301,11 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Are you already registered, or new here?" : lang === "mr" ? "तुम्ही आधीपासून रजिस्टर्ड आहात, की नवीन आहात?" : "क्या आप पहले से रजिस्टर्ड हैं, या नए हैं?"}</p>
         <div className="w-full space-y-3">
+          <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
+            {lang === "en" ? "Sign Up (New Driver)" : lang === "mr" ? "साइन अप करा (नवीन ड्रायव्हर)" : "साइन अप करें (नया ड्राइवर)"}
+          </button>
           <button onClick={() => setMode("login")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
             {lang === "en" ? "Login" : lang === "mr" ? "लॉगिन करा" : "लॉगिन करें"}
-          </button>
-          <button onClick={() => setMode("signup")} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.paper, color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
-            {lang === "en" ? "Sign Up (New Driver)" : lang === "mr" ? "साइन अप करा (नवीन ड्रायव्हर)" : "साइन अप करें (नया ड्राइवर)"}
           </button>
         </div>
       </div>
