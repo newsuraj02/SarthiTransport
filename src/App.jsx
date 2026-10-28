@@ -2200,8 +2200,9 @@ export function usePersistedState(key, initialValue) {
 // throwing somewhere visible, which is what made photos vanish on refresh.
 // A real Storage download URL is just a short link, so it always persists
 // fine — this only affects the degraded fallback path.
-function usePersistedPhoto(key, initialValue) {
+function usePersistedPhoto(key, initialValue, persist = true) {
   const [value, setValue] = useState(() => {
+    if (!persist) return initialValue;
     try {
       const raw = window.localStorage.getItem(key);
       return raw !== null ? JSON.parse(raw) : initialValue;
@@ -2210,12 +2211,13 @@ function usePersistedPhoto(key, initialValue) {
     }
   });
   useEffect(() => {
+    if (!persist) return;
     if (value?.url?.startsWith("data:")) return;
     try {
       if (value) window.localStorage.setItem(key, JSON.stringify(value));
       else window.localStorage.removeItem(key);
     } catch { /* storage unavailable or quota exceeded */ }
-  }, [key, value]);
+  }, [key, value, persist]);
   return [value, setValue];
 }
 
@@ -4963,6 +4965,46 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
 // DRIVER REGISTRATION — one continuous page: phone OTP, then straight
 // into KYC submission, instead of two separate screens.
 // =====================================================================
+// Driver sign-up, owner rule 2026-10-28: the Firebase account is created ONLY
+// when the driver taps "Create Account" at the END of the documents form (so a
+// driver can never end up with an account and no KYC). Photo uploads need a
+// signed-in account, so until then the three photos only exist as Files in
+// memory; once the account exists this uploads them and writes the whole profile
+// in ONE patch. Pure (everything it touches is injected) so verifyInvariants can
+// run the real thing. A DL / side photo the AI check says is the wrong kind is
+// left out (not saved) -- the driver then lands on the normal "Incomplete form"
+// screen listing exactly that item -- never silently accepted.
+async function runDriverSignupFinalize(pending, driver, deps) {
+  const { uploadPhoto: upload, classifyPhoto, setDriver: save, addVehicleType: addType, vehicleTypes, slugify: slug, ref } = deps;
+  const mob = driver.mobile;
+  const keep = async (file, key, docType) => {
+    if (docType) {
+      const verdict = await classifyPhoto(file, docType);
+      if (verdict && verdict.ok && verdict.isMatch === false) return null;
+    }
+    let reason = null;
+    const done = await upload(file, `drivers/${mob}/${key}.jpg`, (r) => { reason = r; });
+    if (!done) throw new Error(`upload-failed:${key}:${reason || ""}`);
+    return done;
+  };
+  const photo = await keep(pending.photo.file, "photo", null);
+  const dl = await keep(pending.dl.file, "dl", "drivingLicense");
+  const side = await keep(pending.vehiclePhotoSide.file, "vehicleSide", "vehicleSide");
+  const typeName = String(pending.vehicleTypeName || "").trim();
+  const match = (vehicleTypes || []).find((v) => (v.label || "").toLowerCase() === typeName.toLowerCase() || (v.labelEn || "").toLowerCase() === typeName.toLowerCase());
+  let typeKey = match?.key;
+  if (!typeKey) {
+    typeKey = slug(typeName);
+    addType({ key: typeKey, label: typeName, rate: 25, capacity: "", capacityKg: Number(pending.capacityKg) || 0 });
+  }
+  save({
+    ...driver, name: pending.name, referredBy: ref && ref !== mob ? ref : null, referralCredited: false,
+    kyc: "Pending", photo, docs: { dl, photo },
+    vehicleSpec: { type: typeKey, photo: null, photoFront: null, photoSide: side, capacityKg: Number(pending.capacityKg) || null, vehicleNumber: String(pending.vehicleNumber || "").trim().toUpperCase() },
+  });
+}
+// END driver sign-up finalize
+
 function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, onLogout, driver, setDriver, vehicleTypes, addVehicleType, onFirstSignupComplete, forceMode = null }) {
   // Which button they tapped on the very first screen — purely about
   // labels/copy, since the mobile+OTP mechanics are identical either way.
@@ -4975,12 +5017,15 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   // this driver doc genuinely has none yet (first-time signup). Persisted
   // to localStorage so a refresh mid-fill doesn't wipe it.
   const [name, setName] = usePersistedState("sarthi_driverReg_name", "");
-  // Mandatory acknowledgment that keeping vehicle documents (RC, insurance,
-  // fitness, permit, PUC) and the driving license valid/updated is the
-  // driver/owner's own responsibility, not the app's — see the Vehicle
-  // Documents & Legal Compliance clause in TermsModal. Required before
-  // registration can complete, same as every other field here.
-  const [acceptedDocsTerms, setAcceptedDocsTerms] = usePersistedState("sarthi_driverReg_acceptedDocsTerms", false);
+  // (The "my documents are my responsibility" clause used to be ticked here on
+  // step 1; it now sits at the END of the documents form -- see DocsTermsCheckbox.)
+  // Sign Up's last step creates the account and saves everything together:
+  // "none" (not started) -> "idle" (account created, profile not saved yet) ->
+  // "working" -> "applied" (patch sent) | "error". pendingSignupRef holds the
+  // form values incl. the three photo Files (never persisted).
+  const pendingSignupRef = useRef(null);
+  const finalizeRunningRef = useRef(false);
+  const [finalizeState, setFinalizeState] = useState("none");
 
   // Step 1 — mobile + PIN. "stage" starts at "checking" only to avoid a
   // one-frame flash of the mobile-entry screen while the effect below
@@ -5053,17 +5098,17 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   // there's no separate address field anymore to check instead.
   const infoAppliedRef = useRef(false);
   useEffect(() => {
-    if (verified && driver && driver.name === driver.mobile && !infoAppliedRef.current && name.trim()) {
+    if (verified && driver && driver.name === driver.mobile && !infoAppliedRef.current && name.trim() && !pendingSignupRef.current) {
       infoAppliedRef.current = true;
       const ref = new URLSearchParams(window.location.search).get("ref");
       const referredBy = ref && ref !== driver.mobile ? ref : null;
       setDriver({ ...driver, name: name.trim(), referredBy, referralCredited: false });
-      setName(""); setAcceptedDocsTerms(false);
+      setName("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verified, driver]);
 
-  const detailsValid = name.trim().length >= 3 && acceptedDocsTerms;
+  const detailsValid = name.trim().length >= 3;
 
   // Guided-step highlighting for the registration details field — see
   // GuidedStep. Shared by both places this form renders (the fallback
@@ -5087,32 +5132,94 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
 
   const submitPin = async () => {
     if (mobile.length !== 10 || pin.length !== 4 || !authInstance || sending) return;
-    if (mode === "signup" && (!detailsValid || pin !== pinConfirm)) return;
     setSending(true);
     setError("");
     try {
-      if (mode === "signup") {
-        await createUserWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pinToPassword(pin));
-      } else {
-        await signInWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pinToPassword(pin));
-      }
+      await signInWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pinToPassword(pin));
       onOtpVerified(mobile);
-      // Sign Up's details attach to the driver doc automatically once it's
-      // ready (see the effect above) — nothing more to do here.
     } catch (e) {
       console.error(e);
-      setError(
-        mode === "signup" && e?.code === "auth/email-already-in-use"
-          ? (lang === "en" ? "This number is already registered — please Login instead." : lang === "mr" ? "हा नंबर आधीच नोंदणीकृत आहे — कृपया लॉगिन करा." : "यह नंबर पहले से रजिस्टर्ड है — कृपया लॉगिन करें।")
-          : mode === "login"
-          ? (lang === "en" ? "Incorrect mobile number or PIN." : lang === "mr" ? "चुकीचा मोबाइल नंबर किंवा PIN." : "गलत मोबाइल नंबर या PIN।")
-          : (lang === "en" ? "Something went wrong — try again." : lang === "mr" ? "काहीतरी चुकले — पुन्हा प्रयत्न करा." : "कुछ गलत हुआ — फिर कोशिश करें।")
-      );
+      setError(lang === "en" ? "Incorrect mobile number or PIN." : lang === "mr" ? "चुकीचा मोबाइल नंबर किंवा PIN." : "गलत मोबाइल नंबर या PIN।");
       setSending(false);
       return;
     }
     setSending(false);
   };
+
+  // Sign Up step 1 (name + mobile + PIN) is only collected -- NO account yet
+  // (owner rule 2026-10-28). Continue just moves on to the documents form.
+  const goToDocsStage = () => {
+    if (pin.length !== 4 || pin !== pinConfirm) return;
+    setError("");
+    setStage("docs");
+  };
+  // The ONLY place a driver account is created: the final "Create Account" tap
+  // at the end of the documents form, once everything is filled in and the
+  // clause is ticked. Then the effect below uploads the photos and saves the
+  // profile in one go.
+  const createAccountAndSubmit = async (values) => {
+    if (mobile.length !== 10 || pin.length !== 4 || pin !== pinConfirm || !detailsValid || sending) return;
+    if (!authInstance) {
+      setError(lang === "en" ? "Sign-up isn't available right now — please try again in a moment." : lang === "mr" ? "साइन-अप सध्या उपलब्ध नाही — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "साइन-अप अभी उपलब्ध नहीं है — कृपया थोड़ी देर बाद फिर कोशिश करें।");
+      return;
+    }
+    setSending(true);
+    setError("");
+    pendingSignupRef.current = { ...values, name: name.trim() };
+    try {
+      await createUserWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pinToPassword(pin));
+    } catch (e) {
+      console.error(e);
+      pendingSignupRef.current = null;
+      setError(
+        e?.code === "auth/email-already-in-use"
+          ? (lang === "en" ? "This number is already registered — please Login instead." : lang === "mr" ? "हा नंबर आधीच नोंदणीकृत आहे — कृपया लॉगिन करा." : "यह नंबर पहले से रजिस्टर्ड है — कृपया लॉगिन करें।")
+          : (lang === "en" ? "Something went wrong — try again." : lang === "mr" ? "काहीतरी चुकले — पुन्हा प्रयत्न करा." : "कुछ गलत हुआ — फिर कोशिश करें।")
+      );
+      setSending(false);
+      return;
+    }
+    setFinalizeState("idle");
+    onOtpVerified(mobile);
+    setSending(false);
+  };
+  // Account exists and the driver doc has arrived: upload the photos + save the
+  // profile (runDriverSignupFinalize). Only ever starts from "idle".
+  useEffect(() => {
+    if (finalizeState !== "idle" || !pendingSignupRef.current || !verified || !driver || finalizeRunningRef.current) return;
+    finalizeRunningRef.current = true;
+    setFinalizeState("working");
+    (async () => {
+      try {
+        const ref = new URLSearchParams(window.location.search).get("ref");
+        await runDriverSignupFinalize(pendingSignupRef.current, driver, {
+          uploadPhoto: (file, path, onFail) => uploadPhoto(file, path, 900, 0.72, null, onFail),
+          classifyPhoto: async (file, docType) => {
+            const payload = await fileToClassifyPayload(file);
+            if (!payload) return null;
+            return withTimeout(classifyKycPhoto(payload.base64, payload.mimeType, docType), 8000, { ok: false, reason: "timeout" });
+          },
+          setDriver, addVehicleType, vehicleTypes, slugify, ref,
+        });
+        ["sarthi_driverKyc_vehicleTypeName", "sarthi_driverKyc_capacityKg", "sarthi_driverKyc_vehicleNumber", "sarthi_driverKyc_acceptedDocsTerms"].forEach((k) => { try { window.localStorage.removeItem(k); } catch { /* storage unavailable */ } });
+        setName("");
+        setFinalizeState("applied");
+        onFirstSignupComplete?.();
+      } catch (e) {
+        console.error("[driver signup finalize]", e);
+        finalizeRunningRef.current = false;
+        setFinalizeState("error");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalizeState, verified, driver]);
+  // The save is fire-and-forget (setDriver); if the screen is still here 12s
+  // after it was sent, it didn't land -- offer Try again instead of hanging.
+  useEffect(() => {
+    if (finalizeState !== "applied") return;
+    const t = setTimeout(() => { finalizeRunningRef.current = false; setFinalizeState("error"); }, 12000);
+    return () => clearTimeout(t);
+  }, [finalizeState]);
 
   const getForgotRecaptcha = () => {
     if (!forgotRecaptchaRef.current) {
@@ -5193,6 +5300,29 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     return <div className="flex-1 flex items-center justify-center"><p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Checking your session..." : lang === "mr" ? "तुमचे सेशन तपासले जात आहे..." : "आपका सेशन जांचा जा रहा है..."}</p></div>;
   }
 
+  if (finalizeState !== "none") {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+        {finalizeState === "error" ? (
+          <>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: C.safety }}><XCircle size={26} color="#FFFFFF" /></div>
+            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Couldn't save your details" : lang === "mr" ? "तुमची माहिती सेव्ह होऊ शकली नाही" : "आपकी जानकारी सेव नहीं हो सकी"}</h2>
+            <p className="text-xs mb-5" style={{ color: C.inkSoft }}>{lang === "en" ? "Check your internet and try again. Your photos are still here." : lang === "mr" ? "इंटरनेट तपासा आणि पुन्हा प्रयत्न करा. तुमचे फोटो अजून इथेच आहेत." : "इंटरनेट जांचें और फिर कोशिश करें। आपकी फोटो अभी यहीं हैं।"}</p>
+            <button onClick={() => { finalizeRunningRef.current = false; setFinalizeState("idle"); }} className="w-full rounded-lg py-4 font-bold text-base" style={{ background: C.marigold, color: "#000000" }}>
+              {lang === "en" ? "Try again" : lang === "mr" ? "पुन्हा प्रयत्न करा" : "फिर कोशिश करें"}
+            </button>
+          </>
+        ) : (
+          <>
+            <Loader2 size={34} color={C.marigoldDeep} className="animate-spin mb-4" />
+            <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Creating your account..." : lang === "mr" ? "तुमचे खाते तयार होत आहे..." : "आपका खाता बन रहा है..."}</h2>
+            <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Saving your documents. Please keep the app open." : lang === "mr" ? "तुमची कागदपत्रे सेव्ह होत आहेत. कृपया अ‍ॅप उघडे ठेवा." : "आपके दस्तावेज़ सेव हो रहे हैं। कृपया ऐप खुला रखें।"}</p>
+          </>
+        )}
+      </div>
+    );
+  }
+
   if (verified && driver && driver.vehicleSpec) {
     // Returning driver, same number — already fully registered. The root
     // will swap to the KYC-pending or DriverApp screen on its next render.
@@ -5266,17 +5396,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
             <input className={fieldCls} style={fieldStyle} placeholder={lang === "en" ? "e.g. Ramesh Patel" : lang === "mr" ? "उदा: रमेश पटेल" : "जैसे: रमेश पटेल"} value={name} onChange={(e) => setName(e.target.value)} />
           </GuidedStep>
         </div>
-        <div className="rounded-lg p-3 mt-3" style={{ background: C.safety }}>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" checked={acceptedDocsTerms} onChange={(e) => setAcceptedDocsTerms(e.target.checked)} className="mt-0.5 shrink-0" style={{ width: 18, height: 18 }} />
-            <span className="text-[11px] font-semibold leading-snug" style={{ color: "#FFFFFF" }}>
-              {lang === "en"
-                ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
-                : lang === "mr" ? "मी याची पुष्टी करतो/करते की माझ्या गाडीचे RC, इन्शुरन्स, फिटनेस सर्टिफिकेट, परमिट, PUC आणि माझा ड्रायव्हिंग लायसन्स वैध व अद्ययावत ठेवणे, ड्रायव्हर/गाडी मालक म्हणून, पूर्णपणे माझी जबाबदारी आहे. कोणत्याही कागदपत्राच्या कमतरतेमुळे किंवा त्यामुळे होणाऱ्या RTO/कायदेशीर कारवाई, दंड किंवा चलनासाठी अपना ट्रान्सपोर्ट जबाबदार राहणार नाही — त्याची संपूर्ण जबाबदारी माझी स्वतःची असेल." : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
-            </span>
-          </label>
-        </div>
-        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above and accept the document responsibility clause to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "आगे बढ़ने के लिए ऊपर नाम भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
+        {!detailsValid && <div className="text-[11px] font-semibold mt-3" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above to continue" : lang === "mr" ? "पुढे जाण्यासाठी वरील नाव भरा" : "आगे बढ़ने के लिए ऊपर नाम भरें"}</div>}
         <button onClick={completeDetails} disabled={!detailsValid} className={`w-full rounded-lg py-4 font-bold text-base mt-3 ${detailsValid ? "guided-submit-ready" : ""}`}
           style={{ background: detailsValid ? C.marigold : "#E5EAF2", color: detailsValid ? "#000000" : "#9AA3B0" }}>
           {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
@@ -5395,6 +5515,23 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     );
   }
 
+  // Sign Up step 2: the documents form -- still no account. Its last button,
+  // "Create Account", is what creates it (createAccountAndSubmit).
+  if (mode === "signup" && stage === "docs") {
+    return (
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-5 pt-4">
+          <button onClick={() => { setError(""); setStage("pin"); }} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+            <ChevronLeft size={18} strokeWidth={3} />
+          </button>
+        </div>
+        <DriverKyc deferred driver={{ name: name.trim(), mobile, kyc: null, vehicleSpec: null, docs: null, photo: null }} setDriver={() => {}} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
+          stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : lang === "mr" ? "स्टेप 2 / 2 — कागदपत्रे आणि गाडी" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"}
+          onDeferredSubmit={createAccountAndSubmit} submitting={sending} submitError={error} />
+      </div>
+    );
+  }
+
   // Sign Up — the registration form comes first, with mobile/OTP
   // verification at the bottom of this same page.
   return (
@@ -5431,16 +5568,6 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
         </GuidedStep>
       </div>
 
-      <div className="rounded-lg p-3 mt-3" style={{ background: C.safety }}>
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input type="checkbox" checked={acceptedDocsTerms} onChange={(e) => setAcceptedDocsTerms(e.target.checked)} className="mt-0.5 shrink-0" style={{ width: 18, height: 18 }} />
-          <span className="text-[11px] font-semibold leading-snug" style={{ color: "#FFFFFF" }}>
-            {lang === "en"
-              ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
-              : lang === "mr" ? "मी याची पुष्टी करतो/करते की माझ्या गाडीचे RC, इन्शुरन्स, फिटनेस सर्टिफिकेट, परमिट, PUC आणि माझा ड्रायव्हिंग लायसन्स वैध व अद्ययावत ठेवणे, ड्रायव्हर/गाडी मालक म्हणून, पूर्णपणे माझी जबाबदारी आहे. कोणत्याही कागदपत्राच्या कमतरतेमुळे किंवा त्यामुळे होणाऱ्या RTO/कायदेशीर कारवाई, दंड किंवा चलनासाठी अपना ट्रान्सपोर्ट जबाबदार राहणार नाही — त्याची संपूर्ण जबाबदारी माझी स्वतःची असेल." : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
-          </span>
-        </label>
-      </div>
 
       <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
         <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Set Up Login" : lang === "mr" ? "लॉगिन सेट करा" : "लॉगिन सेट करें"}</div>
@@ -5452,7 +5579,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
                 <input className="flex-1 py-3 text-sm outline-none" style={{ color: C.ink, fontFamily: monoFont }} placeholder={lang === "en" ? "10-digit mobile number" : lang === "mr" ? "10 अंकी मोबाइल नंबर" : "10 अंकों का मोबाइल नंबर"}
                   value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(""); }} />
               </div>
-              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above and accept the document responsibility clause first" : lang === "mr" ? "आधी वरील नाव भरा आणि कागदपत्र जबाबदारीची अट स्वीकारा" : "पहले ऊपर नाम भरें और दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"}</div>}
+              {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above first" : lang === "mr" ? "आधी वरील नाव भरा" : "पहले ऊपर नाम भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
               <button onClick={goToPinStage} disabled={!detailsValid || mobile.length !== 10}
                 className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 ? C.marigold : "#E5EAF2", color: detailsValid && mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
@@ -5470,9 +5597,9 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
                 <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "PINs don't match" : lang === "mr" ? "PIN जुळत नाहीत" : "PIN मेल नहीं खाते"}</div>
               )}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-              <button onClick={submitPin} disabled={pin.length !== 4 || pin !== pinConfirm || sending}
-                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm && !sending ? C.marigold : "#E5EAF2", color: pin.length === 4 && pin === pinConfirm && !sending ? "#000000" : "#9AA3B0" }}>
-                {sending ? (lang === "en" ? "Creating account..." : lang === "mr" ? "खाते तयार होत आहे..." : "खाता बन रहा है...") : (lang === "en" ? "Create Account" : lang === "mr" ? "खाते तयार करा" : "खाता बनाएं")}
+              <button onClick={goToDocsStage} disabled={pin.length !== 4 || pin !== pinConfirm}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pin.length === 4 && pin === pinConfirm ? C.marigold : "#E5EAF2", color: pin.length === 4 && pin === pinConfirm ? "#000000" : "#9AA3B0" }}>
+                {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
               </button>
               <button onClick={() => { setStage("mobile"); setError(""); }} className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Change number" : lang === "mr" ? "नंबर बदला" : "नंबर बदलें"}</button>
             </div>
@@ -10342,6 +10469,26 @@ function DriverHistory({ tripLog, driver, lang }) {
   );
 }
 
+// The "I confirm that keeping my documents valid is MY responsibility" clause
+// (see the Vehicle Documents & Legal Compliance clause in TermsModal).
+// Owner rule 2026-10-28: it is NOT on sign-up step 1 any more -- it sits at the
+// END of the documents form (after Step 2 Vehicle Details), right above the
+// final button, and a first submission can't be made without ticking it.
+function DocsTermsCheckbox({ lang, checked, onChange }) {
+  return (
+    <div className="rounded-lg p-3 mt-3" style={{ background: C.safety }}>
+      <label className="flex items-start gap-2 cursor-pointer">
+        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 shrink-0" style={{ width: 18, height: 18 }} />
+        <span className="text-[11px] font-semibold leading-snug" style={{ color: "#FFFFFF" }}>
+          {lang === "en"
+            ? "I confirm that keeping my vehicle's RC, insurance, fitness certificate, permit, PUC, and my driving license valid and up to date is my full responsibility as the Driver/Vehicle Owner. Apna Transport is not liable for any document deficiency or any resulting RTO/legal action, fine, or challan — full responsibility rests with me."
+            : lang === "mr" ? "मी याची पुष्टी करतो/करते की माझ्या गाडीचे RC, इन्शुरन्स, फिटनेस सर्टिफिकेट, परमिट, PUC आणि माझा ड्रायव्हिंग लायसन्स वैध व अद्ययावत ठेवणे, ड्रायव्हर/गाडी मालक म्हणून, पूर्णपणे माझी जबाबदारी आहे. कोणत्याही कागदपत्राच्या कमतरतेमुळे किंवा त्यामुळे होणाऱ्या RTO/कायदेशीर कारवाई, दंड किंवा चलनासाठी अपना ट्रान्सपोर्ट जबाबदार राहणार नाही — त्याची संपूर्ण जबाबदारी माझी स्वतःची असेल." : "मैं पुष्टि करता/करती हूं कि मेरी गाड़ी की RC, इंश्योरेंस, फिटनेस सर्टिफिकेट, परमिट, PUC और मेरा ड्राइविंग लाइसेंस वैध व अपडेट रखना, ड्राइवर/गाड़ी मालिक के तौर पर, पूरी तरह मेरी जिम्मेदारी है। किसी भी दस्तावेज़ की कमी या उससे होने वाली RTO/कानूनी कार्रवाई, जुर्माने या चालान के लिए अपना ट्रांसपोर्ट जिम्मेदार नहीं होगा — इसकी पूरी जिम्मेदारी मेरी खुद की होगी।"}
+        </span>
+      </label>
+    </div>
+  );
+}
+
 // The first thing a driver with an unfinished sign-up/KYC sees every time the
 // app opens (owner rule, 2026-10-27) -- shown above the KYC form by
 // DriverOnboarding (signed up, never submitted) and by App()'s
@@ -10409,7 +10556,7 @@ function KycReminderBanner({ lang, missing, onComplete, onDismiss }) {
   );
 }
 
-function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, onFirstSubmit }) {
+function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, stepLabel, onFirstSubmit, deferred = false, onDeferredSubmit, submitting = false, submitError = "" }) {
   const VEHICLES = vehicleTypes;
   // Persisted to localStorage so a refresh mid-fill (slow connection,
   // accidental reload) doesn't force re-uploading photos or retyping —
@@ -10424,8 +10571,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // two document tiles empty, as before.
   const savedKycComplete = isDriverKycComplete(driver);
   const keepSavedDocs = !!driver.vehicleSpec && driver.kyc !== "Rejected" && !savedKycComplete;
-  const [dl, setDl] = usePersistedPhoto("sarthi_driverKyc_dl", keepSavedDocs ? (driver.docs?.dl || null) : null);
-  const [photo, setPhoto] = usePersistedPhoto("sarthi_driverKyc_photo", keepSavedDocs ? (driver.docs?.photo || driver.photo || null) : null);
+  const [dl, setDl] = usePersistedPhoto("sarthi_driverKyc_dl", keepSavedDocs ? (driver.docs?.dl || null) : null, !deferred);
+  const [photo, setPhoto] = usePersistedPhoto("sarthi_driverKyc_photo", keepSavedDocs ? (driver.docs?.photo || driver.photo || null) : null, !deferred);
   // Which photo tiles are mid-upload — a set, not a single value, so
   // uploading two photos at once (e.g. tapping Front then Side before the
   // first finishes) doesn't make one tile's "uploading" indicator vanish
@@ -10454,13 +10601,19 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // network blip, not a bad photo.
   const lastFilesRef = useRef({});
 
+  // Owner rule 2026-10-28: the "my documents are my responsibility" clause is
+  // ticked HERE, after Step 2 Vehicle Details, on a first submission -- not on
+  // sign-up step 1. (Edits/re-submissions by an existing driver don't repeat it.)
+  const needsTerms = driver.kyc == null;
+  const [acceptedTerms, setAcceptedTerms] = usePersistedState("sarthi_driverKyc_acceptedDocsTerms", false);
+
   const existingVehicleType = VEHICLES.find((v) => v.key === driver.vehicleSpec?.type);
   // The driver just types their vehicle's name — no dropdown of preset
   // types to pick from. Resolved to a vehicleTypes entry (reusing a
   // matching one by name, or creating a new one) only at submit time.
   const [vehicleTypeName, setVehicleTypeName] = usePersistedState("sarthi_driverKyc_vehicleTypeName", existingVehicleType ? vehicleLabel(existingVehicleType, lang) : (driver.vehicleSpec?.type || ""));
-  const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null);
-  const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null);
+  const [vehiclePhotoFront, setVehiclePhotoFront] = usePersistedPhoto("sarthi_driverKyc_photoFront", driver.vehicleSpec?.photo || driver.vehicleSpec?.photoFront || null, !deferred);
+  const [vehiclePhotoSide, setVehiclePhotoSide] = usePersistedPhoto("sarthi_driverKyc_photoSide", driver.vehicleSpec?.photoSide || null, !deferred);
   // vehicleSpec.capacityKg is stored as a number (see resolveVehicleTypeKey
   // below) -- String(...) here so this always starts as a string, since
   // canSubmit/kycStepCompleted below call .trim() on it. Skipping this cast
@@ -10512,6 +10665,13 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const KYC_CLASSIFY_DOCTYPE = { vehicleSide: "vehicleSide", dl: "drivingLicense" };
   const startPhotoUpload = (setVal, key) => async (f) => {
     if (!f) return;
+    if (deferred) {
+      // No account yet, so nothing can be uploaded (Storage needs sign-in):
+      // keep the File and a local preview; it's uploaded after "Create Account".
+      markUploadError(key, false);
+      setVal({ name: f.name, url: URL.createObjectURL(f), file: f });
+      return;
+    }
     lastFilesRef.current[key] = f;
     markUploading(key, true);
     markUploadError(key, false);
@@ -10570,7 +10730,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // the Incomplete screen and the admin KYC badge use, so Submit can never
   // accept less than what the app later treats as "complete".
   const draftMissing = getKycMissingFromValues({ photo, dl, vehicleName: vehicleTypeName, vehicleNumber, capacityKg: capacityKgStr, vehicleSide: vehiclePhotoSide });
-  const canSubmit = draftMissing.length === 0 && !anyUploading;
+  const termsMissing = needsTerms && !acceptedTerms;
+  const canSubmit = draftMissing.length === 0 && !termsMissing && !anyUploading && !submitting;
   // Guided-step highlighting for the KYC fields — see GuidedStep. Vehicle
   // Front isn't required here — see the photo tile below, same reasoning as
   // DriverProfileEdit's document list already applied: the side profile is
@@ -10588,6 +10749,10 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   const isFirstSubmission = driver.kyc == null;
   const submit = () => {
     if (!canSubmit) return;
+    if (deferred) {
+      onDeferredSubmit?.({ photo, dl, vehiclePhotoSide, vehicleTypeName: vehicleTypeName.trim(), capacityKg: capacityKgStr.trim(), vehicleNumber: vehicleNumber.trim() });
+      return;
+    }
     setDriver({
       // The KYC driver photo doubles as the profile photo (see
       // DriverProfileEdit) — kept in sync here every time KYC is
@@ -10606,10 +10771,11 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     // Submitted for real — clear the draft so a later resubmission (after a
     // rejection) starts from the driver's actual saved data, not this.
     setDl(null); setPhoto(null); setVehicleTypeName(""); setVehiclePhotoFront(null); setVehiclePhotoSide(null);
-    setCapacityKg(""); setVehicleNumber("");
+    setCapacityKg(""); setVehicleNumber(""); setAcceptedTerms(false);
     if (isFirstSubmission) onFirstSubmit?.();
   };
 
+  const doneTxt = deferred ? (lang === "en" ? "Added ✓" : lang === "mr" ? "जोडले ✓" : "जुड़ गया ✓") : (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓");
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none";
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
   const docLabels = lang === "en"
@@ -10625,11 +10791,12 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
       <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Everything below is mandatory — upload your photo, driving license and vehicle side photo, and enter your vehicle's name, number and capacity." : lang === "mr" ? "खालील सर्व माहिती अनिवार्य आहे — तुमचा फोटो, ड्रायव्हिंग लायसन्स आणि गाडीचा बाजूचा फोटो अपलोड करा, आणि गाडीचे नाव, नंबर व क्षमता टाका." : "नीचे दी गई सारी जानकारी अनिवार्य है — अपनी फोटो, ड्राइविंग लाइसेंस और गाड़ी की साइड वाली फोटो अपलोड करें, और गाड़ी का नाम, नंबर व क्षमता डालें।"}</p>
 
       {/* Saved-doc status. "Incomplete" wins over Verified/Pending: an Approved
-          driver whose saved KYC lacks a mandatory field isn't verified yet. */}
-      <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: driver.kyc === "Approved" ? C.success : !savedKycComplete ? C.safety : C.marigoldDeep }}>
+          driver whose saved KYC lacks a mandatory field isn't verified yet.
+          (Not shown while signing up: there's no saved profile yet.) */}
+      {!deferred && <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: driver.kyc === "Approved" ? C.success : !savedKycComplete ? C.safety : C.marigoldDeep }}>
         <ShieldCheck size={16} color="#FFFFFF" />
         <span className="text-xs font-semibold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Status" : lang === "mr" ? "स्टेटस" : "स्टेटस"}: {driver.kyc === "Approved" ? (lang === "en" ? "Verified" : lang === "mr" ? "सत्यापित" : "सत्यापित") : !savedKycComplete ? (lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरा") : (lang === "en" ? "Pending" : lang === "mr" ? "प्रलंबित" : "लंबित")}</span>
-      </div>
+      </div>}
 
       <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Documents" : lang === "mr" ? "कागदपत्रे" : "दस्तावेज़"} <span style={{ color: C.safety }}>*</span></div>
       <div className="grid grid-cols-2 gap-2 mb-3">
@@ -10671,7 +10838,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                   </div>
                 ) : (
                   <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>
-                    {val ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}
+                    {val ? doneTxt : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}
                   </span>
                 )}
               </div>
@@ -10748,7 +10915,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                 </div>
               ) : (
                 <div className="text-[9px] mt-0.5 text-center" style={{ color: vehiclePhotoSide ? C.success : C.inkSoft }}>
-                  {vehiclePhotoSide ? (lang === "en" ? "Uploaded ✓" : lang === "mr" ? "अपलोड ✓" : "अपलोड ✓") : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
+                  {vehiclePhotoSide ? doneTxt : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
                 </div>
               )}
             </PhotoPicker>
@@ -10768,8 +10935,15 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
         </div>
       </div>
 
-      {draftMissing.length > 0 && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "To submit, still needed: " : lang === "mr" ? "सबमिट करण्यासाठी अजून बाकी: " : "सबमिट करने के लिए अभी बाकी: "}{draftMissing.map((k) => kycFieldLabel(k, lang)).join(", ")}</div>}
-      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-4 font-bold text-base ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : "#E5EAF2", color: canSubmit ? "#000000" : "#9AA3B0" }}>{lang === "en" ? "Submit" : lang === "mr" ? "सबमिट करा" : "सबमिट करें"}</button>
+      {/* The clause goes LAST, right above the final button (owner 2026-10-28). */}
+      {needsTerms && <div className="mb-3"><DocsTermsCheckbox lang={lang} checked={acceptedTerms} onChange={setAcceptedTerms} /></div>}
+      {(draftMissing.length > 0 || termsMissing) && <div className="text-[11px] font-semibold mb-2" style={{ color: C.safety }}>{lang === "en" ? "To submit, still needed: " : lang === "mr" ? "सबमिट करण्यासाठी अजून बाकी: " : "सबमिट करने के लिए अभी बाकी: "}{[...draftMissing.map((k2) => kycFieldLabel(k2, lang)), ...(termsMissing ? [lang === "en" ? "tick the document responsibility clause" : lang === "mr" ? "कागदपत्र जबाबदारीची अट स्वीकारा" : "दस्तावेज़ जिम्मेदारी वाली शर्त स्वीकार करें"] : [])].join(", ")}</div>}
+      {submitError && <div className="text-[11px] font-bold mb-2" style={{ color: C.safety }}>{submitError}</div>}
+      <button onClick={submit} disabled={!canSubmit} className={`w-full rounded-lg py-4 font-bold text-base ${canSubmit ? "guided-submit-ready" : ""}`} style={{ background: canSubmit ? C.marigold : "#E5EAF2", color: canSubmit ? "#000000" : "#9AA3B0" }}>
+        {deferred
+          ? (submitting ? (lang === "en" ? "Creating account..." : lang === "mr" ? "खाते तयार होत आहे..." : "खाता बन रहा है...") : (lang === "en" ? "Create Account" : lang === "mr" ? "खाते तयार करा" : "खाता बनाएं"))
+          : (lang === "en" ? "Submit" : lang === "mr" ? "सबमिट करा" : "सबमिट करें")}
+      </button>
     </div>
   );
 }

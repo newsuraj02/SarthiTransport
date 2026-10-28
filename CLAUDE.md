@@ -223,6 +223,20 @@ drivers keep their own "resubmit" screen. Everyone else's submission lands in
 refused. The GPS/ring code itself is untouched; the gate simply means a gated
 driver never reaches `DriverHome`.
 
+**Driver sign-up flow (owner 2026-10-28 -- built, not yet confirmed on a device).**
+Step 1 = Name, Mobile, PIN/confirm PIN ONLY (no document clause there); the PIN
+button says "Continue" (`goToDocsStage`) and creates NO account. Step 2 = the
+mandatory documents + vehicle form (`DriverKyc deferred`), with the
+document-responsibility clause (`DocsTermsCheckbox`) LAST, after Vehicle Details.
+The Firebase account is created in exactly one place, `createAccountAndSubmit`,
+when the final "Create Account" is tapped with everything filled and the clause
+ticked -- so nobody ends up with an account and an Incomplete KYC. Photos picked
+before the account exists are held in memory (File + blob preview) and uploaded by
+`runDriverSignupFinalize` right after creation (AI check on licence/side photo; a
+wrong-kind photo is dropped, so that driver lands on the Incomplete form listing
+it). If the account can't be created or saved, an error shows and the form stays.
+Pinned by behavior checks in `verifyInvariants.mjs`.
+
 **Meta ads export (owner 2026-10-27).** Admin Settings -> "Export app users for ads
 (Meta)" downloads every driver + customer mobile (blocked/inactive included, duplicates
 merged, junk skipped) as a one-column `phone` CSV (`91XXXXXXXXXX`), to upload as a Meta

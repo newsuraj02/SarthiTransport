@@ -59,6 +59,12 @@ function loadMetaExportFn() {
   const end = admin.indexOf("// END Meta users export helpers");
   return new Function(admin.slice(start, end) + "; return { toMetaPhone, buildMetaUsersCsv };")();
 }
+// Runs the REAL runDriverSignupFinalize (pure, everything injected) out of App.jsx.
+function loadSignupFinalizeFn() {
+  const start = app.indexOf("async function runDriverSignupFinalize");
+  const end = app.indexOf("// END driver sign-up finalize");
+  return new Function(app.slice(start, end) + "; return runDriverSignupFinalize;")();
+}
 const photo = (n) => ({ name: `${n}.jpg`, url: `https://example.test/${n}.jpg` });
 const fullDriver = () => ({
   name: "Ramesh", mobile: "9999999999", kyc: "Approved", photo: photo("p"), docs: { dl: photo("dl"), photo: photo("p") },
@@ -167,7 +173,7 @@ const checks = [
     const d = fullDriver(); d.docs = { dl: photo("dl") };
     return k.isDriverKycComplete(d);
   }],
-  ["KYC form's Submit is gated by the same shared list (getKycMissingFromValues)", () => app.includes("const canSubmit = draftMissing.length === 0 && !anyUploading;") && app.includes("const draftMissing = getKycMissingFromValues({")],
+  ["KYC form's Submit is gated by the same shared list (getKycMissingFromValues) + the clause on a first submission", () => app.includes("const canSubmit = draftMissing.length === 0 && !termsMissing && !anyUploading && !submitting;") && app.includes("const draftMissing = getKycMissingFromValues({") && app.includes("const termsMissing = needsTerms && !acceptedTerms;")],
   ["incomplete drivers see the Incomplete form FIRST: gate sits before the Pending and Approved screens", () => {
     const gate = app.indexOf("{role === \"driver\" && driverKycIncomplete && !driverResubmitting && (");
     const pending = app.indexOf("!driverResubmitting && !driverKycIncomplete && driver.kyc !== \"Approved\"");
@@ -210,6 +216,52 @@ const checks = [
     });
   }],
   ["Customer sign-up: optional 'Firm Name' sits under Full Name (before phone + PIN) in both forms, is saved with the profile; only photo + firm name are optional", () => count(app, '"Firm Name (Optional)"') === 2 && app.includes('firmName: firmName.trim() || null,') && app.includes("const detailsValid = name.trim().length >= 3;") && app.indexOf('"Firm Name (Optional)"') > app.indexOf('"Full Name" : lang === "mr" ? "पूर्ण नाव"')],
+  // ---- Driver sign-up (owner 2026-10-28): account only at the very end; clause after Step 2 ----
+  ["Driver sign-up: the account is created ONLY by the final 'Create Account' (createAccountAndSubmit); step 1 + the PIN screen only collect, with a 'Continue' button and NO clause", () => {
+    const a = app.indexOf("function DriverOnboarding("), b = app.indexOf("// DRIVER KYC PORTAL"); const reg = app.slice(a, b);
+    const fn = reg.slice(reg.indexOf("const createAccountAndSubmit"), reg.indexOf("// Account exists and the driver doc has arrived"));
+    return count(reg, "createUserWithEmailAndPassword(") === 1 && fn.includes("createUserWithEmailAndPassword(")
+      && reg.includes("onClick={goToDocsStage}") && !reg.includes("setAcceptedDocsTerms") && !reg.includes("sarthi_driverReg_acceptedDocsTerms") && !reg.includes("<DocsTermsCheckbox") && !reg.includes('"Create Account" : lang === "mr"')
+      && !reg.includes("accept the document responsibility clause");
+  }],
+  ["Driver documents form: the clause sits AFTER Step 2 Vehicle Details, right above the final button, which reads 'Create Account' during sign-up", () => {
+    const a = app.indexOf("function DriverKyc("); const k = app.slice(a);
+    const i = k.indexOf("Fill this clearly"), j = k.indexOf("<DocsTermsCheckbox lang={lang}"), l = k.indexOf("To submit, still needed"), m = k.indexOf('"Create Account" : lang === "mr"');
+    return i > 0 && j > i && l > j && m > l && count(app, "<DocsTermsCheckbox lang={lang}") === 1;
+  }],
+  ["Photos picked before the account exists are held in memory only (never persisted) and uploaded after it", () => count(app, ", !deferred);") === 4 && app.includes("setVal({ name: f.name, url: URL.createObjectURL(f), file: f });") && app.includes("await runDriverSignupFinalize(pendingSignupRef.current, driver, {")],
+  ["runDriverSignupFinalize (real code): uploads first, then ONE complete profile patch (Pending, name, docs, vehicle, side photo) -- the doc a driver ends up with is KYC-complete", async () => {
+    const run = loadSignupFinalizeFn(), k = loadKycFns();
+    const calls = []; const saved = [];
+    const f = (n) => ({ file: { name: n }, url: "blob:" + n, name: n });
+    const pending = { name: "Suresh Jadhav", photo: f("me"), dl: f("dl"), vehiclePhotoSide: f("side"), vehicleTypeName: "Tata 109", capacityKg: "2500", vehicleNumber: " mh14ab1234 " };
+    const types = [];
+    await run(pending, { mobile: "9123456780", name: "9123456780", kyc: null }, {
+      uploadPhoto: async (file, path) => { calls.push(path); return { name: file.name, url: "https://x/" + path }; },
+      classifyPhoto: async () => ({ ok: true, isMatch: true }), setDriver: (d) => saved.push(d), addVehicleType: (t) => types.push(t), vehicleTypes: [], slugify: (x) => x.toLowerCase().replace(/\s+/g, "-"), ref: "9000000000",
+    });
+    const d = saved[0];
+    return saved.length === 1 && JSON.stringify(calls) === JSON.stringify(["drivers/9123456780/photo.jpg", "drivers/9123456780/dl.jpg", "drivers/9123456780/vehicleSide.jpg"])
+      && d.kyc === "Pending" && d.name === "Suresh Jadhav" && d.referredBy === "9000000000" && d.vehicleSpec.vehicleNumber === "MH14AB1234" && d.vehicleSpec.capacityKg === 2500 && d.vehicleSpec.type === "tata-109"
+      && types.length === 1 && types[0].key === "tata-109" && k.isDriverKycComplete(d);
+  }],
+  ["runDriverSignupFinalize: a wrong-kind DL/side photo (AI check) is NOT saved and not uploaded -- the driver lands on Incomplete form listing exactly that item; an upload failure saves nothing", async () => {
+    const run = loadSignupFinalizeFn(), k = loadKycFns();
+    const f = (n) => ({ file: { name: n }, url: "blob:" + n, name: n });
+    const pending = { name: "S J", photo: f("me"), dl: f("dl"), vehiclePhotoSide: f("side"), vehicleTypeName: "Tata", capacityKg: "900", vehicleNumber: "MH12" };
+    const uploads = []; const saved = [];
+    await run(pending, { mobile: "9123456780" }, {
+      uploadPhoto: async (file, path) => { uploads.push(path); return { name: file.name, url: "u" }; },
+      classifyPhoto: async (file, type) => (type === "vehicleSide" ? { ok: true, isMatch: false } : { ok: true, isMatch: true }),
+      setDriver: (d) => saved.push(d), addVehicleType: () => {}, vehicleTypes: [{ key: "tata", label: "Tata" }], slugify: (x) => x, ref: null,
+    });
+    const missing = k.getDriverKycMissing(saved[0]);
+    let threw = false; const saved2 = [];
+    try {
+      await run(pending, { mobile: "9123456780" }, { uploadPhoto: async () => null, classifyPhoto: async () => null, setDriver: (d) => saved2.push(d), addVehicleType: () => {}, vehicleTypes: [], slugify: (x) => x, ref: null });
+    } catch { threw = true; }
+    return !uploads.some((u) => u.includes("vehicleSide")) && saved[0].vehicleSpec && saved[0].vehicleSpec.photoSide === null && JSON.stringify(missing) === '["vehicleSide"]' && threw && saved2.length === 0;
+  }],
   ["admin KYC badge is plain green for Approved (completeness doesn't change it)", () => admin.includes('background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>') && !admin.includes("isDriverKycComplete")],
 
   // ---- Role selection ----
@@ -224,7 +276,7 @@ const checks = [
 let failed = 0;
 for (const [name, fn] of checks) {
   let ok = false;
-  try { ok = !!fn(); } catch { ok = false; }
+  try { ok = !!(await fn()); } catch { ok = false; }
   if (!ok) failed++;
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}`);
 }
