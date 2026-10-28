@@ -1403,6 +1403,24 @@ exports.resetPinAfterPhoneVerify = onCall({ region: "asia-south1" }, async (requ
   return { ok: true };
 });
 
+// Sign-up pre-check: does this mobile already have a PIN account for this
+// role? Callable signed-out (nobody has an account yet). A number can still
+// hold one account per role. Reveals only a yes/no the sign-up screen would
+// reveal anyway when account creation is refused.
+exports.checkMobileRegistered = onCall({ region: "asia-south1" }, async (request) => {
+  const { role, mobile } = request.data || {};
+  if (typeof mobile !== "string" || !/^\d{10}$/.test(mobile)) throw new HttpsError("invalid-argument", "A 10-digit mobile is required.");
+  const toRole = role === "driver" ? "driver" : "customer";
+  try {
+    await getAuth().getUserByEmail(pinAuthEmail(mobile, toRole));
+    return { ok: true, exists: true };
+  } catch (e) {
+    if (e.code === "auth/user-not-found") return { ok: true, exists: false };
+    console.error("[checkMobileRegistered] lookup failed:", e.message);
+    return { ok: false, reason: "error" };
+  }
+});
+
 // ---------------- Daily health check (live-backend half) ----------------
 // The other half of the same daily check lives in a Claude Code Routine
 // (GitHub source-code regression check + build, holding no Firebase

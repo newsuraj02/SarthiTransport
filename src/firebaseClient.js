@@ -362,6 +362,24 @@ export async function resetPinAfterPhoneVerify(role, newPin) {
   }
 }
 
+// Does this mobile already have a PIN account for this role? Sign-up asks
+// before collecting anything else (see functions/index.js
+// checkMobileRegistered). Works signed-out. Always resolves with
+// { ok, exists? } -- on any failure ok is false and the caller carries on,
+// since account creation itself still refuses a duplicate.
+export async function checkMobileRegistered(role, mobile) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "checkMobileRegistered");
+    const result = await call({ role, mobile });
+    return result.data;
+  } catch (e) {
+    console.error("[checkMobileRegistered] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
 // Re-added for the driver "new load posted" alert only — see
 // functions/index.js's onNewLoadPosted/sendLoadAlert. Every other push
 // type stays removed; this is the one carve-out. Push notifications don't

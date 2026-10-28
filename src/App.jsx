@@ -28,7 +28,7 @@ import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -4562,11 +4562,23 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   // don't have to tap elsewhere on screen just to move on.
   const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
 
-  const goToPinStage = () => {
+  const goToPinStage = async () => {
     // Sign Up requires the details form to be filled in first; Login just
-    // needs a valid-length mobile number. No network call here — the PIN
-    // itself is what actually authenticates, entered on the next screen.
+    // needs a valid-length mobile number (the PIN itself is what actually
+    // authenticates, entered on the next screen). Sign Up also asks the server
+    // whether the number is already taken for this role.
     if ((mode === "signup" && !detailsValid) || mobile.length !== 10) return;
+    if (sending) return;
+    // Sign Up: tell them NOW if this number already has an account for this
+    // role, instead of after they've filled everything in. If the check can't
+    // run (offline / not deployed), carry on -- account creation still refuses.
+    if (mode === "signup") {
+      setSending(true);
+      setError("");
+      const res = await checkMobileRegistered("customer", mobile);
+      setSending(false);
+      if (res.ok && res.exists) { setError(numberExistsMsg(lang)); return; }
+    }
     setPin(""); setPinConfirm(""); setError("");
     setStage("pin");
   };
@@ -4590,7 +4602,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
       console.error(e);
       setError(
         mode === "signup" && e?.code === "auth/email-already-in-use"
-          ? (lang === "en" ? "This number is already registered — please Login instead." : lang === "mr" ? "हा नंबर आधीच नोंदणीकृत आहे — कृपया लॉगिन करा." : "यह नंबर पहले से रजिस्टर्ड है — कृपया लॉगिन करें।")
+          ? numberExistsMsg(lang)
           : mode === "login"
           ? (lang === "en" ? "Incorrect mobile number or PIN." : lang === "mr" ? "चुकीचा मोबाइल नंबर किंवा PIN." : "गलत मोबाइल नंबर या PIN।")
           : (lang === "en" ? "Something went wrong — try again." : lang === "mr" ? "काहीतरी चुकले — पुन्हा प्रयत्न करा." : "कुछ गलत हुआ — फिर कोशिश करें।")
@@ -4933,7 +4945,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
               </div>
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in all the details above first" : lang === "mr" ? "आधी वरील सर्व माहिती भरा" : "पहले ऊपर सारी जानकारी भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-              <button onClick={goToPinStage} disabled={!detailsValid || mobile.length !== 10}
+              <button onClick={goToPinStage} disabled={!detailsValid || mobile.length !== 10 || sending}
                 className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 ? C.marigold : "#E5EAF2", color: detailsValid && mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
                 {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
               </button>
@@ -5122,10 +5134,21 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   // don't have to tap elsewhere on screen just to move on.
   const { stepProps: regStepProps } = useGuidedSteps(regStepCompleted, { pinFocus: true, autoAdvanceMs: 5000 });
 
-  const goToPinStage = () => {
+  const goToPinStage = async () => {
     // Sign Up requires the details form to be filled in first; Login just
     // needs a valid-length mobile number.
     if ((mode === "signup" && !detailsValid) || mobile.length !== 10) return;
+    if (sending) return;
+    // Sign Up: tell them NOW if this number already has an account for this
+    // role, instead of after they've filled everything in. If the check can't
+    // run (offline / not deployed), carry on -- account creation still refuses.
+    if (mode === "signup") {
+      setSending(true);
+      setError("");
+      const res = await checkMobileRegistered("driver", mobile);
+      setSending(false);
+      if (res.ok && res.exists) { setError(numberExistsMsg(lang)); return; }
+    }
     setPin(""); setPinConfirm(""); setError("");
     setStage("pin");
   };
@@ -5173,7 +5196,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
       pendingSignupRef.current = null;
       setError(
         e?.code === "auth/email-already-in-use"
-          ? (lang === "en" ? "This number is already registered — please Login instead." : lang === "mr" ? "हा नंबर आधीच नोंदणीकृत आहे — कृपया लॉगिन करा." : "यह नंबर पहले से रजिस्टर्ड है — कृपया लॉगिन करें।")
+          ? numberExistsMsg(lang)
           : (lang === "en" ? "Something went wrong — try again." : lang === "mr" ? "काहीतरी चुकले — पुन्हा प्रयत्न करा." : "कुछ गलत हुआ — फिर कोशिश करें।")
       );
       setSending(false);
@@ -5565,7 +5588,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
               </div>
               {!detailsValid && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{lang === "en" ? "Fill in your name above first" : lang === "mr" ? "आधी वरील नाव भरा" : "पहले ऊपर नाम भरें"}</div>}
               {error && <div className="text-[11px] font-semibold" style={{ color: C.safety }}>{error}</div>}
-              <button onClick={goToPinStage} disabled={!detailsValid || mobile.length !== 10}
+              <button onClick={goToPinStage} disabled={!detailsValid || mobile.length !== 10 || sending}
                 className={`w-full rounded-lg py-4 font-bold text-base ${detailsValid && mobile.length === 10 ? "guided-submit-ready" : ""}`} style={{ background: detailsValid && mobile.length === 10 ? C.marigold : "#E5EAF2", color: detailsValid && mobile.length === 10 ? "#000000" : "#9AA3B0" }}>
                 {lang === "en" ? "Continue" : lang === "mr" ? "पुढे जा" : "आगे बढ़ें"}
               </button>
@@ -10451,6 +10474,12 @@ function DriverHistory({ tripLog, driver, lang }) {
       {docsTrip && <BillDocumentsViewModal trip={docsTrip} onClose={() => setDocsTrip(null)} lang={lang} />}
     </div>
   );
+}
+
+// Shown when a sign-up uses a mobile number that already has an account for
+// that SAME role (owner 2026-10-28). A number may still be used once per role.
+function numberExistsMsg(lang) {
+  return lang === "en" ? "Number Already exists. Try login" : lang === "mr" ? "नंबर आधीपासून अस्तित्वात आहे. लॉगिन करून पहा" : "नंबर पहले से मौजूद है। लॉगिन करके देखें";
 }
 
 // The "I confirm that keeping my documents valid is MY responsibility" clause

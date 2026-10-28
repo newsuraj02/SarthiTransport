@@ -236,6 +236,12 @@ before the account exists are held in memory (File + blob preview) and uploaded 
 wrong-kind photo is dropped, so that driver lands on the Incomplete form listing
 it). If the account can't be created or saved, an error shows and the form stays.
 Pinned by behavior checks in `verifyInvariants.mjs`.
+A mobile that already has an account for the SAME role (customer or driver; one
+number may hold one account per role) is refused at the mobile step of Sign Up
+with "Number Already exists. Try login" -- `goToPinStage` asks the callable
+`checkMobileRegistered` (functions/index.js; needs `firebase deploy --only functions`).
+If that check can't run, sign-up continues and account creation shows the same
+message.
 
 **Meta ads export (owner 2026-10-27).** Admin Settings -> "Export app users for ads
 (Meta)" downloads every driver + customer mobile (blocked/inactive included, duplicates
