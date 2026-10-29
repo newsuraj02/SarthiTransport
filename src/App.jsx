@@ -6956,13 +6956,30 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // just appeared -- requested here, done after the render that mounts that box.
   const [focusReq, setFocusReq] = useState(null); // { to: "drop" | "weight", n }
   const requestFocus = (to) => setFocusReq({ to, n: Date.now() });
+  // The Weight row sits low on the page, so the phone's keyboard (and the sticky Book Now bar) used
+  // to cover it. Re-centre it in the visible area while the keyboard slides up and whenever the
+  // visible height changes (visualViewport), for about a second.
+  const weightRowRef = useRef(null);
+  const keepWeightVisible = () => {
+    const timers = [0, 200, 450, 800].map((ms) => setTimeout(() => weightRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), ms));
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    const onResize = () => weightRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    vv?.addEventListener("resize", onResize);
+    const stop = setTimeout(() => vv?.removeEventListener("resize", onResize), 1400);
+    return () => { timers.forEach(clearTimeout); clearTimeout(stop); vv?.removeEventListener("resize", onResize); };
+  };
   useEffect(() => {
     if (!focusReq) return;
+    let cleanupKeep = null;
     const t = setTimeout(() => {
-      const el = focusReq.to === "drop" ? dropFieldRef.current : weightInputRef.current;
-      el?.focus();
+      if (focusReq.to === "weight") {
+        weightInputRef.current?.focus({ preventScroll: true });
+        cleanupKeep = keepWeightVisible();
+      } else {
+        dropFieldRef.current?.focus();
+      }
     }, 90);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); cleanupKeep?.(); };
   }, [focusReq]);
   const onMapClick = async (lat, lng) => {
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
@@ -7379,7 +7396,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         )}
 
         {showWeight && (
-        <div className="flex gap-3 anim-rise">
+        <div ref={weightRowRef} className="flex gap-3 anim-rise" style={{ scrollMarginBottom: 130, scrollMarginTop: 70 }}>
           {/* Narrower now (fixed width, not a 50/50 grid column) -- the
               weight box needs the extra room for the two-segment kg/ton
               toggle below, and this box's own content (a short distance
@@ -7413,7 +7430,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   setWeightUnitHint(mismatchUnit);
                   setWeightCapHit(capped);
                 }}
-                onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
+                onFocus={() => { setActiveField("weight"); keepWeightVisible(); }} />
               {/* Both units shown at once now (a real segmented toggle, not a
                   single button that only displays whichever is currently
                   active) -- same right-edge slot pattern as LocationField's
