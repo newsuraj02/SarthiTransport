@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Apna Transport - Animation check</title>
+<style>
+  :root{--blue:#0052CC;--yel:#FFCC00;--grn:#00A854;--red:#D93025;--ink:#0F1B2D;--soft:#475569;--line:#D5DCE8;--bg:#F4F7FB}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:20px 16px 40px}
+  main{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  h1{font-size:22px;margin:0 0 2px;font-weight:800}
+  p{margin:0;color:var(--soft)}
+  .row{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+  .row b{font-size:13px;color:var(--soft);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+  .val{font-size:18px;font-weight:800}
+  .good{color:var(--grn)} .bad{color:var(--red)} .wait{color:var(--soft)}
+  .demo{display:flex;align-items:center;gap:16px;padding:6px 0}
+  .spin{width:34px;height:34px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--blue);animation:spin .9s linear infinite}
+  .pulse{width:34px;height:34px;border-radius:50%;background:var(--yel);animation:pulse 1.4s ease-out infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,204,0,.7)}100%{box-shadow:0 0 0 16px rgba(255,204,0,0)}}
+  html:not(.force-motion) .spin,html:not(.force-motion) .pulse{}
+  @media (prefers-reduced-motion:reduce){html:not(.force-motion) .spin,html:not(.force-motion) .pulse{animation:none}}
+  button{font:inherit;font-weight:800;border:0;border-radius:12px;padding:13px 16px;background:var(--blue);color:#fff;cursor:pointer}
+  button.alt{background:#fff;color:var(--blue);border:1.5px solid var(--blue)}
+  ol{margin:4px 0 0;padding-left:20px;color:var(--soft)}
+  ol li{margin:3px 0}
+</style>
+<script>try{if(localStorage.getItem('sarthi_forceMotion')==='1')document.documentElement.classList.add('force-motion')}catch(e){}</script>
+</head>
+<body>
+<main>
+  <div><h1>Animation check</h1><p>Shows why animations might not be playing on this phone.</p></div>
+
+  <div class="row"><b>1. Phone setting "Remove animations"</b>
+    <span class="val" id="rm">Checking…</span>
+    <p id="rmNote"></p></div>
+
+  <div class="row"><b>2. Latest animation update on the server</b>
+    <span class="val" id="dep">Checking…</span>
+    <p id="depNote"></p></div>
+
+  <div class="row"><b>3. Live test (should be moving)</b>
+    <div class="demo"><span class="spin"></span><span class="pulse"></span><span id="run" class="val wait">…</span></div></div>
+
+  <div class="row"><b>Play animations anyway on this phone</b>
+    <p>The app normally follows the phone's "Remove animations" setting. This overrides it on this phone only.</p>
+    <button id="force" type="button">Turn on</button>
+    <button id="follow" class="alt" type="button" hidden>Follow my phone's setting again</button></div>
+
+  <div class="row"><b>If it still doesn't move</b>
+    <ol>
+      <li>Samsung: Settings, Accessibility, Visibility enhancements, turn off <i>Remove animations</i>.</li>
+      <li>Samsung: turn off Power saving mode (it can switch animations off).</li>
+      <li>Other Android: Settings, Accessibility, turn off <i>Remove animations</i>; and in Developer options check that Window, Transition and Animator duration scale are not "off".</li>
+      <li>Close the app fully and reopen it, or tap the orange refresh button.</li>
+    </ol></div>
+</main>
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  function setVal(id,text,cls){var e=$(id);e.textContent=text;e.className="val "+cls}
+  var reduced=false; try{reduced=matchMedia("(prefers-reduced-motion: reduce)").matches}catch(e){}
+  var forced=document.documentElement.classList.contains("force-motion");
+  function paint(){
+    forced=document.documentElement.classList.contains("force-motion");
+    if(reduced&&!forced){setVal("rm","ON — animations are switched off","bad");$("rmNote").textContent="This is the most common reason. Turn it off in the phone's settings (steps below), or use the button further down."}
+    else if(reduced&&forced){setVal("rm","ON, but overridden for this phone","good");$("rmNote").textContent="The app will play its animations on this phone."}
+    else{setVal("rm","OFF — animations are allowed","good");$("rmNote").textContent=""}
+    $("force").hidden=forced; $("follow").hidden=!forced;
+    setTimeout(function(){
+      var n=0; try{n=document.getAnimations().length}catch(e){}
+      var moving=n>0;
+      setVal("run",moving?"Moving":"Stopped",moving?"good":"bad");
+    },250);
+  }
+  $("force").onclick=function(){try{localStorage.setItem("sarthi_forceMotion","1")}catch(e){} document.documentElement.classList.add("force-motion");paint()};
+  $("follow").onclick=function(){try{localStorage.removeItem("sarthi_forceMotion")}catch(e){} document.documentElement.classList.remove("force-motion");paint()};
+  paint();
+  fetch("/?cb="+Date.now(),{cache:"no-store"}).then(function(r){return r.text()}).then(function(t){
+    var has=t.indexOf("al-tile-wrap")>-1;
+    if(has){setVal("dep","Yes — the animation update is live","good");$("depNote").textContent="If the app still looks old, close it fully and reopen, or tap the orange refresh button."}
+    else{setVal("dep","No — the server still has the old version","bad");$("depNote").textContent="The new version has not been deployed to the website yet."}
+  }).catch(function(){setVal("dep","Could not check (offline?)","wait")});
+})();
+</script>
+</body>
+</html>

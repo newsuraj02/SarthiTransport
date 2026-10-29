@@ -182,6 +182,11 @@ untouched); the driver trip summary counts the fare up; sign-up steps slide with
 one-off `SuccessBurst` after a brand-new sign-up; KYC photo tiles zoom in; history lists show
 `SkeletonRows` until the first bookings snapshot (`useBookingsLoaded`) and `EmptyState` (bobbing
 blue/yellow truck) when empty. Not done: the route-line draw-on and the confetti-free variants.
+Every animation obeys the phone's "Remove animations" setting (`prefers-reduced-motion`) -- on
+Samsung that setting and Power saving mode switch ALL of them off. `/motion-check.html`
+(`public/`) tells the owner whether that is the cause and whether the latest build is deployed,
+and its "Play animations anyway" button sets `localStorage.sarthi_forceMotion`, which `index.html`
+turns into `html.force-motion` so every reduced-motion rule steps aside on that phone only.
 
 **Fares.** `calculateFare` (App.jsx): in-city = master formula × `priceCorrectionFactor`
 (anchored 5% below Porter at 13 km); outstation = `priceOutstation`, a piecewise

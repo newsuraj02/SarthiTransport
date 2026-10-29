@@ -149,12 +149,39 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: po
 }
 .step-enter { animation: stepIn 0.35s ease-out both; }
 
+/* Follows the phone's "Remove animations" setting. A phone can opt back in with
+   html.force-motion (set from /motion-check.html, stored in localStorage). */
 @media (prefers-reduced-motion: reduce) {
-  .draw-tick { stroke-dashoffset: 0 !important; }
-  .sb-overlay, .sb-circle, .sb-text, .anim-rise, .anim-drop-in, .pop-in, .slide-in-right, .photo-zoom-in { opacity: 1 !important; }
-  .guided-step-active, .guided-submit-ready, .current-location-blink,
-  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse, .sheet-up, .step-enter, .refresh-turn,
-  .anim-rise, .anim-drop-in, .ring-pulse-yellow, .bell-wiggle, .pop-in, .draw-tick, .chip-fade-out, .radar-ring, .map-halo, .skeleton::after, .bob, .road-drift, .slide-in-right, .photo-zoom-in, .line-fill, .sb-overlay, .sb-circle, .sb-text, .sb-conf i {
+  :root:not(.force-motion) .draw-tick { stroke-dashoffset: 0 !important; }
+  :root:not(.force-motion) .sb-overlay, :root:not(.force-motion) .sb-circle, :root:not(.force-motion) .sb-text, :root:not(.force-motion) .anim-rise, :root:not(.force-motion) .anim-drop-in, :root:not(.force-motion) .pop-in, :root:not(.force-motion) .slide-in-right, :root:not(.force-motion) .photo-zoom-in { opacity: 1 !important; }
+  :root:not(.force-motion) .guided-step-active,
+  :root:not(.force-motion) .guided-submit-ready,
+  :root:not(.force-motion) .current-location-blink,
+  :root:not(.force-motion) .unmatched-vehicle-link-blink,
+  :root:not(.force-motion) .driver-selected-bounce,
+  :root:not(.force-motion) .live-pulse,
+  :root:not(.force-motion) .sheet-up,
+  :root:not(.force-motion) .step-enter,
+  :root:not(.force-motion) .refresh-turn,
+  :root:not(.force-motion) .anim-rise,
+  :root:not(.force-motion) .anim-drop-in,
+  :root:not(.force-motion) .ring-pulse-yellow,
+  :root:not(.force-motion) .bell-wiggle,
+  :root:not(.force-motion) .pop-in,
+  :root:not(.force-motion) .draw-tick,
+  :root:not(.force-motion) .chip-fade-out,
+  :root:not(.force-motion) .radar-ring,
+  :root:not(.force-motion) .map-halo,
+  :root:not(.force-motion) .skeleton::after,
+  :root:not(.force-motion) .bob,
+  :root:not(.force-motion) .road-drift,
+  :root:not(.force-motion) .slide-in-right,
+  :root:not(.force-motion) .photo-zoom-in,
+  :root:not(.force-motion) .line-fill,
+  :root:not(.force-motion) .sb-overlay,
+  :root:not(.force-motion) .sb-circle,
+  :root:not(.force-motion) .sb-text,
+  :root:not(.force-motion) .sb-conf i {
     animation: none !important;
   }
 }

@@ -12,6 +12,7 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <meta name="theme-color" content="#0B3D91" />
+    <script>try{if(localStorage.getItem('sarthi_forceMotion')==='1')document.documentElement.classList.add('force-motion')}catch(e){}</script>
     <!-- The app already switches between English/Hindi itself via its own
          ENG/हिं toggle — browser auto-translate (e.g. Chrome Translate)
          conflicts with that and mistranslates "Apna" (not a real English
@@ -81,11 +82,11 @@
       @keyframes al-spin{to{transform:rotate(360deg)}}
       @keyframes al-fade{from{opacity:0}to{opacity:1}}
       @media (prefers-reduced-motion:reduce){
-        #app-loader,#app-loader.is-hidden{transform:none}
-        #app-loader .al-tile{animation:al-fade .4s ease both}
-        #app-loader .al-glow,#app-loader .al-shine{animation:none}
-        #app-loader .al-bar i{animation:none;transform:scaleX(1)}
-        #app-loader .al-ring{animation:none}
+        html:not(.force-motion) #app-loader,html:not(.force-motion) #app-loader.is-hidden{transform:none}
+        html:not(.force-motion) #app-loader .al-tile{animation:al-fade .4s ease both}
+        html:not(.force-motion) #app-loader .al-glow,html:not(.force-motion) #app-loader .al-shine{animation:none}
+        html:not(.force-motion) #app-loader .al-bar i{animation:none;transform:scaleX(1)}
+        html:not(.force-motion) #app-loader .al-ring{animation:none}
       }
     </style>
   </head>
