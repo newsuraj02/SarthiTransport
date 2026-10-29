@@ -2178,7 +2178,7 @@ function useRefreshButton() {
     setRefreshing(true);
     try { window.sessionStorage.setItem("sarthi_refresh", "1"); } catch { /* storage unavailable -- full intro, fine */ }
     document.documentElement.classList.add("is-refreshing");
-    setTimeout(() => window.location.reload(), 450);
+    setTimeout(() => window.location.reload(), 600);
   };
   return { refreshing, refresh };
 }

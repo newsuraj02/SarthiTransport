@@ -95,8 +95,8 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: po
 /* Refresh button: one smooth full turn, while the app behind it dims (the
    reload starts once the turn is done -- see useRefreshButton). */
 @keyframes refreshTurn { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.refresh-turn { animation: refreshTurn 0.45s cubic-bezier(0.4, 0, 0.2, 1) both; }
-#root { transition: opacity 0.3s ease; }
+.refresh-turn { animation: refreshTurn 0.6s cubic-bezier(0.4, 0, 0.2, 1) both; }
+#root { transition: opacity 0.4s ease; }
 .is-refreshing #root { opacity: 0.35; }
 
 /* Booking steps (Pickup -> Drop -> Weight) ease in instead of popping. */
