@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, useId, useSyncExternalStore, Suspense, lazy } from "react";
 // Admin's 16 screens live in their own module and are lazy-loaded here so a
 // customer or driver never downloads any of it — see AdminPanel.jsx's own
 // header comment for how this was split out.
@@ -24,7 +24,7 @@ import {
   claimBooking, addDeclinedBy,
 } from "./firestoreStore";
 import { increment, serverTimestamp } from "firebase/firestore";
-import { GoogleMap, MarkerF, PolylineF, Autocomplete } from "@react-google-maps/api";
+import { GoogleMap, MarkerF, OverlayViewF, PolylineF, Autocomplete } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
@@ -3964,11 +3964,18 @@ function VehicleCategoryIcon({ tierIndex, size = 40 }) {
 // calling a hook a different number of times across renders breaks React,
 // whereas each driver's OWN marker instance (keyed by id) calls them a
 // fixed number of times across its own re-renders.
-function NearbyDriverMarker({ driver }) {
+function NearbyDriverMarker({ driver, index = 0 }) {
   const rawPos = { lat: driver.lastKnownLocation.lat, lng: driver.lastKnownLocation.lng };
   const pos = useSmoothPosition(rawPos);
   const heading = useBearing(rawPos);
-  return <MarkerF position={pos || rawPos} icon={driverTruckIcon(heading)} />;
+  // Fades in (staggered by index) instead of popping onto the map.
+  const [opacity, setOpacity] = useState(0);
+  useEffect(() => {
+    const base = Math.min(index, 8) * 90;
+    const ts = [[base + 40, 0.4], [base + 140, 0.75], [base + 240, 1]].map(([ms, v]) => setTimeout(() => setOpacity(v), ms));
+    return () => ts.forEach(clearTimeout);
+  }, []);
+  return <MarkerF position={pos || rawPos} icon={driverTruckIcon(heading)} opacity={opacity} />;
 }
 
 // Where the customer last zoomed/panned the booking map (owner 2026-10-29: "once
@@ -4074,6 +4081,9 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
         onClick={(e) => onMapClick?.(e.latLng.lat(), e.latLng.lng())}
         options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, clickableIcons: false, keyboardShortcuts: false, gestureHandling: "greedy" }}
       >
+        <OverlayViewF position={center} mapPaneName="overlayLayer" getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h / 2 })}>
+          <span className="map-halo" />
+        </OverlayViewF>
         <MarkerF position={center} icon={customerPinIcon()} />
         {nearbyInactive.map((d) => (
           <MarkerF
@@ -4082,8 +4092,8 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
             icon={driverTruckIconInactive()}
           />
         ))}
-        {nearby.map((d) => (
-          <NearbyDriverMarker key={d.mobile || d.id} driver={d} />
+        {nearby.map((d, i) => (
+          <NearbyDriverMarker key={d.mobile || d.id} driver={d} index={i} />
         ))}
       </GoogleMap>
       {/* Bottom right (owner 2026-10-29): the active/inactive count. No +/- zoom
@@ -4888,7 +4898,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
         <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Customer Login" : lang === "mr" ? "कस्टमर लॉगिन" : "कस्टमर लॉगिन"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Enter your mobile number and PIN to continue." : lang === "mr" ? "सुरू ठेवण्यासाठी तुमचा मोबाइल नंबर आणि PIN टाका." : "जारी रखने के लिए अपना मोबाइल नंबर और PIN डालें।"}</p>
-        <div className="w-full">
+        <div key={stage} className="w-full slide-in-right">
           {stage === "mobile" ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
@@ -4992,7 +5002,7 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
           </div>
       </div>
 
-      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+      <div key={stage} className="mt-5 pt-4 slide-in-right" style={{ borderTop: `1px solid ${C.line}` }}>
         <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Set Up Login" : lang === "mr" ? "लॉगिन सेट करा" : "लॉगिन सेट करें"}</div>
         {stage === "mobile" ? (
             <div className="space-y-3">
@@ -5531,7 +5541,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
         <div className="mb-4"><Logo size={96} /></div>
         <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Login" : lang === "mr" ? "ड्रायव्हर लॉगिन" : "ड्राइवर लॉगिन"}</h2>
         <p className="text-xs text-center mb-6" style={{ color: C.inkSoft }}>{lang === "en" ? "Enter your mobile number and PIN to continue." : lang === "mr" ? "सुरू ठेवण्यासाठी तुमचा मोबाइल नंबर आणि PIN टाका." : "जारी रखने के लिए अपना मोबाइल नंबर और PIN डालें।"}</p>
-        <div className="w-full">
+        <div key={stage} className="w-full slide-in-right">
           {stage === "mobile" ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 rounded-lg px-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
@@ -5608,12 +5618,13 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   // "Create Account", is what creates it (createAccountAndSubmit).
   if (mode === "signup" && stage === "docs") {
     return (
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto slide-in-right">
         <div className="px-5 pt-4">
           <button onClick={resetForm} className="flex items-center gap-1 mb-1 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
             <ChevronLeft size={18} strokeWidth={3} />
           </button>
         </div>
+        <div className="px-5 pb-1"><StepDots step={2} total={2} /></div>
         <DriverKyc deferred driver={{ name: name.trim(), mobile, kyc: null, vehicleSpec: null, docs: null, photo: null }} setDriver={() => {}} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} lang={lang}
           stepLabel={lang === "en" ? "Step 2 of 2 — Documents & Vehicle" : lang === "mr" ? "स्टेप 2 / 2 — कागदपत्रे आणि गाडी" : "स्टेप 2 / 2 — दस्तावेज़ और गाड़ी"}
           onDeferredSubmit={createAccountAndSubmit} submitting={sending} submitError={error} />
@@ -5630,6 +5641,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
       </button>
       <div className="mb-4"><Logo size={96} /></div>
       <h2 className="text-lg font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Driver Sign Up" : lang === "mr" ? "ड्रायव्हर साइन अप" : "ड्राइवर साइन अप"}</h2>
+      <div className="mb-3"><StepDots step={1} total={2} /></div>
       <p className="text-xs mb-5" style={{ color: C.inkSoft }}>
         {lang === "en" ? "Step 1 of 2 — Fill in your details, then set a PIN below." : lang === "mr" ? "स्टेप 1 / 2 — तुमची माहिती भरा, नंतर खाली PIN सेट करा." : "स्टेप 1 / 2 — अपनी जानकारी भरें, फिर नीचे PIN सेट करें।"}
       </p>
@@ -5642,7 +5654,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
       </div>
 
 
-      <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${C.line}` }}>
+      <div key={stage} className="mt-5 pt-4 slide-in-right" style={{ borderTop: `1px solid ${C.line}` }}>
         <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Set Up Login" : lang === "mr" ? "लॉगिन सेट करा" : "लॉगिन सेट करें"}</div>
         {stage === "mobile" ? (
             <div className="space-y-3">
@@ -6649,6 +6661,121 @@ function weightUnitLabel(unit) {
   return unit === "kg" ? "kg" : "ton";
 }
 
+const CONFETTI_PIECES = [[97, -15, 235, 10, 12, "#FFCC00"], [105, 8, 281, 10, 4, "#0052CC"], [71, 23, -257, 10, 12, "#00A854"], [72, 60, 287, 10, 12, "#FF6B35"], [13, 65, -135, 6, 4, "#FFE066"], [-28, 62, 203, 8, 12, "#4C8DF6"], [-56, 48, 247, 6, 12, "#FFCC00"], [-69, 45, 261, 6, 12, "#0052CC"], [-97, 21, 127, 6, 12, "#00A854"], [-89, -20, 218, 6, 4, "#FF6B35"], [-63, -39, -133, 8, 6, "#FFE066"], [-59, -67, -264, 10, 4, "#4C8DF6"], [-35, -74, -199, 8, 4, "#FFCC00"], [-4, -99, -154, 6, 12, "#0052CC"], [4, -72, 165, 10, 12, "#00A854"], [39, -83, -227, 10, 6, "#FF6B35"], [62, -66, -120, 8, 12, "#FFE066"], [103, -50, -167, 8, 12, "#4C8DF6"]];
+
+// ---------------- Bookings "first load" flag (drives the loading skeletons) ----------------
+let bookingsLoadedFlag = false;
+const bookingsLoadedListeners = new Set();
+function markBookingsLoaded() {
+  if (bookingsLoadedFlag) return;
+  bookingsLoadedFlag = true;
+  bookingsLoadedListeners.forEach((fn) => fn());
+}
+function useBookingsLoaded() {
+  useEffect(() => {
+    // Never leave a skeleton up forever if the first snapshot is slow or never comes.
+    const t = setTimeout(markBookingsLoaded, 6000);
+    return () => clearTimeout(t);
+  }, []);
+  return useSyncExternalStore(
+    (fn) => { bookingsLoadedListeners.add(fn); return () => bookingsLoadedListeners.delete(fn); },
+    () => bookingsLoadedFlag || !firestoreReady,
+    () => true
+  );
+}
+
+// ---------------- Motion helpers (owner 2026-10-29) ----------------
+// Counts from 0 up to `target` once (e.g. a fare on the trip summary).
+function useCountUpFromZero(target, duration = 1100, delay = 250) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    let raf, t0;
+    const to = setTimeout(() => {
+      const step = (now) => {
+        if (t0 == null) t0 = now;
+        const p = Math.min(1, (now - t0) / duration);
+        setV(target * (1 - Math.pow(1 - p, 3)));
+        if (p < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }, delay);
+    return () => { clearTimeout(to); cancelAnimationFrame(raf); };
+  }, [target, duration, delay]);
+  return v;
+}
+// Tick that draws itself (see .draw-tick in index.css).
+function TickIcon({ size = 18, color = "#fff", stroke = 3 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path className="draw-tick" style={{ "--len": 22 }} d="M5 12.5l4.5 4.5L19 7.5" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+// Grey shimmering placeholder rows shown while a list is still loading.
+function SkeletonRows({ rows = 3 }) {
+  return (
+    <div className="space-y-2.5" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="rounded-xl p-3 flex items-center gap-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <div className="skeleton w-10 h-10 shrink-0" style={{ borderRadius: 10 }} />
+          <div className="flex-1 space-y-2"><div className="skeleton h-3" style={{ width: "72%" }} /><div className="skeleton h-2.5" style={{ width: "44%" }} /></div>
+          <div className="skeleton h-4 w-14" />
+        </div>
+      ))}
+    </div>
+  );
+}
+// Friendly empty state: a parked truck that bobs gently over a drifting road.
+function EmptyState({ title, sub }) {
+  return (
+    <div className="text-center py-10 px-6 flex flex-col items-center">
+      <svg className="bob" width="84" height="84" viewBox="0 0 44 44" aria-hidden="true"><use href="#apna-truck" /></svg>
+      <div className="road-drift mt-1 mb-3" />
+      <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{title}</p>
+      {sub && <p className="text-xs" style={{ color: C.inkSoft }}>{sub}</p>}
+    </div>
+  );
+}
+// Two-step progress dots for sign-up (the line fills when step 2 is reached).
+function StepDots({ step = 1, total = 2 }) {
+  return (
+    <div className="flex items-center justify-center gap-0 px-10" aria-hidden="true">
+      {Array.from({ length: total }).map((_, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && (
+            <span className="flex-1 h-[3px] rounded mx-1.5 overflow-hidden" style={{ background: C.line }}>
+              {step > i && <span className="block h-full line-fill" style={{ background: C.navy }} />}
+            </span>
+          )}
+          <span className={`w-3 h-3 rounded-full ${step === i + 1 && i > 0 ? "pop-in" : ""}`} style={{ background: step >= i + 1 ? C.navy : C.line }} />
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+// Full-screen "account created" moment: a circle pops, the tick draws and a short
+// confetti burst fades out; it removes itself and never blocks a tap.
+function SuccessBurst({ lang, onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 2300); return () => clearTimeout(t); }, [onDone]);
+  return (
+    <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center sb-overlay" style={{ background: "rgba(244,247,251,0.96)", pointerEvents: "none" }} role="status" aria-live="polite">
+      <div className="relative flex items-center justify-center" style={{ width: 96, height: 96 }}>
+        <div className="sb-conf absolute" style={{ left: "50%", top: "50%", width: 0, height: 0 }}>
+          {CONFETTI_PIECES.map(([dx, dy, rot, w, h, bg], i) => <i key={i} style={{ "--dx": `${dx}px`, "--dy": `${dy}px`, "--rot": `${rot}deg`, width: w, height: h, background: bg }} />)}
+        </div>
+        <svg className="sb-circle" width="96" height="96" viewBox="0 0 80 80" aria-hidden="true">
+          <circle cx="40" cy="40" r="36" fill={C.success} />
+          <path className="draw-tick" style={{ "--len": 48, animationDelay: "0.5s" }} d="M24 41l11 11 21-23" fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <div className="sb-text text-center mt-6">
+        <div className="text-xl font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "Account created" : lang === "mr" ? "खाते तयार झाले" : "अकाउंट बन गया"}</div>
+        <div className="text-xs mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Welcome to Apna Transport" : lang === "mr" ? "अपना ट्रान्सपोर्टमध्ये स्वागत आहे" : "अपना ट्रांसपोर्ट में आपका स्वागत है"}</div>
+      </div>
+    </div>
+  );
+}
+
 // Step-by-step booking helpers (owner 2026-10-29).
 function StepSummary({ label, value, changeLabel, onChange, loading = false }) {
   return (
@@ -7399,13 +7526,13 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 </p>
               ) : (
                 <>
-                  {visibleDrivers.map((entry) => {
+                  {visibleDrivers.map((entry, idx) => {
                     const key = entry.id;
                     const isSelected = selectedDriverKey === key;
                     const isSending = sendingKey === key;
                     const fare = entry.fare;
                     return (
-                      <div key={key}>
+                      <div key={key} className="anim-rise" style={{ animationDelay: `${Math.min(idx, 6) * 70}ms` }}>
                         <button onClick={() => setSelectedDriverKey(isSelected ? null : key)} disabled={isSending}
                           className={`w-full flex items-center gap-3 rounded-xl p-3 text-left shadow-sm ${isSelected ? "driver-selected-bounce" : ""}`}
                           style={{ border: `2px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isSelected ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
@@ -7436,7 +7563,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                             className={`w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 ${isSending ? "" : "animate-pulse"}`}
                             style={{ background: isSending ? C.inkSoft : C.success }}>
                             {isSending
-                              ? (lang === "en" ? "Request sent. Please wait" : lang === "mr" ? "रिक्वेस्ट पाठवली. कृपया थांबा" : "रिक्वेस्ट भेज दी गई. कृपया प्रतीक्षा करें")
+                              ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
                               : <>{lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}</>}
                           </button>
                         )}
@@ -8004,13 +8131,13 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                 </p>
               ) : (
                 <>
-                  {visibleDrivers.map((entry) => {
+                  {visibleDrivers.map((entry, idx) => {
                     const key = entry.id;
                     const isSelected = selectedDriverKey === key;
                     const isSending = sendingKey === key;
                     const fare = entry.fare;
                     return (
-                      <div key={key}>
+                      <div key={key} className="anim-rise" style={{ animationDelay: `${Math.min(idx, 6) * 70}ms` }}>
                         <button onClick={() => setSelectedDriverKey(isSelected ? null : key)} disabled={isSending}
                           className={`w-full flex items-center gap-3 rounded-xl p-3 text-left shadow-sm ${isSelected ? "driver-selected-bounce" : ""}`}
                           style={{ border: `2px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isSelected ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
@@ -8041,7 +8168,7 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
                             className={`w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 ${isSending ? "" : "animate-pulse"}`}
                             style={{ background: isSending ? C.inkSoft : C.success }}>
                             {isSending
-                              ? (lang === "en" ? "Request sent. Please wait" : lang === "mr" ? "रिक्वेस्ट पाठवली. कृपया थांबा" : "रिक्वेस्ट भेज दी गई. कृपया प्रतीक्षा करें")
+                              ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
                               : <>{lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}</>}
                           </button>
                         )}
@@ -8216,6 +8343,8 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
   const [cancelError, setCancelError] = useState("");
   const [showDocs, setShowDocs] = useState(false);
   const docsSent = !!b.documents?.file?.url;
+  // "Ringing on N driver phones" climbs to N instead of jumping.
+  const ringCount = Math.round(useCountUp(b.ringDeliveredCount || 0, 800));
 
   // The real OTP now lives in its own bookingOtps/{id} doc (see
   // driverRespondBooking), readable only by this booking's own customer
@@ -8275,8 +8404,17 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
               <span className="text-[11px] font-bold" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Advance ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड"}: {rideDateTimeLabel(b)}</span>
             </div>
           )}
-          <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2 guided-submit-ready" style={{ background: noDriverYet ? "#8B0000" : C.navy }}>
-            {noDriverYet ? <AlertTriangle size={20} color="#FFFFFF" /> : <Truck size={20} color="#FFFFFF" />}
+          {!noDriverYet && (
+            <div className="chip-fade-out inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black text-white mb-2" style={{ background: C.success }}>
+              <TickIcon size={14} stroke={3.4} />
+              {lang === "en" ? "Request sent" : lang === "mr" ? "रिक्वेस्ट पाठवली" : "रिक्वेस्ट भेज दी गई"}
+            </div>
+          )}
+          <div className="relative w-12 h-12 mx-auto mb-2">
+            {!noDriverYet && [0, 0.8, 1.6].map((d) => <span key={d} className="radar-ring" style={{ animationDelay: `${d}s` }} />)}
+            <div className="relative w-12 h-12 rounded-full flex items-center justify-center guided-submit-ready" style={{ background: noDriverYet ? "#8B0000" : C.navy }}>
+              {noDriverYet ? <AlertTriangle size={20} color="#FFFFFF" /> : <Truck size={20} color="#FFFFFF" />}
+            </div>
           </div>
           <div className="text-base font-black" style={{ color: C.ink }}>
             {noDriverYet
@@ -8293,7 +8431,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
           {b.ringDeliveredCount > 0 && (
             <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 mt-2 text-xs font-black" style={{ background: "#E8F7EE", color: C.success, border: `1px solid ${C.success}` }}>
               <Bell size={12} color={C.success} />
-              {lang === "en" ? `Ringing on ${b.ringDeliveredCount} driver phone${b.ringDeliveredCount > 1 ? "s" : ""}` : lang === "mr" ? `${b.ringDeliveredCount} ड्रायव्हरच्या फोनवर घंटी वाजत आहे` : `${b.ringDeliveredCount} ड्राइवरों के फ़ोन पर घंटी बज रही है`}
+              {lang === "en" ? `Ringing on ${ringCount} driver phone${b.ringDeliveredCount > 1 ? "s" : ""}` : lang === "mr" ? `${ringCount} ड्रायव्हरच्या फोनवर घंटी वाजत आहे` : `${ringCount} ड्राइवरों के फ़ोन पर घंटी बज रही है`}
             </div>
           )}
           {!noDriverYet && (formatKgLabel(b.weight, lang) || b.distance != null) && (
@@ -8350,7 +8488,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
         )}
       </div>
 
+      <div className="anim-rise">
       <BookedVehiclePanel b={b} v={v} VEHICLES={VEHICLES} driverVehicle={driverVehicle} drivers={drivers} lang={lang} />
+      </div>
 
       {b.driverMobile && (
         <MaskedCallButton bookingId={b.id} fallbackMobile={b.driverMobile} lang={lang}
@@ -8414,6 +8554,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
 // that the main page focuses on the single active ride.
 function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
   const VEHICLES = vehicleTypes;
+  const bookingsLoaded = useBookingsLoaded();
   const others = bookings.filter((b) => b.status === "Completed" || b.status === "Cancelled");
   const [docsBooking, setDocsBooking] = useState(null);
   const statusMeta = lang === "en"
@@ -8454,14 +8595,9 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
   return (
     <div className="px-5 py-4">
       <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Ride History" : lang === "mr" ? "राइड हिस्टरी" : "राइड हिस्ट्री"}</h2>
-      {others.length === 0 ? (
-        <div className="text-center py-12 px-6">
-          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.marigoldDeep }}>
-            <Package size={26} color="#FFFFFF" />
-          </div>
-          <p className="text-sm font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "No past rides yet" : lang === "mr" ? "अजून कोणतीही जुनी राइड नाही" : "अभी कोई पुरानी राइड नहीं है"}</p>
-          <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "Completed and cancelled bookings will show up here." : lang === "mr" ? "पूर्ण आणि रद्द बुकिंग इथे दिसतील." : "पूर्ण और रद्द बुकिंग यहां दिखेंगी।"}</p>
-        </div>
+      {!bookingsLoaded ? <SkeletonRows rows={3} /> : others.length === 0 ? (
+        <EmptyState title={lang === "en" ? "No past rides yet" : lang === "mr" ? "अजून कोणतीही जुनी राइड नाही" : "अभी कोई पुरानी राइड नहीं है"}
+          sub={lang === "en" ? "Completed and cancelled bookings will show up here." : lang === "mr" ? "पूर्ण आणि रद्द बुकिंग इथे दिसतील." : "पूर्ण और रद्द बुकिंग यहां दिखेंगी।"} />
       ) : others.map((b) => {
         const meta = statusMeta[b.status];
         return (
@@ -9102,7 +9238,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
             ) : (
               <div className="px-5 py-5">
                 {advanceBookings.length === 0 ? (
-                  <p className="text-sm text-center py-16" style={{ color: C.inkSoft }}>{lang === "en" ? "No advance bookings yet." : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही." : "अभी तक कोई एडवांस बुकिंग नहीं है।"}</p>
+                  <EmptyState title={lang === "en" ? "No advance bookings yet" : lang === "mr" ? "अजून कोणतीही अ‍ॅडव्हान्स बुकिंग नाही" : "अभी तक कोई एडवांस बुकिंग नहीं है"} />
                 ) : (
                   <div className="space-y-3">
                     {advanceBookings.map((ab) => (
@@ -9465,6 +9601,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
 function DriverTripSummary({ trip, lang, onDone }) {
   const baseFare = trip.fare || 0;
   const totalAmount = trip.bill?.total ?? (baseFare + (trip.extraCharge || 0));
+  const shownTotal = useCountUpFromZero(totalAmount);
   const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   return (
     <div>
@@ -9498,8 +9635,9 @@ function DriverTripSummary({ trip, lang, onDone }) {
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
-        <CheckCircle2 size={20} color={C.success} className="shrink-0" />
-        <div className="text-sm font-black" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : lang === "mr" ? "ट्रिप पूर्ण झाली" : "ट्रिप पूरी हुई"}</div>
+        <CheckCircle2 size={20} color={C.success} className="shrink-0 pop-in" />
+        <div className="text-sm font-black flex-1" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : lang === "mr" ? "ट्रिप पूर्ण झाली" : "ट्रिप पूरी हुई"}</div>
+        <div className="text-lg font-black rounded-full px-3 py-0.5" style={{ color: C.success, background: "rgba(0,168,84,0.10)", fontFamily: monoFont }}>{fmt(Math.round(shownTotal))}</div>
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -10021,7 +10159,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
     return (
       <div className="px-5 pt-5 pb-5">
         <div className="rounded-lg p-2.5 mb-3 flex items-center gap-2 shadow-lg" style={{ background: C.success }}>
-          <CheckCircle2 size={16} color="#FFFFFF" />
+          <Bell size={16} color="#FFFFFF" className="bell-wiggle" />
           <span className="text-sm font-black text-white">
             {lang === "en" ? `${broadcastBookings.length} new load${broadcastBookings.length > 1 ? "s" : ""} near you` : lang === "mr" ? `तुमच्या जवळ ${broadcastBookings.length} नवीन लोड` : `आपके पास ${broadcastBookings.length} नए लोड`}
           </span>
@@ -10039,7 +10177,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
             // this badge is just letting the driver know before they tap.
             const isReturn = isReturnLoadFor(driver, b);
             return (
-              <div key={b.id} className="rounded-xl p-3 shadow-sm" style={{ background: C.paper, border: `2px solid ${isReturn ? C.success : C.marigoldDeep}` }}>
+              <div key={b.id} className={`rounded-xl p-3 shadow-sm anim-drop-in ${isReturn ? "" : "ring-pulse-yellow"}`} style={{ background: C.paper, border: `2px solid ${isReturn ? C.success : C.marigoldDeep}` }}>
                 {isReturn && (
                   <div className="rounded-lg px-2.5 py-1.5 mb-2 flex items-center gap-1.5" style={{ background: C.success }}>
                     <Truck size={13} color="#fff" />
@@ -10371,9 +10509,9 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
               );
             }
           }} className="shrink-0 flex items-center">
-            <span className="w-14 h-8 rounded-full relative transition-colors" style={{ background: driver.online ? C.success : C.safety }}>
+            <span className={`w-14 h-8 rounded-full relative transition-colors duration-300 ${driver.online ? "live-pulse" : ""}`} style={{ background: driver.online ? C.success : C.safety }}>
               <span className="absolute inset-0 flex items-center text-[10px] font-black text-white select-none" style={{ justifyContent: driver.online ? "flex-start" : "flex-end", paddingLeft: driver.online ? 8 : 0, paddingRight: driver.online ? 0 : 8 }}>{driver.online ? "On" : "Off"}</span>
-              <span className="w-6 h-6 rounded-full bg-white absolute top-1 transition-all shadow-sm" style={{ left: driver.online ? 31 : 4 }} />
+              <span className="w-6 h-6 rounded-full bg-white absolute top-1 shadow-sm" style={{ left: driver.online ? 31 : 4, transition: "left 0.35s cubic-bezier(0.3, 1.4, 0.4, 1)" }} />
             </span>
           </button>
         </div>
@@ -10698,18 +10836,16 @@ function DriverWallet({ driver, setDriver, minWallet, lang, withdrawals, request
 
 function DriverHistory({ tripLog, driver, lang }) {
   const myTrips = tripLog.filter((t) => isDriverRecord(t, driver));
+  const bookingsLoaded = useBookingsLoaded();
   const [docsTrip, setDocsTrip] = useState(null);
   return (
     <div className="px-5 py-5">
       <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{lang === "en" ? "Trip History" : lang === "mr" ? "ट्रिप हिस्टरी" : "ट्रिप हिस्ट्री"}</h2>
       <div className="space-y-2">
-        {myTrips.length === 0 && (
-          <div className="text-center py-10">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "rgba(71,85,105,0.10)" }}>
-              <Package size={28} color={C.inkSoft} />
-            </div>
-            <p className="text-sm font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "No bid accepted yet." : lang === "mr" ? "अजून कोणतीही बिड अ‍ॅक्सेप्ट झाली नाही." : "अभी कोई बिड एक्सेप्ट नहीं हुई।"}</p>
-          </div>
+        {!bookingsLoaded && myTrips.length === 0 && <SkeletonRows rows={3} />}
+        {bookingsLoaded && myTrips.length === 0 && (
+          <EmptyState title={lang === "en" ? "No trips yet" : lang === "mr" ? "अजून कोणतीही ट्रिप नाही" : "अभी कोई ट्रिप नहीं"}
+            sub={lang === "en" ? "Accepted loads will show up here." : lang === "mr" ? "स्वीकारलेले लोड इथे दिसतील." : "स्वीकार किए गए लोड यहां दिखेंगे।"} />
         )}
         {myTrips.map((t) => (
           <div key={t.id} className="rounded-xl px-3.5 py-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${t.status === "Cancelled" ? C.safety : C.line}` }}>
@@ -11090,13 +11226,14 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
               <div className="rounded-lg overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer" style={{ border: `1.5px dashed ${C.line}`, background: C.paper, minHeight: 86 }}>
                 {uploadingKeys[key] ? (
                   <div className="p-2 flex flex-col items-center justify-center">
+                    <Loader2 size={18} color={C.navy} className="animate-spin mb-1" />
                     <span className="text-[10px] font-semibold" style={{ color: C.marigoldDeep }}>{lang === "en" ? "Uploading" : lang === "mr" ? "अपलोड होत आहे" : "अपलोड हो रहा है"}{uploadProgress[key] ? ` ${uploadProgress[key]}%` : "..."}</span>
                   </div>
                 ) : (
                   <SafeImage
                     src={val?.url}
                     alt={label}
-                    className="w-full h-16 object-cover"
+                    className="w-full h-16 object-cover photo-zoom-in"
                     fallback={
                       <div className="p-2 flex flex-col items-center justify-center">
                         <Camera size={16} color={C.inkSoft} />
@@ -11119,7 +11256,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                     )}
                   </div>
                 ) : (
-                  <span className="text-[9px] mt-0.5 pb-1 truncate max-w-full" style={{ color: val ? C.success : C.inkSoft }}>
+                  <span key={val ? "done" : "todo"} className={`text-[9px] mt-0.5 pb-1 truncate max-w-full ${val ? "pop-in" : ""}`} style={{ color: val ? C.success : C.inkSoft }}>
                     {val ? doneTxt : (lang === "en" ? "Take photo" : lang === "mr" ? "फोटो घ्या" : "फोटो लें")}
                   </span>
                 )}
@@ -11172,7 +11309,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                   <SafeImage
                     src={vehiclePhotoSide?.url}
                     alt={lang === "en" ? "Side" : lang === "mr" ? "बाजूने" : "साइड से"}
-                    className="w-full h-24 rounded-lg object-cover"
+                    className="w-full h-24 rounded-lg object-cover photo-zoom-in"
                     fallback={
                       <>
                         <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1" style={{ background: C.marigoldDeep }}><Camera size={18} color="#FFFFFF" /></div>
@@ -11196,7 +11333,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
                   )}
                 </div>
               ) : (
-                <div className="text-[9px] mt-0.5 text-center" style={{ color: vehiclePhotoSide ? C.success : C.inkSoft }}>
+                <div key={vehiclePhotoSide ? "done" : "todo"} className={`text-[9px] mt-0.5 text-center ${vehiclePhotoSide ? "pop-in" : ""}`} style={{ color: vehiclePhotoSide ? C.success : C.inkSoft }}>
                   {vehiclePhotoSide ? doneTxt : (lang === "en" ? "Tap to upload" : lang === "mr" ? "अपलोडसाठी टॅप करा" : "अपलोड के लिए टैप करें")}
                 </div>
               )}
@@ -12329,6 +12466,8 @@ export default function App() {
   // returning/login user never has this flag set, so they never see it.
   const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
   const [langPromptPending, setLangPromptPending] = usePersistedState("sarthi_langPromptPending", false);
+  // One-off "Account created" moment after a brand-new sign-up (see SuccessBurst).
+  const [signupBurst, setSignupBurst] = useState(false);
   // Whether this device has already fired the one-time Location +
   // Notifications priming (see usePrimePermissionsOnce) — global (not
   // per-role/mobile) since it fires before role selection or login even
@@ -12519,7 +12658,7 @@ export default function App() {
   // Only Admin needs the full customer list (profile/address oversight).
   const [allCustomers, setAllCustomers] = useState([]);
   useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("customers", setAllCustomers, null) : undefined), authDeps);
-  useEffect(() => (firestoreReady ? subscribeCollection("bookings", setBookings) : undefined), authDeps);
+  useEffect(() => (firestoreReady ? subscribeCollection("bookings", (rows) => { setBookings(rows); markBookingsLoaded(); }) : undefined), authDeps);
   // Admin reads every alert (see AdminAlerts); customers/drivers now also
   // subscribe so SosScreen's "My Complaints" list can show their own
   // filed complaints and any admin reply — filtered to "mine" in JS, same
@@ -13273,6 +13412,17 @@ export default function App() {
     // via an inner flex-1 overflow-y-auto region (see CustomerHome/
     // DriverHome/AdminPanel), not by growing this outer shell.
     <div className="h-full flex justify-center" style={{ background: "#E2E8F0", fontFamily: bodyFont }}>
+      {signupBurst && <SuccessBurst lang={lang} onDone={() => setSignupBurst(false)} />}
+      {/* Shared artwork for EmptyState (see index.css .bob) -- one copy, referenced by <use>. */}
+      <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true"><defs>
+        <linearGradient id="apna-gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2A78F0" /><stop offset="1" stopColor="#0046B3" /></linearGradient>
+        <linearGradient id="apna-gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFDB4D" /><stop offset="1" stopColor="#F2B800" /></linearGradient>
+        <symbol id="apna-truck" viewBox="0 0 44 44"><g transform="translate(22 22) scale(.9) translate(-22 -22)">
+          <rect x="2" y="12" width="26" height="20" rx="3" fill="url(#apna-gb)" stroke="#fff" strokeWidth="1.4" /><rect x="4.6" y="14.6" width="20.8" height="14.8" rx="1.8" fill="#003C99" /><rect x="27" y="19.6" width="3.4" height="4.8" rx="1" fill="#003C99" />
+          <rect x="36.2" y="12.4" width="2.6" height="1.9" rx=".8" fill="#00266B" /><rect x="36.2" y="29.7" width="2.6" height="1.9" rx=".8" fill="#00266B" />
+          <path d="M29 14.5h6q3 0 4.2 2.2l1.3 2.4v5.8l-1.3 2.4q-1.2 2.2-4.2 2.2h-6z" fill="url(#apna-gc)" stroke="#fff" strokeWidth="1.4" strokeLinejoin="round" /><rect x="30.2" y="17.2" width="4" height="9.6" rx="1.2" fill="#E6A800" />
+          <path d="M35.4 17.5h1.5q1.6 0 2.2 1.4l.5 1.2v3.8l-.5 1.2q-.6 1.4-2.2 1.4h-1.5z" fill="#BFD9FA" /><circle cx="40.5" cy="17.6" r="1.1" fill="#FFF6CC" /><circle cx="40.5" cy="26.4" r="1.1" fill="#FFF6CC" />
+        </g></symbol></defs></svg>
       <button onClick={refreshButton.refresh} disabled={refreshButton.refreshing}
         className="fixed right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
         style={{ background: C.marigoldDeep, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
@@ -13316,6 +13466,7 @@ export default function App() {
               logAnalyticsEvent("customer_signup_complete");
               // Brand-new signup — prompt for a language once, right after.
               setLangPromptPending(true);
+              setSignupBurst(true);
             }} />
         )}
         {role === "customer" && customerAuth.verified && customerChecked && customer && (
@@ -13333,6 +13484,7 @@ export default function App() {
             onFirstSignupComplete={() => {
               logAnalyticsEvent("driver_signup_complete");
               setLangPromptPending(true);
+              setSignupBurst(true);
               speakGuide(
                 lang === "en" ? "Your profile has been created successfully!" : lang === "mr" ? "तुमची प्रोफाइल यशस्वीरित्या तयार झाली आहे!" : "आपकी प्रोफाइल सफलतापूर्वक बन गई है!",
                 lang

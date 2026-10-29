@@ -99,6 +99,49 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: po
 #root { transition: opacity 0.4s ease; }
 .is-refreshing #root { opacity: 0.35; }
 
+/* ---- Motion pass (owner 2026-10-29: "implement all" of the animation preview) ----
+   Every class below is decoration only and is switched off under reduced motion. */
+@keyframes riseIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+.anim-rise { animation: riseIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes dropIn { 0% { opacity: 0; transform: translateY(-24px) scale(0.96); } 70% { opacity: 1; transform: translateY(3px) scale(1.01); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+.anim-drop-in { animation: dropIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes ringPulseY { 0% { box-shadow: 0 0 0 0 rgba(255, 204, 0, 0.65); } 100% { box-shadow: 0 0 0 14px rgba(255, 204, 0, 0); } }
+.ring-pulse-yellow { animation: ringPulseY 1.3s ease-out infinite; }
+@keyframes bellWiggle { 0%, 55%, 100% { transform: rotate(0); } 10% { transform: rotate(16deg); } 20% { transform: rotate(-14deg); } 30% { transform: rotate(10deg); } 40% { transform: rotate(-6deg); } }
+.bell-wiggle { animation: bellWiggle 2s ease-in-out infinite; transform-origin: 50% 0; }
+@keyframes popIn { 0% { opacity: 0; transform: scale(0.4); } 65% { opacity: 1; transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
+.pop-in { animation: popIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@keyframes drawTick { to { stroke-dashoffset: 0; } }
+.draw-tick { stroke-dasharray: var(--len, 30); stroke-dashoffset: var(--len, 30); animation: drawTick 0.5s ease-out 0.15s forwards; }
+@keyframes chipOut { 0%, 80% { opacity: 1; max-height: 40px; margin-bottom: 8px; } 100% { opacity: 0; max-height: 0; margin-bottom: 0; } }
+.chip-fade-out { overflow: hidden; animation: popIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both, chipOut 3.2s ease 0s forwards; }
+@keyframes radarRing { 0% { opacity: 0.55; transform: scale(0.35); } 100% { opacity: 0; transform: scale(1.9); } }
+.radar-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(0, 82, 204, 0.45); background: rgba(0, 82, 204, 0.12); animation: radarRing 2.4s ease-out infinite; pointer-events: none; }
+@keyframes mapHalo { 0% { opacity: 0.5; transform: scale(0.3); } 100% { opacity: 0; transform: scale(1.5); } }
+.map-halo { display: block; width: 140px; height: 140px; border-radius: 50%; background: rgba(0, 82, 204, 0.18); border: 1px solid rgba(0, 82, 204, 0.35); animation: mapHalo 2s ease-out infinite; pointer-events: none; }
+@keyframes shimmerSweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.skeleton { position: relative; overflow: hidden; background: #E5EAF2; border-radius: 8px; }
+.skeleton::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75), transparent); transform: translateX(-100%); animation: shimmerSweep 1.2s linear infinite; }
+@keyframes bobY { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.bob { animation: bobY 2.4s ease-in-out infinite; }
+@keyframes roadDrift { from { background-position: 0 0; } to { background-position: -48px 0; } }
+.road-drift { width: 160px; height: 4px; border-radius: 2px; background: repeating-linear-gradient(90deg, #B8C4D8 0 24px, transparent 24px 48px); animation: roadDrift 1.2s linear infinite; }
+@keyframes slideInRight { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
+.slide-in-right { animation: slideInRight 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes photoZoom { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
+.photo-zoom-in { animation: photoZoom 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes lineFill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.line-fill { transform-origin: left; animation: lineFill 0.5s ease-out 0.1s both; }
+/* success burst (sign-up complete) */
+@keyframes sbLife { 0% { opacity: 0; } 8% { opacity: 1; } 82% { opacity: 1; } 100% { opacity: 0; } }
+.sb-overlay { animation: sbLife 2.2s ease both; }
+@keyframes sbCircle { 0% { opacity: 0; transform: scale(0.3); } 45% { opacity: 1; transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
+.sb-circle { animation: sbCircle 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.1) 0.1s both; }
+@keyframes sbText { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.sb-text { animation: sbText 0.45s ease 0.6s both; }
+@keyframes confBurst { 0% { opacity: 0; transform: translate(0, 0) scale(0.3) rotate(0); } 12% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0); } 65% { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1) rotate(var(--rot)); } 100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 46px)) scale(0.9) rotate(calc(var(--rot) * 1.6)); } }
+.sb-conf i { position: absolute; left: -4px; top: -4px; border-radius: 2px; opacity: 0; animation: confBurst 1.5s cubic-bezier(0.2, 0.7, 0.3, 1) 0.25s both; }
+
 /* Booking steps (Pickup -> Drop -> Weight) ease in instead of popping. */
 @keyframes stepIn {
   from { opacity: 0; transform: translateY(10px); }
@@ -107,8 +150,11 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: po
 .step-enter { animation: stepIn 0.35s ease-out both; }
 
 @media (prefers-reduced-motion: reduce) {
+  .draw-tick { stroke-dashoffset: 0 !important; }
+  .sb-overlay, .sb-circle, .sb-text, .anim-rise, .anim-drop-in, .pop-in, .slide-in-right, .photo-zoom-in { opacity: 1 !important; }
   .guided-step-active, .guided-submit-ready, .current-location-blink,
-  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse, .sheet-up, .step-enter, .refresh-turn {
+  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse, .sheet-up, .step-enter, .refresh-turn,
+  .anim-rise, .anim-drop-in, .ring-pulse-yellow, .bell-wiggle, .pop-in, .draw-tick, .chip-fade-out, .radar-ring, .map-halo, .skeleton::after, .bob, .road-drift, .slide-in-right, .photo-zoom-in, .line-fill, .sb-overlay, .sb-circle, .sb-text, .sb-conf i {
     animation: none !important;
   }
 }

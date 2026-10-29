@@ -169,6 +169,20 @@ the screen eases away (min ~2.4 s hold, the bar fills over it, 0.8 s exit). The 
 the loader reads that flag and plays the short `.is-refresh` variant (icon + spinning ring,
 ~0.9 s). The Android native splash image is separate (native build) and was not touched.
 
+**Motion pass (owner 2026-10-29, "implement all" -- built, not yet confirmed on a device).**
+Decoration-only classes live in `index.css` (`anim-rise`, `anim-drop-in`, `ring-pulse-yellow`,
+`bell-wiggle`, `pop-in`, `draw-tick`, `radar-ring`, `map-halo`, `skeleton`, `bob`,
+`slide-in-right`, `photo-zoom-in`, `sb-*`) and ALL stop under reduced motion. Where: vehicle
+cards rise (both booking screens) and the Book button shows a spinner while sending; map trucks
+fade in and the pickup dot pulses (`OverlayViewF`); the "Notifying" screen has radar rings, a
+self-drawing "Request sent" tick and a counting-up ring count; the booked-driver panel rises in;
+the driver duty switch has a springy knob + live pulse; incoming-load cards drop in with a bell
+wiggle and yellow ring (visual only -- `respondToBroadcast`, the ring and the beep loop are
+untouched); the driver trip summary counts the fare up; sign-up steps slide with `StepDots`; a
+one-off `SuccessBurst` after a brand-new sign-up; KYC photo tiles zoom in; history lists show
+`SkeletonRows` until the first bookings snapshot (`useBookingsLoaded`) and `EmptyState` (bobbing
+blue/yellow truck) when empty. Not done: the route-line draw-on and the confetti-free variants.
+
 **Fares.** `calculateFare` (App.jsx): in-city = master formula × `priceCorrectionFactor`
 (anchored 5% below Porter at 13 km); outstation = `priceOutstation`, a piecewise
 curve from real Porter quotes (500/750/1200/2000/3500/5000 kg, ×0.95), tiers
