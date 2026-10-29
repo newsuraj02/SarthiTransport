@@ -111,6 +111,24 @@ const checks = [
   ["dashboard shows 'N Direct request(s) from customer' red box linking to Alerts", () => admin.includes("Direct request${pendingUnmatchedCount > 1") && admin.includes('onNavigate("alerts")')],
 
   // ---- Voice ----
+  ["role-select voice: welcome then question are QUEUED (never cut off); a plain speakGuide still replaces everything and drops lines waiting their turn (owner 2026-10-29 recheck)", async () => {
+    const i = app.indexOf("let guideTimers = [];"), j = app.indexOf("// Re-added for the driver \"new load posted\" alert only");
+    if (i < 0 || j < i) return false;
+    const log = [];
+    const win = { speechSynthesis: { speak: (u) => log.push("speak:" + u.text), cancel: () => log.push("cancel") } };
+    const fn = new Function("window", "SpeechSynthesisUtterance", "SPEECH_RATE", app.slice(i, j) + "\nreturn speakGuide;");
+    const speakGuide = fn(win, function (t) { this.text = t; }, 0.85);
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    speakGuide("welcome", "hi"); speakGuide("question", "hi", { queue: true });
+    await wait(400);
+    const queuedOk = log.join(",") === "cancel,speak:welcome,speak:question";
+    log.length = 0;
+    speakGuide("a", "hi"); speakGuide("b", "hi", { queue: true }); speakGuide("c", "hi"); // c replaces a and the still-waiting b
+    await wait(400);
+    const replacedOk = log.join(",") === "cancel,cancel,speak:c";
+    return queuedOk && replacedOk && app.includes("speakGuide(roleQuestion, lang, { queue: true })") && !app.includes("setTimeout(() => speakGuide(roleQuestion");
+  }],
+  ["sign-up's opening voice prompt asks for the NAME and mobile (the form's first field is the name)", () => count(app, 'Please enter your name and mobile number.') === 2],
   ["onboarding voice guidance is mandatory (no mute/once gating)", () => !app.includes("sarthi_voiceGuideOn") && !app.includes("sarthi_voiceGuideSeen")],
   ["admin broadcast audio is server-generated, played by playAnnouncementAudio", () => fns.includes("async function synthesizeBroadcastAudio") && app.includes("function playAnnouncementAudio(url)")],
   ["TTS client is lazy (an eager one broke 'firebase deploy' with a 10s timeout)", () => fns.includes("function getTtsClient()") && !fns.includes("\nconst ttsClient = new textToSpeech.TextToSpeechClient();")],

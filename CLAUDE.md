@@ -190,7 +190,10 @@ The 🔊 button is a strict play/stop toggle (owner 2026-10-26): ONE shared play
 copy; a new announcement replaces the old one; the icon becomes a stop square
 while playing. EVERY spoken sound (`speakAlert`, `speakGuide`, the MP3 player)
 uses the one `SPEECH_RATE` (0.85, slower than normal) — retune that one number,
-never set a speed on an individual sound.
+never set a speed on an individual sound. Lines that must play one after another use
+`speakGuide(text, lang, { queue: true })` (role select: welcome, then the role question)
+-- never a fixed timer, which chopped the Hindi welcome. Sign-up's opening prompt asks
+for the name AND mobile (the form's first field is the name).
 Deploy gotchas: run `npm install` in `functions/` after pulling new deps; keep
 the TTS client lazy (eager creation timed out `firebase deploy`); Cloud
 Text-to-Speech API must be enabled on the GCP project.

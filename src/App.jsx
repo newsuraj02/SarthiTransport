@@ -2437,16 +2437,29 @@ function speakAlert(text, lang = "hi") {
 // both Customer and Driver -- no mute option, no "only once" gate (an
 // earlier version had both; dropped per this request), so it speaks every
 // single time a prompt's screen/condition is reached.
-function speakGuide(text, lang) {
+// { queue: true } adds the line AFTER whatever is already speaking instead of
+// cutting it off (owner 2026-10-29 recheck: the Hindi welcome was being chopped
+// mid-sentence by the role question, which used a fixed 2.6s timer). A plain
+// call still replaces everything, and also drops lines still waiting their turn.
+let guideTimers = [];
+function speakGuide(text, lang, { queue = false } = {}) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   try {
-    window.speechSynthesis.cancel();
+    if (!queue) {
+      guideTimers.forEach(clearTimeout);
+      guideTimers = [];
+      window.speechSynthesis.cancel();
+    }
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
     utterance.rate = SPEECH_RATE;
     utterance.pitch = 1;
     utterance.volume = 1;
-    setTimeout(() => window.speechSynthesis.speak(utterance), 150);
+    const t = setTimeout(() => {
+      guideTimers = guideTimers.filter((x) => x !== t);
+      window.speechSynthesis.speak(utterance);
+    }, 150);
+    guideTimers.push(t);
   } catch { /* speech synthesis not available */ }
 }
 
@@ -4377,8 +4390,7 @@ function RoleSelect({ onSelect, lang, customerVerified, driverVerified, adminVer
       ? "तुम्ही ड्रायव्हर आहात की कस्टमर? जर तुम्ही गाडी चालवता तर ड्रायव्हर अ‍ॅप निवडा. जर तुम्हाला सामान पाठवायचे असेल तर कस्टमर अ‍ॅप निवडा."
       : "क्या आप ड्राइवर हैं या कस्टमर? अगर आप गाड़ी चलाते हैं तो ड्राइवर ऐप चुनें। अगर आपको सामान भेजना है तो कस्टमर ऐप चुनें।";
     speakGuide(welcome, lang);
-    const t = setTimeout(() => speakGuide(roleQuestion, lang), 2600);
-    return () => clearTimeout(t);
+    speakGuide(roleQuestion, lang, { queue: true }); // plays right after the welcome finishes, never cutting it off
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, anyVerified]);
   return (
@@ -4537,7 +4549,9 @@ function CustomerOnboarding({ lang = "hi", authInstance, verified, verifiedMobil
   useEffect(() => {
     if (!mode || stage !== "mobile") return;
     speakGuide(
-      lang === "en" ? "Please enter your mobile number." : lang === "mr" ? "कृपया तुमचा मोबाइल नंबर टाका." : "कृपया अपना मोबाइल नंबर डालें।",
+      mode === "signup"
+        ? (lang === "en" ? "Please enter your name and mobile number." : lang === "mr" ? "कृपया तुमचे नाव आणि मोबाइल नंबर टाका." : "कृपया अपना नाम और मोबाइल नंबर डालें।")
+        : (lang === "en" ? "Please enter your mobile number." : lang === "mr" ? "कृपया तुमचा मोबाइल नंबर टाका." : "कृपया अपना मोबाइल नंबर डालें।"),
       lang
     );
   }, [mode, stage, lang]);
@@ -5083,7 +5097,9 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
   useEffect(() => {
     if (!mode || stage !== "mobile") return;
     speakGuide(
-      lang === "en" ? "Please enter your mobile number." : lang === "mr" ? "कृपया तुमचा मोबाइल नंबर टाका." : "कृपया अपना मोबाइल नंबर डालें।",
+      mode === "signup"
+        ? (lang === "en" ? "Please enter your name and mobile number." : lang === "mr" ? "कृपया तुमचे नाव आणि मोबाइल नंबर टाका." : "कृपया अपना नाम और मोबाइल नंबर डालें।")
+        : (lang === "en" ? "Please enter your mobile number." : lang === "mr" ? "कृपया तुमचा मोबाइल नंबर टाका." : "कृपया अपना मोबाइल नंबर डालें।"),
       lang
     );
   }, [mode, stage, lang]);
