@@ -7282,6 +7282,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       return;
     }
     setSendingKey(entry.id);
+    // A short, deliberate beat so the "Sending request…" spinner is actually seen
+    // (Firestore's local echo would otherwise swap this screen out instantly).
+    setTimeout(() => {
     const err = requestByCategory({
       pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
@@ -7293,7 +7296,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       // saw and tapped to accept.
       fare: entry.fare,
     });
-    if (err) { setBookingError(err); setSendingKey(null); return; }
+    if (err) { setBookingError(err); setSendingKey(null); }
+    }, 700);
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
@@ -7853,13 +7857,17 @@ function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleReques
       return;
     }
     setSendingKey(entry.id);
+    // A short, deliberate beat so the "Sending request…" spinner is actually seen
+    // (Firestore's local echo would otherwise swap this screen out instantly).
+    setTimeout(() => {
     const err = requestByCategory({
       pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: scheduledForValue,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       fare: entry.fare,
     });
-    if (err) { setBookingError(err); setSendingKey(null); return; }
+    if (err) { setBookingError(err); setSendingKey(null); }
+    }, 700);
   };
 
   const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
@@ -8410,9 +8418,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
               {lang === "en" ? "Request sent" : lang === "mr" ? "रिक्वेस्ट पाठवली" : "रिक्वेस्ट भेज दी गई"}
             </div>
           )}
-          <div className="relative w-12 h-12 mx-auto mb-2">
+          <div className="relative mx-auto mb-1 flex items-center justify-center" style={{ width: 112, height: 112 }}>
             {!noDriverYet && [0, 0.8, 1.6].map((d) => <span key={d} className="radar-ring" style={{ animationDelay: `${d}s` }} />)}
-            <div className="relative w-12 h-12 rounded-full flex items-center justify-center guided-submit-ready" style={{ background: noDriverYet ? "#8B0000" : C.navy }}>
+            <div className="relative w-14 h-14 rounded-full flex items-center justify-center guided-submit-ready" style={{ background: noDriverYet ? "#8B0000" : C.navy }}>
               {noDriverYet ? <AlertTriangle size={20} color="#FFFFFF" /> : <Truck size={20} color="#FFFFFF" />}
             </div>
           </div>
@@ -9601,7 +9609,7 @@ function DriverOtpEntry({ trip, startLoading, lang }) {
 function DriverTripSummary({ trip, lang, onDone }) {
   const baseFare = trip.fare || 0;
   const totalAmount = trip.bill?.total ?? (baseFare + (trip.extraCharge || 0));
-  const shownTotal = useCountUpFromZero(totalAmount);
+  const shownTotal = useCountUpFromZero(totalAmount, 1600, 350);
   const completedLabel = trip.completedAt ? new Date(trip.completedAt).toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   return (
     <div>
@@ -9637,7 +9645,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${C.success}` }}>
         <CheckCircle2 size={20} color={C.success} className="shrink-0 pop-in" />
         <div className="text-sm font-black flex-1" style={{ color: C.ink }}>{lang === "en" ? "Trip Completed" : lang === "mr" ? "ट्रिप पूर्ण झाली" : "ट्रिप पूरी हुई"}</div>
-        <div className="text-lg font-black rounded-full px-3 py-0.5" style={{ color: C.success, background: "rgba(0,168,84,0.10)", fontFamily: monoFont }}>{fmt(Math.round(shownTotal))}</div>
+        <div className="text-2xl font-black rounded-full px-4 py-1" style={{ color: C.success, background: "rgba(0,168,84,0.10)", fontFamily: monoFont }}>{fmt(Math.round(shownTotal))}</div>
       </div>
 
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>

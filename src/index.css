@@ -99,6 +99,11 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: po
 #root { transition: opacity 0.4s ease; }
 .is-refreshing #root { opacity: 0.35; }
 
+/* Inputs may always shrink inside a flex row. Their built-in width (~20 characters)
+   used to push the mobile-number box out of its border -- and off the right edge of the
+   screen -- on narrow or display-zoomed phones. */
+input, select, textarea { min-width: 0; max-width: 100%; }
+
 /* ---- Motion pass (owner 2026-10-29: "implement all" of the animation preview) ----
    Every class below is decoration only and is switched off under reduced motion. */
 @keyframes riseIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
@@ -113,10 +118,10 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: po
 .pop-in { animation: popIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
 @keyframes drawTick { to { stroke-dashoffset: 0; } }
 .draw-tick { stroke-dasharray: var(--len, 30); stroke-dashoffset: var(--len, 30); animation: drawTick 0.5s ease-out 0.15s forwards; }
-@keyframes chipOut { 0%, 80% { opacity: 1; max-height: 40px; margin-bottom: 8px; } 100% { opacity: 0; max-height: 0; margin-bottom: 0; } }
-.chip-fade-out { overflow: hidden; animation: popIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both, chipOut 3.2s ease 0s forwards; }
-@keyframes radarRing { 0% { opacity: 0.55; transform: scale(0.35); } 100% { opacity: 0; transform: scale(1.9); } }
-.radar-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(0, 82, 204, 0.45); background: rgba(0, 82, 204, 0.12); animation: radarRing 2.4s ease-out infinite; pointer-events: none; }
+@keyframes chipOut { 0%, 85% { opacity: 1; max-height: 40px; margin-bottom: 8px; } 100% { opacity: 0; max-height: 0; margin-bottom: 0; } }
+.chip-fade-out { overflow: hidden; animation: popIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both, chipOut 5s ease 0s forwards; }
+@keyframes radarRing { 0% { opacity: 0.7; transform: scale(0.5); } 100% { opacity: 0; transform: scale(1.4); } }
+.radar-ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid rgba(0, 82, 204, 0.6); background: rgba(0, 82, 204, 0.14); animation: radarRing 2.4s ease-out infinite; pointer-events: none; }
 @keyframes mapHalo { 0% { opacity: 0.5; transform: scale(0.3); } 100% { opacity: 0; transform: scale(1.5); } }
 .map-halo { display: block; width: 140px; height: 140px; border-radius: 50%; background: rgba(0, 82, 204, 0.18); border: 1px solid rgba(0, 82, 204, 0.35); animation: mapHalo 2s ease-out infinite; pointer-events: none; }
 @keyframes shimmerSweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
