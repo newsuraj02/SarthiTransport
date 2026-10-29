@@ -240,6 +240,7 @@ never set a speed on an individual sound. Lines that must play one after another
 `speakGuide(text, lang, { queue: true })` (role select: welcome, then the role question)
 -- never a fixed timer, which chopped the Hindi welcome. Sign-up's opening prompt asks
 for the name AND mobile (the form's first field is the name).
+Cloud Functions run on Node 22 (`firebase.json` runtime `nodejs22` + `functions/package.json` engines `22`; upgraded 2026-10-29 because Node 20 is decommissioned 2026-10-30).
 Deploy gotchas: run `npm install` in `functions/` after pulling new deps; keep
 the TTS client lazy (eager creation timed out `firebase deploy`); Cloud
 Text-to-Speech API must be enabled on the GCP project.

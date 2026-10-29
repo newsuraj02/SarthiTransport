@@ -3,7 +3,7 @@
   "description": "Cloud Functions for Apna Transport — sends push notifications for ride events (bid accepted, trip completed, new bid).",
   "private": true,
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "dependencies": {
