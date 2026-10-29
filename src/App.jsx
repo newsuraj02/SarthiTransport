@@ -6632,14 +6632,15 @@ function StepNextButton({ show, label, onClick }) {
 }
 // Past places the customer already used, listed right under the open step's box
 // so a repeat address is one tap.
-function RecentPlacesList({ items, title, onPick }) {
+function RecentPlacesList({ items, title, onPick, flat = false }) {
   if (!items || items.length === 0) return null;
   return (
-    <div>
+    <div style={flat ? { borderTop: `1px solid ${C.line}`, paddingTop: 10 } : undefined}>
       <div className="text-[11px] font-bold mb-1.5" style={{ color: C.inkSoft }}>{title}</div>
-      <div className="space-y-1.5">
-        {items.map((it) => (
-          <button key={it.name} type="button" onClick={() => onPick(it)} className="w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className={flat ? "" : "space-y-1.5"}>
+        {items.map((it, i) => (
+          <button key={it.name} type="button" onClick={() => onPick(it)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-left ${flat ? "rounded-none" : "rounded-xl"}`}
+            style={flat ? { background: "transparent", borderTop: i ? `1px solid ${C.line}` : "none" } : { background: C.paper, border: `1px solid ${C.line}` }}>
             <MapPin size={14} color={C.inkSoft} className="shrink-0" />
             <span className="text-sm font-semibold truncate" style={{ color: C.ink }}>{it.name}</span>
           </button>
@@ -7048,47 +7049,44 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           <StepSummary loading label={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} value={pickup} />
         ) : (
           <div className="space-y-3 step-enter">
-        <div className="flex items-start gap-2">
-          <div className="flex-1 min-w-0">
-            <LocationField
-              lang={lang}
-              value={pickup}
-              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupConfirmed(false); }}
-              onPlaceSelected={onPickupPlaceSelected}
-              mapsReady={mapsReady}
-              placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
-              suggestions={suggestAreas(pickup)}
-              onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
-              onFocus={() => setActiveField("pickup")}
-              highlighted={highlightField === "pickup"}
-              ref={pickupFieldRef}
-            />
-          </div>
-          {/* Separate box next to Pickup -- blue/white blink (see
-              .current-location-blink, index.css) until tapped or Pickup
-              gets any text (typed or picked), at which point it's gone
-              entirely -- no point offering "use current location" once
-              there's already an address in the field. */}
-          {!pickup.trim() && (
-            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
-              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup ? "" : "current-location-blink"}`}
-              style={{ width: 92, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
-              {locatingPickup ? (
-                <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
-              ) : (
-                <>
-                  <LocateFixed size={20} color="currentColor" strokeWidth={2.2} />
-                  <span className="text-[10px] font-bold leading-tight" style={{ color: "currentColor" }}>
-                    {lang === "en" ? "Use Current Location" : lang === "mr" ? "करंट लोकेशन निवडा" : "करंट लोकेशन चुनें"}
-                  </span>
-                </>
+            {/* ONE card, in this order (owner 2026-10-29): Pickup box, then
+                "Use Current Location", then the customer's past pickups. */}
+            <div className="rounded-2xl p-3 space-y-3 shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <LocationField
+                lang={lang}
+                value={pickup}
+                onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupConfirmed(false); }}
+                onPlaceSelected={onPickupPlaceSelected}
+                mapsReady={mapsReady}
+                placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
+                suggestions={suggestAreas(pickup)}
+                onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
+                onFocus={() => setActiveField("pickup")}
+                highlighted={highlightField === "pickup"}
+                ref={pickupFieldRef}
+              />
+              {/* Blue/white blink (see .current-location-blink, index.css)
+                  until tapped or Pickup gets any text -- then it's gone, no
+                  point offering "use current location" once there's an address. */}
+              {!pickup.trim() && (
+                <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
+                  className={`w-full rounded-xl py-3 flex items-center justify-center gap-2 text-center ${locatingPickup ? "" : "current-location-blink"}`}
+                  style={locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : undefined}>
+                  {locatingPickup ? (
+                    <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
+                  ) : (
+                    <>
+                      <LocateFixed size={18} color="currentColor" strokeWidth={2.2} />
+                      <span className="text-sm font-bold" style={{ color: "currentColor" }}>
+                        {lang === "en" ? "Use Current Location" : lang === "mr" ? "करंट लोकेशन निवडा" : "करंट लोकेशन चुनें"}
+                      </span>
+                    </>
+                  )}
+                </button>
               )}
-            </button>
-          )}
-        </div>
-
+              <RecentPlacesList flat items={recentPickups} title={lang === "en" ? "Your recent pickups" : lang === "mr" ? "तुमचे अलीकडील पिकअप" : "आपके पिछले पिकअप"} onPick={onPickupPlaceSelected} />
+            </div>
             <StepNextButton show={!!pickup.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => commitStep("pickup")} />
-            <RecentPlacesList items={recentPickups} title={lang === "en" ? "Your recent pickups" : lang === "mr" ? "तुमचे अलीकडील पिकअप" : "आपके पिछले पिकअप"} onPick={onPickupPlaceSelected} />
           </div>
         )}
 
@@ -7099,23 +7097,24 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           <StepSummary loading label={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} value={drop} />
         ) : showDropStep ? (
           <div className="space-y-3 step-enter">
-        <LocationField
-          lang={lang}
-          value={drop}
-          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropConfirmed(false); }}
-          onPlaceSelected={onDropPlaceSelected}
-          mapsReady={mapsReady}
-          placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
-          suggestions={suggestAreas(drop)}
-          onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
-          onFocus={() => setActiveField("drop")}
-          highlighted={highlightField === "drop"}
-          disabled={!pickup.trim()}
-          ref={dropFieldRef}
-        />
-
+            <div className="rounded-2xl p-3 space-y-3 shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <LocationField
+                lang={lang}
+                value={drop}
+                onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropConfirmed(false); }}
+                onPlaceSelected={onDropPlaceSelected}
+                mapsReady={mapsReady}
+                placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
+                suggestions={suggestAreas(drop)}
+                onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
+                onFocus={() => setActiveField("drop")}
+                highlighted={highlightField === "drop"}
+                disabled={!pickup.trim()}
+                ref={dropFieldRef}
+              />
+              <RecentPlacesList flat items={recentDrops} title={lang === "en" ? "Your recent drops" : lang === "mr" ? "तुमचे अलीकडील ड्रॉप" : "आपके पिछले ड्रॉप"} onPick={onDropPlaceSelected} />
+            </div>
             <StepNextButton show={!!drop.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => commitStep("drop")} />
-            <RecentPlacesList items={recentDrops} title={lang === "en" ? "Your recent drops" : lang === "mr" ? "तुमचे अलीकडील ड्रॉप" : "आपके पिछले ड्रॉप"} onPick={onDropPlaceSelected} />
           </div>
         ) : null}
 
