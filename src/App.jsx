@@ -4053,7 +4053,10 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           <NearbyDriverMarker key={d.mobile || d.id} driver={d} />
         ))}
       </GoogleMap>
-      <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+      {/* Bottom centre, same spot as the no-Maps fallback above: the top right
+          holds the Pickup pill and the bottom corners hold Google's own logo and
+          terms, so none of them overlap (owner 2026-10-29). */}
+      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap pointer-events-none" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
         {countLabel}
       </div>
     </div>
@@ -8975,7 +8978,9 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
             ) : (
               <div className="flex-1 min-w-0" />
             )}
-            {showHamburger ? null : <div className="w-9 h-9 shrink-0" />}
+            {/* Always reserve the Refresh button's spot (fixed, top right) so the
+                "Book Advance" button never sits under it. */}
+            <div className="w-9 h-9 shrink-0" />
           </div>
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="customer" />
