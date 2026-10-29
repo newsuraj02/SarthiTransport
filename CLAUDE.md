@@ -152,7 +152,12 @@ the white pill (`PickupPill`) at the top right of the main page: search box + re
 places, "Current Location" and "Locate on Map" at the bottom ("Current Location" re-arms
 auto-follow; a manually chosen pickup is never overwritten). Choosing a drop closes the
 keyboard, shows a ~1s spinner row (`commitStep`) and eases into the next step; steps never
-open the keyboard by themselves; no check icons. Weight caps, fares and the vehicle/driver
+open the keyboard by themselves; no check icons. The booking map takes 50% of the screen height; it has + / - zoom buttons at the
+bottom right with the active/inactive driver count under them, and it keeps the
+customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`; only a newly
+chosen manual pickup re-frames it). Vehicle markers are the sleek top-down charcoal truck
+(`truckMarkerIcon`, also used by live tracking) and the pickup is a blue dot -- no
+cartoon trucks. Weight caps, fares and the vehicle/driver
 list are unchanged; `CustomerAdvanceBooking` was NOT converted. Pinned in
 `verifyInvariants.mjs`.
 

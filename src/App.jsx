@@ -3567,24 +3567,7 @@ function pinMarkerIcon(color, letter) {
 // headingDeg-90. Only the truck itself rotates -- the base pad underneath
 // stays flat/unrotated, same as a pin shadow.
 function vehicleMarkerIcon(headingDeg = null) {
-  const rotate = headingDeg == null ? 0 : headingDeg - 90;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="46" viewBox="0 0 40 46">
-    <ellipse cx="20" cy="39" rx="11" ry="4" fill="#1a8f45"/>
-    <g transform="rotate(${rotate} 20 20)">
-      <rect x="6" y="15" width="18" height="13" rx="2.2" fill="#f3dfae" stroke="#9c7a3a" stroke-width="1"/>
-      <rect x="23" y="11" width="10" height="17" rx="2.2" fill="#2f6fe0" stroke="#1d4ea3" stroke-width="1"/>
-      <rect x="26" y="14" width="5" height="5" rx="1" fill="#cfe6ff"/>
-      <circle cx="12" cy="29" r="3.3" fill="#2a2a2a"/>
-      <circle cx="12" cy="29" r="1.3" fill="#9a9a9a"/>
-      <circle cx="27" cy="29" r="3.3" fill="#2a2a2a"/>
-      <circle cx="27" cy="29" r="1.3" fill="#9a9a9a"/>
-    </g>
-  </svg>`;
-  return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new window.google.maps.Size(40, 46),
-    anchor: new window.google.maps.Point(20, 41),
-  };
+  return truckMarkerIcon(headingDeg, true);
 }
 
 // Real Google Maps live-tracking view — pickup/drop pins at real coordinates
@@ -3868,67 +3851,66 @@ function nearbyOfflineDrivers(drivers, customerLocation) {
 // until the customer's own GPS fix comes in (or if it never does).
 export const NEARBY_MAP_DEFAULT_CENTER = { lat: 18.6298, lng: 73.8131 };
 
-// Classic map-pin drop for the customer's own location — a teardrop shape
-// anchored at its bottom point (so it visually "sits on" the exact spot),
-// instead of a plain centered dot.
+// Pickup / "you are here" marker: a calm blue dot with a soft halo, the way Google,
+// Uber and Ola mark a point (owner 2026-10-29: the old teardrop looked childish).
+// Anchored at its centre.
 function customerPinIcon() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">` +
-    `<path d="M15 0C6.7 0 0 6.7 0 15c0 11.25 15 25 15 25s15-13.75 15-25C30 6.7 23.3 0 15 0z" fill="${C.success}" stroke="#fff" stroke-width="1.5"/>` +
-    `<circle cx="15" cy="15" r="6" fill="#fff"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+    <circle cx="22" cy="22" r="20" fill="#0052CC" fill-opacity="0.16"/>
+    <circle cx="22" cy="22" r="11" fill="#fff" stroke="#0F1B2D" stroke-opacity="0.12" stroke-width="1"/>
+    <circle cx="22" cy="22" r="7" fill="#0052CC"/>
+  </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new window.google.maps.Size(30, 40),
-    anchor: new window.google.maps.Point(15, 40),
+    scaledSize: new window.google.maps.Size(44, 44),
+    anchor: new window.google.maps.Point(22, 22),
   };
 }
 
-// Same blocky cartoon-truck-on-base token as vehicleMarkerIcon, for each
-// nearby online driver on the customer's browse map -- kept as its own
-// function (rather than reusing vehicleMarkerIcon directly) since the two
-// call sites independently decide colors/active-vs-inactive.
-// headingDeg: see vehicleMarkerIcon's comment -- same East-facing default
-// (cab/front leads on the right), same rotation-baked-into-the-SVG reason.
-export function driverTruckIcon(headingDeg = null) {
+// Top-down truck for every vehicle marker on the customer's maps (owner
+// 2026-10-29: the cartoon truck looked kiddish -- now a sleek charcoal vehicle with
+// a white edge, soft shadow, glass windscreen and a thin brand-yellow roof line,
+// in the spirit of Uber/Ola's black car markers, but a truck).
+// headingDeg: compass bearing (0=North) it should face, or null for the default.
+// Drawn facing East (cab leads on the right), so the rotation applied is
+// headingDeg-90; the soft shadow rotates with it.
+// active=false: the same truck in muted greys -- an off-duty driver at the last
+// known spot, clearly "not bookable" at a glance.
+function truckMarkerIcon(headingDeg = null, active = true) {
   const rotate = headingDeg == null ? 0 : headingDeg - 90;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="46" viewBox="0 0 40 46">
-    <ellipse cx="20" cy="39" rx="11" ry="4" fill="#1a8f45"/>
-    <g transform="rotate(${rotate} 20 20)">
-      <rect x="6" y="15" width="18" height="13" rx="2.2" fill="#f3dfae" stroke="#9c7a3a" stroke-width="1"/>
-      <rect x="23" y="11" width="10" height="17" rx="2.2" fill="#2f6fe0" stroke="#1d4ea3" stroke-width="1"/>
-      <rect x="26" y="14" width="5" height="5" rx="1" fill="#cfe6ff"/>
-      <circle cx="12" cy="29" r="3.3" fill="#2a2a2a"/>
-      <circle cx="12" cy="29" r="1.3" fill="#9a9a9a"/>
-      <circle cx="27" cy="29" r="3.3" fill="#2a2a2a"/>
-      <circle cx="27" cy="29" r="1.3" fill="#9a9a9a"/>
+  const body0 = active ? "#2B3445" : "#A3ABB8", body1 = active ? "#0F172A" : "#7C8594";
+  const panel = active ? "#1B2433" : "#939CAA";
+  const stripe = active ? "#FFCC00" : "#D3D8E0";
+  const glass = active ? "#A9C1DB" : "#E6E9EE";
+  const lamp = active ? "#FDE68A" : "#F1F3F6";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+    <defs>
+      <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${body0}"/><stop offset="1" stop-color="${body1}"/></linearGradient>
+      <filter id="s" filterUnits="userSpaceOnUse" x="-6" y="-6" width="56" height="56"><feDropShadow dx="0" dy="1.6" stdDeviation="1.7" flood-color="#000" flood-opacity="0.38"/></filter>
+    </defs>
+    <g transform="rotate(${rotate} 22 22) translate(22 22) scale(0.9) translate(-22 -22)" filter="url(#s)">
+      <rect x="2" y="12" width="26" height="20" rx="3" fill="url(#b)" stroke="#fff" stroke-width="1.4"/>
+      <rect x="4.6" y="14.6" width="20.8" height="14.8" rx="1.8" fill="${panel}"/>
+      <rect x="4.6" y="14.6" width="20.8" height="2.4" rx="1.2" fill="${stripe}"/>
+      <rect x="9" y="21.6" width="13" height="0.9" rx="0.45" fill="#fff" fill-opacity="0.10"/>
+      <rect x="27" y="19.6" width="3.4" height="4.8" rx="1" fill="${panel}"/>
+      <rect x="36.2" y="12.4" width="2.6" height="1.9" rx="0.8" fill="${body1}"/>
+      <rect x="36.2" y="29.7" width="2.6" height="1.9" rx="0.8" fill="${body1}"/>
+      <path d="M29 14.5h6q3 0 4.2 2.2l1.3 2.4v5.8l-1.3 2.4q-1.2 2.2-4.2 2.2h-6z" fill="url(#b)" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/>
+      <rect x="30.2" y="17.2" width="4" height="9.6" rx="1.2" fill="${panel}"/>
+      <path d="M35.4 17.5h1.5q1.6 0 2.2 1.4l.5 1.2v3.8l-.5 1.2q-.6 1.4-2.2 1.4h-1.5z" fill="${glass}"/>
+      <circle cx="40.5" cy="17.6" r="1.1" fill="${lamp}"/>
+      <circle cx="40.5" cy="26.4" r="1.1" fill="${lamp}"/>
     </g>
   </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new window.google.maps.Size(40, 46),
-    anchor: new window.google.maps.Point(20, 41),
+    scaledSize: new window.google.maps.Size(44, 44),
+    anchor: new window.google.maps.Point(22, 22),
   };
 }
-
-// Same truck-on-base shape as driverTruckIcon, greyed out -- an off-duty
-// driver plotted at their last known spot, visually distinct from a
-// bookable one.
-export function driverTruckIconInactive() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="46" viewBox="0 0 40 46">
-    <ellipse cx="20" cy="39" rx="11" ry="4" fill="#B9BEC7"/>
-    <rect x="6" y="15" width="18" height="13" rx="2.2" fill="#E3E5E9" stroke="#9AA3B0" stroke-width="1"/>
-    <rect x="23" y="11" width="10" height="17" rx="2.2" fill="#CBD5E1" stroke="#9AA3B0" stroke-width="1"/>
-    <rect x="26" y="14" width="5" height="5" rx="1" fill="#F0F1F3"/>
-    <circle cx="12" cy="29" r="3.3" fill="#6B7280"/>
-    <circle cx="12" cy="29" r="1.3" fill="#CBD5E1"/>
-    <circle cx="27" cy="29" r="3.3" fill="#6B7280"/>
-    <circle cx="27" cy="29" r="1.3" fill="#CBD5E1"/>
-  </svg>`;
-  return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new window.google.maps.Size(40, 46),
-    anchor: new window.google.maps.Point(20, 41),
-  };
-}
+export function driverTruckIcon(headingDeg = null) { return truckMarkerIcon(headingDeg, true); }
+export function driverTruckIconInactive() { return truckMarkerIcon(null, false); }
 
 // Original silhouette (not any reference app's artwork) for the category
 // booking sheet — cab + cargo box + wheels, same flat-icon language as
@@ -3975,15 +3957,58 @@ function NearbyDriverMarker({ driver }) {
   return <MarkerF position={pos || rawPos} icon={driverTruckIcon(heading)} />;
 }
 
-function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick }) {
+// Where the customer last zoomed/panned the booking map (owner 2026-10-29: "once
+// you zoom in/out it stays until the page is refreshed"). Module-level on purpose:
+// it survives the map being re-mounted (it collapses/re-opens as the form fills in)
+// but is gone after a page reload, i.e. the Refresh button.
+let nearbyMapUserView = null; // { lat, lng, zoom } | null
+
+// refitKey: change it (e.g. a new pickup was chosen) to drop the remembered view
+// and frame the map afresh.
+function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick, refitKey = "" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const nearby = nearbyOnlineDrivers(drivers, customerLocation);
   const nearbyInactive = nearbyOfflineDrivers(drivers, customerLocation);
   const center = customerLocation || NEARBY_MAP_DEFAULT_CENTER;
   const [mapInstance, setMapInstance] = useState(null);
+  const userAdjustedRef = useRef(false);
+  const progUntilRef = useRef(0); // camera moves we make ourselves don't count as the customer's
+  const prevRefitKeyRef = useRef(refitKey);
+  if (prevRefitKeyRef.current !== refitKey) {
+    prevRefitKeyRef.current = refitKey;
+    userAdjustedRef.current = false;
+    nearbyMapUserView = null;
+  }
+
+  // Remember the customer's own zoom/pan and stop re-framing the map under them.
+  useEffect(() => {
+    if (!mapInstance || !window.google?.maps) return;
+    if (nearbyMapUserView) {
+      userAdjustedRef.current = true;
+      progUntilRef.current = Date.now() + 1200;
+      mapInstance.setCenter({ lat: nearbyMapUserView.lat, lng: nearbyMapUserView.lng });
+      mapInstance.setZoom(nearbyMapUserView.zoom);
+    }
+    const markAdjusted = () => { userAdjustedRef.current = true; };
+    const l1 = mapInstance.addListener("dragstart", markAdjusted);
+    const l2 = mapInstance.addListener("zoom_changed", () => { if (Date.now() > progUntilRef.current) markAdjusted(); });
+    const l3 = mapInstance.addListener("idle", () => {
+      if (!userAdjustedRef.current) return;
+      const c = mapInstance.getCenter();
+      nearbyMapUserView = { lat: c.lat(), lng: c.lng(), zoom: mapInstance.getZoom() };
+    });
+    return () => { l1.remove(); l2.remove(); l3.remove(); };
+  }, [mapInstance]);
+  const zoomBy = (delta) => {
+    if (!mapInstance) return;
+    userAdjustedRef.current = true;
+    mapInstance.setZoom((mapInstance.getZoom() || 13) + delta);
+  };
 
   useEffect(() => {
     if (!mapInstance || !window.google?.maps) return;
+    if (userAdjustedRef.current) return; // the customer has set their own view -- leave it alone
+    progUntilRef.current = Date.now() + 1200;
     const bounds = new window.google.maps.LatLngBounds();
     bounds.extend(center);
     nearby.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
@@ -3995,7 +4020,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
       if (mapInstance.getZoom() > 15) mapInstance.setZoom(15);
     });
     return () => window.google.maps.event.removeListener(listener);
-  }, [mapInstance, center.lat, center.lng, nearby.length, nearbyInactive.length]);
+  }, [mapInstance, center.lat, center.lng, nearby.length, nearbyInactive.length, refitKey]);
 
   const countLabel = lang === "en"
     ? `${nearby.length} active${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} inactive` : ""} nearby`
@@ -4026,7 +4051,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
             return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill={C.navy} stroke="#fff" strokeWidth="0.6" />;
           })}
         </svg>
-        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+        <div className="absolute bottom-1.5 right-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
           {countLabel}
         </div>
       </div>
@@ -4053,11 +4078,18 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           <NearbyDriverMarker key={d.mobile || d.id} driver={d} />
         ))}
       </GoogleMap>
-      {/* Bottom centre, same spot as the no-Maps fallback above: the top right
-          holds the Pickup pill and the bottom corners hold Google's own logo and
-          terms, so none of them overlap (owner 2026-10-29). */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap pointer-events-none" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
-        {countLabel}
+      {/* Bottom right (owner 2026-10-29): zoom buttons, with the active/inactive
+          count underneath them. The top right belongs to the Pickup pill and the
+          bottom left to Google's logo, so nothing overlaps. */}
+      <div className="absolute right-2 bottom-5 flex flex-col items-end gap-2 pointer-events-none">
+        <div className="pointer-events-auto flex flex-col rounded-xl overflow-hidden shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+          <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1)} className="w-9 h-9 flex items-center justify-center text-xl font-bold leading-none" style={{ color: C.ink }}>+</button>
+          <div style={{ height: 1, background: C.line }} />
+          <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-1)} className="w-9 h-9 flex items-center justify-center text-xl font-bold leading-none" style={{ color: C.ink }}>−</button>
+        </div>
+        <div className="text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+          {countLabel}
+        </div>
       </div>
     </div>
   );
@@ -7167,7 +7199,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         // themselves. Falls back to customerLocation (device GPS) only
         // before Pickup has been entered/geocoded, same as before.
         <div className="relative">
-          <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} />
+          <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="50vh" lang={lang} onMapClick={onMapClick} refitKey={pickupAuto ? "auto" : `${pickupCoords?.lat},${pickupCoords?.lng}`} />
           <div className="absolute top-3 right-3 z-10" style={{ maxWidth: "72%" }}>
             <PickupPill pickup={pickup} lang={lang} onClick={() => setPickupPageOpen(true)} />
           </div>
