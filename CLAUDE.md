@@ -162,6 +162,13 @@ cartoon trucks. Weight caps, fares and the vehicle/driver
 list are unchanged; `CustomerAdvanceBooking` was NOT converted. Pinned in
 `verifyInvariants.mjs`.
 
+**Entry + refresh animation (owner 2026-10-29).** `index.html`'s inline loader: the app icon
+rises in on a deep-blue field with a one-time shine and a slim yellow progress bar, then
+the screen eases away (min ~1.3 s). The Refresh button (`useRefreshButton`) turns once
+(`refresh-turn`), dims the app, sets `sessionStorage.sarthi_refresh` and reloads after 450 ms;
+the loader reads that flag and plays the short `.is-refresh` variant (icon + spinning ring,
+~0.5 s). The Android native splash image is separate (native build) and was not touched.
+
 **Fares.** `calculateFare` (App.jsx): in-city = master formula × `priceCorrectionFactor`
 (anchored 5% below Porter at 13 km); outstation = `priceOutstation`, a piecewise
 curve from real Porter quotes (500/750/1200/2000/3500/5000 kg, ×0.95), tiers

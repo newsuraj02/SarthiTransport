@@ -2170,7 +2170,16 @@ export function fetchRoadDistanceKm(pickupCoords, dropCoords) {
 // unambiguous button.
 function useRefreshButton() {
   const [refreshing, setRefreshing] = useState(false);
-  const refresh = () => { setRefreshing(true); window.location.reload(); };
+  // Owner 2026-10-29 ("improve the refresh animation"): the icon takes one full
+  // turn while the page dims, THEN the reload happens, and the reload plays the
+  // short loader variant (index.html reads this flag) instead of the full intro.
+  const refresh = () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { window.sessionStorage.setItem("sarthi_refresh", "1"); } catch { /* storage unavailable -- full intro, fine */ }
+    document.documentElement.classList.add("is-refreshing");
+    setTimeout(() => window.location.reload(), 450);
+  };
   return { refreshing, refresh };
 }
 
@@ -13267,7 +13276,7 @@ export default function App() {
       <button onClick={refreshButton.refresh} disabled={refreshButton.refreshing}
         className="fixed right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
         style={{ background: C.marigoldDeep, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
-        <RefreshCw size={16} color="#fff" className={refreshButton.refreshing ? "animate-spin" : ""} />
+        <RefreshCw size={16} color="#fff" className={refreshButton.refreshing ? "refresh-turn" : ""} />
       </button>
       <div className={`w-full ${isDesktop ? "max-w-3xl" : "max-w-sm"} h-full flex flex-col`} style={{ background: C.bg }}>
         {role === "admin" && adminAuth && (

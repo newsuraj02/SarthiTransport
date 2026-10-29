@@ -92,6 +92,13 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: po
 /* Anyone whose phone is set to "reduce motion" (or "remove animations")
    gets calm screens: the attention-grabbing pulses/blinks stop, tap
    feedback stays instant. Purely a CSS media query -- no behaviour change. */
+/* Refresh button: one smooth full turn, while the app behind it dims (the
+   reload starts once the turn is done -- see useRefreshButton). */
+@keyframes refreshTurn { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.refresh-turn { animation: refreshTurn 0.45s cubic-bezier(0.4, 0, 0.2, 1) both; }
+#root { transition: opacity 0.3s ease; }
+.is-refreshing #root { opacity: 0.35; }
+
 /* Booking steps (Pickup -> Drop -> Weight) ease in instead of popping. */
 @keyframes stepIn {
   from { opacity: 0; transform: translateY(10px); }
@@ -101,7 +108,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: po
 
 @media (prefers-reduced-motion: reduce) {
   .guided-step-active, .guided-submit-ready, .current-location-blink,
-  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse, .sheet-up, .step-enter {
+  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse, .sheet-up, .step-enter, .refresh-turn {
     animation: none !important;
   }
 }
