@@ -7426,11 +7426,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // offline, no longer matches the current weight) rather than showing a
   // stale single card for someone no longer there.
   const selectedEntry = selectedDriverKey ? nearbyDrivers.find((e) => e.id === selectedDriverKey) || null : null;
-  // Everything stays listed; the tapped vehicle (or, until one is tapped, the best match =
-  // lightest vehicle that fits, nearest first) is what the Book Now button books.
+  // Nothing is pre-selected (owner 2026-10-29): the whole list is shown until the customer taps a vehicle;
+  // only then does the Book button appear, and it books that vehicle.
   const chosen = !!selectedEntry;
   const visibleDrivers = selectedEntry ? [selectedEntry] : nearbyDrivers;
-  const bookEntry = selectedEntry || nearbyDrivers[0] || null;
+  const bookEntry = selectedEntry; // nothing is pre-selected: Book only appears once the customer taps a vehicle
   const canBook = locationsReady && !sameLocation && weightReady && !exceedsFleetMax && !!bookEntry;
   // Map (owner brief 2026-10-29): with a valid weight, only the vehicles in the list below are plotted; once one is
   // chosen, only that type -- with the nearest of them ringed and its minutes shown.
@@ -7727,7 +7727,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             <>
               {!chosen && (
               <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1.5px solid rgba(0,82,204,0.3)` }}>
-                👇 {lang === "en" ? "Best match is selected — tap another to change" : lang === "mr" ? "सर्वोत्तम गाडी निवडली आहे — बदलण्यासाठी दुसरी टॅप करा" : "सबसे सही गाड़ी चुनी गई है — बदलने के लिए दूसरी टैप करें"}
+                👇 {lang === "en" ? "Tap a vehicle to select it" : lang === "mr" ? "निवडण्यासाठी गाडीवर टॅप करा" : "चुनने के लिए गाड़ी पर टैप करें"}
               </div>
               )}
               {bookingError && (
@@ -7741,7 +7741,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 <>
                   {visibleDrivers.map((entry, idx) => {
                     const key = entry.id;
-                    const isSelected = !!bookEntry && bookEntry.id === key;
+                    const isSelected = !!selectedEntry && selectedEntry.id === key;
                     const isSending = sendingKey === key;
                     const fare = entry.fare;
                     return (
@@ -7796,16 +7796,18 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
       )}
 
-      {/* Book Now -- always at the end, greyed out until Pickup, Drop and Weight are all in. */}
+      {/* "Book this vehicle" exists ONLY once a vehicle has been tapped (owner 2026-10-29); nothing is pre-selected. */}
+      {selectedEntry && (
       <div className="sticky bottom-0 z-10 px-5 pt-3 pb-3" style={{ background: "linear-gradient(to top, #F4F7FB 72%, rgba(244,247,251,0))" }}>
         <button type="button" disabled={!canBook || !!sendingKey} onClick={() => bookEntry && bookDriver(bookEntry)}
           className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
           style={{ background: sendingKey ? C.inkSoft : canBook ? C.success : "#E5EAF2", color: canBook || sendingKey ? "#FFFFFF" : "#9AA3B0", boxShadow: canBook && !sendingKey ? "0 8px 18px rgba(0,168,84,0.3)" : undefined }}>
           {sendingKey
             ? <span className="inline-flex items-center gap-2"><Loader2 size={20} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
-            : <>🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}{canBook ? ` · ${fmt(bookEntry.fare)}` : ""}</>}
+            : <>🚚 {lang === "en" ? "Book this vehicle" : lang === "mr" ? "ही गाडी बुक करा" : "यह गाड़ी बुक करें"}{canBook ? ` · ${fmt(bookEntry.fare)}` : ""}</>}
         </button>
       </div>
+      )}
     </div>
   );
 }

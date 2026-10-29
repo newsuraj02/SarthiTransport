@@ -144,15 +144,15 @@ validation was fine, the label was wrong, bug since 207b028).
 
 **Customer booking (owner 2026-10-29, flow redone -- built, not yet confirmed on a device).**
 `CustomerBooking` reveals itself step by step on ONE page. Screen 1: Pickup box + "Use Current
-Location" + a greyed Book Now; the customer's last 3 whole trips (pickup AND drop, `recentTrips`, built in
+Location" (no Book button yet); the customer's last 3 whole trips (pickup AND drop, `recentTrips`, built in
 `CustomerApp`) are listed right under the Pickup box with NO heading text and ONLY while Pickup is empty (owner
 2026-10-29: not inside the dropdown, and not kept on screen after a pickup is typed/chosen); Drop and Weight are not rendered. Drop appears once Pickup is
 SELECTED (`pickupSelected` = coordinates known: suggestion / current location / map tap / trip /
 typed text that has geocoded; without Google Maps, 3+ typed characters count); Weight appears once
 Pickup AND Drop are selected (`showWeight`). Tapping a trip fills both and moves the cursor +
-golden highlight to Weight (`onTripSelected`, `requestFocus`). Book Now is a sticky bar at the
-bottom, enabled only when `canBook`; it books the tapped vehicle or, if none was tapped, the best
-match (`bookEntry`: lightest vehicle that fits, nearest first). Tapping Book shows "Sending request..." for a
+golden highlight to Weight (`onTripSelected`, `requestFocus`). Nothing is pre-selected (owner
+2026-10-29): the vehicle list shows no highlighted card, and the sticky "Book this vehicle" bar exists ONLY once
+the customer has tapped a vehicle (`selectedEntry`); it books that vehicle (`bookEntry`). Tapping Book shows "Sending request..." for a
 deliberate 700 ms. Developer-brief rules (owner 2026-10-29, "implement these changes only"): (1) the moment a
 weight is typed, Pickup + Drop tuck away (`weightTyped`) behind a one-line summary with "Change" (clears the
 weight, brings the boxes back); (2) the map is never collapsed or hidden before Book, and it is NOT pinned: it scrolls up and down with the rest of the page (owner 2026-10-29), and with a valid weight it plots ONLY the vehicles in the list below
