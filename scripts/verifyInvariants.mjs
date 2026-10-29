@@ -7,7 +7,10 @@
 // Deliberately plain text/count checks, not an import of App.jsx (JSX plus
 // Firebase can't be loaded in bare Node) -- each one pins the exact source
 // text of a rule that was hard-won and verified on real devices.
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync as rawReadFileSync, existsSync } from "node:fs";
+// Windows checkouts (git autocrlf) turn every newline into CRLF; the checks below
+// match multi-line snippets, so read everything with plain LF line endings.
+const readFileSync = (p, enc) => { const v = rawReadFileSync(p, enc); return typeof v === "string" ? v.replace(/\r\n/g, "\n") : v; };
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
