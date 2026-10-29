@@ -7492,9 +7492,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
           Falls back to customerLocation (device GPS) only before Pickup has been entered/geocoded.
           Owner brief 2026-10-29: once a weight is typed the map shows ONLY active vehicles of the matching types
-          (inactive ones hidden); once a vehicle is chosen, only that type, with the nearest one ringed and its minutes shown. */}
-      <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="50vh" lang={lang} onMapClick={onMapClick}
-        activeOnly={weightTyped} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
+          (inactive ones hidden); once a vehicle is chosen, only that type, with the nearest one ringed and its minutes shown.
+          The map stays pinned to the top (40vh) from the moment a weight is typed until Book is tapped (owner 2026-10-29). */}
+      <div className={weightTyped ? "sticky top-0 z-20" : ""}>
+        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height={weightTyped ? "40vh" : "50vh"} lang={lang} onMapClick={onMapClick}
+          activeOnly={weightTyped} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
+      </div>
       {bookedMsg && (
         <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
           ✓ {lang === "en" ? "Your message has gone to drivers" : lang === "mr" ? "तुमचा संदेश ड्रायव्हर्सना पाठवला आहे" : "आपका संदेश ड्राइवरों को भेज दिया गया है"}
