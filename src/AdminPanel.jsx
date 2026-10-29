@@ -15,7 +15,7 @@ import {
 import { GoogleMap, MarkerF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp } from "./firebaseClient";
+import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink } from "./firebaseClient";
 import { createDoc, removeDoc, bulkUpdateDocs } from "./firestoreStore";
 import {
   ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
@@ -3775,20 +3775,27 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
   }, [latestVersionCode, updateUrl, latestAdminVersionCode, adminUpdateUrl, dirty]);
   const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
   const metaExport = buildMetaUsersCsv(drivers, customers);
-  // The Android app's WebView has no download handler, so a blob <a download>
-  // can silently do nothing there (owner 2026-10-29: "not downloading"). The
-  // download is still tried (attached to the page, revoked late), and the
-  // numbers can ALSO be copied/pasted straight into Meta's "Customer list ->
-  // copy and paste" box, which works everywhere.
+  // The Android app's WebView can't save a blob <a download> (owner 2026-10-29:
+  // "not downloading"), so the file is built into a short-lived https link by
+  // the server (createCsvDownloadLink) that the phone's browser downloads. If
+  // that isn't available, fall back to a plain blob download, and the numbers
+  // can always be copied/pasted into Meta's "Customer list -> copy and paste".
   const [metaCopied, setMetaCopied] = useState(false);
   const [metaShowText, setMetaShowText] = useState(false);
+  const [metaPreparing, setMetaPreparing] = useState(false);
   const metaNumbersText = metaExport.csv.replace(/^phone\n/, "").trim();
-  const downloadMetaUsers = () => {
+  const downloadMetaUsers = async () => {
+    if (metaPreparing) return;
+    const fileName = `app-users-meta-${new Date().toISOString().slice(0, 10)}.csv`;
+    setMetaPreparing(true);
+    const res = await createCsvDownloadLink(metaExport.csv, fileName);
+    setMetaPreparing(false);
+    if (res?.ok && res.url) { window.open(res.url, "_blank") || (window.location.href = res.url); return; }
     try {
       const blob = new Blob([metaExport.csv], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = `app-users-meta-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.href = url; a.download = fileName;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) { console.error("[meta csv download]", e); }
@@ -3848,9 +3855,9 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
           {metaExport.driverCount} {lang === "en" ? "drivers" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"} + {metaExport.customerCount} {lang === "en" ? "customers" : lang === "mr" ? "कस्टमर" : "कस्टमर"} = {metaExport.total} {lang === "en" ? "unique numbers" : lang === "mr" ? "युनिक नंबर" : "यूनिक नंबर"}
           {metaExport.skipped > 0 && <span style={{ color: C.safety }}> · {metaExport.skipped} {lang === "en" ? "skipped (not a valid mobile)" : lang === "mr" ? "वगळले (वैध मोबाइल नाही)" : "छोड़े गए (वैध मोबाइल नहीं)"}</span>}
         </div>
-        <button onClick={downloadMetaUsers} disabled={metaExport.total === 0} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-3 font-bold text-sm"
+        <button onClick={downloadMetaUsers} disabled={metaExport.total === 0 || metaPreparing} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-3 font-bold text-sm"
           style={{ background: metaExport.total ? C.marigold : "#E5EAF2", color: metaExport.total ? "#000000" : "#9AA3B0" }}>
-          <Download size={15} /> {lang === "en" ? "Download CSV for Meta" : lang === "mr" ? "Meta साठी CSV डाउनलोड करा" : "Meta के लिए CSV डाउनलोड करें"}
+          <Download size={15} /> {metaPreparing ? (lang === "en" ? "Preparing file..." : lang === "mr" ? "फाइल तयार होत आहे..." : "फाइल तैयार हो रही है...") : lang === "en" ? "Download CSV for Meta" : lang === "mr" ? "Meta साठी CSV डाउनलोड करा" : "Meta के लिए CSV डाउनलोड करें"}
         </button>
         <button onClick={copyMetaNumbers} disabled={metaExport.total === 0} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-3 font-bold text-sm mt-2"
           style={{ background: "#FFFFFF", color: metaExport.total ? C.ink : "#9AA3B0", border: `1.5px solid ${C.line}` }}>

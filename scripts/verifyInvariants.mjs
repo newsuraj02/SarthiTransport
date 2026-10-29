@@ -209,6 +209,7 @@ const checks = [
       && r.driverCount === 3 && r.customerCount === 2 && r.total === 4 && r.skipped === 4
       && buildMetaUsersCsv([], []).csv === "phone\n" && buildMetaUsersCsv([], []).total === 0;
   }],
+  ["Meta export downloads through a server-made https link (admin-only callable) so it works in the Android app (owner 2026-10-29)", () => admin.includes("await createCsvDownloadLink(metaExport.csv, fileName)") && /exports\.createCsvDownloadLink[\s\S]{0,400}token\?\.admin !== true/.test(readFileSync(join(root, "functions", "index.js"), "utf8")) && readFileSync(join(root, "functions", "index.js"), "utf8").includes('contentDisposition: `attachment; filename="${safeName}"`')],
   ["Meta export also offers copy/paste of the numbers (the Android WebView can't download blobs) (owner 2026-10-29)", () => admin.includes("const copyMetaNumbers = async () => {") && admin.includes("navigator.clipboard.writeText(metaNumbersText)") && admin.includes("<textarea readOnly value={metaNumbersText}")],
   ["Admin Settings has the 'Export app users for ads (Meta)' card wired to the real driver + customer lists", () => admin.includes("const metaExport = buildMetaUsersCsv(drivers, customers);") && admin.includes("<AdminSettings drivers={drivers} customers={customers} ") && admin.includes("Download CSV for Meta")],
   ["Customer + Driver first screens: 'Sign Up' sits ABOVE 'Login' and both buttons are yellow (owner 2026-10-28)", () => {

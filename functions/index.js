@@ -1421,6 +1421,23 @@ exports.checkMobileRegistered = onCall({ region: "asia-south1" }, async (request
   }
 });
 
+// Admin-only: turn a CSV the Admin screen already built into a real, short-lived
+// download link. The Android app's WebView has no download handler, so a blob
+// <a download> does nothing there (owner 2026-10-29: "not downloading"); an
+// https link opens in the phone's browser, which does download it. The file is
+// private (no client can read adminExports/, see storage.rules) and the signed
+// link expires in 10 minutes.
+exports.createCsvDownloadLink = onCall({ region: "asia-south1" }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const { csv, fileName } = request.data || {};
+  if (typeof csv !== "string" || !csv.trim() || csv.length > 2000000) throw new HttpsError("invalid-argument", "A CSV (max 2 MB) is required.");
+  const safeName = String(fileName || "export.csv").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80).replace(/(\.csv)?$/i, ".csv");
+  const file = getStorage().bucket().file(`adminExports/${crypto.randomBytes(8).toString("hex")}-${safeName}`);
+  await file.save(csv, { metadata: { contentType: "text/csv; charset=utf-8", contentDisposition: `attachment; filename="${safeName}"` } });
+  const [url] = await file.getSignedUrl({ version: "v4", action: "read", expires: Date.now() + 10 * 60 * 1000 });
+  return { ok: true, url };
+});
+
 // ---------------- Daily health check (live-backend half) ----------------
 // The other half of the same daily check lives in a Claude Code Routine
 // (GitHub source-code regression check + build, holding no Firebase

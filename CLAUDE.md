@@ -252,9 +252,12 @@ the whole form so they retype it all. Pinned in `verifyInvariants.mjs`.
 merged, junk skipped) as a one-column `phone` CSV (`91XXXXXXXXXX`), to upload as a Meta
 Customer-list audience and EXCLUDE from install ads. Logic is `buildMetaUsersCsv`
 (pinned by a behavior check). The Android app's WebView has no download handler, so
-the CSV download can silently do nothing there; the same card therefore also has
-"Copy numbers" + a selectable text box (paste into Meta's "Copy and paste your
-customer list").
+a blob CSV download can silently do nothing there. So "Download CSV for Meta" asks the
+admin-only callable `createCsvDownloadLink` (functions/index.js; needs
+`firebase deploy --only functions`) for a 10-minute signed https link and opens it
+in the phone's browser, which downloads it. If that fails it falls back to the blob
+download. The card also has "Copy numbers" + a selectable box (paste into Meta's
+"Copy and paste your customer list").
 
 **Look & feel (owner 2026-10-26: "same brand colour, fresher feel").** Brand hues
 (marigold #FFCC00, orange, blue #0052CC, green, red) are unchanged. All screens

@@ -362,6 +362,22 @@ export async function resetPinAfterPhoneVerify(role, newPin) {
   }
 }
 
+// Admin only (see functions/index.js createCsvDownloadLink): turns a CSV into a
+// 10-minute https download link that works from the Android app too. Always
+// resolves with { ok, url? }.
+export async function createCsvDownloadLink(csv, fileName) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "createCsvDownloadLink");
+    const result = await call({ csv, fileName });
+    return result.data;
+  } catch (e) {
+    console.error("[createCsvDownloadLink] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
 // Does this mobile already have a PIN account for this role? Sign-up asks
 // before collecting anything else (see functions/index.js
 // checkMobileRegistered). Works signed-out. Always resolves with
