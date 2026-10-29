@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <meta name="theme-color" content="#0B3D91" />
-    <script>try{if(localStorage.getItem('sarthi_forceMotion')==='1')document.documentElement.classList.add('force-motion')}catch(e){}</script>
+    <script>/* Animations play by default, even if the phone says "Remove animations"; a phone can opt out in /motion-check.html (sarthi_forceMotion = '0'). */try{if(localStorage.getItem('sarthi_forceMotion')!=='0')document.documentElement.classList.add('force-motion')}catch(e){document.documentElement.classList.add('force-motion')}</script>
     <!-- The app already switches between English/Hindi itself via its own
          ENG/हिं toggle — browser auto-translate (e.g. Chrome Translate)
          conflicts with that and mistranslates "Apna" (not a real English

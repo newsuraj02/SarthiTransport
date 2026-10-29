@@ -28,7 +28,7 @@
   ol{margin:4px 0 0;padding-left:20px;color:var(--soft)}
   ol li{margin:3px 0}
 </style>
-<script>try{if(localStorage.getItem('sarthi_forceMotion')==='1')document.documentElement.classList.add('force-motion')}catch(e){}</script>
+<script>try{if(localStorage.getItem('sarthi_forceMotion')!=='0')document.documentElement.classList.add('force-motion')}catch(e){document.documentElement.classList.add('force-motion')}</script>
 </head>
 <body>
 <main>
@@ -45,10 +45,10 @@
   <div class="row"><b>3. Live test (should be moving)</b>
     <div class="demo"><span class="spin"></span><span class="pulse"></span><span id="run" class="val wait">…</span></div></div>
 
-  <div class="row"><b>Play animations anyway on this phone</b>
-    <p>The app normally follows the phone's "Remove animations" setting. This overrides it on this phone only.</p>
-    <button id="force" type="button">Turn on</button>
-    <button id="follow" class="alt" type="button" hidden>Follow my phone's setting again</button></div>
+  <div class="row"><b>Animations on this phone</b>
+    <p id="modeNote"></p>
+    <button id="force" type="button" hidden>Play animations (recommended)</button>
+    <button id="follow" class="alt" type="button" hidden>Follow my phone's "Remove animations" setting</button></div>
 
   <div class="row"><b>If it still doesn't move</b>
     <ol>
@@ -66,18 +66,19 @@
   var forced=document.documentElement.classList.contains("force-motion");
   function paint(){
     forced=document.documentElement.classList.contains("force-motion");
-    if(reduced&&!forced){setVal("rm","ON — animations are switched off","bad");$("rmNote").textContent="This is the most common reason. Turn it off in the phone's settings (steps below), or use the button further down."}
-    else if(reduced&&forced){setVal("rm","ON, but overridden for this phone","good");$("rmNote").textContent="The app will play its animations on this phone."}
+    if(reduced&&!forced){setVal("rm","ON — and this phone follows it","bad");$("rmNote").textContent="Animations are switched off here because you chose to follow the phone's setting."}
+    else if(reduced&&forced){setVal("rm","ON, but the app plays animations anyway","good");$("rmNote").textContent="Nothing to do: the app ignores that phone setting by default."}
     else{setVal("rm","OFF — animations are allowed","good");$("rmNote").textContent=""}
     $("force").hidden=forced; $("follow").hidden=!forced;
+    $("modeNote").textContent=forced?"The app plays its animations on this phone, whatever the phone's setting says.":"The app follows the phone's setting, so animations are off while it is ON.";
     setTimeout(function(){
       var n=0; try{n=document.getAnimations().length}catch(e){}
       var moving=n>0;
       setVal("run",moving?"Moving":"Stopped",moving?"good":"bad");
     },250);
   }
-  $("force").onclick=function(){try{localStorage.setItem("sarthi_forceMotion","1")}catch(e){} document.documentElement.classList.add("force-motion");paint()};
-  $("follow").onclick=function(){try{localStorage.removeItem("sarthi_forceMotion")}catch(e){} document.documentElement.classList.remove("force-motion");paint()};
+  $("force").onclick=function(){try{localStorage.removeItem("sarthi_forceMotion")}catch(e){} document.documentElement.classList.add("force-motion");paint()};
+  $("follow").onclick=function(){try{localStorage.setItem("sarthi_forceMotion","0")}catch(e){} document.documentElement.classList.remove("force-motion");paint()};
   paint();
   fetch("/?cb="+Date.now(),{cache:"no-store"}).then(function(r){return r.text()}).then(function(t){
     var has=t.indexOf("al-tile-wrap")>-1;
