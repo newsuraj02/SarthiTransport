@@ -7498,8 +7498,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
       )}
       <div className="px-5 pt-4 space-y-4">
+        {/* Layering (owner 2026-10-29: the km box and Enter Weight were painting OVER the Drop suggestions): every
+            .anim-rise block below is its own stacking layer, and a later layer paints over an earlier one no matter
+            how high a z-index sits INSIDE it. So the two boxes that own a suggestion dropdown get their own
+            explicit layers: Pickup (z-40) above Drop (z-30) above everything under them. */}
         {!weightTyped && (
-        <div className="flex items-start gap-2">
+        <div className="relative z-40 flex items-start gap-2">
           <div className="flex-1 min-w-0">
             <LocationField
               lang={lang}
@@ -7561,7 +7565,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         )}
 
         {showDrop && !weightTyped && (
-        <div className="anim-rise">
+        <div className="anim-rise relative z-30">
         <LocationField
           lang={lang}
           value={drop}

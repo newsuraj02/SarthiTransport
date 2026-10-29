@@ -241,7 +241,7 @@ const checks = [
       && !cb.includes("sticky top-0 z-20") && !cb.includes("View Map") && cb.includes("activeOnly={weightTyped}") && cb.includes("fixedDrivers={mapFixedDrivers}") && cb.includes("highlightLabel={mapHighlight?.label")
       && cb.includes("const visibleDrivers = selectedEntry ? [selectedEntry] : nearbyDrivers;") && cb.includes("setSelectedDriverKey(null)} disabled={!!sendingKey}") && cb.includes("e.tier.maxKg === selectedEntry.tier.maxKg")
       && cb.includes("const clearAfterPickup = () => {") && cb.includes("const clearAfterDrop = () => {") && cb.includes("onChange={(e) => onPickupTyped(e.target.value)}") && cb.includes("onChange={(e) => onDropTyped(e.target.value)}")
-      && cb.includes("pickupPlaceId, dropPlaceId,") && cb.includes("localizePlace(") && cb.includes("reverseGeocodeFull(") && cb.includes("readLangReloadDraft()")
+      && cb.includes('<div className="relative z-40 flex items-start gap-2">') && cb.includes('<div className="anim-rise relative z-30">') && cb.includes("pickupPlaceId, dropPlaceId,") && cb.includes("localizePlace(") && cb.includes("reverseGeocodeFull(") && cb.includes("readLangReloadDraft()")
       && cb.includes("else { resetBookingForm(); setSendingKey(null); setBookedMsg(true); }") && cb.includes("Your message has gone to drivers")
       && app.includes("pickupPlaceId: pickupPlaceId ?? null, dropPlaceId: dropPlaceId ?? null, placeLang: lang") && app.includes("placeId: p.place_id || null") && app.includes("window.sessionStorage.setItem(LANG_RELOAD_KEY")
       && app.includes("const key = `${b.pickupPlaceId || pickupName}|${b.dropPlaceId || dropName}`;")

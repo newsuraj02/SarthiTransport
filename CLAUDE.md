@@ -173,7 +173,9 @@ is a compact 35% of the screen (owner 2026-10-29: 50% pushed the content off scr
 keeps the customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`); markers are the
 top-down blue-and-yellow truck (`truckMarkerIcon`) and a blue pickup dot. Weight caps, fares and
 the vehicle/driver list are unchanged; `CustomerAdvanceBooking` was NOT changed. Inputs may always
-shrink (global `min-width: 0` in `index.css`). Pinned in `verifyInvariants.mjs`.
+shrink (global `min-width: 0` in `index.css`). Layering rule (owner 2026-10-29: the km box + Enter Weight painted over the Drop suggestions): every `.anim-rise`
+block is its own stacking layer, so the Pickup row is `relative z-40` and the Drop wrapper `relative z-30` -- keep
+them, or suggestion lists get covered by the rows below. Pinned in `verifyInvariants.mjs`.
 
 **OTP-screen map (owner 2026-10-29 -- built, not yet confirmed on a device).** Before the pickup OTP is
 entered, the ride-tracking map (`LiveTrackingMap`, `mode="toPickup"`; the customer's `ActiveRide` and the
