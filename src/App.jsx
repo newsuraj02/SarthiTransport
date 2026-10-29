@@ -3712,7 +3712,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
         onLoad={setMapInstance}
-        options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: true, gestureHandling: "greedy", disableDefaultUI: true, clickableIcons: false, keyboardShortcuts: false }}
+        options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false, zoomControl: false, gestureHandling: "greedy", disableDefaultUI: true, clickableIcons: false, keyboardShortcuts: false }}
       >
         <MarkerF position={pickupPos} icon={pinMarkerIcon(C.success, "P")} />
         {!toPickup && dropPos && <MarkerF position={dropPos} icon={pinMarkerIcon(C.safety, "D")} />}
