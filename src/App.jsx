@@ -6907,7 +6907,7 @@ function PickupPage({ lang, mapsReady, drivers, recentPlaces, initialQuery, cust
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentPlaces, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
+function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
   const VEHICLES = vehicleTypes;
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
@@ -6929,36 +6929,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // weight" note under the field; cleared on any accepted keystroke or unit switch.
   const [weightCapHit, setWeightCapHit] = useState(false);
   useEffect(() => { setWeightCapHit(false); }, [weightUnit]);
-  // Step-by-step flow (owner 2026-10-29): Pickup -> Drop -> Weight/vehicles.
-  // A step only counts as finished once a place was actually CHOSEN (suggestion,
-  // current location, map tap, recent place) or the customer taps "Next" on what
-  // they typed -- never just because geocoding resolved mid-typing. A finished
-  // step collapses to a one-line summary with a "Change" link (editingStep).
-  // Owner 2026-10-29 (second pass): the main page asks only for the DROP. Pickup is
-  // always the customer's current location (pickupAuto) until they pick another
-  // one on the separate Pickup page (pickupPageOpen), opened from the pill at the
-  // top right of the main page.
-  const [dropConfirmed, setDropConfirmed] = useState(false);
-  const [editingStep, setEditingStep] = useState(null); // 'drop' | null
-  const [pickupAuto, setPickupAuto] = useState(true);
-  const [pickupPageOpen, setPickupPageOpen] = useState(false);
-  // Owner 2026-10-29: the move between steps felt jumpy (the keyboard kept
-  // popping up and down). Choosing a place now closes the keyboard, shows a short
-  // "setting..." beat (pendingStep), and only then moves to the next step -- and
-  // the next step never grabs the keyboard by itself.
-  const [pendingStep, setPendingStep] = useState(null); // 'drop' | null
-  const advanceTimerRef = useRef(null);
-  useEffect(() => () => clearTimeout(advanceTimerRef.current), []);
-  const commitStep = (which) => {
-    try { document.activeElement?.blur?.(); } catch { /* nothing focused */ }
-    setPendingStep(which);
-    clearTimeout(advanceTimerRef.current);
-    advanceTimerRef.current = setTimeout(() => {
-      setDropConfirmed(true);
-      setEditingStep(null);
-      setPendingStep(null);
-    }, 900);
-  };
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6978,14 +6948,15 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // actually move the keyboard cursor into the next field, not just the
   // visual highlight, the moment a place is chosen (not while typing by
   // hand). LocationField forwards its ref straight to its <input>.
+  const pickupFieldRef = useRef(null);
   const dropFieldRef = useRef(null);
   const weightInputRef = useRef(null);
   const onMapClick = async (lat, lng) => {
-    // A tap on the main map picks the DROP while it is still open; once it is
-    // set, use "Change" on the Drop row to move it (Pickup has its own page).
-    if (dropDone) return;
+    const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
+    if (!field) return;
     const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); commitStep("drop");
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); dropFieldRef.current?.focus(); }
+    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); weightInputRef.current?.focus(); }
   };
 
   // If the customer typed Pickup/Drop by hand without tapping an
@@ -7041,24 +7012,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     };
   }, []);
 
-  // Pickup follows the customer's own position (owner 2026-10-29) until they pick a
-  // different place on the Pickup page. Re-resolves only after moving ~150 m, at
-  // most every 10 s, and stops once a drop is confirmed so the quote doesn't shift
-  // under them mid-booking.
-  const autoPickupRef = useRef({ at: 0, busy: false });
-  useEffect(() => {
-    if (!pickupAuto || dropConfirmed || !customerLocation) return;
-    const moved = !pickupCoords || haversineKm(pickupCoords.lat, pickupCoords.lng, customerLocation.lat, customerLocation.lng) > 0.15;
-    const ref = autoPickupRef.current;
-    if (!moved || ref.busy || Date.now() - ref.at < 10000) return;
-    ref.busy = true; ref.at = Date.now();
-    const loc = customerLocation;
-    reverseGeocode(loc.lat, loc.lng)
-      .then((name) => { setPickup(name || `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`); setPickupCoords({ lat: loc.lat, lng: loc.lng }); })
-      .catch(() => { setPickup(`${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`); setPickupCoords({ lat: loc.lat, lng: loc.lng }); })
-      .finally(() => { ref.busy = false; });
-  }, [customerLocation, pickupAuto, dropConfirmed, pickupCoords]);
-
   // Shows the straight-line estimate immediately (no blank/loading state),
   // then silently upgrades to the real routed distance from Google's
   // Distance Matrix once it resolves — keeping the straight-line number if
@@ -7083,16 +7036,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // tap all count, same as explicitly tapping into the next field by
   // hand. Typing by hand doesn't trigger this -- only a genuine selection
   // does, since the customer might still be mid-edit after typing.
-  // Chosen on the Pickup page (a suggestion, a recent place, a map point or typed
-  // text). auto = true only for "Current Location", which re-arms the automatic
-  // following of the customer's own position.
-  const onPickupPlaceSelected = (p, { auto = false } = {}) => {
-    setPickup(p.name);
-    setPickupCoords(p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null);
-    setPickupAuto(auto);
-    setPickupPageOpen(false);
-  };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); commitStep("drop"); };
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); dropFieldRef.current?.focus(); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); weightInputRef.current?.focus(); };
 
   // "Use current location" box next to the Pickup field -- same one-shot
   // GPS call and reverseGeocode as onMapClick above, just for a direct tap
@@ -7105,7 +7050,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       locationPermission?.markGranted();
       const lat = pos.coords.latitude, lng = pos.coords.longitude;
       const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-      onPickupPlaceSelected({ name, lat, lng }, { auto: true });
+      onPickupPlaceSelected({ name, lat, lng });
     } catch (err) {
       if (isLocationPermissionDeniedError(err)) locationPermission?.markDenied();
       else console.error("[use current location]", err);
@@ -7175,11 +7120,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // instant it's focused. activeField (sticky, set onFocus -- see its own
   // comment above) takes over the moment the customer explicitly taps a
   // field out of order.
-  const pickupDone = !!pickup.trim();
-  const dropDone = dropConfirmed && !!drop.trim() && editingStep !== "drop";
-  const showDropStep = !dropDone;
-  const showWeightStep = pickupDone && dropDone;
-  const highlightField = !dropDone ? "drop" : !weightReady ? "weight" : null;
+  const highlightField = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : !weightReady ? "weight" : null);
 
   // Every real, currently online/approved/non-blacklisted driver within
   // the request radius of Pickup AND whose own vehicle can actually carry
@@ -7305,11 +7246,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
 
   return (
     <div className="pt-0 pb-8">
-      {pickupPageOpen && (
-        <PickupPage lang={lang} mapsReady={mapsReady} drivers={drivers} recentPlaces={recentPlaces} initialQuery={pickupAuto ? "" : pickup}
-          customerLocation={customerLocation} locating={locatingPickup} onUseCurrent={useCurrentLocationForPickup}
-          onSelect={onPickupPlaceSelected} onClose={() => setPickupPageOpen(false)} />
-      )}
       {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
       {/* Map collapses to a compact header once weight is filled in --
           matches the design-mock's "form before map" flow, reclaiming
@@ -7319,12 +7255,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       {mapCollapsed ? (
         <div className="px-5 pt-3 pb-1 flex items-center justify-between gap-2">
           <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Booking" : lang === "mr" ? "बुकिंग" : "बुकिंग"}</span>
-          <div className="flex items-center gap-2 min-w-0">
-            <PickupPill pickup={pickup} lang={lang} onClick={() => setPickupPageOpen(true)} />
-            <button onClick={() => setManualMapOpen(true)} className="rounded-full px-3.5 py-1.5 text-xs font-bold shrink-0" style={{ border: `1.5px solid ${C.line}`, color: C.ink, background: C.paper }}>
-              {lang === "en" ? "View Map" : lang === "mr" ? "नकाशा पहा" : "मैप देखें"}
-            </button>
-          </div>
+          <button onClick={() => setManualMapOpen(true)} className="rounded-full px-3.5 py-1.5 text-xs font-bold shrink-0" style={{ border: `1.5px solid ${C.line}`, color: C.ink, background: C.paper }}>
+            {lang === "en" ? "View Map" : lang === "mr" ? "नकाशा पहा" : "मैप देखें"}
+          </button>
         </div>
       ) : (
         // Centers on the typed Pickup once it's resolved, not the
@@ -7333,51 +7266,64 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         // vehicles near the load's actual pickup point, not near
         // themselves. Falls back to customerLocation (device GPS) only
         // before Pickup has been entered/geocoded, same as before.
-        <div className="relative">
-          <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="50vh" lang={lang} onMapClick={onMapClick} refitKey={pickupAuto ? "auto" : `${pickupCoords?.lat},${pickupCoords?.lng}`} />
-          <div className="absolute top-3 right-3 z-10" style={{ maxWidth: "72%" }}>
-            <PickupPill pickup={pickup} lang={lang} onClick={() => setPickupPageOpen(true)} />
-          </div>
-        </div>
+        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="50vh" lang={lang} onMapClick={onMapClick} />
       )}
       <div className="px-5 pt-4 space-y-4">
-        {/* Drop -- the only place the customer is asked for on the main page. */}
-        {dropDone ? (
-          <StepSummary label={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} value={drop} changeLabel={lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"} onChange={() => { setEditingStep("drop"); setActiveField("drop"); }} />
-        ) : pendingStep === "drop" ? (
-          <StepSummary loading label={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} value={drop} />
-        ) : showDropStep ? (
-          <div className="space-y-3 step-enter">
-            {!pickupDone && (
-              <button type="button" onClick={() => setPickupPageOpen(true)} className="w-full rounded-xl py-3 px-3 text-xs font-bold text-center" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: "1.5px solid rgba(232,152,40,0.35)" }}>
-                {lang === "en" ? "Finding your location… or tap here to set your pickup" : lang === "mr" ? "तुमचे लोकेशन शोधत आहे… किंवा पिकअप सेट करण्यासाठी इथे टॅप करा" : "आपकी लोकेशन ढूंढ रहे हैं… या पिकअप सेट करने के लिए यहाँ टैप करें"}
-              </button>
-            )}
-            <div className="space-y-3">
-              <LocationField
-                compact
-                lang={lang}
-                value={drop}
-                onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropConfirmed(false); }}
-                onPlaceSelected={onDropPlaceSelected}
-                mapsReady={mapsReady}
-                placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
-                suggestions={suggestAreas(drop)}
-                onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
-                onFocus={() => setActiveField("drop")}
-                highlighted={highlightField === "drop"}
-                disabled={!pickup.trim()}
-                ref={dropFieldRef}
-              />
-              <RecentPlacesList items={recentPlaces.filter((x) => x.name !== pickup.trim())} title={lang === "en" ? "Your recent places" : lang === "mr" ? "तुमची अलीकडील ठिकाणे" : "आपकी पिछली जगहें"} onPick={onDropPlaceSelected} />
-            </div>
-            <StepNextButton show={!!drop.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => commitStep("drop")} />
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <LocationField
+              lang={lang}
+              value={pickup}
+              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
+              onPlaceSelected={onPickupPlaceSelected}
+              mapsReady={mapsReady}
+              placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
+              suggestions={suggestAreas(pickup)}
+              onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
+              onFocus={() => setActiveField("pickup")}
+              recentItems={recentPickups}
+              highlighted={highlightField === "pickup"}
+              ref={pickupFieldRef}
+            />
           </div>
-        ) : null}
+          {/* Separate box next to Pickup -- blue/white blink (see
+              .current-location-blink, index.css) until tapped or Pickup
+              gets any text (typed or picked), at which point it's gone
+              entirely -- no point offering "use current location" once
+              there's already an address in the field. */}
+          {!pickup.trim() && (
+            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
+              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup ? "" : "current-location-blink"}`}
+              style={{ width: 92, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
+              {locatingPickup ? (
+                <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
+              ) : (
+                <>
+                  <LocateFixed size={20} color="currentColor" strokeWidth={2.2} />
+                  <span className="text-[10px] font-bold leading-tight" style={{ color: "currentColor" }}>
+                    {lang === "en" ? "Use Current Location" : lang === "mr" ? "करंट लोकेशन निवडा" : "करंट लोकेशन चुनें"}
+                  </span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
 
-        {/* STEP 3 -- Distance + weight (vehicles follow below). */}
-        {showWeightStep && (
-          <div className="space-y-4 step-enter">
+        <LocationField
+          lang={lang}
+          value={drop}
+          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
+          onPlaceSelected={onDropPlaceSelected}
+          mapsReady={mapsReady}
+          placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
+          suggestions={suggestAreas(drop)}
+          onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
+          onFocus={() => setActiveField("drop")}
+          highlighted={highlightField === "drop"}
+          disabled={!pickup.trim()}
+          ref={dropFieldRef}
+        />
+
         <div className="flex gap-3">
           {/* Narrower now (fixed width, not a 50/50 grid column) -- the
               weight box needs the extra room for the two-segment kg/ton
@@ -7439,10 +7385,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           </div>
         )}
 
-          </div>
-        )}
-
-        {!(pickupDone && dropDone) && (
+        {!locationsReady && (
           <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
             🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
           </button>
@@ -7465,7 +7408,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           "Choose another vehicle" link back to the full list; tapping
           Book sends the request immediately (no confirmation sheet) and
           that same button becomes a disabled "Request sent. Please wait". */}
-      {locationsReady && pickupDone && dropDone && (
+      {locationsReady && (
         <div className="px-5 pt-3 pb-4 space-y-2.5">
           {sameLocation ? (
             // Pickup and Drop read as the same place (see isSameLocation) --

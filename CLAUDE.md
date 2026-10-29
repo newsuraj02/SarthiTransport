@@ -142,24 +142,22 @@ vehicle-capacity fields are a different thing and are NOT capped by this.
 suffix of `weightKg` (2026-10-26: Alerts showed "9000ton" for a 9-ton load;
 validation was fine, the label was wrong, bug since 207b028).
 
-**Customer booking (owner 2026-10-29 -- built, not yet confirmed on a device).**
-`CustomerBooking`'s main page asks ONLY for the Drop ("Where to?" box + the customer's
-recent places, i.e. places used as pickup OR drop, up to 8), then Weight + distance, then
-the vehicle list; the nearby-vehicles map stays at the top. Pickup is the customer's
-CURRENT location at all times (`pickupAuto`, follows them after ~150 m, frozen once a drop
-is confirmed) until they choose another on the separate full-screen `PickupPage`, opened by
-the white pill (`PickupPill`) at the top right of the main page: search box + recent
-places, "Current Location" and "Locate on Map" at the bottom ("Current Location" re-arms
-auto-follow; a manually chosen pickup is never overwritten). Choosing a drop closes the
-keyboard, shows a ~1s spinner row (`commitStep`) and eases into the next step; steps never
-open the keyboard by themselves; no check icons. The booking map takes 50% of the screen height and by default frames a 1.5 km radius around the
-current location / chosen pickup (`NEARBY_MAP_DEFAULT_RADIUS_KM`); it (and the live ride-tracking map) has NO +/- zoom buttons (pinch to zoom; the
-active/inactive driver count is at the bottom right), and it keeps the
-customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`; only a newly
-chosen manual pickup re-frames it). Vehicle markers are the sleek top-down blue-and-yellow truck
-(`truckMarkerIcon`, also used by live tracking; blue cargo, yellow cab, no stripe) and the pickup is a blue dot -- no
-cartoon trucks. Weight caps, fares and the vehicle/driver
-list are unchanged; `CustomerAdvanceBooking` was NOT converted. Pinned in
+**Customer booking (owner 2026-10-29 reset).** `CustomerBooking` is the ORIGINAL single screen
+again, on purpose: Pickup box with the "Use Current Location" button beside it (and recent
+pickups on focus), Drop box, then Weight + distance, then the vehicle list -- all on one page,
+no steps, no top-right pill, no separate Pickup page. (The step-flow / Pickup-page / pill
+redesign of the same day was tried and rolled back at the owner's request; `PickupPage`,
+`PickupPill`, `StepSummary`, `RecentPlacesList` are left in the file, unused, and the
+`recentPlaces` list is still built in `CustomerApp`, in case it is wanted again.) What stays from
+the same day: the booking map takes 50% of the screen height and by default frames a 1.5 km
+radius around the current location (`NEARBY_MAP_DEFAULT_RADIUS_KM`); it (and the live
+ride-tracking map) has NO +/- zoom buttons (pinch to zoom; the active/inactive driver count is
+at the bottom right) and keeps the customer's own zoom/pan until the page is refreshed
+(`nearbyMapUserView`); vehicle markers are the top-down blue-and-yellow truck
+(`truckMarkerIcon`) and the pickup is a blue dot; vehicle cards rise in, and tapping Book shows
+"Sending request…" for a deliberate 700 ms before the request is sent. Weight caps, fares and
+the vehicle/driver list are unchanged. Inputs may always shrink (global `min-width: 0` in
+`index.css`), so the mobile-number box never pokes off narrow screens. Pinned in
 `verifyInvariants.mjs`.
 
 **Entry + refresh animation (owner 2026-10-29).** `index.html`'s inline loader: the app icon
