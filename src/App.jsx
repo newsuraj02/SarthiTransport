@@ -3850,6 +3850,8 @@ function nearbyOfflineDrivers(drivers, customerLocation) {
 // Pimpri-Chinchwad / Pune — same fallback default as MapPicker, used only
 // until the customer's own GPS fix comes in (or if it never does).
 export const NEARBY_MAP_DEFAULT_CENTER = { lat: 18.6298, lng: 73.8131 };
+// Radius the booking map frames by default.
+const NEARBY_MAP_DEFAULT_RADIUS_KM = 3;
 
 // Pickup / "you are here" marker: a calm blue dot with a soft halo, the way Google,
 // Uber and Ola mark a point (owner 2026-10-29: the old teardrop looked childish).
@@ -4005,22 +4007,21 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
     mapInstance.setZoom((mapInstance.getZoom() || 13) + delta);
   };
 
+  // Default view (owner 2026-10-29): a 3 km radius around the current location
+  // (or the chosen pickup), not "zoom out to fit every driver". Drivers beyond
+  // that are still plotted, just off-screen until the customer zooms out.
   useEffect(() => {
     if (!mapInstance || !window.google?.maps) return;
     if (userAdjustedRef.current) return; // the customer has set their own view -- leave it alone
     progUntilRef.current = Date.now() + 1200;
-    const bounds = new window.google.maps.LatLngBounds();
-    bounds.extend(center);
-    nearby.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
-    nearbyInactive.forEach((d) => bounds.extend({ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }));
-    mapInstance.fitBounds(bounds, 48);
-    // Don't zoom in past a sane street-level view just because there are no
-    // (or one) nearby driver(s) to spread the bounds out.
-    const listener = window.google.maps.event.addListenerOnce(mapInstance, "bounds_changed", () => {
-      if (mapInstance.getZoom() > 15) mapInstance.setZoom(15);
-    });
-    return () => window.google.maps.event.removeListener(listener);
-  }, [mapInstance, center.lat, center.lng, nearby.length, nearbyInactive.length, refitKey]);
+    const dLat = NEARBY_MAP_DEFAULT_RADIUS_KM / 111.32;
+    const dLng = NEARBY_MAP_DEFAULT_RADIUS_KM / (111.32 * Math.max(0.2, Math.cos((center.lat * Math.PI) / 180)));
+    mapInstance.fitBounds(
+      { north: center.lat + dLat, south: center.lat - dLat, east: center.lng + dLng, west: center.lng - dLng },
+      8
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapInstance, Math.round(center.lat * 1000), Math.round(center.lng * 1000), refitKey]);
 
   const countLabel = lang === "en"
     ? `${nearby.length} active${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} inactive` : ""} nearby`
