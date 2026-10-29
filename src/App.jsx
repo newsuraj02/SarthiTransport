@@ -3851,7 +3851,7 @@ function nearbyOfflineDrivers(drivers, customerLocation) {
 // until the customer's own GPS fix comes in (or if it never does).
 export const NEARBY_MAP_DEFAULT_CENTER = { lat: 18.6298, lng: 73.8131 };
 // Radius the booking map frames by default.
-const NEARBY_MAP_DEFAULT_RADIUS_KM = 3;
+const NEARBY_MAP_DEFAULT_RADIUS_KM = 1.5;
 
 // Pickup / "you are here" marker: a calm blue dot with a soft halo, the way Google,
 // Uber and Ola mark a point (owner 2026-10-29: the old teardrop looked childish).
@@ -4007,7 +4007,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
     mapInstance.setZoom((mapInstance.getZoom() || 13) + delta);
   };
 
-  // Default view (owner 2026-10-29): a 3 km radius around the current location
+  // Default view (owner 2026-10-29): a 1.5 km radius around the current location
   // (or the chosen pickup), not "zoom out to fit every driver". Drivers beyond
   // that are still plotted, just off-screen until the customer zooms out.
   useEffect(() => {
