@@ -3885,7 +3885,6 @@ function truckMarkerIcon(headingDeg = null, active = true) {
   const cab0 = active ? "#FFDB4D" : "#C3C9D3", cab1 = active ? "#F2B800" : "#9AA3B0";
   const panel = active ? "#003C99" : "#939CAA";
   const cabRoof = active ? "#E6A800" : "#8A93A1";
-  const stripe = active ? "#FFCC00" : "#D3D8E0";
   const glass = active ? "#BFD9FA" : "#E6E9EE";
   const lamp = active ? "#FFF6CC" : "#F1F3F6";
   const mirror = active ? "#00266B" : "#6B7280";
@@ -3898,7 +3897,6 @@ function truckMarkerIcon(headingDeg = null, active = true) {
     <g transform="rotate(${rotate} 22 22) translate(22 22) scale(0.9) translate(-22 -22)" filter="url(#s)">
       <rect x="2" y="12" width="26" height="20" rx="3" fill="url(#b)" stroke="#fff" stroke-width="1.4"/>
       <rect x="4.6" y="14.6" width="20.8" height="14.8" rx="1.8" fill="${panel}"/>
-      <rect x="4.6" y="14.6" width="20.8" height="2.4" rx="1.2" fill="${stripe}"/>
       <rect x="9" y="21.6" width="13" height="0.9" rx="0.45" fill="#fff" fill-opacity="0.18"/>
       <rect x="27" y="19.6" width="3.4" height="4.8" rx="1" fill="${panel}"/>
       <rect x="36.2" y="12.4" width="2.6" height="1.9" rx="0.8" fill="${mirror}"/>
