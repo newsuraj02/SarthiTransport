@@ -143,8 +143,10 @@ suffix of `weightKg` (2026-10-26: Alerts showed "9000ton" for a 9-ton load;
 validation was fine, the label was wrong, bug since 207b028).
 
 **Customer booking is a 3-step flow (owner 2026-10-29 -- built, not yet confirmed on a
-device).** `CustomerBooking`: Step 1 Pickup (box + "Use Current Location" + the
-customer's recent pickups, up to 5), Step 2 Drop (box + recent drops), Step 3
+device).** `CustomerBooking`: Step 1 Pickup (box, then "Use Current Location", then recent
+places -- each its own box, nothing nested in another box), Step 2 Drop (box + the SAME
+recent places, minus the chosen pickup: places used as pickup OR drop, up to 8, so a
+return trip needs no searching), Step 3
 distance + weight, then the vehicle list. A step is finished only when a place was
 chosen (suggestion / current location / map tap / recent place) or "Next" tapped; a
 finished step collapses to a summary row with "Change". The nearby-vehicles map stays

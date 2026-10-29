@@ -6632,15 +6632,14 @@ function StepNextButton({ show, label, onClick }) {
 }
 // Past places the customer already used, listed right under the open step's box
 // so a repeat address is one tap.
-function RecentPlacesList({ items, title, onPick, flat = false }) {
+function RecentPlacesList({ items, title, onPick }) {
   if (!items || items.length === 0) return null;
   return (
-    <div style={flat ? { borderTop: `1px solid ${C.line}`, paddingTop: 10 } : undefined}>
+    <div>
       <div className="text-[11px] font-bold mb-1.5" style={{ color: C.inkSoft }}>{title}</div>
-      <div className={flat ? "" : "space-y-1.5"}>
-        {items.map((it, i) => (
-          <button key={it.name} type="button" onClick={() => onPick(it)} className={`w-full flex items-center gap-2 px-3 py-2.5 text-left ${flat ? "rounded-none" : "rounded-xl"}`}
-            style={flat ? { background: "transparent", borderTop: i ? `1px solid ${C.line}` : "none" } : { background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="space-y-1.5">
+        {items.map((it) => (
+          <button key={it.name} type="button" onClick={() => onPick(it)} className="w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <MapPin size={14} color={C.inkSoft} className="shrink-0" />
             <span className="text-sm font-semibold truncate" style={{ color: C.ink }}>{it.name}</span>
           </button>
@@ -6653,7 +6652,7 @@ function RecentPlacesList({ items, title, onPick, flat = false }) {
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentDrops, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
+function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentPlaces, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
   const VEHICLES = vehicleTypes;
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
@@ -7049,9 +7048,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           <StepSummary loading label={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} value={pickup} />
         ) : (
           <div className="space-y-3 step-enter">
-            {/* ONE card, in this order (owner 2026-10-29): Pickup box, then
-                "Use Current Location", then the customer's past pickups. */}
-            <div className="rounded-2xl p-3 space-y-3 shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            {/* In this order (owner 2026-10-29): Pickup box, then "Use
+                Current Location", then the customer's recent places -- each its
+                own box, not nested inside another box. */}
+            <div className="space-y-3">
               <LocationField
                 lang={lang}
                 value={pickup}
@@ -7084,7 +7084,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   )}
                 </button>
               )}
-              <RecentPlacesList flat items={recentPickups} title={lang === "en" ? "Your recent pickups" : lang === "mr" ? "तुमचे अलीकडील पिकअप" : "आपके पिछले पिकअप"} onPick={onPickupPlaceSelected} />
+              <RecentPlacesList items={recentPlaces} title={lang === "en" ? "Your recent places" : lang === "mr" ? "तुमची अलीकडील ठिकाणे" : "आपकी पिछली जगहें"} onPick={onPickupPlaceSelected} />
             </div>
             <StepNextButton show={!!pickup.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => commitStep("pickup")} />
           </div>
@@ -7097,7 +7097,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           <StepSummary loading label={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} value={drop} />
         ) : showDropStep ? (
           <div className="space-y-3 step-enter">
-            <div className="rounded-2xl p-3 space-y-3 shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <div className="space-y-3">
               <LocationField
                 lang={lang}
                 value={drop}
@@ -7112,7 +7112,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 disabled={!pickup.trim()}
                 ref={dropFieldRef}
               />
-              <RecentPlacesList flat items={recentDrops} title={lang === "en" ? "Your recent drops" : lang === "mr" ? "तुमचे अलीकडील ड्रॉप" : "आपके पिछले ड्रॉप"} onPick={onDropPlaceSelected} />
+              <RecentPlacesList items={recentPlaces.filter((x) => x.name !== pickup.trim())} title={lang === "en" ? "Your recent places" : lang === "mr" ? "तुमची अलीकडील ठिकाणे" : "आपकी पिछली जगहें"} onPick={onDropPlaceSelected} />
             </div>
             <StepNextButton show={!!drop.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => commitStep("drop")} />
           </div>
@@ -8607,15 +8607,19 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
     recentPickups.push({ name, lat: b.pickupLat, lng: b.pickupLng });
     if (recentPickups.length >= 5) break;
   }
-  // Same idea for places goods were delivered to -- the Drop step's quick list.
-  const recentDrops = [];
-  const seenDropNames = new Set();
-  for (const b of myBookings) {
-    const name = b.drop?.trim();
-    if (!name || seenDropNames.has(name) || b.dropLat == null || b.dropLng == null) continue;
-    seenDropNames.add(name);
-    recentDrops.push({ name, lat: b.dropLat, lng: b.dropLng });
-    if (recentDrops.length >= 5) break;
+  // Places used as a pickup OR a drop, newest first, de-duplicated -- offered at
+  // both steps so a return trip (last time's drop is now the pickup, and vice
+  // versa) is one tap, no searching again. (owner 2026-10-29)
+  const recentPlaces = [];
+  const seenPlaceNames = new Set();
+  outer: for (const b of myBookings) {
+    for (const [name0, lat, lng] of [[b.pickup, b.pickupLat, b.pickupLng], [b.drop, b.dropLat, b.dropLng]]) {
+      const name = name0?.trim();
+      if (!name || seenPlaceNames.has(name) || lat == null || lng == null) continue;
+      seenPlaceNames.add(name);
+      recentPlaces.push({ name, lat, lng });
+      if (recentPlaces.length >= 8) break outer;
+    }
   }
   // Posting a new ride while another one is already active/advance-booked —
   // see the "Back" button on ActiveRide below, which flips this back on to
@@ -8958,7 +8962,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
             <CustomerAdvanceBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
               locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} />
           ) : (
-            <CustomerBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} recentDrops={recentDrops} lang={lang} drivers={drivers}
+            <CustomerBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} recentPlaces={recentPlaces} lang={lang} drivers={drivers}
               locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} />
           )
         ) : (
