@@ -149,7 +149,9 @@ distance + weight, then the vehicle list. A step is finished only when a place w
 chosen (suggestion / current location / map tap / recent place) or "Next" tapped; a
 finished step collapses to a summary row with "Change". The nearby-vehicles map stays
 at the top. Weight caps, fares and the vehicle/driver list are unchanged;
-`CustomerAdvanceBooking` was NOT converted. Pinned in `verifyInvariants.mjs`.
+`CustomerAdvanceBooking` was NOT converted. Choosing a place closes the keyboard, shows a
+~1s spinner row (`commitStep`) and then eases into the next step, which never opens the
+keyboard by itself; finished steps have no check icon. Pinned in `verifyInvariants.mjs`.
 
 **Fares.** `calculateFare` (App.jsx): in-city = master formula × `priceCorrectionFactor`
 (anchored 5% below Porter at 13 km); outstation = `priceOutstation`, a piecewise

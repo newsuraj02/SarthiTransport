@@ -92,9 +92,16 @@ input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: po
 /* Anyone whose phone is set to "reduce motion" (or "remove animations")
    gets calm screens: the attention-grabbing pulses/blinks stop, tap
    feedback stays instant. Purely a CSS media query -- no behaviour change. */
+/* Booking steps (Pickup -> Drop -> Weight) ease in instead of popping. */
+@keyframes stepIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.step-enter { animation: stepIn 0.35s ease-out both; }
+
 @media (prefers-reduced-motion: reduce) {
   .guided-step-active, .guided-submit-ready, .current-location-blink,
-  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse, .sheet-up {
+  .unmatched-vehicle-link-blink, .driver-selected-bounce, .live-pulse, .sheet-up, .step-enter {
     animation: none !important;
   }
 }

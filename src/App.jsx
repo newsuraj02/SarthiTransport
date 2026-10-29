@@ -6609,15 +6609,16 @@ function weightUnitLabel(unit) {
 }
 
 // Step-by-step booking helpers (owner 2026-10-29).
-function StepSummary({ label, value, changeLabel, onChange }) {
+function StepSummary({ label, value, changeLabel, onChange, loading = false }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black text-white" style={{ background: C.success }}>✓</span>
+    <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm step-enter" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex-1 min-w-0">
         <div className="text-[10px] font-bold uppercase" style={{ color: C.inkSoft }}>{label}</div>
         <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{value}</div>
       </div>
-      <button type="button" onClick={onChange} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full" style={{ color: C.navy, border: `1.5px solid ${C.navy}` }}>{changeLabel}</button>
+      {loading
+        ? <Loader2 size={20} color={C.navy} className="shrink-0 animate-spin" />
+        : <button type="button" onClick={onChange} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full" style={{ color: C.navy, border: `1.5px solid ${C.navy}` }}>{changeLabel}</button>}
     </div>
   );
 }
@@ -6681,6 +6682,23 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const [pickupConfirmed, setPickupConfirmed] = useState(false);
   const [dropConfirmed, setDropConfirmed] = useState(false);
   const [editingStep, setEditingStep] = useState(null); // 'pickup' | 'drop' | null
+  // Owner 2026-10-29: the move between steps felt jumpy (the keyboard kept
+  // popping up and down). Choosing a place now closes the keyboard, shows a short
+  // "setting..." beat (pendingStep), and only then moves to the next step -- and
+  // the next step never grabs the keyboard by itself.
+  const [pendingStep, setPendingStep] = useState(null); // 'pickup' | 'drop' | null
+  const advanceTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(advanceTimerRef.current), []);
+  const commitStep = (which) => {
+    try { document.activeElement?.blur?.(); } catch { /* nothing focused */ }
+    setPendingStep(which);
+    clearTimeout(advanceTimerRef.current);
+    advanceTimerRef.current = setTimeout(() => {
+      if (which === "pickup") setPickupConfirmed(true); else setDropConfirmed(true);
+      setEditingStep(null);
+      setPendingStep(null);
+    }, 900);
+  };
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6709,8 +6727,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     const field = !pickupDone ? "pickup" : !dropDone ? "drop" : null;
     if (!field) return;
     const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setPickupConfirmed(true); setEditingStep(null); setActiveField("drop"); }
-    else { setDrop(name); setDropCoords({ lat, lng }); setDropConfirmed(true); setEditingStep(null); setActiveField("weight"); }
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); commitStep("pickup"); }
+    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); commitStep("drop"); }
   };
 
   // If the customer typed Pickup/Drop by hand without tapping an
@@ -6790,8 +6808,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // tap all count, same as explicitly tapping into the next field by
   // hand. Typing by hand doesn't trigger this -- only a genuine selection
   // does, since the customer might still be mid-edit after typing.
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupConfirmed(true); setEditingStep(null); setActiveField("drop"); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropConfirmed(true); setEditingStep(null); setActiveField("weight"); };
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); commitStep("pickup"); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); commitStep("drop"); };
 
   // "Use current location" box next to the Pickup field -- same one-shot
   // GPS call and reverseGeocode as onMapClick above, just for a direct tap
@@ -6879,18 +6897,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const showDropStep = pickupDone && !dropDone;
   const showWeightStep = pickupDone && dropDone;
   const highlightField = !pickupDone ? "pickup" : !dropDone ? "drop" : !weightReady ? "weight" : null;
-  // Hand the keyboard to the step that just opened (the old single-form layout
-  // did this the moment a place was picked).
-  useEffect(() => {
-    if (!showDropStep) return;
-    const t = setTimeout(() => dropFieldRef.current?.focus(), 120);
-    return () => clearTimeout(t);
-  }, [showDropStep]);
-  useEffect(() => {
-    if (!showWeightStep) return;
-    const t = setTimeout(() => weightInputRef.current?.focus(), 120);
-    return () => clearTimeout(t);
-  }, [showWeightStep]);
 
   // Every real, currently online/approved/non-blacklisted driver within
   // the request radius of Pickup AND whose own vehicle can actually carry
@@ -7038,8 +7044,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         {/* STEP 1 -- Pickup. Finished = one-line summary + Change. */}
         {pickupDone ? (
           <StepSummary label={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} value={pickup} changeLabel={lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"} onChange={() => { setEditingStep("pickup"); setActiveField("pickup"); }} />
+        ) : pendingStep === "pickup" ? (
+          <StepSummary loading label={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} value={pickup} />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 step-enter">
         <div className="flex items-start gap-2">
           <div className="flex-1 min-w-0">
             <LocationField
@@ -7079,7 +7087,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           )}
         </div>
 
-            <StepNextButton show={!!pickup.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => { setPickupConfirmed(true); setEditingStep(null); }} />
+            <StepNextButton show={!!pickup.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => commitStep("pickup")} />
             <RecentPlacesList items={recentPickups} title={lang === "en" ? "Your recent pickups" : lang === "mr" ? "तुमचे अलीकडील पिकअप" : "आपके पिछले पिकअप"} onPick={onPickupPlaceSelected} />
           </div>
         )}
@@ -7087,8 +7095,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         {/* STEP 2 -- Drop (opens once Pickup is finished). */}
         {dropDone ? (
           <StepSummary label={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} value={drop} changeLabel={lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"} onChange={() => { setEditingStep("drop"); setActiveField("drop"); }} />
+        ) : pendingStep === "drop" ? (
+          <StepSummary loading label={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} value={drop} />
         ) : showDropStep ? (
-          <div className="space-y-3">
+          <div className="space-y-3 step-enter">
         <LocationField
           lang={lang}
           value={drop}
@@ -7104,14 +7114,14 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           ref={dropFieldRef}
         />
 
-            <StepNextButton show={!!drop.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => { setDropConfirmed(true); setEditingStep(null); }} />
+            <StepNextButton show={!!drop.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => commitStep("drop")} />
             <RecentPlacesList items={recentDrops} title={lang === "en" ? "Your recent drops" : lang === "mr" ? "तुमचे अलीकडील ड्रॉप" : "आपके पिछले ड्रॉप"} onPick={onDropPlaceSelected} />
           </div>
         ) : null}
 
         {/* STEP 3 -- Distance + weight (vehicles follow below). */}
         {showWeightStep && (
-          <>
+          <div className="space-y-4 step-enter">
         <div className="flex gap-3">
           {/* Narrower now (fixed width, not a 50/50 grid column) -- the
               weight box needs the extra room for the two-segment kg/ton
@@ -7173,7 +7183,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           </div>
         )}
 
-          </>
+          </div>
         )}
 
         {!(pickupDone && dropDone) && (
