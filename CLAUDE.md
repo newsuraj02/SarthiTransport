@@ -142,18 +142,19 @@ vehicle-capacity fields are a different thing and are NOT capped by this.
 suffix of `weightKg` (2026-10-26: Alerts showed "9000ton" for a 9-ton load;
 validation was fine, the label was wrong, bug since 207b028).
 
-**Customer booking is a 3-step flow (owner 2026-10-29 -- built, not yet confirmed on a
-device).** `CustomerBooking`: Step 1 Pickup (box, then "Use Current Location", then recent
-places -- each its own box, nothing nested in another box), Step 2 Drop (box + the SAME
-recent places, minus the chosen pickup: places used as pickup OR drop, up to 8, so a
-return trip needs no searching), Step 3
-distance + weight, then the vehicle list. A step is finished only when a place was
-chosen (suggestion / current location / map tap / recent place) or "Next" tapped; a
-finished step collapses to a summary row with "Change". The nearby-vehicles map stays
-at the top. Weight caps, fares and the vehicle/driver list are unchanged;
-`CustomerAdvanceBooking` was NOT converted. Choosing a place closes the keyboard, shows a
-~1s spinner row (`commitStep`) and then eases into the next step, which never opens the
-keyboard by itself; finished steps have no check icon. Pinned in `verifyInvariants.mjs`.
+**Customer booking (owner 2026-10-29 -- built, not yet confirmed on a device).**
+`CustomerBooking`'s main page asks ONLY for the Drop ("Where to?" box + the customer's
+recent places, i.e. places used as pickup OR drop, up to 8), then Weight + distance, then
+the vehicle list; the nearby-vehicles map stays at the top. Pickup is the customer's
+CURRENT location at all times (`pickupAuto`, follows them after ~150 m, frozen once a drop
+is confirmed) until they choose another on the separate full-screen `PickupPage`, opened by
+the white pill (`PickupPill`) at the top right of the main page: search box + recent
+places, "Current Location" and "Locate on Map" at the bottom ("Current Location" re-arms
+auto-follow; a manually chosen pickup is never overwritten). Choosing a drop closes the
+keyboard, shows a ~1s spinner row (`commitStep`) and eases into the next step; steps never
+open the keyboard by themselves; no check icons. Weight caps, fares and the vehicle/driver
+list are unchanged; `CustomerAdvanceBooking` was NOT converted. Pinned in
+`verifyInvariants.mjs`.
 
 **Fares.** `calculateFare` (App.jsx): in-city = master formula × `priceCorrectionFactor`
 (anchored 5% below Porter at 13 km); outstation = `priceOutstation`, a piecewise
