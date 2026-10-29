@@ -142,6 +142,15 @@ vehicle-capacity fields are a different thing and are NOT capped by this.
 suffix of `weightKg` (2026-10-26: Alerts showed "9000ton" for a 9-ton load;
 validation was fine, the label was wrong, bug since 207b028).
 
+**Customer booking is a 3-step flow (owner 2026-10-29 -- built, not yet confirmed on a
+device).** `CustomerBooking`: Step 1 Pickup (box + "Use Current Location" + the
+customer's recent pickups, up to 5), Step 2 Drop (box + recent drops), Step 3
+distance + weight, then the vehicle list. A step is finished only when a place was
+chosen (suggestion / current location / map tap / recent place) or "Next" tapped; a
+finished step collapses to a summary row with "Change". The nearby-vehicles map stays
+at the top. Weight caps, fares and the vehicle/driver list are unchanged;
+`CustomerAdvanceBooking` was NOT converted. Pinned in `verifyInvariants.mjs`.
+
 **Fares.** `calculateFare` (App.jsx): in-city = master formula × `priceCorrectionFactor`
 (anchored 5% below Porter at 13 km); outstation = `priceOutstation`, a piecewise
 curve from real Porter quotes (500/750/1200/2000/3500/5000 kg, ×0.95), tiers

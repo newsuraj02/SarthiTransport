@@ -6608,10 +6608,50 @@ function weightUnitLabel(unit) {
   return unit === "kg" ? "kg" : "ton";
 }
 
+// Step-by-step booking helpers (owner 2026-10-29).
+function StepSummary({ label, value, changeLabel, onChange }) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black text-white" style={{ background: C.success }}>✓</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] font-bold uppercase" style={{ color: C.inkSoft }}>{label}</div>
+        <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{value}</div>
+      </div>
+      <button type="button" onClick={onChange} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full" style={{ color: C.navy, border: `1.5px solid ${C.navy}` }}>{changeLabel}</button>
+    </div>
+  );
+}
+function StepNextButton({ show, label, onClick }) {
+  if (!show) return null;
+  return (
+    <button type="button" onClick={onClick} className="w-full rounded-xl py-3 font-extrabold text-sm text-white shadow-md" style={{ background: C.navy }}>
+      {label} ›
+    </button>
+  );
+}
+// Past places the customer already used, listed right under the open step's box
+// so a repeat address is one tap.
+function RecentPlacesList({ items, title, onPick }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div>
+      <div className="text-[11px] font-bold mb-1.5" style={{ color: C.inkSoft }}>{title}</div>
+      <div className="space-y-1.5">
+        {items.map((it) => (
+          <button key={it.name} type="button" onClick={() => onPick(it)} className="w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <MapPin size={14} color={C.inkSoft} className="shrink-0" />
+            <span className="text-sm font-semibold truncate" style={{ color: C.ink }}>{it.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
+function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentDrops, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
   const VEHICLES = vehicleTypes;
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
@@ -6633,6 +6673,14 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // weight" note under the field; cleared on any accepted keystroke or unit switch.
   const [weightCapHit, setWeightCapHit] = useState(false);
   useEffect(() => { setWeightCapHit(false); }, [weightUnit]);
+  // Step-by-step flow (owner 2026-10-29): Pickup -> Drop -> Weight/vehicles.
+  // A step only counts as finished once a place was actually CHOSEN (suggestion,
+  // current location, map tap, recent place) or the customer taps "Next" on what
+  // they typed -- never just because geocoding resolved mid-typing. A finished
+  // step collapses to a one-line summary with a "Change" link (editingStep).
+  const [pickupConfirmed, setPickupConfirmed] = useState(false);
+  const [dropConfirmed, setDropConfirmed] = useState(false);
+  const [editingStep, setEditingStep] = useState(null); // 'pickup' | 'drop' | null
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
@@ -6656,11 +6704,13 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const dropFieldRef = useRef(null);
   const weightInputRef = useRef(null);
   const onMapClick = async (lat, lng) => {
-    const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
+    // The map fills whichever step is currently open (Pickup, then Drop); once
+    // both are set, use "Change" on a step to move a point.
+    const field = !pickupDone ? "pickup" : !dropDone ? "drop" : null;
     if (!field) return;
     const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); dropFieldRef.current?.focus(); }
-    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); weightInputRef.current?.focus(); }
+    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setPickupConfirmed(true); setEditingStep(null); setActiveField("drop"); }
+    else { setDrop(name); setDropCoords({ lat, lng }); setDropConfirmed(true); setEditingStep(null); setActiveField("weight"); }
   };
 
   // If the customer typed Pickup/Drop by hand without tapping an
@@ -6740,8 +6790,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // tap all count, same as explicitly tapping into the next field by
   // hand. Typing by hand doesn't trigger this -- only a genuine selection
   // does, since the customer might still be mid-edit after typing.
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); dropFieldRef.current?.focus(); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); weightInputRef.current?.focus(); };
+  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupConfirmed(true); setEditingStep(null); setActiveField("drop"); };
+  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropConfirmed(true); setEditingStep(null); setActiveField("weight"); };
 
   // "Use current location" box next to the Pickup field -- same one-shot
   // GPS call and reverseGeocode as onMapClick above, just for a direct tap
@@ -6824,7 +6874,23 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // instant it's focused. activeField (sticky, set onFocus -- see its own
   // comment above) takes over the moment the customer explicitly taps a
   // field out of order.
-  const highlightField = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : !weightReady ? "weight" : null);
+  const pickupDone = pickupConfirmed && !!pickup.trim() && editingStep !== "pickup";
+  const dropDone = dropConfirmed && !!drop.trim() && editingStep !== "drop";
+  const showDropStep = pickupDone && !dropDone;
+  const showWeightStep = pickupDone && dropDone;
+  const highlightField = !pickupDone ? "pickup" : !dropDone ? "drop" : !weightReady ? "weight" : null;
+  // Hand the keyboard to the step that just opened (the old single-form layout
+  // did this the moment a place was picked).
+  useEffect(() => {
+    if (!showDropStep) return;
+    const t = setTimeout(() => dropFieldRef.current?.focus(), 120);
+    return () => clearTimeout(t);
+  }, [showDropStep]);
+  useEffect(() => {
+    if (!showWeightStep) return;
+    const t = setTimeout(() => weightInputRef.current?.focus(), 120);
+    return () => clearTimeout(t);
+  }, [showWeightStep]);
 
   // Every real, currently online/approved/non-blacklisted driver within
   // the request radius of Pickup AND whose own vehicle can actually carry
@@ -6969,19 +7035,23 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} />
       )}
       <div className="px-5 pt-4 space-y-4">
+        {/* STEP 1 -- Pickup. Finished = one-line summary + Change. */}
+        {pickupDone ? (
+          <StepSummary label={lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"} value={pickup} changeLabel={lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"} onChange={() => { setEditingStep("pickup"); setActiveField("pickup"); }} />
+        ) : (
+          <div className="space-y-3">
         <div className="flex items-start gap-2">
           <div className="flex-1 min-w-0">
             <LocationField
               lang={lang}
               value={pickup}
-              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
+              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupConfirmed(false); }}
               onPlaceSelected={onPickupPlaceSelected}
               mapsReady={mapsReady}
               placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
               suggestions={suggestAreas(pickup)}
               onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
               onFocus={() => setActiveField("pickup")}
-              recentItems={recentPickups}
               highlighted={highlightField === "pickup"}
               ref={pickupFieldRef}
             />
@@ -7009,10 +7079,20 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           )}
         </div>
 
+            <StepNextButton show={!!pickup.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => { setPickupConfirmed(true); setEditingStep(null); }} />
+            <RecentPlacesList items={recentPickups} title={lang === "en" ? "Your recent pickups" : lang === "mr" ? "तुमचे अलीकडील पिकअप" : "आपके पिछले पिकअप"} onPick={onPickupPlaceSelected} />
+          </div>
+        )}
+
+        {/* STEP 2 -- Drop (opens once Pickup is finished). */}
+        {dropDone ? (
+          <StepSummary label={lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"} value={drop} changeLabel={lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"} onChange={() => { setEditingStep("drop"); setActiveField("drop"); }} />
+        ) : showDropStep ? (
+          <div className="space-y-3">
         <LocationField
           lang={lang}
           value={drop}
-          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
+          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropConfirmed(false); }}
           onPlaceSelected={onDropPlaceSelected}
           mapsReady={mapsReady}
           placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
@@ -7024,6 +7104,14 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           ref={dropFieldRef}
         />
 
+            <StepNextButton show={!!drop.trim()} label={lang === "en" ? "Next" : lang === "mr" ? "पुढे" : "आगे"} onClick={() => { setDropConfirmed(true); setEditingStep(null); }} />
+            <RecentPlacesList items={recentDrops} title={lang === "en" ? "Your recent drops" : lang === "mr" ? "तुमचे अलीकडील ड्रॉप" : "आपके पिछले ड्रॉप"} onPick={onDropPlaceSelected} />
+          </div>
+        ) : null}
+
+        {/* STEP 3 -- Distance + weight (vehicles follow below). */}
+        {showWeightStep && (
+          <>
         <div className="flex gap-3">
           {/* Narrower now (fixed width, not a 50/50 grid column) -- the
               weight box needs the extra room for the two-segment kg/ton
@@ -7085,7 +7173,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           </div>
         )}
 
-        {!locationsReady && (
+          </>
+        )}
+
+        {!(pickupDone && dropDone) && (
           <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
             🚚 {lang === "en" ? "Book Now" : lang === "mr" ? "आत्ता बुक करा" : "अभी बुक करें"}
           </button>
@@ -7108,7 +7199,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           "Choose another vehicle" link back to the full list; tapping
           Book sends the request immediately (no confirmation sheet) and
           that same button becomes a disabled "Request sent. Please wait". */}
-      {locationsReady && (
+      {locationsReady && pickupDone && dropDone && (
         <div className="px-5 pt-3 pb-4 space-y-2.5">
           {sameLocation ? (
             // Pickup and Drop read as the same place (see isSameLocation) --
@@ -8505,7 +8596,17 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
     if (!name || seenPickupNames.has(name) || b.pickupLat == null || b.pickupLng == null) continue;
     seenPickupNames.add(name);
     recentPickups.push({ name, lat: b.pickupLat, lng: b.pickupLng });
-    if (recentPickups.length >= 3) break;
+    if (recentPickups.length >= 5) break;
+  }
+  // Same idea for places goods were delivered to -- the Drop step's quick list.
+  const recentDrops = [];
+  const seenDropNames = new Set();
+  for (const b of myBookings) {
+    const name = b.drop?.trim();
+    if (!name || seenDropNames.has(name) || b.dropLat == null || b.dropLng == null) continue;
+    seenDropNames.add(name);
+    recentDrops.push({ name, lat: b.dropLat, lng: b.dropLng });
+    if (recentDrops.length >= 5) break;
   }
   // Posting a new ride while another one is already active/advance-booked —
   // see the "Back" button on ActiveRide below, which flips this back on to
@@ -8848,7 +8949,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
             <CustomerAdvanceBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
               locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} />
           ) : (
-            <CustomerBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
+            <CustomerBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} recentDrops={recentDrops} lang={lang} drivers={drivers}
               locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} />
           )
         ) : (
