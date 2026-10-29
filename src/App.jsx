@@ -9328,7 +9328,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
     <>
       <div className="flex-1 overflow-y-auto relative">
         {headerHasContent && (
-          <div className="relative z-50 flex items-center justify-between gap-2 px-5 pt-3">
+          <div className="relative z-30 flex items-center justify-between gap-2 px-5 pt-3">
             {showHamburger ? (
               <div className="relative shrink-0">
                 <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
@@ -13675,7 +13675,7 @@ export default function App() {
           <path d="M35.4 17.5h1.5q1.6 0 2.2 1.4l.5 1.2v3.8l-.5 1.2q-.6 1.4-2.2 1.4h-1.5z" fill="#BFD9FA" /><circle cx="40.5" cy="17.6" r="1.1" fill="#FFF6CC" /><circle cx="40.5" cy="26.4" r="1.1" fill="#FFF6CC" />
         </g></symbol></defs></svg>
       <button onClick={refreshButton.refresh} disabled={refreshButton.refreshing}
-        className="fixed right-3 z-50 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+        className="fixed right-3 z-[60] w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
         style={{ background: C.marigoldDeep, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
         <RefreshCw size={16} color="#fff" className={refreshButton.refreshing ? "refresh-turn" : ""} />
       </button>

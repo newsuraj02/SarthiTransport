@@ -180,7 +180,9 @@ them, or suggestion lists get covered by the rows below. Pinned in `verifyInvari
 **Map vs header taps (owner 2026-10-29: tapping a header icon set a map point as Pickup).** Both live maps
 (`NearbyVehiclesMap`, `LiveTrackingMap`) are wrapped in their own stacking context (`isolation: isolate` +
 `overflow-hidden`) so Google's high-z-index panes can never sit above the page header or the fixed Refresh button,
-and the customer header row is `relative z-50`. Keep both. Pinned in `verifyInvariants.mjs`.
+and the customer header row is `relative z-30` while the fixed Refresh button is `z-[60]`: the header row's
+transparent right-hand spacer sits exactly under Refresh, so Refresh MUST stay above the header row (a same-level
+header row once swallowed its taps). All three header buttons -- menu, Book Advance, Refresh -- must stay tappable. Keep all of it. Pinned in `verifyInvariants.mjs`.
 
 **OTP-screen map (owner 2026-10-29 -- built, not yet confirmed on a device).** Before the pickup OTP is
 entered, the ride-tracking map (`LiveTrackingMap`, `mode="toPickup"`; the customer's `ActiveRide` and the
