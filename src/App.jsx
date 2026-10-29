@@ -3787,7 +3787,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
     return <MockMap pickup={pickup} drop={toPickup ? null : drop} progress={toPickup ? undefined : progress} zoneColor={zoneColor} height={height} lang={lang} />;
   }
   return (
-    <div className="relative rounded-lg overflow-hidden" style={{ height, border: `1px solid ${C.line}` }}>
+    <div className="relative rounded-lg overflow-hidden" style={{ height, border: `1px solid ${C.line}`, isolation: "isolate" }}>
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
         onLoad={setMapInstance}
@@ -4142,7 +4142,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
     const scale = 900; // px-per-degree, tuned for a city-block-ish spread
     const toXY = (lat, lng) => ({ x: 50 + (lng - center.lng) * scale, y: 50 - (lat - center.lat) * scale });
     return (
-      <div className="relative overflow-hidden" style={{ height, background: "#E2E8F0" }}>
+      <div className="relative overflow-hidden" style={{ height, background: "#E2E8F0", isolation: "isolate" }}>
         <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
           {Array.from({ length: 8 }).map((_, i) => <line key={"h" + i} x1="0" y1={i * 14} x2="100" y2={i * 14} stroke="#CBD5E1" strokeWidth="0.4" />)}
           {Array.from({ length: 8 }).map((_, i) => <line key={"v" + i} x1={i * 14} y1="0" x2={i * 14} y2="100" stroke="#CBD5E1" strokeWidth="0.4" />)}
@@ -4166,8 +4166,11 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
     );
   }
 
+  // isolation: the map's own layers (Google gives them z-indexes in the hundreds and thousands) must stay INSIDE
+  // the map's box -- otherwise they sit above the page header and the fixed Refresh button, which then swallow the
+  // tap as a map click ("header icon tapped = pickup set to a map point", owner 2026-10-29).
   return (
-    <div className="relative" style={{ height }}>
+    <div className="relative overflow-hidden" style={{ height, isolation: "isolate" }}>
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
         onLoad={setMapInstance}
@@ -9325,7 +9328,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
     <>
       <div className="flex-1 overflow-y-auto relative">
         {headerHasContent && (
-          <div className="flex items-center justify-between gap-2 px-5 pt-3">
+          <div className="relative z-50 flex items-center justify-between gap-2 px-5 pt-3">
             {showHamburger ? (
               <div className="relative shrink-0">
                 <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>

@@ -177,6 +177,11 @@ shrink (global `min-width: 0` in `index.css`). Layering rule (owner 2026-10-29: 
 block is its own stacking layer, so the Pickup row is `relative z-40` and the Drop wrapper `relative z-30` -- keep
 them, or suggestion lists get covered by the rows below. Pinned in `verifyInvariants.mjs`.
 
+**Map vs header taps (owner 2026-10-29: tapping a header icon set a map point as Pickup).** Both live maps
+(`NearbyVehiclesMap`, `LiveTrackingMap`) are wrapped in their own stacking context (`isolation: isolate` +
+`overflow-hidden`) so Google's high-z-index panes can never sit above the page header or the fixed Refresh button,
+and the customer header row is `relative z-50`. Keep both. Pinned in `verifyInvariants.mjs`.
+
 **OTP-screen map (owner 2026-10-29 -- built, not yet confirmed on a device).** Before the pickup OTP is
 entered, the ride-tracking map (`LiveTrackingMap`, `mode="toPickup"`; the customer's `ActiveRide` and the
 driver's trip screen) frames a 500 m radius (`OTP_MAP_RADIUS_KM`) around the driver's live position, or the
