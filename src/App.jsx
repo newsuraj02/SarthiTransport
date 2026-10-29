@@ -2224,8 +2224,10 @@ function useRefreshButton() {
   // Owner 2026-10-29 ("improve the refresh animation"): the icon takes one full
   // turn while the page dims, THEN the reload happens, and the reload plays the
   // short loader variant (index.html reads this flag) instead of the full intro.
+  const lockRef = useRef(false); // the safety-net listener in App and the button's own onClick may both fire for one tap
   const refresh = () => {
-    if (refreshing) return;
+    if (refreshing || lockRef.current) return;
+    lockRef.current = true;
     setRefreshing(true);
     try { window.sessionStorage.setItem("sarthi_refresh", "1"); } catch { /* storage unavailable -- full intro, fine */ }
     document.documentElement.classList.add("is-refreshing");
@@ -13567,6 +13569,27 @@ export default function App() {
 
   const isDesktop = role === "admin" && adminAuth;
   const refreshButton = useRefreshButton();
+  // Owner 2026-10-29: Refresh worked on the driver screen but a tap on it did NOTHING on the customer screen (which has the
+  // live map), and every attempt to find what sat on top of it failed. So Refresh no longer depends on being the element
+  // that receives the tap: a tap that starts AND ends inside the button's own rectangle refreshes, seen at the window's
+  // capture phase, before anything lying over the button (or any stopPropagation) can swallow it.
+  const refreshBtnRef = useRef(null);
+  const refreshFnRef = useRef(refreshButton.refresh);
+  refreshFnRef.current = refreshButton.refresh;
+  useEffect(() => {
+    let downInside = false;
+    const inside = (e) => {
+      const el = refreshBtnRef.current;
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    };
+    const onDown = (e) => { downInside = inside(e); };
+    const onUp = (e) => { const hit = downInside && inside(e); downInside = false; if (hit) refreshFnRef.current(); };
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("pointerup", onUp, true);
+    return () => { window.removeEventListener("pointerdown", onDown, true); window.removeEventListener("pointerup", onUp, true); };
+  }, []);
 
   // Standalone Driver KYC portal (?driverKyc=1&mobile=...) — entirely
   // separate from role-select/login (no auth at all, see
@@ -13674,7 +13697,7 @@ export default function App() {
           <path d="M29 14.5h6q3 0 4.2 2.2l1.3 2.4v5.8l-1.3 2.4q-1.2 2.2-4.2 2.2h-6z" fill="url(#apna-gc)" stroke="#fff" strokeWidth="1.4" strokeLinejoin="round" /><rect x="30.2" y="17.2" width="4" height="9.6" rx="1.2" fill="#E6A800" />
           <path d="M35.4 17.5h1.5q1.6 0 2.2 1.4l.5 1.2v3.8l-.5 1.2q-.6 1.4-2.2 1.4h-1.5z" fill="#BFD9FA" /><circle cx="40.5" cy="17.6" r="1.1" fill="#FFF6CC" /><circle cx="40.5" cy="26.4" r="1.1" fill="#FFF6CC" />
         </g></symbol></defs></svg>
-      <button onClick={refreshButton.refresh} disabled={refreshButton.refreshing}
+      <button ref={refreshBtnRef} onClick={refreshButton.refresh} disabled={refreshButton.refreshing}
         className="fixed right-3 z-[60] w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
         style={{ background: C.marigoldDeep, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
         <RefreshCw size={16} color="#fff" className={refreshButton.refreshing ? "refresh-turn" : ""} />

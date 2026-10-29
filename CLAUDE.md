@@ -183,7 +183,10 @@ them, or suggestion lists get covered by the rows below. Pinned in `verifyInvari
 and the customer header row is `relative z-30` while the fixed Refresh button is `z-[60]`: the header row's
 transparent right-hand spacer sits exactly under Refresh, so Refresh MUST stay above the header row (a same-level
 header row once swallowed its taps). The header row and its empty spacer are also `pointer-events-none` (only the row's
-buttons take taps), so nothing empty in that row can ever swallow a tap whatever the layering. All three header buttons -- menu, Book Advance, Refresh -- must stay tappable. Keep all of it. Pinned in `verifyInvariants.mjs`.
+buttons take taps), so nothing empty in that row can ever swallow a tap whatever the layering. All three header buttons -- menu, Book Advance, Refresh -- must stay tappable. Keep all of it.
+Refresh additionally has a safety net (owner 2026-10-29: dead on the customer screen, fine on the driver's, cause never
+found): `App` listens at the window's CAPTURE phase and refreshes on any tap that starts and ends inside the button's
+rectangle (`refreshBtnRef`), whatever element is on top of it; `useRefreshButton`'s `lockRef` stops a double fire. Pinned in `verifyInvariants.mjs`.
 
 **OTP-screen map (owner 2026-10-29 -- built, not yet confirmed on a device).** Before the pickup OTP is
 entered, the ride-tracking map (`LiveTrackingMap`, `mode="toPickup"`; the customer's `ActiveRide` and the
