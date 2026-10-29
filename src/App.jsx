@@ -3870,9 +3870,9 @@ function customerPinIcon() {
 }
 
 // Top-down truck for every vehicle marker on the customer's maps (owner
-// 2026-10-29: the cartoon truck looked kiddish -- now a sleek charcoal vehicle with
-// a white edge, soft shadow, glass windscreen and a thin brand-yellow roof line,
-// in the spirit of Uber/Ola's black car markers, but a truck).
+// 2026-10-29: the cartoon truck looked kiddish -- now a sleek vehicle in the app's blue and
+// yellow with a white edge, soft shadow and glass windscreen, in the spirit of
+// Uber/Ola's car markers, but a truck).
 // headingDeg: compass bearing (0=North) it should face, or null for the default.
 // Drawn facing East (cab leads on the right), so the rotation applied is
 // headingDeg-90; the soft shadow rotates with it.
@@ -3880,26 +3880,31 @@ function customerPinIcon() {
 // known spot, clearly "not bookable" at a glance.
 function truckMarkerIcon(headingDeg = null, active = true) {
   const rotate = headingDeg == null ? 0 : headingDeg - 90;
-  const body0 = active ? "#2B3445" : "#A3ABB8", body1 = active ? "#0F172A" : "#7C8594";
-  const panel = active ? "#1B2433" : "#939CAA";
+  // App colours (owner 2026-10-29): brand blue cargo box, brand yellow cab.
+  const box0 = active ? "#2A78F0" : "#A3ABB8", box1 = active ? "#0046B3" : "#7C8594";
+  const cab0 = active ? "#FFDB4D" : "#C3C9D3", cab1 = active ? "#F2B800" : "#9AA3B0";
+  const panel = active ? "#003C99" : "#939CAA";
+  const cabRoof = active ? "#E6A800" : "#8A93A1";
   const stripe = active ? "#FFCC00" : "#D3D8E0";
-  const glass = active ? "#A9C1DB" : "#E6E9EE";
-  const lamp = active ? "#FDE68A" : "#F1F3F6";
+  const glass = active ? "#BFD9FA" : "#E6E9EE";
+  const lamp = active ? "#FFF6CC" : "#F1F3F6";
+  const mirror = active ? "#00266B" : "#6B7280";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
     <defs>
-      <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${body0}"/><stop offset="1" stop-color="${body1}"/></linearGradient>
+      <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${box0}"/><stop offset="1" stop-color="${box1}"/></linearGradient>
+      <linearGradient id="c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${cab0}"/><stop offset="1" stop-color="${cab1}"/></linearGradient>
       <filter id="s" filterUnits="userSpaceOnUse" x="-6" y="-6" width="56" height="56"><feDropShadow dx="0" dy="1.6" stdDeviation="1.7" flood-color="#000" flood-opacity="0.38"/></filter>
     </defs>
     <g transform="rotate(${rotate} 22 22) translate(22 22) scale(0.9) translate(-22 -22)" filter="url(#s)">
       <rect x="2" y="12" width="26" height="20" rx="3" fill="url(#b)" stroke="#fff" stroke-width="1.4"/>
       <rect x="4.6" y="14.6" width="20.8" height="14.8" rx="1.8" fill="${panel}"/>
       <rect x="4.6" y="14.6" width="20.8" height="2.4" rx="1.2" fill="${stripe}"/>
-      <rect x="9" y="21.6" width="13" height="0.9" rx="0.45" fill="#fff" fill-opacity="0.10"/>
+      <rect x="9" y="21.6" width="13" height="0.9" rx="0.45" fill="#fff" fill-opacity="0.18"/>
       <rect x="27" y="19.6" width="3.4" height="4.8" rx="1" fill="${panel}"/>
-      <rect x="36.2" y="12.4" width="2.6" height="1.9" rx="0.8" fill="${body1}"/>
-      <rect x="36.2" y="29.7" width="2.6" height="1.9" rx="0.8" fill="${body1}"/>
-      <path d="M29 14.5h6q3 0 4.2 2.2l1.3 2.4v5.8l-1.3 2.4q-1.2 2.2-4.2 2.2h-6z" fill="url(#b)" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/>
-      <rect x="30.2" y="17.2" width="4" height="9.6" rx="1.2" fill="${panel}"/>
+      <rect x="36.2" y="12.4" width="2.6" height="1.9" rx="0.8" fill="${mirror}"/>
+      <rect x="36.2" y="29.7" width="2.6" height="1.9" rx="0.8" fill="${mirror}"/>
+      <path d="M29 14.5h6q3 0 4.2 2.2l1.3 2.4v5.8l-1.3 2.4q-1.2 2.2-4.2 2.2h-6z" fill="url(#c)" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/>
+      <rect x="30.2" y="17.2" width="4" height="9.6" rx="1.2" fill="${cabRoof}"/>
       <path d="M35.4 17.5h1.5q1.6 0 2.2 1.4l.5 1.2v3.8l-.5 1.2q-.6 1.4-2.2 1.4h-1.5z" fill="${glass}"/>
       <circle cx="40.5" cy="17.6" r="1.1" fill="${lamp}"/>
       <circle cx="40.5" cy="26.4" r="1.1" fill="${lamp}"/>

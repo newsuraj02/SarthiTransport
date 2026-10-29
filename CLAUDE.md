@@ -156,7 +156,7 @@ open the keyboard by themselves; no check icons. The booking map takes 50% of th
 current location / chosen pickup (`NEARBY_MAP_DEFAULT_RADIUS_KM`); it (and the live ride-tracking map) has NO +/- zoom buttons (pinch to zoom; the
 active/inactive driver count is at the bottom right), and it keeps the
 customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`; only a newly
-chosen manual pickup re-frames it). Vehicle markers are the sleek top-down charcoal truck
+chosen manual pickup re-frames it). Vehicle markers are the sleek top-down blue-and-yellow truck
 (`truckMarkerIcon`, also used by live tracking) and the pickup is a blue dot -- no
 cartoon trucks. Weight caps, fares and the vehicle/driver
 list are unchanged; `CustomerAdvanceBooking` was NOT converted. Pinned in
