@@ -153,8 +153,8 @@ places, "Current Location" and "Locate on Map" at the bottom ("Current Location"
 auto-follow; a manually chosen pickup is never overwritten). Choosing a drop closes the
 keyboard, shows a ~1s spinner row (`commitStep`) and eases into the next step; steps never
 open the keyboard by themselves; no check icons. The booking map takes 50% of the screen height and by default frames a 1.5 km radius around the
-current location / chosen pickup (`NEARBY_MAP_DEFAULT_RADIUS_KM`); it has + / - zoom buttons at the
-bottom right with the active/inactive driver count under them, and it keeps the
+current location / chosen pickup (`NEARBY_MAP_DEFAULT_RADIUS_KM`); it has NO +/- zoom buttons (pinch to zoom; the
+active/inactive driver count is at the bottom right), and it keeps the
 customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`; only a newly
 chosen manual pickup re-frames it). Vehicle markers are the sleek top-down charcoal truck
 (`truckMarkerIcon`, also used by live tracking) and the pickup is a blue dot -- no

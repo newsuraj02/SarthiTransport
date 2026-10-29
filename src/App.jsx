@@ -4001,11 +4001,6 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
     });
     return () => { l1.remove(); l2.remove(); l3.remove(); };
   }, [mapInstance]);
-  const zoomBy = (delta) => {
-    if (!mapInstance) return;
-    userAdjustedRef.current = true;
-    mapInstance.setZoom((mapInstance.getZoom() || 13) + delta);
-  };
 
   // Default view (owner 2026-10-29): a 1.5 km radius around the current location
   // (or the chosen pickup), not "zoom out to fit every driver". Drivers beyond
@@ -4079,15 +4074,11 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           <NearbyDriverMarker key={d.mobile || d.id} driver={d} />
         ))}
       </GoogleMap>
-      {/* Bottom right (owner 2026-10-29): zoom buttons, with the active/inactive
-          count underneath them. The top right belongs to the Pickup pill and the
-          bottom left to Google's logo, so nothing overlaps. */}
+      {/* Bottom right (owner 2026-10-29): the active/inactive count. No +/- zoom
+          buttons on this map (owner asked for them to go) -- pinch to zoom. The top
+          right belongs to the Pickup pill and the bottom left to Google's logo, so
+          nothing overlaps. */}
       <div className="absolute right-2 bottom-5 flex flex-col items-end gap-2 pointer-events-none">
-        <div className="pointer-events-auto flex flex-col rounded-xl overflow-hidden shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1)} className="w-9 h-9 flex items-center justify-center text-xl font-bold leading-none" style={{ color: C.ink }}>+</button>
-          <div style={{ height: 1, background: C.line }} />
-          <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-1)} className="w-9 h-9 flex items-center justify-center text-xl font-bold leading-none" style={{ color: C.ink }}>−</button>
-        </div>
         <div className="text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
           {countLabel}
         </div>
