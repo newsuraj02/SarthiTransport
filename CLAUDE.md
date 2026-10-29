@@ -144,8 +144,9 @@ validation was fine, the label was wrong, bug since 207b028).
 
 **Customer booking (owner 2026-10-29, flow redone -- built, not yet confirmed on a device).**
 `CustomerBooking` reveals itself step by step on ONE page. Screen 1: Pickup box + "Use Current
-Location" + the customer's last 3 whole trips (pickup AND drop, `recentTrips`, built in
-`CustomerApp`) + a greyed Book Now; Drop and Weight are not rendered. Drop appears once Pickup is
+Location" + a greyed Book Now; the customer's last 3 whole trips (pickup AND drop, `recentTrips`, built in
+`CustomerApp`) are NOT a section on the page (owner 2026-10-29: removed the "Your recent trips" text) -- they are
+suggestions of the PICKUP box only (`tripSuggestions` in `LocationField`, shown while Pickup is focused and empty); Drop and Weight are not rendered. Drop appears once Pickup is
 SELECTED (`pickupSelected` = coordinates known: suggestion / current location / map tap / trip /
 typed text that has geocoded; without Google Maps, 3+ typed characters count); Weight appears once
 Pickup AND Drop are selected (`showWeight`). Tapping a trip fills both and moves the cursor +
@@ -167,7 +168,7 @@ read while the stamp is under 60 s old; nothing else is ever remembered); (6) af
 "Your message has gone to drivers" shows (also the first line of the ride screen). Pinned in `verifyInvariants.mjs`.
 The earlier step-flow / Pickup-page / top-right-pill redesign was rolled back (`PickupPage`,
 `PickupPill`, `StepSummary`, `RecentPlacesList` remain in the file, unused). Also: the booking map
-takes 50% of the screen and by default frames a 1.5 km radius around the current location
+is a compact 35% of the screen (owner 2026-10-29: 50% pushed the content off screen) and by default frames a 1.5 km radius around the current location
 (`NEARBY_MAP_DEFAULT_RADIUS_KM`); it (and the live ride-tracking map) has NO +/- zoom buttons and
 keeps the customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`); markers are the
 top-down blue-and-yellow truck (`truckMarkerIcon`) and a blue pickup dot. Weight caps, fares and
