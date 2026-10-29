@@ -251,7 +251,10 @@ the whole form so they retype it all. Pinned in `verifyInvariants.mjs`.
 (Meta)" downloads every driver + customer mobile (blocked/inactive included, duplicates
 merged, junk skipped) as a one-column `phone` CSV (`91XXXXXXXXXX`), to upload as a Meta
 Customer-list audience and EXCLUDE from install ads. Logic is `buildMetaUsersCsv`
-(pinned by a behavior check).
+(pinned by a behavior check). The Android app's WebView has no download handler, so
+the CSV download can silently do nothing there; the same card therefore also has
+"Copy numbers" + a selectable text box (paste into Meta's "Copy and paste your
+customer list").
 
 **Look & feel (owner 2026-10-26: "same brand colour, fresher feel").** Brand hues
 (marigold #FFCC00, orange, blue #0052CC, green, red) are unchanged. All screens

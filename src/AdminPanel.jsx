@@ -3775,12 +3775,29 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
   }, [latestVersionCode, updateUrl, latestAdminVersionCode, adminUpdateUrl, dirty]);
   const updateDraft = (patch) => { setDraft((d) => ({ ...d, ...patch })); setDirty(true); setSaved(false); };
   const metaExport = buildMetaUsersCsv(drivers, customers);
+  // The Android app's WebView has no download handler, so a blob <a download>
+  // can silently do nothing there (owner 2026-10-29: "not downloading"). The
+  // download is still tried (attached to the page, revoked late), and the
+  // numbers can ALSO be copied/pasted straight into Meta's "Customer list ->
+  // copy and paste" box, which works everywhere.
+  const [metaCopied, setMetaCopied] = useState(false);
+  const [metaShowText, setMetaShowText] = useState(false);
+  const metaNumbersText = metaExport.csv.replace(/^phone\n/, "").trim();
   const downloadMetaUsers = () => {
-    const blob = new Blob([metaExport.csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `app-users-meta-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = new Blob([metaExport.csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `app-users-meta-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { console.error("[meta csv download]", e); }
+    setMetaShowText(true);
+  };
+  const copyMetaNumbers = async () => {
+    setMetaShowText(true);
+    try { await navigator.clipboard.writeText(metaNumbersText); setMetaCopied(true); setTimeout(() => setMetaCopied(false), 3000); }
+    catch { /* clipboard blocked -- the visible box below lets them select and copy by hand */ }
   };
   const saveSettings = () => {
     setLatestVersionCode(draft.latestVersionCode === "" ? null : Number(draft.latestVersionCode));
@@ -3835,6 +3852,20 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
           style={{ background: metaExport.total ? C.marigold : "#E5EAF2", color: metaExport.total ? "#000000" : "#9AA3B0" }}>
           <Download size={15} /> {lang === "en" ? "Download CSV for Meta" : lang === "mr" ? "Meta साठी CSV डाउनलोड करा" : "Meta के लिए CSV डाउनलोड करें"}
         </button>
+        <button onClick={copyMetaNumbers} disabled={metaExport.total === 0} className="w-full flex items-center justify-center gap-1.5 rounded-lg py-3 font-bold text-sm mt-2"
+          style={{ background: "#FFFFFF", color: metaExport.total ? C.ink : "#9AA3B0", border: `1.5px solid ${C.line}` }}>
+          {metaCopied
+            ? (lang === "en" ? "Copied ✓ — paste it in Meta" : lang === "mr" ? "कॉपी झाले ✓ — Meta मध्ये पेस्ट करा" : "कॉपी हो गया ✓ — Meta में पेस्ट करें")
+            : (lang === "en" ? "Copy numbers (if the download doesn't start)" : lang === "mr" ? "नंबर कॉपी करा (डाउनलोड सुरू न झाल्यास)" : "नंबर कॉपी करें (डाउनलोड शुरू न हो तो)")}
+        </button>
+        {metaShowText && metaExport.total > 0 && (
+          <div className="mt-2">
+            <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>
+              {lang === "en" ? "In Meta choose Customer list → \"Copy and paste your customer list\", then paste these numbers (long-press → Select all → Copy if the button above didn't copy):" : lang === "mr" ? "Meta मध्ये Customer list → \"Copy and paste your customer list\" निवडा आणि हे नंबर पेस्ट करा (वरचे बटण कॉपी न करल्यास: दाबून धरा → Select all → Copy):" : "Meta में Customer list → \"Copy and paste your customer list\" चुनें और ये नंबर पेस्ट करें (ऊपर का बटन कॉपी न करे तो: दबाकर रखें → Select all → Copy):"}
+            </div>
+            <textarea readOnly value={metaNumbersText} onFocus={(e) => e.target.select()} rows={6} className="w-full rounded-lg p-2 text-xs" style={{ border: `1.5px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
+          </div>
+        )}
       </div>
 
       {saved && <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold" style={{ color: C.success }}><CheckCircle2 size={13} /> {lang === "en" ? "Settings saved" : lang === "mr" ? "सेटिंग्स सेव्ह झाल्या" : "सेटिंग्स सेव हो गईं"}</div>}
