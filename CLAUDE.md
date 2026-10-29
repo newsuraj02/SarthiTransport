@@ -142,23 +142,25 @@ vehicle-capacity fields are a different thing and are NOT capped by this.
 suffix of `weightKg` (2026-10-26: Alerts showed "9000ton" for a 9-ton load;
 validation was fine, the label was wrong, bug since 207b028).
 
-**Customer booking (owner 2026-10-29 reset).** `CustomerBooking` is the ORIGINAL single screen
-again, on purpose: Pickup box with the "Use Current Location" button beside it (and recent
-pickups on focus), Drop box, then Weight + distance, then the vehicle list -- all on one page,
-no steps, no top-right pill, no separate Pickup page. (The step-flow / Pickup-page / pill
-redesign of the same day was tried and rolled back at the owner's request; `PickupPage`,
-`PickupPill`, `StepSummary`, `RecentPlacesList` are left in the file, unused, and the
-`recentPlaces` list is still built in `CustomerApp`, in case it is wanted again.) What stays from
-the same day: the booking map takes 50% of the screen height and by default frames a 1.5 km
-radius around the current location (`NEARBY_MAP_DEFAULT_RADIUS_KM`); it (and the live
-ride-tracking map) has NO +/- zoom buttons (pinch to zoom; the active/inactive driver count is
-at the bottom right) and keeps the customer's own zoom/pan until the page is refreshed
-(`nearbyMapUserView`); vehicle markers are the top-down blue-and-yellow truck
-(`truckMarkerIcon`) and the pickup is a blue dot; vehicle cards rise in, and tapping Book shows
-"Sending request…" for a deliberate 700 ms before the request is sent. Weight caps, fares and
-the vehicle/driver list are unchanged. Inputs may always shrink (global `min-width: 0` in
-`index.css`), so the mobile-number box never pokes off narrow screens. Pinned in
-`verifyInvariants.mjs`.
+**Customer booking (owner 2026-10-29, flow redone -- built, not yet confirmed on a device).**
+`CustomerBooking` reveals itself step by step on ONE page. Screen 1: Pickup box + "Use Current
+Location" + the customer's last 3 whole trips (pickup AND drop, `recentTrips`, built in
+`CustomerApp`) + a greyed Book Now; Drop and Weight are not rendered. Drop appears once Pickup is
+SELECTED (`pickupSelected` = coordinates known: suggestion / current location / map tap / trip /
+typed text that has geocoded; without Google Maps, 3+ typed characters count); Weight appears once
+Pickup AND Drop are selected (`showWeight`). Tapping a trip fills both and moves the cursor +
+golden highlight to Weight (`onTripSelected`, `requestFocus`). Book Now is a sticky bar at the
+bottom, enabled only when `canBook`; it books the tapped vehicle or, if none was tapped, the best
+match (`bookEntry`: lightest vehicle that fits, nearest first). Vehicle cards no longer collapse
+and have no per-card Book button. Tapping Book shows "Sending request..." for a deliberate 700 ms.
+The earlier step-flow / Pickup-page / top-right-pill redesign was rolled back (`PickupPage`,
+`PickupPill`, `StepSummary`, `RecentPlacesList` remain in the file, unused). Also: the booking map
+takes 50% of the screen and by default frames a 1.5 km radius around the current location
+(`NEARBY_MAP_DEFAULT_RADIUS_KM`); it (and the live ride-tracking map) has NO +/- zoom buttons and
+keeps the customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`); markers are the
+top-down blue-and-yellow truck (`truckMarkerIcon`) and a blue pickup dot. Weight caps, fares and
+the vehicle/driver list are unchanged; `CustomerAdvanceBooking` was NOT changed. Inputs may always
+shrink (global `min-width: 0` in `index.css`). Pinned in `verifyInvariants.mjs`.
 
 **Entry + refresh animation (owner 2026-10-29).** `index.html`'s inline loader: the app icon
 rises in on a deep-blue field with a one-time shine and a slim yellow progress bar, then
