@@ -6166,7 +6166,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false }, ref) {
+export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false }, ref) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -6244,8 +6244,10 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
     onPlaceSelected({ name: r.name, lat: coords?.lat ?? r.lat, lng: coords?.lng ?? r.lng });
   };
 
-  const inputCls = "w-full rounded-lg py-5 text-xs font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: 16, paddingRight: value ? 52 : 16 };
+  // compact (customer booking steps, owner 2026-10-29): smaller, lighter text and
+  // tighter padding so a long address shows more words before it runs out of room.
+  const inputCls = compact ? "w-full rounded-lg py-4 text-[11.5px] font-semibold outline-none" : "w-full rounded-lg py-5 text-xs font-bold outline-none";
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: compact ? 12 : 16, paddingRight: value ? (compact ? 44 : 52) : (compact ? 12 : 16) };
   // Golden-yellow frame AROUND the box (not the box's own border/
   // background) -- a padded, colored outer wrapper rather than an
   // outline, so the gap between the box and the highlight itself is
@@ -6614,7 +6616,7 @@ function StepSummary({ label, value, changeLabel, onChange, loading = false }) {
     <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm step-enter" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       <div className="flex-1 min-w-0">
         <div className="text-[10px] font-bold uppercase" style={{ color: C.inkSoft }}>{label}</div>
-        <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{value}</div>
+        <div className="text-[12.5px] font-bold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{value}</div>
       </div>
       {loading
         ? <Loader2 size={20} color={C.navy} className="shrink-0 animate-spin" />
@@ -6641,7 +6643,7 @@ function RecentPlacesList({ items, title, onPick }) {
         {items.map((it) => (
           <button key={it.name} type="button" onClick={() => onPick(it)} className="w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <MapPin size={14} color={C.inkSoft} className="shrink-0" />
-            <span className="text-sm font-semibold truncate" style={{ color: C.ink }}>{it.name}</span>
+            <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{it.name}</span>
           </button>
         ))}
       </div>
@@ -7053,6 +7055,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 own box, not nested inside another box. */}
             <div className="space-y-3">
               <LocationField
+                compact
                 lang={lang}
                 value={pickup}
                 onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); setPickupConfirmed(false); }}
@@ -7099,6 +7102,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           <div className="space-y-3 step-enter">
             <div className="space-y-3">
               <LocationField
+                compact
                 lang={lang}
                 value={drop}
                 onChange={(e) => { setDrop(e.target.value); setDropCoords(null); setDropConfirmed(false); }}
