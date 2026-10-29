@@ -182,7 +182,8 @@ them, or suggestion lists get covered by the rows below. Pinned in `verifyInvari
 `overflow-hidden`) so Google's high-z-index panes can never sit above the page header or the fixed Refresh button,
 and the customer header row is `relative z-30` while the fixed Refresh button is `z-[60]`: the header row's
 transparent right-hand spacer sits exactly under Refresh, so Refresh MUST stay above the header row (a same-level
-header row once swallowed its taps). All three header buttons -- menu, Book Advance, Refresh -- must stay tappable. Keep all of it. Pinned in `verifyInvariants.mjs`.
+header row once swallowed its taps). The header row and its empty spacer are also `pointer-events-none` (only the row's
+buttons take taps), so nothing empty in that row can ever swallow a tap whatever the layering. All three header buttons -- menu, Book Advance, Refresh -- must stay tappable. Keep all of it. Pinned in `verifyInvariants.mjs`.
 
 **OTP-screen map (owner 2026-10-29 -- built, not yet confirmed on a device).** Before the pickup OTP is
 entered, the ride-tracking map (`LiveTrackingMap`, `mode="toPickup"`; the customer's `ActiveRide` and the

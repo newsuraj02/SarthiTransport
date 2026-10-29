@@ -9328,7 +9328,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
     <>
       <div className="flex-1 overflow-y-auto relative">
         {headerHasContent && (
-          <div className="relative z-30 flex items-center justify-between gap-2 px-5 pt-3">
+          <div className="relative z-30 flex items-center justify-between gap-2 px-5 pt-3 pointer-events-none [&_button]:pointer-events-auto">
             {showHamburger ? (
               <div className="relative shrink-0">
                 <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
@@ -9395,7 +9395,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
             )}
             {/* Always reserve the Refresh button's spot (fixed, top right) so the
                 "Book Advance" button never sits under it. */}
-            <div className="w-9 h-9 shrink-0" />
+            <div className="w-9 h-9 shrink-0 pointer-events-none" aria-hidden="true" />
           </div>
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="customer" />
