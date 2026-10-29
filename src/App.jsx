@@ -2083,6 +2083,45 @@ export function geocodeAddress(text) {
   });
 }
 
+// Place identity (owner 2026-10-29): pickup/drop are matched and remembered by Google place_id, never by
+// display text (the text changes with the language). localizePlace re-reads the NAME of a saved place in the
+// language the Maps script was loaded with (= the app language after the reload a language change does).
+const placeNameCache = new Map();
+function localizePlace({ placeId, lat, lng }, lang = "") {
+  if (!window.google?.maps?.Geocoder) return Promise.resolve(null);
+  const key = placeId ? `id:${placeId}:${lang}` : (lat != null && lng != null ? `ll:${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}:${lang}` : null);
+  if (!key) return Promise.resolve(null);
+  if (placeNameCache.has(key)) return placeNameCache.get(key);
+  const req = placeId ? { placeId } : { location: { lat, lng } };
+  const promise = new Promise((resolve) => {
+    new window.google.maps.Geocoder().geocode(req, (results, status) => {
+      resolve(status === "OK" && results?.[0] ? stripPlusCode(results[0].formatted_address) : null);
+    });
+  });
+  placeNameCache.set(key, promise);
+  promise.then((v) => { if (v == null) placeNameCache.delete(key); });
+  return promise;
+}
+// Half-finished booking form carried across the page reload a language change does (and ONLY that:
+// the form is never remembered otherwise). chooseLang stamps LANG_RELOAD_KEY; CustomerBooking reads the
+// draft only while that stamp is fresh.
+const BOOKING_DRAFT_KEY = "sarthi_booking_draft";
+const LANG_RELOAD_KEY = "sarthi_lang_reload";
+function readLangReloadDraft() {
+  try {
+    const at = Number(window.sessionStorage.getItem(LANG_RELOAD_KEY));
+    if (!at || Date.now() - at > 60000) return null;
+    const raw = window.sessionStorage.getItem(BOOKING_DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function writeBookingDraft(draft) {
+  try {
+    if (draft) window.sessionStorage.setItem(BOOKING_DRAFT_KEY, JSON.stringify(draft));
+    else window.sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+  } catch { /* storage unavailable */ }
+}
+
 // The reverse of geocodeAddress — turns a tapped lat/lng (e.g. a point
 // picked on the live nearby-vehicles map) back into a readable address.
 // Falls back to free OSM reverse-geocoding if Google Maps isn't loaded.
@@ -2101,6 +2140,18 @@ async function reverseGeocode(lat, lng) {
   } catch {
     return null;
   }
+}
+// Same lookup, but also returns the Google place_id of the result (null without Google Maps).
+async function reverseGeocodeFull(lat, lng) {
+  if (window.google?.maps?.Geocoder) {
+    return new Promise((resolve) => {
+      new window.google.maps.Geocoder().geocode({ location: { lat, lng } }, (results, status) => {
+        resolve(status === "OK" && results?.[0] ? { name: stripPlusCode(results[0].formatted_address), placeId: results[0].place_id || null } : null);
+      });
+    });
+  }
+  const name = await reverseGeocode(lat, lng);
+  return name ? { name, placeId: null } : null;
 }
 
 // Google's Geocoder/Places can return a Plus Code (e.g. "JQ38+PRM, Wakad,
@@ -3983,7 +4034,7 @@ function VehicleCategoryIcon({ tierIndex, size = 40 }) {
 // calling a hook a different number of times across renders breaks React,
 // whereas each driver's OWN marker instance (keyed by id) calls them a
 // fixed number of times across its own re-renders.
-function NearbyDriverMarker({ driver, index = 0 }) {
+function NearbyDriverMarker({ driver, index = 0, highlightLabel = "" }) {
   const rawPos = { lat: driver.lastKnownLocation.lat, lng: driver.lastKnownLocation.lng };
   const pos = useSmoothPosition(rawPos);
   const heading = useBearing(rawPos);
@@ -3994,8 +4045,25 @@ function NearbyDriverMarker({ driver, index = 0 }) {
     const ts = [[base + 40, 0.4], [base + 140, 0.75], [base + 240, 1]].map(([ms, v]) => setTimeout(() => setOpacity(v), ms));
     return () => ts.forEach(clearTimeout);
   }, []);
-  return <MarkerF position={pos || rawPos} icon={driverTruckIcon(heading)} opacity={opacity} />;
+  return (
+    <>
+      <MarkerF position={pos || rawPos} icon={driverTruckIcon(heading)} opacity={opacity} />
+      {/* The nearest vehicle of the chosen type: a pulsing ring + "N min" pill (owner brief 2026-10-29). */}
+      {highlightLabel && (
+        <OverlayViewF position={pos || rawPos} mapPaneName="overlayLayer" getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h / 2 })}>
+          <span className="map-halo" />
+        </OverlayViewF>
+      )}
+      {highlightLabel && (
+        <OverlayViewF position={pos || rawPos} mapPaneName="floatPane" getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h - 20 })}>
+          <span className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-extrabold shadow-md" style={{ background: C.navy, color: "#fff", border: `1.5px solid ${C.marigold}` }}>{highlightLabel}</span>
+        </OverlayViewF>
+      )}
+    </>
+  );
 }
+// Rough minutes for a vehicle to reach the pickup: straight-line km x 1.3 road factor at a city-traffic 25 km/h.
+function etaMinutes(km) { return Math.max(1, Math.round((km * 1.3 / 25) * 60)); }
 
 // Where the customer last zoomed/panned the booking map (owner 2026-10-29: "once
 // you zoom in/out it stays until the page is refreshed"). Module-level on purpose:
@@ -4005,10 +4073,13 @@ let nearbyMapUserView = null; // { lat, lng, zoom } | null
 
 // refitKey: change it (e.g. a new pickup was chosen) to drop the remembered view
 // and frame the map afresh.
-function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick, refitKey = "" }) {
+// activeOnly: hide the inactive (grey) trucks. fixedDrivers: plot exactly these drivers (the vehicles that match
+// the typed weight / the chosen type) instead of every active one nearby. highlightId/highlightLabel: ring + pill
+// on one of them.
+function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = "hi", onMapClick, refitKey = "", activeOnly = false, fixedDrivers = null, highlightId = null, highlightLabel = "" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
-  const nearby = nearbyOnlineDrivers(drivers, customerLocation);
-  const nearbyInactive = nearbyOfflineDrivers(drivers, customerLocation);
+  const nearby = fixedDrivers || nearbyOnlineDrivers(drivers, customerLocation);
+  const nearbyInactive = (fixedDrivers || activeOnly) ? [] : nearbyOfflineDrivers(drivers, customerLocation);
   const center = customerLocation || NEARBY_MAP_DEFAULT_CENTER;
   const [mapInstance, setMapInstance] = useState(null);
   const userAdjustedRef = useRef(false);
@@ -4056,7 +4127,9 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapInstance, Math.round(center.lat * 1000), Math.round(center.lng * 1000), refitKey]);
 
-  const countLabel = lang === "en"
+  const countLabel = fixedDrivers
+    ? (lang === "en" ? `${nearby.length} matching vehicle${nearby.length === 1 ? "" : "s"}` : lang === "mr" ? `${nearby.length} जुळणाऱ्या गाड्या` : `${nearby.length} मेल खाती गाड़ियां`)
+    : lang === "en"
     ? `${nearby.length} active${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} inactive` : ""} nearby`
     : lang === "mr"
     ? `जवळपास ${nearby.length} सक्रिय${nearbyInactive.length > 0 ? `, ${nearbyInactive.length} निष्क्रिय` : ""} गाड्या`
@@ -4082,7 +4155,8 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           {nearby.map((d) => {
             const p = toXY(d.lastKnownLocation.lat, d.lastKnownLocation.lng);
             if (p.x < 2 || p.x > 98 || p.y < 2 || p.y > 98) return null;
-            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r="2.2" fill={C.navy} stroke="#fff" strokeWidth="0.6" />;
+            const hl = highlightId && (d.mobile || d.id) === highlightId;
+            return <circle key={d.mobile || d.id} cx={p.x} cy={p.y} r={hl ? 3.4 : 2.2} fill={C.navy} stroke={hl ? C.marigold : "#fff"} strokeWidth={hl ? 1.2 : 0.6} />;
           })}
         </svg>
         <div className="absolute bottom-1.5 right-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
@@ -4112,7 +4186,7 @@ function NearbyVehiclesMap({ drivers, customerLocation, height = "35vh", lang = 
           />
         ))}
         {nearby.map((d, i) => (
-          <NearbyDriverMarker key={d.mobile || d.id} driver={d} index={i} />
+          <NearbyDriverMarker key={d.mobile || d.id} driver={d} index={i} highlightLabel={highlightId && (d.mobile || d.id) === highlightId ? highlightLabel : ""} />
         ))}
       </GoogleMap>
       {/* Bottom right (owner 2026-10-29): the active/inactive count. No +/- zoom
@@ -6298,7 +6372,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
       const r = status === "OK" && results?.[0];
       const loc = r?.geometry?.location;
       if (!loc) return;
-      onPlaceSelected({ name: stripPlusCode(r.formatted_address || p.description), lat: loc.lat(), lng: loc.lng() });
+      onPlaceSelected({ name: stripPlusCode(r.formatted_address || p.description), lat: loc.lat(), lng: loc.lng(), placeId: p.place_id || null });
     });
   };
   const selectRecent = async (r) => {
@@ -6928,16 +7002,25 @@ function PickupPage({ lang, mapsReady, drivers, recentPlaces, initialQuery, cust
 // =====================================================================
 function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentTrips, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
   const VEHICLES = vehicleTypes;
-  const [pickup, setPickup] = useState("");
-  const [drop, setDrop] = useState("");
-  const [pickupCoords, setPickupCoords] = useState(null); // {lat,lng} | null
-  const [dropCoords, setDropCoords] = useState(null);
+  // Only set right after a language change reloaded the page (see readLangReloadDraft); null otherwise.
+  const [restored] = useState(() => readLangReloadDraft());
+  const [pickup, setPickup] = useState(restored?.pickup?.name || "");
+  const [drop, setDrop] = useState(restored?.drop?.name || "");
+  const [pickupCoords, setPickupCoords] = useState(restored?.pickup ? { lat: restored.pickup.lat, lng: restored.pickup.lng } : null); // {lat,lng} | null
+  const [dropCoords, setDropCoords] = useState(restored?.drop ? { lat: restored.drop.lat, lng: restored.drop.lng } : null);
+  // Google place ids of the chosen Pickup/Drop (null when the text was typed / not a Google place). Selections are
+  // matched by these, never by the display text, which changes with the language.
+  const [pickupPlaceId, setPickupPlaceId] = useState(restored?.pickup?.placeId || null);
+  const [dropPlaceId, setDropPlaceId] = useState(restored?.drop?.placeId || null);
+  // True while the box text is the NAME of a chosen place (so a language change may re-read it); typing clears it.
+  const pickupFromPlaceRef = useRef(!!restored?.pickup);
+  const dropFromPlaceRef = useRef(!!restored?.drop);
   const [distance, setDistance] = useState(null);
-  const [weight, setWeight] = useState("");
+  const [weight, setWeight] = useState(restored?.weight || "");
   // kg (default) or ton -- loadKg below converts for every downstream use
   // (vehicle matching, fare resolution), so the rest of this component
   // never needs to know which unit was actually typed.
-  const [weightUnit, setWeightUnit] = useState("kg");
+  const [weightUnit, setWeightUnit] = useState(restored?.weightUnit === "ton" ? "ton" : "kg");
   // Set the moment getWeightInputChange (see its own comment) detects the
   // customer typing past the current unit's cap -- holds the OTHER unit to
   // offer switching to, cleared the instant they either switch or edit the
@@ -7001,11 +7084,13 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     return () => { clearTimeout(t); cleanupKeep?.(); };
   }, [focusReq]);
   const onMapClick = async (lat, lng) => {
+    if (weight.trim()) return; // Pickup/Drop are tucked away once a weight is typed
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field) return;
-    const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); requestFocus("drop"); }
-    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); requestFocus("weight"); }
+    const found = await reverseGeocodeFull(lat, lng);
+    const place = { name: found?.name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, placeId: found?.placeId || null };
+    if (field === "pickup") onPickupPlaceSelected(place);
+    else onDropPlaceSelected(place);
   };
 
   // If the customer typed Pickup/Drop by hand without tapping an
@@ -7085,13 +7170,92 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // tap all count, same as explicitly tapping into the next field by
   // hand. Typing by hand doesn't trigger this -- only a genuine selection
   // does, since the customer might still be mid-edit after typing.
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); requestFocus("drop"); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); requestFocus("weight"); };
+  const onPickupPlaceSelected = (p) => {
+    setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupPlaceId(p.placeId || null); pickupFromPlaceRef.current = true;
+    setBookedMsg(false); setActiveField("drop"); requestFocus("drop");
+  };
+  const onDropPlaceSelected = (p) => {
+    setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropPlaceId(p.placeId || null); dropFromPlaceRef.current = true;
+    setActiveField("weight"); requestFocus("weight");
+  };
+  // Past trips remember Google place ids; their names are re-read in today's language (tripNames) when they were
+  // saved in another one.
+  const [tripNames, setTripNames] = useState({}); // place id -> name in the current language
+  const tripName = (t, which) => (which === "pickup" ? (t.pickupPlaceId && tripNames[t.pickupPlaceId]) || t.pickup : (t.dropPlaceId && tripNames[t.dropPlaceId]) || t.drop);
+  const tripsKey = (recentTrips || []).map((t) => `${t.pickupPlaceId}|${t.dropPlaceId}|${t.placeLang}`).join(",");
+  useEffect(() => {
+    if (!mapsReady || !recentTrips?.length) return;
+    let cancelled = false;
+    recentTrips.forEach((t) => {
+      if (t.placeLang === lang) return; // saved in this language already -- no lookup needed
+      [t.pickupPlaceId, t.dropPlaceId].forEach((id) => {
+        if (!id) return;
+        localizePlace({ placeId: id }, lang).then((name) => { if (!cancelled && name) setTripNames((prev) => (prev[id] === name ? prev : { ...prev, [id]: name })); });
+      });
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapsReady, lang, tripsKey]);
   // A whole past trip picked from the suggestions: fills Pickup AND Drop, cursor goes to Weight.
   const onTripSelected = (t) => {
-    setPickup(t.pickup); setPickupCoords({ lat: t.pickupLat, lng: t.pickupLng });
-    setDrop(t.drop); setDropCoords({ lat: t.dropLat, lng: t.dropLng });
-    setActiveField("weight"); requestFocus("weight");
+    setPickup(tripName(t, "pickup")); setPickupCoords({ lat: t.pickupLat, lng: t.pickupLng }); setPickupPlaceId(t.pickupPlaceId || null); pickupFromPlaceRef.current = true;
+    setDrop(tripName(t, "drop")); setDropCoords({ lat: t.dropLat, lng: t.dropLng }); setDropPlaceId(t.dropPlaceId || null); dropFromPlaceRef.current = true;
+    setBookedMsg(false); setActiveField("weight"); requestFocus("weight");
+  };
+
+  // Language changed (or the page just reloaded into a new language with a half-filled form): re-read the Pickup and
+  // Drop NAMES from the saved places -- by place id, else by coordinates -- instead of keeping the old-language text.
+  useEffect(() => {
+    if (!mapsReady) return;
+    let cancelled = false;
+    const relabel = (fromPlaceRef, coords, placeId, setText) => {
+      if (!fromPlaceRef.current || !coords) return;
+      localizePlace({ placeId, lat: coords.lat, lng: coords.lng }, lang).then((name) => { if (!cancelled && name && fromPlaceRef.current) setText(name); });
+    };
+    relabel(pickupFromPlaceRef, pickupCoords, pickupPlaceId, setPickup);
+    relabel(dropFromPlaceRef, dropCoords, dropPlaceId, setDrop);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang, mapsReady]);
+  // The carry-over is for the language-change reload only: drop the stamp now that it has been read, and keep a
+  // draft of the chosen places + weight for the NEXT reload (nothing is restored unless that stamp is fresh).
+  useEffect(() => { try { window.sessionStorage.removeItem(LANG_RELOAD_KEY); } catch { /* storage unavailable */ } }, []);
+  useEffect(() => {
+    if (!pickupCoords && !dropCoords) { writeBookingDraft(null); return; }
+    writeBookingDraft({
+      pickup: pickupCoords ? { name: pickup, lat: pickupCoords.lat, lng: pickupCoords.lng, placeId: pickupPlaceId } : null,
+      drop: dropCoords ? { name: drop, lat: dropCoords.lat, lng: dropCoords.lng, placeId: dropPlaceId } : null,
+      weight, weightUnit,
+    });
+  }, [pickup, drop, pickupCoords, dropCoords, pickupPlaceId, dropPlaceId, weight, weightUnit]);
+
+  // Typing in Pickup or Drop clears everything chosen AFTER it (drop, distance, weight) -- owner brief 2026-10-29.
+  // Distance is derived from the two coordinates, so clearing them clears it too.
+  const clearAfterDrop = () => {
+    setWeight(""); setWeightUnitHint(null); setWeightCapHit(false);
+    setSelectedDriverKey(null); setUnmatchedRequested(false); setBookingError("");
+  };
+  const clearAfterPickup = () => {
+    setDrop(""); setDropCoords(null); setDropPlaceId(null); dropFromPlaceRef.current = false;
+    clearAfterDrop();
+  };
+  const onPickupTyped = (text) => {
+    setPickup(text); setPickupCoords(null); setPickupPlaceId(null); pickupFromPlaceRef.current = false;
+    setBookedMsg(false);
+    clearAfterPickup();
+  };
+  const onDropTyped = (text) => {
+    setDrop(text); setDropCoords(null); setDropPlaceId(null); dropFromPlaceRef.current = false;
+    clearAfterDrop();
+  };
+  // After a request goes out the whole form is emptied and "Your message has gone to drivers" is shown (the
+  // driver's OTP and live location then appear on the ride screen this hands over to).
+  const [bookedMsg, setBookedMsg] = useState(false);
+  const resetBookingForm = () => {
+    setPickup(""); setPickupCoords(null); setPickupPlaceId(null); pickupFromPlaceRef.current = false;
+    setDrop(""); setDropCoords(null); setDropPlaceId(null); dropFromPlaceRef.current = false;
+    clearAfterDrop();
+    setActiveField(null);
   };
 
   // "Use current location" box next to the Pickup field -- same one-shot
@@ -7104,8 +7268,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       const pos = await getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
       locationPermission?.markGranted();
       const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-      onPickupPlaceSelected({ name, lat, lng });
+      const found = await reverseGeocodeFull(lat, lng);
+      onPickupPlaceSelected({ name: found?.name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, placeId: found?.placeId || null });
     } catch (err) {
       if (isLocationPermissionDeniedError(err)) locationPermission?.markDenied();
       else console.error("[use current location]", err);
@@ -7155,8 +7319,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // "form before map" flow as the design mock) -- manualMapOpen is the
   // explicit "View Map" override, reset the moment weight changes again so
   // the collapse re-asserts itself exactly like the mock's render() does.
-  const [manualMapOpen, setManualMapOpen] = useState(false);
-  useEffect(() => { setManualMapOpen(false); }, [weight]);
   // Tapping a driver's inline "Book this vehicle" button sends the
   // request immediately (no separate confirmation step) -- sendingKey
   // marks that one card's button as "Request sent. Please wait" (disabled)
@@ -7173,7 +7335,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const showWeight = locationsReady;                  // Weight is invisible until Pickup AND Drop are selected
   const sameLocation = locationsReady && isSameLocation(pickup, drop, pickupCoords, dropCoords);
   const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
-  const mapCollapsed = !!weight.trim() && !manualMapOpen;
+  // Weight typed = Pickup and Drop tuck away (owner brief 2026-10-29); the vehicles below + the map take over.
+  const weightTyped = showWeight && !!weight.trim();
   // Which ONE of Pickup/Drop/Enter Weight gets the golden "current step"
   // ring (see LocationField's highlighted prop and the weight input's own
   // outline below) -- defaults through the natural fill order and stays
@@ -7268,9 +7431,19 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const selectedEntry = selectedDriverKey ? nearbyDrivers.find((e) => e.id === selectedDriverKey) || null : null;
   // Everything stays listed; the tapped vehicle (or, until one is tapped, the best match =
   // lightest vehicle that fits, nearest first) is what the Book Now button books.
-  const visibleDrivers = nearbyDrivers;
+  const chosen = !!selectedEntry;
+  const visibleDrivers = selectedEntry ? [selectedEntry] : nearbyDrivers;
   const bookEntry = selectedEntry || nearbyDrivers[0] || null;
   const canBook = locationsReady && !sameLocation && weightReady && !exceedsFleetMax && !!bookEntry;
+  // Map (owner brief 2026-10-29): with a valid weight, only the vehicles in the list below are plotted; once one is
+  // chosen, only that type -- with the nearest of them ringed and its minutes shown.
+  const mapEntries = !(weightReady && locationsReady && !sameLocation) ? null
+    : selectedEntry ? nearbyDrivers.filter((e) => e.tier.maxKg === selectedEntry.tier.maxKg) : nearbyDrivers;
+  const mapFixedDrivers = mapEntries ? mapEntries.map((e) => e.driver) : null;
+  const nearestOfType = selectedEntry && mapEntries?.length ? mapEntries.reduce((best, e) => (e.km < best.km ? e : best), mapEntries[0]) : null;
+  const mapHighlight = nearestOfType
+    ? { id: nearestOfType.id, label: (() => { const m = etaMinutes(nearestOfType.km); return lang === "en" ? `${m} min` : lang === "mr" ? `${m} मिनिट` : `${m} मिनट`; })() }
+    : null;
 
   // Tapping a specific driver's card doesn't pin the request to just them
   // (see requestByCategory's driverName param) — it's still a broadcast to
@@ -7296,6 +7469,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
+      pickupPlaceId, dropPlaceId,
       // The exact fare already shown on this card (outlier-corrected, see
       // nearbyDrivers above) -- passed through rather than letting
       // requestByCategory re-resolve it independently, so a booking can
@@ -7304,6 +7478,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       fare: entry.fare,
     });
     if (err) { setBookingError(err); setSendingKey(null); }
+    else { resetBookingForm(); setSendingKey(null); setBookedMsg(true); }
     }, 700);
   };
 
@@ -7313,39 +7488,31 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   return (
     <div className="pt-0 pb-8">
       {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
-      {/* Map collapses to a compact header once weight is filled in --
-          matches the design-mock's "form before map" flow, reclaiming
-          screen space for the driver list that follows right after. Tap
-          "View Map" to bring it back; it re-collapses the moment weight
-          changes again (see manualMapOpen above). */}
-      {mapCollapsed ? (
-        <div className="px-5 pt-3 pb-1 flex items-center justify-between gap-2">
-          <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Booking" : lang === "mr" ? "बुकिंग" : "बुकिंग"}</span>
-          <button onClick={() => setManualMapOpen(true)} className="rounded-full px-3.5 py-1.5 text-xs font-bold shrink-0" style={{ border: `1.5px solid ${C.line}`, color: C.ink, background: C.paper }}>
-            {lang === "en" ? "View Map" : lang === "mr" ? "नकाशा पहा" : "मैप देखें"}
-          </button>
+      {/* Centers on the typed Pickup once it's resolved, not the customer's own live position -- a customer
+          booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
+          Falls back to customerLocation (device GPS) only before Pickup has been entered/geocoded.
+          Owner brief 2026-10-29: once a weight is typed the map shows ONLY active vehicles of the matching types
+          (inactive ones hidden); once a vehicle is chosen, only that type, with the nearest one ringed and its minutes shown. */}
+      <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="50vh" lang={lang} onMapClick={onMapClick}
+        activeOnly={weightTyped} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
+      {bookedMsg && (
+        <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
+          ✓ {lang === "en" ? "Your message has gone to drivers" : lang === "mr" ? "तुमचा संदेश ड्रायव्हर्सना पाठवला आहे" : "आपका संदेश ड्राइवरों को भेज दिया गया है"}
         </div>
-      ) : (
-        // Centers on the typed Pickup once it's resolved, not the
-        // customer's own live position — a customer booking a load for a
-        // different part of town (or a different city) needs to see
-        // vehicles near the load's actual pickup point, not near
-        // themselves. Falls back to customerLocation (device GPS) only
-        // before Pickup has been entered/geocoded, same as before.
-        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="50vh" lang={lang} onMapClick={onMapClick} />
       )}
       <div className="px-5 pt-4 space-y-4">
+        {!weightTyped && (
         <div className="flex items-start gap-2">
           <div className="flex-1 min-w-0">
             <LocationField
               lang={lang}
               value={pickup}
-              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
+              onChange={(e) => onPickupTyped(e.target.value)}
               onPlaceSelected={onPickupPlaceSelected}
               mapsReady={mapsReady}
               placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
               suggestions={suggestAreas(pickup)}
-              onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
+              onSuggestionTap={(a) => onPickupTyped(pickup.trim() + (pickup.trim() ? ", " : "") + a)}
               onFocus={() => setActiveField("pickup")}
               highlighted={highlightField === "pickup"}
               ref={pickupFieldRef}
@@ -7373,6 +7540,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             </button>
           )}
         </div>
+        )}
 
         {/* Suggestions: the last 3 whole trips (pickup + drop). Tapping one fills BOTH and jumps to Weight. */}
         {!showWeight && recentTrips && recentTrips.length > 0 && (
@@ -7380,15 +7548,15 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             <div className="text-[11px] font-bold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Your recent trips" : lang === "mr" ? "तुमच्या अलीकडील ट्रिप" : "आपकी पिछली ट्रिप"}</div>
             <div className="space-y-1.5">
               {recentTrips.map((t) => (
-                <button key={`${t.pickup}|${t.drop}`} type="button" onClick={() => onTripSelected(t)} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <button key={t.key || `${t.pickup}|${t.drop}`} type="button" onClick={() => onTripSelected(t)} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <span className="flex flex-col items-center py-1 shrink-0" aria-hidden="true">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
                     <span className="flex-1 w-px my-0.5" style={{ background: C.line }} />
                     <span className="w-2.5 h-2.5 rounded-sm" style={{ background: C.navy }} />
                   </span>
                   <span className="flex-1 min-w-0 flex flex-col gap-1.5">
-                    <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{t.pickup}</span>
-                    <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{t.drop}</span>
+                    <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "pickup")}</span>
+                    <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "drop")}</span>
                   </span>
                 </button>
               ))}
@@ -7396,17 +7564,17 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           </div>
         )}
 
-        {showDrop && (
+        {showDrop && !weightTyped && (
         <div className="anim-rise">
         <LocationField
           lang={lang}
           value={drop}
-          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
+          onChange={(e) => onDropTyped(e.target.value)}
           onPlaceSelected={onDropPlaceSelected}
           mapsReady={mapsReady}
           placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
           suggestions={suggestAreas(drop)}
-          onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
+          onSuggestionTap={(a) => onDropTyped(drop.trim() + (drop.trim() ? ", " : "") + a)}
           onFocus={() => setActiveField("drop")}
           highlighted={highlightField === "drop"}
           ref={dropFieldRef}
@@ -7414,7 +7582,22 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
         )}
 
-        {showWeight && (
+        {weightTyped && !chosen && (
+          <button type="button" onClick={() => setWeight("")} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+            <span className="flex flex-col items-center py-1 shrink-0" aria-hidden="true">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
+              <span className="flex-1 w-px my-0.5" style={{ background: C.line }} />
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: C.navy }} />
+            </span>
+            <span className="flex-1 min-w-0 flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{pickup}</span>
+              <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{drop}</span>
+            </span>
+            <span className="self-center text-xs font-extrabold shrink-0 underline" style={{ color: C.navy }}>{lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"}</span>
+          </button>
+        )}
+
+        {showWeight && !chosen && (
         <div ref={weightRowRef} className="flex gap-3 anim-rise" style={{ scrollMarginBottom: 130, scrollMarginTop: 70 }}>
           {/* Narrower now (fixed width, not a 50/50 grid column) -- the
               weight box needs the extra room for the two-segment kg/ton
@@ -7546,9 +7729,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             </div>
           ) : (
             <>
+              {!chosen && (
               <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1.5px solid rgba(0,82,204,0.3)` }}>
                 👇 {lang === "en" ? "Best match is selected — tap another to change" : lang === "mr" ? "सर्वोत्तम गाडी निवडली आहे — बदलण्यासाठी दुसरी टॅप करा" : "सबसे सही गाड़ी चुनी गई है — बदलने के लिए दूसरी टैप करें"}
               </div>
+              )}
               {bookingError && (
                 <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
               )}
@@ -7593,9 +7778,15 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                       </div>
                     );
                   })}
+                  {chosen && (
+                    <button type="button" onClick={() => setSelectedDriverKey(null)} disabled={!!sendingKey}
+                      className="w-full text-center text-sm font-extrabold py-2.5 rounded-xl" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: "1.5px solid rgba(0,82,204,0.3)" }}>
+                      ↺ {lang === "en" ? "Choose another vehicle" : lang === "mr" ? "दुसरी गाडी निवडा" : "दूसरी गाड़ी चुनें"}
+                    </button>
+                  )}
                 </>
               )}
-              {unmatchedRequested ? (
+              {chosen ? null : unmatchedRequested ? (
                 <p className="text-center text-xs font-bold py-2" style={{ color: C.success }}>
                   ✓ {lang === "en" ? "Our team has been notified and will call you shortly." : lang === "mr" ? "आमच्या टीमला कळवले आहे, ते लवकरच कॉल करतील." : "हमारी टीम को सूचित कर दिया गया है, वे जल्द कॉल करेंगे।"}
                 </p>
@@ -8440,7 +8631,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
           {!noDriverYet && (
             <div className="chip-fade-out inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black text-white mb-2" style={{ background: C.success }}>
               <TickIcon size={14} stroke={3.4} />
-              {lang === "en" ? "Request sent" : lang === "mr" ? "रिक्वेस्ट पाठवली" : "रिक्वेस्ट भेज दी गई"}
+              {lang === "en" ? "Your message has gone to drivers" : lang === "mr" ? "तुमचा संदेश ड्रायव्हर्सना पाठवला आहे" : "आपका संदेश ड्राइवरों को भेज दिया गया है"}
             </div>
           )}
           <div className="relative mx-auto mb-1 flex items-center justify-center" style={{ width: 112, height: 112 }}>
@@ -8908,10 +9099,12 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
   for (const b of myBookings) {
     const pickupName = b.pickup?.trim(), dropName = b.drop?.trim();
     if (!pickupName || !dropName || b.pickupLat == null || b.pickupLng == null || b.dropLat == null || b.dropLng == null) continue;
-    const key = `${pickupName}|${dropName}`;
+    // Same trip = same place ids (text differs by language); text only for older bookings without ids.
+    const key = `${b.pickupPlaceId || pickupName}|${b.dropPlaceId || dropName}`;
     if (seenTripKeys.has(key)) continue;
     seenTripKeys.add(key);
-    recentTrips.push({ pickup: pickupName, drop: dropName, pickupLat: b.pickupLat, pickupLng: b.pickupLng, dropLat: b.dropLat, dropLng: b.dropLng });
+    recentTrips.push({ key, pickup: pickupName, drop: dropName, pickupLat: b.pickupLat, pickupLng: b.pickupLng, dropLat: b.dropLat, dropLng: b.dropLng,
+      pickupPlaceId: b.pickupPlaceId || null, dropPlaceId: b.dropPlaceId || null, placeLang: b.placeLang || null });
     if (recentTrips.length >= 3) break;
   }
   // Places used as a pickup OR a drop, newest first, de-duplicated -- offered at
@@ -12534,6 +12727,7 @@ export default function App() {
   const chooseLang = (l) => {
     try { window.localStorage.setItem("sarthi_lang", JSON.stringify(l)); } catch { /* storage unavailable */ }
     try { window.localStorage.setItem("sarthi_langPromptPending", "false"); } catch { /* storage unavailable */ }
+    try { window.sessionStorage.setItem(LANG_RELOAD_KEY, String(Date.now())); } catch { /* storage unavailable */ }
     setLang(l);
     setLangPromptPending(false);
     window.location.reload();
@@ -13034,7 +13228,7 @@ export default function App() {
   // category itself (resolveFareForTier), not any specific driver. Returns
   // an error message string to show the customer (nobody eligible at all
   // right now), or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, fare: fareOverride }) => {
+  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, fare: fareOverride }) => {
     const bookingId = genId();
     // weight included here to match the real created doc below -- isDriverBroadcastEligible
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
@@ -13068,6 +13262,9 @@ export default function App() {
       // style summary (see DriverTripSummary) to show a real customer name.
       customerName: customer?.name || "",
       pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null, dropLat: dropLat ?? null, dropLng: dropLng ?? null,
+      // Google place ids + the language the pickup/drop TEXT was saved in, so past trips can be re-read in
+      // today's language (owner 2026-10-29: match places by id, never by display name).
+      pickupPlaceId: pickupPlaceId ?? null, dropPlaceId: dropPlaceId ?? null, placeLang: lang,
       driverLocation: null,
     }).catch((e) => console.error(e));
     return null;

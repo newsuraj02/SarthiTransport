@@ -151,8 +151,20 @@ typed text that has geocoded; without Google Maps, 3+ typed characters count); W
 Pickup AND Drop are selected (`showWeight`). Tapping a trip fills both and moves the cursor +
 golden highlight to Weight (`onTripSelected`, `requestFocus`). Book Now is a sticky bar at the
 bottom, enabled only when `canBook`; it books the tapped vehicle or, if none was tapped, the best
-match (`bookEntry`: lightest vehicle that fits, nearest first). Vehicle cards no longer collapse
-and have no per-card Book button. Tapping Book shows "Sending request..." for a deliberate 700 ms.
+match (`bookEntry`: lightest vehicle that fits, nearest first). Tapping Book shows "Sending request..." for a
+deliberate 700 ms. Developer-brief rules (owner 2026-10-29, "implement these changes only"): (1) the moment a
+weight is typed, Pickup + Drop tuck away (`weightTyped`) behind a one-line summary with "Change" (clears the
+weight, brings the boxes back); (2) with a valid weight the map plots ONLY the vehicles in the list below
+(`mapFixedDrivers`, inactive trucks hidden, `activeOnly`); (3) tapping a vehicle (`chosen`) leaves only that
+card + "Choose another vehicle" + Book Now (weight row, summary, banner and the "not seeing the right vehicle"
+link vanish); the map then shows only that type with the nearest one ringed and "N min" (`etaMinutes`, km x 1.3
+at 25 km/h); `CustomerAdvanceBooking` still has its own collapse; (4) typing in Pickup clears drop + distance +
+weight, typing in Drop clears distance + weight (`clearAfterPickup/Drop`; picking from a list or a trip never
+clears); (5) places carry Google place ids (`pickupPlaceId`/`dropPlaceId`, saved on the booking with `placeLang`);
+past trips are de-duplicated by id and re-read in today's language (`localizePlace`), and a half-filled form
+survives the page reload a language change does (`sarthi_lang_reload` stamp + `sarthi_booking_draft`, only
+read while the stamp is under 60 s old; nothing else is ever remembered); (6) after Book the form empties and
+"Your message has gone to drivers" shows (also the first line of the ride screen). Pinned in `verifyInvariants.mjs`.
 The earlier step-flow / Pickup-page / top-right-pill redesign was rolled back (`PickupPage`,
 `PickupPill`, `StepSummary`, `RecentPlacesList` remain in the file, unused). Also: the booking map
 takes 50% of the screen and by default frames a 1.5 km radius around the current location
