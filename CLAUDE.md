@@ -154,7 +154,7 @@ bottom, enabled only when `canBook`; it books the tapped vehicle or, if none was
 match (`bookEntry`: lightest vehicle that fits, nearest first). Tapping Book shows "Sending request..." for a
 deliberate 700 ms. Developer-brief rules (owner 2026-10-29, "implement these changes only"): (1) the moment a
 weight is typed, Pickup + Drop tuck away (`weightTyped`) behind a one-line summary with "Change" (clears the
-weight, brings the boxes back); (2) the map stays pinned to the top (sticky, 40vh instead of 50vh) from the moment a weight is typed until Book is tapped, and with a valid weight it plots ONLY the vehicles in the list below
+weight, brings the boxes back); (2) the map is never collapsed or hidden before Book, and it is NOT pinned: it scrolls up and down with the rest of the page (owner 2026-10-29), and with a valid weight it plots ONLY the vehicles in the list below
 (`mapFixedDrivers`, inactive trucks hidden, `activeOnly`); (3) tapping a vehicle (`chosen`) leaves only that
 card + "Choose another vehicle" + Book Now (weight row, summary, banner and the "not seeing the right vehicle"
 link vanish); the map then shows only that type with the nearest one ringed and "N min" (`etaMinutes`, km x 1.3

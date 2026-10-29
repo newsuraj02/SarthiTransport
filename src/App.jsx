@@ -7315,10 +7315,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // always shows the full fresh list again instead of silently keeping a
   // stale single-vehicle view whenever the old id still happens to match.
   useEffect(() => { setSelectedDriverKey(null); }, [weight, weightUnit]);
-  // The map collapses to a compact header once weight is filled in (same
-  // "form before map" flow as the design mock) -- manualMapOpen is the
-  // explicit "View Map" override, reset the moment weight changes again so
-  // the collapse re-asserts itself exactly like the mock's render() does.
+  // The map is never collapsed or hidden before Book, and it scrolls with the page (owner 2026-10-29).
   // Tapping a driver's inline "Book this vehicle" button sends the
   // request immediately (no separate confirmation step) -- sendingKey
   // marks that one card's button as "Request sent. Please wait" (disabled)
@@ -7492,12 +7489,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
           Falls back to customerLocation (device GPS) only before Pickup has been entered/geocoded.
           Owner brief 2026-10-29: once a weight is typed the map shows ONLY active vehicles of the matching types
-          (inactive ones hidden); once a vehicle is chosen, only that type, with the nearest one ringed and its minutes shown.
-          The map stays pinned to the top (40vh) from the moment a weight is typed until Book is tapped (owner 2026-10-29). */}
-      <div className={weightTyped ? "sticky top-0 z-20" : ""}>
-        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height={weightTyped ? "40vh" : "50vh"} lang={lang} onMapClick={onMapClick}
-          activeOnly={weightTyped} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
-      </div>
+          (inactive ones hidden); once a vehicle is chosen, only that type, with the nearest one ringed and its minutes shown. */}
+      <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="50vh" lang={lang} onMapClick={onMapClick}
+        activeOnly={weightTyped} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
       {bookedMsg && (
         <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
           ✓ {lang === "en" ? "Your message has gone to drivers" : lang === "mr" ? "तुमचा संदेश ड्रायव्हर्सना पाठवला आहे" : "आपका संदेश ड्राइवरों को भेज दिया गया है"}
