@@ -11917,12 +11917,16 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
       {/* Sits just left of the global pull-to-refresh button (see AppRoot),
           both fixed to the viewport at the same top offset — this is the
           only role that needs a second top-right action. */}
-      <button onClick={() => setSetFareOpen(true)}
-        className="fixed z-50 h-9 pl-2.5 pr-3 rounded-full flex items-center gap-1 shadow-lg"
-        style={{ background: C.navy, right: 56, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
-        <IndianRupee size={14} color="#fff" />
-        <span className="text-xs font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Set Fare" : lang === "mr" ? "भाडे सेट करा" : "किराया सेट करें"}</span>
-      </button>
+      {/* Owner 2026-10-29: Set Fare lives ONLY on the driver's main (idle home)
+          page -- not on Wallet, My Trips, Advance rides, Profile or an active trip. */}
+      {realHamburgerVisible && (
+        <button onClick={() => setSetFareOpen(true)}
+          className="fixed z-50 h-9 pl-2.5 pr-3 rounded-full flex items-center gap-1 shadow-lg"
+          style={{ background: C.navy, right: 56, top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
+          <IndianRupee size={14} color="#fff" />
+          <span className="text-xs font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Set Fare" : lang === "mr" ? "भाडे सेट करा" : "किराया सेट करें"}</span>
+        </button>
+      )}
       {setFareOpen && <SetFareForm driver={driver} routeFares={routeFares} fareTiers={fareTiers} lang={lang} onClose={() => setSetFareOpen(false)} />}
       <div className="flex-1 overflow-y-auto relative">
         {/* This whole row (menu, advance badge) is for the idle main

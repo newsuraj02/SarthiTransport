@@ -168,6 +168,10 @@ driver's trip screen) frames a 500 m radius (`OTP_MAP_RADIUS_KM`) around the dri
 Pickup pin until a GPS fix arrives. Framed once per anchor, so the person's own zoom is kept; after the OTP
 (`mode="route"`) the old fit-the-whole-route behaviour is unchanged. Pinned in `verifyInvariants.mjs`.
 
+**Set Fare (owner 2026-10-29).** The driver's "Set Fare" pill appears ONLY on the main (idle home) page --
+`realHamburgerVisible` in `DriverApp` -- and nowhere else (not Wallet, My Trips, Advance rides, Profile, or an
+active trip). Pinned in `verifyInvariants.mjs`.
+
 **Entry + refresh animation (owner 2026-10-29).** `index.html`'s inline loader: the app icon
 rises in on a deep-blue field with a one-time shine and a slim yellow progress bar, then
 the screen eases away (min ~2.4 s hold, the bar fills over it, 0.8 s exit). The Refresh button (`useRefreshButton`) turns once
