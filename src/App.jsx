@@ -6310,7 +6310,7 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, tripSuggestions, onTripPick, tripLabel, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false }, ref) {
+export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false }, ref) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
@@ -6412,8 +6412,6 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   // app pattern of surfacing recent addresses before the customer types
   // anything, rather than only ever showing them once they start searching.
   const showRecents = dropdownOpen && !value.trim() && (recentItems?.length > 0);
-  // Past pickup+drop combos, offered only here -- as this box's own suggestions while it is focused and still empty.
-  const showTrips = dropdownOpen && !value.trim() && !showRecents && (tripSuggestions?.length > 0);
 
   return (
     <div>
@@ -6449,24 +6447,6 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
                   </button>
                 );
               })}
-            </div>
-          )}
-          {showTrips && (
-            <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-72 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(15,27,45,0.18)" }}>
-              {tripSuggestions.map((t, i) => (
-                <button key={t.key || i} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setDropdownOpen(false); onTripPick?.(t); }}
-                  className="w-full text-left px-3 py-2.5 flex items-stretch gap-2.5" style={{ borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
-                  <span className="flex flex-col items-center py-1 shrink-0" aria-hidden="true">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
-                    <span className="flex-1 w-px my-0.5" style={{ background: C.line }} />
-                    <span className="w-2.5 h-2.5 rounded-sm" style={{ background: C.navy }} />
-                  </span>
-                  <span className="flex-1 min-w-0 flex flex-col gap-1.5">
-                    <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripLabel ? tripLabel(t, "pickup") : t.pickup}</span>
-                    <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripLabel ? tripLabel(t, "drop") : t.drop}</span>
-                  </span>
-                </button>
-              ))}
             </div>
           )}
           {showRecents && (
@@ -7528,7 +7508,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               onPlaceSelected={onPickupPlaceSelected}
               mapsReady={mapsReady}
               placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
-              tripSuggestions={recentTrips} onTripPick={onTripSelected} tripLabel={tripName}
               suggestions={suggestAreas(pickup)}
               onSuggestionTap={(a) => onPickupTyped(pickup.trim() + (pickup.trim() ? ", " : "") + a)}
               onFocus={() => setActiveField("pickup")}
@@ -7560,6 +7539,26 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
         )}
 
+
+        {/* The last 3 whole trips (pickup + drop), right under the Pickup box and ONLY while Pickup is still empty
+            (owner 2026-10-29: no heading text, and not kept on screen once a pickup is typed or chosen). */}
+        {!pickup.trim() && recentTrips && recentTrips.length > 0 && (
+          <div className="space-y-1.5">
+            {recentTrips.map((t) => (
+              <button key={t.key || `${t.pickup}|${t.drop}`} type="button" onClick={() => onTripSelected(t)} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                <span className="flex flex-col items-center py-1 shrink-0" aria-hidden="true">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
+                  <span className="flex-1 w-px my-0.5" style={{ background: C.line }} />
+                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: C.navy }} />
+                </span>
+                <span className="flex-1 min-w-0 flex flex-col gap-1.5">
+                  <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "pickup")}</span>
+                  <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "drop")}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {showDrop && !weightTyped && (
         <div className="anim-rise">

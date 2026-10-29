@@ -145,8 +145,8 @@ validation was fine, the label was wrong, bug since 207b028).
 **Customer booking (owner 2026-10-29, flow redone -- built, not yet confirmed on a device).**
 `CustomerBooking` reveals itself step by step on ONE page. Screen 1: Pickup box + "Use Current
 Location" + a greyed Book Now; the customer's last 3 whole trips (pickup AND drop, `recentTrips`, built in
-`CustomerApp`) are NOT a section on the page (owner 2026-10-29: removed the "Your recent trips" text) -- they are
-suggestions of the PICKUP box only (`tripSuggestions` in `LocationField`, shown while Pickup is focused and empty); Drop and Weight are not rendered. Drop appears once Pickup is
+`CustomerApp`) are listed right under the Pickup box with NO heading text and ONLY while Pickup is empty (owner
+2026-10-29: not inside the dropdown, and not kept on screen after a pickup is typed/chosen); Drop and Weight are not rendered. Drop appears once Pickup is
 SELECTED (`pickupSelected` = coordinates known: suggestion / current location / map tap / trip /
 typed text that has geocoded; without Google Maps, 3+ typed characters count); Weight appears once
 Pickup AND Drop are selected (`showWeight`). Tapping a trip fills both and moves the cursor +
