@@ -3584,6 +3584,8 @@ function vehicleMarkerIcon(headingDeg = null) {
 // route (not a straight line) via useDrivingRoute. Falls back to the fake
 // MockMap when Google Maps isn't configured/loaded yet, or this booking has
 // no real coordinates (e.g. it was posted before Maps was set up).
+// Radius the ride-tracking map frames before the pickup OTP is entered (customer + driver).
+const OTP_MAP_RADIUS_KM = 0.5;
 function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng, driverLocation, customerLocation, progress, zoneColor, height = 150, lang = "hi", mode = "route" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   // Re-renders every 20s so the "last location N min ago" chip below keeps
@@ -3659,6 +3661,23 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
     // layout reflow landing a beat later), the map can get stuck rendering
     // at a stale/zero size until something explicitly tells it to remeasure.
     window.google.maps.event.trigger(mapInstance, "resize");
+    // OTP screen (owner 2026-10-29): before the OTP is entered, both the
+    // customer and the driver see a 500 m radius around the driver's live
+    // position (the Pickup pin if no GPS fix has arrived yet) -- close
+    // enough to read the street. Framed once per anchor; after that the
+    // person's own zoom/pan is left alone (the follow camera below only
+    // re-centres, it never changes zoom).
+    if (toPickup) {
+      const anchor = rawDriverPos || pickupPos;
+      if (!anchor) return;
+      const radiusKey = `toPickup-radius:${rawDriverPos ? "driver" : "pickup"}`;
+      if (fittedKeyRef.current === radiusKey) return;
+      const dLat = OTP_MAP_RADIUS_KM / 111.32;
+      const dLng = OTP_MAP_RADIUS_KM / (111.32 * Math.max(0.2, Math.cos((anchor.lat * Math.PI) / 180)));
+      mapInstance.fitBounds({ north: anchor.lat + dLat, south: anchor.lat - dLat, east: anchor.lng + dLng, west: anchor.lng - dLng }, 0);
+      fittedKeyRef.current = radiusKey;
+      return;
+    }
     const fitKey = `${mode}:${roadPath?.length ? "route" : staticRoadPath?.length ? "static-route" : "straight"}`;
     if (fittedKeyRef.current === fitKey) return;
     const bounds = new window.google.maps.LatLngBounds();
@@ -3680,7 +3699,7 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
       mapInstance.fitBounds(bounds, 28);
       fittedKeyRef.current = fitKey;
     }
-  }, [mapInstance, roadPath, staticRoadPath, routeOrigin?.lat, routeOrigin?.lng, routeDestination?.lat, routeDestination?.lng, mode]);
+  }, [mapInstance, roadPath, staticRoadPath, routeOrigin?.lat, routeOrigin?.lng, routeDestination?.lat, routeDestination?.lng, mode, pickupLat, pickupLng]);
 
   // "Follow" mode: once the initial framing above has run for this leg,
   // every genuinely new GPS fix from the driver smoothly re-centers the

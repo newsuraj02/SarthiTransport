@@ -162,6 +162,12 @@ top-down blue-and-yellow truck (`truckMarkerIcon`) and a blue pickup dot. Weight
 the vehicle/driver list are unchanged; `CustomerAdvanceBooking` was NOT changed. Inputs may always
 shrink (global `min-width: 0` in `index.css`). Pinned in `verifyInvariants.mjs`.
 
+**OTP-screen map (owner 2026-10-29 -- built, not yet confirmed on a device).** Before the pickup OTP is
+entered, the ride-tracking map (`LiveTrackingMap`, `mode="toPickup"`; the customer's `ActiveRide` and the
+driver's trip screen) frames a 500 m radius (`OTP_MAP_RADIUS_KM`) around the driver's live position, or the
+Pickup pin until a GPS fix arrives. Framed once per anchor, so the person's own zoom is kept; after the OTP
+(`mode="route"`) the old fit-the-whole-route behaviour is unchanged. Pinned in `verifyInvariants.mjs`.
+
 **Entry + refresh animation (owner 2026-10-29).** `index.html`'s inline loader: the app icon
 rises in on a deep-blue field with a one-time shine and a slim yellow progress bar, then
 the screen eases away (min ~2.4 s hold, the bar fills over it, 0.8 s exit). The Refresh button (`useRefreshButton`) turns once
