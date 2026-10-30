@@ -189,15 +189,17 @@ starts `false`, so the app ALWAYS opens on Current. It replaced the single "Book
 
 **Advance Booking = the same screen + date and time (owner 2026-10-30: "follow the same UI/UX, pattern, flow of work, exact
 same with the addition of date and time").** `CustomerAdvanceBooking` is only `<CustomerBooking {...props} advance />`;
-there is ONE copy of the booking screen -- change `CustomerBooking`, never re-create a second one. `advance` adds: a
-"Choose a date / Choose a time" row at the very top (date picker, then the time-slot sheet; the golden highlight runs
-date -> time -> pickup -> drop -> weight); Pickup, "Use Current Location" and the trip suggestions stay disabled until BOTH
-are chosen (and the Weight row / vehicle list wait for them too); `ADVANCE_BID_RADIUS_KM` (50 km) instead of the current
-radius; drivers checked against THIS slot (`findDriverLoadConflict` with `scheduledFor`); the per-category
-`minAdvanceNoticeHours` check when Book is tapped; `scheduledFor` ("YYYY-MM-DD HH:MM") sent with the request and the
-unmatched-load request (`bookingType: "advance"`); a "📅 date . time" line above Book once a vehicle is chosen; and the
-date/time are cleared with the rest of the form after Book. The language-reload draft only restores into the SAME mode.
-Pinned in `verifyInvariants.mjs`.
+there is ONE copy of the booking screen -- change `CustomerBooking`, never re-create a second one. `advance` adds (owner
+2026-10-30): ONE horizontal "Date | Time" box (date picker on the left, time-slot sheet on the right, nothing else
+inside) placed AFTER the Pickup/Drop flow and shown only once Pickup AND Drop are entered (typed, picked or via a trip
+suggestion) -- the flow is Pickup -> Drop -> Date/Time -> Weight, the golden ring following that order; Pickup, "Use
+Current Location" and the trip suggestions are NOT gated by the schedule; the Weight row and vehicle list wait for BOTH
+date and time (`placesReady` = places chosen, `locationsReady` = places + schedule); `ADVANCE_BID_RADIUS_KM` (50 km)
+instead of the current radius; drivers checked against THIS slot (`findDriverLoadConflict` with `scheduledFor`); the
+per-category `minAdvanceNoticeHours` check when Book is tapped; `scheduledFor` ("YYYY-MM-DD HH:MM") sent with the request
+and the unmatched-load request (`bookingType: "advance"`); a "📅 date . time" line above Book once a vehicle is chosen;
+and the date/time are cleared with the rest of the form after Book. The language-reload draft only restores into the SAME
+mode. Pinned in `verifyInvariants.mjs`.
 
 **Map vs header taps (owner 2026-10-29: tapping a header icon set a map point as Pickup).** Both live maps
 (`NearbyVehiclesMap`, `LiveTrackingMap`) are wrapped in their own stacking context (`isolation: isolate` +

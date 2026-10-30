@@ -7095,6 +7095,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         cleanupKeep = keepWeightVisible();
       } else if (focusReq.to === "pickup") {
         pickupFieldRef.current?.focus();
+      } else if (focusReq.to === "date") {
+        if (typeof document !== "undefined") document.activeElement?.blur?.(); // keyboard down; the golden ring shows the next step
       } else {
         dropFieldRef.current?.focus();
       }
@@ -7103,9 +7105,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   }, [focusReq]);
   const onMapClick = async (lat, lng) => {
     if (weight.trim() || fromTrip) return; // Pickup/Drop are tucked away once a weight is typed / a trip suggestion was tapped
-    if (!scheduleReady) return; // advance: date and time come first
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
-    if (!field) return;
+    if (!field || field === "date" || field === "time") return;
     const found = await reverseGeocodeFull(lat, lng);
     const place = { name: found?.name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, placeId: found?.placeId || null };
     if (field === "pickup") onPickupPlaceSelected(place);
@@ -7189,13 +7190,18 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // tap all count, same as explicitly tapping into the next field by
   // hand. Typing by hand doesn't trigger this -- only a genuine selection
   // does, since the customer might still be mid-edit after typing.
+  // Next step once Pickup AND Drop are in: advance -> the Date/Time box (until it is filled), otherwise Weight.
+  const goAfterPlaces = () => {
+    if (advance && !(advanceDate && advanceTime)) { setActiveField("date"); requestFocus("date"); }
+    else { setActiveField("weight"); requestFocus("weight"); }
+  };
   const onPickupPlaceSelected = (p) => {
     setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupPlaceId(p.placeId || null); pickupFromPlaceRef.current = true;
     setFromTrip(false); setBookedMsg(false); setActiveField("drop"); requestFocus("drop");
   };
   const onDropPlaceSelected = (p) => {
     setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropPlaceId(p.placeId || null); dropFromPlaceRef.current = true;
-    setFromTrip(false); setActiveField("weight"); requestFocus("weight");
+    setFromTrip(false); goAfterPlaces();
   };
   // Past trips remember Google place ids; their names are re-read in today's language (tripNames) when they were
   // saved in another one.
@@ -7219,7 +7225,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const onTripSelected = (t) => {
     setPickup(tripName(t, "pickup")); setPickupCoords({ lat: t.pickupLat, lng: t.pickupLng }); setPickupPlaceId(t.pickupPlaceId || null); pickupFromPlaceRef.current = true;
     setDrop(tripName(t, "drop")); setDropCoords({ lat: t.dropLat, lng: t.dropLng }); setDropPlaceId(t.dropPlaceId || null); dropFromPlaceRef.current = true;
-    setFromTrip(true); setBookedMsg(false); setActiveField("weight"); requestFocus("weight");
+    setFromTrip(true); setBookedMsg(false); goAfterPlaces();
   };
 
   // Language changed (or the page just reloaded into a new language with a half-filled form): re-read the Pickup and
@@ -7349,9 +7355,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const pickupSelected = !!pickupCoords || (!mapsReady && pickup.trim().length >= 3);
   const dropSelected = !!dropCoords || (!mapsReady && drop.trim().length >= 3);
   const showDrop = pickupSelected;                    // Drop box is invisible until Pickup is selected
-  const locationsReady = pickupSelected && dropSelected && !!pickup.trim() && !!drop.trim() && scheduleReady;
+  const placesReady = pickupSelected && dropSelected && !!pickup.trim() && !!drop.trim(); // Pickup AND Drop chosen
+  const locationsReady = placesReady && scheduleReady;   // advance: ...and the date + time too
   const showWeight = locationsReady;
-  const tripHidden = fromTrip && locationsReady;      // trip suggestion tapped: Pickup/Drop stay filled but hidden                  // Weight is invisible until Pickup AND Drop are selected
+  const tripHidden = fromTrip && placesReady;      // trip suggestion tapped: Pickup/Drop stay filled but hidden                  // Weight is invisible until Pickup AND Drop are selected
   const sameLocation = locationsReady && isSameLocation(pickup, drop, pickupCoords, dropCoords);
   const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
   // Weight typed = Pickup and Drop tuck away (owner brief 2026-10-29); the vehicles below + the map take over.
@@ -7363,8 +7370,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // instant it's focused. activeField (sticky, set onFocus -- see its own
   // comment above) takes over the moment the customer explicitly taps a
   // field out of order.
-  const naturalField = advance && !advanceDate ? "date" : advance && !advanceTime ? "time" : !pickupSelected ? "pickup" : !dropSelected ? "drop" : !weightReady ? "weight" : null;
-  const highlightField = activeField && ((activeField === "date" && advance) || (activeField === "time" && advance) || activeField === "pickup" || (activeField === "drop" && showDrop) || (activeField === "weight" && showWeight)) ? activeField : naturalField;
+  const naturalField = !pickupSelected ? "pickup" : !dropSelected ? "drop" : advance && !advanceDate ? "date" : advance && !advanceTime ? "time" : !weightReady ? "weight" : null;
+  const highlightField = activeField && ((activeField === "date" && advance && placesReady) || (activeField === "time" && advance && placesReady) || activeField === "pickup" || (activeField === "drop" && showDrop) || (activeField === "weight" && showWeight)) ? activeField : naturalField;
 
   // Every real, currently online/approved/non-blacklisted driver within
   // the request radius of Pickup AND whose own vehicle can actually carry
@@ -7539,58 +7546,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
       )}
       <div className="px-5 pt-4 space-y-4">
-        {advance && !chosen && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div style={{
-                  padding: highlightField === "date" ? 4 : 0,
-                  background: highlightField === "date" ? C.marigold : "transparent",
-                  borderRadius: highlightField === "date" ? 12 : 0,
-                  transition: "padding 0.15s ease, background 0.15s ease",
-                }}>
-                {/* A native date input can't take a real placeholder -- this overlay label lets clicks pass through
-                    (pointer-events-none) to still open the native picker, and disappears once a date is chosen. */}
-                <div className="relative">
-                  <input ref={dateFieldRef} type="date" value={advanceDate} min={new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => {
-                      if (!e.target.value || e.target.value >= new Date().toISOString().slice(0, 10)) {
-                        setAdvanceDate(e.target.value);
-                        setBookedMsg(false);
-                        if (e.target.value) { setActiveField("time"); timeFieldRef.current?.focus(); }
-                      }
-                    }}
-                    onFocus={() => setActiveField("date")}
-                    className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
-                  {!advanceDate && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#94A3B8" }}>
-                      {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div style={{
-                  padding: highlightField === "time" ? 4 : 0,
-                  background: highlightField === "time" ? C.marigold : "transparent",
-                  borderRadius: highlightField === "time" ? 12 : 0,
-                  transition: "padding 0.15s ease, background 0.15s ease",
-                }}>
-                <button ref={timeFieldRef} type="button" disabled={!advanceDate} onClick={() => { setActiveField("time"); setShowTimeModal(true); }} className={`${inputCls} flex items-center justify-between gap-1`} style={{ ...inputStyle, opacity: !advanceDate ? 0.6 : 1 }}>
-                  <span className="truncate" style={{ color: advanceTime ? C.ink : "#94A3B8" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
-                  <Clock3 size={16} color={C.inkSoft} className="shrink-0" />
-                </button>
-              </div>
-            </div>
-            <TimeSlotModal open={showTimeModal} value={advanceTime}
-              onSelect={(t) => {
-                setAdvanceTime(t);
-                setBookedMsg(false);
-                // Auto-shift to Pickup the instant a time is confirmed (cancelling out of the modal never steals focus).
-                setActiveField("pickup");
-                requestFocus("pickup");
-              }}
-              onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
-          </div>
-        )}
         {/* Layering (owner 2026-10-29: the km box and Enter Weight were painting OVER the Drop suggestions): every
             .anim-rise block below is its own stacking layer, and a later layer paints over an earlier one no matter
             how high a z-index sits INSIDE it. So the two boxes that own a suggestion dropdown get their own
@@ -7609,7 +7564,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               onSuggestionTap={(a) => onPickupTyped(pickup.trim() + (pickup.trim() ? ", " : "") + a)}
               onFocus={() => setActiveField("pickup")}
               highlighted={highlightField === "pickup"}
-              disabled={!scheduleReady}
               ref={pickupFieldRef}
             />
           </div>
@@ -7619,9 +7573,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               entirely -- no point offering "use current location" once
               there's already an address in the field. */}
           {!pickup.trim() && (
-            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup || !scheduleReady}
-              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup || !scheduleReady ? "" : "current-location-blink"}`}
-              style={{ width: 92, opacity: !scheduleReady ? 0.6 : 1, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
+            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
+              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup ? "" : "current-location-blink"}`}
+              style={{ width: 92, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
               {locatingPickup ? (
                 <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
               ) : (
@@ -7643,7 +7597,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         {!pickup.trim() && recentTrips && recentTrips.length > 0 && (
           <div className="space-y-1.5">
             {recentTrips.map((t) => (
-              <button key={t.key || `${t.pickup}|${t.drop}`} type="button" disabled={!scheduleReady} onClick={() => onTripSelected(t)} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <button key={t.key || `${t.pickup}|${t.drop}`} type="button" onClick={() => onTripSelected(t)} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <span className="flex flex-col items-center py-1 shrink-0" aria-hidden="true">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
                   <span className="flex-1 w-px my-0.5" style={{ background: C.line }} />
@@ -7689,6 +7643,54 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             </span>
             <span className="self-center text-xs font-extrabold shrink-0 underline" style={{ color: C.navy }}>{lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"}</span>
           </button>
+        )}
+
+        {/* Advance only (owner 2026-10-30): ONE horizontal box holding Date and Time, placed after the Pickup/Drop flow and
+            shown only once Pickup AND Drop are entered. */}
+        {advance && placesReady && !chosen && (
+          <div className="anim-rise" style={{
+              padding: highlightField === "date" || highlightField === "time" ? 4 : 0,
+              background: highlightField === "date" || highlightField === "time" ? C.marigold : "transparent",
+              borderRadius: highlightField === "date" || highlightField === "time" ? 12 : 0,
+              transition: "padding 0.15s ease, background 0.15s ease",
+            }}>
+            <div className="flex items-stretch rounded-lg overflow-hidden" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              {/* A native date input can't take a real placeholder -- this overlay label lets clicks pass through
+                  (pointer-events-none) to still open the native picker, and disappears once a date is chosen. */}
+              <div className="relative flex-1 min-w-0">
+                <input ref={dateFieldRef} type="date" value={advanceDate} min={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => {
+                    if (!e.target.value || e.target.value >= new Date().toISOString().slice(0, 10)) {
+                      setAdvanceDate(e.target.value);
+                      setBookedMsg(false);
+                      if (e.target.value) { setActiveField("time"); timeFieldRef.current?.focus(); }
+                    }
+                  }}
+                  onFocus={() => setActiveField("date")}
+                  className="w-full px-3 py-2.5 text-sm font-bold outline-none" style={{ background: "transparent", border: "none", color: advanceDate ? C.ink : "transparent" }} />
+                {!advanceDate && (
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#94A3B8" }}>
+                    {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
+                  </span>
+                )}
+              </div>
+              <div className="w-px self-stretch" style={{ background: C.line }} aria-hidden="true" />
+              <button ref={timeFieldRef} type="button" disabled={!advanceDate} onClick={() => { setActiveField("time"); setShowTimeModal(true); }}
+                className="flex-1 min-w-0 px-3 py-2.5 text-sm font-bold outline-none flex items-center justify-between gap-1" style={{ background: "transparent", opacity: !advanceDate ? 0.6 : 1 }}>
+                <span className="truncate" style={{ color: advanceTime ? C.ink : "#94A3B8" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
+                <Clock3 size={16} color={C.inkSoft} className="shrink-0" />
+              </button>
+            </div>
+            <TimeSlotModal open={showTimeModal} value={advanceTime}
+              onSelect={(t) => {
+                setAdvanceTime(t);
+                setBookedMsg(false);
+                // Auto-shift to Weight the instant a time is confirmed (cancelling out of the modal never steals focus).
+                setActiveField("weight");
+                requestFocus("weight");
+              }}
+              onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
+          </div>
         )}
 
         {showWeight && !chosen && (
