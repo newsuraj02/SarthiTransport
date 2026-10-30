@@ -275,6 +275,145 @@ function formatTimeSlot(hhmm, lang) {
   const period = TIME_PERIODS[h >= 5 && h < 12 ? 0 : h >= 12 && h < 16 ? 1 : h >= 16 && h < 20 ? 2 : 3];
   return `${periodLabel(period, lang)} ${formatSlotShort(hhmm, lang)}`;
 }
+// One sheet for BOTH the date and the time, as a two-step flow (owner 2026-10-30): 1. Select Date  ->  2. Time slots  ->
+// Confirm. The chosen date is held here until Confirm, which hands back (time, date) together.
+function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
+  const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  const [step, setStep] = useState(1); // 1 = Select Date, 2 = Time slots
+  const [pendingDate, setPendingDate] = useState(selectedDate || "");
+  const todayStr = new Date().toISOString().slice(0, 10);
+  // Mirrors the date picker's own past-date block: if the chosen date is
+  // today, any slot whose hour has already passed (or is the current hour)
+  // is disabled — same "no past" rule, just applied at the hour level too.
+  const isToday = pendingDate === todayStr;
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const isPastSlot = (hhmm) => {
+    if (!isToday) return false;
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + m <= nowMinutes;
+  };
+  const defaultPeriod = (TIME_PERIODS.find((p) => p.slots.includes(value)) || TIME_PERIODS[0]).key;
+  const [activePeriod, setActivePeriod] = useState(defaultPeriod);
+  const [pending, setPending] = useState(value || "");
+  // Reselecting an already-set time shouldn't let Confirm through on the old
+  // value alone — the period defaults to the right one for convenience
+  // (so the relevant slots show immediately), but both it and a slot must
+  // be actively tapped again before Confirm unlocks. That requirement only
+  // makes sense when there WAS a prior value to reconfirm — on a genuinely
+  // first-time pick there's nothing to accidentally confirm, so the
+  // period (already shown highlighted as the sensible default) counts as
+  // picked from the start; only the slot itself needs a tap.
+  const [periodPicked, setPeriodPicked] = useState(!value);
+  const [slotPicked, setSlotPicked] = useState(false);
+  useEffect(() => {
+    if (open) { setStep(1); setActivePeriod(defaultPeriod); setPending(""); setPeriodPicked(!value); setSlotPicked(false); setPendingDate(selectedDate || ""); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  if (!open) return null;
+  const period = TIME_PERIODS.find((p) => p.key === activePeriod);
+  const canConfirm = !!pendingDate && periodPicked && slotPicked && !!pending && !(isToday && isPastSlot(pending));
+  const dateLabel = pendingDate ? new Date(`${pendingDate}T00:00:00`).toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+  const stepChip = (n, label, active, done, onClick, disabled) => (
+    <button type="button" onClick={onClick} disabled={disabled} className="flex-1 min-w-0 rounded-full px-2 py-2 text-xs font-extrabold flex items-center justify-center gap-1.5"
+      style={{ background: active ? "#0052CC" : done ? "rgba(0,168,84,0.12)" : "#F1F4F9", color: active ? "#FFFFFF" : done ? C.success : C.inkSoft, border: `1.5px solid ${active ? "#0052CC" : done ? C.success : C.line}`, opacity: disabled ? 0.6 : 1 }}>
+      <span className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] shrink-0" style={{ background: active ? "rgba(255,255,255,0.25)" : done ? C.success : "#E5EAF2", color: active ? "#FFFFFF" : done ? "#FFFFFF" : C.inkSoft }}>{done ? "✓" : n}</span>
+      <span className="truncate">{label}</span>
+    </button>
+  );
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-3xl overflow-hidden shadow-lg sheet-up" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 pt-3 pb-4" style={{ background: C.navy }}>
+          <div className="mx-auto mb-2.5 rounded-full" style={{ width: 36, height: 4, background: "rgba(255,255,255,0.35)" }} />
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-extrabold" style={{ color: "#fff" }}>{T("Choose Date & Time", "तारीख और समय चुनें", "तारीख आणि वेळ निवडा")}</h3>
+            <button onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold" style={{ color: "#fff", background: "rgba(255,255,255,0.18)" }}>✕</button>
+          </div>
+          <p className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>{step === 1 ? T("First pick the date.", "पहले तारीख चुनें।", "आधी तारीख निवडा.") : T("Now pick a period and a time slot, then confirm.", "अब पहर और समय चुनें, फिर पुष्टि करें।", "आता प्रहर आणि वेळ निवडा, मग निश्चित करा.")}</p>
+        </div>
+        <div className="p-5">
+          {/* The flow: 1 Select Date -> 2 Time slots -> Confirm */}
+          <div className="flex items-center gap-2 mb-4">
+            {stepChip(1, T("Select Date", "तारीख चुनें", "तारीख निवडा"), step === 1, step === 2 && !!pendingDate, () => setStep(1), false)}
+            <span className="shrink-0 text-xs font-black" style={{ color: C.inkSoft }} aria-hidden="true">›</span>
+            {stepChip(2, T("Time slots", "समय स्लॉट", "वेळेचे स्लॉट"), step === 2, false, () => { if (pendingDate) setStep(2); }, !pendingDate)}
+          </div>
+
+          {step === 1 ? (
+            <>
+              {/* A native date input can't take a real placeholder -- so our own label sits over it (pointer-events-none lets the tap
+                  through to open the phone's date picker): grey "Select date" like every other box, the chosen date once picked. */}
+              <div className="relative mb-5">
+                <input type="date" value={pendingDate} min={todayStr} aria-label={T("Select date", "तारीख चुनें", "तारीख निवडा")}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v || v >= todayStr) {
+                      if (v !== pendingDate) { setPending(""); setSlotPicked(false); }
+                      setPendingDate(v);
+                      if (v) setStep(2); // a date was picked -> straight on to the time slots
+                    }
+                  }}
+                  className="w-full rounded-lg px-3 py-3.5 text-base font-bold outline-none" style={{ background: C.paper, border: `1.5px solid ${C.line}`, color: "transparent", WebkitTextFillColor: "transparent" }} />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base font-bold pointer-events-none" style={{ color: pendingDate ? C.ink : "#94A3B8" }}>
+                  {pendingDate ? dateLabel : T("Select date", "तारीख चुनें", "तारीख निवडा")}
+                </span>
+                <CalendarClock size={18} color={C.inkSoft} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              <button type="button" onClick={() => { if (pendingDate) setStep(2); }} disabled={!pendingDate}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: pendingDate ? "#0052CC" : "#E5EAF2", color: pendingDate ? "#fff" : "#9AA3B0" }}>
+                {T("Next", "आगे", "पुढे")}
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 mb-4" style={{ background: "#F1F4F9", border: `1px solid ${C.line}` }}>
+                <span className="text-sm font-extrabold truncate" style={{ color: C.ink }}>📅 {dateLabel}</span>
+                <button type="button" onClick={() => setStep(1)} className="text-xs font-extrabold underline shrink-0" style={{ color: "#0052CC" }}>{T("Change date", "तारीख बदलें", "तारीख बदला")}</button>
+              </div>
+              <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{T("Choose period:", "पहर चुनें:", "प्रहर निवडा:")}</div>
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                {TIME_PERIODS.map((p) => {
+                  const active = activePeriod === p.key;
+                  return (
+                    <button key={p.key} type="button" onClick={() => { setActivePeriod(p.key); setPeriodPicked(true); }}
+                      className="rounded-lg py-3.5 flex flex-col items-center gap-1 text-sm font-bold"
+                      style={{ background: active ? C.marigoldDeep : C.bg, border: `1.5px solid ${active ? C.marigoldDeep : C.line}`, color: active ? "#FFFFFF" : C.inkSoft, boxShadow: active ? "0 4px 12px -2px rgba(255,102,0,0.45)" : undefined }}>
+                      <span className="text-lg leading-none">{p.icon}</span>
+                      {periodLabel(p, lang)}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>{T("Available time slots:", "उपलब्ध समय स्लॉट:", "उपलब्ध वेळ (Time Slots):")}</div>
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                {period.slots.map((s) => {
+                  const active = pending === s;
+                  const past = isPastSlot(s);
+                  return (
+                    <button key={s} type="button" disabled={past} onClick={() => { setPending(s); setSlotPicked(true); }}
+                      className="rounded-lg py-3.5 text-base font-bold text-left px-4"
+                      style={{
+                        background: past ? "#F1F4F9" : active ? C.marigoldDeep : C.paper,
+                        border: `1.5px solid ${past ? "#E8EDF5" : active ? C.marigoldDeep : C.line}`,
+                        color: past ? "#B4BDCB" : active ? "#FFFFFF" : C.ink,
+                        boxShadow: active ? "0 4px 12px -2px rgba(255,102,0,0.45)" : undefined,
+                      }}>
+                      {period.icon} {formatSlotShort(s, lang)}
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={() => { if (canConfirm) { onSelect(pending, pendingDate); onClose(); } }} disabled={!canConfirm}
+                className="w-full rounded-lg py-4 font-bold text-base" style={{ background: canConfirm ? "#0052CC" : "#E5EAF2", color: canConfirm ? "#fff" : "#9AA3B0" }}>
+                {T("Confirm", "पुष्टि करें", "निश्चित करा")}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 const ALERT_TYPE_LABELS_EN = { "पुलिस सहायता": "Police Help", "इमरजेंसी कॉल": "Emergency Call", "व्हाट्सएप सपोर्ट": "WhatsApp Support", "शिकायत": "Complaint" };
 export const alertTypeLabel = (t, lang) => (lang === "en" && ALERT_TYPE_LABELS_EN[t]) ? ALERT_TYPE_LABELS_EN[t] : t;
 
@@ -6922,11 +7061,6 @@ function PickupPage({ lang, mapsReady, drivers, recentPlaces, initialQuery, cust
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-// Current local time as 'YYYY-MM-DDTHH:mm' -- the `min` of the native date-time picker (no past times).
-function localDateTimeMin() {
-  const d = new Date();
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-}
 function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentTrips, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre, advance = false }) {
   const VEHICLES = vehicleTypes;
   // Only set right after a language change reloaded the page (see readLangReloadDraft); null otherwise.
@@ -6934,7 +7068,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Advance mode (owner 2026-10-30): the very same screen plus a date and a time -- the schedule below.
   const [advanceDate, setAdvanceDate] = useState(restored?.advanceDate || "");
   const [advanceTime, setAdvanceTime] = useState(restored?.advanceTime || "");
-  const [scheduleError, setScheduleError] = useState(false);
+  const [showTimeModal, setShowTimeModal] = useState(false);
   const scheduleReady = !advance || !!(advanceDate && advanceTime);
   const scheduledForValue = advance ? `${advanceDate} ${advanceTime}` : null;
   const [pickup, setPickup] = useState(restored?.pickup?.name || "");
@@ -7568,44 +7702,36 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         {/* Advance only (owner 2026-10-30): ONE horizontal box holding Date and Time, placed after the Pickup/Drop flow and
             shown only once Pickup AND Drop are entered. */}
         {advance && placesReady && !chosen && (
+          <>
           <div className="anim-rise" style={{
               padding: highlightField === "date" || highlightField === "time" ? 4 : 0,
               background: highlightField === "date" || highlightField === "time" ? C.marigold : "transparent",
               borderRadius: highlightField === "date" || highlightField === "time" ? 12 : 0,
               transition: "padding 0.15s ease, background 0.15s ease",
             }}>
-            {/* ONE box. Tapping it opens the phone's own "Set date and time" picker (day / month / year wheels + hour / minute /
-                am-pm wheels, owner 2026-10-30) via an invisible <input type="datetime-local"> laid over our own label, which
-                shows e.g. "4 Nov 2026 . Morning 10:00 AM" in the app's language. */}
-            <div className={`${inputCls} relative flex items-center`} style={inputStyle}>
-              <span className="truncate pr-8 pointer-events-none" style={{ color: scheduleReady ? C.ink : "#94A3B8" }}>
+            {/* ONE box: it reads "Choose date & time" and, once picked, "4 Nov 2026 . Morning 6:00 AM". Tapping it opens the
+                two-step sheet (1 Select Date -> 2 Time slots -> Confirm). */}
+            <button type="button" onClick={() => { setActiveField("date"); setShowTimeModal(true); }}
+              className={`${inputCls} flex items-center justify-between gap-2 text-left`} style={inputStyle}>
+              <span className="truncate" style={{ color: scheduleReady ? C.ink : "#94A3B8" }}>
                 {scheduleReady
                   ? `${new Date(`${advanceDate}T00:00:00`).toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" })} · ${formatTimeSlot(advanceTime, lang)}`
                   : (lang === "en" ? "Choose date & time" : lang === "mr" ? "तारीख आणि वेळ निवडा" : "तारीख और समय चुनें")}
               </span>
-              <CalendarClock size={18} color={C.inkSoft} className="absolute right-3 pointer-events-none" />
-              <input type="datetime-local" aria-label={lang === "en" ? "Choose date & time" : lang === "mr" ? "तारीख आणि वेळ निवडा" : "तारीख और समय चुनें"}
-                value={scheduleReady ? `${advanceDate}T${advanceTime}` : ""} min={localDateTimeMin()}
-                onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* not supported -- the tap itself opens it */ } }}
-                onFocus={() => setActiveField("date")}
-                onChange={(e) => {
-                  const v = e.target.value; // "YYYY-MM-DDTHH:mm" or "" when cleared
-                  if (!v) { setAdvanceDate(""); setAdvanceTime(""); setScheduleError(false); return; }
-                  if (v < localDateTimeMin()) { setScheduleError(true); return; } // never a time that has already passed
-                  const firstFill = !(advanceDate && advanceTime);
-                  setScheduleError(false); setBookedMsg(false);
-                  setAdvanceDate(v.slice(0, 10)); setAdvanceTime(v.slice(11, 16));
-                  // Auto-shift to Weight the first time a date + time is confirmed.
-                  if (firstFill) { setActiveField("weight"); requestFocus("weight"); }
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" style={{ fontSize: 16 }} />
-            </div>
-            {scheduleError && (
-              <div className="mt-1.5 text-xs font-bold" style={{ color: C.safety }}>
-                {lang === "en" ? "Please choose a future date and time." : lang === "mr" ? "कृपया भविष्यातील तारीख आणि वेळ निवडा." : "कृपया आगे की तारीख और समय चुनें।"}
-              </div>
-            )}
+              <CalendarClock size={18} color={C.inkSoft} className="shrink-0" />
+            </button>
           </div>
+          {/* Outside the .anim-rise block on purpose: a transformed ancestor would turn this sheet's `fixed` into 'relative to the box'. */}
+          <TimeSlotModal open={showTimeModal} value={advanceTime}
+            onSelect={(t, d) => {
+              setAdvanceDate(d); setAdvanceTime(t);
+              setBookedMsg(false);
+              // Auto-shift to Weight the instant date + time are confirmed (cancelling out of the sheet never steals focus).
+              setActiveField("weight");
+              requestFocus("weight");
+            }}
+            onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
+          </>
         )}
 
         {showWeight && !chosen && (
