@@ -154,6 +154,28 @@ const functionsByRole = {
   admin: adminApp ? getFunctions(adminApp, "asia-south1") : null,
 };
 
+// Address language (owner 2026-10-31): Pickup/Drop addresses come from these three callables (functions/index.js:
+// getAddress / searchPlaces / getPlace), always in the app's selected language with English words transliterated into the
+// script. Each resolves with the data, or null on ANY failure (not deployed yet, no MAPS_KEY secret, offline, signed out)
+// -- callers then fall back to the old in-browser Google lookup. After a failure the server is skipped for 30 s so a missing
+// deployment costs one slow attempt, not one per keystroke.
+let geoDownUntil = 0;
+async function callGeo(name, payload) {
+  const functions = functionsByRole[activeRole];
+  if (!functions || Date.now() < geoDownUntil) return null;
+  try {
+    const result = await httpsCallable(functions, name)(payload);
+    return result.data;
+  } catch (e) {
+    if (e?.code !== "functions/invalid-argument") geoDownUntil = Date.now() + 30000;
+    console.warn(`[geo] ${name} unavailable -- using the in-browser lookup`, e?.code || e);
+    return null;
+  }
+}
+export const geoSearchPlaces = (payload) => callGeo("searchPlaces", payload);
+export const geoGetPlace = (payload) => callGeo("getPlace", payload);
+export const geoGetAddress = (payload) => callGeo("getAddress", payload);
+
 // Bridges a call between this booking's customer and driver through
 // MSG91 (see functions/index.js) so neither side sees the other's real
 // number. Always resolves (never throws) with { ok, reason? } — reason

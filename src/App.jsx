@@ -28,7 +28,7 @@ import { GoogleMap, MarkerF, OverlayViewF, PolylineF, Autocomplete } from "@reac
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -2144,16 +2144,25 @@ export function geocodeAddress(text) {
 // language the Maps script was loaded with (= the app language after the reload a language change does).
 const placeNameCache = new Map();
 function localizePlace({ placeId, lat, lng }, lang = "") {
-  if (!window.google?.maps?.Geocoder) return Promise.resolve(null);
   const key = placeId ? `id:${placeId}:${lang}` : (lat != null && lng != null ? `ll:${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}:${lang}` : null);
   if (!key) return Promise.resolve(null);
   if (placeNameCache.has(key)) return placeNameCache.get(key);
-  const req = placeId ? { placeId } : { location: { lat, lng } };
-  const promise = new Promise((resolve) => {
-    new window.google.maps.Geocoder().geocode(req, (results, status) => {
-      resolve(status === "OK" && results?.[0] ? stripPlusCode(results[0].formatted_address) : null);
+  const promise = (async () => {
+    // 1) the server (address in `lang`, English words transliterated -- see functions/addressLang.js)
+    if (lang) {
+      const d = placeId ? await geoGetPlace({ placeId, lang }) : await geoGetAddress({ lat, lng, lang });
+      const text = d && (d.address || d.name);
+      if (text) return stripPlusCode(text);
+    }
+    // 2) fallback: Google's browser Geocoder, in the language the Maps script was loaded with
+    if (!window.google?.maps?.Geocoder) return null;
+    const req = placeId ? { placeId } : { location: { lat, lng } };
+    return new Promise((resolve) => {
+      new window.google.maps.Geocoder().geocode(req, (results, status) => {
+        resolve(status === "OK" && results?.[0] ? stripPlusCode(results[0].formatted_address) : null);
+      });
     });
-  });
+  })();
   placeNameCache.set(key, promise);
   promise.then((v) => { if (v == null) placeNameCache.delete(key); });
   return promise;
@@ -2198,7 +2207,12 @@ async function reverseGeocode(lat, lng) {
   }
 }
 // Same lookup, but also returns the Google place_id of the result (null without Google Maps).
-async function reverseGeocodeFull(lat, lng) {
+async function reverseGeocodeFull(lat, lng, lang = "") {
+  if (lang) {
+    // server first: the address in the app's language (English words transliterated)
+    const d = await geoGetAddress({ lat, lng, lang });
+    if (d?.address) return { name: stripPlusCode(d.address), placeId: d.placeId || null };
+  }
   if (window.google?.maps?.Geocoder) {
     return new Promise((resolve) => {
       new window.google.maps.Geocoder().geocode({ location: { lat, lng } }, (results, status) => {
@@ -6390,13 +6404,31 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   // see onPickupPlaceSelected/onDropPlaceSelected/onMapClick's .focus()
   // calls after advancing the highlight to the next step.
 
+  // One Places "session" per typing session (typing -> tapping a suggestion), so Google bills the lookups as one.
+  const sessionTokenRef = useRef(null);
+  const newSessionToken = () => {
+    if (!sessionTokenRef.current) {
+      sessionTokenRef.current = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+    }
+    return sessionTokenRef.current;
+  };
   useEffect(() => {
     clearTimeout(debounceRef.current);
-    if (!mapsReady || !window.google?.maps?.places?.AutocompleteService || !value.trim()) {
-      setPredictions([]);
-      return;
-    }
-    debounceRef.current = setTimeout(() => {
+    let cancelled = false;
+    if (!value.trim()) { setPredictions([]); return; }
+    const clientOk = mapsReady && !!window.google?.maps?.places?.AutocompleteService;
+    debounceRef.current = setTimeout(async () => {
+      // Owner 2026-10-31 (developer brief): suggestions are produced on the server IN THE APP'S LANGUAGE, English words
+      // transliterated into the script. City-only boxes (Set Fare) and any server failure use the in-browser lookup below.
+      if (!citiesOnly) {
+        const data = await geoSearchPlaces({ input: value, lang, sessionToken: newSessionToken(), lat: 18.6298, lng: 73.8131 });
+        if (cancelled) return;
+        if (data && Array.isArray(data.results)) {
+          setPredictions(data.results.map((r) => ({ place_id: r.placeId, description: r.full, structured_formatting: { main_text: r.main, secondary_text: r.secondary }, __server: true })));
+          return;
+        }
+      }
+      if (!clientOk) { setPredictions([]); return; }
       // location+radius below is a soft bias (ranks nearby matches higher),
       // not a hard filter — componentRestrictions alone only narrows to
       // "country: in", and India has many same-named localities in
@@ -6417,17 +6449,26 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
           // stretching to cover.
           ...(citiesOnly ? { types: ["(cities)"] } : {}),
         },
-        (preds, status) => setPredictions(status === "OK" && preds ? preds : [])
+        (preds, status) => { if (!cancelled) setPredictions(status === "OK" && preds ? preds : []); }
       );
     }, 300);
-    return () => clearTimeout(debounceRef.current);
-  }, [value, mapsReady, citiesOnly]);
+    return () => { cancelled = true; clearTimeout(debounceRef.current); };
+  }, [value, mapsReady, citiesOnly, lang]);
 
   useEffect(() => () => clearTimeout(blurTimeoutRef.current), []);
 
-  const selectPrediction = (p) => {
+  const selectPrediction = async (p) => {
     setDropdownOpen(false);
     setPredictions([]);
+    const token = sessionTokenRef.current; sessionTokenRef.current = null; // the typing session ends with this tap
+    if (p.__server) {
+      const place = await geoGetPlace({ placeId: p.place_id, lang, sessionToken: token });
+      if (place && typeof place.lat === "number" && typeof place.lng === "number") {
+        onPlaceSelected({ name: stripPlusCode(place.address || place.name || p.description), lat: place.lat, lng: place.lng, placeId: place.placeId || p.place_id });
+        return;
+      }
+      // server could not give the place -> the browser Geocoder (a Places (New) place id works there too)
+    }
     if (!window.google?.maps?.Geocoder) return;
     new window.google.maps.Geocoder().geocode({ placeId: p.place_id }, (results, status) => {
       const r = status === "OK" && results?.[0];
@@ -7161,7 +7202,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     if (weight.trim() || fromTrip) return; // Pickup/Drop are tucked away once a weight is typed / a trip suggestion was tapped
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field || field === "date" || field === "time") return;
-    const found = await reverseGeocodeFull(lat, lng);
+    const found = await reverseGeocodeFull(lat, lng, lang);
     const place = { name: found?.name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, placeId: found?.placeId || null };
     if (field === "pickup") onPickupPlaceSelected(place);
     else onDropPlaceSelected(place);
@@ -7349,7 +7390,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       const pos = await getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
       locationPermission?.markGranted();
       const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      const found = await reverseGeocodeFull(lat, lng);
+      const found = await reverseGeocodeFull(lat, lng, lang);
       onPickupPlaceSelected({ name: found?.name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, placeId: found?.placeId || null });
     } catch (err) {
       if (isLocationPermissionDeniedError(err)) locationPermission?.markDenied();

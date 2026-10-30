@@ -258,6 +258,33 @@ const checks = [
       && cb.includes("const locationsReady = placesReady && scheduleReady;") && !cb.includes("disabled={!scheduleReady}") && cb.includes("{advance && placesReady && !chosen && (") && !cb.includes('type="datetime-local"') && cb.includes('"Choose date & time"') && cb.includes("onSelect={(t, d) => {") && app.includes('"Choose Date & Time"') && app.includes("onSelect(pending, pendingDate)") && app.includes("const [step, setStep] = useState(1); // 1 = Select Date, 2 = Time slots") && app.includes('T("Select Date", "तारीख चुनें", "तारीख निवडा")') && app.includes('T("Time slots", "समय स्लॉट", "वेळेचे स्लॉट")') && app.includes('T("Confirm", "पुष्टि करें", "निश्चित करा")') && app.includes('T("Select date", "तारीख चुनें", "तारीख निवडा")') && app.includes('pendingDate ? C.ink : "#94A3B8"') && cb.indexOf("<TimeSlotModal open={showTimeModal}") > cb.indexOf("</button>\n          </div>\n          {/* Outside the .anim-rise block on purpose") && cb.includes("{advance && placesReady && !scheduleReady && (") && cb.indexOf("{advance && placesReady && !chosen && (") > cb.indexOf("{showDrop && !weightTyped && !tripHidden && (") && cb.indexOf("{advance && placesReady && !chosen && (") < cb.indexOf("{showWeight && !chosen && (")
       && app.includes("recentTrips={recentTrips} lang={lang} drivers={drivers}") && (app.match(/<CustomerAdvanceBooking /g) || []).length === 1;
   }],
+  ["address language (owner 2026-10-31, developer brief): the Pickup/Drop boxes get addresses from the server in the app's language -- searchPlaces / getPlace / getAddress callables (signed-in only), English words transliterated into the script, plus codes stripped, results cached; the client tries them first and falls back to the in-browser Google lookup (city-only boxes keep the old path); existing functions untouched", async () => {
+    const { createRequire } = await import("node:module");
+    const { createAddressService, resolveLang, GeoError } = createRequire(import.meta.url)(join(root, "functions", "addressLang.js"));
+    const TR = { Rajeshivajinagar: "राजेशिवाजीनगर", Pimpri: "पिंपरी", Chinchwad: "चिंचवड" };
+    const store = new Map(); let googleCalls = 0;
+    const fetchFn = async (url) => {
+      const u = String(url);
+      if (u.startsWith("https://inputtools.google.com")) { const w = decodeURIComponent(u.match(/text=([^&]*)/)[1]); return { ok: true, json: async () => (TR[w] ? ["SUCCESS", [[w, [TR[w]]]]] : ["FAILED"]) }; }
+      googleCalls++;
+      return { ok: true, json: async () => ({ status: "OK", results: [{ formatted_address: "JQ38+PRM, 16/189, Rajeshivajinagar, Pimpri-Chinchwad", place_id: "PID" }] }) };
+    };
+    const svc = createAddressService({ fetchFn, mapsKey: () => "K", cache: { get: async (id) => store.get(id) || null, set: async (id, d) => { store.set(id, d); } } });
+    const hi = await svc.getAddress(18.6298, 73.8131, "hi"); await svc.getAddress(18.6298, 73.8131, "hi");
+    const en = await svc.getAddress(18.6298, 73.8131, "en");
+    const callsForTwoLanguages = googleCalls; // Hindi (once, then cached) + English = 2 Google calls
+    const down = createAddressService({ fetchFn: async (u) => { if (String(u).includes("inputtools")) throw new Error("down"); return fetchFn(u); }, mapsKey: () => "K", cache: { get: async () => null, set: async () => {} } });
+    const outage = await down.getAddress(1, 2, "hi");
+    let typed = false; try { await createAddressService({ fetchFn: async () => ({ ok: true, json: async () => ({ status: "ZERO_RESULTS" }) }), mapsKey: () => "K", cache: { get: async () => null, set: async () => {} } }).getAddress(1, 2, "hi"); } catch (e) { typed = e instanceof GeoError; }
+    const behaviour = hi.address === "16/189, राजेशिवाजीनगर, पिंपरी-चिंचवड" && hi.placeId === "PID" && en.address === "16/189, Rajeshivajinagar, Pimpri-Chinchwad" && callsForTwoLanguages === 2 && outage.address === "16/189, Rajeshivajinagar, Pimpri-Chinchwad" && typed && resolveLang("मराठी") === "mr" && resolveLang(undefined) === "hi";
+    const fc = read("src/firebaseClient.js");
+    return behaviour
+      && ["getAddress", "searchPlaces", "getPlace"].every((n) => fns.includes(`exports.${n} = onCall(GEO_OPTIONS`)) && fns.includes("function geoGuard(request)") && fns.includes('defineSecret("MAPS_KEY")') && fns.includes('require("./addressLang")')
+      && ["mintLocationServiceToken", "onDirectRequestBroadcast", "ringAck", "onBookingTaken", "sendTestRing"].every((n) => fns.includes(`exports.${n} = `))
+      && fc.includes("export const geoSearchPlaces") && fc.includes("export const geoGetPlace") && fc.includes("export const geoGetAddress") && fc.includes("geoDownUntil = Date.now() + 30000")
+      && app.includes("const data = await geoSearchPlaces({ input: value, lang, sessionToken: newSessionToken()") && app.includes("const place = await geoGetPlace({ placeId: p.place_id, lang, sessionToken: token })") && app.includes("if (!citiesOnly) {")
+      && app.includes("async function reverseGeocodeFull(lat, lng, lang = \"\")") && (app.match(/reverseGeocodeFull\(lat, lng, lang\)/g) || []).length === 2 && app.includes("placeId ? await geoGetPlace({ placeId, lang }) : await geoGetAddress({ lat, lng, lang })");
+  }],
   ["OTP-screen map (customer + driver, mode toPickup) frames a 500 m radius around the driver by default (owner 2026-10-29)", () => app.includes("const OTP_MAP_RADIUS_KM = 0.5;") && app.includes("const radiusKey = `toPickup-radius:") && app.includes("anchor.lat + dLat")],
   ["booking map frames a 1.5 km radius around the current location/pickup by default (owner 2026-10-29)", () => app.includes("const NEARBY_MAP_DEFAULT_RADIUS_KM = 1.5;") && app.includes("center.lat + dLat") && app.includes("if (userAdjustedRef.current) return; // the customer has set their own view -- leave it alone")],
   ["live tracking map has no built-in zoom control either (owner 2026-10-29)", () => app.includes('fullscreenControl: false, zoomControl: false, gestureHandling: "greedy", disableDefaultUI: true,') && !app.includes('zoomControl: true')],

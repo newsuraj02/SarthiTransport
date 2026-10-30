@@ -1581,3 +1581,72 @@ exports.dailyHealthCheckNight = onSchedule({ schedule: "0 23 * * *", timeZone: "
   await runDailyHealthCheck("lastNightRun");
 });
 
+// ---------------------------------------------------------------------------
+// Address language (owner 2026-10-31, from the developer brief "Address Language
+// Fix"): the Pickup / Drop boxes ask THESE three callables for addresses, always
+// in the app's selected language, with any English words transliterated into the
+// selected script (logic + the TRANSLITERATE_ENABLED kill switch: addressLang.js).
+//
+// ONE-TIME SETUP before deploying (a missing secret blocks the functions deploy):
+//   firebase functions:secrets:set MAPS_KEY      (a SERVER Maps key)
+//   Google Cloud Console -> enable "Geocoding API" + "Places API (New)" for that key.
+// The app falls back to its old in-browser Google lookup whenever these fail, so
+// hosting can be deployed first without breaking anything.
+// ---------------------------------------------------------------------------
+const { createAddressService, resolveLang, GeoError } = require("./addressLang");
+const MAPS_KEY = defineSecret("MAPS_KEY");
+const GEO_CACHE_COLLECTION = "geoCache";
+const addressService = createAddressService({
+  fetchFn: (...args) => fetch(...args),
+  mapsKey: () => MAPS_KEY.value(),
+  cache: {
+    get: async (id) => { const snap = await db.collection(GEO_CACHE_COLLECTION).doc(id).get(); return snap.exists ? snap.data() : null; },
+    set: (id, data) => db.collection(GEO_CACHE_COLLECTION).doc(id).set({ ...data, at: FieldValue.serverTimestamp() }),
+  },
+});
+// Signed-in users only (customers and drivers both have a Firebase session): these calls spend Maps quota.
+function geoGuard(request) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in.");
+}
+function geoError(e) {
+  if (e instanceof HttpsError) return e;
+  if (e instanceof GeoError) return new HttpsError(e.code, e.message);
+  console.error("[address language]", e);
+  return new HttpsError("internal", "Address lookup failed.");
+}
+const GEO_OPTIONS = { region: "asia-south1", secrets: [MAPS_KEY], maxInstances: 20 };
+
+// Current location / map pin -> address in the user's language.
+exports.getAddress = onCall(GEO_OPTIONS, async (request) => {
+  geoGuard(request);
+  const { lat, lng, lang } = request.data || {};
+  if (typeof lat !== "number" || typeof lng !== "number") throw new HttpsError("invalid-argument", "lat and lng (numbers) are required");
+  try {
+    const L = resolveLang(lang);
+    const { address, placeId } = await addressService.getAddress(lat, lng, L);
+    return { lang: L, lat, lng, address, placeId };
+  } catch (e) { throw geoError(e); }
+});
+
+// Search-box suggestions (pickup / drop).
+exports.searchPlaces = onCall(GEO_OPTIONS, async (request) => {
+  geoGuard(request);
+  const { input, lang, sessionToken, lat, lng } = request.data || {};
+  if (!input || String(input).trim().length < 2) return { lang: null, results: [] };
+  if (String(input).length > 120) throw new HttpsError("invalid-argument", "input too long");
+  try {
+    const L = resolveLang(lang);
+    return { lang: L, results: await addressService.searchPlaces(String(input), L, sessionToken, lat, lng) };
+  } catch (e) { throw geoError(e); }
+});
+
+// The customer taps a suggestion -> the full place (name, address, lat/lng).
+exports.getPlace = onCall(GEO_OPTIONS, async (request) => {
+  geoGuard(request);
+  const { placeId, lang, sessionToken } = request.data || {};
+  if (!placeId || typeof placeId !== "string") throw new HttpsError("invalid-argument", "placeId is required");
+  try {
+    const L = resolveLang(lang);
+    return { lang: L, ...(await addressService.getPlace(placeId, L, sessionToken)) };
+  } catch (e) { throw geoError(e); }
+});

@@ -208,6 +208,22 @@ and the unmatched-load request (`bookingType: "advance"`); a "📅 date . time" 
 and the date/time are cleared with the rest of the form after Book. The language-reload draft only restores into the SAME
 mode. Pinned in `verifyInvariants.mjs`.
 
+**Address language (owner 2026-10-31, from the developer brief "Address Language Fix" -- built, NOT yet deployed/confirmed).**
+The Pickup/Drop boxes (`LocationField`, "Use Current Location", map taps, language re-read of saved places) get addresses
+from three server callables in `functions/index.js` -- `searchPlaces`, `getPlace`, `getAddress` (logic in
+`functions/addressLang.js`, testable without Firebase): always in the app's selected language, English words
+transliterated into the script via Google Input Tools, plus codes stripped, cached in Firestore `geoCache`, signed-in
+callers only. The client (`geoSearchPlaces` / `geoGetPlace` / `geoGetAddress` in `firebaseClient.js`) tries them FIRST and
+falls back to the old in-browser Google lookup on ANY failure (30 s cooldown after a failure), so hosting can be deployed
+before functions. City-only boxes (Set Fare, `citiesOnly`) keep the in-browser path. A one-time server setup is needed
+BEFORE `firebase deploy --only functions`: `firebase functions:secrets:set MAPS_KEY` (a SERVER Maps key) and enable
+"Geocoding API" + "Places API (New)" for it -- a missing secret blocks the whole functions deploy. NOT taken from the brief
+on purpose: its `index.js`/`package.json` (would wipe the other functions; Node 20 is decommissioned -- we run 22),
+`firebase init functions`, the `users`/`trips` collections (ours are `customers`/`drivers`/`bookings`), and the trip-address
+triggers (extra cost; nothing reads `pickupAddress` yet). Transliteration was removed from the app once before because the
+home-made version produced broken text -- if Input Tools output looks wrong, set `TRANSLITERATE_ENABLED = false` in
+`functions/addressLang.js` and redeploy functions. Pinned in `verifyInvariants.mjs`.
+
 **Map vs header taps (owner 2026-10-29: tapping a header icon set a map point as Pickup).** Both live maps
 (`NearbyVehiclesMap`, `LiveTrackingMap`) are wrapped in their own stacking context (`isolation: isolate` +
 `overflow-hidden`) so Google's high-z-index panes can never sit above the page header or the fixed Refresh button,
