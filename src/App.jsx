@@ -11058,6 +11058,8 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
     <div className="px-5 py-5">
       {stepLabel && <div className="text-[11px] font-bold mb-2" style={{ color: C.marigoldDeep }}>{stepLabel}</div>}
       <h2 className="text-base font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Documents (KYC)" : lang === "mr" ? "कागदपत्रे (KYC)" : "दस्तावेज़ (KYC)"}</h2>
+      {/* Owner 2026-10-31: very first line of the KYC note. */}
+      <p className="text-xs font-bold mb-1" style={{ color: C.safety }}>{lang === "en" ? "Without these documents you won't be able to get loads." : lang === "mr" ? "या कागदपत्रांशिवाय तुम्हाला लोड मिळू शकणार नाहीत." : "इन दस्तावेज़ों के बिना आपको लोड नहीं मिल पाएँगे।"}</p>
       <p className="text-xs mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Everything below is mandatory — upload your photo, driving license and vehicle side photo, and enter your vehicle's name, number and capacity." : lang === "mr" ? "खालील सर्व माहिती अनिवार्य आहे — तुमचा फोटो, ड्रायव्हिंग लायसन्स आणि गाडीचा बाजूचा फोटो अपलोड करा, आणि गाडीचे नाव, नंबर व क्षमता टाका." : "नीचे दी गई सारी जानकारी अनिवार्य है — अपनी फोटो, ड्राइविंग लाइसेंस और गाड़ी की साइड वाली फोटो अपलोड करें, और गाड़ी का नाम, नंबर व क्षमता डालें।"}</p>
 
       {/* Saved-doc status. "Incomplete" wins over Verified/Pending: an Approved

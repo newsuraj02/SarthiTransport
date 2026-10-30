@@ -366,6 +366,7 @@ drivers keep their own "resubmit" screen. Everyone else's submission lands in
 `firebase deploy --only firestore:rules` or a Rejected driver's re-submit is
 refused. The GPS/ring code itself is untouched; the gate simply means a gated
 driver never reaches `DriverHome`.
+The KYC screen (`DriverKyc`, shared by Settings and sign-up) opens with the red line "Without these documents you won't be able to get loads." (owner 2026-10-31), above the "Everything below is mandatory" note.
 
 **Driver sign-up flow (owner 2026-10-28 -- built, not yet confirmed on a device).**
 Step 1 = Name, Mobile, PIN/confirm PIN ONLY (no document clause there); the PIN
