@@ -10157,7 +10157,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   }
 
   return (
-    <div className="px-5 pt-5 pb-5">
+    <div className="px-5 pt-5 pb-5 flex flex-col" style={{ minHeight: "100%" }}>
       {PERMISSION_CARDS_ENABLED && showAutoStartCard && (
         <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#EAF1FF", border: `1.5px solid ${C.navy}` }}>
           <div className="text-xs font-bold mb-1" style={{ color: C.navy }}>
@@ -10298,7 +10298,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 
       {driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
         <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
-          <p className="text-base font-black mb-10 rounded-full px-4 py-1.5" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{lang === "en" ? "All India booking available" : lang === "mr" ? "संपूर्ण भारतात बुकिंग उपलब्ध" : "पूरे भारत में बुकिंग उपलब्ध"}</p>
+          <p className="text-base font-black mb-10 rounded-full px-4 py-1.5" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{lang === "en" ? "Loads available in Pune Hub" : lang === "mr" ? "पुणे हबमध्ये लोड उपलब्ध" : "पुणे हब में लोड उपलब्ध"}</p>
           {/* Gentle radar ring (.live-pulse, index.css) so a driver glancing
               at the phone can tell at once that the app is online and
               listening. Calm, slow, and stops under reduce-motion. */}
@@ -10320,10 +10320,12 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
 
       <LoadBellButton driver={driver} lang={lang} />
 
+      {/* Owner 2026-10-31: wallet + duty + KYC / WhatsApp links sit at the BOTTOM of the screen (mt-auto in the column root). */}
+      <div className="mt-auto pt-5">
       {/* My Wallet + Driver Duty switch — moved down here from the header
           row above DriverHome (see DriverApp) so the Get Estimate card can
           take that top spot instead. */}
-      <div className="flex items-center gap-2.5 mt-5 p-2.5 rounded-full shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+      <div className="flex items-center gap-2.5 p-2.5 rounded-full shadow-md" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         <button onClick={() => onOpenWallet?.()} className="flex-1 rounded-full px-4 py-3 text-base font-black text-white text-center flex items-center justify-center gap-1.5 shadow-sm" style={{ background: "#0052CC" }}>
           <Wallet size={16} color="#fff" /> {lang === "en" ? "My Wallet" : lang === "mr" ? "माझे वॉलेट" : "मेरा वॉलेट"}
         </button>
@@ -10356,14 +10358,15 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       </div>
       {/* Quiet shortcuts under the wallet / duty bar (owner 2026-10-31: "keep it simple and don't highlight it too much"):
           plain grey text, no fill, no border. KYC Settings = the same screen as the menu's "Settings (KYC & Vehicle)". */}
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 text-xs font-semibold" style={{ color: C.inkSoft }}>
-        <button type="button" onClick={() => onOpenKycSettings?.()} className="flex items-center gap-1.5 px-2 py-2.5 whitespace-nowrap">
-          <Settings2 size={14} color={C.inkSoft} /> {lang === "en" ? "KYC Settings" : lang === "mr" ? "KYC सेटिंग्स" : "KYC सेटिंग्स"}
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-x-1.5 text-sm font-semibold" style={{ color: C.inkSoft }}>
+        <button type="button" onClick={() => onOpenKycSettings?.()} className="flex items-center gap-1.5 px-2 py-3 whitespace-nowrap">
+          <Settings2 size={17} color={C.inkSoft} /> {lang === "en" ? "KYC Settings" : lang === "mr" ? "KYC सेटिंग्स" : "KYC सेटिंग्स"}
         </button>
-        <span className="w-px h-4" style={{ background: C.line }} aria-hidden="true" />
-        <a href={`https://wa.me/${ADMIN_WHATSAPP}`} target="_blank" rel="noreferrer" onClick={() => raiseAlert?.("driver", "व्हाट्सएप सपोर्ट", null, driver.mobile)} className="flex items-center gap-1.5 px-2 py-2.5 whitespace-nowrap">
-          <MessageCircle size={14} color={C.inkSoft} /> {lang === "en" ? "WhatsApp Support" : lang === "mr" ? "व्हॉट्सअ‍ॅप सपोर्ट" : "व्हाट्सएप सपोर्ट"}
+        <span className="w-px h-5" style={{ background: C.line }} aria-hidden="true" />
+        <a href={`https://wa.me/${ADMIN_WHATSAPP}`} target="_blank" rel="noreferrer" onClick={() => raiseAlert?.("driver", "व्हाट्सएप सपोर्ट", null, driver.mobile)} className="flex items-center gap-1.5 px-2 py-3 whitespace-nowrap">
+          <MessageCircle size={17} color={C.inkSoft} /> {lang === "en" ? "WhatsApp Support" : lang === "mr" ? "व्हॉट्सअ‍ॅप सपोर्ट" : "व्हाट्सएप सपोर्ट"}
         </a>
+      </div>
       </div>
     </div>
   );

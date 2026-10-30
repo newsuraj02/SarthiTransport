@@ -246,6 +246,10 @@ quiet, plain-grey text links (no fill, no border -- "keep it simple and don't hi
 (opens the same screen as the menu's "Settings (KYC & Vehicle)", via `onOpenKycSettings`) and "WhatsApp Support" (the support
 number `ADMIN_WHATSAPP`, and it logs the same "व्हाट्सएप सपोर्ट" alert for that driver as the Helpline page). They stay on ONE
 row down to 320 px. Pinned in `verifyInvariants.mjs`.
+Also (owner 2026-10-31): the whole block -- My Wallet, the Driver Duty switch, KYC Settings and WhatsApp Support -- is pinned to the
+BOTTOM of the idle home screen (`DriverHome`'s root is a flex column with `minHeight: 100%`; the block is `mt-auto`), the two links
+are `text-sm` with 17 px icons (still plain grey; they wrap onto two lines only at 320 px in English), and the idle pill says
+"Loads available in Pune Hub" (hi "पुणे हब में लोड उपलब्ध", mr "पुणे हबमध्ये लोड उपलब्ध") instead of "All India booking available".
 
 **Set Fare (owner 2026-10-29).** The driver's "Set Fare" pill appears ONLY on the main (idle home) page --
 `realHamburgerVisible` in `DriverApp` -- and nowhere else (not Wallet, My Trips, Advance rides, Profile, or an
