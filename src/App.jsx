@@ -273,11 +273,14 @@ function formatTimeSlot(hhmm, lang) {
   const period = TIME_PERIODS.find((p) => p.slots.includes(hhmm)) || TIME_PERIODS[0];
   return `${periodLabel(period, lang)} ${formatSlotShort(hhmm, lang)}`;
 }
+// One sheet for BOTH the date and the time (owner 2026-10-30: "a single box only with date selection and time selection
+// inside it"). The chosen date is held here until Done, which hands back (time, date) together.
 function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
+  const [pendingDate, setPendingDate] = useState(selectedDate || "");
   // Mirrors the date picker's own past-date block: if the chosen date is
   // today, any slot whose hour has already passed (or is the current hour)
   // is disabled — same "no past" rule, just applied at the hour level too.
-  const isToday = selectedDate === new Date().toISOString().slice(0, 10);
+  const isToday = pendingDate === new Date().toISOString().slice(0, 10);
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
   const isPastSlot = (hhmm) => {
     if (!isToday) return false;
@@ -298,25 +301,29 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
   const [periodPicked, setPeriodPicked] = useState(!value);
   const [slotPicked, setSlotPicked] = useState(false);
   useEffect(() => {
-    if (open) { setActivePeriod(defaultPeriod); setPending(""); setPeriodPicked(!value); setSlotPicked(false); }
+    if (open) { setActivePeriod(defaultPeriod); setPending(""); setPeriodPicked(!value); setSlotPicked(false); setPendingDate(selectedDate || ""); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   if (!open) return null;
   const period = TIME_PERIODS.find((p) => p.key === activePeriod);
-  const canConfirm = periodPicked && slotPicked && !!pending;
+  const canConfirm = !!pendingDate && periodPicked && slotPicked && !!pending && !(isToday && isPastSlot(pending));
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-3xl overflow-hidden shadow-lg sheet-up" style={{ background: C.paper }} onClick={(e) => e.stopPropagation()}>
         <div className="px-5 pt-3 pb-4" style={{ background: C.navy }}>
           <div className="mx-auto mb-2.5 rounded-full" style={{ width: 36, height: 4, background: "rgba(255,255,255,0.35)" }} />
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-extrabold" style={{ color: "#fff" }}>{lang === "en" ? "Choose Time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें"}</h3>
+            <h3 className="text-base font-extrabold" style={{ color: "#fff" }}>{lang === "en" ? "Choose Date & Time" : lang === "mr" ? "तारीख आणि वेळ निवडा" : "तारीख और समय चुनें"}</h3>
             <button onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold" style={{ color: "#fff", background: "rgba(255,255,255,0.18)" }}>✕</button>
           </div>
           <p className="text-[11px] mt-0.5" style={{ color: "#FFFFFF" }}>{lang === "en" ? "Pick a period, then only that period's slots will show." : lang === "mr" ? "जो प्रहर निवडाल, फक्त तीच वेळ दिसेल" : "जो पहर चुनेंगे, सिर्फ वही समय दिखेगा"}</p>
         </div>
         <div className="p-5">
-          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>1. {lang === "en" ? "Choose period:" : lang === "mr" ? "प्रहर निवडा:" : "पहर चुनें:"}</div>
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>1. {lang === "en" ? "Choose date:" : lang === "mr" ? "तारीख निवडा:" : "तारीख चुनें:"}</div>
+          <input type="date" value={pendingDate} min={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => { const v = e.target.value; if (!v || v >= new Date().toISOString().slice(0, 10)) { setPendingDate(v); setPending(""); setSlotPicked(false); } }}
+            className="w-full rounded-lg px-3 py-2.5 mb-4 text-sm font-bold outline-none" style={{ background: C.paper, border: `1px solid ${C.line}`, color: C.ink }} />
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>2. {lang === "en" ? "Choose period:" : lang === "mr" ? "प्रहर निवडा:" : "पहर चुनें:"}</div>
           <div className="grid grid-cols-4 gap-2 mb-4">
             {TIME_PERIODS.map((p) => {
               const active = activePeriod === p.key;
@@ -330,7 +337,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
               );
             })}
           </div>
-          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>2. {lang === "en" ? "Available time slots:" : lang === "mr" ? "उपलब्ध वेळ (Time Slots):" : "उपलब्ध समय (Time Slots):"}</div>
+          <div className="text-xs font-bold mb-2" style={{ color: C.ink }}>3. {lang === "en" ? "Available time slots:" : lang === "mr" ? "उपलब्ध वेळ (Time Slots):" : "उपलब्ध समय (Time Slots):"}</div>
           <div className="grid grid-cols-2 gap-2 mb-5">
             {period.slots.map((s) => {
               const active = pending === s;
@@ -349,7 +356,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
               );
             })}
           </div>
-          <button onClick={() => { if (canConfirm) { onSelect(pending); onClose(); } }} disabled={!canConfirm}
+          <button onClick={() => { if (canConfirm) { onSelect(pending, pendingDate); onClose(); } }} disabled={!canConfirm}
             className="w-full rounded-lg py-4 font-bold text-base" style={{ background: canConfirm ? "#0052CC" : "#E5EAF2", color: canConfirm ? "#fff" : "#9AA3B0" }}>
             {lang === "en" ? "Done" : lang === "mr" ? "ठीक आहे (Done)" : "ठीक है (Done)"}
           </button>
@@ -7013,7 +7020,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const [advanceDate, setAdvanceDate] = useState(restored?.advanceDate || "");
   const [advanceTime, setAdvanceTime] = useState(restored?.advanceTime || "");
   const [showTimeModal, setShowTimeModal] = useState(false);
-  const dateFieldRef = useRef(null);
   const timeFieldRef = useRef(null);
   const scheduleReady = !advance || !!(advanceDate && advanceTime);
   const scheduledForValue = advance ? `${advanceDate} ${advanceTime}` : null;
@@ -7648,49 +7654,36 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         {/* Advance only (owner 2026-10-30): ONE horizontal box holding Date and Time, placed after the Pickup/Drop flow and
             shown only once Pickup AND Drop are entered. */}
         {advance && placesReady && !chosen && (
+          <>
           <div className="anim-rise" style={{
               padding: highlightField === "date" || highlightField === "time" ? 4 : 0,
               background: highlightField === "date" || highlightField === "time" ? C.marigold : "transparent",
               borderRadius: highlightField === "date" || highlightField === "time" ? 12 : 0,
               transition: "padding 0.15s ease, background 0.15s ease",
             }}>
-            <div className="flex items-stretch rounded-lg overflow-hidden" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-              {/* A native date input can't take a real placeholder -- this overlay label lets clicks pass through
-                  (pointer-events-none) to still open the native picker, and disappears once a date is chosen. */}
-              <div className="relative flex-1 min-w-0">
-                <input ref={dateFieldRef} type="date" value={advanceDate} min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => {
-                    if (!e.target.value || e.target.value >= new Date().toISOString().slice(0, 10)) {
-                      setAdvanceDate(e.target.value);
-                      setBookedMsg(false);
-                      if (e.target.value) { setActiveField("time"); timeFieldRef.current?.focus(); }
-                    }
-                  }}
-                  onFocus={() => setActiveField("date")}
-                  className="w-full px-3 py-2.5 text-sm font-bold outline-none" style={{ background: "transparent", border: "none", color: advanceDate ? C.ink : "transparent" }} />
-                {!advanceDate && (
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#94A3B8" }}>
-                    {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
-                  </span>
-                )}
-              </div>
-              <div className="w-px self-stretch" style={{ background: C.line }} aria-hidden="true" />
-              <button ref={timeFieldRef} type="button" disabled={!advanceDate} onClick={() => { setActiveField("time"); setShowTimeModal(true); }}
-                className="flex-1 min-w-0 px-3 py-2.5 text-sm font-bold outline-none flex items-center justify-between gap-1" style={{ background: "transparent", opacity: !advanceDate ? 0.6 : 1 }}>
-                <span className="truncate" style={{ color: advanceTime ? C.ink : "#94A3B8" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
-                <Clock3 size={16} color={C.inkSoft} className="shrink-0" />
-              </button>
-            </div>
-            <TimeSlotModal open={showTimeModal} value={advanceTime}
-              onSelect={(t) => {
-                setAdvanceTime(t);
-                setBookedMsg(false);
-                // Auto-shift to Weight the instant a time is confirmed (cancelling out of the modal never steals focus).
-                setActiveField("weight");
-                requestFocus("weight");
-              }}
-              onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
+            {/* ONE box: it reads "Choose date & time" and, once picked, "04 Nov 2026 · Morning 6:00 AM". Tapping it opens the
+                single sheet where the date AND the time are chosen. */}
+            <button ref={timeFieldRef} type="button" onClick={() => { setActiveField("date"); setShowTimeModal(true); }}
+              className={`${inputCls} flex items-center justify-between gap-2 text-left`} style={inputStyle}>
+              <span className="truncate" style={{ color: scheduleReady ? C.ink : "#94A3B8" }}>
+                {scheduleReady
+                  ? `${new Date(`${advanceDate}T00:00:00`).toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" })} · ${formatTimeSlot(advanceTime, lang)}`
+                  : (lang === "en" ? "Choose date & time" : lang === "mr" ? "तारीख आणि वेळ निवडा" : "तारीख और समय चुनें")}
+              </span>
+              <CalendarClock size={18} color={C.inkSoft} className="shrink-0" />
+            </button>
           </div>
+          {/* Outside the .anim-rise block on purpose: a transformed ancestor would turn this sheet's `fixed` into 'relative to the box'. */}
+          <TimeSlotModal open={showTimeModal} value={advanceTime}
+            onSelect={(t, d) => {
+              setAdvanceDate(d); setAdvanceTime(t);
+              setBookedMsg(false);
+              // Auto-shift to Weight the instant date + time are confirmed (cancelling out of the sheet never steals focus).
+              setActiveField("weight");
+              requestFocus("weight");
+            }}
+            onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
+          </>
         )}
 
         {showWeight && !chosen && (
