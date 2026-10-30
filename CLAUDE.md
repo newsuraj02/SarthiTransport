@@ -164,7 +164,7 @@ weight, brings the boxes back); (2) the map is never collapsed or hidden before 
 (`mapFixedDrivers`, inactive trucks hidden, `activeOnly`); (3) tapping a vehicle (`chosen`) leaves only that
 card + "Book this vehicle" + "See all vehicles" (weight row, summary, banner and the "not seeing the right vehicle"
 link vanish); the map then shows only that type with the nearest one ringed and "N min" (`etaMinutes`, km x 1.3
-at 25 km/h); `CustomerAdvanceBooking` still has its own collapse; (4) typing in Pickup clears drop + distance +
+at 25 km/h); Advance Booking now behaves identically (see below); (4) typing in Pickup clears drop + distance +
 weight, typing in Drop clears distance + weight (`clearAfterPickup/Drop`; picking from a list or a trip never
 clears); (5) places carry Google place ids (`pickupPlaceId`/`dropPlaceId`, saved on the booking with `placeLang`);
 past trips are de-duplicated by id and re-read in today's language (`localizePlace`), and a half-filled form
@@ -177,7 +177,7 @@ is a compact 35% of the screen (owner 2026-10-29: 50% pushed the content off scr
 (`NEARBY_MAP_DEFAULT_RADIUS_KM`); it (and the live ride-tracking map) has NO +/- zoom buttons and
 keeps the customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`); markers are the
 top-down blue-and-yellow truck (`truckMarkerIcon`) and a blue pickup dot. Weight caps, fares and
-the vehicle/driver list are unchanged; `CustomerAdvanceBooking` was NOT changed. Inputs may always
+the vehicle/driver list are unchanged. Inputs may always
 shrink (global `min-width: 0` in `index.css`). Layering rule (owner 2026-10-29: the km box + Enter Weight painted over the Drop suggestions): every `.anim-rise`
 block is its own stacking layer, so the Pickup row is `relative z-40` and the Drop wrapper `relative z-30` -- keep
 them, or suggestion lists get covered by the rows below. Pinned in `verifyInvariants.mjs`.
@@ -186,6 +186,18 @@ them, or suggestion lists get covered by the rows below. Pinned in `verifyInvari
 (hi "करंट बुकिंग"/"एडवांस बुकिंग", mr "करंट बुकिंग"/"अ‍ॅडव्हान्स बुकिंग"; 11px text so it fits at 320px) -- both always visible; the one in use is GREEN for Current Booking and BLUE (#0052CC) for Advance Booking (owner 2026-10-30: matches the hamburger menu's "View Current Booking/s" green and "View Advance Booking" blue), the other plain. `advanceOpen`
 starts `false`, so the app ALWAYS opens on Current. It replaced the single "Book Advance / Book Current" pill. The toggle is exactly CENTRED in the header (owner 2026-10-30; menu and the Refresh spacer are the same width either side); the "Advance (N)" list button and the go-to-current-ride arrow, when present, sit on their own right-aligned line UNDER it so they can never push it off-centre. Pinned in
 `verifyInvariants.mjs`.
+
+**Advance Booking = the same screen + date and time (owner 2026-10-30: "follow the same UI/UX, pattern, flow of work, exact
+same with the addition of date and time").** `CustomerAdvanceBooking` is only `<CustomerBooking {...props} advance />`;
+there is ONE copy of the booking screen -- change `CustomerBooking`, never re-create a second one. `advance` adds: a
+"Choose a date / Choose a time" row at the very top (date picker, then the time-slot sheet; the golden highlight runs
+date -> time -> pickup -> drop -> weight); Pickup, "Use Current Location" and the trip suggestions stay disabled until BOTH
+are chosen (and the Weight row / vehicle list wait for them too); `ADVANCE_BID_RADIUS_KM` (50 km) instead of the current
+radius; drivers checked against THIS slot (`findDriverLoadConflict` with `scheduledFor`); the per-category
+`minAdvanceNoticeHours` check when Book is tapped; `scheduledFor` ("YYYY-MM-DD HH:MM") sent with the request and the
+unmatched-load request (`bookingType: "advance"`); a "📅 date . time" line above Book once a vehicle is chosen; and the
+date/time are cleared with the rest of the form after Book. The language-reload draft only restores into the SAME mode.
+Pinned in `verifyInvariants.mjs`.
 
 **Map vs header taps (owner 2026-10-29: tapping a header icon set a map point as Pickup).** Both live maps
 (`NearbyVehiclesMap`, `LiveTrackingMap`) are wrapped in their own stacking context (`isolation: isolate` +

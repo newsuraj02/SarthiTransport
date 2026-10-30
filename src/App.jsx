@@ -7005,10 +7005,18 @@ function PickupPage({ lang, mapsReady, drivers, recentPlaces, initialQuery, cust
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentTrips, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
+function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentTrips, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre, advance = false }) {
   const VEHICLES = vehicleTypes;
   // Only set right after a language change reloaded the page (see readLangReloadDraft); null otherwise.
-  const [restored] = useState(() => readLangReloadDraft());
+  const [restored] = useState(() => { const d = readLangReloadDraft(); return d && !!d.advance === !!advance ? d : null; });
+  // Advance mode (owner 2026-10-30): the very same screen plus a date and a time -- the schedule below.
+  const [advanceDate, setAdvanceDate] = useState(restored?.advanceDate || "");
+  const [advanceTime, setAdvanceTime] = useState(restored?.advanceTime || "");
+  const [showTimeModal, setShowTimeModal] = useState(false);
+  const dateFieldRef = useRef(null);
+  const timeFieldRef = useRef(null);
+  const scheduleReady = !advance || !!(advanceDate && advanceTime);
+  const scheduledForValue = advance ? `${advanceDate} ${advanceTime}` : null;
   const [pickup, setPickup] = useState(restored?.pickup?.name || "");
   const [drop, setDrop] = useState(restored?.drop?.name || "");
   const [pickupCoords, setPickupCoords] = useState(restored?.pickup ? { lat: restored.pickup.lat, lng: restored.pickup.lng } : null); // {lat,lng} | null
@@ -7085,6 +7093,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       if (focusReq.to === "weight") {
         weightInputRef.current?.focus({ preventScroll: true });
         cleanupKeep = keepWeightVisible();
+      } else if (focusReq.to === "pickup") {
+        pickupFieldRef.current?.focus();
       } else {
         dropFieldRef.current?.focus();
       }
@@ -7093,6 +7103,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   }, [focusReq]);
   const onMapClick = async (lat, lng) => {
     if (weight.trim() || fromTrip) return; // Pickup/Drop are tucked away once a weight is typed / a trip suggestion was tapped
+    if (!scheduleReady) return; // advance: date and time come first
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field) return;
     const found = await reverseGeocodeFull(lat, lng);
@@ -7233,9 +7244,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     writeBookingDraft({
       pickup: pickupCoords ? { name: pickup, lat: pickupCoords.lat, lng: pickupCoords.lng, placeId: pickupPlaceId } : null,
       drop: dropCoords ? { name: drop, lat: dropCoords.lat, lng: dropCoords.lng, placeId: dropPlaceId } : null,
-      weight, weightUnit,
+      weight, weightUnit, advance: !!advance, advanceDate, advanceTime,
     });
-  }, [pickup, drop, pickupCoords, dropCoords, pickupPlaceId, dropPlaceId, weight, weightUnit]);
+  }, [pickup, drop, pickupCoords, dropCoords, pickupPlaceId, dropPlaceId, weight, weightUnit, advance, advanceDate, advanceTime]);
 
   // Typing in Pickup or Drop clears everything chosen AFTER it (drop, distance, weight) -- owner brief 2026-10-29.
   // Distance is derived from the two coordinates, so clearing them clears it too.
@@ -7264,6 +7275,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     setDrop(""); setDropCoords(null); setDropPlaceId(null); dropFromPlaceRef.current = false;
     clearAfterDrop();
     setFromTrip(false);
+    setAdvanceDate(""); setAdvanceTime("");
     setActiveField(null);
   };
 
@@ -7300,7 +7312,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // Directions call hadn't resolved yet.
     const distanceKm = distance ?? estimateDistanceKm(pickupCoords, dropCoords);
     raiseUnmatchedVehicleRequest?.({
-      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "immediate", distanceKm,
+      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: advance ? "advance" : "immediate", ...(advance ? { scheduledFor: scheduledForValue } : {}), distanceKm,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
@@ -7337,7 +7349,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const pickupSelected = !!pickupCoords || (!mapsReady && pickup.trim().length >= 3);
   const dropSelected = !!dropCoords || (!mapsReady && drop.trim().length >= 3);
   const showDrop = pickupSelected;                    // Drop box is invisible until Pickup is selected
-  const locationsReady = pickupSelected && dropSelected && !!pickup.trim() && !!drop.trim();
+  const locationsReady = pickupSelected && dropSelected && !!pickup.trim() && !!drop.trim() && scheduleReady;
   const showWeight = locationsReady;
   const tripHidden = fromTrip && locationsReady;      // trip suggestion tapped: Pickup/Drop stay filled but hidden                  // Weight is invisible until Pickup AND Drop are selected
   const sameLocation = locationsReady && isSameLocation(pickup, drop, pickupCoords, dropCoords);
@@ -7351,8 +7363,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // instant it's focused. activeField (sticky, set onFocus -- see its own
   // comment above) takes over the moment the customer explicitly taps a
   // field out of order.
-  const naturalField = !pickupSelected ? "pickup" : !dropSelected ? "drop" : !weightReady ? "weight" : null;
-  const highlightField = activeField && (activeField === "pickup" || (activeField === "drop" && showDrop) || (activeField === "weight" && showWeight)) ? activeField : naturalField;
+  const naturalField = advance && !advanceDate ? "date" : advance && !advanceTime ? "time" : !pickupSelected ? "pickup" : !dropSelected ? "drop" : !weightReady ? "weight" : null;
+  const highlightField = activeField && ((activeField === "date" && advance) || (activeField === "time" && advance) || activeField === "pickup" || (activeField === "drop" && showDrop) || (activeField === "weight" && showWeight)) ? activeField : naturalField;
 
   // Every real, currently online/approved/non-blacklisted driver within
   // the request radius of Pickup AND whose own vehicle can actually carry
@@ -7373,7 +7385,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const loadKg = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1);
   const maxFleetCapacityKg = maxFleetVehicleCapacityKg(drivers, VEHICLES);
   const exceedsFleetMax = weightReady && maxFleetCapacityKg > 0 && loadKg > maxFleetCapacityKg;
+  const bidRadiusKm = advance ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
   const nearbyDrivers = (() => {
+    if (!scheduleReady) return []; // advance: nothing to match until the date AND time are chosen
     let withFare = drivers
       .filter((d) => {
         if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
@@ -7381,11 +7395,13 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
         if (!pickupCoords || !d.lastKnownLocation) return false;
         if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-        if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > CURRENT_BID_RADIUS_KM) return false;
+        if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > bidRadiusKm) return false;
         // On an Ongoing trip right now, or inside an upcoming advance-
         // booking's protected window -- on the move, not actually
         // available, shouldn't be shown as a bookable card at all.
-        return !findDriverLoadConflict(d, {}, bookings, VEHICLES, lang);
+        // Advance: checked against THIS booking's own slot, not right now -- a driver free now but already committed
+        // during the requested window is unavailable for it.
+        return !findDriverLoadConflict(d, advance ? { scheduledFor: scheduledForValue } : {}, bookings, VEHICLES, lang);
       })
       .map((d) => {
         const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
@@ -7402,8 +7418,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // tier(s) above what's already here so the customer still sees a few
     // real choices (see padVehicleCategories above).
     withFare = padVehicleCategories(withFare, {
-      drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: CURRENT_BID_RADIUS_KM,
+      drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: bidRadiusKm,
       pickup, drop, distance, dropCoords, adminRouteFares, loadKg, bookings, lang, dieselPricePerLitre,
+      ...(advance ? { scheduledFor: scheduledForValue } : {}),
     });
 
     // A bad Admin override for just one tier on this route (a stray digit,
@@ -7468,12 +7485,26 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — कृपया एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।");
       return;
     }
+    if (advance) {
+      // Advance-notice lead time, scaled by the vehicle's own category (checked once a specific vehicle is confirmed).
+      const scheduled = parseScheduledFor(scheduledForValue);
+      const minHours = minAdvanceNoticeHours(entry.tier.maxKg);
+      const hoursUntil = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
+      if (hoursUntil < minHours) {
+        setBookingError(lang === "en"
+          ? `This vehicle needs at least ${minHours} hour${minHours > 1 ? "s" : ""} advance notice — please pick a later time.`
+          : lang === "mr"
+          ? `या वाहनासाठी किमान ${minHours} तास आधी बुकिंग आवश्यक आहे — कृपया नंतरची वेळ निवडा.`
+          : `इस वाहन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`);
+        return;
+      }
+    }
     setSendingKey(entry.id);
     // A short, deliberate beat so the "Sending request…" spinner is actually seen
     // (Firestore's local echo would otherwise swap this screen out instantly).
     setTimeout(() => {
     const err = requestByCategory({
-      pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: null,
+      pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       pickupPlaceId, dropPlaceId,
@@ -7508,6 +7539,58 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
       )}
       <div className="px-5 pt-4 space-y-4">
+        {advance && !chosen && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div style={{
+                  padding: highlightField === "date" ? 4 : 0,
+                  background: highlightField === "date" ? C.marigold : "transparent",
+                  borderRadius: highlightField === "date" ? 12 : 0,
+                  transition: "padding 0.15s ease, background 0.15s ease",
+                }}>
+                {/* A native date input can't take a real placeholder -- this overlay label lets clicks pass through
+                    (pointer-events-none) to still open the native picker, and disappears once a date is chosen. */}
+                <div className="relative">
+                  <input ref={dateFieldRef} type="date" value={advanceDate} min={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => {
+                      if (!e.target.value || e.target.value >= new Date().toISOString().slice(0, 10)) {
+                        setAdvanceDate(e.target.value);
+                        setBookedMsg(false);
+                        if (e.target.value) { setActiveField("time"); timeFieldRef.current?.focus(); }
+                      }
+                    }}
+                    onFocus={() => setActiveField("date")}
+                    className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
+                  {!advanceDate && (
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#94A3B8" }}>
+                      {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div style={{
+                  padding: highlightField === "time" ? 4 : 0,
+                  background: highlightField === "time" ? C.marigold : "transparent",
+                  borderRadius: highlightField === "time" ? 12 : 0,
+                  transition: "padding 0.15s ease, background 0.15s ease",
+                }}>
+                <button ref={timeFieldRef} type="button" disabled={!advanceDate} onClick={() => { setActiveField("time"); setShowTimeModal(true); }} className={`${inputCls} flex items-center justify-between gap-1`} style={{ ...inputStyle, opacity: !advanceDate ? 0.6 : 1 }}>
+                  <span className="truncate" style={{ color: advanceTime ? C.ink : "#94A3B8" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
+                  <Clock3 size={16} color={C.inkSoft} className="shrink-0" />
+                </button>
+              </div>
+            </div>
+            <TimeSlotModal open={showTimeModal} value={advanceTime}
+              onSelect={(t) => {
+                setAdvanceTime(t);
+                setBookedMsg(false);
+                // Auto-shift to Pickup the instant a time is confirmed (cancelling out of the modal never steals focus).
+                setActiveField("pickup");
+                requestFocus("pickup");
+              }}
+              onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
+          </div>
+        )}
         {/* Layering (owner 2026-10-29: the km box and Enter Weight were painting OVER the Drop suggestions): every
             .anim-rise block below is its own stacking layer, and a later layer paints over an earlier one no matter
             how high a z-index sits INSIDE it. So the two boxes that own a suggestion dropdown get their own
@@ -7526,6 +7609,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               onSuggestionTap={(a) => onPickupTyped(pickup.trim() + (pickup.trim() ? ", " : "") + a)}
               onFocus={() => setActiveField("pickup")}
               highlighted={highlightField === "pickup"}
+              disabled={!scheduleReady}
               ref={pickupFieldRef}
             />
           </div>
@@ -7535,9 +7619,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               entirely -- no point offering "use current location" once
               there's already an address in the field. */}
           {!pickup.trim() && (
-            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup}
-              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup ? "" : "current-location-blink"}`}
-              style={{ width: 92, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
+            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup || !scheduleReady}
+              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup || !scheduleReady ? "" : "current-location-blink"}`}
+              style={{ width: 92, opacity: !scheduleReady ? 0.6 : 1, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
               {locatingPickup ? (
                 <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
               ) : (
@@ -7559,7 +7643,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         {!pickup.trim() && recentTrips && recentTrips.length > 0 && (
           <div className="space-y-1.5">
             {recentTrips.map((t) => (
-              <button key={t.key || `${t.pickup}|${t.drop}`} type="button" onClick={() => onTripSelected(t)} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <button key={t.key || `${t.pickup}|${t.drop}`} type="button" disabled={!scheduleReady} onClick={() => onTripSelected(t)} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <span className="flex flex-col items-center py-1 shrink-0" aria-hidden="true">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
                   <span className="flex-1 w-px my-0.5" style={{ background: C.line }} />
@@ -7796,6 +7880,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   })}
                   {chosen && (
                     <>
+                      {advance && (
+                        <div className="text-center text-xs font-bold" style={{ color: C.inkSoft }}>
+                          📅 {advanceDate} · {formatTimeSlot(advanceTime, lang)}
+                        </div>
+                      )}
                       {/* Order once a vehicle is chosen (owner 2026-10-30): the card, THEN "Book this vehicle", THEN "See all vehicles". */}
                       <button type="button" disabled={!canBook || !!sendingKey} onClick={() => bookEntry && bookDriver(bookEntry)}
                         className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
@@ -7829,613 +7918,15 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   );
 }
 
-// Advance/scheduled-ride booking -- a genuinely separate screen from
-// CustomerBooking now (previously an advanceOpen-toggled panel inside the
-// same component), reached via the same header pill in CustomerApp. Mirrors
-// CustomerBooking's whole interaction pattern (map collapses once weight is
-// filled, driver list inline, select-then-confirm-sheet, success screen) --
-// duplicated rather than parameterized, matching this codebase's existing
-// convention of a separate, self-contained copy per screen instead of one
-// component branching on a mode flag (see AdminFleet/AdminDriverList's own
-// duplicated bulk-send state for the same reasoning). The two real
-// differences: a date/time picker up front gating locationsReady alongside
-// pickup/drop, ADVANCE_BID_RADIUS_KM instead of CURRENT_BID_RADIUS_KM
-// (a scheduled driver has time to travel further), and bookDriver's
-// per-category minimum-lead-time check (minAdvanceNoticeHours) before
-// requestByCategory ever runs.
-function CustomerAdvanceBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre }) {
-  const VEHICLES = vehicleTypes;
-  const [advanceDate, setAdvanceDate] = useState("");
-  const [advanceTime, setAdvanceTime] = useState("");
-  const [showTimeModal, setShowTimeModal] = useState(false);
-  const [pickup, setPickup] = useState("");
-  const [drop, setDrop] = useState("");
-  const [pickupCoords, setPickupCoords] = useState(null);
-  const [dropCoords, setDropCoords] = useState(null);
-  const [distance, setDistance] = useState(null);
-  const [weight, setWeight] = useState("");
-  // kg (default) or ton -- loadKg below converts for every downstream use
-  // (vehicle matching, fare resolution), so the rest of this component
-  // never needs to know which unit was actually typed.
-  const [weightUnit, setWeightUnit] = useState("kg");
-  // Set the moment getWeightInputChange (see its own comment) detects the
-  // customer typing past the current unit's cap -- holds the OTHER unit to
-  // offer switching to, cleared the instant they either switch or edit the
-  // field back under the cap.
-  const [weightUnitHint, setWeightUnitHint] = useState(null);
-  // True right after a keystroke was refused for pushing the weight past
-  // MAX_BOOKING_WEIGHT_KG/TON (see getWeightInputChange) -- drives the "max
-  // weight" note under the field; cleared on any accepted keystroke or unit switch.
-  const [weightCapHit, setWeightCapHit] = useState(false);
-  useEffect(() => { setWeightCapHit(false); }, [weightUnit]);
-  const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
-  const mapsReady = mapsHasKey && mapsLoaded;
-
-  const [activeField, setActiveField] = useState(null); // 'date' | 'time' | 'pickup' | 'drop' | 'weight' | null
-  // Real DOM refs for the fields -- see CustomerBooking's identical
-  // ones for the full reasoning (moves the keyboard cursor, not just the
-  // highlight, on an actual place selection). dateFieldRef/timeFieldRef
-  // added so Select Date -> Select Time -> Pickup -> Drop -> Enter Weight
-  // is one continuous highlight+auto-shift sequence, not just the last
-  // three steps of it.
-  const dateFieldRef = useRef(null);
-  const timeFieldRef = useRef(null);
-  const pickupFieldRef = useRef(null);
-  const dropFieldRef = useRef(null);
-  const weightInputRef = useRef(null);
-  const onMapClick = async (lat, lng) => {
-    const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
-    if (!field) return;
-    const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    if (field === "pickup") { setPickup(name); setPickupCoords({ lat, lng }); setActiveField("drop"); dropFieldRef.current?.focus(); }
-    else { setDrop(name); setDropCoords({ lat, lng }); setActiveField("weight"); weightInputRef.current?.focus(); }
-  };
-
-  useEffect(() => {
-    if (!mapsReady || pickupCoords || !pickup.trim()) return;
-    const t = setTimeout(() => { geocodeAddress(pickup).then((loc) => { if (loc) setPickupCoords(loc); }); }, 900);
-    return () => clearTimeout(t);
-  }, [pickup, pickupCoords, mapsReady]);
-  useEffect(() => {
-    if (!mapsReady || dropCoords || !drop.trim()) return;
-    const t = setTimeout(() => { geocodeAddress(drop).then((loc) => { if (loc) setDropCoords(loc); }); }, 900);
-    return () => clearTimeout(t);
-  }, [drop, dropCoords, mapsReady]);
-
-  const [customerLocation, setCustomerLocation] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    const poll = () => {
-      getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
-        .then((pos) => {
-          if (cancelled) return;
-          locationPermission?.markGranted();
-          setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          if (isLocationPermissionDeniedError(err)) locationPermission?.markDenied();
-        });
-    };
-    poll();
-    const intervalId = setInterval(poll, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(intervalId);
-    };
-  }, []);
-
-  const distanceRequestRef = useRef(0);
-  useEffect(() => {
-    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
-    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
-    if (!hasBothCoords || !mapsReady) return;
-    const requestId = ++distanceRequestRef.current;
-    fetchRoadDistanceKm(pickupCoords, dropCoords)
-      .then((km) => {
-        if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100);
-      })
-      .catch((e) => console.error("[distance matrix]", e));
-  }, [pickupCoords, dropCoords, mapsReady]);
-
-  // Advances the golden highlight (highlightField, below) to the next
-  // step the moment a real place is actually chosen -- a dropdown pick,
-  // "Use Current Location" (routes through this same handler), or a map
-  // tap all count, same as explicitly tapping into the next field by
-  // hand. Typing by hand doesn't trigger this -- only a genuine selection
-  // does, since the customer might still be mid-edit after typing.
-  const onPickupPlaceSelected = (p) => { setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setActiveField("drop"); dropFieldRef.current?.focus(); };
-  const onDropPlaceSelected = (p) => { setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setActiveField("weight"); weightInputRef.current?.focus(); };
-
-  // "Use current location" box next to the Pickup field (owner request
-  // 2026-10-15: same as CustomerBooking's own copy of this -- see that
-  // component's identical block for the full "why"). An advance booking's
-  // pickup is usually wherever the customer happens to be standing when
-  // they book it, same as a current-booking pickup, so there's no reason
-  // this convenience should exist on one form and not the other.
-  const [locatingPickup, setLocatingPickup] = useState(false);
-  const useCurrentLocationForPickup = async () => {
-    setLocatingPickup(true);
-    try {
-      const pos = await getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
-      locationPermission?.markGranted();
-      const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      const name = (await reverseGeocode(lat, lng)) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-      onPickupPlaceSelected({ name, lat, lng });
-    } catch (err) {
-      if (isLocationPermissionDeniedError(err)) locationPermission?.markDenied();
-      else console.error("[use current location]", err);
-    }
-    setLocatingPickup(false);
-  };
-
-  const [bookingError, setBookingError] = useState("");
-  // Smart Load-to-Vehicle Match -- same one-shot "Doesn't match
-  // requirement?" escalation as CustomerBooking, with bookingType
-  // "advance" and the chosen date/time instead of "immediate".
-  const [unmatchedRequested, setUnmatchedRequested] = useState(false);
-  const sendUnmatchedVehicleRequest = () => {
-    // Same fresh-recompute fallback as CustomerBooking's copy of this --
-    // see its comment.
-    const distanceKm = distance ?? estimateDistanceKm(pickupCoords, dropCoords);
-    raiseUnmatchedVehicleRequest?.({
-      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: "advance", scheduledFor: scheduledForValue, distanceKm,
-      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
-      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
-    });
-    setUnmatchedRequested(true);
-  };
-  const [selectedDriverKey, setSelectedDriverKey] = useState(null);
-  const [manualMapOpen, setManualMapOpen] = useState(false);
-  useEffect(() => { setManualMapOpen(false); }, [weight]);
-  // Tapping a driver's inline "Book this vehicle" button sends the
-  // request immediately (no separate confirmation step) -- sendingKey
-  // marks that one card's button as "Request sent. Please wait" (disabled)
-  // until this whole component unmounts, same as CustomerBooking above.
-  const [sendingKey, setSendingKey] = useState(null);
-  const locationsReady = !!(pickup.trim() && drop.trim() && advanceDate && advanceTime);
-  const sameLocation = !!(pickup.trim() && drop.trim()) && isSameLocation(pickup, drop, pickupCoords, dropCoords);
-  const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
-  const mapCollapsed = !!weight.trim() && !manualMapOpen;
-  const scheduledForValue = `${advanceDate} ${advanceTime}`;
-  // Which ONE of Select Date/Select Time/Pickup/Drop/Enter Weight gets the
-  // golden "current step" ring -- owner request 2026-10-20: the sequence
-  // used to start at Pickup (date/time weren't part of this at all), so
-  // the golden ring appeared to "skip" straight past them. Date and time
-  // now lead the chain, same sticky-activeField-overrides-the-default
-  // pattern as CustomerBooking's identical highlightField.
-  const highlightField = activeField || (!advanceDate ? "date" : !advanceTime ? "time" : !pickup.trim() ? "pickup" : !drop.trim() ? "drop" : !weightReady ? "weight" : null);
-
-  const loadKg = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1);
-  const maxFleetCapacityKg = maxFleetVehicleCapacityKg(drivers, VEHICLES);
-  const exceedsFleetMax = weightReady && maxFleetCapacityKg > 0 && loadKg > maxFleetCapacityKg;
-  const nearbyDrivers = (() => {
-    let withFare = drivers
-      .filter((d) => {
-        if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
-        const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-        if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
-        if (!pickupCoords || !d.lastKnownLocation) return false;
-        if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-        if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > ADVANCE_BID_RADIUS_KM) return false;
-        // Checked against THIS booking's own scheduled slot (scheduledForValue),
-        // not right now -- a driver free right now but already committed
-        // during the requested advance window is still unavailable for it.
-        return !findDriverLoadConflict(d, { scheduledFor: scheduledForValue }, bookings, VEHICLES, lang);
-      })
-      .map((d) => {
-        const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-        const tier = findFareTier(capacityKg, fareTiers);
-        const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
-        const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
-        const id = d.mobile || d.id;
-        const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares, dieselPricePerLitre);
-        return { driver: d, capacityKg, tier, tierIndex, km, id, fare };
-      })
-      .sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km);
-
-    withFare = padVehicleCategories(withFare, {
-      drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: ADVANCE_BID_RADIUS_KM,
-      pickup, drop, distance, dropCoords, adminRouteFares, loadKg, bookings, lang, scheduledFor: scheduledForValue, dieselPricePerLitre,
-    });
-
-    const outlierIds = findFareOutliers(
-      withFare.map((e) => ({ id: e.id, tierMaxKg: e.tier.maxKg, totalFare: e.fare, estimatedKm: distance })),
-      fareTiers, dieselPricePerLitre
-    );
-    const afterOutliers = outlierIds.size === 0 ? withFare : (() => {
-      const clean = withFare.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tier.maxKg, fare: e.fare }));
-      return withFare.map((e) => outlierIds.has(e.id)
-        ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers, dieselPricePerLitre) }
-        : e);
-    })();
-    // Last pass, after outlier correction -- see enforceMonotonicFares:
-    // never show a bigger-capacity vehicle cheaper than a smaller one.
-    return enforceMonotonicFares(afterOutliers);
-  })();
-
-  // Once a driver is picked, the list collapses down to just that one
-  // card (matching the design mock) instead of floating it to the top of
-  // a still-full list -- "Choose another vehicle" below it is the only
-  // way back to the full list. Falls back to the full list if the
-  // selected driver ever drops out of nearbyDrivers entirely (went
-  // offline, no longer matches the current weight) rather than showing a
-  // stale single card for someone no longer there.
-  const selectedEntry = selectedDriverKey ? nearbyDrivers.find((e) => e.id === selectedDriverKey) || null : null;
-  const visibleDrivers = selectedEntry ? [selectedEntry] : nearbyDrivers;
-
-  // Same advance-notice lead-time check the old toggled panel had (scaled
-  // by the driver's own category) -- happens here, once a specific vehicle
-  // is actually confirmed, rather than blocking the date/time fields up
-  // front before a category is even known.
-  const bookDriver = (entry) => {
-    setBookingError("");
-    if (isSameLocation(pickup, drop, pickupCoords, dropCoords)) {
-      setBookingError(lang === "en" ? "Pickup and Drop look like the same place — please enter a more specific address (area, landmark or street) for one of them."
-        : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — कृपया एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
-        : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — कृपया एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।");
-      return;
-    }
-    const scheduled = parseScheduledFor(scheduledForValue);
-    const minHours = minAdvanceNoticeHours(entry.tier.maxKg);
-    const hoursUntil = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
-    if (hoursUntil < minHours) {
-      setBookingError(lang === "en"
-        ? `This vehicle needs at least ${minHours} hour${minHours > 1 ? "s" : ""} advance notice — please pick a later time.`
-        : lang === "mr"
-        ? `या वाहनासाठी किमान ${minHours} तास आधी बुकिंग आवश्यक आहे — कृपया नंतरची वेळ निवडा.`
-        : `इस वाहन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`);
-      return;
-    }
-    setSendingKey(entry.id);
-    // A short, deliberate beat so the "Sending request…" spinner is actually seen
-    // (Firestore's local echo would otherwise swap this screen out instantly).
-    setTimeout(() => {
-    const err = requestByCategory({
-      pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: scheduledForValue,
-      pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
-      dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
-      fare: entry.fare,
-    });
-    if (err) { setBookingError(err); setSendingKey(null); }
-    }, 700);
-  };
-
-  const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
-
-  return (
-    <div className="pt-0 pb-8">
-      {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
-      {mapCollapsed ? (
-        <div className="px-5 pt-3 pb-1 flex items-center justify-between gap-2">
-          <span className="text-base font-black" style={{ color: C.ink }}>{lang === "en" ? "Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग" : "एडवांस बुकिंग"}</span>
-          <button onClick={() => setManualMapOpen(true)} className="rounded-full px-3.5 py-1.5 text-xs font-bold shrink-0" style={{ border: `1.5px solid ${C.line}`, color: C.ink, background: C.paper }}>
-            {lang === "en" ? "View Map" : lang === "mr" ? "नकाशा पहा" : "मैप देखें"}
-          </button>
-        </div>
-      ) : (
-        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick} />
-      )}
-      <div className="px-5 pt-4 space-y-4">
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            {/* Same golden-frame wrapper technique as the weight field
-                below/LocationField's highlighted prop -- padded, colored
-                outer div around the untouched inner block, so Select Date
-                and Select Time join the same highlight+auto-shift chain
-                as Pickup/Drop/Enter Weight. */}
-            <div style={{
-                padding: highlightField === "date" ? 4 : 0,
-                background: highlightField === "date" ? C.marigold : "transparent",
-                borderRadius: highlightField === "date" ? 12 : 0,
-                transition: "padding 0.15s ease, background 0.15s ease",
-              }}>
-              {/* A native date input can't take a real placeholder — this
-                  overlay label sits on top and lets clicks pass through
-                  (pointer-events-none) to still open the native picker; it
-                  disappears once a date is chosen. */}
-              <div className="relative">
-                <input ref={dateFieldRef} type="date" value={advanceDate} min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => {
-                    if (!e.target.value || e.target.value >= new Date().toISOString().slice(0, 10)) {
-                      setAdvanceDate(e.target.value);
-                      // Auto-shift to Select Time the instant a valid date is
-                      // picked -- same "advance the golden highlight" rule as
-                      // a place selection in Pickup/Drop below.
-                      if (e.target.value) { setActiveField("time"); timeFieldRef.current?.focus(); }
-                    }
-                  }}
-                  onFocus={() => setActiveField("date")}
-                  className={inputCls} style={{ ...inputStyle, color: advanceDate ? C.ink : "transparent" }} />
-                {!advanceDate && (
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: "#94A3B8" }}>
-                    {lang === "en" ? "Choose a date" : lang === "mr" ? "तारीख निवडा" : "तारीख चुनें"}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div style={{
-                padding: highlightField === "time" ? 4 : 0,
-                background: highlightField === "time" ? C.marigold : "transparent",
-                borderRadius: highlightField === "time" ? 12 : 0,
-                transition: "padding 0.15s ease, background 0.15s ease",
-              }}>
-              <button ref={timeFieldRef} type="button" disabled={!advanceDate} onClick={() => { setActiveField("time"); setShowTimeModal(true); }} className={`${inputCls} flex items-center justify-between gap-1`} style={{ ...inputStyle, opacity: !advanceDate ? 0.6 : 1 }}>
-                <span className="truncate" style={{ color: advanceTime ? C.ink : "#94A3B8" }}>{advanceTime ? formatTimeSlot(advanceTime, lang) : (lang === "en" ? "Choose a time" : lang === "mr" ? "वेळ निवडा" : "समय चुनें")}</span>
-                <Clock3 size={16} color={C.inkSoft} className="shrink-0" />
-              </button>
-            </div>
-          </div>
-          <TimeSlotModal open={showTimeModal} value={advanceTime}
-            onSelect={(t) => {
-              setAdvanceTime(t);
-              // Auto-shift to Pickup the instant a time is actually
-              // confirmed (TimeSlotModal's own Done button calls onSelect
-              // then onClose together -- see that component) -- cancelling
-              // out of the modal (✕/backdrop) only fires onClose, never
-              // this, so an abandoned pick never steals focus.
-              setActiveField("pickup");
-              pickupFieldRef.current?.focus();
-            }}
-            onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
-        </div>
-
-        <div className="flex items-start gap-2">
-          <div className="flex-1 min-w-0">
-            <LocationField
-              lang={lang}
-              value={pickup}
-              onChange={(e) => { setPickup(e.target.value); setPickupCoords(null); }}
-              onPlaceSelected={onPickupPlaceSelected}
-              mapsReady={mapsReady}
-              placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
-              suggestions={suggestAreas(pickup)}
-              onSuggestionTap={(a) => { setPickup(pickup.trim() + (pickup.trim() ? ", " : "") + a); setPickupCoords(null); }}
-              onFocus={() => setActiveField("pickup")}
-              recentItems={recentPickups}
-              highlighted={highlightField === "pickup"}
-              disabled={!advanceTime}
-              ref={pickupFieldRef}
-            />
-          </div>
-          {/* Same "Use Current Location" box as CustomerBooking -- blue/white
-              blink until tapped or Pickup gets any text, then gone entirely.
-              Also blocked until Select Time is filled -- it fills Pickup
-              itself, so it has to respect the same gate as the field it
-              fills. */}
-          {!pickup.trim() && (
-            <button type="button" onClick={useCurrentLocationForPickup} disabled={locatingPickup || !advanceTime}
-              className={`shrink-0 self-stretch rounded-2xl flex flex-col items-center justify-center gap-1 text-center px-1.5 ${locatingPickup || !advanceTime ? "" : "current-location-blink"}`}
-              style={{ width: 92, opacity: !advanceTime ? 0.6 : 1, ...(locatingPickup ? { background: C.paper, border: `1.5px solid ${C.line}` } : {}) }}>
-              {locatingPickup ? (
-                <Loader2 size={18} color={C.marigoldDeep} className="animate-spin" />
-              ) : (
-                <>
-                  <LocateFixed size={20} color="currentColor" strokeWidth={2.2} />
-                  <span className="text-[10px] font-bold leading-tight" style={{ color: "currentColor" }}>
-                    {lang === "en" ? "Use Current Location" : lang === "mr" ? "करंट लोकेशन निवडा" : "करंट लोकेशन चुनें"}
-                  </span>
-                </>
-              )}
-            </button>
-          )}
-        </div>
-
-        <LocationField
-          lang={lang}
-          value={drop}
-          onChange={(e) => { setDrop(e.target.value); setDropCoords(null); }}
-          onPlaceSelected={onDropPlaceSelected}
-          mapsReady={mapsReady}
-          placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
-          suggestions={suggestAreas(drop)}
-          onSuggestionTap={(a) => { setDrop(drop.trim() + (drop.trim() ? ", " : "") + a); setDropCoords(null); }}
-          onFocus={() => setActiveField("drop")}
-          highlighted={highlightField === "drop"}
-          disabled={!pickup.trim()}
-          ref={dropFieldRef}
-        />
-
-        <div className="flex gap-3">
-          {/* Narrower now (fixed width, not a 50/50 grid column) -- the
-              weight box needs the extra room for the two-segment kg/ton
-              toggle below, and this box's own content (a short distance
-              or "Calculating...") reads fine truncated at this width. */}
-          <div className={`${inputCls} flex items-center gap-1.5 shrink-0`} style={{ ...inputStyle, width: 104 }}>
-            <Navigation size={14} color={C.inkSoft} className="shrink-0" />
-            <span className="truncate text-[11px]">
-              {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
-            </span>
-          </div>
-          {/* Same golden-frame wrapper technique as LocationField's
-              highlightWrapStyle -- padded, colored outer div around the
-              untouched relative/absolute-positioned inner block, so the
-              kg/ton toggle stays flush with the input's own edges. */}
-          <div className="flex-1" style={{
-              padding: highlightField === "weight" ? 4 : 0,
-              background: highlightField === "weight" ? C.marigold : "transparent",
-              borderRadius: highlightField === "weight" ? 12 : 0,
-              transition: "padding 0.15s ease, background 0.15s ease",
-            }}>
-            <div className="relative">
-              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108, opacity: !drop.trim() ? 0.6 : 1 }} inputMode="decimal" disabled={!drop.trim()}
-                placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
-                onChange={(e) => {
-                  // See getWeightInputChange's own comment -- enforces kg's
-                  // 3-5 digit / tons' 2+2-digit shape as you type, and flags
-                  // mismatchUnit (surfaced below) the moment what's typed
-                  // looks like it belongs in the OTHER unit instead.
-                  const { clean, mismatchUnit, capped } = getWeightInputChange(e.target.value, weightUnit, weight);
-                  setWeight(clean);
-                  setWeightUnitHint(mismatchUnit);
-                  setWeightCapHit(capped);
-                }}
-                onFocus={(e) => { setActiveField("weight"); e.target.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
-              {/* Both units shown at once now (a real segmented toggle, not a
-                  single button that only displays whichever is currently
-                  active) -- same right-edge slot pattern as LocationField's
-                  clear button. */}
-              <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1 rounded-md p-1" style={{ background: "rgba(0,0,0,0.06)" }}>
-                <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
-                  className="h-full px-3 rounded text-xs font-black"
-                  style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
-                  kg
-                </button>
-                <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
-                  className="h-full px-3 rounded text-xs font-black"
-                  style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
-                  {weightUnitLabel("ton")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {weightCapHit && (
-          <div className="text-xs font-bold -mt-1" style={{ color: C.safety }}>
-            {lang === "en" ? `Maximum weight is ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg.` : lang === "mr" ? `कमाल वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg आहे.` : `अधिकतम वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg है।`}
-          </div>
-        )}
-
-        {!locationsReady && (
-          <button disabled className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
-            📅 {lang === "en" ? "Book Advance" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें"}
-          </button>
-        )}
-      </div>
-
-      {locationsReady && (
-        <div className="px-5 pt-3 pb-4 space-y-2.5">
-          {sameLocation ? (
-            // Pickup and Drop read as the same place (see isSameLocation) --
-            // no point showing bookable vehicles for a trip that can't be
-            // booked; same "hide the list on an error" rule as
-            // weightUnitHint/exceedsFleetMax/!weightReady below, just
-            // checked first since a location problem blocks booking
-            // regardless of what the weight says.
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
-              {lang === "en" ? "Pickup and Drop look like the same place — enter a more specific address (area, landmark or street) for one of them."
-                : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
-                : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।"}
-            </div>
-          ) : weightUnitHint ? (
-            // Typed value overflowed the current unit's shape (see
-            // getWeightInputChange) -- almost certainly meant for the
-            // OTHER unit, so this offers a one-tap fix instead of a
-            // generic error, and (same as !weightReady) still hides the
-            // vehicle list below, since the entered weight can't be
-            // trusted yet.
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
-              {lang === "en"
-                ? `Do you mean ${weightUnitLabel(weightUnitHint)}? `
-                : lang === "mr"
-                ? `तुमचा अर्थ ${weightUnitLabel(weightUnitHint)} आहे का? `
-                : `क्या आपका मतलब ${weightUnitLabel(weightUnitHint)} से है? `}
-              <button type="button" onClick={() => { setWeightUnit(weightUnitHint); setWeightUnitHint(null); }} className="underline">
-                {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint)} पर स्विच करें`}
-              </button>
-            </div>
-          ) : exceedsFleetMax ? (
-            // Entered weight is heavier than anything the live fleet can
-            // carry (see maxFleetVehicleCapacityKg) -- same "don't show
-            // vehicles on an error" rule as weightUnitHint above, since no
-            // real vehicle could ever match this. maxFleetCapacityKg grows
-            // automatically the moment a bigger vehicle completes KYC, so
-            // this message is never stuck describing a stale ceiling.
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
-              {lang === "en"
-                ? `We don't currently have a vehicle for this weight. Max available: ${maxFleetCapacityKg}kg.`
-                : lang === "mr"
-                ? `सध्या तुमच्या वजनासाठी आमच्याकडे वाहन उपलब्ध नाही. कमाल उपलब्ध: ${maxFleetCapacityKg}kg.`
-                : `फिलहाल आपके वजन के लिए कोई गाड़ी उपलब्ध नहीं है। अधिकतम उपलब्ध: ${maxFleetCapacityKg}kg.`}
-            </div>
-          ) : !weightReady ? (
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
-              👆 {lang === "en" ? "Enter weight first, then vehicles will show" : lang === "mr" ? "आधी वजन टाका, मग गाड्या दिसतील" : "पहले वजन डालें, तभी गाड़ियाँ दिखेंगी"}
-            </div>
-          ) : (
-            <>
-              {!selectedEntry && (
-                <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1.5px solid rgba(0,82,204,0.3)` }}>
-                  👇 {lang === "en" ? "Choose a vehicle" : lang === "mr" ? "वाहन निवडा" : "वाहन चुनें"}
-                </div>
-              )}
-              {bookingError && (
-                <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
-              )}
-              {nearbyDrivers.length === 0 ? (
-                <p className="text-sm text-center py-8" style={{ color: C.inkSoft }}>
-                  {lang === "en" ? "No online driver is available near this pickup right now." : lang === "mr" ? "सध्या या पिकअपजवळ कोणताही ऑनलाइन ड्रायव्हर उपलब्ध नाही." : "अभी इस पिकअप के पास कोई ऑनलाइन ड्राइवर उपलब्ध नहीं है।"}
-                </p>
-              ) : (
-                <>
-                  {visibleDrivers.map((entry, idx) => {
-                    const key = entry.id;
-                    const isSelected = selectedDriverKey === key;
-                    const isSending = sendingKey === key;
-                    const fare = entry.fare;
-                    return (
-                      <div key={key} className="anim-rise" style={{ animationDelay: `${Math.min(idx, 6) * 70}ms` }}>
-                        <button onClick={() => setSelectedDriverKey(isSelected ? null : key)} disabled={isSending}
-                          className={`w-full flex items-center gap-3 rounded-xl p-3 text-left shadow-sm ${isSelected ? "driver-selected-bounce" : ""}`}
-                          style={{ border: `2px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isSelected ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
-                          <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
-                            <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                              <VehicleCategoryIcon tierIndex={entry.tierIndex} />
-                            </div>
-                          } />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
-                            <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
-                            </div>
-                            <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {lang === "en" ? (
-                                <><span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} km</span> from Pickup</>
-                              ) : lang === "mr" ? (
-                                <>पिकअपपासून <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
-                              ) : (
-                                <>पिकअप से <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-sm font-black shrink-0 rounded-full px-2.5 py-1" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(fare)}</div>
-                        </button>
-                        {isSelected && (
-                          <button onClick={() => bookDriver(entry)} disabled={isSending}
-                            className={`w-full rounded-xl py-3 mt-2 font-black text-sm text-white shadow-lg flex items-center justify-center gap-1.5 ${isSending ? "" : "animate-pulse"}`}
-                            style={{ background: isSending ? C.inkSoft : C.success }}>
-                            {isSending
-                              ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
-                              : <>{lang === "en" ? "Book this vehicle" : lang === "mr" ? "हीच गाडी बुक करा" : "यही गाड़ी बुक करें"} · {fmt(fare)}</>}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {selectedEntry && sendingKey !== selectedEntry.id && (
-                    <button onClick={() => setSelectedDriverKey(null)} className="w-full text-center text-xs font-bold py-1.5" style={{ color: C.inkSoft, textDecoration: "underline" }}>
-                      ↺ {lang === "en" ? "Choose another vehicle" : lang === "mr" ? "दुसरी गाडी निवडा" : "दूसरी गाड़ी चुनें"}
-                    </button>
-                  )}
-                </>
-              )}
-              {unmatchedRequested ? (
-                <p className="text-center text-xs font-bold py-2" style={{ color: C.success }}>
-                  ✓ {lang === "en" ? "Our team has been notified and will call you shortly." : lang === "mr" ? "आमच्या टीमला कळवले आहे, ते लवकरच कॉल करतील." : "हमारी टीम को सूचित कर दिया गया है, वे जल्द कॉल करेंगे।"}
-                </p>
-              ) : (
-                <button type="button" onClick={sendUnmatchedVehicleRequest} className="w-full text-center text-xs font-bold py-2.5 rounded-xl unmatched-vehicle-link-blink" style={{ color: "#000000" }}>
-                  {lang === "en" ? "Not seeing the right vehicle? Click here" : lang === "mr" ? "योग्य गाडी दिसत नाही? इथे क्लिक करा" : "सही गाड़ी नहीं दिख रही? यहाँ क्लिक करें"}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
+// Advance (scheduled) booking -- owner 2026-10-30: "follow the same UI/UX, pattern, flow of work, exact same with the
+// addition of date and time". It is therefore NOT a separate copy any more (the old copy kept drifting away from the
+// Current Booking screen): it is CustomerBooking itself with `advance`, which adds the date + time row up front, the
+// longer search radius (ADVANCE_BID_RADIUS_KM), driver availability checked against the chosen slot, the per-category
+// minimum-notice check, and sends `scheduledFor`. Everything else -- trips under Pickup, hidden trip, weight tucking
+// Pickup/Drop away, matching-vehicles map, no pre-selection, Book this vehicle / See all vehicles, clearing rules,
+// place ids, form emptied after Book -- is shared code. Keep it that way: change CustomerBooking, not a copy.
+function CustomerAdvanceBooking(props) {
+  return <CustomerBooking {...props} advance />;
 }
 
 // Bold From/To route line with pickup/drop dots — used in booking lists so
@@ -9479,7 +8970,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
               customerMobile={customerMobile} bookingExtras={bookingExtras}
               onAddAnother={() => setAddingAnother(true)} />
           ) : advanceOpen ? (
-            <CustomerAdvanceBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} lang={lang} drivers={drivers}
+            <CustomerAdvanceBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} recentTrips={recentTrips} lang={lang} drivers={drivers}
               locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} />
           ) : (
             <CustomerBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} recentPlaces={recentPlaces} recentTrips={recentTrips} lang={lang} drivers={drivers}
