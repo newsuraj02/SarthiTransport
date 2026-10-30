@@ -190,14 +190,16 @@ starts `false`, so the app ALWAYS opens on Current. It replaced the single "Book
 **Advance Booking = the same screen + date and time (owner 2026-10-30: "follow the same UI/UX, pattern, flow of work, exact
 same with the addition of date and time").** `CustomerAdvanceBooking` is only `<CustomerBooking {...props} advance />`;
 there is ONE copy of the booking screen -- change `CustomerBooking`, never re-create a second one. `advance` adds (owner
-2026-10-30): ONE single "Choose date & time" box (owner 2026-10-30: one box only, with the date selection and the time
-selection inside it -- tapping it opens ONE bottom sheet, `TimeSlotModal`, run as a TWO-STEP flow (owner 2026-10-30): step 1 "Select Date" (date field + Next; picking a
-date moves straight on), step 2 "Time slots" (date recap with "Change date", period buttons, slots), then "Confirm" returns
-both; the box then reads e.g. "4 Nov 2026 . Morning 6:00 AM"; the sheet must stay OUTSIDE the
-`.anim-rise` block, whose transform would otherwise break its `fixed` positioning) placed AFTER the Pickup/Drop flow and shown only once Pickup AND Drop are entered (typed, picked or via a trip
+2026-10-30): ONE single "Choose date & time" box (owner 2026-10-30) -- tapping it opens the PHONE'S OWN native "Set date and time" picker
+(day / month / year wheels + hour / minute / am-pm wheels): the box is an invisible `<input type="datetime-local">`
+(`min` = now via `localDateTimeMin()`; a past value is refused with a message) laid over our own label, which reads e.g.
+"4 Nov 2026 . Morning 10:00 AM" (`formatTimeSlot` derives the period from the hour, so ANY time works -- the old hourly
+slot sheet `TimeSlotModal` is gone). The est. km box and "Enter Weight" appear TOGETHER with that box (`showWeight` =
+`placesReady`, owner 2026-10-30: use the empty space), weight can be typed before the schedule is set, and the vehicle
+list stays hidden behind an orange "choose the date & time first" hint until the schedule exists; the box is placed AFTER the Pickup/Drop flow and shown only once Pickup AND Drop are entered (typed, picked or via a trip
 suggestion) -- the flow is Pickup -> Drop -> Date/Time -> Weight, the golden ring following that order; Pickup, "Use
-Current Location" and the trip suggestions are NOT gated by the schedule; the Weight row and vehicle list wait for BOTH
-date and time (`placesReady` = places chosen, `locationsReady` = places + schedule); `ADVANCE_BID_RADIUS_KM` (50 km)
+Current Location" and the trip suggestions are NOT gated by the schedule; only the vehicle list waits for the date AND time
+(`placesReady` = places chosen, `locationsReady` = places + schedule); `ADVANCE_BID_RADIUS_KM` (50 km)
 instead of the current radius; drivers checked against THIS slot (`findDriverLoadConflict` with `scheduledFor`); the
 per-category `minAdvanceNoticeHours` check when Book is tapped; `scheduledFor` ("YYYY-MM-DD HH:MM") sent with the request
 and the unmatched-load request (`bookingType: "advance"`); a "📅 date . time" line above Book once a vehicle is chosen;
