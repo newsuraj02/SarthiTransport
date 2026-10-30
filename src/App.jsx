@@ -9364,7 +9364,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
               </div>
             ) : showHamburger ? (
               <div className="flex-1 min-w-0 flex items-center justify-center">
-                {/* Current | Advance toggle (owner 2026-10-30): both options always visible, the one in use is GREEN.
+                {/* Current | Advance toggle (owner 2026-10-30): both options always visible; the one in use is GREEN for Current Booking and BLUE (#0052CC) for Advance Booking -- the same colours as the matching hamburger-menu items.
                     advanceOpen starts false, so the app always opens on "Current". */}
                 <div className="flex items-center rounded-full p-0.5 shadow-sm shrink-0" style={{ background: C.paper, border: `1.5px solid ${C.line}` }} role="group">
                   <button type="button" aria-pressed={!advanceOpen} onClick={() => setAdvanceOpen(false)}
@@ -9374,7 +9374,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
                   </button>
                   <button type="button" aria-pressed={advanceOpen} onClick={() => setAdvanceOpen(true)}
                     className="rounded-full px-2.5 py-1.5 text-[11px] font-black whitespace-nowrap"
-                    style={{ background: advanceOpen ? C.success : "transparent", color: advanceOpen ? "#FFFFFF" : C.inkSoft }}>
+                    style={{ background: advanceOpen ? "#0052CC" : "transparent", color: advanceOpen ? "#FFFFFF" : C.inkSoft }}>
                     {lang === "en" ? "Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग" : "एडवांस बुकिंग"}
                   </button>
                 </div>
