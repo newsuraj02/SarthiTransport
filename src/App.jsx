@@ -9368,14 +9368,14 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
                     advanceOpen starts false, so the app always opens on "Current". */}
                 <div className="flex items-center rounded-full p-0.5 shadow-sm shrink-0" style={{ background: C.paper, border: `1.5px solid ${C.line}` }} role="group">
                   <button type="button" aria-pressed={!advanceOpen} onClick={() => setAdvanceOpen(false)}
-                    className="rounded-full px-3.5 py-1.5 text-xs font-black whitespace-nowrap"
+                    className="rounded-full px-2.5 py-1.5 text-[11px] font-black whitespace-nowrap"
                     style={{ background: !advanceOpen ? C.success : "transparent", color: !advanceOpen ? "#FFFFFF" : C.inkSoft }}>
-                    {lang === "en" ? "Current" : "करंट"}
+                    {lang === "en" ? "Current Booking" : "करंट बुकिंग"}
                   </button>
                   <button type="button" aria-pressed={advanceOpen} onClick={() => setAdvanceOpen(true)}
-                    className="rounded-full px-3.5 py-1.5 text-xs font-black whitespace-nowrap"
+                    className="rounded-full px-2.5 py-1.5 text-[11px] font-black whitespace-nowrap"
                     style={{ background: advanceOpen ? C.success : "transparent", color: advanceOpen ? "#FFFFFF" : C.inkSoft }}>
-                    {lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}
+                    {lang === "en" ? "Advance Booking" : lang === "mr" ? "अ‍ॅडव्हान्स बुकिंग" : "एडवांस बुकिंग"}
                   </button>
                 </div>
               </div>
