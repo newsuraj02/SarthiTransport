@@ -246,8 +246,9 @@ quiet, plain-grey text links (no fill, no border -- "keep it simple and don't hi
 (opens the KYC & Vehicle settings screen via `onOpenKycSettings`; the menu's "Settings (KYC & Vehicle)" entry was REMOVED 2026-10-31 -- this link replaces it) and "WhatsApp Support" (the support
 number `ADMIN_WHATSAPP`, and it logs the same "व्हाट्सएप सपोर्ट" alert for that driver as the Helpline page). They stay on ONE
 row down to 320 px. Pinned in `verifyInvariants.mjs`.
+The hamburger / Advance row at the top of the driver home is FIXED (owner 2026-10-31): it sits OUTSIDE the scrolling area (`relative z-20 shrink-0`, before the scroller in `DriverApp`), so it never scrolls away.
 Also (owner 2026-10-31): the whole block -- My Wallet, the Driver Duty switch, KYC Settings and WhatsApp Support -- is pinned to the
-BOTTOM of the idle home screen (`DriverHome`'s root is a flex column with `height: 100%`; the block is `mt-auto`; the "You're live" area is `flex-1`, so the whole idle page FITS the screen and does not scroll -- owner 2026-10-31: "keep it intact"; it scrolls only if banners/permission cards genuinely add height), the two links
+BOTTOM of the idle home screen (`DriverHome`'s root is a flex column with `flex-1` inside the scroller, which is itself a flex column on this screen; the block is `mt-auto`; the "You're live" area is `flex-1`, so the whole idle page FITS the screen and does not scroll -- owner 2026-10-31: "keep it intact"; it scrolls only if banners/permission cards genuinely add height), the two links
 are `text-sm` with 17 px icons (still plain grey; they wrap onto two lines only at 320 px in English), and the idle pill says
 "Loads available in Pune Hub" (hi "पुणे हब में लोड उपलब्ध", mr "पुणे हबमध्ये लोड उपलब्ध") instead of "All India booking available".
 

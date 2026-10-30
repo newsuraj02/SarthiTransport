@@ -10157,7 +10157,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   }
 
   return (
-    <div className="px-5 pt-5 pb-5 flex flex-col" style={{ height: "100%" }}>
+    <div className="px-5 pt-5 pb-5 flex flex-col flex-1">
       {PERMISSION_CARDS_ENABLED && showAutoStartCard && (
         <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#EAF1FF", border: `1.5px solid ${C.navy}` }}>
           <div className="text-xs font-bold mb-1" style={{ color: C.navy }}>
@@ -11737,17 +11737,9 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
         </button>
       )}
       {setFareOpen && <SetFareForm driver={driver} routeFares={routeFares} fareTiers={fareTiers} lang={lang} onClose={() => setSetFareOpen(false)} />}
-      <div className="flex-1 overflow-y-auto relative">
-        {/* This whole row (menu, advance badge) is for the idle main
-            dashboard only -- Wallet, My Trips, and the Advance Ride/s view
-            (all reached via the hamburger menu, and all with their own Back
-            control) don't need it, same as an active trip doesn't. My
-            Wallet and the Driver Duty switch used to live here too — moved
-            down to the bottom of DriverHome's own idle screen instead (see
-            DriverHome), alongside the new Get Estimate card that now takes
-            this top spot. */}
+      {/* Owner 2026-10-31: the hamburger row is FIXED at the top (outside the scrolling area). */}
         {realHamburgerVisible && (
-          <div className="flex items-center justify-between gap-2 px-5 pt-3">
+          <div className="relative z-20 shrink-0 flex items-center justify-between gap-2 px-5 pt-3 pb-1" style={{ background: C.bg }}>
             <div className="relative shrink-0">
               <button onClick={() => { setMenuOpen(true); setShareNoteOpen(false); setShowBookingHint(false); }} className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm" style={{ background: "#0052CC", border: "1.5px solid #0052CC" }}>
                 <Menu size={18} color="#fff" strokeWidth={2.5} />
@@ -11773,6 +11765,15 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
             )}
           </div>
         )}
+      <div className={`flex-1 overflow-y-auto relative${realHamburgerVisible ? " flex flex-col" : ""}`}>
+        {/* This whole row (menu, advance badge) is for the idle main
+            dashboard only -- Wallet, My Trips, and the Advance Ride/s view
+            (all reached via the hamburger menu, and all with their own Back
+            control) don't need it, same as an active trip doesn't. My
+            Wallet and the Driver Duty switch used to live here too — moved
+            down to the bottom of DriverHome's own idle screen instead (see
+            DriverHome), alongside the new Get Estimate card that now takes
+            this top spot. */}
         {!driver.trialNoteSeen && (
           <button onClick={() => setDriver({ ...driver, trialNoteSeen: true })} className="w-full flex items-center justify-between gap-2 px-5 py-3.5 text-left" style={{ background: C.metallicGold }}>
             <span className="text-xs font-black" style={{ color: "#000000" }}>🎁 {lang === "en" ? "Free trial for 30 days" : lang === "mr" ? "30 दिवसांची फ्री ट्रायल" : "30 दिनों का फ्री ट्रायल"}</span>
