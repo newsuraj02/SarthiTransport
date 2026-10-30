@@ -10157,7 +10157,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   }
 
   return (
-    <div className="px-5 pt-5 pb-5 flex flex-col" style={{ minHeight: "100%" }}>
+    <div className="px-5 pt-5 pb-5 flex flex-col" style={{ height: "100%" }}>
       {PERMISSION_CARDS_ENABLED && showAutoStartCard && (
         <div className="rounded-lg p-3 mb-3 shadow-sm" style={{ background: "#EAF1FF", border: `1.5px solid ${C.navy}` }}>
           <div className="text-xs font-bold mb-1" style={{ color: C.navy }}>
@@ -10297,7 +10297,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
       )}
 
       {driver.online && driver.kyc === "Approved" && !driver.blacklisted ? (
-        <div className="flex flex-col items-center justify-center text-center py-10 px-4" style={{ minHeight: 420 }}>
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-4 px-4">
           <p className="text-base font-black mb-10 rounded-full px-4 py-1.5" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{lang === "en" ? "Loads available in Pune Hub" : lang === "mr" ? "पुणे हबमध्ये लोड उपलब्ध" : "पुणे हब में लोड उपलब्ध"}</p>
           {/* Gentle radar ring (.live-pulse, index.css) so a driver glancing
               at the phone can tell at once that the app is online and
@@ -10357,7 +10357,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
         </div>
       </div>
       {/* Quiet shortcuts under the wallet / duty bar (owner 2026-10-31: "keep it simple and don't highlight it too much"):
-          plain grey text, no fill, no border. KYC Settings = the same screen as the menu's "Settings (KYC & Vehicle)". */}
+          plain grey text, no fill, no border. KYC Settings = the KYC & Vehicle settings screen (the menu entry was removed). */}
       <div className="mt-2 flex flex-wrap items-center justify-center gap-x-1.5 text-sm font-semibold" style={{ color: C.inkSoft }}>
         <button type="button" onClick={() => onOpenKycSettings?.()} className="flex items-center gap-1.5 px-2 py-3 whitespace-nowrap">
           <Settings2 size={17} color={C.inkSoft} /> {lang === "en" ? "KYC Settings" : lang === "mr" ? "KYC सेटिंग्स" : "KYC सेटिंग्स"}
@@ -10889,7 +10889,7 @@ function DriverKyc({ driver, setDriver, vehicleTypes, addVehicleType, lang, step
   // canSubmit/kycStepCompleted below call .trim() on it. Skipping this cast
   // crashed the whole KYC screen (capacityKg.trim is not a function) for
   // any driver whose vehicleSpec already had a numeric capacityKg set --
-  // e.g. reopening "Settings (KYC & Vehicle)" after a first submission.
+  // e.g. reopening the KYC & Vehicle settings screen after a first submission.
   const [capacityKg, setCapacityKg] = usePersistedState("sarthi_driverKyc_capacityKg", driver.vehicleSpec?.capacityKg != null ? String(driver.vehicleSpec.capacityKg) : "", !deferred);
   const [vehicleNumber, setVehicleNumber] = usePersistedState("sarthi_driverKyc_vehicleNumber", driver.vehicleSpec?.vehicleNumber || "", !deferred);
 
@@ -11816,9 +11816,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
                   <span className="rounded-full px-1.5 py-0.5 text-[10px] font-black text-white" style={{ background: C.safety }}>{announcementAlerts.unreadCount} {lang === "en" ? "new" : lang === "mr" ? "नवीन" : "नई"}</span>
                 )}
               </button>
-              <button onClick={() => { setSettingsView("kyc"); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-5 py-4 text-base font-semibold text-left" style={{ color: C.ink, borderBottom: `1px solid ${C.line}` }}>
-                <Settings2 size={16} color={C.marigoldDeep} /> {lang === "en" ? "Settings (KYC & Vehicle)" : lang === "mr" ? "सेटिंग्स (KYC व गाडी)" : "सेटिंग्स (KYC व गाड़ी)"}
-              </button>
+              {/* Owner 2026-10-31: KYC Settings moved out of this menu -- it lives on the driver home screen (quiet link under the wallet / duty bar). */}
               <div style={{ borderBottom: `1px solid ${C.line}` }}>
                 <button
                   onClick={() => { if (shareNoteOpen) { shareApp(); setMenuOpen(false); setShareNoteOpen(false); } else { setShareNoteOpen(true); } }}

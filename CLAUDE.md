@@ -243,11 +243,11 @@ Pickup pin until a GPS fix arrives. Framed once per anchor, so the person's own 
 
 **Driver home shortcuts (owner 2026-10-31).** Under the "My Wallet" + duty bar on the driver's idle home screen sit two
 quiet, plain-grey text links (no fill, no border -- "keep it simple and don't highlight it too much"): "KYC Settings"
-(opens the same screen as the menu's "Settings (KYC & Vehicle)", via `onOpenKycSettings`) and "WhatsApp Support" (the support
+(opens the KYC & Vehicle settings screen via `onOpenKycSettings`; the menu's "Settings (KYC & Vehicle)" entry was REMOVED 2026-10-31 -- this link replaces it) and "WhatsApp Support" (the support
 number `ADMIN_WHATSAPP`, and it logs the same "व्हाट्सएप सपोर्ट" alert for that driver as the Helpline page). They stay on ONE
 row down to 320 px. Pinned in `verifyInvariants.mjs`.
 Also (owner 2026-10-31): the whole block -- My Wallet, the Driver Duty switch, KYC Settings and WhatsApp Support -- is pinned to the
-BOTTOM of the idle home screen (`DriverHome`'s root is a flex column with `minHeight: 100%`; the block is `mt-auto`), the two links
+BOTTOM of the idle home screen (`DriverHome`'s root is a flex column with `height: 100%`; the block is `mt-auto`; the "You're live" area is `flex-1`, so the whole idle page FITS the screen and does not scroll -- owner 2026-10-31: "keep it intact"; it scrolls only if banners/permission cards genuinely add height), the two links
 are `text-sm` with 17 px icons (still plain grey; they wrap onto two lines only at 320 px in English), and the idle pill says
 "Loads available in Pune Hub" (hi "पुणे हब में लोड उपलब्ध", mr "पुणे हबमध्ये लोड उपलब्ध") instead of "All India booking available".
 
