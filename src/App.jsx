@@ -9382,23 +9382,20 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
                     <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
                   </button>
                 )}
-                {/* Toggles between the two booking modes — shows what
-                    tapping it will switch TO, not the mode you're currently
-                    in: "Book Advance" (blue, matching the hamburger) while
-                    on the immediate-booking page, flipping to "Book
-                    Current" (green, matching Book Now) once the Advance
-                    Date/Time panel is open, so tapping it again switches
-                    straight back. */}
-                <button onClick={() => setAdvanceOpen((v) => !v)}
-                  className="rounded-full pl-3 pr-3.5 py-2 flex items-center gap-1.5 shadow-sm shrink-0"
-                  style={{ background: advanceOpen ? C.success : "#0052CC", border: `1.5px solid ${advanceOpen ? C.success : "#0052CC"}` }}>
-                  {advanceOpen ? <Truck size={16} color="#fff" strokeWidth={2.5} /> : <CalendarClock size={16} color="#fff" strokeWidth={2.5} />}
-                  <span className="text-xs font-black text-white whitespace-nowrap">
-                    {advanceOpen
-                      ? (lang === "en" ? "Book Current" : lang === "mr" ? "करंट बुक करा" : "करंट बुक करें")
-                      : (lang === "en" ? "Book Advance" : lang === "mr" ? "अ‍ॅडव्हान्स बुक करा" : "एडवांस बुक करें")}
-                  </span>
-                </button>
+                {/* Current | Advance toggle (owner 2026-10-30): both options always visible, the one in use is GREEN.
+                    advanceOpen starts false, so the app always opens on "Current". */}
+                <div className="flex items-center rounded-full p-0.5 shadow-sm shrink-0" style={{ background: C.paper, border: `1.5px solid ${C.line}` }} role="group">
+                  <button type="button" aria-pressed={!advanceOpen} onClick={() => setAdvanceOpen(false)}
+                    className="rounded-full px-3.5 py-1.5 text-xs font-black whitespace-nowrap"
+                    style={{ background: !advanceOpen ? C.success : "transparent", color: !advanceOpen ? "#FFFFFF" : C.inkSoft }}>
+                    {lang === "en" ? "Current" : "करंट"}
+                  </button>
+                  <button type="button" aria-pressed={advanceOpen} onClick={() => setAdvanceOpen(true)}
+                    className="rounded-full px-3.5 py-1.5 text-xs font-black whitespace-nowrap"
+                    style={{ background: advanceOpen ? C.success : "transparent", color: advanceOpen ? "#FFFFFF" : C.inkSoft }}>
+                    {lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="flex-1 min-w-0" />

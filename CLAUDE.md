@@ -182,6 +182,11 @@ shrink (global `min-width: 0` in `index.css`). Layering rule (owner 2026-10-29: 
 block is its own stacking layer, so the Pickup row is `relative z-40` and the Drop wrapper `relative z-30` -- keep
 them, or suggestion lists get covered by the rows below. Pinned in `verifyInvariants.mjs`.
 
+**Current | Advance toggle (owner 2026-10-30).** The customer header has a two-segment toggle -- "Current" and "Advance"
+(hi "करंट"/"एडवांस", mr "करंट"/"अ‍ॅडव्हान्स") -- both always visible, the one in use GREEN, the other plain. `advanceOpen`
+starts `false`, so the app ALWAYS opens on Current. It replaced the single "Book Advance / Book Current" pill. Pinned in
+`verifyInvariants.mjs`.
+
 **Map vs header taps (owner 2026-10-29: tapping a header icon set a map point as Pickup).** Both live maps
 (`NearbyVehiclesMap`, `LiveTrackingMap`) are wrapped in their own stacking context (`isolation: isolate` +
 `overflow-hidden`) so Google's high-z-index panes can never sit above the page header or the fixed Refresh button,
