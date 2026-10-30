@@ -9491,7 +9491,7 @@ function DriverTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, vehicleTypes, fareTiers, lang, onOpenWallet, locationPermission, bookingExtras }) {
+function DriverHome({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, vehicleTypes, fareTiers, lang, onOpenWallet, onOpenKycSettings, raiseAlert, locationPermission, bookingExtras }) {
   const [cancelError, setCancelError] = useState("");
   const myTrip = bookings.find((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && !isFutureAdvance(b.scheduledFor));
   // Snapshot of the trip End Trip was just tapped on — the booking flips to
@@ -10353,6 +10353,17 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
             </span>
           </button>
         </div>
+      </div>
+      {/* Quiet shortcuts under the wallet / duty bar (owner 2026-10-31: "keep it simple and don't highlight it too much"):
+          plain grey text, no fill, no border. KYC Settings = the same screen as the menu's "Settings (KYC & Vehicle)". */}
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 text-xs font-semibold" style={{ color: C.inkSoft }}>
+        <button type="button" onClick={() => onOpenKycSettings?.()} className="flex items-center gap-1.5 px-2 py-2.5 whitespace-nowrap">
+          <Settings2 size={14} color={C.inkSoft} /> {lang === "en" ? "KYC Settings" : lang === "mr" ? "KYC सेटिंग्स" : "KYC सेटिंग्स"}
+        </button>
+        <span className="w-px h-4" style={{ background: C.line }} aria-hidden="true" />
+        <a href={`https://wa.me/${ADMIN_WHATSAPP}`} target="_blank" rel="noreferrer" onClick={() => raiseAlert?.("driver", "व्हाट्सएप सपोर्ट", null, driver.mobile)} className="flex items-center gap-1.5 px-2 py-2.5 whitespace-nowrap">
+          <MessageCircle size={14} color={C.inkSoft} /> {lang === "en" ? "WhatsApp Support" : lang === "mr" ? "व्हॉट्सअ‍ॅप सपोर्ट" : "व्हाट्सएप सपोर्ट"}
+        </a>
       </div>
     </div>
   );
@@ -11848,7 +11859,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
         {realHamburgerVisible && !kycReminderDismissed && !isDriverKycComplete(driver) && (
           <KycReminderBanner lang={lang} missing={getDriverKycMissing(driver)} onComplete={() => setSettingsView("kyc")} onDismiss={() => setKycReminderDismissed(true)} />
         )}
-        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} locationPermission={locationPermission} bookingExtras={bookingExtras} />}
+        {tab === "home" && rideView === "current" && <DriverHome driver={driver} setDriver={setDriver} bookings={bookings} driverRespondBooking={driverRespondBooking} completeBooking={completeBooking} startLoading={startLoading} cancelBooking={cancelBooking} vehicleTypes={vehicleTypes} fareTiers={fareTiers} lang={lang} onOpenWallet={() => setTab("wallet")} onOpenKycSettings={() => setSettingsView("kyc")} raiseAlert={raiseAlert} locationPermission={locationPermission} bookingExtras={bookingExtras} />}
         {tab === "home" && rideView === "advance" && (
           selectedAdvanceId && advanceBookings.find((ab) => ab.id === selectedAdvanceId) ? (() => {
             const ab = advanceBookings.find((x) => x.id === selectedAdvanceId);

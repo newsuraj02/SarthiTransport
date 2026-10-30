@@ -241,6 +241,12 @@ driver's trip screen) frames a 500 m radius (`OTP_MAP_RADIUS_KM`) around the dri
 Pickup pin until a GPS fix arrives. Framed once per anchor, so the person's own zoom is kept; after the OTP
 (`mode="route"`) the old fit-the-whole-route behaviour is unchanged. Pinned in `verifyInvariants.mjs`.
 
+**Driver home shortcuts (owner 2026-10-31).** Under the "My Wallet" + duty bar on the driver's idle home screen sit two
+quiet, plain-grey text links (no fill, no border -- "keep it simple and don't highlight it too much"): "KYC Settings"
+(opens the same screen as the menu's "Settings (KYC & Vehicle)", via `onOpenKycSettings`) and "WhatsApp Support" (the support
+number `ADMIN_WHATSAPP`, and it logs the same "व्हाट्सएप सपोर्ट" alert for that driver as the Helpline page). They stay on ONE
+row down to 320 px. Pinned in `verifyInvariants.mjs`.
+
 **Set Fare (owner 2026-10-29).** The driver's "Set Fare" pill appears ONLY on the main (idle home) page --
 `realHamburgerVisible` in `DriverApp` -- and nowhere else (not Wallet, My Trips, Advance rides, Profile, or an
 active trip). Pinned in `verifyInvariants.mjs`.
