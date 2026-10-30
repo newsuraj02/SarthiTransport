@@ -7019,6 +7019,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const [dropPlaceId, setDropPlaceId] = useState(restored?.drop?.placeId || null);
   // True while the box text is the NAME of a chosen place (so a language change may re-read it); typing clears it.
   const pickupFromPlaceRef = useRef(!!restored?.pickup);
+  // True while Pickup + Drop came from a tapped suggestion (past trip): they are filled in the background and hidden --
+  // only the est. km box and Enter Weight are shown (owner 2026-10-30).
+  const [fromTrip, setFromTrip] = useState(false);
   const dropFromPlaceRef = useRef(!!restored?.drop);
   const [distance, setDistance] = useState(null);
   const [weight, setWeight] = useState(restored?.weight || "");
@@ -7089,7 +7092,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     return () => { clearTimeout(t); cleanupKeep?.(); };
   }, [focusReq]);
   const onMapClick = async (lat, lng) => {
-    if (weight.trim()) return; // Pickup/Drop are tucked away once a weight is typed
+    if (weight.trim() || fromTrip) return; // Pickup/Drop are tucked away once a weight is typed / a trip suggestion was tapped
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field) return;
     const found = await reverseGeocodeFull(lat, lng);
@@ -7177,11 +7180,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // does, since the customer might still be mid-edit after typing.
   const onPickupPlaceSelected = (p) => {
     setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupPlaceId(p.placeId || null); pickupFromPlaceRef.current = true;
-    setBookedMsg(false); setActiveField("drop"); requestFocus("drop");
+    setFromTrip(false); setBookedMsg(false); setActiveField("drop"); requestFocus("drop");
   };
   const onDropPlaceSelected = (p) => {
     setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropPlaceId(p.placeId || null); dropFromPlaceRef.current = true;
-    setActiveField("weight"); requestFocus("weight");
+    setFromTrip(false); setActiveField("weight"); requestFocus("weight");
   };
   // Past trips remember Google place ids; their names are re-read in today's language (tripNames) when they were
   // saved in another one.
@@ -7205,7 +7208,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const onTripSelected = (t) => {
     setPickup(tripName(t, "pickup")); setPickupCoords({ lat: t.pickupLat, lng: t.pickupLng }); setPickupPlaceId(t.pickupPlaceId || null); pickupFromPlaceRef.current = true;
     setDrop(tripName(t, "drop")); setDropCoords({ lat: t.dropLat, lng: t.dropLng }); setDropPlaceId(t.dropPlaceId || null); dropFromPlaceRef.current = true;
-    setBookedMsg(false); setActiveField("weight"); requestFocus("weight");
+    setFromTrip(true); setBookedMsg(false); setActiveField("weight"); requestFocus("weight");
   };
 
   // Language changed (or the page just reloaded into a new language with a half-filled form): re-read the Pickup and
@@ -7245,12 +7248,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     clearAfterDrop();
   };
   const onPickupTyped = (text) => {
-    setPickup(text); setPickupCoords(null); setPickupPlaceId(null); pickupFromPlaceRef.current = false;
+    setPickup(text); setPickupCoords(null); setPickupPlaceId(null); pickupFromPlaceRef.current = false; setFromTrip(false);
     setBookedMsg(false);
     clearAfterPickup();
   };
   const onDropTyped = (text) => {
-    setDrop(text); setDropCoords(null); setDropPlaceId(null); dropFromPlaceRef.current = false;
+    setDrop(text); setDropCoords(null); setDropPlaceId(null); dropFromPlaceRef.current = false; setFromTrip(false);
     clearAfterDrop();
   };
   // After a request goes out the whole form is emptied and "Your message has gone to drivers" is shown (the
@@ -7260,6 +7263,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     setPickup(""); setPickupCoords(null); setPickupPlaceId(null); pickupFromPlaceRef.current = false;
     setDrop(""); setDropCoords(null); setDropPlaceId(null); dropFromPlaceRef.current = false;
     clearAfterDrop();
+    setFromTrip(false);
     setActiveField(null);
   };
 
@@ -7334,7 +7338,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const dropSelected = !!dropCoords || (!mapsReady && drop.trim().length >= 3);
   const showDrop = pickupSelected;                    // Drop box is invisible until Pickup is selected
   const locationsReady = pickupSelected && dropSelected && !!pickup.trim() && !!drop.trim();
-  const showWeight = locationsReady;                  // Weight is invisible until Pickup AND Drop are selected
+  const showWeight = locationsReady;
+  const tripHidden = fromTrip && locationsReady;      // trip suggestion tapped: Pickup/Drop stay filled but hidden                  // Weight is invisible until Pickup AND Drop are selected
   const sameLocation = locationsReady && isSameLocation(pickup, drop, pickupCoords, dropCoords);
   const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
   // Weight typed = Pickup and Drop tuck away (owner brief 2026-10-29); the vehicles below + the map take over.
@@ -7507,7 +7512,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             .anim-rise block below is its own stacking layer, and a later layer paints over an earlier one no matter
             how high a z-index sits INSIDE it. So the two boxes that own a suggestion dropdown get their own
             explicit layers: Pickup (z-40) above Drop (z-30) above everything under them. */}
-        {!weightTyped && (
+        {!weightTyped && !tripHidden && (
         <div className="relative z-40 flex items-start gap-2">
           <div className="flex-1 min-w-0">
             <LocationField
@@ -7569,7 +7574,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           </div>
         )}
 
-        {showDrop && !weightTyped && (
+        {showDrop && !weightTyped && !tripHidden && (
         <div className="anim-rise relative z-30">
         <LocationField
           lang={lang}
@@ -7587,7 +7592,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
         )}
 
-        {weightTyped && !chosen && (
+        {weightTyped && !chosen && !tripHidden && (
           <button type="button" onClick={() => setWeight("")} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
             <span className="flex flex-col items-center py-1 shrink-0" aria-hidden="true">
               <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
@@ -7657,6 +7662,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             </div>
           </div>
         </div>
+        )}
+
+        {tripHidden && !chosen && (
+          <button type="button" onClick={() => { setFromTrip(false); setWeight(""); }} className="self-start text-xs font-extrabold underline -mt-1" style={{ color: C.navy }}>
+            {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
+          </button>
         )}
 
         {weightCapHit && (

@@ -149,8 +149,11 @@ Location" (no Book button yet); the customer's last 3 whole trips (pickup AND dr
 2026-10-29: not inside the dropdown, and not kept on screen after a pickup is typed/chosen); Drop and Weight are not rendered. Drop appears once Pickup is
 SELECTED (`pickupSelected` = coordinates known: suggestion / current location / map tap / trip /
 typed text that has geocoded; without Google Maps, 3+ typed characters count); Weight appears once
-Pickup AND Drop are selected (`showWeight`). Tapping a trip fills both and moves the cursor +
-golden highlight to Weight (`onTripSelected`, `requestFocus`). Nothing is pre-selected (owner
+Pickup AND Drop are selected (`showWeight`). Tapping a trip fills both IN THE BACKGROUND and moves the cursor +
+golden highlight to Weight (`onTripSelected`, `requestFocus`); the Pickup and Drop boxes (and any pickup/drop text) then
+stay HIDDEN (`fromTrip` / `tripHidden`, owner 2026-10-30) -- only the est. km box and Enter Weight show, plus a small
+"Change pickup / drop" link that brings the boxes back with the trip's values; picking/typing a place any other way
+clears `fromTrip` and behaves as before. Nothing is pre-selected (owner
 2026-10-29): the vehicle list shows no highlighted card, and the sticky "Book this vehicle" bar exists ONLY once
 the customer has tapped a vehicle (`selectedEntry`); it books that vehicle (`bookEntry`). Tapping Book shows "Sending request..." for a
 deliberate 700 ms. Developer-brief rules (owner 2026-10-29, "implement these changes only"): (1) the moment a
