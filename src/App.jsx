@@ -7805,7 +7805,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                           : <>🚚 {lang === "en" ? "Book this vehicle" : lang === "mr" ? "ही गाडी बुक करा" : "यह गाड़ी बुक करें"}{canBook ? ` · ${fmt(bookEntry.fare)}` : ""}</>}
                       </button>
                       <button type="button" onClick={() => setSelectedDriverKey(null)} disabled={!!sendingKey}
-                        className="w-full text-center text-sm font-extrabold py-2.5 rounded-xl" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: "1.5px solid rgba(0,82,204,0.3)" }}>
+                        className="w-full text-center text-xs font-semibold py-2 rounded-xl" style={{ color: C.inkSoft, background: "transparent", border: `1px solid ${C.line}` }}>
                         {lang === "en" ? "See all vehicles" : lang === "mr" ? "सर्व गाड्या पहा" : "सभी गाड़ियाँ देखें"}
                       </button>
                     </>
