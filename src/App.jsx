@@ -9363,25 +9363,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
                 </span>
               </div>
             ) : showHamburger ? (
-              <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
-                {/* Replaces the old "Advance Booking/s" hamburger menu item —
-                    only shown when there's actually one to jump to. */}
-                {advanceBookings.length > 0 && (
-                  <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }}
-                    className="relative shrink-0 rounded-full pl-3 pr-2.5 py-2 flex items-center gap-1 shadow-sm" style={{ background: C.marigoldDeep }}>
-                    <Clock3 size={13} color="#FFFFFF" />
-                    <span className="text-xs font-black text-white">{lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}</span>
-                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shadow-sm" style={{ background: "#FFFFFF", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
-                      {advanceBookings.length}
-                    </span>
-                  </button>
-                )}
-                {activeBooking && (
-                  <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : lang === "mr" ? "सध्याच्या राइडवर जा" : "मौजूदा राइड पर जाएं"}
-                    className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-                    <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
-                  </button>
-                )}
+              <div className="flex-1 min-w-0 flex items-center justify-center">
                 {/* Current | Advance toggle (owner 2026-10-30): both options always visible, the one in use is GREEN.
                     advanceOpen starts false, so the app always opens on "Current". */}
                 <div className="flex items-center rounded-full p-0.5 shadow-sm shrink-0" style={{ background: C.paper, border: `1.5px solid ${C.line}` }} role="group">
@@ -9403,6 +9385,30 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
             {/* Always reserve the Refresh button's spot (fixed, top right) so the
                 Current | Advance toggle never sits under it. */}
             <div className="w-9 h-9 shrink-0 pointer-events-none" aria-hidden="true" />
+          </div>
+        )}
+        {/* The "Advance (N)" list button and the "go to current ride" arrow sit on their own line under the centred toggle,
+            only when there is something to show, so the toggle itself stays exactly centred (owner 2026-10-30). */}
+        {headerHasContent && showHamburger && !showRideBadge && (advanceBookings.length > 0 || !!activeBooking) && (
+          <div className="relative z-30 flex items-center justify-end gap-2 px-5 pt-2 pointer-events-none [&_button]:pointer-events-auto">
+              {/* Replaces the old "Advance Booking/s" hamburger menu item —
+                  only shown when there's actually one to jump to. */}
+              {advanceBookings.length > 0 && (
+                <button onClick={() => { setRideView("advance"); setSelectedAdvanceId(null); }}
+                  className="relative shrink-0 rounded-full pl-3 pr-2.5 py-2 flex items-center gap-1 shadow-sm" style={{ background: C.marigoldDeep }}>
+                  <Clock3 size={13} color="#FFFFFF" />
+                  <span className="text-xs font-black text-white">{lang === "en" ? "Advance" : lang === "mr" ? "अ‍ॅडव्हान्स" : "एडवांस"}</span>
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shadow-sm" style={{ background: "#FFFFFF", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
+                    {advanceBookings.length}
+                  </span>
+                </button>
+              )}
+              {activeBooking && (
+                <button onClick={() => { setRideView("current"); setAddingAnother(false); }} title={lang === "en" ? "Go to current ride" : lang === "mr" ? "सध्याच्या राइडवर जा" : "मौजूदा राइड पर जाएं"}
+                  className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm shrink-0" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
+                  <ArrowRight size={18} color="#000000" strokeWidth={2.5} />
+                </button>
+              )}
           </div>
         )}
         <NotificationBanner permission={rideNotifications.permission} onEnable={rideNotifications.enable} lang={lang} context="customer" />

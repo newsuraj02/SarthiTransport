@@ -184,7 +184,7 @@ them, or suggestion lists get covered by the rows below. Pinned in `verifyInvari
 
 **Current | Advance toggle (owner 2026-10-30).** The customer header has a two-segment toggle -- "Current" and "Advance"
 (hi "करंट"/"एडवांस", mr "करंट"/"अ‍ॅडव्हान्स") -- both always visible, the one in use GREEN, the other plain. `advanceOpen`
-starts `false`, so the app ALWAYS opens on Current. It replaced the single "Book Advance / Book Current" pill. Pinned in
+starts `false`, so the app ALWAYS opens on Current. It replaced the single "Book Advance / Book Current" pill. The toggle is exactly CENTRED in the header (owner 2026-10-30; menu and the Refresh spacer are the same width either side); the "Advance (N)" list button and the go-to-current-ride arrow, when present, sit on their own right-aligned line UNDER it so they can never push it off-centre. Pinned in
 `verifyInvariants.mjs`.
 
 **Map vs header taps (owner 2026-10-29: tapping a header icon set a map point as Pickup).** Both live maps
