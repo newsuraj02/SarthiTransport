@@ -9401,7 +9401,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
               <div className="flex-1 min-w-0" />
             )}
             {/* Always reserve the Refresh button's spot (fixed, top right) so the
-                "Book Advance" button never sits under it. */}
+                Current | Advance toggle never sits under it. */}
             <div className="w-9 h-9 shrink-0 pointer-events-none" aria-hidden="true" />
           </div>
         )}
