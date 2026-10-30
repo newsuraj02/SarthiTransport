@@ -9432,7 +9432,7 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
                   <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FFFFFF" }}>
                     <Truck size={13} color={C.success} />
                   </div>
-                  <div className="flex-1 min-w-0 text-xs font-black text-white">{lang === "en" ? "Current Booking/s" : lang === "mr" ? "सध्याची बुकिंग पहा" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
+                  <div className="flex-1 min-w-0 text-xs font-black text-white">{lang === "en" ? "View Current Booking/s" : lang === "mr" ? "सध्याची बुकिंग पहा" : "वर्तमान बुकिंग देखें"} ({activeBooking ? 1 : 0})</div>
                 </button>
                 {/* Same blue (#0052CC) the old hamburger "Advance Booking/s"
                     item used before it was replaced by the header pill (see
