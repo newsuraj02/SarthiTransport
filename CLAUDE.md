@@ -191,8 +191,9 @@ starts `false`, so the app ALWAYS opens on Current. It replaced the single "Book
 same with the addition of date and time").** `CustomerAdvanceBooking` is only `<CustomerBooking {...props} advance />`;
 there is ONE copy of the booking screen -- change `CustomerBooking`, never re-create a second one. `advance` adds (owner
 2026-10-30): ONE single "Choose date & time" box (owner 2026-10-30: one box only, with the date selection and the time
-selection inside it -- tapping it opens ONE bottom sheet, `TimeSlotModal`, holding the date field, the period buttons and
-the time slots; Done returns both; the box then reads e.g. "4 Nov 2026 . Morning 6:00 AM"; the sheet must stay OUTSIDE the
+selection inside it -- tapping it opens ONE bottom sheet, `TimeSlotModal`, run as a TWO-STEP flow (owner 2026-10-30): step 1 "Select Date" (date field + Next; picking a
+date moves straight on), step 2 "Time slots" (date recap with "Change date", period buttons, slots), then "Confirm" returns
+both; the box then reads e.g. "4 Nov 2026 . Morning 6:00 AM"; the sheet must stay OUTSIDE the
 `.anim-rise` block, whose transform would otherwise break its `fixed` positioning) placed AFTER the Pickup/Drop flow and shown only once Pickup AND Drop are entered (typed, picked or via a trip
 suggestion) -- the flow is Pickup -> Drop -> Date/Time -> Weight, the golden ring following that order; Pickup, "Use
 Current Location" and the trip suggestions are NOT gated by the schedule; the Weight row and vehicle list wait for BOTH
