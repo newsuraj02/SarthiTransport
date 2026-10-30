@@ -7430,7 +7430,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
 
   // Once a driver is picked, the list collapses down to just that one
   // card (matching the design mock) instead of floating it to the top of
-  // a still-full list -- "Choose another vehicle" below it is the only
+  // a still-full list -- "See all vehicles" below it is the only
   // way back to the full list. Falls back to the full list if the
   // selected driver ever drops out of nearbyDrivers entirely (went
   // offline, no longer matches the current weight) rather than showing a
@@ -7691,7 +7691,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           because each is a real, different vehicle. Once one is picked,
           the list collapses to just that card (see visibleDrivers) with
           an inline "Book this vehicle" button right under it and a
-          "Choose another vehicle" link back to the full list; tapping
+          "See all vehicles" link back to the full list; tapping
           Book sends the request immediately (no confirmation sheet) and
           that same button becomes a disabled "Request sent. Please wait". */}
       {locationsReady && (
@@ -7795,10 +7795,20 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                     );
                   })}
                   {chosen && (
-                    <button type="button" onClick={() => setSelectedDriverKey(null)} disabled={!!sendingKey}
-                      className="w-full text-center text-sm font-extrabold py-2.5 rounded-xl" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: "1.5px solid rgba(0,82,204,0.3)" }}>
-                      ↺ {lang === "en" ? "Choose another vehicle" : lang === "mr" ? "दुसरी गाडी निवडा" : "दूसरी गाड़ी चुनें"}
-                    </button>
+                    <>
+                      {/* Order once a vehicle is chosen (owner 2026-10-30): the card, THEN "Book this vehicle", THEN "See all vehicles". */}
+                      <button type="button" disabled={!canBook || !!sendingKey} onClick={() => bookEntry && bookDriver(bookEntry)}
+                        className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
+                        style={{ background: sendingKey ? C.inkSoft : canBook ? C.success : "#E5EAF2", color: canBook || sendingKey ? "#FFFFFF" : "#9AA3B0", boxShadow: canBook && !sendingKey ? "0 8px 18px rgba(0,168,84,0.3)" : undefined }}>
+                        {sendingKey
+                          ? <span className="inline-flex items-center gap-2"><Loader2 size={20} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
+                          : <>🚚 {lang === "en" ? "Book this vehicle" : lang === "mr" ? "ही गाडी बुक करा" : "यह गाड़ी बुक करें"}{canBook ? ` · ${fmt(bookEntry.fare)}` : ""}</>}
+                      </button>
+                      <button type="button" onClick={() => setSelectedDriverKey(null)} disabled={!!sendingKey}
+                        className="w-full text-center text-sm font-extrabold py-2.5 rounded-xl" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: "1.5px solid rgba(0,82,204,0.3)" }}>
+                        {lang === "en" ? "See all vehicles" : lang === "mr" ? "सर्व गाड्या पहा" : "सभी गाड़ियाँ देखें"}
+                      </button>
+                    </>
                   )}
                 </>
               )}
@@ -7814,19 +7824,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             </>
           )}
         </div>
-      )}
-
-      {/* "Book this vehicle" exists ONLY once a vehicle has been tapped (owner 2026-10-29); nothing is pre-selected. */}
-      {selectedEntry && (
-      <div className="sticky bottom-0 z-10 px-5 pt-3 pb-3" style={{ background: "linear-gradient(to top, #F4F7FB 72%, rgba(244,247,251,0))" }}>
-        <button type="button" disabled={!canBook || !!sendingKey} onClick={() => bookEntry && bookDriver(bookEntry)}
-          className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
-          style={{ background: sendingKey ? C.inkSoft : canBook ? C.success : "#E5EAF2", color: canBook || sendingKey ? "#FFFFFF" : "#9AA3B0", boxShadow: canBook && !sendingKey ? "0 8px 18px rgba(0,168,84,0.3)" : undefined }}>
-          {sendingKey
-            ? <span className="inline-flex items-center gap-2"><Loader2 size={20} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
-            : <>🚚 {lang === "en" ? "Book this vehicle" : lang === "mr" ? "ही गाडी बुक करा" : "यह गाड़ी बुक करें"}{canBook ? ` · ${fmt(bookEntry.fare)}` : ""}</>}
-        </button>
-      </div>
       )}
     </div>
   );

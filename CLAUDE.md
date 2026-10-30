@@ -154,13 +154,15 @@ golden highlight to Weight (`onTripSelected`, `requestFocus`); the Pickup and Dr
 stay HIDDEN (`fromTrip` / `tripHidden`, owner 2026-10-30) -- only the est. km box and Enter Weight show, plus a small
 "Change pickup / drop" link that brings the boxes back with the trip's values; picking/typing a place any other way
 clears `fromTrip` and behaves as before. Nothing is pre-selected (owner
-2026-10-29): the vehicle list shows no highlighted card, and the sticky "Book this vehicle" bar exists ONLY once
-the customer has tapped a vehicle (`selectedEntry`); it books that vehicle (`bookEntry`). Tapping Book shows "Sending request..." for a
+2026-10-29): the vehicle list shows no highlighted card, and the "Book this vehicle" button exists ONLY once
+the customer has tapped a vehicle (`selectedEntry`); it books that vehicle (`bookEntry`). Order after a tap (owner
+2026-10-30): the chosen card, then "Book this vehicle", then "See all vehicles" (hi "सभी गाड़ियाँ देखें", mr "सर्व गाड्या पहा");
+there is no sticky bottom bar any more. Tapping Book shows "Sending request..." for a
 deliberate 700 ms. Developer-brief rules (owner 2026-10-29, "implement these changes only"): (1) the moment a
 weight is typed, Pickup + Drop tuck away (`weightTyped`) behind a one-line summary with "Change" (clears the
 weight, brings the boxes back); (2) the map is never collapsed or hidden before Book, and it is NOT pinned: it scrolls up and down with the rest of the page (owner 2026-10-29), and with a valid weight it plots ONLY the vehicles in the list below
 (`mapFixedDrivers`, inactive trucks hidden, `activeOnly`); (3) tapping a vehicle (`chosen`) leaves only that
-card + "Choose another vehicle" + Book Now (weight row, summary, banner and the "not seeing the right vehicle"
+card + "Book this vehicle" + "See all vehicles" (weight row, summary, banner and the "not seeing the right vehicle"
 link vanish); the map then shows only that type with the nearest one ringed and "N min" (`etaMinutes`, km x 1.3
 at 25 km/h); `CustomerAdvanceBooking` still has its own collapse; (4) typing in Pickup clears drop + distance +
 weight, typing in Drop clears distance + weight (`clearAfterPickup/Drop`; picking from a list or a trip never
