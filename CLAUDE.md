@@ -172,7 +172,10 @@ Pickup AND Drop are selected (`showWeight`). Tapping a trip fills both IN THE BA
 golden highlight to Weight (`onTripSelected`, `requestFocus`); the Pickup and Drop boxes (and any pickup/drop text) then
 stay HIDDEN (`fromTrip` / `tripHidden`, owner 2026-10-30) -- only the est. km box and Enter Weight show, plus a small
 "Change pickup / drop" link that brings the boxes back with the trip's values; picking/typing a place any other way
-clears `fromTrip` and behaves as before. Nothing is pre-selected (owner
+clears `fromTrip` and behaves as before; (owner 2026-10-31) the SAME tuck-away now also happens when Pickup AND Drop were both
+CHOSEN by hand -- a suggestion, "Use Current Location" or a map tap, never merely typed text -- so only the est. km box and Enter
+Weight stay (`onPickupPlaceSelected` / `onDropPlaceSelected` set `fromTrip` once both places are explicitly chosen); Advance Booking
+behaves identically. Nothing is pre-selected (owner
 2026-10-29): the vehicle list shows no highlighted card, and the "Book this vehicle" button exists ONLY once
 the customer has tapped a vehicle (`selectedEntry`); it books that vehicle (`bookEntry`). Order after a tap (owner
 2026-10-30): the chosen card, then "Book this vehicle", then "See all vehicles" (hi "सभी गाड़ियाँ देखें", mr "सर्व गाड्या पहा");

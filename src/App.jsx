@@ -7292,11 +7292,15 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   };
   const onPickupPlaceSelected = (p) => {
     setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupPlaceId(p.placeId || null); pickupFromPlaceRef.current = true;
-    setFromTrip(false); setBookedMsg(false); setActiveField("drop"); requestFocus("drop");
+    // Owner 2026-10-31: once BOTH places were explicitly chosen (suggestion / current location / map tap -- not just typed
+    // text) the boxes tuck away exactly like after a recent-trip tap (`fromTrip` / `tripHidden`), leaving km + weight.
+    const dropAlreadyChosen = dropFromPlaceRef.current && !!dropCoords;
+    setFromTrip(dropAlreadyChosen); setBookedMsg(false);
+    if (dropAlreadyChosen) goAfterPlaces(); else { setActiveField("drop"); requestFocus("drop"); }
   };
   const onDropPlaceSelected = (p) => {
     setDrop(p.name); setDropCoords({ lat: p.lat, lng: p.lng }); setDropPlaceId(p.placeId || null); dropFromPlaceRef.current = true;
-    setFromTrip(false); goAfterPlaces();
+    setFromTrip(pickupFromPlaceRef.current && !!pickupCoords); goAfterPlaces();
   };
   // Past trips remember Google place ids; their names are re-read in today's language (tripNames) when they were
   // saved in another one.
