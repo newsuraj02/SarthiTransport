@@ -6907,6 +6907,37 @@ function TickIcon({ size = 18, color = "#fff", stroke = 3 }) {
   );
 }
 // Grey shimmering placeholder rows shown while a list is still loading.
+// Owner 2026-10-31 ("the switch from Pickup and Drop needs to be more smooth"): a block that eases open/closed (height +
+// fade) instead of popping in/out. While closed it is unmounted (same as the old conditional render), so inputs inside are
+// gone exactly as before. In its steady open state overflow is visible and nothing positioned/stacked is added, so the
+// suggestion dropdowns and the Pickup z-40 / Drop z-30 layering keep working.
+function SmoothCollapse({ show, children, duration = 320 }) {
+  const [mounted, setMounted] = useState(show);
+  const [open, setOpen] = useState(show);
+  const [settled, setSettled] = useState(true);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return undefined; }
+    let t1; let t2; let raf;
+    if (show) {
+      setMounted(true); setSettled(false);
+      raf = requestAnimationFrame(() => { raf = requestAnimationFrame(() => setOpen(true)); });
+      t2 = setTimeout(() => setSettled(true), duration + 40);
+    } else {
+      setOpen(false); setSettled(false);
+      t1 = setTimeout(() => setMounted(false), duration + 40);
+    }
+    return () => { clearTimeout(t1); clearTimeout(t2); cancelAnimationFrame(raf); };
+  }, [show]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!mounted && !show) return null;
+  const t = `${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+  return (
+    <div style={{ display: "grid", gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0, marginTop: open ? undefined : 0, transition: `grid-template-rows ${t}, opacity ${duration - 60}ms ease, margin-top ${t}` }}>
+      <div style={{ minHeight: 0, overflow: settled && open ? "visible" : "hidden" }}>{children}</div>
+    </div>
+  );
+}
+
 function SkeletonRows({ rows = 3 }) {
   return (
     <div className="space-y-2.5" aria-hidden="true">
@@ -7562,6 +7593,15 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Nothing is pre-selected (owner 2026-10-29): the whole list is shown until the customer taps a vehicle;
   // only then does the Book button appear, and it books that vehicle.
   const chosen = !!selectedEntry;
+  // "Change pickup / drop" (owner 2026-10-31): sits UNDER the "Enter weight first..." note (or the date/time hint / the
+  // "Tap a vehicle" line), centred and dull grey. Only while Pickup/Drop are tucked away and no vehicle is chosen.
+  const changePlacesLink = tripHidden && !chosen ? (
+    <div className="text-center">
+      <button type="button" onClick={() => { setFromTrip(false); setWeight(""); }} className="px-3 py-2 text-xs font-semibold underline underline-offset-2" style={{ color: "#94A3B8" }}>
+        {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
+      </button>
+    </div>
+  ) : null;
   const visibleDrivers = selectedEntry ? [selectedEntry] : nearbyDrivers;
   const bookEntry = selectedEntry; // nothing is pre-selected: Book only appears once the customer taps a vehicle
   const canBook = locationsReady && !sameLocation && weightReady && !exceedsFleetMax && !!bookEntry;
@@ -7653,7 +7693,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             .anim-rise block below is its own stacking layer, and a later layer paints over an earlier one no matter
             how high a z-index sits INSIDE it. So the two boxes that own a suggestion dropdown get their own
             explicit layers: Pickup (z-40) above Drop (z-30) above everything under them. */}
-        {!weightTyped && !tripHidden && (
+        <SmoothCollapse show={!weightTyped && !tripHidden}>
         <div className="relative z-40 flex items-start gap-2">
           <div className="flex-1 min-w-0">
             <LocationField
@@ -7692,7 +7732,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             </button>
           )}
         </div>
-        )}
+        </SmoothCollapse>
 
 
         {/* The last 3 whole trips (pickup + drop), right under the Pickup box and ONLY while Pickup is still empty
@@ -7715,7 +7755,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           </div>
         )}
 
-        {showDrop && !weightTyped && !tripHidden && (
+        <SmoothCollapse show={showDrop && !weightTyped && !tripHidden}>
         <div className="anim-rise relative z-30">
         <LocationField
           lang={lang}
@@ -7731,7 +7771,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           ref={dropFieldRef}
         />
         </div>
-        )}
+        </SmoothCollapse>
 
         {weightTyped && !chosen && !tripHidden && (
           <button type="button" onClick={() => setWeight("")} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -7840,12 +7880,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
         )}
 
-        {tripHidden && !chosen && (
-          <button type="button" onClick={() => { setFromTrip(false); setWeight(""); }} className="self-start text-xs font-extrabold underline -mt-1" style={{ color: C.navy }}>
-            {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
-          </button>
-        )}
-
         {weightCapHit && (
           <div className="text-xs font-bold -mt-1" style={{ color: C.safety }}>
             {lang === "en" ? `Maximum weight is ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg.` : lang === "mr" ? `कमाल वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg आहे.` : `अधिकतम वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg है।`}
@@ -7926,6 +7960,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 👇 {lang === "en" ? "Tap a vehicle to select it" : lang === "mr" ? "निवडण्यासाठी गाडीवर टॅप करा" : "चुनने के लिए गाड़ी पर टैप करें"}
               </div>
               )}
+              {changePlacesLink}
               {bookingError && (
                 <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
               )}
@@ -8004,6 +8039,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               )}
             </>
           )}
+          {!(weightReady && !sameLocation && !weightUnitHint && !exceedsFleetMax) && changePlacesLink}
         </div>
       )}
       {advance && placesReady && !scheduleReady && (
@@ -8011,6 +8047,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
             👆 {lang === "en" ? "Choose the date & time first, then vehicles will show" : lang === "mr" ? "आधी तारीख आणि वेळ निवडा, मग गाड्या दिसतील" : "पहले तारीख और समय चुनें, तभी गाड़ियाँ दिखेंगी"}
           </div>
+          {changePlacesLink}
         </div>
       )}
     </div>
