@@ -2,6 +2,7 @@ const { onDocumentCreated, onDocumentWritten, onDocumentUpdated } = require("fir
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const crypto = require("crypto");
+const { ringWeightText } = require("./ringText");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -287,7 +288,8 @@ async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile, 
         bookingId,
         pickup: load.pickup || "-",
         drop: load.drop || "-",
-        weight: load.weight ? String(load.weight) : "-",
+        // Customer name / fare / km ride along inside the weight text (see ringText.js) -- no native build needed.
+        weight: ringWeightText(load),
         // Delivery receipt (see ringAck below): the phone posts these back
         // the moment it starts ringing. Older app builds just ignore them.
         ...(ackKey ? { ackKey, driverMobile, ackUrl: RING_ACK_URL } : {}),
@@ -1072,7 +1074,7 @@ exports.sendTestRing = onCall({ region: "asia-south1" }, async (request) => {
         bookingId: `TEST-${now}`,
         pickup: "🔔 टेस्ट घंटी — यह असली लोड नहीं है",
         drop: "बंद करने के लिए कोई भी बटन दबाएँ",
-        weight: "-",
+        weight: ringWeightText({ customerName: "टेस्ट ग्राहक", fare: 1250, distance: 14, weight: 1500 }),
       },
     });
     return { ok: true };

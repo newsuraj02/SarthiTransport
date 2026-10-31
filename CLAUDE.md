@@ -84,6 +84,13 @@ Before ANY release that touches native code, test on the owner's two
 phones (Google Pixel 10, Oppo): app open, app swiped away, phone locked —
 each must ring and wake the screen.
 
+Owner-requested change 2026-10-31 (ring screen content, NO native build -- owner: "make it work without new version"): the installed
+`RingingBookingActivity` shows only pickup / drop / weight (+ " किग्रा"), so `sendDirectRequestRingAlert` writes the customer name, fare
+and est. km INTO the weight text (`ringWeightText` in `functions/ringText.js`): "ग्राहक / भाड़ा / अनुमानित दूरी" lines, then
+"वज़न: <kg>" last. Lines with no value are skipped; with nothing extra the text is exactly the old one. The native files were NOT
+touched. Limit: the second ring path (`LoadWatcher`, native, builds the text from the booking itself) still shows the old three
+fields; a proper separate layout needs a native build, which the owner declined.
+
 Known leftovers, to remove only when the owner asks: the temporary
 `PushDiagnosticPanel` in Profile screens, `rawPushRegisterProbe`, and
 `WebView.setWebContentsDebuggingEnabled(true)` in `MainActivity`.
