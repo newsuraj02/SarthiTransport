@@ -10,7 +10,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="नई डायरेक्ट बुकिंग रिक्वेस्ट!"
+        android:text="🔔 नई डायरेक्ट बुकिंग रिक्वेस्ट!"
         android:textColor="#FFFFFF"
         android:textSize="24sp"
         android:textStyle="bold"

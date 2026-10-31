@@ -91,6 +91,10 @@ and est. km INTO the weight text (`ringWeightText` in `functions/ringText.js`): 
 touched. Limit: the second ring path (`LoadWatcher`, native, builds the text from the booking itself) still shows the old three
 fields; a proper separate layout needs a native build, which the owner declined.
 
+Owner-requested 2026-10-31, PREPARED but NOT built: a bell (🔔) in front of the ring screen's header "नई डायरेक्ट बुकिंग रिक्वेस्ट!"
+(`activity_ringing_booking.xml`, native). No build was triggered for it -- it ships with the NEXT native build, whenever one is needed
+anyway (owner: "prepare it without new build"). Until then the installed app shows the header without the bell.
+
 Known leftovers, to remove only when the owner asks: the temporary
 `PushDiagnosticPanel` in Profile screens, `rawPushRegisterProbe`, and
 `WebView.setWebContentsDebuggingEnabled(true)` in `MainActivity`.
