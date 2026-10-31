@@ -318,7 +318,7 @@ Diesel baseline ₹98/L; live price in Firestore `settings/main.dieselPricePerLi
 adds km × Δprice ÷ tier mileage to every fare. Resolution order: admin's saved
 route rate → scaled by the admin's other-tier ratio → formula.
 
-**Admin lists** (Drivers tab: FOUR boxes -- GPS On/Off, KYC Complete/Incomplete, Status On Duty/Off Duty, Low wallet -- each with its toggle inside (owner 2026-10-31; they replaced the 7 accordions, same lists), tap a box / toggle to list those drivers below, "All Drivers (N)" lists everyone, + search; Customers, Uninstalled, Blocked,
+**Admin lists** (Drivers tab: FOUR boxes -- GPS, KYC, Status, Low wallet -- showing their counts (owner 2026-10-31; they replaced the 7 accordions, same lists); tapping a box OPENS A NEW SCREEN with a toggle at the top (GPS On/Off, KYC Complete/Incomplete, Status On Duty/Off Duty; Low wallet has none) and the list of the selected side below it, back arrow returns; "All Drivers (N)" opens a screen with everyone; search stays on the boxes screen; Customers, Uninstalled, Blocked,
 New Registrations): numbered rows; name truncates but icons are never cut; driver
 GPS/KYC are compact "GPS"/"KYC" badges (green ok, red not); Call really disables
 after a tap (not just greys) and stays disabled until EVERY entry in that list

@@ -7,7 +7,7 @@
 // one of the imports here.
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, Clock,
+  Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
   MessageCircle, Phone, PhoneCall, Plus, Settings2, Siren, UserCircle2, Users,
   Wallet, Weight, XCircle,
@@ -3079,11 +3079,11 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // sections (once under whichever GPS section, once under whichever KYC
   // section) rather than being hidden by whichever single tab was picked.
   // (They used to be collapsible accordions; now they are the four boxes below.)
-  // Owner 2026-10-31: the 7 accordions became FOUR BOXES (GPS On/Off, KYC Complete/Incomplete, Status On/Off Duty, Low Wallet), each
-  // with its toggle inside. Same lists as before (gpsOn/gpsOff, complete/incomplete, online/offDuty, lowWallet); tapping a box (or
-  // its toggle) shows that list below. Default = KYC Incomplete, the section that used to be open.
+  // Owner 2026-10-31: the 7 accordions became FOUR BOXES (GPS, KYC, Status, Low Wallet). Tapping a box OPENS A NEW SCREEN with its
+  // toggle at the top (GPS On/Off, KYC Complete/Incomplete, Status On Duty/Off Duty) and the list of the selected side below it.
+  // Same lists as before (gpsOn/gpsOff, complete/incomplete, online/offDuty, lowWallet).
   const [boxPick, setBoxPick] = useState({ gps: "on", kyc: "incomplete", status: "on" });
-  const [activeBox, setActiveBox] = useState("kyc"); // gps | kyc | status | wallet | all
+  const [openBox, setOpenBox] = useState(null); // null = the boxes screen | gps | kyc | status | wallet | all
   // "Called this round" tracking for every driver card's Call button (see
   // renderRow) -- same round-robin pattern as detailPages.uninstalled in
   // AdminFleet (owner request, 2026-10-25): tapping Call disables that
@@ -3340,10 +3340,39 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
       { v: "off", label: L3("Off Duty", "ऑफ ड्युटी", "ऑफ ड्यूटी"), list: offDutySection, color: C.inkSoft }] },
     { key: "wallet", title: L3("Low wallet", "कमी वॉलेट", "कम वॉलेट"), list: lowWalletSection },
   ];
-  const activeBoxDef = driverBoxes.find((b) => b.key === activeBox);
-  const activeOpt = activeBoxDef?.opts?.find((o) => o.v === boxPick[activeBox]);
-  const shownList = activeBox === "all" ? bySection(totalInstalled) : activeBoxDef ? (activeOpt ? activeOpt.list : activeBoxDef.list) : [];
-  const shownLabel = activeBox === "all" ? L3("All Drivers", "सर्व ड्रायव्हर", "सभी ड्राइवर") : `${activeBoxDef?.title}${activeOpt ? ` · ${activeOpt.label}` : ""}`;
+  const openDef = driverBoxes.find((b) => b.key === openBox);
+  const openOpt = openDef?.opts?.find((o) => o.v === boxPick[openBox]);
+  const shownList = openBox === "all" ? bySection(totalInstalled) : openDef ? (openOpt ? openOpt.list : openDef.list) : [];
+  const shownTitle = openBox === "all" ? L3("All Drivers", "सर्व ड्रायव्हर", "सभी ड्राइवर") : openDef?.title;
+
+  if (openBox) {
+    return (
+      <div data-driver-screen={openBox}>
+        <button onClick={() => setOpenBox(null)} aria-label={L3("Back", "मागे", "वापस")} className="flex items-center gap-1 mb-3 p-3 rounded-full shadow-sm" style={{ background: C.marigold, color: "#000000", border: `1.5px solid ${C.marigoldDeep}` }}>
+          <ChevronLeft size={18} strokeWidth={3} />
+        </button>
+        <h2 className="text-lg font-extrabold mb-3" style={{ color: C.ink }}>{shownTitle}</h2>
+        {openDef?.opts && (
+          <div className="grid grid-cols-2 gap-1 rounded-xl p-1 mb-3" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+            {openDef.opts.map((o) => {
+              const on = boxPick[openBox] === o.v;
+              return (
+                <button key={o.v} type="button" aria-pressed={on} onClick={() => setBoxPick((prev) => ({ ...prev, [openBox]: o.v }))}
+                  className="rounded-lg py-2.5 px-2 text-sm font-extrabold leading-tight" style={{ background: on ? o.color : "transparent", color: on ? "#fff" : C.inkSoft }}>
+                  {o.label} ({o.list.length})
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="space-y-2">
+          {shownList.length === 0
+            ? <p className="text-xs text-center py-10" style={{ color: C.inkSoft }}>{L3("No driver here.", "इथे कोणताही ड्रायव्हर नाही.", "यहां कोई ड्राइवर नहीं है।")}</p>
+            : shownList.map(renderRow)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -3352,8 +3381,8 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             reset button) -- with sections replacing tabs below, its job is
             now to open or close every section at once, in place of the old
             "reset both tabs to all" action. */}
-        <button onClick={() => setActiveBox(activeBox === "all" ? "kyc" : "all")}
-          className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: activeBox === "all" ? C.navy : C.bg, color: activeBox === "all" ? "#fff" : C.ink, border: `1px solid ${activeBox === "all" ? C.navy : C.line}` }}>
+        <button onClick={() => setOpenBox("all")}
+          className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: C.bg, color: C.ink, border: `1px solid ${C.line}` }}>
           <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"} ({totalInstalled.length})
         </button>
       </div>
@@ -3364,49 +3393,31 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           {searchResults.map(renderRow)}
         </div>
       ) : (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2" data-driver-boxes>
-            {driverBoxes.map((box) => {
-              const isActive = activeBox === box.key;
-              const picked = box.opts ? box.opts.find((o) => o.v === boxPick[box.key]) : null;
-              const count = picked ? picked.list.length : box.list.length;
-              return (
-                <div key={box.key} role="group" aria-label={box.title} onClick={() => setActiveBox(box.key)}
-                  className="rounded-xl p-2.5 cursor-pointer shadow-sm" style={{ background: C.paper, border: `2px solid ${isActive ? C.navy : C.line}` }}>
-                  <div className="flex items-baseline justify-between gap-2 mb-2">
-                    <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: C.inkSoft }}>{box.title}</span>
-                    <span className="text-lg font-extrabold leading-none" style={{ color: picked ? picked.color : C.safety }}>{count}</span>
-                  </div>
-                  {box.opts ? (
-                    <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-1 rounded-lg p-0.5" style={{ background: C.bg }}>
-                      {box.opts.map((o) => {
-                        const on = boxPick[box.key] === o.v;
-                        return (
-                          <button key={o.v} type="button" aria-pressed={on}
-                            onClick={(e) => { e.stopPropagation(); setBoxPick((prev) => ({ ...prev, [box.key]: o.v })); setActiveBox(box.key); }}
-                            className="rounded-md py-1.5 px-1 text-[11px] font-extrabold leading-tight whitespace-nowrap" style={{ background: on ? o.color : "transparent", color: on ? "#fff" : C.inkSoft }}>
-                            {o.label}
-                          </button>
-                        );
-                      })}
+        <div className="grid grid-cols-2 gap-2" data-driver-boxes>
+          {driverBoxes.map((box) => (
+            <button key={box.key} type="button" onClick={() => setOpenBox(box.key)} aria-label={box.title}
+              className="rounded-xl p-3 text-left shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: C.inkSoft }}>{box.title}</span>
+                <ChevronRight size={16} color={C.inkSoft} />
+              </div>
+              {box.opts ? (
+                <div className="flex items-baseline gap-3">
+                  {box.opts.map((o) => (
+                    <div key={o.v} className="min-w-0">
+                      <div className="text-xl font-extrabold leading-none" style={{ color: o.color }}>{o.list.length}</div>
+                      <div className="text-[11px] font-bold mt-1 truncate" style={{ color: C.inkSoft }}>{o.label}</div>
                     </div>
-                  ) : (
-                    <div className="rounded-lg py-1.5 px-1 text-center text-[11px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>
-                      {L3("Below", "यापेक्षा कमी", "से कम")} ₹{minWallet}
-                    </div>
-                  )}
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-          <div className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
-            <div className="text-sm font-bold mb-2" style={{ color: C.ink }}>{shownLabel} ({shownList.length})</div>
-            <div className="space-y-2">
-              {shownList.length === 0
-                ? <p className="text-xs" style={{ color: C.inkSoft }}>{L3("No driver here.", "इथे कोणताही ड्रायव्हर नाही.", "यहां कोई ड्राइवर नहीं है।")}</p>
-                : shownList.map(renderRow)}
-            </div>
-          </div>
+              ) : (
+                <div>
+                  <div className="text-xl font-extrabold leading-none" style={{ color: C.safety }}>{box.list.length}</div>
+                  <div className="text-[11px] font-bold mt-1" style={{ color: C.inkSoft }}>{L3("Below", "यापेक्षा कमी", "से कम")} ₹{minWallet}</div>
+                </div>
+              )}
+            </button>
+          ))}
         </div>
       )}
     </div>
