@@ -12367,6 +12367,9 @@ export default function App() {
   // Customer/Driver signup completes (see langPromptPending below); a
   // returning/login user never has this flag set, so they never see it.
   const [lang, setLang] = usePersistedState("sarthi_lang", "hi");
+  // Owner 2026-10-31 (clean fonts): tell the page which language is showing, so index.css can set the right type rules
+  // per script (:lang(hi)/:lang(mr) vs :lang(en)). Display only.
+  useEffect(() => { try { document.documentElement.lang = lang; } catch (e) { /* ignore */ } }, [lang]);
   const [langPromptPending, setLangPromptPending] = usePersistedState("sarthi_langPromptPending", false);
   // One-off "Account created" moment after a brand-new sign-up (see SuccessBurst).
   const [signupBurst, setSignupBurst] = useState(false);

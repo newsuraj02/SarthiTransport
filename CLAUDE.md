@@ -455,6 +455,14 @@ moved. `index.css` also sets `--sarthi-css: 1` and `index.html` reloads ONCE (`s
 i.e. when the stylesheet failed to load (the unstyled-screen report). Bigger visual changes (per-screen layouts) were NOT done: they
 need the design-first route. Pinned in `verifyInvariants.mjs`.
 
+**Clean fonts (owner 2026-10-31: "more clean irrespective of the language ... don't remove bold, italic, underline").** Same fonts (Inter +
+Noto Sans Devanagari); `<html lang>` now follows the app language (`App()` effect) so `index.css` can treat each script on its own:
+Latin headings get -0.01em, Hindi/Marathi headings none (never squeeze conjuncts), Hindi/Marathi weight 800 is drawn at 700 (still
+bold), Inter loads its real italics (`ital` axis in the Google Fonts link), underlines keep their underline with a cleaner offset,
+kerning/ligatures on. Bold / italic / underline are NEVER removed -- no rule may set `font-style`/`text-decoration`/low weights with
+`!important`. Layout measured before/after on six screens: 0 moved (1 element 1 px in Hindi). Not viewable in the sandbox (Google Fonts
+are not loaded there), so the real-font look is for the owner to confirm on a phone. Pinned in `verifyInvariants.mjs`.
+
 **Working agreement.** Push automatically after build + invariants pass, EXCEPT
 GPS/notification-related changes — ask first (owner rule, 2026-10-23). After a
 push, give the deploy commands: `git checkout claude/app-from-document-njzc58 &&

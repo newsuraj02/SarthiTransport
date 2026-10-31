@@ -295,7 +295,7 @@ button:disabled {
 /* Mobile browsers must not inflate text on their own in landscape / on zoomed displays. */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* Balanced headings, no one-word last lines in paragraphs (ignored by browsers that lack it). */
-h1, h2, h3, h4 { text-wrap: balance; letter-spacing: -0.01em; }
+h1, h2, h3, h4 { text-wrap: balance; }
 p { text-wrap: pretty; }
 /* Brand-tinted text selection instead of the default grey/blue. */
 ::selection { background: rgba(0, 82, 204, 0.18); }
@@ -309,3 +309,21 @@ button:not(:disabled), a, input, textarea, select {
 }
 /* No rubber-band / glow bounce behind the app when a page is dragged past its end. */
 body { overscroll-behavior-y: none; }
+
+/* ---- Clean fonts (owner 2026-10-31: "more clean irrespective of the language ... don't remove bold, italic, underline") ----
+   Inter (Latin) + Noto Sans Devanagari (Hindi / Marathi) stay; this only evens out how each script is drawn. Bold, italic and
+   underline are all kept. The html lang attribute follows the app language (see App()). */
+body {
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  font-variant-ligatures: common-ligatures;
+}
+/* A touch of tightening only for Latin headings; Devanagari conjuncts must never be squeezed. */
+:lang(en) :is(h1, h2, h3, h4) { letter-spacing: -0.01em; }
+:lang(hi) :is(h1, h2, h3, h4), :lang(mr) :is(h1, h2, h3, h4) { letter-spacing: 0; }
+/* Devanagari at the heaviest weight (800) clogs the joined letters; bold stays bold, at 700. */
+:lang(hi) :is(.font-black, .font-extrabold), :lang(mr) :is(.font-black, .font-extrabold) { font-weight: 700; }
+/* Cleaner underlines: thinner, a little below the text, not cutting through descenders / matras. */
+.underline, u, a:where([style*="underline"]) { text-underline-offset: 0.18em; text-decoration-thickness: from-font; text-decoration-skip-ink: auto; }
+/* Real italic where the font has one (Inter now loads its italics); Devanagari has none, so the browser slants it. */
+i, em, .italic { font-synthesis: style; }
