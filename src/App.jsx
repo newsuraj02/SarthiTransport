@@ -7637,8 +7637,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           Falls back to customerLocation (device GPS) only before Pickup has been entered/geocoded.
           Owner brief 2026-10-29: once a weight is typed the map shows ONLY active vehicles of the matching types
           (inactive ones hidden); once a vehicle is chosen, only that type, with the nearest one ringed and its minutes shown. */}
-      <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
-        activeOnly={weightTyped} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
+      {/* Owner 2026-10-31: an evident line between the map and the form (3 px navy rule + a soft shadow below it).
+          Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched. */}
+      <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
+        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
+          activeOnly={weightTyped} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
+      </div>
       {bookedMsg && (
         <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
           ✓ {lang === "en" ? "Your message has gone to drivers" : lang === "mr" ? "तुमचा संदेश ड्रायव्हर्सना पाठवला आहे" : "आपका संदेश ड्राइवरों को भेज दिया गया है"}

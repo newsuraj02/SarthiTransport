@@ -199,7 +199,7 @@ is a compact 35% of the screen (owner 2026-10-29: 50% pushed the content off scr
 (`NEARBY_MAP_DEFAULT_RADIUS_KM`); it (and the live ride-tracking map) has NO +/- zoom buttons and
 keeps the customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`); markers are the
 top-down blue-and-yellow truck (`truckMarkerIcon`) and a blue pickup dot. Weight caps, fares and
-the vehicle/driver list are unchanged. Inputs may always
+the vehicle/driver list are unchanged. An evident 3 px navy line + soft shadow separates the map from the form (owner 2026-10-31, `data-map-divider`; a plain wrapper, no position/z-index). Inputs may always
 shrink (global `min-width: 0` in `index.css`). Layering rule (owner 2026-10-29: the km box + Enter Weight painted over the Drop suggestions): every `.anim-rise`
 block is its own stacking layer, so the Pickup row is `relative z-40` and the Drop wrapper `relative z-30` -- keep
 them, or suggestion lists get covered by the rows below. Pinned in `verifyInvariants.mjs`.
