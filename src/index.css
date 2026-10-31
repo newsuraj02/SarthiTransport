@@ -5,6 +5,8 @@
 html, body, #root {
   height: 100%;
 }
+/* Marker the index.html self-heal script looks for: proves this stylesheet really loaded. */
+:root { --sarthi-css: 1; }
 
 /* Android 15+ (targetSdk 36 — see android/variables.gradle) draws the app
    edge-to-edge behind the status/navigation bars by default now, instead of
@@ -287,3 +289,23 @@ button:not(:disabled):active {
 button:disabled {
   cursor: not-allowed;
 }
+
+/* ---- Clean-up pass (owner 2026-10-31, "make the whole app clean" -> safe shared styles only) ----
+   Nothing here changes a box size, a position or a layer; it only evens out how things read and feel. */
+/* Mobile browsers must not inflate text on their own in landscape / on zoomed displays. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* Balanced headings, no one-word last lines in paragraphs (ignored by browsers that lack it). */
+h1, h2, h3, h4 { text-wrap: balance; letter-spacing: -0.01em; }
+p { text-wrap: pretty; }
+/* Brand-tinted text selection instead of the default grey/blue. */
+::selection { background: rgba(0, 82, 204, 0.18); }
+/* Buttons are not text: a long press must not select their label or pop the callout. */
+button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* State changes (selected card, enabled/disabled, focus) fade instead of flipping. */
+button:not(:disabled), a, input, textarea, select {
+  transition-property: transform, box-shadow, filter, background-color, border-color, color;
+  transition-duration: 0.12s, 0.15s, 0.15s, 0.18s, 0.18s, 0.18s;
+  transition-timing-function: ease;
+}
+/* No rubber-band / glow bounce behind the app when a page is dragged past its end. */
+body { overscroll-behavior-y: none; }

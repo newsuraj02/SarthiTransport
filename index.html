@@ -135,6 +135,24 @@
         setTimeout(dismiss, HARD_CAP);
       })();
     </script>
+    <script>
+      /* Owner 2026-10-31 ("clean frontend"): on a flaky network the page script can arrive while the stylesheet fails, which
+         leaves the whole app unstyled (plain grey buttons, huge text). index.css sets --sarthi-css:1 on :root; if it is
+         missing once the page has loaded, reload ONE time (sessionStorage guard, so it can never loop). */
+      (function () {
+        try {
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              var ok = getComputedStyle(document.documentElement).getPropertyValue('--sarthi-css').trim() === '1';
+              if (!ok && sessionStorage.getItem('sarthi_css_retry') !== '1') {
+                sessionStorage.setItem('sarthi_css_retry', '1');
+                location.reload();
+              }
+            }, 1500);
+          });
+        } catch (e) { /* storage blocked: do nothing */ }
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

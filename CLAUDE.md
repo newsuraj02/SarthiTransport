@@ -447,6 +447,14 @@ states ring + tint instead of thicker borders (no layout jump). GPS/ring-frozen
 blocks (LoadBellButton, BackgroundLocationDisclosure, AdminLiveMap) were left
 exactly as they were.
 
+**Clean-up pass (owner 2026-10-31, "make the whole app clean" -> chosen approach: SAFE shared styles only).** The end of `index.css`
+("Clean-up pass") adds only look-and-feel rules that change no box size, position or layer: no text inflation, balanced headings /
+tidy paragraphs, brand-tinted selection, buttons not text-selectable, colour fades on state changes, no overscroll bounce. Layout of
+six screens (customer, customer after a trip tap, advance, driver in en/hi, customer hi) was measured before and after: 0 elements
+moved. `index.css` also sets `--sarthi-css: 1` and `index.html` reloads ONCE (`sarthi_css_retry` guard) when that marker is missing,
+i.e. when the stylesheet failed to load (the unstyled-screen report). Bigger visual changes (per-screen layouts) were NOT done: they
+need the design-first route. Pinned in `verifyInvariants.mjs`.
+
 **Working agreement.** Push automatically after build + invariants pass, EXCEPT
 GPS/notification-related changes — ask first (owner rule, 2026-10-23). After a
 push, give the deploy commands: `git checkout claude/app-from-document-njzc58 &&
