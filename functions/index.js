@@ -345,6 +345,8 @@ const PROJECT_ID = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "sar
 const RING_ACK_URL = `https://asia-south1-${PROJECT_ID}.cloudfunctions.net/ringAck`;
 const RING_RETRY_DELAYS_MS = [20000, 25000]; // re-ring at ~20 s, then ~45 s
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// How long the push gets to ring a phone before the in-app live watcher is allowed to (see onDirectRequestBroadcast).
+const WATCHER_BACKUP_DELAY_MS = 3000;
 
 exports.ringAck = onRequest({ region: "asia-south1", cors: false }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).send("POST only"); return; }
@@ -446,9 +448,13 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
     });
     console.log(`[onDirectRequestBroadcast] booking ${event.params.bookingId} (tier=${load.tierMaxKg}, pickup=${load.pickupLat},${load.pickupLng}): ${driversSnap.size} drivers checked\n${skipLog.join("\n")}`);
     // Saved BEFORE anything rings, so onBookingTaken always knows whose
-    // phone to stop -- even if someone accepts within a second.
+    // phone to stop -- even if someone accepts within a second. Owner 2026-10-31: written as
+    // `ringTargets` first, NOT `alertedDriverMobiles` -- the phone's live watcher (LoadWatcher)
+    // rings the moment it sees alertedDriverMobiles, and it only knows pickup/drop/weight, so it
+    // beat the push (which carries customer/fare/km). alertedDriverMobiles follows after the push
+    // has been sent (below); onBookingTaken / escalation read both lists.
     if (alerted.length) {
-      await event.data.ref.update({ alertedDriverMobiles: alerted, ringDeliveredCount: 0 }).catch((e) => console.error("[onDirectRequestBroadcast] alertedDriverMobiles", e.message));
+      await event.data.ref.update({ ringTargets: alerted, ringDeliveredCount: 0 }).catch((e) => console.error("[onDirectRequestBroadcast] ringTargets", e.message));
       const batch = db.batch();
       const bookingId = event.params.bookingId;
       for (const [mobile, { key }] of Object.entries(ringKeys)) {
@@ -456,7 +462,16 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       }
       await batch.commit().catch((e) => console.error("[onDirectRequestBroadcast] ringDeliveries", e.message));
     }
-    await Promise.all(sends.map((send) => send()));
+    try {
+      await Promise.all(sends.map((send) => send()));
+      // Let the push reach the phones first (it carries the full details); the live watcher is the
+      // backup and only starts ringing once alertedDriverMobiles appears. RUNG in the app makes
+      // sure a load rings once even when both arrive.
+      if (alerted.length) await sleep(WATCHER_BACKUP_DELAY_MS);
+    } finally {
+      // Always written, even if a send threw, so the backup ring is never lost.
+      if (alerted.length) await event.data.ref.update({ alertedDriverMobiles: alerted }).catch((e) => console.error("[onDirectRequestBroadcast] alertedDriverMobiles", e.message));
+    }
 
     // Re-ring whoever's phone hasn't confirmed, while the load is still open.
     const bookingId = event.params.bookingId;
@@ -491,7 +506,7 @@ exports.onBookingTaken = onDocumentUpdated("bookings/{bookingId}", async (event)
   const after = event.data?.after?.data();
   if (!before || !after) return;
   if (before.status !== "AwaitingDriver" || after.status === "AwaitingDriver") return;
-  const alerted = after.alertedDriverMobiles || before.alertedDriverMobiles || [];
+  const alerted = [...new Set([...(after.alertedDriverMobiles || before.alertedDriverMobiles || []), ...(after.ringTargets || before.ringTargets || [])])];
   const winner = after.driverMobile || null;
   const targets = alerted.filter((m) => m && m !== winner);
   if (!targets.length) return;
@@ -558,7 +573,7 @@ async function escalateOneBooking(bookingId, load, radiusKm, tierIndex) {
     (ongoingByDriver[key] ||= []).push(b);
   });
 
-  const alreadyAlerted = new Set(load.alertedDriverMobiles || []);
+  const alreadyAlerted = new Set([...(load.alertedDriverMobiles || []), ...(load.ringTargets || [])]);
   const newlyAlerted = [];
   const sends = [];
   const ringKeys = {};

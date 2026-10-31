@@ -91,6 +91,14 @@ and est. km INTO the weight text (`ringWeightText` in `functions/ringText.js`): 
 touched. Limit: the second ring path (`LoadWatcher`, native, builds the text from the booking itself) still shows the old three
 fields; a proper separate layout needs a native build, which the owner declined.
 
+Owner-requested 2026-10-31 (still NO native build) -- ring ORDER: `LoadWatcher` rings the instant it sees `alertedDriverMobiles` on a
+booking, and it only knows pickup/drop/weight, so it always beat the push and the customer/fare/km lines never showed. Now
+`onDirectRequestBroadcast` writes `ringTargets` (same list) FIRST, sends the push, waits `WATCHER_BACKUP_DELAY_MS` (3 s), THEN writes
+`alertedDriverMobiles` (in a `finally`, so the backup ring is never lost). `onBookingTaken` and the escalation job read BOTH lists.
+Trade-off the owner accepted: when the push does not arrive (the case LoadWatcher exists for), the backup ring is ~3 s later than before.
+The escalation waves (`escalateUnmatchedBookings`) were NOT changed. Pinned by a text-order check; the real function was also run
+against fake Firebase pieces to confirm the order (ringTargets -> push with details -> alertedDriverMobiles).
+
 Owner-requested 2026-10-31, PREPARED but NOT built: a bell (🔔) in front of the ring screen's header "नई डायरेक्ट बुकिंग रिक्वेस्ट!"
 (`activity_ringing_booking.xml`, native). No build was triggered for it -- it ships with the NEXT native build, whenever one is needed
 anyway (owner: "prepare it without new build"). Until then the installed app shows the header without the bell.
