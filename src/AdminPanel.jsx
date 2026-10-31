@@ -3078,12 +3078,12 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // belongs to exactly one of each pair and shows up in both of its
   // sections (once under whichever GPS section, once under whichever KYC
   // section) rather than being hidden by whichever single tab was picked.
-  // Each section is its own collapsible accordion (see expandedSections)
-  // instead of a click-to-switch tab, so admin can open more than one at
-  // once, or none, without losing the others' place.
-  const [expandedSections, setExpandedSections] = useState({ gpsOn: false, gpsOff: false, incomplete: true, complete: false, lowWallet: false, online: false, offDuty: false });
-  const toggleSection = (key) => setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  const allSectionsExpanded = Object.values(expandedSections).every(Boolean);
+  // (They used to be collapsible accordions; now they are the four boxes below.)
+  // Owner 2026-10-31: the 7 accordions became FOUR BOXES (GPS On/Off, KYC Complete/Incomplete, Status On/Off Duty, Low Wallet), each
+  // with its toggle inside. Same lists as before (gpsOn/gpsOff, complete/incomplete, online/offDuty, lowWallet); tapping a box (or
+  // its toggle) shows that list below. Default = KYC Incomplete, the section that used to be open.
+  const [boxPick, setBoxPick] = useState({ gps: "on", kyc: "incomplete", status: "on" });
+  const [activeBox, setActiveBox] = useState("kyc"); // gps | kyc | status | wallet | all
   // "Called this round" tracking for every driver card's Call button (see
   // renderRow) -- same round-robin pattern as detailPages.uninstalled in
   // AdminFleet (owner request, 2026-10-25): tapping Call disables that
@@ -3322,21 +3322,28 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
       </div>
     );
   };
-  // Section metadata for the accordions below -- a driver naturally belongs
-  // to exactly one GPS section and one KYC section, so it can appear in up
-  // to 2 of the first 4 lists at once (see the big comment above
-  // expandedSections). Low Wallet / Online / Off Duty are 3 more
+  // Box metadata -- a driver naturally belongs to exactly one GPS list and one KYC
+  // list, so it can appear in up to 2 of the first 4 lists at once (see the big
+  // comment above). Low Wallet / Online / Off Duty are 3 more
   // independent dimensions layered on top -- same filters the Live
   // Dashboard's own tiles used before those tiles were removed from there.
-  const sections = [
-    { key: "gpsOn", label: lang === "en" ? "GPS ON" : lang === "mr" ? "GPS ऑन" : "GPS ऑन", list: gpsOnSection },
-    { key: "gpsOff", label: lang === "en" ? "GPS OFF" : lang === "mr" ? "GPS ऑफ" : "GPS ऑफ", list: gpsOffSection },
-    { key: "incomplete", label: lang === "en" ? "Incomplete" : lang === "mr" ? "अपूर्ण" : "अधूरी", list: incompleteSection },
-    { key: "complete", label: lang === "en" ? "Complete" : lang === "mr" ? "पूर्ण" : "पूरी", list: completeSection },
-    { key: "lowWallet", label: lang === "en" ? "Low Wallet" : lang === "mr" ? "कमी वॉलेट" : "कम वॉलेट", list: lowWalletSection },
-    { key: "online", label: lang === "en" ? "Online — Ready" : lang === "mr" ? "ऑनलाइन — तयार" : "ऑनलाइन — तैयार", list: onlineSection },
-    { key: "offDuty", label: lang === "en" ? "Off Duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी", list: offDutySection },
+  const L3 = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  const driverBoxes = [
+    { key: "gps", title: "GPS", opts: [
+      { v: "on", label: L3("On", "ऑन", "ऑन"), list: gpsOnSection, color: C.success },
+      { v: "off", label: L3("Off", "ऑफ", "ऑफ"), list: gpsOffSection, color: C.safety }] },
+    { key: "kyc", title: "KYC", opts: [
+      { v: "complete", label: L3("Complete", "पूर्ण", "पूरी"), list: completeSection, color: C.success },
+      { v: "incomplete", label: L3("Incomplete", "अपूर्ण", "अधूरी"), list: incompleteSection, color: C.safety }] },
+    { key: "status", title: L3("Status", "स्टेटस", "स्टेटस"), opts: [
+      { v: "on", label: L3("On Duty", "ऑन ड्युटी", "ऑन ड्यूटी"), list: onlineSection, color: C.success },
+      { v: "off", label: L3("Off Duty", "ऑफ ड्युटी", "ऑफ ड्यूटी"), list: offDutySection, color: C.inkSoft }] },
+    { key: "wallet", title: L3("Low wallet", "कमी वॉलेट", "कम वॉलेट"), list: lowWalletSection },
   ];
+  const activeBoxDef = driverBoxes.find((b) => b.key === activeBox);
+  const activeOpt = activeBoxDef?.opts?.find((o) => o.v === boxPick[activeBox]);
+  const shownList = activeBox === "all" ? bySection(totalInstalled) : activeBoxDef ? (activeOpt ? activeOpt.list : activeBoxDef.list) : [];
+  const shownLabel = activeBox === "all" ? L3("All Drivers", "सर्व ड्रायव्हर", "सभी ड्राइवर") : `${activeBoxDef?.title}${activeOpt ? ` · ${activeOpt.label}` : ""}`;
 
   return (
     <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
@@ -3345,8 +3352,8 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             reset button) -- with sections replacing tabs below, its job is
             now to open or close every section at once, in place of the old
             "reset both tabs to all" action. */}
-        <button onClick={() => { const next = !allSectionsExpanded; setExpandedSections({ gpsOn: next, gpsOff: next, incomplete: next, complete: next, lowWallet: next, online: next, offDuty: next }); }}
-          className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: allSectionsExpanded ? C.navy : C.bg, color: allSectionsExpanded ? "#fff" : C.ink, border: `1px solid ${allSectionsExpanded ? C.navy : C.line}` }}>
+        <button onClick={() => setActiveBox(activeBox === "all" ? "kyc" : "all")}
+          className="text-sm font-bold px-4 py-2.5 rounded-lg flex items-center gap-1.5" style={{ background: activeBox === "all" ? C.navy : C.bg, color: activeBox === "all" ? "#fff" : C.ink, border: `1px solid ${activeBox === "all" ? C.navy : C.line}` }}>
           <Users size={16} /> {lang === "en" ? "All Drivers" : lang === "mr" ? "सर्व ड्रायव्हर" : "सभी ड्राइवर"} ({totalInstalled.length})
         </button>
       </div>
@@ -3357,22 +3364,49 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           {searchResults.map(renderRow)}
         </div>
       ) : (
-        <div className="space-y-2">
-          {sections.map(({ key, label, list }) => (
-            <div key={key} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}` }}>
-              <button onClick={() => toggleSection(key)} className="w-full flex items-center justify-between px-3 py-3" style={{ background: expandedSections[key] ? C.bg : C.paper }}>
-                <span className="text-sm font-bold" style={{ color: C.ink }}>{label} ({list.length})</span>
-                <span className="text-sm font-bold" style={{ color: C.marigoldDeep }}>{expandedSections[key] ? "▲" : "▼"}</span>
-              </button>
-              {expandedSections[key] && (
-                <div className="px-3 pb-3 pt-1 space-y-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                  {list.length === 0
-                    ? <p className="text-xs pt-2" style={{ color: C.inkSoft }}>{lang === "en" ? "No driver here." : lang === "mr" ? "इथे कोणताही ड्रायव्हर नाही." : "यहां कोई ड्राइवर नहीं है।"}</p>
-                    : list.map(renderRow)}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2" data-driver-boxes>
+            {driverBoxes.map((box) => {
+              const isActive = activeBox === box.key;
+              const picked = box.opts ? box.opts.find((o) => o.v === boxPick[box.key]) : null;
+              const count = picked ? picked.list.length : box.list.length;
+              return (
+                <div key={box.key} role="group" aria-label={box.title} onClick={() => setActiveBox(box.key)}
+                  className="rounded-xl p-2.5 cursor-pointer shadow-sm" style={{ background: C.paper, border: `2px solid ${isActive ? C.navy : C.line}` }}>
+                  <div className="flex items-baseline justify-between gap-2 mb-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: C.inkSoft }}>{box.title}</span>
+                    <span className="text-lg font-extrabold leading-none" style={{ color: picked ? picked.color : C.safety }}>{count}</span>
+                  </div>
+                  {box.opts ? (
+                    <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-1 rounded-lg p-0.5" style={{ background: C.bg }}>
+                      {box.opts.map((o) => {
+                        const on = boxPick[box.key] === o.v;
+                        return (
+                          <button key={o.v} type="button" aria-pressed={on}
+                            onClick={(e) => { e.stopPropagation(); setBoxPick((prev) => ({ ...prev, [box.key]: o.v })); setActiveBox(box.key); }}
+                            className="rounded-md py-1.5 px-1 text-[11px] font-extrabold leading-tight whitespace-nowrap" style={{ background: on ? o.color : "transparent", color: on ? "#fff" : C.inkSoft }}>
+                            {o.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg py-1.5 px-1 text-center text-[11px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>
+                      {L3("Below", "यापेक्षा कमी", "से कम")} ₹{minWallet}
+                    </div>
+                  )}
                 </div>
-              )}
+              );
+            })}
+          </div>
+          <div className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, background: C.paper }}>
+            <div className="text-sm font-bold mb-2" style={{ color: C.ink }}>{shownLabel} ({shownList.length})</div>
+            <div className="space-y-2">
+              {shownList.length === 0
+                ? <p className="text-xs" style={{ color: C.inkSoft }}>{L3("No driver here.", "इथे कोणताही ड्रायव्हर नाही.", "यहां कोई ड्राइवर नहीं है।")}</p>
+                : shownList.map(renderRow)}
             </div>
-          ))}
+          </div>
         </div>
       )}
     </div>
