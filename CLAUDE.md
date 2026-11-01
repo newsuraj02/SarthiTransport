@@ -178,10 +178,11 @@ Weight stay (`onPickupPlaceSelected` / `onDropPlaceSelected` set `fromTrip` once
 behaves identically. The hide/show is SMOOTH (owner 2026-10-31: `SmoothCollapse` eases the Pickup and Drop blocks closed/open instead of
 popping; open state has overflow visible and no extra stacking so the dropdowns and the z-40 / z-30 rule still work), and
 "Change pickup / drop" (`changePlacesLink`) sits UNDER the "Enter weight first..." note (the date/time hint in Advance, the "Tap a
-vehicle" line once vehicles show), centred, small and dull grey -- not at the top any more. A "Return trip" checkbox (`returnTrip`, owner 2026-11-01) sits right under the Pickup box, before the recent trips, in Current AND Advance:
-it stays visible while Pickup/Drop tuck away, becomes a small "↩ Return trip" line once a vehicle is chosen, is saved on the booking and the
-unmatched-load request as `returnTrip`, survives a language reload, is cleared after Book, and does NOT change the fare (nothing was
-specified) -- drivers/admin do not display it yet. Nothing is pre-selected (owner
+vehicle" line once vehicles show), centred, small and dull grey -- not at the top any more. A FIXED horizontal "Book Return trip" box with its checkbox sits at the BOTTOM of the booking screen (`data-return-bar`, owner 2026-11-01,
+Current AND Advance): `fixed`, z-40 (below the menu/sheets at z-50), page has `pb-28` so nothing hides behind it, it steps aside while a
+text box is being typed in (`typingNow`), stays visible after a vehicle is chosen, is saved on the booking and the unmatched-load
+request as `returnTrip`, survives a language reload and is cleared after Book. It does NOT change the fare yet (the calculation was only
+proposed -- see the fare note the owner is deciding on). Nothing is pre-selected (owner
 2026-10-29): the vehicle list shows no highlighted card, and the "Book this vehicle" button exists ONLY once
 the customer has tapped a vehicle (`selectedEntry`); it books that vehicle (`bookEntry`). Order after a tap (owner
 2026-10-30): the chosen card, then "Book this vehicle", then "See all vehicles" (hi "सभी गाड़ियाँ देखें", mr "सर्व गाड्या पहा");

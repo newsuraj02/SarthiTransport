@@ -7144,6 +7144,16 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Owner 2026-11-01: "Return trip" checkbox right under the Pickup box (Current and Advance). Saved on the booking as `returnTrip`;
   // it does NOT change the fare (not asked) and is cleared after Book like the rest of the form.
   const [returnTrip, setReturnTrip] = useState(!!restored?.returnTrip);
+  // The fixed "Book Return trip" bar (bottom of this screen) steps aside while a text box is being typed in, so it never sits
+  // on top of the keyboard / the field (checkboxes themselves don't count as typing).
+  const [typingNow, setTypingNow] = useState(false);
+  useEffect(() => {
+    const isText = (el) => !!el && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && !["checkbox", "radio", "button", "submit"].includes(el.type)));
+    const onIn = (e) => { if (isText(e.target)) setTypingNow(true); };
+    const onOut = () => setTimeout(() => setTypingNow(isText(document.activeElement)), 60);
+    document.addEventListener("focusin", onIn); document.addEventListener("focusout", onOut);
+    return () => { document.removeEventListener("focusin", onIn); document.removeEventListener("focusout", onOut); };
+  }, []);
   const scheduleReady = !advance || !!(advanceDate && advanceTime);
   const scheduledForValue = advance ? `${advanceDate} ${advanceTime}` : null;
   const [pickup, setPickup] = useState(restored?.pickup?.name || "");
@@ -7674,7 +7684,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   return (
-    <div className="pt-0 pb-8">
+    <div className="pt-0 pb-28">
       {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
       {/* Centers on the typed Pickup once it's resolved, not the customer's own live position -- a customer
           booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
@@ -7737,14 +7747,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           )}
         </div>
         </SmoothCollapse>
-
-        {/* Owner 2026-11-01: Return trip -- a checkbox just under the Pickup box (both Current and Advance). */}
-        {!chosen && (
-          <label data-return-trip className="flex items-center gap-2.5 px-1 -mt-1 cursor-pointer select-none">
-            <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-5 h-5 shrink-0 rounded" style={{ accentColor: C.navy }} />
-            <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Return trip" : lang === "mr" ? "परतीचा प्रवास" : "वापसी यात्रा"}</span>
-          </label>
-        )}
 
         {/* The last 3 whole trips (pickup + drop), right under the Pickup box and ONLY while Pickup is still empty
             (owner 2026-10-29: no heading text, and not kept on screen once a pickup is typed or chosen). */}
@@ -8018,11 +8020,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   })}
                   {chosen && (
                     <>
-                      {returnTrip && (
-                        <div className="text-center text-xs font-bold" style={{ color: C.inkSoft }}>
-                          ↩ {lang === "en" ? "Return trip" : lang === "mr" ? "परतीचा प्रवास" : "वापसी यात्रा"}
-                        </div>
-                      )}
                       {advance && (
                         <div className="text-center text-xs font-bold" style={{ color: C.inkSoft }}>
                           📅 {advanceDate} · {formatTimeSlot(advanceTime, lang)}
@@ -8064,6 +8061,20 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             👆 {lang === "en" ? "Choose the date & time first, then vehicles will show" : lang === "mr" ? "आधी तारीख आणि वेळ निवडा, मग गाड्या दिसतील" : "पहले तारीख और समय चुनें, तभी गाड़ियाँ दिखेंगी"}
           </div>
           {changePlacesLink}
+        </div>
+      )}
+      {/* Owner 2026-11-01: a FIXED horizontal box at the bottom with the "Book Return trip" checkbox (Current and Advance, one
+          shared screen). Plain fixed element, z-40: above the page, below the menu / sheets (z-50) and the header (z-30 row sits
+          at the top, nowhere near it); hidden while a text box is being typed in. */}
+      {!typingNow && (
+        <div data-return-bar className="fixed left-0 right-0 bottom-0 z-40 px-3 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)", pointerEvents: "none" }}>
+          <label className="mx-auto max-w-md flex items-center justify-between gap-3 rounded-2xl px-4 py-3 cursor-pointer select-none shadow-lg" style={{ background: C.paper, border: `2px solid ${returnTrip ? C.navy : C.line}`, pointerEvents: "auto" }}>
+            <span className="flex items-center gap-2 min-w-0">
+              <span className="text-base" aria-hidden="true">↩</span>
+              <span className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{lang === "en" ? "Book Return trip" : lang === "mr" ? "परतीचा प्रवास बुक करा" : "वापसी यात्रा बुक करें"}</span>
+            </span>
+            <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-6 h-6 shrink-0 rounded" style={{ accentColor: C.navy }} />
+          </label>
         </div>
       )}
     </div>
