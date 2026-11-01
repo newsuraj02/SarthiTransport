@@ -7598,6 +7598,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const returnFareNote = returnTrip ? (
     <div data-return-note className="text-center text-xs font-bold" style={{ color: C.success }}>
       ↩ {lang === "en" ? `Return fare included (${returnPct}% off the return leg)` : lang === "mr" ? `परतीचे भाडे समाविष्ट (परतीच्या प्रवासावर ${returnPct}% सूट)` : `वापसी का किराया शामिल (वापसी पर ${returnPct}% की छूट)`}
+      <button type="button" data-return-remove onClick={() => setReturnTrip(false)} className="ml-2 px-1.5 py-1 text-[11px] font-semibold underline" style={{ color: C.inkSoft }}>
+        {lang === "en" ? "Remove" : lang === "mr" ? "काढा" : "हटाएँ"}
+      </button>
     </div>
   ) : null;
 
@@ -7617,7 +7620,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Owner 2026-11-01: the fixed "Book Return trip" bar is only for the step where Pickup and Drop are being ENTERED -- i.e. exactly while the
   // Pickup/Drop boxes are on screen. Once both are in (they tuck away) or a weight is typed or a vehicle is chosen, it is gone;
   // "Change pickup / drop" brings the boxes -- and the bar -- back. The tick itself is kept either way.
-  const returnBarVisible = !weightTyped && !tripHidden && !chosen;
+  // Owner 2026-11-01 (later): and once it is TICKED the box is not shown any more (hence "&& !returnTrip"); the green "Return fare
+  // included" note with its small "Remove" is how the tick shows -- and gets undone -- from then on.
+  const returnBarVisible = !weightTyped && !tripHidden && !chosen && !returnTrip;
   const changePlacesLink = tripHidden && !chosen ? (
     <div className="text-center">
       <button type="button" onClick={() => { setFromTrip(false); setWeight(""); }} className="px-3 py-2 text-xs font-semibold underline underline-offset-2" style={{ color: "#94A3B8" }}>
@@ -7694,7 +7699,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   return (
-    <div className={returnBarVisible ? "pt-0 pb-28" : "pt-0 pb-8"}>
+    <div className={returnBarVisible ? "pt-0 pb-16" : "pt-0 pb-8"}>
       {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
       {/* Centers on the typed Pickup once it's resolved, not the customer's own live position -- a customer
           booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
@@ -8064,6 +8069,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               )}
             </>
           )}
+          {!(weightReady && !sameLocation && !weightUnitHint && !exceedsFleetMax) && returnFareNote}
           {!(weightReady && !sameLocation && !weightUnitHint && !exceedsFleetMax) && changePlacesLink}
         </div>
       )}
@@ -8072,6 +8078,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
             👆 {lang === "en" ? "Choose the date & time first, then vehicles will show" : lang === "mr" ? "आधी तारीख आणि वेळ निवडा, मग गाड्या दिसतील" : "पहले तारीख और समय चुनें, तभी गाड़ियाँ दिखेंगी"}
           </div>
+          {returnFareNote}
           {changePlacesLink}
         </div>
       )}
@@ -8080,13 +8087,13 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           and the sheets (z-50). Visible ONLY while the Pickup/Drop boxes are on screen (returnBarVisible); it must not depend on which
           text box has focus (an earlier version did, and vanished when the Weight box got the cursor). */}
       {returnBarVisible && (
-        <div data-return-bar className="fixed left-0 right-0 bottom-0 z-[25] px-3 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)", pointerEvents: "none" }}>
-          <label className="mx-auto max-w-md flex items-center justify-between gap-3 rounded-2xl px-4 py-3 cursor-pointer select-none shadow-lg" style={{ background: C.paper, border: `2px solid ${returnTrip ? C.navy : C.line}`, pointerEvents: "auto" }}>
-            <span className="flex items-center gap-2 min-w-0">
-              <span className="text-base" aria-hidden="true">↩</span>
-              <span className="text-sm font-extrabold truncate" style={{ color: C.ink }}>{lang === "en" ? "Book Return trip" : lang === "mr" ? "परतीचा प्रवास बुक करा" : "वापसी यात्रा बुक करें"}</span>
+        <div data-return-bar className="fixed left-0 right-0 bottom-0 z-[25] px-4 pt-1" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)", pointerEvents: "none" }}>
+          <label className="mx-auto max-w-sm flex items-center justify-between gap-3 rounded-xl px-3 py-1.5 cursor-pointer select-none" style={{ background: C.paper, border: `1px solid ${C.line}`, pointerEvents: "auto" }}>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="text-xs" aria-hidden="true" style={{ color: C.inkSoft }}>↩</span>
+              <span className="text-xs font-semibold truncate" style={{ color: C.inkSoft }}>{lang === "en" ? "Book Return trip" : lang === "mr" ? "परतीचा प्रवास बुक करा" : "वापसी यात्रा बुक करें"}</span>
             </span>
-            <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-6 h-6 shrink-0 rounded" style={{ accentColor: C.navy }} />
+            <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-4 h-4 shrink-0 rounded" style={{ accentColor: C.navy }} />
           </label>
         </div>
       )}
