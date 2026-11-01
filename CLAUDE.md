@@ -103,6 +103,12 @@ Owner-requested 2026-10-31, PREPARED but NOT built: a bell (🔔) in front of th
 (`activity_ringing_booking.xml`, native). No build was triggered for it -- it ships with the NEXT native build, whenever one is needed
 anyway (owner: "prepare it without new build"). Until then the installed app shows the header without the bell.
 
+Owner-requested 2026-11-01 -- ONE Accept: the Accept/Reject tapped on the native ring screen is read once by `RingingBridge` (it removes the
+extras as it hands them over). On a cold start / slow resume the booking was often not in `bookings` yet, `driverRespondBooking` silently did
+nothing and the tap was lost, so the load had to be accepted a second time in the app. Now the tap is PARKED (`pendingRingActionRef`) and
+settled by `settlePendingRingAction` as soon as the booking is in the list (accept/reject once; dropped if the load was taken or after the
+2-minute ring window). JS only (no native change). Pinned by a behaviour check in `verifyInvariants.mjs`.
+
 Known leftovers, to remove only when the owner asks: the temporary
 `PushDiagnosticPanel` in Profile screens, `rawPushRegisterProbe`, and
 `WebView.setWebContentsDebuggingEnabled(true)` in `MainActivity`.
@@ -192,8 +198,8 @@ every vehicle's fare is ONE-WAY + RETURN, where the return fare = Admin's saved 
 Admin's `returnPct` (settings/main, 15 now; passed App -> CustomerApp -> CustomerBooking). NO waiting charge. A green note "Return fare
 included (N% off on return)" shows with the vehicle list and above Book. The booking stores `returnTrip`, `oneWayFare`,
 `returnFare`, `returnPct`, and `fare` = the TOTAL; the unmatched-load request stores `returnTrip`. Drivers and admin see a "↩ Return trip"
-tag (`ReturnTripTag`: `RouteLine`, `RideTypeBanner`, admin lists, unmatched requests) and the driver's ring text has "वापसी यात्रा: हाँ
-(किराया आना-जाना)" (`ringWeightText`, needs `firebase deploy --only functions`). RETURN TRIP DRIVER FLOW (owner "go" 2026-11-01): there is still exactly ONE End Trip, tapped at the PICKUP once the vehicle is back. After the OTP the
+tag (`ReturnTripTag`: `RouteLine`, `RideTypeBanner`, admin lists, unmatched requests) and the driver's ring text has "↔ राउंड ट्रिप (आना-जाना)" as its FIRST
+line (`ringWeightText`, needs `firebase deploy --only functions` -- until functions are redeployed the ring screen cannot show it). RETURN TRIP DRIVER FLOW (owner "go" 2026-11-01): there is still exactly ONE End Trip, tapped at the PICKUP once the vehicle is back. After the OTP the
 driver's `LoadingTimer` shows only "↩ Reached drop — start return" (stamps `returnStartedAt`, ends nothing, no second OTP); after that it shows
 the normal End Trip plus an "on the way back" hint. From `returnStartedAt` on (`isReturning(b)` / `tripStretch(b)`), the driver's and the
 customer's map, the address line ("Back to Pickup") and the customer's "Distance to pickup" point back to the pickup, and the customer

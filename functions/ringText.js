@@ -8,10 +8,11 @@
  */
 function ringWeightText(load) {
   const lines = [];
+  // Owner 2026-11-01: a customer who ticked "Round trip" -- FIRST line, so it cannot be missed; the fare below is then the TOTAL
+  // (one way + return).
+  if (load?.returnTrip) lines.push("↔ राउंड ट्रिप (आना-जाना)");
   const name = String(load?.customerName || "").trim();
   if (name) lines.push(`ग्राहक: ${name}`);
-  // Owner 2026-11-01: a customer who ticked "Book Return trip" -- the fare below is then the TOTAL (one way + return).
-  if (load?.returnTrip) lines.push("वापसी यात्रा: हाँ (किराया आना-जाना)");
   const fare = Math.round(Number(load?.fare));
   if (fare > 0) lines.push(`भाड़ा: ₹${fare}`);
   const km = Number(load?.distance);

@@ -3037,6 +3037,21 @@ async function startNativeImmediateUpdate() {
 // native side). Resolves { action: null, bookingId: null } when nothing's
 // pending -- every caller below already treats that as a no-op.
 const RingingBridgeNative = registerPlugin("RingingBridge");
+
+// ---- ring-action settle (start) ----
+// Owner 2026-11-01 ("when you accept here it must be accepted in the app directly, no need to accept twice"): the Accept/Reject tapped on
+// the native ring screen is READ ONCE (RingingBridge removes it as it hands it over), but on a cold start / slow resume the booking is
+// often not in the app's `bookings` list yet -- driverRespondBooking then did nothing, the tap was lost and the load showed up as a
+// card that had to be accepted again. So the tap is parked and settled as soon as the booking arrives.
+const RING_ACTION_WAIT_MS = 120000; // same window as the ring screen itself (2 minutes)
+function settlePendingRingAction(pending, bookings, now = Date.now()) {
+  if (!pending) return "none";
+  if (now - pending.at > RING_ACTION_WAIT_MS) return "expired";
+  const b = (bookings || []).find((x) => x.id === pending.bookingId);
+  if (!b) return "wait"; // not loaded yet: keep it parked
+  return b.status === "AwaitingDriver" ? "go" : "taken"; // taken/cancelled meanwhile: nothing to claim
+}
+// ---- ring-action settle (end) ----
 async function consumePendingRingAction() {
   if (!isNativeApp) return { action: null, bookingId: null };
   try {
@@ -13129,6 +13144,23 @@ export default function App() {
   const driverRespondBookingRef = useRef(driverRespondBooking);
   useEffect(() => { driverRespondBookingRef.current = driverRespondBooking; });
 
+  // Parked Accept/Reject from the ring screen (see settlePendingRingAction) + always-latest copies of what settling needs.
+  const pendingRingActionRef = useRef(null);
+  const bookingsLatestRef = useRef(bookings);
+  const driverLatestRef = useRef(driver);
+  useEffect(() => { bookingsLatestRef.current = bookings; driverLatestRef.current = driver; });
+  const settleRingActionNow = () => {
+    const pending = pendingRingActionRef.current;
+    if (!pending || !driverLatestRef.current?.mobile) return; // wait for the driver profile too
+    const verdict = settlePendingRingAction(pending, bookingsLatestRef.current);
+    if (verdict === "wait") return;
+    pendingRingActionRef.current = null;
+    if (verdict !== "go") return;
+    driverRespondBookingRef.current(pending.bookingId, pending.accept).catch((e) => console.error("[ringingBridge] respond", e));
+  };
+  // Whenever the bookings (or the driver) change, give a parked ring tap another chance.
+  useEffect(() => { settleRingActionNow(); }, [bookings, driver?.mobile]);
+
   // Picks up an Accept/Reject made from the native full-screen ringing
   // screen (see RingingBookingActivity.java) and feeds it into the exact
   // same driverRespondBooking above that the in-app Accept/Reject buttons
@@ -13145,8 +13177,8 @@ export default function App() {
         if (!bookingId || (action !== "acceptBooking" && action !== "rejectBooking")) return;
         // "टेस्ट घंटी" (sendTestRing) -- nothing to claim; just confirm it worked.
         if (String(bookingId).startsWith("TEST-")) { try { localStorage.setItem("sarthi_testRingOkAt", String(Date.now())); } catch { /* storage off */ } window.dispatchEvent(new Event("sarthi-test-ring-ok")); return; }
-        driverRespondBookingRef.current(bookingId, action === "acceptBooking")
-          .catch((e) => console.error("[ringingBridge] respond", e));
+        pendingRingActionRef.current = { bookingId, accept: action === "acceptBooking", at: Date.now() };
+        settleRingActionNow();
       });
     };
     check();
