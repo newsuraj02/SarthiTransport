@@ -7141,6 +7141,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const [advanceDate, setAdvanceDate] = useState(restored?.advanceDate || "");
   const [advanceTime, setAdvanceTime] = useState(restored?.advanceTime || "");
   const [showTimeModal, setShowTimeModal] = useState(false);
+  // Owner 2026-11-01: "Return trip" checkbox right under the Pickup box (Current and Advance). Saved on the booking as `returnTrip`;
+  // it does NOT change the fare (not asked) and is cleared after Book like the rest of the form.
+  const [returnTrip, setReturnTrip] = useState(!!restored?.returnTrip);
   const scheduleReady = !advance || !!(advanceDate && advanceTime);
   const scheduledForValue = advance ? `${advanceDate} ${advanceTime}` : null;
   const [pickup, setPickup] = useState(restored?.pickup?.name || "");
@@ -7380,9 +7383,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     writeBookingDraft({
       pickup: pickupCoords ? { name: pickup, lat: pickupCoords.lat, lng: pickupCoords.lng, placeId: pickupPlaceId } : null,
       drop: dropCoords ? { name: drop, lat: dropCoords.lat, lng: dropCoords.lng, placeId: dropPlaceId } : null,
-      weight, weightUnit, advance: !!advance, advanceDate, advanceTime,
+      weight, weightUnit, advance: !!advance, advanceDate, advanceTime, returnTrip,
     });
-  }, [pickup, drop, pickupCoords, dropCoords, pickupPlaceId, dropPlaceId, weight, weightUnit, advance, advanceDate, advanceTime]);
+  }, [pickup, drop, pickupCoords, dropCoords, pickupPlaceId, dropPlaceId, weight, weightUnit, advance, advanceDate, advanceTime, returnTrip]);
 
   // Typing in Pickup or Drop clears everything chosen AFTER it (drop, distance, weight) -- owner brief 2026-10-29.
   // Distance is derived from the two coordinates, so clearing them clears it too.
@@ -7412,6 +7415,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     clearAfterDrop();
     setFromTrip(false);
     setAdvanceDate(""); setAdvanceTime("");
+    setReturnTrip(false);
     setActiveField(null);
   };
 
@@ -7448,7 +7452,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // Directions call hadn't resolved yet.
     const distanceKm = distance ?? estimateDistanceKm(pickupCoords, dropCoords);
     raiseUnmatchedVehicleRequest?.({
-      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: advance ? "advance" : "immediate", ...(advance ? { scheduledFor: scheduledForValue } : {}), distanceKm,
+      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: advance ? "advance" : "immediate", ...(advance ? { scheduledFor: scheduledForValue } : {}), distanceKm, returnTrip,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
@@ -7653,7 +7657,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
-      pickupPlaceId, dropPlaceId,
+      pickupPlaceId, dropPlaceId, returnTrip,
       // The exact fare already shown on this card (outlier-corrected, see
       // nearbyDrivers above) -- passed through rather than letting
       // requestByCategory re-resolve it independently, so a booking can
@@ -7734,6 +7738,13 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
         </SmoothCollapse>
 
+        {/* Owner 2026-11-01: Return trip -- a checkbox just under the Pickup box (both Current and Advance). */}
+        {!chosen && (
+          <label data-return-trip className="flex items-center gap-2.5 px-1 -mt-1 cursor-pointer select-none">
+            <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-5 h-5 shrink-0 rounded" style={{ accentColor: C.navy }} />
+            <span className="text-sm font-bold" style={{ color: C.ink }}>{lang === "en" ? "Return trip" : lang === "mr" ? "परतीचा प्रवास" : "वापसी यात्रा"}</span>
+          </label>
+        )}
 
         {/* The last 3 whole trips (pickup + drop), right under the Pickup box and ONLY while Pickup is still empty
             (owner 2026-10-29: no heading text, and not kept on screen once a pickup is typed or chosen). */}
@@ -8007,6 +8018,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   })}
                   {chosen && (
                     <>
+                      {returnTrip && (
+                        <div className="text-center text-xs font-bold" style={{ color: C.inkSoft }}>
+                          ↩ {lang === "en" ? "Return trip" : lang === "mr" ? "परतीचा प्रवास" : "वापसी यात्रा"}
+                        </div>
+                      )}
                       {advance && (
                         <div className="text-center text-xs font-bold" style={{ color: C.inkSoft }}>
                           📅 {advanceDate} · {formatTimeSlot(advanceTime, lang)}
@@ -12891,7 +12907,7 @@ export default function App() {
   // category itself (resolveFareForTier), not any specific driver. Returns
   // an error message string to show the customer (nobody eligible at all
   // right now), or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, fare: fareOverride }) => {
+  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, fare: fareOverride }) => {
     const bookingId = genId();
     // weight included here to match the real created doc below -- isDriverBroadcastEligible
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
@@ -12918,7 +12934,7 @@ export default function App() {
       pickup, drop, vehicle: null, tierMaxKg, weight: customerWeight ?? tierMaxKg, distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
       declinedBy: [],
-      driverName: null, progress: 0, scheduledFor: scheduledFor || null, customerMobile: customerAuth.mobile || "",
+      driverName: null, progress: 0, scheduledFor: scheduledFor || null, returnTrip: !!returnTrip, customerMobile: customerAuth.mobile || "",
       // Stamped once at booking time (same pattern as driverName/customerMobile
       // above) since the booking itself has no other link back to the
       // customer's profile doc — needed for the driver's post-trip invoice-
@@ -13188,11 +13204,11 @@ export default function App() {
   // CustomerBooking/CustomerAdvanceBooking). Logged only; matching offline
   // drivers and the admin's call action both happen client-side in
   // AdminAlerts, no Cloud Function involved.
-  const raiseUnmatchedVehicleRequest = ({ pickup, drop, weightKg, weightUnit, bookingType, scheduledFor, distanceKm, pickupLat, pickupLng, dropLat, dropLng }) =>
+  const raiseUnmatchedVehicleRequest = ({ pickup, drop, weightKg, weightUnit, bookingType, scheduledFor, distanceKm, returnTrip, pickupLat, pickupLng, dropLat, dropLng }) =>
     createDoc("unmatchedVehicleRequests", genId("UVR"), {
       customerMobile: customerAuth.mobile || "", customerName: customer?.name || "",
       pickup: pickup || "", drop: drop || "", weightKg: weightKg ?? null, weightUnit: weightUnit || "kg",
-      bookingType: bookingType || "immediate", scheduledFor: scheduledFor || null, distanceKm: distanceKm ?? null,
+      bookingType: bookingType || "immediate", scheduledFor: scheduledFor || null, distanceKm: distanceKm ?? null, returnTrip: !!returnTrip,
       pickupLat: pickupLat ?? null, pickupLng: pickupLng ?? null,
       dropLat: dropLat ?? null, dropLng: dropLng ?? null,
       status: "pending", createdAt: serverTimestamp(),
