@@ -179,9 +179,12 @@ behaves identically. The hide/show is SMOOTH (owner 2026-10-31: `SmoothCollapse`
 popping; open state has overflow visible and no extra stacking so the dropdowns and the z-40 / z-30 rule still work), and
 "Change pickup / drop" (`changePlacesLink`) sits UNDER the "Enter weight first..." note (the date/time hint in Advance, the "Tap a
 vehicle" line once vehicles show), centred, small and dull grey -- not at the top any more. A FIXED horizontal "Book Return trip" box with its checkbox sits at the BOTTOM of the booking screen (`data-return-bar`, owner 2026-11-01,
-Current AND Advance): `fixed`, `z-[25]` (below the Pickup z-40 / Drop z-30 suggestion lists and the menu/sheets at z-50), ALWAYS visible
--- an earlier version hid it while a text box had focus, which made it vanish the moment Pickup+Drop were chosen (the Weight box gets
-focus), so do NOT bring that back; the page has `pb-28` so nothing hides behind it. RETURN FARE (owner answers 2026-11-01): ticked =
+Current AND Advance): `fixed`, `z-[25]` (below the Pickup z-40 / Drop z-30 suggestion lists and the menu/sheets at z-50), shown ONLY while the Pickup/Drop boxes are on
+screen (`returnBarVisible = !weightTyped && !tripHidden && !chosen`, owner 2026-11-01: "only until the Pickup and Drop is entered, force
+remove from every other screen"): gone as soon as both places are entered, when a weight is typed and once a vehicle is chosen; "Change
+pickup / drop" brings the boxes and the bar back; the TICK is kept the whole time, so the fares / note / booking still include the return.
+It must NOT depend on which text box has focus (an earlier version hid itself when the Weight box got the cursor -- do not bring that
+back); the page has `pb-28` only while it is shown. RETURN FARE (owner answers 2026-11-01): ticked =
 every vehicle's fare is ONE-WAY + RETURN LEG, where the return leg = Admin's saved return rate for the swapped route
 (`getAdminRouteOverride(... isReturn=true)`, what the Admin rate calculator's ⇅ swap saves) if there is one, otherwise the one-way fare less
 Admin's `returnPct` (settings/main, 15 now; passed App -> CustomerApp -> CustomerBooking). NO waiting charge. A green note "Return fare
