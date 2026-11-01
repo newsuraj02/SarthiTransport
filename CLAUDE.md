@@ -183,15 +183,15 @@ Current AND Advance): `fixed`, `z-[25]` (below the Pickup z-40 / Drop z-30 sugge
 highlighted" -> slim strip ~30 px, 1 px `C.line` border, no shadow, 12 px semibold grey text, 16 px checkbox). Shown ONLY while the Pickup/Drop
 boxes are on screen AND the tick is off: `returnBarVisible = !weightTyped && !tripHidden && !chosen && !returnTrip` -- the moment it is TICKED
 the box disappears, and it is gone once both places are entered / a weight is typed / a vehicle is chosen. The tick stays on and shows as
-the green "Return fare included (N% off the return leg)" note (under the "Enter weight first" note, the date/time hint, the "Tap a vehicle"
-line, and above Book) which carries a small "Remove" (`data-return-remove`) to untick -- there is no other way to untick once it is hidden.
+the green "Return fare included (N% off on return)" note (under the "Enter weight first" note, the date/time hint, the "Tap a vehicle"
+line, and above Book) which has NO Remove/untick control (owner 2026-11-01: "remove the Remove button") -- once ticked it stays ticked until the form is reset (Book, or the Refresh button). A return-trip booking NEVER pays a halting charge (owner 2026-11-01; `completeBooking` sets it to 0 when `returnTrip`). The word "leg" is not used anywhere for return trips -- say "return".
 It must NOT depend on which text box has focus (an earlier version hid itself when the Weight box got the cursor -- do not bring that
 back); the page has `pb-16` only while it is shown. RETURN FARE (owner answers 2026-11-01): ticked =
-every vehicle's fare is ONE-WAY + RETURN LEG, where the return leg = Admin's saved return rate for the swapped route
+every vehicle's fare is ONE-WAY + RETURN, where the return fare = Admin's saved return rate for the swapped route
 (`getAdminRouteOverride(... isReturn=true)`, what the Admin rate calculator's ⇅ swap saves) if there is one, otherwise the one-way fare less
 Admin's `returnPct` (settings/main, 15 now; passed App -> CustomerApp -> CustomerBooking). NO waiting charge. A green note "Return fare
-included (N% off the return leg)" shows with the vehicle list and above Book. The booking stores `returnTrip`, `oneWayFare`,
-`returnLegFare`, `returnPct`, and `fare` = the TOTAL; the unmatched-load request stores `returnTrip`. Drivers and admin see a "↩ Return trip"
+included (N% off on return)" shows with the vehicle list and above Book. The booking stores `returnTrip`, `oneWayFare`,
+`returnFare`, `returnPct`, and `fare` = the TOTAL; the unmatched-load request stores `returnTrip`. Drivers and admin see a "↩ Return trip"
 tag (`ReturnTripTag`: `RouteLine`, `RideTypeBanner`, admin lists, unmatched requests) and the driver's ring text has "वापसी यात्रा: हाँ
 (किराया आना-जाना)" (`ringWeightText`, needs `firebase deploy --only functions`). Nothing is pre-selected (owner
 2026-10-29): the vehicle list shows no highlighted card, and the "Book this vehicle" button exists ONLY once

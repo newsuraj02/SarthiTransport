@@ -7585,22 +7585,19 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // never show a bigger-capacity vehicle cheaper than a smaller one.
     const priced = enforceMonotonicFares(afterOutliers);
     if (!returnTrip) return priced;
-    // Return trip (owner 2026-11-01): total = the normal one-way fare + the RETURN leg. The return leg is what Admin's rate
+    // Return trip (owner 2026-11-01): total = the normal one-way fare + the RETURN fare. The return fare is what Admin's rate
     // calculator calls the return direction: Admin's saved return rate for the swapped route if there is one, otherwise the
     // same fare less the Admin-set return % (returnPct, settings/main -- 15 now). No waiting charge.
     return priced.map((e) => {
       const saved = getAdminRouteOverride(drop, pickup, e.tier.maxKg, adminRouteFares, dropCoords?.lat, dropCoords?.lng, pickupCoords?.lat, pickupCoords?.lng, fareTiers, distance, null, true);
-      const returnLegFare = saved != null ? Math.round(saved) : Math.round(e.fare * (1 - (Number(returnPct) || 0) / 100));
-      return { ...e, oneWayFare: e.fare, returnLegFare, fare: e.fare + returnLegFare };
+      const returnFare = saved != null ? Math.round(saved) : Math.round(e.fare * (1 - (Number(returnPct) || 0) / 100));
+      return { ...e, oneWayFare: e.fare, returnFare, fare: e.fare + returnFare };
     });
   })();
   // Small note shown with the vehicle list while Return trip is ticked.
   const returnFareNote = returnTrip ? (
     <div data-return-note className="text-center text-xs font-bold" style={{ color: C.success }}>
-      ↩ {lang === "en" ? `Return fare included (${returnPct}% off the return leg)` : lang === "mr" ? `परतीचे भाडे समाविष्ट (परतीच्या प्रवासावर ${returnPct}% सूट)` : `वापसी का किराया शामिल (वापसी पर ${returnPct}% की छूट)`}
-      <button type="button" data-return-remove onClick={() => setReturnTrip(false)} className="ml-2 px-1.5 py-1 text-[11px] font-semibold underline" style={{ color: C.inkSoft }}>
-        {lang === "en" ? "Remove" : lang === "mr" ? "काढा" : "हटाएँ"}
-      </button>
+      ↩ {lang === "en" ? `Return fare included (${returnPct}% off on return)` : lang === "mr" ? `परतीचे भाडे समाविष्ट (परतीच्या प्रवासावर ${returnPct}% सूट)` : `वापसी का किराया शामिल (वापसी पर ${returnPct}% की छूट)`}
     </div>
   ) : null;
 
@@ -7682,7 +7679,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       pickupPlaceId, dropPlaceId, returnTrip,
-      ...(returnTrip ? { oneWayFare: entry.oneWayFare ?? null, returnLegFare: entry.returnLegFare ?? null, returnPct } : {}),
+      ...(returnTrip ? { oneWayFare: entry.oneWayFare ?? null, returnFare: entry.returnFare ?? null, returnPct } : {}),
       // The exact fare already shown on this card (outlier-corrected, see
       // nearbyDrivers above) -- passed through rather than letting
       // requestByCategory re-resolve it independently, so a booking can
@@ -12948,7 +12945,7 @@ export default function App() {
   // category itself (resolveFareForTier), not any specific driver. Returns
   // an error message string to show the customer (nobody eligible at all
   // right now), or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnLegFare, returnPct: returnPctUsed, fare: fareOverride }) => {
+  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnFare, returnPct: returnPctUsed, fare: fareOverride }) => {
     const bookingId = genId();
     // weight included here to match the real created doc below -- isDriverBroadcastEligible
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
@@ -12975,7 +12972,7 @@ export default function App() {
       pickup, drop, vehicle: null, tierMaxKg, weight: customerWeight ?? tierMaxKg, distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
       declinedBy: [],
-      driverName: null, progress: 0, scheduledFor: scheduledFor || null, returnTrip: !!returnTrip, ...(returnTrip ? { oneWayFare: oneWayFare ?? null, returnLegFare: returnLegFare ?? null, returnPct: returnPctUsed ?? null } : {}), customerMobile: customerAuth.mobile || "",
+      driverName: null, progress: 0, scheduledFor: scheduledFor || null, returnTrip: !!returnTrip, ...(returnTrip ? { oneWayFare: oneWayFare ?? null, returnFare: returnFare ?? null, returnPct: returnPctUsed ?? null } : {}), customerMobile: customerAuth.mobile || "",
       // Stamped once at booking time (same pattern as driverName/customerMobile
       // above) since the booking itself has no other link back to the
       // customer's profile doc — needed for the driver's post-trip invoice-
@@ -13174,7 +13171,8 @@ export default function App() {
     // folded into `fare` exactly as before and isn't part of this new bill.
     const zone = zoneFor(b.pickupLat, b.pickupLng, b.dropLat, b.dropLng, b.distance);
     const usedDays = daysUsed(b.loadingStartedAt, completedAtMs);
-    const haltingCharge = haltOf(b.tierMaxKg, zone, b.distance, usedDays);
+    // Owner 2026-11-01: a booking with the Return trip ticked never pays halting (no waiting charges for it).
+    const haltingCharge = b.returnTrip ? 0 : haltOf(b.tierMaxKg, zone, b.distance, usedDays);
     const regularFare = b.isReturn ? (b.originalFare ?? b.fare) : b.fare;
     const myExtras = bookingExtras.filter((e) => e.bookingId === id);
     const bill = buildBill({ fare: regularFare, isReturn: b.isReturn, returnPct: b.returnPct, haltingCharge, extras: myExtras });
