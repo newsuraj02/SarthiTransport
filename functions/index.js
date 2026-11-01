@@ -1089,7 +1089,7 @@ exports.sendTestRing = onCall({ region: "asia-south1" }, async (request) => {
         bookingId: `TEST-${now}`,
         pickup: "🔔 टेस्ट घंटी — यह असली लोड नहीं है",
         drop: "बंद करने के लिए कोई भी बटन दबाएँ",
-        weight: ringWeightText({ customerName: "टेस्ट ग्राहक", returnTrip: true, fare: 1250, distance: 14, weight: 1500 }),
+        weight: ringWeightText({ customerName: "टेस्ट ग्राहक", scheduledFor: new Date(now + 24 * 3600 * 1000 + 5.5 * 3600 * 1000).toISOString().slice(0, 16).replace("T", " "), returnTrip: true, fare: 1250, distance: 14, weight: 1500 }),
       },
     });
     return { ok: true };

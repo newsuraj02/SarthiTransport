@@ -103,6 +103,9 @@ Owner-requested 2026-10-31, PREPARED but NOT built: a bell (🔔) in front of th
 (`activity_ringing_booking.xml`, native). No build was triggered for it -- it ships with the NEXT native build, whenever one is needed
 anyway (owner: "prepare it without new build"). Until then the installed app shows the header without the bell.
 
+Owner-requested 2026-11-01 -- ADVANCE date on the ring: a booking with `scheduledFor` ("YYYY-MM-DD HH:MM") puts "📅 एडवांस ट्रिप: 5 Nov 2026, 7:00 AM" as the VERY FIRST line of the ring text (`ringWeightText` / `formatScheduledFor` in `functions/ringText.js`; Current bookings have none; the
+"test ring" sample shows one for tomorrow). Needs `firebase deploy --only functions`. Order of lines: date, round trip, customer, fare, km, weight.
+
 Owner-requested 2026-11-01 -- ONE Accept: the Accept/Reject tapped on the native ring screen is read once by `RingingBridge` (it removes the
 extras as it hands them over). On a cold start / slow resume the booking was often not in `bookings` yet, `driverRespondBooking` silently did
 nothing and the tap was lost, so the load had to be accepted a second time in the app. Now the tap is PARKED (`pendingRingActionRef`) and
