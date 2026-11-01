@@ -179,10 +179,16 @@ behaves identically. The hide/show is SMOOTH (owner 2026-10-31: `SmoothCollapse`
 popping; open state has overflow visible and no extra stacking so the dropdowns and the z-40 / z-30 rule still work), and
 "Change pickup / drop" (`changePlacesLink`) sits UNDER the "Enter weight first..." note (the date/time hint in Advance, the "Tap a
 vehicle" line once vehicles show), centred, small and dull grey -- not at the top any more. A FIXED horizontal "Book Return trip" box with its checkbox sits at the BOTTOM of the booking screen (`data-return-bar`, owner 2026-11-01,
-Current AND Advance): `fixed`, z-40 (below the menu/sheets at z-50), page has `pb-28` so nothing hides behind it, it steps aside while a
-text box is being typed in (`typingNow`), stays visible after a vehicle is chosen, is saved on the booking and the unmatched-load
-request as `returnTrip`, survives a language reload and is cleared after Book. It does NOT change the fare yet (the calculation was only
-proposed -- see the fare note the owner is deciding on). Nothing is pre-selected (owner
+Current AND Advance): `fixed`, `z-[25]` (below the Pickup z-40 / Drop z-30 suggestion lists and the menu/sheets at z-50), ALWAYS visible
+-- an earlier version hid it while a text box had focus, which made it vanish the moment Pickup+Drop were chosen (the Weight box gets
+focus), so do NOT bring that back; the page has `pb-28` so nothing hides behind it. RETURN FARE (owner answers 2026-11-01): ticked =
+every vehicle's fare is ONE-WAY + RETURN LEG, where the return leg = Admin's saved return rate for the swapped route
+(`getAdminRouteOverride(... isReturn=true)`, what the Admin rate calculator's ⇅ swap saves) if there is one, otherwise the one-way fare less
+Admin's `returnPct` (settings/main, 15 now; passed App -> CustomerApp -> CustomerBooking). NO waiting charge. A green note "Return fare
+included (N% off the return leg)" shows with the vehicle list and above Book. The booking stores `returnTrip`, `oneWayFare`,
+`returnLegFare`, `returnPct`, and `fare` = the TOTAL; the unmatched-load request stores `returnTrip`. Drivers and admin see a "↩ Return trip"
+tag (`ReturnTripTag`: `RouteLine`, `RideTypeBanner`, admin lists, unmatched requests) and the driver's ring text has "वापसी यात्रा: हाँ
+(किराया आना-जाना)" (`ringWeightText`, needs `firebase deploy --only functions`). Nothing is pre-selected (owner
 2026-10-29): the vehicle list shows no highlighted card, and the "Book this vehicle" button exists ONLY once
 the customer has tapped a vehicle (`selectedEntry`); it books that vehicle (`bookEntry`). Order after a tap (owner
 2026-10-30): the chosen card, then "Book this vehicle", then "See all vehicles" (hi "सभी गाड़ियाँ देखें", mr "सर्व गाड्या पहा");

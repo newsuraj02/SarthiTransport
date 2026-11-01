@@ -26,7 +26,7 @@ import {
   isFutureAdvance, isLikelyUninstalled,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
-  LocationField, PhotoPicker, RouteLine, SafeImage, StatTile, VEHICLE_HEADROOM_KG,
+  LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile, VEHICLE_HEADROOM_KG,
 } from "./App.jsx";
 
 // Owner rule (2026-10-13): every vehicle's current status shows directly
@@ -1374,7 +1374,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
               return (
                 <div key={b.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: C.bg }}>
                   <div className="min-w-0">
-                    <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.pickup} → {b.drop}</div>
+                    <div className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{b.returnTrip ? "↩ " : ""}{b.pickup} → {b.drop}</div>
                     <div className="text-[10px]" style={{ color: C.inkSoft }}>{b.driverName ? `${b.driverName} · ` : ""}{activityTime(b)}</div>
                   </div>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
@@ -1436,7 +1436,7 @@ function AdminBookings({ bookings, tripLog, lang }) {
       items: cancelledTodayList,
       renderItem: (b) => (
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
           <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : lang === "mr" ? "कोणताही ड्रायव्हर निश्चित झाला नाही" : "कोई ड्राइवर तय नहीं हुआ")}</div>
         </div>
       ),
@@ -1448,7 +1448,7 @@ function AdminBookings({ bookings, tripLog, lang }) {
       items: advanceBookingsList,
       renderItem: (b) => (
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} />
+          <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
           <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}</div>
         </div>
       ),
@@ -2769,6 +2769,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                   <div className="text-[11px] mt-1.5" style={{ color: C.inkSoft }}>
                     <b style={{ color: C.ink }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}:</b> {req.pickup || "—"}
                   </div>
+                  {req.returnTrip && <ReturnTripTag lang={lang} />}
                   <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
                     <b style={{ color: C.ink }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}:</b> {req.drop || "—"}
                   </div>

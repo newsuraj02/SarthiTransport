@@ -7133,7 +7133,7 @@ function PickupPage({ lang, mapsReady, drivers, recentPlaces, initialQuery, cust
 // =====================================================================
 // CUSTOMER APP
 // =====================================================================
-function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentTrips, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre, advance = false }) {
+function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehicleTypes, recentPickups, recentTrips, lang, drivers, locationPermission, fareTiers, routeFares, adminRouteFares, bookings, dieselPricePerLitre, returnPct = 15, advance = false }) {
   const VEHICLES = vehicleTypes;
   // Only set right after a language change reloaded the page (see readLangReloadDraft); null otherwise.
   const [restored] = useState(() => { const d = readLangReloadDraft(); return d && !!d.advance === !!advance ? d : null; });
@@ -7144,16 +7144,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Owner 2026-11-01: "Return trip" checkbox right under the Pickup box (Current and Advance). Saved on the booking as `returnTrip`;
   // it does NOT change the fare (not asked) and is cleared after Book like the rest of the form.
   const [returnTrip, setReturnTrip] = useState(!!restored?.returnTrip);
-  // The fixed "Book Return trip" bar (bottom of this screen) steps aside while a text box is being typed in, so it never sits
-  // on top of the keyboard / the field (checkboxes themselves don't count as typing).
-  const [typingNow, setTypingNow] = useState(false);
-  useEffect(() => {
-    const isText = (el) => !!el && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && !["checkbox", "radio", "button", "submit"].includes(el.type)));
-    const onIn = (e) => { if (isText(e.target)) setTypingNow(true); };
-    const onOut = () => setTimeout(() => setTypingNow(isText(document.activeElement)), 60);
-    document.addEventListener("focusin", onIn); document.addEventListener("focusout", onOut);
-    return () => { document.removeEventListener("focusin", onIn); document.removeEventListener("focusout", onOut); };
-  }, []);
   const scheduleReady = !advance || !!(advanceDate && advanceTime);
   const scheduledForValue = advance ? `${advanceDate} ${advanceTime}` : null;
   const [pickup, setPickup] = useState(restored?.pickup?.name || "");
@@ -7593,8 +7583,23 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     })();
     // Last pass, after outlier correction -- see enforceMonotonicFares:
     // never show a bigger-capacity vehicle cheaper than a smaller one.
-    return enforceMonotonicFares(afterOutliers);
+    const priced = enforceMonotonicFares(afterOutliers);
+    if (!returnTrip) return priced;
+    // Return trip (owner 2026-11-01): total = the normal one-way fare + the RETURN leg. The return leg is what Admin's rate
+    // calculator calls the return direction: Admin's saved return rate for the swapped route if there is one, otherwise the
+    // same fare less the Admin-set return % (returnPct, settings/main -- 15 now). No waiting charge.
+    return priced.map((e) => {
+      const saved = getAdminRouteOverride(drop, pickup, e.tier.maxKg, adminRouteFares, dropCoords?.lat, dropCoords?.lng, pickupCoords?.lat, pickupCoords?.lng, fareTiers, distance, null, true);
+      const returnLegFare = saved != null ? Math.round(saved) : Math.round(e.fare * (1 - (Number(returnPct) || 0) / 100));
+      return { ...e, oneWayFare: e.fare, returnLegFare, fare: e.fare + returnLegFare };
+    });
   })();
+  // Small note shown with the vehicle list while Return trip is ticked.
+  const returnFareNote = returnTrip ? (
+    <div data-return-note className="text-center text-xs font-bold" style={{ color: C.success }}>
+      ↩ {lang === "en" ? `Return fare included (${returnPct}% off the return leg)` : lang === "mr" ? `परतीचे भाडे समाविष्ट (परतीच्या प्रवासावर ${returnPct}% सूट)` : `वापसी का किराया शामिल (वापसी पर ${returnPct}% की छूट)`}
+    </div>
+  ) : null;
 
   // Once a driver is picked, the list collapses down to just that one
   // card (matching the design mock) instead of floating it to the top of
@@ -7668,6 +7673,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       pickupPlaceId, dropPlaceId, returnTrip,
+      ...(returnTrip ? { oneWayFare: entry.oneWayFare ?? null, returnLegFare: entry.returnLegFare ?? null, returnPct } : {}),
       // The exact fare already shown on this card (outlier-corrected, see
       // nearbyDrivers above) -- passed through rather than letting
       // requestByCategory re-resolve it independently, so a booking can
@@ -7973,6 +7979,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 👇 {lang === "en" ? "Tap a vehicle to select it" : lang === "mr" ? "निवडण्यासाठी गाडीवर टॅप करा" : "चुनने के लिए गाड़ी पर टैप करें"}
               </div>
               )}
+              {returnFareNote}
               {changePlacesLink}
               {bookingError && (
                 <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
@@ -8020,6 +8027,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   })}
                   {chosen && (
                     <>
+                      {returnFareNote}
                       {advance && (
                         <div className="text-center text-xs font-bold" style={{ color: C.inkSoft }}>
                           📅 {advanceDate} · {formatTimeSlot(advanceTime, lang)}
@@ -8064,10 +8072,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
       )}
       {/* Owner 2026-11-01: a FIXED horizontal box at the bottom with the "Book Return trip" checkbox (Current and Advance, one
-          shared screen). Plain fixed element, z-40: above the page, below the menu / sheets (z-50) and the header (z-30 row sits
-          at the top, nowhere near it); hidden while a text box is being typed in. */}
-      {!typingNow && (
-        <div data-return-bar className="fixed left-0 right-0 bottom-0 z-40 px-3 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)", pointerEvents: "none" }}>
+          shared screen). Plain fixed element, z-[25]: above the page, BELOW the Pickup (z-40) / Drop (z-30) suggestion lists, the menu
+          and the sheets (z-50). Always visible -- it used to hide while the Weight box had focus, which made it vanish as
+          soon as Pickup and Drop were chosen. */}
+      {(
+        <div data-return-bar className="fixed left-0 right-0 bottom-0 z-[25] px-3 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)", pointerEvents: "none" }}>
           <label className="mx-auto max-w-md flex items-center justify-between gap-3 rounded-2xl px-4 py-3 cursor-pointer select-none shadow-lg" style={{ background: C.paper, border: `2px solid ${returnTrip ? C.navy : C.line}`, pointerEvents: "auto" }}>
             <span className="flex items-center gap-2 min-w-0">
               <span className="text-base" aria-hidden="true">↩</span>
@@ -8094,7 +8103,7 @@ function CustomerAdvanceBooking(props) {
 
 // Bold From/To route line with pickup/drop dots — used in booking lists so
 // the route is the most visually prominent thing on the card.
-export function RouteLine({ pickup, drop, lang }) {
+export function RouteLine({ pickup, drop, lang, returnTrip = false }) {
   return (
     <div className="flex items-stretch gap-2.5 my-1.5">
       <div className="flex flex-col items-center pt-1">
@@ -8107,8 +8116,17 @@ export function RouteLine({ pickup, drop, lang }) {
         <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{pickup}</div>
         <div className="text-[9px] font-bold uppercase tracking-wide mt-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}</div>
         <div className="text-sm font-bold leading-snug" style={{ color: C.ink }}>{drop}</div>
+        {returnTrip && <ReturnTripTag lang={lang} />}
       </div>
     </div>
+  );
+}
+// Small "Return trip" tag shown wherever a booking that has the Return trip ticked is listed (owner 2026-11-01).
+export function ReturnTripTag({ lang }) {
+  return (
+    <span data-return-tag className="inline-block mt-1.5 rounded-full px-2 py-0.5 text-[10px] font-extrabold" style={{ color: C.success, background: "rgba(0,168,84,0.12)", border: `1px solid ${C.success}` }}>
+      ↩ {lang === "en" ? "Return trip" : lang === "mr" ? "परतीचा प्रवास" : "वापसी यात्रा"}
+    </span>
   );
 }
 
@@ -8124,6 +8142,7 @@ function RideTypeBanner({ booking, lang }) {
       <span className="text-sm sm:text-base font-extrabold text-white tracking-wide">
         {advance ? (lang === "en" ? "Advance Ride" : lang === "mr" ? "अ‍ॅडव्हान्स राइड" : "एडवांस राइड") : (lang === "en" ? "Immediate Ride" : lang === "mr" ? "तात्काळ राइड" : "तुरंत राइड")} · {rideDateTimeLabel(booking)}
       </span>
+      {booking.returnTrip && <span className="rounded-full px-2 py-0.5 text-[11px] font-extrabold" style={{ background: "#FFFFFF", color: C.ink }}>↩ {lang === "en" ? "Return trip" : lang === "mr" ? "परतीचा प्रवास" : "वापसी यात्रा"}</span>}
     </div>
   );
 }
@@ -8728,7 +8747,7 @@ function CustomerTripSummary({ trip, lang, onDone }) {
   );
 }
 
-function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest, drivers, vehicleTypes, cancelBooking, rateBooking, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, alerts, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares, bookingExtras, dieselPricePerLitre }) {
+function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest, drivers, vehicleTypes, cancelBooking, rateBooking, lang, onChangeLang, onLogout, customerProfile, customerMobile, onUpdateProfile, raiseAlert, alerts, onOpenTerms, adminNotifications, fareTiers, routeFares, adminRouteFares, bookingExtras, dieselPricePerLitre, returnPct }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // Whether the booking-creation screen shown below is CustomerBooking
   // (current/immediate ride) or CustomerAdvanceBooking (scheduled ride) —
@@ -9134,10 +9153,10 @@ function CustomerApp({ bookings, requestByCategory, raiseUnmatchedVehicleRequest
               onAddAnother={() => setAddingAnother(true)} />
           ) : advanceOpen ? (
             <CustomerAdvanceBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} recentTrips={recentTrips} lang={lang} drivers={drivers}
-              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} />
+              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />
           ) : (
             <CustomerBooking requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} vehicleTypes={vehicleTypes} recentPickups={recentPickups} recentPlaces={recentPlaces} recentTrips={recentTrips} lang={lang} drivers={drivers}
-              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} />
+              locationPermission={locationPermission} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookings={bookings} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />
           )
         ) : (
           <div>
@@ -12918,7 +12937,7 @@ export default function App() {
   // category itself (resolveFareForTier), not any specific driver. Returns
   // an error message string to show the customer (nobody eligible at all
   // right now), or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, fare: fareOverride }) => {
+  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnLegFare, returnPct: returnPctUsed, fare: fareOverride }) => {
     const bookingId = genId();
     // weight included here to match the real created doc below -- isDriverBroadcastEligible
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
@@ -12945,7 +12964,7 @@ export default function App() {
       pickup, drop, vehicle: null, tierMaxKg, weight: customerWeight ?? tierMaxKg, distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
       declinedBy: [],
-      driverName: null, progress: 0, scheduledFor: scheduledFor || null, returnTrip: !!returnTrip, customerMobile: customerAuth.mobile || "",
+      driverName: null, progress: 0, scheduledFor: scheduledFor || null, returnTrip: !!returnTrip, ...(returnTrip ? { oneWayFare: oneWayFare ?? null, returnLegFare: returnLegFare ?? null, returnPct: returnPctUsed ?? null } : {}), customerMobile: customerAuth.mobile || "",
       // Stamped once at booking time (same pattern as driverName/customerMobile
       // above) since the booking itself has no other link back to the
       // customer's profile doc — needed for the driver's post-trip invoice-
@@ -13430,7 +13449,7 @@ export default function App() {
           <CustomerApp bookings={bookings} requestByCategory={requestByCategory} raiseUnmatchedVehicleRequest={raiseUnmatchedVehicleRequest} drivers={drivers} vehicleTypes={vehicleTypes}
             cancelBooking={cancelBooking} rateBooking={rateBooking} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             customerProfile={customer} customerMobile={customerAuth.mobile} onUpdateProfile={updateCustomerProfile} raiseAlert={raiseAlert} alerts={alerts} onOpenTerms={() => setShowTerms(true)}
-            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookingExtras={bookingExtras} dieselPricePerLitre={dieselPricePerLitre} />
+            adminNotifications={adminNotifications} fareTiers={fareTiers} routeFares={routeFares} adminRouteFares={adminRouteFares} bookingExtras={bookingExtras} dieselPricePerLitre={dieselPricePerLitre} returnPct={returnPct} />
         )}
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth}
