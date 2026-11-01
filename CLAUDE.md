@@ -193,7 +193,12 @@ Admin's `returnPct` (settings/main, 15 now; passed App -> CustomerApp -> Custome
 included (N% off on return)" shows with the vehicle list and above Book. The booking stores `returnTrip`, `oneWayFare`,
 `returnFare`, `returnPct`, and `fare` = the TOTAL; the unmatched-load request stores `returnTrip`. Drivers and admin see a "↩ Return trip"
 tag (`ReturnTripTag`: `RouteLine`, `RideTypeBanner`, admin lists, unmatched requests) and the driver's ring text has "वापसी यात्रा: हाँ
-(किराया आना-जाना)" (`ringWeightText`, needs `firebase deploy --only functions`). Nothing is pre-selected (owner
+(किराया आना-जाना)" (`ringWeightText`, needs `firebase deploy --only functions`). RETURN TRIP DRIVER FLOW (owner "go" 2026-11-01): there is still exactly ONE End Trip, tapped at the PICKUP once the vehicle is back. After the OTP the
+driver's `LoadingTimer` shows only "↩ Reached drop — start return" (stamps `returnStartedAt`, ends nothing, no second OTP); after that it shows
+the normal End Trip plus an "on the way back" hint. From `returnStartedAt` on (`isReturning(b)` / `tripStretch(b)`), the driver's and the
+customer's map, the address line ("Back to Pickup") and the customer's "Distance to pickup" point back to the pickup, and the customer
+sees a green "Return trip: ..." status line (`data-return-status`). Non-return trips are untouched. The frozen GPS polling effect (which
+also stamps `reachedDropAt`) was NOT edited. Nothing is pre-selected (owner
 2026-10-29): the vehicle list shows no highlighted card, and the "Book this vehicle" button exists ONLY once
 the customer has tapped a vehicle (`selectedEntry`); it books that vehicle (`bookEntry`). Order after a tap (owner
 2026-10-30): the chosen card, then "Book this vehicle", then "See all vehicles" (hi "सभी गाड़ियाँ देखें", mr "सर्व गाड्या पहा");

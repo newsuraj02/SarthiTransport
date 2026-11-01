@@ -8203,14 +8203,18 @@ function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
   // Live distance: vehicle -> pickup until loading starts, vehicle -> drop
   // after. Same road-factor estimate the booking screen uses for its own
   // distance, so the two numbers agree with each other.
-  const target = b.loadingStartedAt
+  const target = isReturning(b)
+    ? (b.pickupLat != null ? { lat: b.pickupLat, lng: b.pickupLng } : null)
+    : b.loadingStartedAt
     ? (b.dropLat != null ? { lat: b.dropLat, lng: b.dropLng } : null)
     : (b.pickupLat != null ? { lat: b.pickupLat, lng: b.pickupLng } : null);
   const liveKm = estimateDistanceKm(b.driverLocation, target);
   const liveLabel = liveKm != null
     ? formatDistanceExact(liveKm, lang)
     : T("Waiting for location…", "लोकेशन येत आहे…", "लोकेशन आ रही है…");
-  const liveCaption = b.loadingStartedAt
+  const liveCaption = isReturning(b)
+    ? T("Distance to pickup", "पिकअपपर्यंत अंतर", "पिकअप तक दूरी")
+    : b.loadingStartedAt
     ? T("Distance to drop", "ड्रॉपपर्यंत अंतर", "ड्रॉप तक दूरी")
     : T("Vehicle is away", "गाडी किती दूर", "गाड़ी कितनी दूर");
 
@@ -8260,6 +8264,7 @@ function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
 // main page focuses on this one card instead of a separate "My Rides" tab.
 function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, drivers, lang, onAddAnother, customerMobile, bookingExtras }) {
   const VEHICLES = vehicleTypes;
+  const T = (en, mr, hi) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   const [cancelError, setCancelError] = useState("");
   const [showDocs, setShowDocs] = useState(false);
   const docsSent = !!b.documents?.file?.url;
@@ -8380,7 +8385,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
           chain was found to silently collapse to zero on some devices,
           leaving the whole map invisible and untappable; a plain vh value
           has no such ambiguity. */}
-      <LiveTrackingMap pickup={b.pickup} drop={b.drop} pickupLat={b.pickupLat} pickupLng={b.pickupLng} dropLat={b.dropLat} dropLng={b.dropLng}
+      <LiveTrackingMap {...tripStretch(b)}
         driverLocation={b.driverLocation} customerLocation={b.customerLocation} progress={b.progress} zoneColor={C.pimpri} height="35vh" lang={lang}
         mode={b.loadingStartedAt ? "route" : "toPickup"} />
     <div className="px-5 pt-3">
@@ -8419,6 +8424,11 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
           style={{ color: "#FFFFFF", fontFamily: bodyFont, background: C.navy }} />
       )}
 
+      {b.returnTrip && b.loadingStartedAt && (
+        <div data-return-status className="rounded-xl px-3 py-2 mb-2.5 text-center text-sm font-extrabold" style={{ color: C.success, background: "rgba(0,168,84,0.10)", border: `1px solid ${C.success}` }}>
+          ↩ {isReturning(b) ? T("Return trip: the vehicle is coming back to the pickup", "परतीचा प्रवास: गाडी पिकअपकडे परत येत आहे", "वापसी ट्रिप: गाड़ी पिकअप की ओर लौट रही है") : T("Return trip: the vehicle is going to the drop first", "परतीचा प्रवास: गाडी आधी ड्रॉपकडे जात आहे", "वापसी ट्रिप: गाड़ी पहले ड्रॉप की ओर जा रही है")}
+        </div>
+      )}
       <div className="rounded-2xl p-3.5 mb-2.5 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
         {!b.loadingStartedAt && (
           <div style={{ color: C.ink }}>
@@ -8426,7 +8436,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
           </div>
         )}
         {b.loadingStartedAt && (
-          <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
+          <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{isReturning(b) ? T("Back to Pickup", "पिकअपवर परत", "पिकअप पर वापसी") : T("Drop", "ड्रॉप", "ड्रॉप")}: </span><span className="text-base font-normal">{isReturning(b) ? b.pickup : b.drop}</span></div>
         )}
       </div>
 
@@ -9454,7 +9464,18 @@ function TripOvertimeBanner({ booking, lang }) {
   );
 }
 
-function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
+// Return trip trip-flow (owner 2026-11-01, "go"): a booking with returnTrip has TWO stops for the driver -- the drop, then back at the
+// pickup. There is still exactly ONE End Trip, tapped at the pickup after the vehicle is back; at the drop the driver taps "Reached
+// drop -- start return" instead (it only stamps returnStartedAt, ends nothing). After that the map, the address line and the
+// customer's distance all point back to the pickup. Display + one stamp only: no GPS / ring code is involved.
+function isReturning(b) { return !!(b && b.returnTrip && b.returnStartedAt); }
+// The Pickup/Drop of the CURRENT stretch (swapped once the vehicle is on its way back), shaped for LiveTrackingMap.
+function tripStretch(b) {
+  return isReturning(b)
+    ? { pickup: b.drop, drop: b.pickup, pickupLat: b.dropLat, pickupLng: b.dropLng, dropLat: b.pickupLat, dropLng: b.pickupLng }
+    : { pickup: b.pickup, drop: b.drop, pickupLat: b.pickupLat, pickupLng: b.pickupLng, dropLat: b.dropLat, dropLng: b.dropLng };
+}
+function LoadingTimer({ trip, completeBooking, lang, onEnded, startReturnTrip }) {
   const clock = useTripClock(trip.loadingStartedAt, trip.hours, trip.extraHourRate, trip.pausedMs, trip.travelPausedAt);
 
   // Entering the OTP itself now happens up top, next to the Online/Offline
@@ -9463,8 +9484,28 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded }) {
   // that's actually done and loading has started.
   if (!trip.loadingStartedAt) return null;
 
+  // Return trip, still on the way to the drop: the only button is "Reached drop -- start return" (it does NOT end the trip).
+  if (trip.returnTrip && !trip.returnStartedAt) {
+    const startReturn = () => (startReturnTrip ? startReturnTrip(trip.id) : patchDoc("bookings", trip.id, { returnStartedAt: Date.now() }).catch((e) => console.error("[start return]", e)));
+    return (
+      <div className="mt-3 space-y-2.5" data-return-stage="outward">
+        <button onClick={startReturn} className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.navy }}>
+          ↩ {lang === "en" ? "Reached drop — start return" : lang === "mr" ? "ड्रॉपवर पोहोचलो — परतीचा प्रवास सुरू करा" : "ड्रॉप पर पहुँचे — वापसी शुरू करें"}
+        </button>
+        <div className="text-center text-xs font-semibold" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "This is a Return trip: you end it only after you are back at the pickup." : lang === "mr" ? "ही परतीची ट्रिप आहे: पिकअपवर परत आल्यावरच ट्रिप संपवा." : "यह वापसी ट्रिप है: पिकअप पर लौटने के बाद ही ट्रिप खत्म करें।"}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="mt-3 space-y-2.5">
+    <div className="mt-3 space-y-2.5" data-return-stage={trip.returnTrip ? "returning" : undefined}>
+      {trip.returnTrip && (
+        <div className="text-center text-xs font-bold" style={{ color: C.success }}>
+          ↩ {lang === "en" ? "On the way back to the pickup — tap End Trip when you are there." : lang === "mr" ? "पिकअपकडे परत जात आहात — तिथे पोहोचल्यावर एंड ट्रिप दाबा." : "पिकअप की ओर लौट रहे हैं — वहाँ पहुँचकर एंड ट्रिप दबाएँ।"}
+        </div>
+      )}
       {/* The Loading/Unloading + Waiting clocks are gone — auto-bids carry
           no loading-hours/waiting-rate (both 0), so those boxes had nothing
           real to show. clock.extraCharge is still computed (harmlessly 0)
@@ -10169,7 +10210,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
   if (myTrip) {
     return (
       <div className="pb-5">
-        <LiveTrackingMap pickup={myTrip.pickup} drop={myTrip.drop} pickupLat={myTrip.pickupLat} pickupLng={myTrip.pickupLng} dropLat={myTrip.dropLat} dropLng={myTrip.dropLng}
+        <LiveTrackingMap {...tripStretch(myTrip)}
           driverLocation={myTrip.driverLocation} customerLocation={myTrip.customerLocation} progress={myTrip.progress} zoneColor={C.pimpri} height="55vh" lang={lang}
           mode={myTrip.loadingStartedAt ? "route" : "toPickup"} />
         <div className="px-5 pt-2">
@@ -10243,7 +10284,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
                 </div>
               )}
               {myTrip.loadingStartedAt && (
-                <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{myTrip.drop}</span></div>
+                <div style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{isReturning(myTrip) ? (lang === "en" ? "Back to Pickup" : lang === "mr" ? "पिकअपवर परत" : "पिकअप पर वापसी") : (lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप")}: </span><span className="text-base font-normal">{isReturning(myTrip) ? myTrip.pickup : myTrip.drop}</span></div>
               )}
             </div>
 
