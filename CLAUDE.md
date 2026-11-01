@@ -178,7 +178,7 @@ Weight stay (`onPickupPlaceSelected` / `onDropPlaceSelected` set `fromTrip` once
 behaves identically. The hide/show is SMOOTH (owner 2026-10-31: `SmoothCollapse` eases the Pickup and Drop blocks closed/open instead of
 popping; open state has overflow visible and no extra stacking so the dropdowns and the z-40 / z-30 rule still work), and
 "Change pickup / drop" (`changePlacesLink`) sits UNDER the "Enter weight first..." note (the date/time hint in Advance, the "Tap a
-vehicle" line once vehicles show), centred, small and dull grey -- not at the top any more. A FIXED horizontal "Book Return trip" box with its checkbox sits at the BOTTOM of the booking screen (`data-return-bar`, owner 2026-11-01,
+vehicle" line once vehicles show), centred, small and dull grey -- not at the top any more. A FIXED horizontal box with its checkbox, labelled just "Round trip" (hi/mr "राउंड ट्रिप", icon ↔; owner 2026-11-01 -- it used to say "Book Return trip"; the note, tags and driver/admin wording still say "Return trip"), sits at the BOTTOM of the booking screen (`data-return-bar`, owner 2026-11-01,
 Current AND Advance): `fixed`, `z-[25]` (below the Pickup z-40 / Drop z-30 suggestion lists and the menu/sheets at z-50), SMALL and quiet (owner 2026-11-01: "too big and
 highlighted" -> slim strip ~30 px, 1 px `C.line` border, no shadow, 12 px semibold grey text, 16 px checkbox). Shown ONLY while the Pickup/Drop
 boxes are on screen AND the tick is off: `returnBarVisible = !weightTyped && !tripHidden && !chosen && !returnTrip` -- the moment it is TICKED

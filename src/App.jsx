@@ -7614,7 +7614,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const chosen = !!selectedEntry;
   // "Change pickup / drop" (owner 2026-10-31): sits UNDER the "Enter weight first..." note (or the date/time hint / the
   // "Tap a vehicle" line), centred and dull grey. Only while Pickup/Drop are tucked away and no vehicle is chosen.
-  // Owner 2026-11-01: the fixed "Book Return trip" bar is only for the step where Pickup and Drop are being ENTERED -- i.e. exactly while the
+  // Owner 2026-11-01: the fixed "Round trip" bar is only for the step where Pickup and Drop are being ENTERED -- i.e. exactly while the
   // Pickup/Drop boxes are on screen. Once both are in (they tuck away) or a weight is typed or a vehicle is chosen, it is gone;
   // "Change pickup / drop" brings the boxes -- and the bar -- back. The tick itself is kept either way.
   // Owner 2026-11-01 (later): and once it is TICKED the box is not shown any more (hence "&& !returnTrip"); the green "Return fare
@@ -8079,7 +8079,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           {changePlacesLink}
         </div>
       )}
-      {/* Owner 2026-11-01: a FIXED horizontal box at the bottom with the "Book Return trip" checkbox (Current and Advance, one
+      {/* Owner 2026-11-01: a FIXED horizontal box at the bottom with the "Round trip" checkbox (Current and Advance, one
           shared screen). Plain fixed element, z-[25]: above the page, BELOW the Pickup (z-40) / Drop (z-30) suggestion lists, the menu
           and the sheets (z-50). Visible ONLY while the Pickup/Drop boxes are on screen (returnBarVisible); it must not depend on which
           text box has focus (an earlier version did, and vanished when the Weight box got the cursor). */}
@@ -8087,8 +8087,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         <div data-return-bar className="fixed left-0 right-0 bottom-0 z-[25] px-4 pt-1" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)", pointerEvents: "none" }}>
           <label className="mx-auto max-w-sm flex items-center justify-between gap-3 rounded-xl px-3 py-1.5 cursor-pointer select-none" style={{ background: C.paper, border: `1px solid ${C.line}`, pointerEvents: "auto" }}>
             <span className="flex items-center gap-1.5 min-w-0">
-              <span className="text-xs" aria-hidden="true" style={{ color: C.inkSoft }}>↩</span>
-              <span className="text-xs font-semibold truncate" style={{ color: C.inkSoft }}>{lang === "en" ? "Book Return trip" : lang === "mr" ? "परतीचा प्रवास बुक करा" : "वापसी यात्रा बुक करें"}</span>
+              <span className="text-xs" aria-hidden="true" style={{ color: C.inkSoft }}>↔</span>
+              <span className="text-xs font-semibold truncate" style={{ color: C.inkSoft }}>{lang === "en" ? "Round trip" : "राउंड ट्रिप"}</span>
             </span>
             <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-4 h-4 shrink-0 rounded" style={{ accentColor: C.navy }} />
           </label>
