@@ -81,9 +81,14 @@ service cloud.firestore {
     function driverProtectedFieldsUnchanged() {
       return (request.resource.data.kyc == resource.data.kyc || request.resource.data.kyc == 'Pending') &&
         request.resource.data.blacklisted == resource.data.blacklisted &&
-        request.resource.data.wallet == resource.data.wallet &&
-        request.resource.data.heldCredit == resource.data.heldCredit &&
-        request.resource.data.bonus == resource.data.bonus &&
+        // wallet / bonus / heldCredit: the driver's own session may only ever LOWER them, never raise them (deep-clean
+        // 2026-11-02). Raising stays Admin/Cloud-Function only. Lowering is what the app itself does on the driver's side:
+        // requestWithdrawal takes the withdrawn bonus out, and a (currently paused) commission would come out of the wallet.
+        // Before this the withdrawal's bonus deduction was refused while the withdrawal request itself was accepted, so the
+        // same bonus could be requested again and again. `.get(..., 0)` so a doc missing a field no longer errors out.
+        request.resource.data.get('wallet', 0) <= resource.data.get('wallet', 0) &&
+        request.resource.data.get('heldCredit', 0) <= resource.data.get('heldCredit', 0) &&
+        request.resource.data.get('bonus', 0) <= resource.data.get('bonus', 0) &&
         request.resource.data.createdAt == resource.data.createdAt;
     }
 
@@ -164,6 +169,20 @@ service cloud.firestore {
               'declinedBy', 'vehicle', 'driverName', 'driverMobile', 'progress',
               'dispatchPass', 'dispatchTierOffset'
             ]))
+        // Return Load accept (deep-clean 2026-11-02): driverRespondBooking's claim writes the return-discounted `fare` plus
+        // originalFare / isReturn / returnPct in the SAME update that assigns the driver. None of those keys were in the list
+        // above, so the claim was refused ("Couldn't accept") for every driver in Return Load mode. Allowed only as a DISCOUNT:
+        // the new fare may never be higher than the stored one, and when it changes originalFare must be the old fare.
+        || (resource.data.get('driverMobile', null) == null && isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'bids', 'status', 'pendingDriverName', 'pendingDriverMobile', 'pendingBidId', 'acceptedAt',
+              'declinedBy', 'vehicle', 'driverName', 'driverMobile', 'progress',
+              'dispatchPass', 'dispatchTierOffset',
+              'fare', 'originalFare', 'isReturn', 'returnPct'
+            ])
+            && request.resource.data.get('fare', 0) <= resource.data.get('fare', 0)
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['fare'])
+                || request.resource.data.get('originalFare', -1) == resource.data.get('fare', 0)))
         || (resource.data.get('driverMobile', null) != null && isOwnPhone(resource.data.driverMobile));
       allow delete: if isAdmin();
     }

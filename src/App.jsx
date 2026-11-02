@@ -2041,9 +2041,6 @@ function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pic
   const formulaFare = calculateFare(capacityKg, distanceKm, tiers, effectiveZone, 0, dieselPricePerLitre);
   return scaleRatio != null ? Math.round(formulaFare * scaleRatio) : formulaFare;
 }
-function resolveFare(driver, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares) {
-  return resolveFareForCapacity(driver?.vehicleSpec?.capacityKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares);
-}
 // Same fare a real driver in this category would get (resolveFareForCapacity
 // with the tier's own maxKg as the capacity — findFareTier always resolves
 // that number back to this exact tier), for category-based dispatch
@@ -8047,7 +8044,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   {visibleDrivers.map((entry, idx) => {
                     const key = entry.id;
                     const isSelected = !!selectedEntry && selectedEntry.id === key;
-                    const isSending = sendingKey === key;
                     const fare = entry.fare;
                     return (
                       <div key={key} className="anim-rise" style={{ animationDelay: `${Math.min(idx, 6) * 70}ms` }}>
@@ -12997,8 +12993,18 @@ export default function App() {
     return bulkDeleteDocs("bookings", ids);
   };
 
+  // Money taps are guarded against a double tap (deep-clean 2026-11-02): the wallet/status the button reads only refreshes after
+  // the Firestore round trip, so two quick taps used to take the bonus out twice (two withdrawals) or credit a recharge twice.
+  const moneyBusyRef = useRef(new Set());
+  const claimMoneyTap = (key, ms = 6000) => {
+    if (moneyBusyRef.current.has(key)) return false;
+    moneyBusyRef.current.add(key);
+    setTimeout(() => moneyBusyRef.current.delete(key), ms);
+    return true;
+  };
   const requestWithdrawal = (amount) => {
-    if (amount <= 0 || !driver) return;
+    if (amount <= 0 || !driver || amount > (Number(driver.bonus) || 0)) return;
+    if (!claimMoneyTap(`W${driver.mobile}`)) return;
     adjustDriverWallet(driver.mobile, { bonusDelta: -amount });
     createDoc("withdrawals", genId("W"), { role: "driver", driverMobile: driver.mobile, driverName: driver.name, amount, status: "Pending" }).catch((e) => console.error(e));
   };
@@ -13018,7 +13024,7 @@ export default function App() {
     // could both compute from the same stale base and silently lose one
     // credit. adjustDriverWallet's increment() commutes correctly
     // regardless of order or staleness.
-    if (req && req.status === "Pending") adjustDriverWallet(req.driverMobile, { walletDelta: req.amount });
+    if (req && req.status === "Pending" && claimMoneyTap(`R${id}`, 15000)) adjustDriverWallet(req.driverMobile, { walletDelta: req.amount });
     patchDoc("rechargeRequests", id, { status: "Approved" }).catch((e) => console.error(e));
   };
 
@@ -13291,7 +13297,9 @@ export default function App() {
     // Return Load: this vehicle is now empty and (per the guide's own
     // background rule) assumed to be heading home for up to RETURN_HOURS —
     // see markReturnModePatch/isReturnLoadFor above.
-    if (b.driverName === driver?.name && driver?.mobile) {
+    // Not after a customer's Round trip (deep-clean 2026-11-02): that vehicle has already driven back to the pickup, so it is NOT
+    // "empty at the drop heading home" -- flagging it would hand out Return Load discounts from the wrong place.
+    if (b.driverName === driver?.name && driver?.mobile && !b.returnTrip) {
       patchDoc("drivers", driver.mobile, markReturnModePatch(driver, b)).catch((e) => console.error("[return mode]", e));
     }
     // Referral payout (₹200 to whichever driver referred this one, the

@@ -329,17 +329,6 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
 }
 
 function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, bugs, systemHealth, unmatchedVehicleRequests }) {
-  // Takes a raw Firestore Timestamp (not a whole doc) so each caller can
-  // pick the field that actually answers "did this happen today" for that
-  // tile -- createdAt for a signup/booking, but e.g. cancelledAt (not
-  // createdAt) for a cancellation, since a booking placed yesterday and
-  // cancelled today is "cancelled today", not "cancelled yesterday".
-  const isToday = (ts) => {
-    const d = ts?.toDate ? ts.toDate() : null;
-    if (!d) return false;
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-  };
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
   // Single partition, used for every installed/uninstalled/blacklisted
   // count on this dashboard (see partitionDriversByInstallStatus) -- these
@@ -387,13 +376,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // New customer signups today, and drivers still inside their 30-day free
   // trial — both derived live from createdAt, same source of truth as
   // everywhere else trial/signup timing is used in the app.
-  const newCustomersToday = (customers || []).filter((c) => isToday(c.createdAt));
   // Today's new driver signups. "New Registrations" is deliberately just
   // a today's-signup-volume counter, same createdAt-based approach as
   // newCustomersToday -- actually
   // reviewing/approving those signups now happens entirely in the
   // Drivers tab (see AdminDriverList), not through this tile.
-  const newDriversToday = drivers.filter((d) => isToday(d.createdAt));
   // Owner-reported (2026-10-19): Google Ads showed conversions (installs)
   // accumulating over whatever window a campaign report covers, but the
   // dashboard only ever had a "today" counter -- no way to actually check
@@ -438,45 +425,12 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     (drivers || []).forEach((d) => { const k = dateKey(d.createdAt); if (byKey[k]) byKey[k].drivers.push(d); });
     return days.reverse();
   })();
-  const registrationTrendTotal = registrationTrend.reduce((sum, d) => sum + d.customers.length + d.drivers.length, 0);
 
   // Tapping one of the "drill-down" tiles opens a dedicated full page (with
   // its own Back button) showing the live record list behind that count —
   // a separate screen, not an inline panel on the dashboard itself.
   const [detailView, setDetailView] = useState(null);
 
-  // KYC approval queue for "New Registrations" -> Driver (see
-  // detailView === "newRegistrations" below) -- only drivers who've
-  // actually submitted and are sitting in Pending, waiting on a decision.
-  // Deliberately NOT drivers who haven't submitted at all yet -- there's
-  // nothing to approve/reject for those, and they'd just be noise here;
-  // the WhatsApp reminder for them still lives in the Drivers tab's
-  // Incomplete section. Not just today's Pending signups either, since a
-  // driver who signed up yesterday and is still Pending needs this
-  // exactly as much as one who signed up an hour ago. Approve/Reject/Edit
-  // live only here now; the Drivers tab (AdminDriverList) keeps Edit alone.
-  // Also includes Rejected (not just Pending) -- a Reject was previously
-  // treated as final, which meant a mistaken/accidental reject had no way
-  // back short of editing the database directly. Keeping a Rejected entry
-  // here lets admin reconsider and flip it to Approved.
-  const approvalQueue = drivers.filter((d) => d.vehicleSpec && (d.kyc === "Pending" || d.kyc === "Rejected"));
-  // A driver who signed up but hasn't submitted the KYC form yet has
-  // nothing to approve/reject -- but hiding them completely made a fresh
-  // signup look like it vanished/got silently auto-approved (real confusion
-  // this caused once). Kept visible for a few days so Admin has a real
-  // window to actively follow up and ask them to finish the form, not just
-  // a single day -- but still bounded, not every incomplete signup ever, so
-  // this doesn't turn back into the unbounded "not submitted" noise
-  // approvalQueue above deliberately excludes -- a signup from weeks ago
-  // still belongs only in the Drivers tab's Incomplete section/WhatsApp
-  // reminder, not here.
-  const NOT_SUBMITTED_VISIBLE_DAYS = 3;
-  const isWithinLastDays = (ts, days) => {
-    const d = ts?.toDate ? ts.toDate() : null;
-    return !!d && Date.now() - d.getTime() <= days * 24 * 60 * 60 * 1000;
-  };
-  const notSubmittedRecentList = drivers.filter((d) => !d.vehicleSpec && isWithinLastDays(d.createdAt, NOT_SUBMITTED_VISIBLE_DAYS));
-  const driverRegistrations = [...approvalQueue, ...notSubmittedRecentList];
   const [approvalExpandedId, setApprovalExpandedId] = useState(null);
   const [approvalEditingId, setApprovalEditingId] = useState(null);
   const [confirmRejectId, setConfirmRejectId] = useState(null);
@@ -606,7 +560,6 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // detailView === "newRegistrations" below. Defaults to Driver since KYC
   // approval (the thing that actually needs admin action) lives there;
   // Customer is purely informational.
-  const [newRegTab, setNewRegTab] = useState("driver");
 
   const statusMeta = lang === "en"
     ? { Bidding: { label: "Awaiting bids", color: "#FFFFFF", bg: C.marigoldDeep }, Ongoing: { label: "Ongoing", color: "#FFFFFF", bg: C.marigoldDeep }, Completed: { label: "Completed", color: "#FFFFFF", bg: C.success }, Cancelled: { label: "Cancelled", color: "#FFFFFF", bg: C.safety } }
@@ -766,7 +719,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // "New Registrations" -> Customer stays a plain informational,
   // today-only list (a customer registration has no pending/incomplete
   // state, so "today" is the only meaningful scope there). Driver is the
-  // KYC approval queue (see approvalQueue above) -- Approve/Reject/Edit
+  // KYC approval queue (the registration lists below, `canDecide`) -- Approve/Reject/Edit
   // live here now, not in the Drivers tab.
   if (detailView === "liveMap") {
     return (
@@ -802,7 +755,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     // follow-up request -- one combined list per date instead, each row
     // tagged Customer or Driver. Driver rows carry Approve/Reject (plus an
     // expand-to-view-documents and Edit, same pattern as AdminDriverList's
-    // own expanded card) using the approvalQueue/approvalExpandedId/
+    // own expanded card) using the approvalExpandedId/
     // approvalEditingId state declared above -- this is the only place in
     // the app driver KYC can be approved/rejected.
     const rangeCustomersTotal = registrationTrend.reduce((sum, d) => sum + d.customers.length, 0);
