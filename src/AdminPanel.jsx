@@ -1857,7 +1857,7 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
           {dieselError || dieselFlash}
         </div>
       )}
-      <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} />
+      <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} />
     </div>
   );
 }
@@ -1865,7 +1865,7 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
 // The guide's own home screen (section 1): two buttons, Admin Rate
 // Calculator and Saved Routes (with a live count) -- opens one or the
 // other as its own full-screen sheet, same as before.
-function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, lang }) {
+function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, lang, dieselPricePerLitre = null }) {
   const [rateCalcOpen, setRateCalcOpen] = useState(false);
   // Entry to pre-load the calculator with -- set when Saved Routes' own
   // edit action reopens this instead of editing inline.
