@@ -1970,13 +1970,25 @@ export function findExactAdminRoute(pickup, drop, tierMaxKg, zone, isReturn, adm
 // fix/per independently then recomputing (every mode here is linear in
 // fix and per), so this returns the ratio alone — multiply it onto
 // calculateFare's own result at the call site.
-export function getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares, tiers) {
+// Coordinates (optional, last four args) are matched FIRST, exactly like getAdminRouteOverride / findExactAdminRoute: the same
+// real place comes back as different TEXT in Hindi/English/Marathi, so a text-only match silently lost Admin's derived rate for
+// the customer (owner 2026-11-02: Admin calculator ₹6,941 vs customer one-way ≈₹8,964 on the same route). Text stays the fallback.
+export function getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares, tiers, pickupLat = null, pickupLng = null, dropLat = null, dropLng = null) {
   if (!Array.isArray(adminRouteFares) || adminRouteFares.length === 0) return null;
   const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
   if (!p || !d) return null;
-  const matches = adminRouteFares.filter((r) =>
-    (r.zone || "in") === zone && !!r.isReturn === !!isReturn &&
-    routeTextsMatch(r.pickupKey, p) && routeTextsMatch(r.dropKey, d));
+  const routeKm = pickupLat != null && dropLat != null ? haversineKm(pickupLat, pickupLng, dropLat, dropLng) : null;
+  const radiusKm = routeMatchRadiusKm(routeKm);
+  const matches = adminRouteFares.filter((r) => {
+    if ((r.zone || "in") !== zone || !!r.isReturn !== !!isReturn) return false;
+    const pickupOk = pickupLat != null && r.pickupLat != null
+      ? locationsNear(pickupLat, pickupLng, r.pickupLat, r.pickupLng, radiusKm)
+      : routeTextsMatch(r.pickupKey, p);
+    const dropOk = dropLat != null && r.dropLat != null
+      ? locationsNear(dropLat, dropLng, r.dropLat, r.dropLng, radiusKm)
+      : routeTextsMatch(r.dropKey, d);
+    return pickupOk && dropOk;
+  });
   if (matches.length === 0) return null;
   const ratios = matches
     .map((r) => {
@@ -2004,7 +2016,7 @@ function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pic
   const effectiveZone = zone || zoneFor(pickupLat, pickupLng, dropLat, dropLng, distanceKm);
   const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm, effectiveZone, isReturn);
   if (adminOverride != null) return adminOverride;
-  const scaleRatio = getRouteScaleRatio(pickup, drop, effectiveZone, isReturn, adminRouteFares, tiers);
+  const scaleRatio = getRouteScaleRatio(pickup, drop, effectiveZone, isReturn, adminRouteFares, tiers, pickupLat, pickupLng, dropLat, dropLng);
   const formulaFare = calculateFare(capacityKg, distanceKm, tiers, effectiveZone, 0, dieselPricePerLitre);
   return scaleRatio != null ? Math.round(formulaFare * scaleRatio) : formulaFare;
 }

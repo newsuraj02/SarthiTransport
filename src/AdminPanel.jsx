@@ -2091,7 +2091,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     ? findExactAdminRoute(pickup, drop, tier.maxKg, zone, isReturn, adminRouteFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng)
     : null;
   const scaleRatio = tier && pickup.trim() && drop.trim() && !exactMatch
-    ? getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares, fareTiers)
+    ? getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng)
     : null;
   const suggestionSource = exactMatch ? "admin" : scaleRatio != null ? "scaled" : "formula";
 
@@ -2173,7 +2173,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     const entryZone = zoneFor(entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng, entry.estimatedKm);
     const exact = findExactAdminRoute(entry.pickupName, entry.dropName, entryTier.maxKg, entryZone, false, adminRouteFares, entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng);
     if (exact) return Number(exact.totalFare) || null;
-    const ratio = getRouteScaleRatio(entry.pickupName, entry.dropName, entryZone, false, adminRouteFares, fareTiers);
+    const ratio = getRouteScaleRatio(entry.pickupName, entry.dropName, entryZone, false, adminRouteFares, fareTiers, entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng);
     const formulaFare = calculateFare(entryTier.maxKg, entry.estimatedKm, fareTiers, entryZone, 0);
     return ratio != null ? Math.round(formulaFare * ratio) : formulaFare;
   };
@@ -2712,7 +2712,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
     const exact = findExactAdminRoute(req.pickup, req.drop, tier.maxKg, zone, false, adminRouteFares, req.pickupLat, req.pickupLng, req.dropLat, req.dropLng);
     if (exact) return Number(exact.totalFare) || "";
     if (km <= 0) return "";
-    const ratio = getRouteScaleRatio(req.pickup, req.drop, zone, false, adminRouteFares, fareTiers);
+    const ratio = getRouteScaleRatio(req.pickup, req.drop, zone, false, adminRouteFares, fareTiers, req.pickupLat, req.pickupLng, req.dropLat, req.dropLng);
     const formulaFare = calculateFare(tier.maxKg, km, fareTiers, zone, 0, dieselPricePerLitre);
     return ratio != null ? Math.round(formulaFare * ratio) : formulaFare;
   };

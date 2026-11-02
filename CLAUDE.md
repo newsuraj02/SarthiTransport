@@ -346,6 +346,7 @@ vehicle is never cheaper than a smaller one at any distance
 Diesel baseline ₹98/L; live price in Firestore `settings/main.dieselPricePerLitre`
 adds km × Δprice ÷ tier mileage to every fare. Resolution order: admin's saved
 route rate → scaled by the admin's other-tier ratio → formula.
+The scaled layer (`getRouteScaleRatio`) matches the route by COORDINATES first (same radius rule as the exact override), text only as fallback, and every caller passes coordinates (owner 2026-11-02: Admin calculator showed ₹6,941 but the customer's one-way was ≈₹8,964 on the same route, because differently-written place names lost the derived rate; the Round trip total ₹16,583 was just that ₹8,964 + 85% of it). Pinned by a behavior check.
 
 **Admin lists** (Drivers tab: FOUR boxes -- GPS, KYC, Status, Low wallet -- showing their counts (owner 2026-10-31; they replaced the 7 accordions, same lists); tapping a box OPENS A NEW SCREEN with a toggle at the top (GPS On/Off, KYC Complete/Incomplete, Status On Duty/Off Duty; Low wallet has none) and the list of the selected side below it, back arrow returns; "All Drivers (N)" opens a screen with everyone; search stays on the boxes screen; Customers, Uninstalled, Blocked,
 New Registrations): numbered rows; name truncates but icons are never cut; driver
