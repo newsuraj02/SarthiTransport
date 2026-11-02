@@ -10,7 +10,7 @@ import {
   Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
   MessageCircle, Phone, PhoneCall, Plus, Settings2, Siren, UserCircle2, Users,
-  Wallet, Weight, XCircle,
+  Wallet, XCircle,
 } from "lucide-react";
 import { GoogleMap, MarkerF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";

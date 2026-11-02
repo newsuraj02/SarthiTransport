@@ -13,22 +13,22 @@ function AdminLoadingFallback() {
 }
 import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
-  Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation, Activity,
+  Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation,
   Settings2, Download, IndianRupee,
-  ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Plus, Loader2, RefreshCw,
-  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, Calculator, LocateFixed,
+  ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Loader2, RefreshCw,
+  FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, LocateFixed,
   AlertTriangle, Volume2, Square,
 } from "lucide-react";
 import {
-  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkUpdateDocs, bulkDeleteDocs,
+  firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkDeleteDocs,
   claimBooking, addDeclinedBy,
 } from "./firestoreStore";
 import { increment, serverTimestamp } from "firebase/firestore";
-import { GoogleMap, MarkerF, OverlayViewF, PolylineF, Autocomplete } from "@react-google-maps/api";
+import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, sendAdminNotification, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
+import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
 import { registerPlugin, Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
@@ -10201,7 +10201,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
             // heading home past this exact load right now. The discount
             // itself only applies once accepted (see driverRespondBooking);
             // this badge is just letting the driver know before they tap.
-            const isReturn = isReturnLoadFor(driver, b);
+            const isReturn = !b.returnTrip && isReturnLoadFor(driver, b); // a customer's Round trip already carries its own return discount -- never stack the Return Load one on top
             return (
               <div key={b.id} className={`rounded-xl p-3 shadow-sm anim-drop-in ${isReturn ? "" : "ring-pulse-yellow"}`} style={{ background: C.paper, border: `2px solid ${isReturn ? C.success : C.marigoldDeep}` }}>
                 {isReturn && (
@@ -13136,7 +13136,9 @@ export default function App() {
     // was already resolved at request time (not re-derived from
     // scratch, so it stays whatever pricing layer -- Admin override,
     // scaled, or formula -- originally produced it).
-    const isReturn = isReturnLoadFor(driver, b);
+    // A customer's Round trip (b.returnTrip) already includes its own return discount in `fare` -- never discount it a second
+    // time just because this driver also happens to be flagged "heading home" (deep-clean 2026-11-02: 15% was taken twice).
+    const isReturn = !b.returnTrip && isReturnLoadFor(driver, b);
     const claimedFare = isReturn ? Math.round((b.fare || 0) * (1 - returnPct / 100)) : b.fare;
     let result;
     try {
