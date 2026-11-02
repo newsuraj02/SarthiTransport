@@ -281,7 +281,7 @@ function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
   const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   const [step, setStep] = useState(1); // 1 = Select Date, 2 = Time slots
   const [pendingDate, setPendingDate] = useState(selectedDate || "");
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateKey();
   // Mirrors the date picker's own past-date block: if the chosen date is
   // today, any slot whose hour has already passed (or is the current hour)
   // is disabled — same "no past" rule, just applied at the hour level too.
@@ -893,10 +893,17 @@ function stars(n) { return "★".repeat(Math.round(n)) + "☆".repeat(5 - Math.r
 // should behave like any other active/ongoing booking. scheduledFor is
 // stored as "YYYY-MM-DD HH:MM", so a plain string comparison on the date
 // part is enough (no timezone math needed, same as isToday elsewhere).
+// "YYYY-MM-DD" for the device's OWN calendar day (deep-clean 2026-11-02). `toISOString().slice(0, 10)` is the UTC day, which in
+// India is the PREVIOUS day from 00:00 to 05:30 -- and a local-midnight Date turned into an ISO string is ALWAYS the previous day.
+// That made the Admin finance chart plot yesterday under today's label (today's own earnings never showed), let a night-time
+// Advance booking pick an hour that had already passed, and kept "today's" advance bookings in the future until 05:30.
+export function localDateKey(d = new Date()) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
 export function isFutureAdvance(scheduledFor) {
   if (!scheduledFor) return false;
   const datePart = scheduledFor.split(" ")[0];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   return datePart > today;
 }
 

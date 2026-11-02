@@ -23,7 +23,7 @@ import {
   describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
   getRouteScaleRatio, gpsStatus, greetingWord, haversineKm, installedDrivers, zoneFor,
-  isFutureAdvance, isLikelyUninstalled,
+  isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
   LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile, VEHICLE_HEADROOM_KG,
@@ -395,13 +395,13 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // "Cannot access before initialization" TDZ error fires if a `const`
   // declared later in the component is referenced by code earlier in the
   // same function body -- this whole block depends on trendFrom/trendTo.
-  const toDateInputStr = (d) => d.toISOString().slice(0, 10);
+  const toDateInputStr = (d) => localDateKey(d);
   const [trendFrom, setTrendFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return toDateInputStr(d); });
   const [trendTo, setTrendTo] = useState(() => toDateInputStr(new Date()));
   const REGISTRATION_TREND_MAX_DAYS = 92; // ~3 months -- a sane cap so a huge range doesn't render thousands of rows
   const dateKey = (ts) => {
     const d = ts?.toDate ? ts.toDate() : null;
-    return d ? d.toISOString().slice(0, 10) : null;
+    return d ? localDateKey(d) : null;
   };
   const registrationTrendRangeInvalid = !trendFrom || !trendTo || trendFrom > trendTo;
   const registrationTrendTooWide = !registrationTrendRangeInvalid
@@ -471,7 +471,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
 
   // Shared timestamp helper for the "already contacted today" trackers
   // below.
-  const todayStrUninstalled = () => new Date().toISOString().slice(0, 10);
+  const todayStrUninstalled = () => localDateKey();
 
   // "Called this round" tracking for Uninstalled/Blocked (see
   // detailPages.uninstalled) -- owner request (2026-10-24, revised): once
@@ -1081,7 +1081,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   // window. One shared y-axis (never dual-axis -- see the dataviz skill):
   // Expenses reading low/flat against Earnings' scale is the accurate
   // story (healthy margin), not something to "fix" with a second axis.
-  const dayKey = (d) => d.toISOString().slice(0, 10);
+  const dayKey = (d) => localDateKey(d);
   const financeDays = (() => {
     const out = [];
     for (let i = financeChartRangeDays - 1; i >= 0; i--) {
@@ -3786,7 +3786,7 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
   const metaNumbersText = metaExport.csv.replace(/^phone\n/, "").trim();
   const downloadMetaUsers = async () => {
     if (metaPreparing) return;
-    const fileName = `app-users-meta-${new Date().toISOString().slice(0, 10)}.csv`;
+    const fileName = `app-users-meta-${localDateKey()}.csv`;
     setMetaPreparing(true);
     const res = await createCsvDownloadLink(metaExport.csv, fileName);
     setMetaPreparing(false);
@@ -4103,7 +4103,7 @@ function AdminFinance({ commissionPct, setCommissionPct, bonusPct, setBonusPct, 
 // which already live under the Reports tab.
 function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCategory, lang }) {
   const categories = [...DEFAULT_EXPENSE_CATEGORIES, ...Object.values(expenseCategories || {}).filter((c) => !DEFAULT_EXPENSE_CATEGORIES.some((d) => d.hi === c.hi))];
-  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const todayISO = () => localDateKey();
   const blankForm = { date: todayISO(), category: categories[0]?.hi || "", amount: "", note: "", photo: null };
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(blankForm);

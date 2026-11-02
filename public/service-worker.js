@@ -57,7 +57,7 @@ self.addEventListener("notificationclick", (event) => {
 // simple: only same-origin GET requests (the built JS/CSS/HTML/icons) are
 // ever cached — Firestore, Storage, and Google Maps calls always go straight
 // to the network, since that data has to be live.
-const CACHE_NAME = "apna-transport-v3";
+const CACHE_NAME = "apna-transport-v4";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -75,8 +75,16 @@ self.addEventListener("activate", (event) => {
 // one retry below.
 function fetchAndCache(request) {
   return fetch(request).then((response) => {
-    const copy = response.clone();
-    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+    // Only a real, complete 200 is worth keeping (deep-clean 2026-11-02): an error page (404/500 during a deploy) or a partial
+    // 206 stored here would be replayed later whenever the network drops -- e.g. a cached 404 for the stylesheet is exactly an
+    // "unstyled screen". The put() is also caught so a quota/partial-response failure can never become an unhandled rejection.
+    // Hosting rewrites EVERY unknown path to /index.html with a 200, so a stale hashed /assets/*.css|js (right after a deploy)
+    // comes back as an HTML page that looks like a success. A style/script that is really HTML must never be stored.
+    const wrongKind = (request.destination === "style" || request.destination === "script") && /text\/html/i.test(response.headers.get("content-type") || "");
+    if (response.ok && response.status === 200 && !wrongKind) {
+      const copy = response.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+    }
     return response;
   });
 }
