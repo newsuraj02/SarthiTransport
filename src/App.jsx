@@ -9563,8 +9563,9 @@ function LoadingTimer({ trip, completeBooking, lang, onEnded, startReturnTrip })
           and handed to completeBooking below. */}
       <button
         onClick={() => {
-          const { haltingCharge, bill } = completeBooking(trip.id, clock.extraCharge) || {};
-          onEnded?.({ ...trip, extraCharge: clock.extraCharge, billableHours: clock.billableHours, waitingElapsedStr: clock.waitingElapsedStr, haltingCharge, bill });
+          const { haltingCharge, bill, completedAt } = completeBooking(trip.id, clock.extraCharge) || {};
+          // completedAt: the driver's own invoice showed Date "—" because this snapshot never carried it (deep-clean 2026-11-02)
+          onEnded?.({ ...trip, extraCharge: clock.extraCharge, billableHours: clock.billableHours, waitingElapsedStr: clock.waitingElapsedStr, haltingCharge, bill, completedAt });
         }}
         className="w-full rounded-lg py-3.5 font-bold text-base text-white shadow-lg" style={{ background: C.metallicGreen }}>
         {lang === "en" ? "End Trip" : lang === "mr" ? "एंड ट्रिप" : "एंड ट्रिप"}
@@ -13323,7 +13324,7 @@ export default function App() {
     // snapshot -- built locally, before the patch above round-trips back
     // through the subscription -- can show the real bill immediately
     // instead of waiting a beat with haltingCharge/bill still undefined.
-    return { haltingCharge, bill };
+    return { haltingCharge, bill, completedAt: completedAtMs };
   };
   const startLoading = (id, adjustMs = 0) => {
     const b = bookings.find((x) => x.id === id);
