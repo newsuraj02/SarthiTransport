@@ -93,13 +93,18 @@ service cloud.firestore {
         request.resource.data.createdAt == resource.data.createdAt;
     }
 
+    // Vehicle types / materials: anyone signed in may ADD an entry (a driver typing a new vehicle name at sign-up creates one) but
+    // only Admin may change or delete an existing one (owner request 2026-11-02; before this any signed-in customer could rewrite or
+    // delete every vehicle type). `create` is refused if the document already exists, so a new sign-up can never overwrite a type.
     match /vehicleTypes/{id} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
     match /materials/{id} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
     match /settings/{id} {
       // Lets the app's own "create if missing" bootstrap work on a brand
@@ -201,9 +206,13 @@ service cloud.firestore {
     // — same trust level bookings/{id} already grants a driver over their
     // own newly-accepted trip.
     match /bookingOtps/{bookingId} {
-      allow read: if isAdmin() || isOwnPhone(resource.data.get('customerMobile', ''));
-      allow create, update: if isSignedIn();
-      allow delete: if isAdmin();
+      // The code is made and written ONLY by the server (functions/index.js: issuePickupOtp, Admin SDK, which bypasses rules) --
+      // no driver or customer session may write it (owner request 2026-11-02). Before this any signed-in user could overwrite it,
+      // and the driver's own phone made it, so the check proved nothing. Reading a document that does not exist yet is allowed
+      // (nothing to leak): the customer's screen starts listening the instant the booking turns Ongoing, a moment BEFORE the
+      // server has written the code, and a refused listener would never recover.
+      allow read: if isAdmin() || (isSignedIn() && resource == null) || isOwnPhone(resource.data.get('customerMobile', ''));
+      allow create, update, delete: if isAdmin();
     }
 
     // Read is scoped per-document to the request's own driverMobile/

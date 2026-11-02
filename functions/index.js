@@ -3,6 +3,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const crypto = require("crypto");
 const { ringWeightText } = require("./ringText");
+const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -946,9 +947,32 @@ exports.verifyPickupOtp = onCall({ region: "asia-south1" }, async (request) => {
     throw new HttpsError("permission-denied", "Not the assigned driver for this booking.");
   }
 
-  const otpSnap = await db.collection("bookingOtps").doc(bookingId).get();
-  const valid = otpSnap.exists && String(otpSnap.data().otp || "") === String(otp);
-  return { valid };
+  // Guess limit + server-made code: see functions/otp.js. A wrong guess bumps a counter on the OTP document; after
+  // OTP_MAX_BAD_GUESSES the check locks for OTP_LOCK_MS. The client treats any non-valid answer as "Incorrect OTP".
+  const otpRef = db.collection("bookingOtps").doc(bookingId);
+  const otpSnap = await otpRef.get();
+  const verdict = judgeOtpGuess(otpSnap.exists ? otpSnap.data() : null, otp);
+  if (verdict.update) await otpRef.update(verdict.update).catch((e) => console.error("[verifyPickupOtp] counter", e.message));
+  return { valid: verdict.valid, ...(verdict.locked ? { locked: true } : {}), ...(verdict.pending ? { pending: true } : {}) };
+});
+
+// Makes the pickup OTP when a booking first becomes Ongoing (owner request 2026-11-02). The driver's own phone used to make and
+// write it, so it always knew the answer and could overwrite it; now only this function (Admin SDK) can write bookingOtps.
+// `create()` fails with ALREADY_EXISTS if one is there already (a retry, or a stale app version that still writes its own),
+// which is exactly the "issue once" behaviour wanted.
+exports.issuePickupOtp = onDocumentUpdated("bookings/{bookingId}", async (event) => {
+  const before = event.data?.before?.data();
+  const after = event.data?.after?.data();
+  if (!shouldIssuePickupOtp(before, after)) return;
+  try {
+    await db.collection("bookingOtps").doc(event.params.bookingId).create({
+      otp: newPickupOtp(),
+      customerMobile: after.customerMobile || "",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    if (e.code !== 6 && !/already exists/i.test(e.message || "")) throw e;
+  }
 });
 
 // Mints a Firebase custom token for LocationTrackerService (see

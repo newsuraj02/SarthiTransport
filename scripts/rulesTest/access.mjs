@@ -7,7 +7,7 @@
 // "ok" = expected. "BUG?" = KNOWN open design gaps (bookingOtps writable by any signed-in user, vehicleTypes writable by any signed-in user) -- see the deep-clean report.
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
 import { readFileSync } from "node:fs";
-import { doc, setDoc, updateDoc, increment, getDoc, serverTimestamp, collection, addDoc } from "firebase/firestore";
+import { doc, setDoc, updateDoc, deleteDoc, increment, getDoc, serverTimestamp, collection, addDoc } from "firebase/firestore";
 const env = await initializeTestEnvironment({ projectId: "demo-test", firestore: { rules: readFileSync(new URL("../../firestore.rules", import.meta.url).pathname, "utf8"), host: "127.0.0.1", port: Number(process.env.FIRESTORE_EMULATOR_HOST?.split(":")[1] || 8089) } });
 const drv = (m = "9000000001") => env.authenticatedContext("d" + m, { email: `${m}@driver.apnatransport.local` }).firestore();
 const cus = (m = "8000000001") => env.authenticatedContext("c" + m, { email: `${m}@customer.apnatransport.local` }).firestore();
@@ -18,6 +18,7 @@ const seed = async () => env.withSecurityRulesDisabled(async (c) => { const f = 
   await setDoc(doc(f, "bookings", "B1"), { customerMobile: "8000000001", status: "Ongoing", driverMobile: "9000000001", driverName: "Survesh", fare: 1000 });
   await setDoc(doc(f, "bookings", "B2"), { customerMobile: "8000000001", status: "AwaitingDriver", fare: 1000, tierMaxKg: 1000, declinedBy: [] });
   await setDoc(doc(f, "bookingOtps", "B2"), { otp: "1234", customerMobile: "8000000001" });
+  await setDoc(doc(f, "vehicleTypes", "tempo"), { label: "Tempo", rate: 25 });
   await setDoc(doc(f, "rechargeRequests", "R1"), { driverMobile: "9000000001", amount: 100, status: "Pending" });
 });
 const res = [];
@@ -38,10 +39,17 @@ await t("customer rates trip", () => updateDoc(doc(cus(), "bookings", "B1"), { r
 await t("customer creates booking", () => setDoc(doc(cus(), "bookings", "B9"), { customerMobile: "8000000001", status: "AwaitingDriver", fare: 5, returnTrip: true }), true);
 await t("driver reads bookingOtps (must be denied)", () => getDoc(doc(drv(), "bookingOtps", "B2")), false);
 await t("customer reads own bookingOtps", () => getDoc(doc(cus(), "bookingOtps", "B2")), true);
-await t("driver overwrites bookingOtps (design flaw if allowed)", () => setDoc(doc(drv(), "bookingOtps", "B2"), { otp: "0000", customerMobile: "8000000001" }), false);
-await t("driver updates bookingOtps (design flaw if allowed)", () => updateDoc(doc(drv(), "bookingOtps", "B2"), { otp: "0000" }), false);
-await t("customer overwrites bookingOtps (design flaw if allowed)", () => updateDoc(doc(cus(), "bookingOtps", "B2"), { otp: "1111" }), false);
-await t("customer writes vehicleTypes (design flaw if allowed)", () => setDoc(doc(cus(), "vehicleTypes", "x"), { label: "hack" }), false);
+await t("driver overwrites bookingOtps (server-only now)", () => setDoc(doc(drv(), "bookingOtps", "B2"), { otp: "0000", customerMobile: "8000000001" }), false);
+await t("driver updates bookingOtps (server-only now)", () => updateDoc(doc(drv(), "bookingOtps", "B2"), { otp: "0000" }), false);
+await t("customer overwrites bookingOtps (server-only now)", () => updateDoc(doc(cus(), "bookingOtps", "B2"), { otp: "1111" }), false);
+await t("customer overwrites an existing vehicle type (must be denied)", () => setDoc(doc(cus(), "vehicleTypes", "tempo"), { label: "hack" }), false);
+await t("customer deletes a vehicle type (must be denied)", () => deleteDoc(doc(cus(), "vehicleTypes", "tempo")), false);
+await t("driver adds a NEW vehicle type (sign-up)", () => setDoc(doc(drv(), "vehicleTypes", "newtruck"), { label: "New truck", rate: 25 }), true);
+await t("admin edits a vehicle type", () => setDoc(doc(adm(), "vehicleTypes", "tempo"), { label: "Tempo 2" }), true);
+await t("customer reads a bookingOtps doc that does not exist yet (listener must not die)", () => getDoc(doc(cus(), "bookingOtps", "NOPE")), true);
+await t("driver creates a bookingOtps doc (must be denied)", () => setDoc(doc(drv(), "bookingOtps", "NEW1"), { otp: "1111", customerMobile: "8000000001" }), false);
+await t("admin writes bookingOtps", () => setDoc(doc(adm(), "bookingOtps", "NEW2"), { otp: "2222", customerMobile: "8000000001" }), true);
+await t("claim without any OTP write still works", () => updateDoc(doc(drv(), "bookings", "B2"), { status: "Ongoing", driverName: "Survesh", driverMobile: "9000000001", vehicle: "t", progress: 0 }), true);
 await t("customer writes settings (must be denied)", () => updateDoc(doc(cus(), "settings", "main"), { dieselPricePerLitre: 1 }), false);
 await t("customer writes adminRouteFares (must be denied)", () => setDoc(doc(cus(), "adminRouteFares", "z"), { totalFare: 1 }), false);
 await t("customer creates alert", () => setDoc(doc(cus(), "alerts", "A1"), { message: "x" }), true);

@@ -1006,11 +1006,11 @@ function rideDateTimeLabel(booking) {
       const [hh, mm] = timePart.split(":").map(Number);
       timeLabel = " " + to12Hour(hh, mm);
     }
-    return `${d}:${m}:${y}${timeLabel}`;
+    return `${d}/${m}/${y}${timeLabel}`; // DD/MM/YYYY (was DD:MM:YYYY with colons, owner 2026-11-02)
   }
   const d = booking.createdAt?.toDate ? booking.createdAt.toDate() : null;
   if (!d) return "";
-  return `${pad2(d.getDate())}:${pad2(d.getMonth() + 1)}:${d.getFullYear()} ${to12Hour(d.getHours(), d.getMinutes())}`;
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${to12Hour(d.getHours(), d.getMinutes())}`;
 }
 
 // Time-of-day greeting shown at the top of the Customer/Driver/Admin home
@@ -13142,7 +13142,8 @@ export default function App() {
     }
     const conflict = findDriverLoadConflict(driver, { id: b.id, scheduledFor: b.scheduledFor, hours: b.hours }, bookings, vehicleTypes, lang);
     if (conflict) return conflict;
-    const otp = String(Math.floor(1000 + Math.random() * 9000));
+    // The pickup OTP is made by the SERVER now (functions/index.js: issuePickupOtp, fires when this claim flips the booking to
+    // Ongoing). This phone no longer generates it, so it can neither know it nor overwrite it.
     // Return Load (see isReturnLoadFor above): this specific driver's
     // vehicle is empty and genuinely heading home past this load's
     // pickup/drop right now -- both their own fare and the customer's
@@ -13164,15 +13165,7 @@ export default function App() {
         // bill line (guide section 15) instead of back-computing it
         // from the already-discounted fare and losing a rupee to rounding.
         ...(isReturn ? { fare: claimedFare, originalFare: b.fare, isReturn: true, returnPct } : {}),
-      }, [
-        // See otp-readable-by-any-driver in BUG_TRACKER_SEED for why this
-        // is its own document instead of a field on the booking itself.
-        // Written in the SAME transaction as the status:"Ongoing" flip
-        // above (not a separate call afterward) so the customer's own
-        // subscription never observes "Ongoing" before this doc exists --
-        // that gap used to show a brief blank/slow-to-appear OTP.
-        { name: "bookingOtps", id: bookingId, data: { otp, customerMobile: b.customerMobile || "" } },
-      ]);
+      });
     } catch (e) {
       console.error(e);
       return lang === "en" ? "Couldn't accept — please try again." : lang === "mr" ? "स्वीकार करता आले नाही — कृपया पुन्हा प्रयत्न करा." : "स्वीकार नहीं हो सका — कृपया फिर कोशिश करें।";
