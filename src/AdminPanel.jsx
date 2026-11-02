@@ -16,7 +16,7 @@ import { GoogleMap, MarkerF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink } from "./firebaseClient";
-import { createDoc, removeDoc, bulkUpdateDocs } from "./firestoreStore";
+import { createDoc, removeDoc } from "./firestoreStore";
 import {
   ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
@@ -1776,9 +1776,10 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
   //    setDieselPricePerLitre props from the root App component -- same
   //    pattern returnPct already uses) -- owner request, 2026-10-23:
   //    diesel must move every quote, not just previously-saved ones.
-  // 2. Already-saved Admin rates (adminRouteFares) -- a saved totalFare is
-  //    a frozen number that never re-reads the live formula again, so it
-  //    needs this explicit one-time bulk nudge to catch up, same as before.
+  // 2. Already-saved Admin rates (adminRouteFares) -- since 2026-11-02 they
+  //    follow the live price on their own (applyDieselToSavedRates, App.jsx):
+  //    each saved rate carries the diesel it was saved at (dieselAtSave) and
+  //    the root adds km x (live - that) / mileage. No bulk rewrite any more.
   //
   // Per-tier, not a flat ₹/km for everyone -- a heavier vehicle burns more
   // diesel per km, so the same price-per-litre move should shift its rate
@@ -1790,6 +1791,8 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
   // -- that already bakes in driver earnings + margin on top of fuel, so
   // this formula only sizes the ADJUSTMENT, it never replaces the rate.
   //
+  // (Historical note: the bulk nudge this describes is gone -- see applyDieselToSavedRates. The reasoning below on why the move is a
+  // flat km-based delta, not a per-km rate rebuild, is what that function still follows.)
   // The bulk nudge below is still a flat totalFare += perKmDelta*estimatedKm
   // rather than nudging a displayed per-km rate and rebuilding Total from
   // it, which was tried first: that approach amplifies any per-km change by
@@ -1803,7 +1806,7 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
   // Tapping +/- only ever changes dieselStagedPrice (in-memory, no network)
   // so repeated taps are instant -- nothing actually writes to Firestore
   // until "Save Diesel Rate" commits the accumulated change in a single
-  // pass, using bulkUpdateDocs (chunked Firestore batches) rather than one
+  // pass, using chunked bulk writes (chunked Firestore batches) rather than one
   // write per document, since a several-hundred-doc bulk operation from a
   // mobile browser is exactly the kind of long-running write that kept
   // failing halfway during the Maharashtra import.
@@ -1821,23 +1824,11 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
     setDieselFlash("");
     setDieselError("");
     try {
-      // Admin's own rates only, now that driver-submitted quotes (routeFares)
-      // no longer feed into customer pricing at all -- see resolveFare.
-      const adminUpdates = (adminRouteFares || [])
-        .filter((r) => r.estimatedKm > 0)
-        .map((r) => {
-          const mileage = DIESEL_MILEAGE_BY_TIER_MAX_KG[r.tierMaxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED];
-          const perKmDelta = (newPrice - oldPrice) / mileage;
-          return {
-            id: r.id,
-            patch: { totalFare: Math.max(1, Math.round((Number(r.totalFare) || 0) + perKmDelta * r.estimatedKm)) },
-          };
-        });
-      await bulkUpdateDocs("adminRouteFares", adminUpdates);
-      const count = adminUpdates.length;
+      // No bulk rewrite any more (owner 2026-11-02): saved rates follow the live price on their own (applyDieselToSavedRates).
+      const count = (adminRouteFares || []).filter((r) => r.estimatedKm > 0).length;
       setDieselPricePerLitre(newPrice);
       setDieselStagedPrice(null);
-      setDieselFlash(lang === "en" ? `Adjusted ${count} rates for diesel ₹${oldPrice} → ₹${newPrice}/L.` : lang === "mr" ? `डिझेल ₹${oldPrice} → ₹${newPrice}/L साठी ${count} दर बदलले.` : `डीज़ल ₹${oldPrice} → ₹${newPrice}/L के लिए ${count} दरों को बदला गया।`);
+      setDieselFlash(lang === "en" ? `Diesel ₹${oldPrice} → ₹${newPrice}/L saved. ${count} saved rates now follow it automatically.` : lang === "mr" ? `डिझेल ₹${oldPrice} → ₹${newPrice}/L सेव्ह. ${count} सेव्ह दर आपोआप बदलतील.` : `डीज़ल ₹${oldPrice} → ₹${newPrice}/L सेव हुआ। ${count} सेव दर अपने आप बदल जाएंगे।`);
     } catch (e) {
       console.error(e);
       setDieselError(lang === "en" ? "Couldn't adjust rates -- try again." : lang === "mr" ? "दर बदलता आले नाहीत — पुन्हा प्रयत्न करा." : "दर बदले नहीं जा सके — फिर कोशिश करें।");
@@ -2126,11 +2117,14 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   // regular-direction fare (guide section 6A/7).
   // Live diesel (owner 2026-11-02: "fare is not grasping the change in diesel"): the customer's formula/scaled quote adds
   // km x (live price - 98) / tier mileage (calculateFare), so the calculator's suggestion must too. NOT for an exact saved rate:
-  // that one is a frozen number Admin set (and "Save Diesel Rate" already nudged it).
-  const dieselAdj = tier && km > 0 && !exactMatch && dieselPricePerLitre != null
-    ? km * ((dieselPricePerLitre - DIESEL_BASELINE_PRICE_PER_LITRE) / (DIESEL_MILEAGE_BY_TIER_MAX_KG[tier.maxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED]))
+  // that one is Admin's saved rate, already moved to the live diesel by applyDieselToSavedRates.
+  const exactUsesSaved = !!exactMatch && km > 0 && exactMatch.estimatedKm != null && Math.abs(km - exactMatch.estimatedKm) < 0.5;
+  const dieselAdj = tier && km > 0 && !exactUsesSaved && dieselPricePerLitre != null
+    ? km * ((dieselPricePerLitre - DIESEL_BASELINE_PRICE_PER_LITRE) / (DIESEL_MILEAGE_BY_TIER_MAX_KG[tier.maxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED])) * (!exactMatch && scaleRatio != null ? scaleRatio : 1)
     : 0;
-  const suggestedTotal = computedTotal != null
+  const suggestedTotal = exactUsesSaved && Number(exactMatch.totalFare) > 0
+    ? Math.round(Number(exactMatch.totalFare)) // already the effective (live-diesel) saved rate -- same number the customer is quoted
+    : computedTotal != null
     ? Math.round(isReturn && returnPct > 0 ? (computedTotal + dieselAdj) * (1 - returnPct / 100) : computedTotal + dieselAdj)
     : null;
   useEffect(() => {
@@ -2221,6 +2215,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
         isReturn,
         returnPct: isReturn ? returnPct : null,
         driverEntry: comparingEntry ? { mobile: comparingEntry.driverMobile, quote: comparingEntry.totalFare } : null,
+        dieselAtSave: dieselPricePerLitre ?? null,
         updatedAt: Date.now(),
       });
       // docId is derived fresh from the CURRENT route/tier/zone/return --
@@ -2689,7 +2684,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
         dropLat: req.dropLat ?? null, dropLng: req.dropLng ?? null,
         estimatedKm: km, tierMaxKg: tier.maxKg, veh: tier.label, zone,
         fix: fareNum, per: 0, totalFare: fareNum, manual: true,
-        isReturn: false, returnPct: null, driverEntry: null, updatedAt: Date.now(),
+        isReturn: false, returnPct: null, driverEntry: null, dieselAtSave: dieselPricePerLitre ?? null, updatedAt: Date.now(),
       });
       const message = lang === "en"
         ? `Your estimated fare for ${req.pickup} to ${req.drop}: ₹${fareNum}. Our team will arrange a vehicle shortly.`

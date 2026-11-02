@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId, useSyncExternalStore, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, useId, useMemo, useSyncExternalStore, Suspense, lazy } from "react";
 // Admin's 16 screens live in their own module and are lazy-loaded here so a
 // customer or driver never downloads any of it — see AdminPanel.jsx's own
 // header comment for how this was split out.
@@ -2001,6 +2001,24 @@ export function getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares
     .filter((x) => x != null);
   return ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : null;
 }
+// ---- saved rates follow diesel (start) ----
+// Saved Admin rates FOLLOW the live diesel price on their own (owner 2026-11-02, "make saved rates follow diesel automatically"):
+// the stored totalFare is the price at the diesel the rate was saved at (`dieselAtSave`); every quote adds
+// km x (live - that price) / tier mileage on top, exactly like calculateFare does for formula fares. A rate saved before this
+// existed has no stamp: it stands at `legacyBase` (settings/main.ratesDieselBase, written the first time Admin changes the diesel
+// price after this shipped; until then it is the live price, so nothing moves on deploy). Applied once at the root, so every
+// screen (customer quote, booking, Admin lists/calculator) reads the same effective totalFare.
+export function applyDieselToSavedRates(rates, live, legacyBase) {
+  if (!Array.isArray(rates) || live == null) return rates;
+  return rates.map((r) => {
+    const base = r.dieselAtSave != null ? Number(r.dieselAtSave) : (legacyBase != null ? Number(legacyBase) : live);
+    const km = Number(r.estimatedKm) || 0;
+    if (!(km > 0) || !Number.isFinite(base) || base === live) return r;
+    const mileage = DIESEL_MILEAGE_BY_TIER_MAX_KG[r.tierMaxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED];
+    return { ...r, totalFare: Math.max(1, Math.round((Number(r.totalFare) || 0) + km * (live - base) / mileage)) };
+  });
+}
+// ---- saved rates follow diesel (end) ----
 // Single entry point every booking-fare display/write goes through, so the
 // driver-picker list and the actual booking write always agree on the same
 // number for the same trip. Three layers, in the guide's own priority
@@ -12567,7 +12585,8 @@ export default function App() {
   // just sit in one admin's browser localStorage) -- `?? DIESEL_BASELINE...`
   // covers a settings/main doc created before this field existed.
   const dieselPricePerLitre = settings.dieselPricePerLitre ?? DIESEL_BASELINE_PRICE_PER_LITRE;
-  const setDieselPricePerLitre = (v) => patchDoc("settings", "main", { dieselPricePerLitre: typeof v === "function" ? v(dieselPricePerLitre) : v }).catch((e) => console.error(e));
+  // ratesDieselBase: the diesel price rates saved BEFORE they carried a stamp stand at -- written once, with the first change.
+  const setDieselPricePerLitre = (v) => patchDoc("settings", "main", { dieselPricePerLitre: typeof v === "function" ? v(dieselPricePerLitre) : v, ...(settings.ratesDieselBase == null ? { ratesDieselBase: dieselPricePerLitre } : {}) }).catch((e) => console.error(e));
   const setCommissionPct = (v) => patchDoc("settings", "main", { commissionPct: typeof v === "function" ? v(commissionPct) : v }).catch((e) => console.error(e));
   const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
   const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
@@ -12637,12 +12656,13 @@ export default function App() {
   // update every 400ms keeps the UI responsive during a bulk write while
   // staying effectively real-time for the normal one-entry-at-a-time case
   // this collection sees the rest of the time.
-  const [adminRouteFares, setAdminRouteFares] = useState([]);
+  const [adminRouteFaresRaw, setAdminRouteFares] = useState([]);
   // Surfaced in the Admin Rate Calculator so "the list is empty" and "the
   // read is actually failing" are never indistinguishable again -- a
   // permission error here previously just vanished into the console with
   // adminRouteFares silently stuck at its initial [].
   const [adminRouteFaresError, setAdminRouteFaresError] = useState(null);
+  const adminRouteFares = useMemo(() => applyDieselToSavedRates(adminRouteFaresRaw, dieselPricePerLitre, settings.ratesDieselBase), [adminRouteFaresRaw, dieselPricePerLitre, settings.ratesDieselBase]);
   useEffect(() => {
     if (!firestoreReady) return undefined;
     let timer = null;
