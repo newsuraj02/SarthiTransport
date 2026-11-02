@@ -1973,7 +1973,7 @@ export function findExactAdminRoute(pickup, drop, tierMaxKg, zone, isReturn, adm
 // Coordinates (optional, last four args) are matched FIRST, exactly like getAdminRouteOverride / findExactAdminRoute: the same
 // real place comes back as different TEXT in Hindi/English/Marathi, so a text-only match silently lost Admin's derived rate for
 // the customer (owner 2026-11-02: Admin calculator ₹6,941 vs customer one-way ≈₹8,964 on the same route). Text stays the fallback.
-export function getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares, tiers, pickupLat = null, pickupLng = null, dropLat = null, dropLng = null) {
+export function getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares, tiers, pickupLat = null, pickupLng = null, dropLat = null, dropLng = null, dieselPricePerLitre = null) {
   if (!Array.isArray(adminRouteFares) || adminRouteFares.length === 0) return null;
   const p = normalizeRouteText(pickup), d = normalizeRouteText(drop);
   if (!p || !d) return null;
@@ -1992,7 +1992,10 @@ export function getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares
   if (matches.length === 0) return null;
   const ratios = matches
     .map((r) => {
-      const formulaFare = calculateFare(r.tierMaxKg, r.estimatedKm, tiers, r.zone || "in", 0);
+      // Diesel is part of the denominator too (owner 2026-11-02): a saved rate already carries the diesel price it was set/nudged
+      // at, and the formula it is later multiplied onto carries the LIVE price -- both sides must see the same diesel or a diesel
+      // change is counted twice (or not at all) in the scaled fare.
+      const formulaFare = calculateFare(r.tierMaxKg, r.estimatedKm, tiers, r.zone || "in", 0, dieselPricePerLitre);
       return formulaFare > 0 ? (Number(r.totalFare) || 0) / formulaFare : null;
     })
     .filter((x) => x != null);
@@ -2016,7 +2019,7 @@ function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pic
   const effectiveZone = zone || zoneFor(pickupLat, pickupLng, dropLat, dropLng, distanceKm);
   const adminOverride = getAdminRouteOverride(pickup, drop, capacityKg, adminRouteFares, pickupLat, pickupLng, dropLat, dropLng, tiers, distanceKm, effectiveZone, isReturn);
   if (adminOverride != null) return adminOverride;
-  const scaleRatio = getRouteScaleRatio(pickup, drop, effectiveZone, isReturn, adminRouteFares, tiers, pickupLat, pickupLng, dropLat, dropLng);
+  const scaleRatio = getRouteScaleRatio(pickup, drop, effectiveZone, isReturn, adminRouteFares, tiers, pickupLat, pickupLng, dropLat, dropLng, dieselPricePerLitre);
   const formulaFare = calculateFare(capacityKg, distanceKm, tiers, effectiveZone, 0, dieselPricePerLitre);
   return scaleRatio != null ? Math.round(formulaFare * scaleRatio) : formulaFare;
 }

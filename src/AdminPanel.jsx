@@ -18,7 +18,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink } from "./firebaseClient";
 import { createDoc, removeDoc, bulkUpdateDocs } from "./firestoreStore";
 import {
-  ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
+  ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
@@ -1907,7 +1907,7 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
         </div>
       )}
       {rateCalcOpen && (
-        <AdminRateCalculator adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} routeFares={routeFares} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang}
+        <AdminRateCalculator adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} routeFares={routeFares} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre}
           prefill={calcPrefill} onClose={() => setRateCalcOpen(false)} />
       )}
       {savedRoutesOpen && (
@@ -2007,7 +2007,7 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditA
 // vehicle is SELECTED (full-screen picker, section 3), not typed as a
 // loose weight number -- unlike CustomerBooking's customer-facing weight
 // field, Admin is pricing one exact tier at a time.
-function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, routeFares, drivers, returnPct, setReturnPct, lang, prefill, onClose }) {
+function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, routeFares, drivers, returnPct, setReturnPct, lang, prefill, onClose, dieselPricePerLitre = null }) {
   // isReturn now means "the ⇅ swap button has flipped pickup/drop" -- the
   // form is calculating the RETURN-direction fare for this same pair of
   // places, not a manually-toggled discount switch (guide section 6A).
@@ -2091,7 +2091,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     ? findExactAdminRoute(pickup, drop, tier.maxKg, zone, isReturn, adminRouteFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng)
     : null;
   const scaleRatio = tier && pickup.trim() && drop.trim() && !exactMatch
-    ? getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng)
+    ? getRouteScaleRatio(pickup, drop, zone, isReturn, adminRouteFares, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, dieselPricePerLitre)
     : null;
   const suggestionSource = exactMatch ? "admin" : scaleRatio != null ? "scaled" : "formula";
 
@@ -2124,8 +2124,14 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   // isReturn means the ⇅ swap has flipped this into the return direction --
   // the return-load discount only ever applies on that side, never the
   // regular-direction fare (guide section 6A/7).
+  // Live diesel (owner 2026-11-02: "fare is not grasping the change in diesel"): the customer's formula/scaled quote adds
+  // km x (live price - 98) / tier mileage (calculateFare), so the calculator's suggestion must too. NOT for an exact saved rate:
+  // that one is a frozen number Admin set (and "Save Diesel Rate" already nudged it).
+  const dieselAdj = tier && km > 0 && !exactMatch && dieselPricePerLitre != null
+    ? km * ((dieselPricePerLitre - DIESEL_BASELINE_PRICE_PER_LITRE) / (DIESEL_MILEAGE_BY_TIER_MAX_KG[tier.maxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED]))
+    : 0;
   const suggestedTotal = computedTotal != null
-    ? Math.round(isReturn && returnPct > 0 ? computedTotal * (1 - returnPct / 100) : computedTotal)
+    ? Math.round(isReturn && returnPct > 0 ? (computedTotal + dieselAdj) * (1 - returnPct / 100) : computedTotal + dieselAdj)
     : null;
   useEffect(() => {
     if (!manual) setTotalFare(suggestedTotal != null ? String(suggestedTotal) : "");
@@ -2173,8 +2179,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     const entryZone = zoneFor(entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng, entry.estimatedKm);
     const exact = findExactAdminRoute(entry.pickupName, entry.dropName, entryTier.maxKg, entryZone, false, adminRouteFares, entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng);
     if (exact) return Number(exact.totalFare) || null;
-    const ratio = getRouteScaleRatio(entry.pickupName, entry.dropName, entryZone, false, adminRouteFares, fareTiers, entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng);
-    const formulaFare = calculateFare(entryTier.maxKg, entry.estimatedKm, fareTiers, entryZone, 0);
+    const ratio = getRouteScaleRatio(entry.pickupName, entry.dropName, entryZone, false, adminRouteFares, fareTiers, entry.pickupLat, entry.pickupLng, entry.dropLat, entry.dropLng, dieselPricePerLitre);
+    const formulaFare = calculateFare(entryTier.maxKg, entry.estimatedKm, fareTiers, entryZone, 0, dieselPricePerLitre);
     return ratio != null ? Math.round(formulaFare * ratio) : formulaFare;
   };
   const openDriverEntry = (r) => {
@@ -2712,7 +2718,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
     const exact = findExactAdminRoute(req.pickup, req.drop, tier.maxKg, zone, false, adminRouteFares, req.pickupLat, req.pickupLng, req.dropLat, req.dropLng);
     if (exact) return Number(exact.totalFare) || "";
     if (km <= 0) return "";
-    const ratio = getRouteScaleRatio(req.pickup, req.drop, zone, false, adminRouteFares, fareTiers, req.pickupLat, req.pickupLng, req.dropLat, req.dropLng);
+    const ratio = getRouteScaleRatio(req.pickup, req.drop, zone, false, adminRouteFares, fareTiers, req.pickupLat, req.pickupLng, req.dropLat, req.dropLng, dieselPricePerLitre);
     const formulaFare = calculateFare(tier.maxKg, km, fareTiers, zone, 0, dieselPricePerLitre);
     return ratio != null ? Math.round(formulaFare * ratio) : formulaFare;
   };
