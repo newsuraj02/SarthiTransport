@@ -81,13 +81,14 @@ service cloud.firestore {
     function driverProtectedFieldsUnchanged() {
       return (request.resource.data.kyc == resource.data.kyc || request.resource.data.kyc == 'Pending') &&
         request.resource.data.blacklisted == resource.data.blacklisted &&
-        // wallet / bonus / heldCredit: the driver's own session may only ever LOWER them, never raise them (deep-clean
-        // 2026-11-02). Raising stays Admin/Cloud-Function only. Lowering is what the app itself does on the driver's side:
-        // requestWithdrawal takes the withdrawn bonus out, and a (currently paused) commission would come out of the wallet.
-        // Before this the withdrawal's bonus deduction was refused while the withdrawal request itself was accepted, so the
-        // same bonus could be requested again and again. `.get(..., 0)` so a doc missing a field no longer errors out.
-        request.resource.data.get('wallet', 0) <= resource.data.get('wallet', 0) &&
-        request.resource.data.get('heldCredit', 0) <= resource.data.get('heldCredit', 0) &&
+        // bonus: the driver's own session may only ever LOWER it, never raise it (deep-clean 2026-11-02). requestWithdrawal takes the
+        // withdrawn bonus out from the driver's session; before this that deduction was refused while the withdrawal request itself
+        // was accepted, so the same bonus could be requested again and again. wallet / heldCredit stay strictly unchanged: a
+        // driver-side full-profile overwrite from a stale copy must never be able to silently undo an Admin credit (the lowering that
+        // a reactivated commission would need has to move to a Cloud Function first). `.get(..., 0)` so a doc missing a field no
+        // longer errors the whole update out.
+        request.resource.data.get('wallet', 0) == resource.data.get('wallet', 0) &&
+        request.resource.data.get('heldCredit', 0) == resource.data.get('heldCredit', 0) &&
         request.resource.data.get('bonus', 0) <= resource.data.get('bonus', 0) &&
         request.resource.data.createdAt == resource.data.createdAt;
     }

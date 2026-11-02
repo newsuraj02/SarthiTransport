@@ -1,8 +1,9 @@
 // Firestore rules regression test against the REAL firestore.rules, run in the local emulator (deep-clean 2026-11-02).
 // NOT part of `npm run verify:invariants` (needs Java + the emulator). To run, from any scratch folder:
 //   npm i firebase-tools @firebase/rules-unit-testing@3 firebase@10
-//   npx firebase emulators:exec --only firestore --project demo-test "node <repo>/scripts/rulesTest/claim.mjs"
-// with a firebase.json there: { "firestore": { "rules": "<repo>/firestore.rules" }, "emulators": { "firestore": { "port": 8089 } } }
+//   npx firebase emulators:exec --only firestore --project demo-test "node claim.mjs"
+// (copy this file into that same folder first -- Node resolves @firebase/rules-unit-testing from the script's own folder; and point
+// RULES at the repo's firestore.rules) with a firebase.json there: { "firestore": { "rules": "<repo>/firestore.rules" }, "emulators": { "firestore": { "port": 8089 } } }
 // Every line must be PASS: the Return Load accept is a DISCOUNT-only exception on an unassigned booking.
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
 import { readFileSync } from "node:fs";

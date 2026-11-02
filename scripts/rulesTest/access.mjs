@@ -1,8 +1,9 @@
 // Firestore rules regression test against the REAL firestore.rules, run in the local emulator (deep-clean 2026-11-02).
 // NOT part of `npm run verify:invariants` (needs Java + the emulator). To run, from any scratch folder:
 //   npm i firebase-tools @firebase/rules-unit-testing@3 firebase@10
-//   npx firebase emulators:exec --only firestore --project demo-test "node <repo>/scripts/rulesTest/access.mjs"
-// with a firebase.json there: { "firestore": { "rules": "<repo>/firestore.rules" }, "emulators": { "firestore": { "port": 8089 } } }
+//   npx firebase emulators:exec --only firestore --project demo-test "node access.mjs"
+// (copy this file into that same folder first -- Node resolves @firebase/rules-unit-testing from the script's own folder; and point
+// RULES at the repo's firestore.rules) with a firebase.json there: { "firestore": { "rules": "<repo>/firestore.rules" }, "emulators": { "firestore": { "port": 8089 } } }
 // "ok" = expected. "BUG?" = KNOWN open design gaps (bookingOtps writable by any signed-in user, vehicleTypes writable by any signed-in user) -- see the deep-clean report.
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
 import { readFileSync } from "node:fs";
@@ -26,7 +27,7 @@ await t("driver creates a withdrawal doc", () => setDoc(doc(drv(), "withdrawals"
 await t("driver goes online/offline + location", () => updateDoc(doc(drv(), "drivers", "9000000001"), { online: true, lastKnownLocation: { lat: 1, lng: 2, updatedAt: 1 } }), true);
 await t("driver RAISES own bonus (must be denied)", () => updateDoc(doc(drv(), "drivers", "9000000001"), { bonus: increment(500) }), false);
 await t("driver RAISES own heldCredit (must be denied)", () => updateDoc(doc(drv(), "drivers", "9000000001"), { heldCredit: increment(500) }), false);
-await t("driver lowers own wallet (commission)", () => updateDoc(doc(drv(), "drivers", "9000000001"), { wallet: increment(-100) }), true);
+await t("driver lowers own wallet (blocked on purpose until commission moves server-side)", () => updateDoc(doc(drv(), "drivers", "9000000001"), { wallet: increment(-100) }), false);
 await t("driver changes own wallet (must be denied)", () => updateDoc(doc(drv(), "drivers", "9000000001"), { wallet: 99999 }), false);
 await t("driver self-approves kyc (must be denied)", () => updateDoc(doc(drv(), "drivers", "9000000001"), { kyc: "Approved", name: "x", wallet: 1500 }), true);
 await t("driver stamps lastActiveAt serverTimestamp", () => updateDoc(doc(drv(), "drivers", "9000000001"), { lastActiveAt: serverTimestamp() }), true);
@@ -46,8 +47,8 @@ await t("customer writes adminRouteFares (must be denied)", () => setDoc(doc(cus
 await t("customer creates alert", () => setDoc(doc(cus(), "alerts", "A1"), { message: "x" }), true);
 await t("driver creates routeFares (Set Fare)", () => setDoc(doc(drv(), "routeFares", "q"), { driverMobile: "9000000001", pickupName: "a", dropName: "b", totalFare: 5 }), true);
 await t("customer reads other customer's doc (must be denied)", () => getDoc(doc(cus("8000000002"), "customers", "8000000001")), false);
-await t("driver creates callLog", () => setDoc(doc(drv(), "callLogs", "L1"), { by: "x" }), true);
+await t("driver creates callLog (Admin-only collection)", () => setDoc(doc(drv(), "callLogs", "L1"), { by: "x" }), false);
 await t("driver creates bookingExtras", () => setDoc(doc(drv(), "bookingExtras", "E1"), { bookingId: "B1", type: "labour", amount: 100, by: "driver", byMobile: "9000000001", status: "pending" }), true);
-await t("admin bulk anything (settings)", () => updateDoc(doc(adm(), "settings", "main"), { x: 1 }), true).catch(() => {});
+await t("admin writes settings", () => setDoc(doc(adm(), "settings", "main"), { x: 1 }), true);
 for (const r of res) console.log(...r);
 await env.cleanup(); 
