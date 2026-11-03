@@ -877,6 +877,42 @@ const BUG_TRACKER_SEED = [
     foundAt: "2026-09-24",
     fixedAt: "2026-09-24",
   },
+  {
+    number: 38,
+    id: "note-2026-11-03-admin-and-booking-changes",
+    title: "3 Nov 2026 note: Round trip column in Admin calculator, mic + same-city suggestions, road km, bigger Round trip box",
+    severity: "low",
+    status: "fixed",
+    type: "feature",
+    area: "Admin Rate Calculator / Booking screen",
+    description: "Admin Rate Calculator shows a read-only Round trip column (one-way + return, same rule the customer pays). Pickup/Drop boxes have a mic; suggestions list 8-10 places of the customer's own city first (needs functions deploy). The booked-vehicle distance tile uses real road km. The bottom Round trip box is bigger. The pulsing circle round the nearest vehicle on the booking map is removed.",
+    foundAt: "2026-11-03",
+    fixedAt: "2026-11-03",
+  },
+  {
+    number: 39,
+    id: "note-2026-11-03-admin-panel-changes",
+    title: "3 Nov 2026 note: bulk messages to drivers, Alerts inside Notify, Change Log tidy-up",
+    severity: "low",
+    status: "fixed",
+    type: "feature",
+    area: "Admin panel",
+    description: "Admin > Drivers: one-tap WhatsApp to Off-duty, KYC-incomplete and Uninstalled drivers (once a day per driver). Alerts (driver and customer messages) now sit inside the Notify tab. Change Log keeps open and recent entries up front; older fixed ones are behind 'Old changes'.",
+    foundAt: "2026-11-03",
+    fixedAt: "2026-11-03",
+  },
+  {
+    number: 40,
+    id: "note-2026-11-03-live-map-vehicles",
+    title: "3 Nov 2026 note: Admin live map - vehicle without circle, booked vehicle road line to the customer's pickup",
+    severity: "low",
+    status: "fixed",
+    type: "feature",
+    area: "Admin Live Dashboard map",
+    description: "Every vehicle's live position shows on the Live Dashboard map as a plain truck (the white circle round it is gone). A vehicle on a booked trip that has not yet reached the pickup shows the road it is taking to the customer's pickup point (blue dot).",
+    foundAt: "2026-11-03",
+    fixedAt: "2026-11-03",
+  },
 ];
 
 export function genId(p = "TS") { return p + "-" + Math.floor(10000 + Math.random() * 89999); }
@@ -3704,7 +3740,7 @@ function MockMap({ pickup, drop, progress, zoneColor, height = 150, lang = "hi" 
 // tracking origin (the driver) moves continuously, a static one (Pickup)
 // never re-triggers on its own. Returns null until the first route lands,
 // so callers should fall back to a straight line in the meantime.
-function useDrivingRoute(origin, destination, isLoaded, hasKey) {
+export function useDrivingRoute(origin, destination, isLoaded, hasKey) {
   // Returns the road-following path (for drawing), the real driving
   // distance in km, and the estimated travel time in minutes -- all from
   // the same DirectionsService response, so no second API call is needed

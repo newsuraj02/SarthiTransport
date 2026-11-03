@@ -12,14 +12,14 @@ import {
   MessageCircle, Phone, PhoneCall, Plus, Settings2, Siren, UserCircle2, Users,
   Wallet, XCircle,
 } from "lucide-react";
-import { GoogleMap, MarkerF } from "@react-google-maps/api";
+import { GoogleMap, MarkerF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow } from "./firebaseClient";
 import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
   ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
-  NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
+  NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
   getRouteScaleRatio, gpsStatus, greetingWord, haversineKm, installedDrivers, zoneFor,
@@ -47,8 +47,7 @@ function vehicleStatusOf(d, bookings, now) {
 }
 function statusTruckIcon(color) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">` +
-    `<circle cx="17" cy="17" r="16" fill="#fff" stroke="${color}" stroke-width="3"/>` +
-    `<g transform="translate(6,11)">` +
+    `<g transform="translate(6,11)" stroke="#fff" stroke-width="1.2" paint-order="stroke">` +
     `<rect x="0" y="0" width="14" height="8" rx="1.2" fill="${color}"/>` +
     `<path d="M14 2h5.5L22 6v2H14z" fill="${color}"/>` +
     `<circle cx="4.5" cy="9" r="2.1" fill="${color}"/>` +
@@ -59,6 +58,21 @@ function statusTruckIcon(color) {
     scaledSize: new window.google.maps.Size(34, 34),
     anchor: new window.google.maps.Point(17, 17),
   };
+}
+
+// Owner 2026-11-03 (handwritten note): a booked vehicle that has not reached the customer yet shows the ROAD it is taking
+// to the pickup point (blue dot). Read-only; uses the app's shared driving-route hook.
+function AdminTripRoad({ driver, booking, mapsOk, mapsKey }) {
+  const from = driver.lastKnownLocation && { lat: driver.lastKnownLocation.lat, lng: driver.lastKnownLocation.lng };
+  const to = booking.pickupLat != null && booking.pickupLng != null ? { lat: Number(booking.pickupLat), lng: Number(booking.pickupLng) } : null;
+  const road = useDrivingRoute(from, to, mapsOk, mapsKey);
+  if (!to) return null;
+  return (
+    <>
+      {road.path && <PolylineF path={road.path} options={{ strokeColor: "#0052CC", strokeOpacity: 0.85, strokeWeight: 4, clickable: false }} />}
+      <MarkerF position={to} title={booking.pickup || ""} icon={{ path: window.google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: "#0052CC", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 }} />
+    </>
+  );
 }
 
 function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
@@ -147,6 +161,10 @@ function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
         {located.map((d) => (
           <MarkerF key={d.mobile || d.id} position={{ lat: d.lastKnownLocation.lat, lng: d.lastKnownLocation.lng }} icon={statusTruckIcon(VEHICLE_STATUS[statusOf(d)].color)} title={markerTitle(d)} />
         ))}
+        {located.map((d) => {
+          const bk = statusOf(d) === "trip" ? (bookings || []).find((b) => b.status === "Ongoing" && !b.loadingStartedAt && (b.driverMobile && d.mobile ? b.driverMobile === d.mobile : (!!d.name && b.driverName === d.name))) : null;
+          return bk ? <AdminTripRoad key={"road-" + (d.mobile || d.id)} driver={d} booking={bk} mapsOk={isLoaded} mapsKey={hasKey} /> : null;
+        })}
       </GoogleMap>
       <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
         {mapSummaryLabel}

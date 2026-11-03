@@ -30,3 +30,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-03 -- Windows deploy fix: stray root files (100m, firebase-debug.log, .firebase/) no longer enter the code inventory; firebase predeploy uses npm scripts (verify:quiet, stamp:functions); quiet verify mode
 - changed (6): file:firebase.json, code:firebase.json, code:package.json, code:scripts/criteria.mjs#listFiles, code:scripts/verifyInvariants.mjs#checks, code:scripts/verifyInvariants.mjs#other
+
+## 2026-11-03 -- Admin live map: no circle round vehicles, booked vehicle road line to pickup; Change Log entries for 3 Nov note
+- changed (6): code:docs/SYSTEM_CONTRACTS.md, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#statusTruckIcon, code:src/AdminPanel.jsx#AdminLiveMap, code:src/App.jsx#BUG_TRACKER_SEED, code:src/App.jsx#useDrivingRoute
+- added (1): code:src/AdminPanel.jsx#AdminTripRoad

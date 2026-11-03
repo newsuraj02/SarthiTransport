@@ -82,6 +82,8 @@ Legend: **app** = `src/App.jsx`, **admin** = `src/AdminPanel.jsx`, **fns** = `fu
 | M2 | Change Log opens with open + recently fixed entries; older fixed ones sit behind "Old changes (N)" (search / # jump / type filter still reach them). Nothing is deleted. | admin `AdminBugTracker` (`showOld`) | same |
 | M3 | Alerts live INSIDE the Notify tab (two-sided switch); there is no separate Alerts tab button; `onNavigate("alerts")` still opens the Alerts side. | admin `AdminPanel` | same |
 
+| M4 | Admin Live Dashboard map (owner 2026-11-03, asked again explicitly): every located vehicle is a plain coloured truck (no circle round it); a vehicle on an Ongoing trip that has not started loading shows its road to the customer's pickup (blue line + dot, `AdminTripRoad`, read-only, uses `useDrivingRoute`). GPS polling itself untouched. | admin `AdminLiveMap` / `AdminTripRoad` | build + invariants |
+
 ## 5. Frozen (see CLAUDE.md)
 
 GPS tracking · load ring / notifications (two paths) · `LoadBellButton` · push-token fields. Fingerprinted in the lock so ANY edit is visible.
