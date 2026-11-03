@@ -91,16 +91,44 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Mirrors src/App.jsx's getBookingWindow — the real-world time window a
-// driver is committed to for an already-accepted Ongoing booking.
-function getBookingWindow(b) {
-  if (!b.hours) return null;
+// Mirrors src/App.jsx's availability block (estimatedTripHours / isBookingRunning / getBookingWindow) -- the real-world time window a
+// driver is committed to for an already-accepted Ongoing booking. FIXED 2026-11-03 ("yes fix the ring too"): this used to start with
+// `if (!b.hours) return null`, and EVERY booking has hours: 0, so no driver was ever treated as busy and the ring woke drivers who were
+// mid-trip. A RUNNING booking (immediate, or advance whose loading began / time arrived) holds its driver until it is finished.
+// scripts/verifyInvariants.mjs compares this copy with the app's on hundreds of random situations; edit both together.
+function estimatedTripHours(b) {
+  const km = Number(b?.distance) || 0;
+  const oneWay = Math.max(2, Math.ceil(km / 30) + 1);
+  return b?.returnTrip ? oneWay * 2 : oneWay;
+}
+function isBookingRunning(b, now = Date.now()) {
+  if (!b.scheduledFor) return true;
+  if (b.loadingStartedAt) return true;
+  const t = parseScheduledFor(b.scheduledFor).getTime();
+  return Number.isFinite(t) && t <= now;
+}
+function getBookingWindow(b, now = Date.now()) {
   let start;
   if (b.scheduledFor) start = parseScheduledFor(b.scheduledFor);
   else if (b.acceptedAt?.toMillis) start = new Date(b.acceptedAt.toMillis());
   else if (b.createdAt?.toMillis) start = new Date(b.createdAt.toMillis());
-  else return null;
-  return { start, end: new Date(start.getTime() + b.hours * 60 * 60 * 1000) };
+  else start = new Date(now);
+  if (!Number.isFinite(start.getTime())) return null;
+  const hours = Number(b.hours) > 0 ? Number(b.hours) : estimatedTripHours(b);
+  let end = start.getTime() + hours * 60 * 60 * 1000;
+  if (isBookingRunning(b, now) && end < now + 60 * 60 * 1000) end = now + 60 * 60 * 1000;
+  return { start, end: new Date(end) };
+}
+
+// ONE ACCEPT (owner 2026-11-03): the driver app (DriverApp, src/App.jsx) stamps `drivers/{mobile}.appForegroundAt` (a server timestamp)
+// every 15 s while its Home screen is open on screen, and clears it the moment the app is hidden or closed. A driver whose stamp is
+// under 30 s old is LOOKING at the app, where the in-app load card + sound already work -- so no ring push, no full-screen ring screen
+// and no LoadWatcher target is created for them (they would otherwise have to Accept twice: on the ring screen AND in the app).
+// Fail-safe by design: a missing, cleared, old or future-dated stamp means "not looking" and the ring works exactly as before.
+const APP_OPEN_WINDOW_MS = 30 * 1000;
+function isAppOpenNow(driver, now = Date.now()) {
+  const at = driver?.appForegroundAt?.toMillis ? driver.appForegroundAt.toMillis() : null;
+  return at != null && at <= now + 5000 && now - at < APP_OPEN_WINDOW_MS;
 }
 
 // Mirrors src/App.jsx's findDriverLoadConflict (list-filtering mode, no
@@ -111,7 +139,7 @@ function getBookingWindow(b) {
 function hasLoadConflict(load, myOngoing, lockHours) {
   const newStart = load.scheduledFor ? parseScheduledFor(load.scheduledFor) : new Date();
   return myOngoing.some((existing) => {
-    const win = getBookingWindow(existing);
+    const win = getBookingWindow(existing, Date.now());
     if (!win) return false;
     const lockStart = new Date(win.start.getTime() - lockHours * 60 * 60 * 1000);
     return newStart < win.end && newStart >= lockStart;
@@ -429,6 +457,9 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
       const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
       if (hasLoadConflict(load, mine, lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
 
+      // App OPEN on screen -> the in-app card + sound handle it; no ring / push / LoadWatcher target (one Accept, 2026-11-03).
+      if (isAppOpenNow(driver, Date.now())) { skipLog.push(`${tag}: app is OPEN on screen -> in-app card + sound only, no ring`); return; }
+
       if (driver.fcmToken) {
         skipLog.push(`${tag}: SENDING push+ring`);
         alerted.push(doc.id);
@@ -603,6 +634,7 @@ async function escalateOneBooking(bookingId, load, radiusKm, tierIndex) {
     const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
     if (hasLoadConflict(load, mine, lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
 
+    if (isAppOpenNow(driver, Date.now())) { skipLog.push(`${tag}: app is OPEN on screen -> in-app card + sound only, no ring`); return; }
     if (!driver.fcmToken) { skipLog.push(`${tag}: no fcmToken`); return; }
     skipLog.push(`${tag}: NUDGING at ${radiusKm}km tier`);
     newlyAlerted.push(doc.id);

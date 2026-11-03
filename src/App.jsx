@@ -11843,6 +11843,12 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
   );
 }
 
+// ONE ACCEPT (owner 2026-11-03: "there are 2 accept buttons to be clicked ... keep it to Accept on the ring notification if the app is killed /
+// in background; if in app then that screen's accept button works along with the sound only, no wake / full screen"). While the driver's Home
+// screen is open ON SCREEN, DriverApp tells the server (drivers/{mobile}.appForegroundAt, a server timestamp, every 15 s) so the Cloud Functions
+// send NO ring / full-screen push for that driver (functions/index.js isAppOpenNow, 30 s window); the in-app load card + sound (untouched)
+// do the job. The stamp is cleared the moment the app is hidden, closed or leaves Home. No stamp / an old stamp = the ring works as before.
+const APP_OPEN_BEAT_MS = 15000;
 function DriverApp({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, fareTiers, bookingExtras }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -11871,6 +11877,32 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
   useReportInstalledVersion("drivers", driver.mobile);
   const locationPermission = useLocationPermission();
   const announcementAlerts = useAnnouncementAlerts(adminNotifications, driver.mobile, "driver", lang);
+  const appOpenForLoads = tab === "home" && rideView === "current";
+  useEffect(() => {
+    if (!firestoreReady || !driver?.mobile || !appOpenForLoads) return undefined;
+    const mobile = driver.mobile;
+    let timer = null;
+    const write = (v) => patchDoc("drivers", mobile, { appForegroundAt: v }).catch(() => {});
+    const beat = () => write(serverTimestamp());
+    const clearIt = () => { if (timer) { clearInterval(timer); timer = null; } write(null); };
+    const start = () => {
+      if (timer || document.visibilityState !== "visible") return;
+      beat();
+      timer = setInterval(() => (document.visibilityState === "visible" ? beat() : clearIt()), APP_OPEN_BEAT_MS);
+    };
+    const onVis = () => (document.visibilityState === "visible" ? start() : clearIt());
+    start();
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", clearIt);
+    let handle = null;
+    if (isNativeApp) CapacitorApp.addListener("appStateChange", ({ isActive }) => (isActive ? start() : clearIt())).then((h) => { handle = h; }).catch(() => {});
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", clearIt);
+      if (handle) handle.remove();
+      clearIt();
+    };
+  }, [driver?.mobile, appOpenForLoads]);
 
   // Badge + "View your Booking here" callout, shown the moment one of this
   // driver's ADVANCE bids gets accepted (see HamburgerHint/
