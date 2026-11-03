@@ -4,6 +4,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const crypto = require("crypto");
 const { ringWeightText } = require("./ringText");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
+const { auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning } = require("./healthAudit");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -1534,92 +1535,179 @@ async function signInHealthCheckAccount(email) {
 // credentials.
 const SOURCE_REPO_RAW_BASE = "https://raw.githubusercontent.com/newsuraj02/SarthiTransport/claude/app-from-document-njzc58";
 async function checkSourceMarkers() {
+  // Non-fatal on purpose (2026-11-03): if GitHub cannot be read (private repo, rate limit, outage) that is a NOTE, not a failure --
+  // it used to raise a "high" Change Log entry every single day for something that was not wrong with the app.
+  const notes = [];
   const findings = [];
   let src;
   try {
     const res = await fetch(`${SOURCE_REPO_RAW_BASE}/src/App.jsx`);
-    if (!res.ok) return [`[Source check] Couldn't fetch src/App.jsx from GitHub (HTTP ${res.status}) -- skipped.`];
+    if (!res.ok) return { findings, notes: [`Source markers not checked: GitHub returned HTTP ${res.status} (private repository?).`] };
     src = await res.text();
   } catch (e) {
-    return [`[Source check] Couldn't fetch src/App.jsx from GitHub: ${e.message} -- skipped.`];
+    return { findings, notes: [`Source markers not checked: ${e.message}`] };
   }
   const mustContain = [
     ["CURRENT_BID_RADIUS_KM = 30", "30km current-load proximity radius"],
     ["ADVANCE_BID_RADIUS_KM = 50", "50km advance-load proximity radius"],
     ["!pickupCoords || !d.lastKnownLocation", "proximity filter failing closed on missing coordinates"],
+    ["function driverIsOnTrip(", "busy-driver rule (a vehicle on a trip must not be listed)"],
+    ["const isReturn = !b.returnTrip && isReturnLoadFor(driver, b);", "Round trip not discounted twice"],
   ];
   for (const [needle, label] of mustContain) {
-    if (!src.includes(needle)) findings.push(`[Source check] Expected to find "${needle}" (${label}) in src/App.jsx, but it's missing or changed.`);
+    if (!src.includes(needle)) findings.push({ id: `source-marker-${label.slice(0, 20)}`, sev: "high", area: "Source", title: `Expected rule missing from the source: ${label}`, detail: `"${needle}" is not in src/App.jsx on the main branch.` });
   }
-  return findings;
+  return { findings, notes };
+}
+
+// ---- morning / evening scan: live data + deployment drift + change detection (2026-11-03) ----------------------------------------------
+// The pure logic is in functions/healthAudit.js. This half talks to Firestore / GitHub / the live site and writes the result for Admin:
+//   systemHealth/heartbeat  -> `${label}At/Status/Summary` + `${label}Findings` + `${label}Changes` (the Live Dashboard tile reads this)
+//   systemHealth/changeFeed -> newest-first list of every detected change (criteria, settings, builds)
+//   systemHealth/baseline   -> what the previous scan saw (so only NEW changes are reported)
+//   bugs/scan-*             -> one Change Log entry per critical/high finding (re-opened if it comes back)
+async function fetchJsonTimeout(url, headers = {}, ms = 12000) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try { const res = await fetch(url, { headers, signal: ctl.signal }); let data = null; try { data = await res.json(); } catch (e) { /* not json */ } return { ok: res.ok, status: res.status, data }; }
+  catch (e) { return { ok: false, status: 0, data: null, error: e.message }; } finally { clearTimeout(t); }
+}
+const REPO_HEAD_API = "https://api.github.com/repos/newsuraj02/SarthiTransport/commits/claude/app-from-document-njzc58";
+function readFunctionsStamp() { try { return require("./build.json"); } catch (e) { return null; } }
+async function loadLiveData() {
+  const col = async (name, q) => (await (q ? q(db.collection(name)) : db.collection(name)).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const [drivers, bookings, withdrawals, rechargeRequests, unmatched, adminRouteFares, vehicleTypes] = await Promise.all([
+    col("drivers"), col("bookings", (c) => c.where("status", "in", ["Ongoing", "AwaitingDriver"])), col("withdrawals", (c) => c.where("status", "==", "Pending")),
+    col("rechargeRequests", (c) => c.where("status", "==", "Pending")), col("unmatchedVehicleRequests", (c) => c.limit(200)), col("adminRouteFares"), col("vehicleTypes"),
+  ]);
+  const settingsSnap = await db.collection("settings").doc("main").get();
+  const ongoing = bookings.filter((b) => b.status === "Ongoing");
+  const otpSnaps = ongoing.length ? await db.getAll(...ongoing.map((b) => db.collection("bookingOtps").doc(b.id))) : [];
+  return { drivers, bookings, withdrawals, rechargeRequests, unmatched, adminRouteFares, vehicleTypes, settings: settingsSnap.exists ? settingsSnap.data() : {}, otpIds: otpSnaps.filter((x) => x.exists).map((x) => x.id) };
 }
 
 async function runDailyHealthCheck(label) {
   const findings = [];
+  const notes = [];
+  const infra = (id, title, detail) => findings.push({ id: `infra-${id}`, sev: "high", area: "Infrastructure", title, detail: String(detail || "").slice(0, 400) });
 
   try {
     const res = await fetch(PRODUCTION_URL);
-    if (!res.ok) findings.push(`[Hosting] Production URL returned HTTP ${res.status}.`);
+    if (!res.ok) infra("hosting", `Production URL returned HTTP ${res.status}`, "");
   } catch (e) {
-    findings.push(`[Hosting] Production URL unreachable: ${e.message}`);
+    infra("hosting", "Production URL unreachable", e.message);
   }
 
-  try {
-    await signInHealthCheckAccount("9990001111@customer.apnatransport.local");
-  } catch (e) {
-    findings.push(`[Customer login] ${e.message}`);
-  }
-  try {
-    await signInHealthCheckAccount("9990002222@driver.apnatransport.local");
-  } catch (e) {
-    findings.push(`[Driver login] ${e.message}`);
-  }
+  try { await signInHealthCheckAccount("9990001111@customer.apnatransport.local"); } catch (e) { infra("customer-login", "Customer login test failed", e.message); }
+  try { await signInHealthCheckAccount("9990002222@driver.apnatransport.local"); } catch (e) { infra("driver-login", "Driver login test failed", e.message); }
 
   const nearKm = haversineKm(HEALTH_CHECK_DRIVER_LOC.lat, HEALTH_CHECK_DRIVER_LOC.lng, HEALTH_CHECK_NEAR_PICKUP.lat, HEALTH_CHECK_NEAR_PICKUP.lng);
   const farKm = haversineKm(HEALTH_CHECK_DRIVER_LOC.lat, HEALTH_CHECK_DRIVER_LOC.lng, HEALTH_CHECK_FAR_PICKUP.lat, HEALTH_CHECK_FAR_PICKUP.lng);
-  if (!(nearKm <= HEALTH_CHECK_RADIUS_KM)) findings.push(`[Proximity] Known-near test point measured ${nearKm.toFixed(1)}km, expected within ${HEALTH_CHECK_RADIUS_KM}km.`);
-  if (!(farKm > HEALTH_CHECK_RADIUS_KM)) findings.push(`[Proximity] Known-far test point measured ${farKm.toFixed(1)}km, expected well outside ${HEALTH_CHECK_RADIUS_KM}km -- would incorrectly be shown as eligible.`);
+  if (!(nearKm <= HEALTH_CHECK_RADIUS_KM)) infra("proximity-near", "Proximity check failed", `Known-near test point measured ${nearKm.toFixed(1)}km, expected within ${HEALTH_CHECK_RADIUS_KM}km.`);
+  if (!(farKm > HEALTH_CHECK_RADIUS_KM)) infra("proximity-far", "Proximity check failed", `Known-far test point measured ${farKm.toFixed(1)}km, expected outside ${HEALTH_CHECK_RADIUS_KM}km -- would incorrectly be shown.`);
 
+  const src = await checkSourceMarkers();
+  findings.push(...src.findings); notes.push(...src.notes);
+
+  // --- live data audit (the busy-driver rule, double bookings, stuck trips, missing OTPs, settings, money, queues) ---
+  let live = null;
   try {
-    await db.collection("adminRouteFares").limit(1).get();
-  } catch (e) {
-    findings.push(`[Admin rate lookup] adminRouteFares query failed: ${e.message}`);
+    live = await loadLiveData();
+    findings.push(...auditLiveData({ ...live, now: Date.now() }));
+    // The RING path (onDirectRequestBroadcast / escalation) decides with this file's own hasLoadConflict -- test THAT code on the live trips:
+    // every driver on a running trip must count as having a conflict, or the ring would still wake a driver who is mid-trip (2026-11-03).
+    const t = Date.now();
+    const ringWouldRing = live.drivers.filter((d) => {
+      const mine = live.bookings.filter((b) => b.status === "Ongoing" && auditIsDriverRecord(b, d));
+      if (!mine.some((b) => auditIsBookingRunning(b, t))) return false;
+      const cap = Number(d.vehicleSpec && d.vehicleSpec.capacityKg) || 0;
+      return !hasLoadConflict({}, mine, notificationLockHours(cap));
+    });
+    if (ringWouldRing.length) findings.push({ id: "ring-busy-driver", sev: "critical", area: "Ring", title: `The load ring would still wake ${ringWouldRing.length} driver(s) who are on a trip`, detail: "Cloud Function hasLoadConflict / getBookingWindow in functions/index.js ignore trips with hours = 0 (all of them). Needs the same fix the app already has. Driver ids: " + ringWouldRing.slice(0, 8).map((d) => String(d.id || d.mobile || "").slice(-4)).join(", ") });
+  }
+  catch (e) { infra("live-data", "The scan could not read the live data", e.message); }
+
+  // --- deployment drift: live hosting stamp vs functions stamp vs latest commit on the branch ---
+  const hostRes = await fetchJsonTimeout(`${PRODUCTION_URL}build.json?_=${Date.now()}`);
+  const hosting = hostRes.ok && hostRes.data && hostRes.data.commit ? hostRes.data : null;
+  const functionsStamp = readFunctionsStamp();
+  const headRes = await fetchJsonTimeout(REPO_HEAD_API, { "User-Agent": "apna-transport-health-check", Accept: "application/vnd.github+json" });
+  const head = headRes.ok && headRes.data && headRes.data.sha ? headRes.data.sha : null;
+  if (!head) notes.push(`Latest commit not read from GitHub (HTTP ${headRes.status}) -- "is the live app up to date?" was not checked.`);
+  findings.push(...auditDeployment({ hosting, functions: functionsStamp, head }));
+
+  // --- change detection against what the previous scan saw ---
+  const baseRef = db.collection("systemHealth").doc("baseline");
+  const baseSnap = await baseRef.get();
+  const prev = baseSnap.exists ? baseSnap.data() : null;
+  const settingsNow = live ? live.settings : null;
+  const changes = [];
+  if (prev) {
+    if (hosting && prev.hostingCommit && prev.hostingCommit !== hosting.commit) changes.push(`Live app build changed: ${prev.hostingCommit} -> ${hosting.commit}${hosting.dirty ? " (built from uncommitted code!)" : ""}`);
+    if (functionsStamp && prev.functionsCommit && prev.functionsCommit !== functionsStamp.commit) changes.push(`Cloud Functions deployed: ${prev.functionsCommit} -> ${functionsStamp.commit}`);
+    if (hosting && prev.criteria) {
+      const d = diffCriteria(prev.criteria, hosting.criteria);
+      d.changed.forEach((x) => changes.push(`CHANGED: ${x}`)); d.added.forEach((x) => changes.push(`ADDED: ${x}`)); d.removed.forEach((x) => changes.push(`REMOVED: ${x}`));
+    }
+    if (settingsNow && prev.settings) changes.push(...diffSettings(prev.settings, settingsNow));
+  } else notes.push("First scan: baseline recorded -- from the next scan on, every change is listed.");
+  const pick = (o) => { const r = {}; for (const k of ["dieselPricePerLitre", "returnPct", "commissionPct", "bonusPct", "minWallet", "latestVersionCode", "ratesDieselBase"]) if (o && o[k] != null) r[k] = o[k]; return r; };
+  await baseRef.set({
+    at: FieldValue.serverTimestamp(), hostingCommit: hosting ? hosting.commit : (prev && prev.hostingCommit) || null, functionsCommit: functionsStamp ? functionsStamp.commit : (prev && prev.functionsCommit) || null,
+    criteria: hosting ? hosting.criteria : (prev && prev.criteria) || {}, settings: settingsNow ? pick(settingsNow) : (prev && prev.settings) || {},
+  });
+  if (changes.length) {
+    const feedRef = db.collection("systemHealth").doc("changeFeed");
+    const feedSnap = await feedRef.get();
+    const old = feedSnap.exists ? feedSnap.data().entries || [] : [];
+    await feedRef.set({ entries: [...changes.map((text) => ({ at: Date.now(), scan: label, text: text.slice(0, 300) })), ...old].slice(0, 80) });
   }
 
-  findings.push(...(await checkSourceMarkers()));
+  const sevRank = { critical: 0, high: 1, info: 2 };
+  findings.sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
+  const sum = summarize(findings, changes);
+  const passed = sum.status === "pass";
 
-  const passed = findings.length === 0;
-  const summary = passed ? "All checks passed." : findings.join(" | ");
-
-  // Always written, pass or fail -- see AdminFleet's always-visible
-  // "Daily Health Check" status tile in src/App.jsx, which reads this
-  // doc directly (public read) so an admin sees the latest result
-  // either way, not just when something's broken.
+  // Always written, pass or fail -- the Live Dashboard tile reads this doc directly (public read, so NO names / phone numbers in it).
   await db.collection("systemHealth").doc("heartbeat").set({
     [`${label}At`]: FieldValue.serverTimestamp(),
     [`${label}Status`]: passed ? "pass" : "fail",
-    [`${label}Summary`]: summary,
+    [`${label}Summary`]: sum.text,
+    [`${label}Findings`]: findings.slice(0, 30).map((x) => ({ id: x.id, sev: x.sev, area: x.area, title: x.title.slice(0, 200), detail: x.detail })),
+    [`${label}Changes`]: changes.slice(0, 30),
+    [`${label}Notes`]: notes.slice(0, 10),
+    hostingCommit: hosting ? hosting.commit : null, hostingBuiltAt: hosting ? hosting.builtAt : null, hostingDirty: hosting ? !!hosting.dirty : null,
+    functionsCommit: functionsStamp ? functionsStamp.commit : null, repoHead: head ? head.slice(0, 7) : null,
   }, { merge: true });
 
-  if (!passed) {
-    await db.collection("bugs").add({
-      title: `Daily health check found ${findings.length} issue(s)`,
-      description: summary,
-      severity: "high",
-      status: "open",
-      type: "bug",
-      area: "Automated daily health check",
-      foundAt: new Date().toISOString().slice(0, 10),
-    });
+  // Change Log: one entry per critical/high problem (stable id -> re-opened if it returns, never duplicated) + one per scan that saw changes.
+  const day = new Date().toISOString().slice(0, 10);
+  for (const x of findings.filter((y) => y.sev !== "info")) {
+    await db.collection("bugs").doc(`scan-${x.id}`.slice(0, 120)).set({
+      title: x.title, description: `${x.detail}`.trim() || x.title, severity: x.sev, status: "open", type: "bug", area: `Morning/evening scan - ${x.area}`, foundAt: day, lastSeenAt: Date.now(),
+    }, { merge: true });
   }
+  if (changes.length) {
+    await db.collection("bugs").doc(`scan-changes-${day}-${label}`).set({
+      title: `Scan ${label.replace("last", "").replace("Run", "")}: ${changes.length} change(s) detected in the app`, description: changes.join("\n").slice(0, 1500),
+      severity: "low", status: "open", type: "config", area: "Morning/evening scan - change detection", foundAt: day, lastSeenAt: Date.now(),
+    }, { merge: true });
+  }
+  return { status: passed ? "pass" : "fail", summary: sum.text, findings: findings.length, changes: changes.length };
 }
 
-exports.dailyHealthCheckMorning = onSchedule({ schedule: "0 9 * * *", timeZone: "Asia/Kolkata", region: "asia-south1" }, async () => {
+const SCAN_OPTIONS = { schedule: null, timeZone: "Asia/Kolkata", region: "asia-south1", timeoutSeconds: 300, memory: "512MiB" };
+exports.dailyHealthCheckMorning = onSchedule({ ...SCAN_OPTIONS, schedule: "0 9 * * *" }, async () => {
   await runDailyHealthCheck("lastMorningRun");
 });
 
-exports.dailyHealthCheckNight = onSchedule({ schedule: "0 23 * * *", timeZone: "Asia/Kolkata", region: "asia-south1" }, async () => {
+exports.dailyHealthCheckNight = onSchedule({ ...SCAN_OPTIONS, schedule: "0 23 * * *" }, async () => {
   await runDailyHealthCheck("lastNightRun");
+});
+
+// Admin's "Run scan now" button (Live Dashboard) -- same scan, on demand, recorded as `lastManualRun*`.
+exports.runHealthCheckNow = onCall({ region: "asia-south1", timeoutSeconds: 300, memory: "512MiB" }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  return { ok: true, ...(await runDailyHealthCheck("lastManualRun")) };
 });
 
 // ---------------------------------------------------------------------------

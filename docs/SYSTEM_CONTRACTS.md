@@ -1,0 +1,88 @@
+# Apna Transport — system contracts (the app's memory)
+
+**Why this file exists.** The owner's rule (2026-11-03): *"keep track of every inch/minute detail in criteria, conditions, functions, system — inform
+Admin even the slightest change."* Every session starts with no memory of the last one, so the memory has to live in the repository.
+This file lists every rule that decides something, in plain words, WHERE it lives and WHAT pins it. Three machines keep it honest:
+
+| Machine | What it does | When |
+|---|---|---|
+| `npm run verify:invariants` | Runs the real rule code on made-up situations (behaviour checks) and refuses to pass if any fails. **Also fails if any tracked rule, Cloud Function or config/rules file changed without being acknowledged** (`scripts/criteria.lock.json`). | Before every push |
+| `npm run criteria:accept -- "why"` | The ONLY way to acknowledge a rule change: updates the lock and appends a dated line to `docs/CRITERIA_CHANGELOG.md`. | After a deliberate rule change |
+| Morning (09:00) + night (23:00) IST scan, plus Admin's **Run scan now** | Reads the LIVE data and the LIVE deployed build; tells Admin on the Live Dashboard tile (and in the Change Log) about every problem **and every change** since the previous scan. | Twice a day |
+
+**Rules of the road for any session (human or AI):**
+1. Before changing a rule, find it below, read its check, and say plainly what changes.
+2. Change the rule AND its check together. Run `npm run verify:invariants`, then `npm run criteria:accept -- "reason"`.
+3. A rule that exists in two places (app + Cloud Functions) is listed as *mirrored*; the checks compare the copies.
+4. If a bug is found, add a check that FAILS on the old code before fixing it (the busy-driver check was proven this way).
+5. Frozen areas (GPS, ring) are in `CLAUDE.md`; do not touch without the owner's request in the same message.
+
+Legend: **app** = `src/App.jsx`, **admin** = `src/AdminPanel.jsx`, **fns** = `functions/index.js`, **scan** = `functions/healthAudit.js`.
+
+---
+
+## 1. Who may be shown / take a load (AVAILABILITY)
+
+| # | Rule | Where | Pinned by |
+|---|---|---|---|
+| A1 | A driver is **busy** from the moment they accept an immediate booking until it is Completed/Cancelled — however long it overruns. A busy driver is NOT in the customer's vehicle list, NOT on the customer's map, NOT offered new loads, and cannot accept a second trip. | app `driverIsOnTrip`, `isBookingRunning`, `getBookingWindow`, `findDriverLoadConflict` | invariant "DRIVER AVAILABILITY" (fails on the old code) · scan check `availability-rule-broken` |
+| A2 | An **advance** booking holds its driver from *(scheduled time − tonnage buffer)* until *(scheduled time + trip length)*; once its time arrives or loading starts it is "running" (A1). | same | same |
+| A3 | Tonnage buffer before an advance booking: capacity >16 t → 4 h, >8 t → 3 h, ≥3 t → 2 h, else 1 h. | app `notificationLockHours` (mirrored in fns + scan) | availability + equivalence invariants |
+| A4 | Trip length when a booking states none (`hours` is 0 on EVERY booking): `max(2, ceil(km/30)+1)` h, doubled for a round trip. | app `estimatedTripHours` (mirrored in scan) | availability invariant |
+| A5 | **Customer vehicle list** (`nearbyDrivers` in `CustomerBooking`): driver online, KYC Approved, not blacklisted, capacity ≥ load and ≤ load + 5,000 kg, a GPS fix not older than 5 min, within 30 km of pickup (50 km for advance), and **no availability conflict (A1/A2)**. | app `CustomerBooking` | invariants (customer booking) + browser test |
+| A6 | **Driver load list / broadcast** (`isDriverBroadcastEligible`): KYC Approved, not blacklisted, hasn't declined, capacity window (load … load + 5,000 kg), GPS fix within 24 h and within 30 km of pickup, no availability conflict. Online status is deliberately NOT checked. | app `isDriverBroadcastEligible` | text invariants |
+| A7 | The server's ring (`onDirectRequestBroadcast`) applies the same conflict rule through `hasLoadConflict` / `getBookingWindow` — **mirrored copy, still has the old `hours:0 → no window` bug (waiting for the owner's OK because it is ring code).** The scan reports it every run as `ring-busy-driver`. | fns | scan finding `ring-busy-driver` |
+| A8 | Fewer than 3 vehicle categories nearby → the list climbs to the next tiers (`padVehicleCategories`). | app | text invariants |
+
+## 2. Fares
+
+| # | Rule | Where | Pinned by |
+|---|---|---|---|
+| F1 | Resolution order: Admin's saved rate for this vehicle+route → scaled by Admin's other-vehicle ratio on the same route → master formula. | app `resolveFareForCapacity` | invariants (fares) |
+| F2 | Route matching is by **coordinates first** (radius 25 km, growing to 60 km on long routes), place-name text only as fallback — for exact AND scaled rates. | app `getAdminRouteOverride`, `findExactAdminRoute`, `getRouteScaleRatio` | invariant "derived (scaled) Admin rate matches by COORDINATES" |
+| F3 | In-city = master formula × price corrector (5 % under Porter at 13 km); outstation = `priceOutstation` curve; a bigger vehicle is never cheaper than a smaller one. | app `calculateFare`, `priceOutstation`, `enforceMonotonicFares` | invariants |
+| F4 | Diesel baseline ₹98/L; live price in `settings/main.dieselPricePerLitre` adds `km × Δprice ÷ tier mileage` to every formula/scaled fare. | app `DIESEL_*`, `calculateFare` | invariants |
+| F5 | **Saved Admin rates follow diesel automatically**: each stores `dieselAtSave`; the root adds `km × (live − dieselAtSave) ÷ mileage`. Unstamped rates stand at `settings/main.ratesDieselBase`. | app `applyDieselToSavedRates` | invariant "saved Admin rates FOLLOW diesel" |
+| F6 | **Round trip** fare = one-way + return, where return = Admin's saved return rate for the swapped route, else one-way less Admin's `returnPct` (15). No halting charge. | app `CustomerBooking`, `completeBooking` | invariants |
+| F7 | A Round trip is **never** discounted a second time by the driver-side "Return Load" rule, and finishing one does not start Return-Load mode. | app `driverRespondBooking`, `completeBooking` | invariant "Round trip is never discounted a second time" |
+| F8 | Outlier fares (one vehicle priced wildly off its siblings) are corrected for display only. | app `findFareOutliers`, `interpolateOutlierFare` | invariants |
+| F9 | Admin Rate Calculator suggestion includes live diesel; an existing saved rate shows as it stands today. | admin `AdminRateCalculator` | invariant "diesel reaches EVERY fare" |
+
+## 3. Booking input
+
+| # | Rule | Where | Pinned by |
+|---|---|---|---|
+| B1 | Weight: kg 3–5 digits; ton ≤ 2 integer + 3 decimal digits; **hard cap 35,000 kg**; weight is always saved in kg. | app `getWeightInputChange`, `isWeightValid` | behaviour invariants |
+| B2 | Calendar days are the device's LOCAL day (`localDateKey`), never UTC. | app, admin | invariant "calendar days are the device's LOCAL day" |
+| B3 | Advance booking: date + time slot, per-category minimum notice (>8 t 3 h, ≥3 t 2 h, else 1 h). | app `minAdvanceNoticeHours`, `TimeSlotModal` | invariants |
+| B4 | Driver KYC is mandatory for every field except dimensions (`DRIVER_KYC_FIELDS`). | app | behaviour invariants |
+
+## 4. Trip, OTP and money
+
+| # | Rule | Where | Pinned by |
+|---|---|---|---|
+| T1 | The pickup OTP is made by the **server** when the booking turns Ongoing (`issuePickupOtp`); nobody's phone writes it; 10 wrong guesses lock the check for 10 min. | fns `issuePickupOtp`, `verifyPickupOtp`, `functions/otp.js`; rules `bookingOtps` | invariant "pickup OTP is made by the SERVER" · scan finding `otp-missing` |
+| T2 | Halting: free for `includedDays` (1 in city; `ceil(km/500)+1` outstation), then a fixed ₹/day per vehicle. | app `haltOf`, `includedDays`, `HALT_PER_DAY_BY_MAXKG` | invariants |
+| T3 | Bill = fare − return discount + halting + approved extras. | app `buildBill` | invariants |
+| T4 | A driver's own session may only LOWER the bonus; wallet / held credit are locked; withdrawals ≤ bonus; money taps cannot double-fire. | rules `drivers`; app `claimMoneyTap` | invariants + `scripts/rulesTest/` |
+| T5 | A Return-Load accept may only be a discount (fare never higher; originalFare = old fare). | rules `bookings` | `scripts/rulesTest/claim.mjs` |
+
+## 5. Frozen (see CLAUDE.md)
+
+GPS tracking · load ring / notifications (two paths) · `LoadBellButton` · push-token fields. Fingerprinted in the lock so ANY edit is visible.
+
+## 6. The scan itself (`functions/healthAudit.js`, `runDailyHealthCheck`)
+
+Checks on the LIVE data every run: busy-driver rule (A1) · ring helper (A7) · double-booked drivers · stuck / over-72 h trips · unanswered searches ·
+missing pickup OTPs · running trips whose driver no longer exists · negative balances · settings out of range (diesel 60–200, returnPct 0–50, commission 0–50) ·
+unusable saved rates · withdrawals / recharges / unmatched requests / KYC waiting too long · login test accounts · hosting reachable · proximity maths ·
+**deployment drift** (live build vs functions vs the latest commit, or built from uncommitted code).
+Change detection (against the previous scan): live build commit · functions commit · every rule/function/file fingerprint added/changed/removed · settings values.
+Results: `systemHealth/heartbeat` (tile), `systemHealth/changeFeed`, `systemHealth/baseline`, Change Log entries `scan-*`. No names or phone numbers are ever written.
+
+---
+
+## How to read a scan result
+* **CRITICAL** = a rule is broken right now (act today). **HIGH** = wrong but not immediately dangerous. **INFO** = a note / something waiting for a human.
+* "The live app is not the latest commit" = fixes exist that are not deployed — the usual cause of "the app went back to its old self".
+* "Built from UNCOMMITTED code" = someone edited files on the build machine; those edits are live but not in the repository.

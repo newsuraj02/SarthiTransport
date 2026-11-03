@@ -1,5 +1,26 @@
 # Standing rules for this repo
 
+## SYSTEM MEMORY — read this first, every session (owner 2026-11-03)
+
+The owner is, rightly, furious at having to re-explain things and at fixes silently going missing ("the app gets back to its older self").
+The memory is IN THE REPO, and it is enforced by machines, not by good intentions:
+
+1. **`docs/SYSTEM_CONTRACTS.md`** — every rule/condition/function that decides something, in plain words, where it lives and what pins it.
+   Read the relevant section BEFORE changing anything; update it in the same commit as the change.
+2. **`scripts/criteria.lock.json`** — SHA-256 fingerprints of ~110 rule blocks, every Cloud Function, and the rules/config/manifest files.
+   `npm run verify:invariants` FAILS if any of them changed without `npm run criteria:accept -- "why"`, which logs the change in
+   **`docs/CRITERIA_CHANGELOG.md`**. A rule can never change silently again.
+3. **Morning (09:00) + night (23:00 IST) scan + Admin's "Run scan now"** (`functions/healthAudit.js`, `runDailyHealthCheck` in `functions/index.js`):
+   audits LIVE data (busy drivers, double bookings, stuck trips, missing OTPs, settings, money queues, ring helper), checks DEPLOYMENT DRIFT
+   (live hosting build vs Cloud Functions vs latest commit; built from uncommitted code), and lists EVERY change since the previous scan
+   (rule/function/file fingerprints from the live `/build.json`, settings, builds). Shown on the Live Dashboard scan tile + Change Log. Needs
+   `firebase deploy --only functions` AND hosting (the build stamp `dist/build.json` is written by `vite.config.js`; `functions/build.json` by
+   `scripts/writeFunctionsStamp.mjs` before every functions deploy).
+4. **Bug rule:** when a bug is found, first add a check that FAILS on the old code, then fix it (done for the busy-driver bug: the check fails on
+   the old code, passes on the new).
+5. **Mirrored code** (app ↔ `functions/`): the checks compare the copies on hundreds of random situations; never edit one copy alone.
+
+
 ## GPS Tracking — FROZEN, do not touch
 
 As of commit `d34f4fb` (2026-09-22), the driver GPS tracking feature is

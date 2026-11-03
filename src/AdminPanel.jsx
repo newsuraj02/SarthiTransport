@@ -15,8 +15,8 @@ import {
 import { GoogleMap, MarkerF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink } from "./firebaseClient";
-import { createDoc, removeDoc } from "./firestoreStore";
+import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow } from "./firebaseClient";
+import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
   ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, PLAY_STORE_URL, alertTypeLabel, calculateFare,
@@ -324,6 +324,91 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// MORNING / EVENING SCAN TILE (owner 2026-11-03: "inform Admin even the slightest of change"). Always visible on the Live Dashboard:
+// the latest scan (morning 9:00, night 23:00, or "Run scan now"), what it found, EVERY change it detected since the previous scan
+// (rules, functions, builds, settings), and which build is live vs the latest commit. Reads systemHealth/heartbeat (prop) and
+// systemHealth/changeFeed; written by functions/index.js runDailyHealthCheck. Never contains names or phone numbers.
+function ScanStatusTile({ systemHealth, lang }) {
+  const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  const [open, setOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runMsg, setRunMsg] = useState("");
+  const [feed, setFeed] = useState([]);
+  useEffect(() => subscribeDoc("systemHealth", "changeFeed", (d) => setFeed(Array.isArray(d?.entries) ? d.entries : [])), []);
+  const atOf = (k) => (systemHealth?.[`${k}At`]?.toMillis ? systemHealth[`${k}At`].toMillis() : null);
+  const latest = ["lastMorningRun", "lastNightRun", "lastManualRun"].map((k) => ({ k, at: atOf(k) })).filter((r) => r.at).sort((a, b) => b.at - a.at)[0] || null;
+  const status = latest ? systemHealth[`${latest.k}Status`] : null;
+  const summary = latest ? systemHealth[`${latest.k}Summary`] : "";
+  const findings = latest && Array.isArray(systemHealth[`${latest.k}Findings`]) ? systemHealth[`${latest.k}Findings`] : [];
+  const changes = latest && Array.isArray(systemHealth[`${latest.k}Changes`]) ? systemHealth[`${latest.k}Changes`] : [];
+  const notes = latest && Array.isArray(systemHealth[`${latest.k}Notes`]) ? systemHealth[`${latest.k}Notes`] : [];
+  const staleHours = latest ? (Date.now() - latest.at) / 3600000 : null;
+  const stale = staleHours == null || staleHours > 26;
+  const color = stale ? C.marigoldDeep : status === "pass" ? C.success : C.safety;
+  const when = latest ? new Date(latest.at).toLocaleString(lang === "mr" ? "mr-IN" : lang === "hi" ? "hi-IN" : "en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const label = !latest ? T("Morning/evening scan — hasn't run yet", "सुबह/शाम स्कैन — अभी तक नहीं चला", "सकाळ/संध्याकाळ स्कॅन — अजून चालले नाही")
+    : stale ? T(`Scan — last ran ${when}, may have stopped`, `स्कैन — आख़िरी बार ${when} को चला, शायद रुक गया`, `स्कॅन — शेवटचे ${when} ला चालले, कदाचित थांबले`)
+    : status === "pass" ? T(`Scan passed — ${when}`, `स्कैन पास — ${when}`, `स्कॅन पास — ${when}`)
+    : T(`Scan found problems — ${when}`, `स्कैन में समस्याएँ मिलीं — ${when}`, `स्कॅनमध्ये समस्या आढळल्या — ${when}`);
+  const sevColor = { critical: C.safety, high: C.marigoldDeep, info: C.inkSoft };
+  const run = async () => {
+    if (running) return; setRunning(true); setRunMsg("");
+    const r = await runHealthCheckNow();
+    setRunMsg(r?.ok ? T("Scan finished.", "स्कैन पूरा हुआ।", "स्कॅन पूर्ण झाले.") : T("Could not run the scan — try again.", "स्कैन नहीं चल सका — फिर कोशिश करें।", "स्कॅन चालवता आले नाही — पुन्हा प्रयत्न करा."));
+    setRunning(false);
+  };
+  const feedShown = feed.slice(0, 12);
+  return (
+    <div data-scan-tile className="w-full rounded-xl p-3 mb-3" style={{ background: C.paper, border: `1.5px solid ${color}` }}>
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-2 text-left">
+        {stale ? <AlertTriangle size={16} color={color} /> : status === "pass" ? <CheckCircle2 size={16} color={color} /> : <XCircle size={16} color={color} />}
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-bold" style={{ color: C.ink }}>{label}</div>
+          {summary && !stale && <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>{summary}</div>}
+        </div>
+        <span className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{open ? T("Hide", "छुपाएँ", "लपवा") : T("Details", "विवरण", "तपशील")}</span>
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          {findings.length > 0 && (
+            <div data-scan-findings>
+              <div className="text-[10px] font-bold mb-1" style={{ color: C.ink }}>{T("Problems found", "मिली समस्याएँ", "आढळलेल्या समस्या")}</div>
+              {findings.map((f, i) => (
+                <div key={i} className="text-[11px] mb-1 pl-2" style={{ borderLeft: `3px solid ${sevColor[f.sev] || C.inkSoft}`, color: C.ink }}>
+                  <span className="font-bold" style={{ color: sevColor[f.sev] || C.inkSoft }}>{String(f.sev || "").toUpperCase()}</span> · {f.title}
+                  {f.detail ? <div className="text-[10px]" style={{ color: C.inkSoft }}>{f.detail}</div> : null}
+                </div>
+              ))}
+            </div>
+          )}
+          <div data-scan-changes>
+            <div className="text-[10px] font-bold mb-1" style={{ color: C.ink }}>{T("Changes detected in this scan", "इस स्कैन में मिले बदलाव", "या स्कॅनमध्ये आढळलेले बदल")}</div>
+            {changes.length ? changes.map((c, i) => <div key={i} className="text-[11px] mb-0.5" style={{ color: C.ink }}>• {c}</div>) : <div className="text-[11px]" style={{ color: C.inkSoft }}>{T("No change since the previous scan.", "पिछले स्कैन के बाद कोई बदलाव नहीं।", "मागील स्कॅननंतर कोणताही बदल नाही.")}</div>}
+          </div>
+          {feedShown.length > 0 && (
+            <div data-scan-feed>
+              <div className="text-[10px] font-bold mb-1" style={{ color: C.ink }}>{T("Recent changes (all scans)", "हाल के बदलाव (सभी स्कैन)", "अलीकडील बदल (सर्व स्कॅन)")}</div>
+              {feedShown.map((e, i) => <div key={i} className="text-[10px] mb-0.5" style={{ color: C.inkSoft }}>{new Date(e.at).toLocaleString(lang === "mr" ? "mr-IN" : lang === "hi" ? "hi-IN" : "en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} · {e.text}</div>)}
+            </div>
+          )}
+          <div data-scan-build className="text-[10px]" style={{ color: C.inkSoft }}>
+            {T("Live app build", "लाइव ऐप बिल्ड", "लाइव्ह अॅप बिल्ड")}: <b>{systemHealth?.hostingCommit || T("unknown (no stamp)", "अज्ञात (स्टैम्प नहीं)", "अज्ञात (स्टॅम्प नाही)")}</b>{systemHealth?.hostingBuiltAt ? ` · ${new Date(systemHealth.hostingBuiltAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}{systemHealth?.hostingDirty ? " · UNCOMMITTED CODE" : ""}
+            {" · "}{T("Latest commit", "नवीनतम कमिट", "नवीनतम कमिट")}: <b>{systemHealth?.repoHead || "?"}</b>
+            {" · "}{T("Functions", "फ़ंक्शन्स", "फंक्शन्स")}: <b>{systemHealth?.functionsCommit || "?"}</b>
+          </div>
+          {notes.map((n, i) => <div key={i} className="text-[10px]" style={{ color: C.inkSoft }}>ℹ {n}</div>)}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={run} disabled={running} className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-white" style={{ background: C.blue || "#0052CC", opacity: running ? 0.6 : 1 }}>
+              {running ? T("Scanning…", "स्कैन हो रहा है…", "स्कॅन सुरू आहे…") : T("Run scan now", "अभी स्कैन चलाएँ", "आत्ता स्कॅन चालवा")}
+            </button>
+            {runMsg && <span className="text-[10px]" style={{ color: C.inkSoft }}>{runMsg}</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1011,29 +1096,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   const openChangeLogCount = (bugs || []).filter((b) => b.status !== "fixed").length;
   const criticalChangeLogCount = (bugs || []).filter((b) => b.status !== "fixed" && (b.severity === "critical" || b.severity === "high")).length;
 
-  // Always-visible daily health check status -- per explicit request,
-  // this must inform the admin whether the last run passed OR failed, not
-  // just show up when something's broken (that's what the Change Log card
-  // below is for). Reads systemHealth/heartbeat directly (see
-  // dailyHealthCheckMorning/Night in functions/index.js), which both
-  // scheduled runs update every time, pass or fail.
-  const morningAt = systemHealth?.lastMorningRunAt?.toMillis ? systemHealth.lastMorningRunAt.toMillis() : null;
-  const nightAt = systemHealth?.lastNightRunAt?.toMillis ? systemHealth.lastNightRunAt.toMillis() : null;
-  const latestIsMorning = (morningAt || 0) >= (nightAt || 0);
-  const latestHealthMs = latestIsMorning ? morningAt : nightAt;
-  const latestHealthStatus = latestIsMorning ? systemHealth?.lastMorningRunStatus : systemHealth?.lastNightRunStatus;
-  const latestHealthSummary = latestIsMorning ? systemHealth?.lastMorningRunSummary : systemHealth?.lastNightRunSummary;
-  const healthStaleHours = latestHealthMs ? (Date.now() - latestHealthMs) / 3600000 : null;
-  const healthIsStale = healthStaleHours == null || healthStaleHours > 26;
-  const healthColor = healthIsStale ? C.marigoldDeep : latestHealthStatus === "pass" ? C.success : C.safety;
-  const healthTimeStr = latestHealthMs ? new Date(latestHealthMs).toLocaleString(lang === "mr" ? "mr-IN" : lang === "hi" ? "hi-IN" : "en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
-  const healthLabel = !latestHealthMs
-    ? (lang === "en" ? "Daily health check — hasn't run yet" : lang === "mr" ? "डेली हेल्थ चेक — अजून चालले नाही" : "डेली हेल्थ चेक — अभी तक नहीं चला")
-    : healthIsStale
-    ? (lang === "en" ? `Daily health check — last ran ${healthTimeStr}, may have stopped` : lang === "mr" ? `डेली हेल्थ चेक — शेवटचे ${healthTimeStr} ला चालले, थांबले असू शकते` : `डेली हेल्थ चेक — आखिरी बार ${healthTimeStr} को चला, रुक गया हो सकता है`)
-    : latestHealthStatus === "pass"
-    ? (lang === "en" ? `Daily health check passed — ${healthTimeStr}` : lang === "mr" ? `डेली हेल्थ चेक पास झाला — ${healthTimeStr}` : `डेली हेल्थ चेक पास हुआ — ${healthTimeStr}`)
-    : (lang === "en" ? `Daily health check found issues — ${healthTimeStr}` : lang === "mr" ? `डेली हेल्थ चेकमध्ये समस्या आढळल्या — ${healthTimeStr}` : `डेली हेल्थ चेक में समस्याएं मिलीं — ${healthTimeStr}`);
+  // (The always-visible morning/evening scan tile is ScanStatusTile below -- it reads systemHealth/* directly.)
 
   // --- Install vs Uninstall (horizontal bars) -- real installed/uninstalled
   // driver counts, same partitionDriversByInstallStatus split the stat
@@ -1150,15 +1213,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
           </div>
         </button>
       )}
-      <div className="w-full rounded-xl p-3 mb-3 flex items-center gap-2" style={{ background: C.paper, border: `1.5px solid ${healthColor}` }}>
-        {healthIsStale ? <AlertTriangle size={16} color={healthColor} /> : latestHealthStatus === "pass" ? <CheckCircle2 size={16} color={healthColor} /> : <XCircle size={16} color={healthColor} />}
-        <div className="flex-1">
-          <div className="text-xs font-bold" style={{ color: C.ink }}>{healthLabel}</div>
-          {latestHealthSummary && latestHealthStatus !== "pass" && !healthIsStale && (
-            <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>{latestHealthSummary}</div>
-          )}
-        </div>
-      </div>
+      <ScanStatusTile systemHealth={systemHealth} lang={lang} />
       {openChangeLogCount > 0 && (
         <button onClick={() => onNavigate("changelog")} className="w-full rounded-xl p-4 mb-5 shadow-sm text-left" style={{ background: criticalChangeLogCount > 0 ? C.safety : C.marigold, border: `1.5px solid ${criticalChangeLogCount > 0 ? C.safety : C.marigoldDeep}` }}>
           <div className="flex items-center justify-between">

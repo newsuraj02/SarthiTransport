@@ -14,3 +14,6 @@ android/*.jks
 android-admin/*.keystore
 android-admin/*.jks
 scratchpad
+
+# generated at deploy time (scripts/writeFunctionsStamp.mjs)
+functions/build.json

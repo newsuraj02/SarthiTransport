@@ -19,6 +19,10 @@
         "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
       },
       {
+        "source": "/build.json",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+      },
+      {
         "source": "/manifest.json",
         "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
       }
@@ -34,7 +38,8 @@
     {
       "source": "functions",
       "codebase": "default",
-      "runtime": "nodejs22"
+      "runtime": "nodejs22",
+      "predeploy": ["node scripts/writeFunctionsStamp.mjs"]
     }
   ]
 }

@@ -400,6 +400,20 @@ export async function createCsvDownloadLink(csv, fileName) {
   }
 }
 
+// Admin's "Run scan now" (Live Dashboard scan tile): runs the same morning/evening scan on demand (functions/index.js runHealthCheckNow).
+export async function runHealthCheckNow() {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "runHealthCheckNow");
+    const result = await call({});
+    return result.data;
+  } catch (e) {
+    console.error("[runHealthCheckNow] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
 // Does this mobile already have a PIN account for this role? Sign-up asks
 // before collecting anything else (see functions/index.js
 // checkMobileRegistered). Works signed-out. Always resolves with
