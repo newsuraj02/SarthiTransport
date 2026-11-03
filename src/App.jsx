@@ -6512,6 +6512,9 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
+// Set the first time the phone's speech recognition fails for good (not-allowed / service-not-allowed / network / start threw): the installed
+// Android app's WebView often lacks it, so every later tap goes straight to the keyboard's own mic instead of failing silently again.
+let speechRecognitionBroken = false;
 export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false, biasLat = 18.6298, biasLng = 73.8131 }, ref) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -6521,21 +6524,41 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   const SpeechRec = typeof window !== "undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
   const [listening, setListening] = useState(false);
   const recRef = useRef(null);
+  const inputElRef = useRef(null);
+  const setInputRefs = (el) => { inputElRef.current = el; if (typeof ref === "function") ref(el); else if (ref) ref.current = el; };
+  // micHint: "" | "keyboard" (use the keyboard's own mic) | "retry" (heard nothing). Always visible text -- a mic that fails silently was the
+  // reported bug (owner 2026-11-03, "Pickup drop Mic is not working"). The mic icon now ALWAYS shows on an empty box.
+  const [micHint, setMicHint] = useState("");
+  useEffect(() => { if (!micHint) return undefined; const t = setTimeout(() => setMicHint(""), 7000); return () => clearTimeout(t); }, [micHint]);
+  const useKeyboardMic = () => { recRef.current = null; setListening(false); setMicHint("keyboard"); try { inputElRef.current?.focus(); } catch { /* ignore */ } };
   const startListening = () => {
-    if (!SpeechRec || disabled) return;
+    if (disabled) return;
+    if (!SpeechRec || speechRecognitionBroken) { useKeyboardMic(); return; }
     try {
       if (recRef.current) { recRef.current.stop(); recRef.current = null; setListening(false); return; }
+      setMicHint("");
       const rec = new SpeechRec();
+      const startedAt = Date.now(); let gotResult = false;
       rec.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
       rec.interimResults = false; rec.maxAlternatives = 1;
       rec.onresult = (ev) => {
         const text = String(ev.results?.[0]?.[0]?.transcript || "").trim();
-        if (text) { onChange({ target: { value: text } }); setDropdownOpen(true); }
+        if (text) { gotResult = true; onChange({ target: { value: text } }); setDropdownOpen(true); }
       };
-      rec.onerror = () => { recRef.current = null; setListening(false); };
-      rec.onend = () => { recRef.current = null; setListening(false); };
+      rec.onerror = (ev) => {
+        recRef.current = null; setListening(false);
+        const err = ev && ev.error;
+        if (err === "no-speech" || err === "aborted") { setMicHint("retry"); return; }
+        speechRecognitionBroken = true; useKeyboardMic(); // not-allowed / service-not-allowed / network / audio-capture / language-not-supported
+      };
+      rec.onend = () => {
+        const wasActive = recRef.current === rec; recRef.current = null; setListening(false);
+        if (!wasActive || gotResult) return;
+        // ended at once with nothing heard and no error: this WebView starts and stops the engine silently
+        if (Date.now() - startedAt < 1200) { speechRecognitionBroken = true; useKeyboardMic(); } else setMicHint("retry");
+      };
       recRef.current = rec; setListening(true); rec.start();
-    } catch { recRef.current = null; setListening(false); }
+    } catch { speechRecognitionBroken = true; useKeyboardMic(); }
   };
   useEffect(() => () => { try { recRef.current?.stop(); } catch { /* already stopped */ } }, []);
   const debounceRef = useRef(null);
@@ -6643,7 +6666,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   // compact (customer booking steps, owner 2026-10-29): smaller, lighter text and
   // tighter padding so a long address shows more words before it runs out of room.
   const inputCls = compact ? "w-full rounded-lg py-4 text-[11.5px] font-semibold outline-none" : "w-full rounded-lg py-5 text-xs font-bold outline-none";
-  const showMic = !!SpeechRec && !value && !disabled && !citiesOnly;
+  const showMic = !value && !disabled && !citiesOnly; // always shown (a phone without speech recognition falls back to the keyboard's own mic with a hint)
   const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: compact ? 12 : 16, paddingRight: (value || showMic) ? (compact ? 44 : 52) : (compact ? 12 : 16) };
   // Golden-yellow frame AROUND the box (not the box's own border/
   // background) -- a padded, colored outer wrapper rather than an
@@ -6670,7 +6693,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
     <div>
       <div style={highlightWrapStyle}>
         <div className="relative w-full">
-          <input ref={ref} className={inputCls} style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }} placeholder={placeholder} value={value} disabled={disabled}
+          <input ref={setInputRefs} className={inputCls} style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }} placeholder={placeholder} value={value} disabled={disabled}
             onChange={(e) => { onChange(e); setDropdownOpen(true); }}
             onFocus={(e) => {
               setDropdownOpen(true);
@@ -6721,6 +6744,13 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
           )}
         </div>
       </div>
+      {micHint && (
+        <div data-mic-hint className="text-[11px] font-bold mt-1 px-1" style={{ color: C.inkSoft }}>
+          {micHint === "retry"
+            ? (lang === "en" ? "Didn't hear anything — tap the mic and try again." : lang === "mr" ? "काही ऐकू आले नाही — माइक दाबून पुन्हा प्रयत्न करा." : "कुछ सुनाई नहीं दिया — माइक दबाकर फिर कोशिश करें।")
+            : (lang === "en" ? "🎤 Tap the mic on your keyboard and speak the place." : lang === "mr" ? "🎤 तुमच्या कीबोर्डवरील माइक दाबा आणि ठिकाण बोला." : "🎤 अपने कीबोर्ड का माइक दबाएँ और जगह बोलें।")}
+        </div>
+      )}
       {suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
           {suggestions.map((a) => (
