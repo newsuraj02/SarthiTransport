@@ -609,6 +609,11 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
   const markOffDutyWhatsappSent = (mobile) => setOffDutyWhatsappSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
   const sentOffDutyToday = (mobile) => offDutyWhatsappSentMap[mobile] === todayStrUninstalled();
   const offDutyUnsent = offDutyDrivers.filter((d) => !sentOffDutyToday(d.mobile));
+  // Uninstalled drivers: one bulk "come back / reinstall" WhatsApp (template driver_reinstall_offer), once per driver per day
+  // (owner 2026-11-03, handwritten note: message option for uninstalled drivers).
+  const [reinstallSentMap, setReinstallSentMap] = usePersistedState("sarthi_reinstallWhatsappSent", {});
+  const markReinstallSent = (mobile) => setReinstallSentMap((prev) => ({ ...prev, [mobile]: todayStrUninstalled() }));
+  const reinstallUnsent = uninstalledDrivers.filter((d) => d.mobile && reinstallSentMap[d.mobile] !== todayStrUninstalled());
 
   // Real bulk send (see sendBulkDriverWhatsApp in functions/index.js) --
   // one MSG91 API call reaching every not-yet-messaged-today driver at
@@ -746,10 +751,33 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
       title: lang === "en" ? "Uninstalled" : lang === "mr" ? "अनइन्स्टॉल्ड" : "अनइंस्टॉल्ड",
       emptyMsg: lang === "en" ? "No driver has gone quiet this long." : lang === "mr" ? "कोणताही ड्रायव्हर इतका काळ गप्प नाही." : "कोई भी ड्राइवर इतने दिन से खामोश नहीं है।",
       headerExtra: (
-        <p className="text-[11px] font-bold mb-3 -mt-1.5" style={{ color: "#eb6834" }}>
-          {lang === "en" ? "Inactive 14+ days" : lang === "mr" ? "14+ दिवस निष्क्रिय" : "14+ दिन से निष्क्रिय"}
-          <span className="font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? " — no app open, live GPS or push activity" : lang === "mr" ? " — अ‍ॅप उघडणे, लाइव्ह GPS किंवा पुश अ‍ॅक्टिव्हिटी नाही" : " — ऐप खुला नहीं, लाइव GPS या पुश गतिविधि नहीं"}</span>
-        </p>
+        <>
+          <p className="text-[11px] font-bold mb-3 -mt-1.5" style={{ color: "#eb6834" }}>
+            {lang === "en" ? "Inactive 14+ days" : lang === "mr" ? "14+ दिवस निष्क्रिय" : "14+ दिन से निष्क्रिय"}
+            <span className="font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? " — no app open, live GPS or push activity" : lang === "mr" ? " — अ‍ॅप उघडणे, लाइव्ह GPS किंवा पुश अ‍ॅक्टिव्हिटी नाही" : " — ऐप खुला नहीं, लाइव GPS या पुश गतिविधि नहीं"}</span>
+          </p>
+          {uninstalledDrivers.length > 0 && (reinstallUnsent.length > 0 ? (
+            <button data-uninstalled-message onClick={() => sendBulkWhatsAppNow("reinstall", reinstallUnsent, markReinstallSent)} disabled={!!bulkSendingKind}
+              className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5 text-white" style={{ background: bulkSendingKind ? "#9AA3B0" : C.success }}>
+              <MessageCircle size={14} />
+              {bulkSendingKind === "reinstall"
+                ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
+                : (lang === "en" ? `Message all ${reinstallUnsent.length} uninstalled drivers on WhatsApp` : lang === "mr" ? `सर्व ${reinstallUnsent.length} अनइन्स्टॉल्ड ड्रायव्हर्सना WhatsApp मेसेज पाठवा` : `सभी ${reinstallUnsent.length} अनइंस्टॉल्ड ड्राइवरों को WhatsApp मैसेज भेजें`)}
+            </button>
+          ) : (
+            <div className="w-full rounded-lg py-3 font-bold text-sm mb-2 flex items-center justify-center gap-1.5" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
+              <CheckCircle2 size={14} />
+              {lang === "en" ? "Everyone messaged today" : lang === "mr" ? "आज सर्वांना मेसेज केला" : "आज सभी को मेसेज किया गया"}
+            </div>
+          ))}
+          {bulkSendResult?.kind === "reinstall" && (
+            <div className="rounded-lg p-2 mb-3 text-xs font-bold text-center" style={{ background: bulkSendResult.ok ? C.success : C.safety, color: "#fff" }}>
+              {bulkSendResult.ok
+                ? (lang === "en" ? `Sent to ${bulkSendResult.sent} drivers.` : lang === "mr" ? `${bulkSendResult.sent} ड्रायव्हर्सना पाठवले.` : `${bulkSendResult.sent} ड्राइवरों को भेजा गया।`)
+                : (lang === "en" ? "Couldn't send — try again." : lang === "mr" ? "पाठवता आले नाही — पुन्हा प्रयत्न करा." : "भेजा नहीं जा सका — फिर कोशिश करें।")}
+            </div>
+          )}
+        </>
       ),
       // An entry still on its call cooldown sinks to the bottom so admin can
       // work down the list without re-calling the same person twice in the
@@ -1595,6 +1623,10 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [resolvingId, setResolvingId] = useState(null);
+  // OLD ENTRIES TUCKED AWAY (owner 2026-11-03, handwritten note: "in the Change Log remove the old changes, list the new"): the page
+  // opens with open items + RECENTLY fixed ones only; everything fixed earlier sits behind one "Old changes (N)" button. Nothing is
+  // deleted -- a search, a # jump or a type filter still looks through the old ones too.
+  const [showOld, setShowOld] = useState(false);
   const q = query.trim().toLowerCase();
   // A pure number in the search box means "jump to #N" -- an EXACT match
   // on that entry's permanent number (see addBug's own comment), not a
@@ -1760,12 +1792,23 @@ function AdminBugTracker({ bugs, setBugStatus, addBug, lang }) {
           )}
           {fixedEarlier.length > 0 && (
             <>
-              <div className="pt-2 pb-0.5 text-[10px] font-black uppercase tracking-wide" style={{ color: C.inkSoft }}>
-                {lang === "en" ? "Fixed Earlier" : lang === "mr" ? "आधी फिक्स्ड" : "पहले फिक्स्ड"}
-              </div>
-              {fixedEarlier.map((b) => (
-                <FixedChangeLogCard key={b.id} b={b} lang={lang} setBugStatus={setBugStatus} />
-              ))}
+              {!q && typeFilter === "all" && (
+                <button type="button" data-old-changes onClick={() => setShowOld((v) => !v)} className="w-full rounded-lg py-2.5 text-xs font-bold mt-1" style={{ background: C.bg, color: C.inkSoft, border: `1px solid ${C.line}` }}>
+                  {showOld
+                    ? (lang === "en" ? "Hide old changes" : lang === "mr" ? "जुने बदल लपवा" : "पुराने बदलाव छुपाएँ")
+                    : (lang === "en" ? `Old changes (${fixedEarlier.length})` : lang === "mr" ? `जुने बदल (${fixedEarlier.length})` : `पुराने बदलाव (${fixedEarlier.length})`)}
+                </button>
+              )}
+              {(showOld || q || typeFilter !== "all") && (
+                <>
+                  <div className="pt-2 pb-0.5 text-[10px] font-black uppercase tracking-wide" style={{ color: C.inkSoft }}>
+                    {lang === "en" ? "Fixed Earlier" : lang === "mr" ? "आधी फिक्स्ड" : "पहले फिक्स्ड"}
+                  </div>
+                  {fixedEarlier.map((b) => (
+                    <FixedChangeLogCard key={b.id} b={b} lang={lang} setBugStatus={setBugStatus} />
+                  ))}
+                </>
+              )}
             </>
           )}
         </div>
@@ -2157,6 +2200,20 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestedTotal, manual]);
 
+  // ROUND TRIP column (owner 2026-11-03, handwritten note): the same number a customer pays when "Round trip" is ticked
+  // (rule F6): one-way + return, where return = Admin's saved return rate for the swapped route, otherwise one-way less
+  // Admin's returnPct. Read-only; it never changes what is saved. Hidden while the form is already the swapped (return) side.
+  const returnMatchForRound = tier && !isReturn && pickup.trim() && drop.trim()
+    ? findExactAdminRoute(drop, pickup, tier.maxKg, zone, true, adminRouteFares, dropCoords?.lat, dropCoords?.lng, pickupCoords?.lat, pickupCoords?.lng)
+    : null;
+  const oneWayForRound = Number(totalFare) || 0;
+  const returnFareForRound = oneWayForRound > 0
+    ? (returnMatchForRound && Number(returnMatchForRound.totalFare) > 0
+      ? Math.round(Number(returnMatchForRound.totalFare))
+      : Math.round(oneWayForRound * (1 - (Number(returnPct) || 0) / 100)))
+    : null;
+  const roundTripTotal = returnFareForRound != null ? oneWayForRound + returnFareForRound : null;
+
   const resetForm = () => {
     setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
     setSelectedMaxKg(null); setIsReturn(false); setPctEditing(false);
@@ -2430,6 +2487,19 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                 placeholder={lang === "en" ? "Rate" : lang === "mr" ? "दर" : "दर"} />
             </div>
           </div>
+          {!isReturn && (
+            <div data-round-trip-col className="rounded-xl px-3 py-2 flex items-center justify-between gap-2" style={{ border: `1.5px solid ${C.line}`, background: C.bg }}>
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{lang === "en" ? "Round trip rate" : lang === "mr" ? "राउंड ट्रिप दर" : "राउंड ट्रिप दर"}</div>
+                <div className="text-[10px]" style={{ color: C.inkSoft }}>
+                  {roundTripTotal != null
+                    ? `${fmt(oneWayForRound)} + ${lang === "en" ? "return" : "रिटर्न"} ${fmt(returnFareForRound)}${returnMatchForRound ? "" : ` (−${returnPct}%)`}`
+                    : (lang === "en" ? "Choose route and vehicle" : lang === "mr" ? "रूट व गाडी निवडा" : "रूट और गाड़ी चुनें")}
+                </div>
+              </div>
+              <div className="text-sm font-black shrink-0" style={{ color: C.navy, fontFamily: monoFont }}>{roundTripTotal != null ? fmt(roundTripTotal) : "—"}</div>
+            </div>
+          )}
           <div className="flex items-center justify-between text-[11px]" style={{ color: C.inkSoft }}>
             {manual ? (
               <>
@@ -3111,6 +3181,13 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   // Same lists as before (gpsOn/gpsOff, complete/incomplete, online/offDuty, lowWallet).
   const [boxPick, setBoxPick] = useState({ gps: "on", kyc: "incomplete", status: "on" });
   const [openBox, setOpenBox] = useState(null); // null = the boxes screen | gps | kyc | status | wallet | all
+  // MESSAGE ALL (owner 2026-11-03, handwritten note: "in Admin -> Drivers add a message option for off duty, KYC incomplete and
+  // uninstalled"): the KYC "Incomplete" and Status "Off Duty" sides get one bulk WhatsApp button (the approved MSG91 templates
+  // driver_kyc_incomplete / driver_off_duty, see sendBulkDriverWhatsApp). Drivers already messaged TODAY are skipped; the count is shown first.
+  const [kycMsgSentMap, setKycMsgSentMap] = usePersistedState("sarthi_driverListKycMsgSent", {});
+  const [offDutyMsgSentMap, setOffDutyMsgSentMap] = usePersistedState("sarthi_driverListOffDutyMsgSent", {});
+  const [msgSending, setMsgSending] = useState(false);
+  const [msgResult, setMsgResult] = useState(null);
   // "Called this round" tracking for every driver card's Call button (see
   // renderRow) -- same round-robin pattern as detailPages.uninstalled in
   // AdminFleet (owner request, 2026-10-25): tapping Call disables that
@@ -3371,6 +3448,21 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
   const openOpt = openDef?.opts?.find((o) => o.v === boxPick[openBox]);
   const shownList = openBox === "all" ? bySection(totalInstalled) : openDef ? (openOpt ? openOpt.list : openDef.list) : [];
   const shownTitle = openBox === "all" ? L3("All Drivers", "सर्व ड्रायव्हर", "सभी ड्राइवर") : openDef?.title;
+  const msgKind = openBox === "kyc" && boxPick.kyc === "incomplete" ? "kycIncomplete" : openBox === "status" && boxPick.status === "off" ? "offDuty" : null;
+  const msgSentMap = msgKind === "kycIncomplete" ? kycMsgSentMap : offDutyMsgSentMap;
+  const msgToday = localDateKey();
+  const msgTargets = msgKind ? shownList.filter((d) => d.mobile && msgSentMap[d.mobile] !== msgToday) : [];
+  const sendDriverListMessage = async () => {
+    if (msgSending || !msgKind || msgTargets.length === 0) return;
+    setMsgSending(true); setMsgResult(null);
+    const result = await sendBulkDriverWhatsApp(msgKind, msgTargets.map((d) => d.mobile));
+    if (result.ok) {
+      const stamp = Object.fromEntries(msgTargets.map((d) => [d.mobile, msgToday]));
+      (msgKind === "kycIncomplete" ? setKycMsgSentMap : setOffDutyMsgSentMap)((prev) => ({ ...prev, ...stamp }));
+    }
+    setMsgResult({ kind: msgKind, ...result });
+    setMsgSending(false);
+  };
 
   if (openBox) {
     return (
@@ -3390,6 +3482,31 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
                 </button>
               );
             })}
+          </div>
+        )}
+        {msgKind && shownList.length > 0 && (
+          <div data-driver-message-bar className="mb-3">
+            {msgTargets.length > 0 ? (
+              <button type="button" disabled={msgSending} onClick={sendDriverListMessage}
+                className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-1.5 text-white" style={{ background: msgSending ? "#9AA3B0" : C.success }}>
+                <MessageCircle size={14} />
+                {msgSending
+                  ? L3("Sending…", "पाठवत आहे…", "भेजा जा रहा है…")
+                  : L3(`Message all ${msgTargets.length} drivers on WhatsApp`, `सर्व ${msgTargets.length} ड्रायव्हर्सना WhatsApp मेसेज पाठवा`, `सभी ${msgTargets.length} ड्राइवरों को WhatsApp मैसेज भेजें`)}
+              </button>
+            ) : (
+              <div className="w-full rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-1.5" style={{ background: "#E5EAF2", color: "#9AA3B0" }}>
+                <CheckCircle2 size={14} />
+                {L3("Everyone messaged today", "आज सर्वांना मेसेज केला", "आज सभी को मेसेज किया गया")}
+              </div>
+            )}
+            {msgResult?.kind === msgKind && (
+              <div className="rounded-lg p-2 mt-2 text-xs font-bold text-center" style={{ background: msgResult.ok ? C.success : C.safety, color: "#fff" }}>
+                {msgResult.ok
+                  ? L3(`Sent to ${msgResult.sent} drivers.`, `${msgResult.sent} ड्रायव्हर्सना पाठवले.`, `${msgResult.sent} ड्राइवरों को भेजा गया।`)
+                  : L3("Couldn't send — try again.", "पाठवता आले नाही — पुन्हा प्रयत्न करा.", "भेजा नहीं जा सका — फिर कोशिश करें।")}
+              </div>
+            )}
           </div>
         )}
         <div className="space-y-2">
@@ -4396,7 +4513,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
   // a separate "Pending KYC approvals" tile.
-  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["bookings", "बुकिंग्स", CalendarCheck], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["finance", "फायनान्स", BarChart3], ["rates", "रेट्स व डीज़ल", Fuel], ["changelog", "चेंज लॉग", History], ["notify", "सूचना भेजें", Bell], ["alerts", "अलर्ट्स", Siren], ["callLogs", "कॉल लॉग्स", PhoneCall], ["settings", "सिस्टम सेटिंग्स", Settings2]];
+  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["bookings", "बुकिंग्स", CalendarCheck], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["finance", "फायनान्स", BarChart3], ["rates", "रेट्स व डीज़ल", Fuel], ["changelog", "चेंज लॉग", History], ["notify", "सूचना भेजें", Bell], ["callLogs", "कॉल लॉग्स", PhoneCall], ["settings", "सिस्टम सेटिंग्स", Settings2]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
@@ -4409,7 +4526,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       <div className="flex gap-2 mb-5 overflow-x-auto no-scrollbar -mx-5 px-5 pb-1">
         {tabs.map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)} className="flex items-center gap-1.5 px-4 py-3 rounded-full text-base font-black whitespace-nowrap shadow-sm"
-            style={{ background: tab === k ? C.navy : C.marigold, color: tab === k ? "#fff" : "#000000", border: `1.5px solid ${tab === k ? C.navy : C.marigoldDeep}` }}>
+            style={{ background: (tab === k || (k === "notify" && tab === "alerts")) ? C.navy : C.marigold, color: (tab === k || (k === "notify" && tab === "alerts")) ? "#fff" : "#000000", border: `1.5px solid ${(tab === k || (k === "notify" && tab === "alerts")) ? C.navy : C.marigoldDeep}` }}>
             <Icon size={16} /> {lang === "en" ? (EN_LABELS[k] || label) : lang === "mr" ? (MR_LABELS[k] || label) : label}
           </button>
         ))}
@@ -4421,6 +4538,18 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
       {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
+      {/* Alerts now live INSIDE the Notify tab (owner 2026-11-03, handwritten note: "shift Alerts into the Notifications column"):
+          one tab, two sides. The Live Dashboard's red "Direct request" box still opens the Alerts side (onNavigate("alerts")). */}
+      {(tab === "notify" || tab === "alerts") && (
+        <div data-notify-alerts-switch className="grid grid-cols-2 gap-1 rounded-xl p-1 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+          {[["notify", lang === "en" ? "Send notice" : lang === "mr" ? "सूचना पाठवा" : "सूचना भेजें"], ["alerts", lang === "en" ? "Alerts" : lang === "mr" ? "अलर्ट्स" : "अलर्ट्स"]].map(([k, label]) => (
+            <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)} className="rounded-lg py-2.5 text-sm font-extrabold"
+              style={{ background: tab === k ? (k === "alerts" ? C.safety : C.navy) : "transparent", color: tab === k ? "#fff" : C.inkSoft }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}

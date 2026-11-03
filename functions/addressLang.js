@@ -102,11 +102,17 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
     return place;
   }
 
-  async function searchPlaces(input, lang, sessionToken, lat, lng) {
+  // One autocomplete call; `area` is optional: { restrictDeg } = ONLY inside this box around (lat,lng), { biasKm } = soft preference.
+  async function autocompleteOnce(input, lang, sessionToken, lat, lng, area) {
     const body = { input, languageCode: lang, includedRegionCodes: ["in"] };
     if (sessionToken) body.sessionToken = sessionToken;
-    if (typeof lat === "number" && typeof lng === "number") {
-      body.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: 50000 } };
+    if (area && typeof lat === "number" && typeof lng === "number") {
+      if (area.restrictDeg) {
+        const d = area.restrictDeg;
+        body.locationRestriction = { rectangle: { low: { latitude: lat - d, longitude: lng - d }, high: { latitude: lat + d, longitude: lng + d } } };
+      } else {
+        body.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: (area.biasKm || 50) * 1000 } };
+      }
     }
     const r = await fetchFn("https://places.googleapis.com/v1/places:autocomplete", {
       method: "POST",
@@ -115,7 +121,27 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
     });
     const j = await r.json();
     if (!r.ok) throw new GeoError("internal", j.error?.message || "Autocomplete failed");
-    const list = (j.suggestions || []).filter((s) => s.placePrediction).slice(0, 8);
+    return (j.suggestions || []).filter((s) => s.placePrediction).map((s) => s.placePrediction);
+  }
+
+  // Owner 2026-11-03 (handwritten note): picking "Kudalwadi" while in Pune must list the 8-10 Kudalwadi places of
+  // THAT city, not the one in another state. Google returns at most 5 per call, so: a tight box around the customer
+  // (~13 km), then a city-wide box (~39 km), merged without duplicates, nearest-first. Only when fewer than 3 local
+  // places exist (e.g. the customer types "Mumbai" for a long trip) does the old wide, soft-biased search fill in.
+  async function searchPlaces(input, lang, sessionToken, lat, lng) {
+    const hasPoint = typeof lat === "number" && typeof lng === "number";
+    let preds = [];
+    const seen = new Set();
+    const add = (list) => { for (const p of list) { if (p?.placeId && !seen.has(p.placeId)) { seen.add(p.placeId); preds.push(p); } } };
+    if (hasPoint) {
+      const [near, city] = await Promise.all([
+        autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 0.12 }).catch(() => []),
+        autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 0.35 }).catch(() => []),
+      ]);
+      add(near); add(city);
+    }
+    if (!hasPoint || preds.length < 3) add(await autocompleteOnce(input, lang, sessionToken, lat, lng, { biasKm: 50 }));
+    const list = preds.slice(0, 10).map((p) => ({ placePrediction: p }));
     return Promise.all(list.map(async ({ placePrediction: p }) => ({
       placeId: p.placeId,
       main: await toScript(stripPlusCode(p.structuredFormat?.mainText?.text || p.text?.text || ""), lang),

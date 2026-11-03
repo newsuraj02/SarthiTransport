@@ -50,6 +50,7 @@ Legend: **app** = `src/App.jsx`, **admin** = `src/AdminPanel.jsx`, **fns** = `fu
 | F8 | Outlier fares (one vehicle priced wildly off its siblings) are corrected for display only. | app `findFareOutliers`, `interpolateOutlierFare` | invariants |
 | F10 | Admin rate resolution: a saved rate for this vehicle + zone + direction, matched by coordinates (text fallback), wins; km beyond its distance add its per-km; other direction / vehicle / far places never match; else the other vehicles' ratio scales the formula; else the plain formula. | app `getAdminRouteOverride`, `getRouteScaleRatio`, `resolveFareForTier` | invariant "ADMIN RATE RESOLUTION, behaviour" |
 | F9 | Admin Rate Calculator suggestion includes live diesel; an existing saved rate shows as it stands today. | admin `AdminRateCalculator` | invariant "diesel reaches EVERY fare" |
+| F10 | Admin Rate Calculator has a read-only **Round trip** column = one-way + return (saved return rate for the swapped route, else one-way less `returnPct`) — the same number a customer pays (F6). Never saved; hidden on the swapped (return) side. | admin `AdminRateCalculator` (`roundTripTotal`) | invariant "handwritten note 2026-11-03" |
 
 ## 3. Booking input
 
@@ -59,6 +60,9 @@ Legend: **app** = `src/App.jsx`, **admin** = `src/AdminPanel.jsx`, **fns** = `fu
 | B2 | Calendar days are the device's LOCAL day (`localDateKey`), never UTC. | app, admin | invariant "calendar days are the device's LOCAL day" |
 | B3 | Advance booking: date + time slot, per-category minimum notice (>8 t 3 h, ≥3 t 2 h, else 1 h). | app `minAdvanceNoticeHours`, `TimeSlotModal` | invariants |
 | B4 | Driver KYC is mandatory for every field except dimensions (`DRIVER_KYC_FIELDS`). | app | behaviour invariants |
+| B5 | **Pickup/Drop suggestions are the customer's own city first** (owner 2026-11-03): server `searchPlaces` asks Google twice inside a tight box (~13 km) and a city box (~39 km) around the customer (drop: around the pickup), merges without duplicates, up to 10; only when fewer than 3 local places exist does the wide soft-biased search fill in (so "Mumbai" still works). Needs `firebase deploy --only functions`. | fns/`functions/addressLang.js` `searchPlaces`; app `LocationField` (`biasLat`/`biasLng`) | invariant "handwritten note 2026-11-03" |
+| B6 | Pickup/Drop boxes have a **mic** (Web Speech API, hi/mr/en-IN) while empty; a phone without the API shows none. | app `LocationField` | same |
+| B7 | The booked-vehicle "how far" tile shows the **real road distance** (same as the map below it); the x1.35 straight-line guess is only the fallback. | app `BookedVehiclePanel` | same |
 
 ## 4. Trip, OTP and money
 
@@ -69,6 +73,14 @@ Legend: **app** = `src/App.jsx`, **admin** = `src/AdminPanel.jsx`, **fns** = `fu
 | T3 | Bill = fare − return discount + halting + ONLY the accepted extras. | app `buildBill` | invariant "TRIP MONEY, behaviour" |
 | T4 | A driver's own session may only LOWER the bonus; wallet / held credit are locked; withdrawals ≤ bonus; money taps cannot double-fire. | rules `drivers`; app `claimMoneyTap` | invariants + `scripts/rulesTest/` |
 | T5 | A Return-Load accept may only be a discount (fare never higher; originalFare = old fare). | rules `bookings` | `scripts/rulesTest/claim.mjs` |
+
+## 4b. Admin panel (owner 2026-11-03, handwritten note)
+
+| # | Rule | Where | Pinned by |
+|---|---|---|---|
+| M1 | Admin → Drivers: KYC **Incomplete** and Status **Off duty** lists, and the **Uninstalled** page, each have one bulk WhatsApp button (MSG91 templates `driver_kyc_incomplete` / `driver_off_duty` / `driver_reinstall_offer`); a driver is messaged at most once per day; the count shows first. | admin `AdminDriverList` (`msgKind`), `AdminFleet` (`reinstallUnsent`); fns `sendBulkDriverWhatsApp` | invariant "handwritten note 2026-11-03" |
+| M2 | Change Log opens with open + recently fixed entries; older fixed ones sit behind "Old changes (N)" (search / # jump / type filter still reach them). Nothing is deleted. | admin `AdminBugTracker` (`showOld`) | same |
+| M3 | Alerts live INSIDE the Notify tab (two-sided switch); there is no separate Alerts tab button; `onNavigate("alerts")` still opens the Alerts side. | admin `AdminPanel` | same |
 
 ## 5. Frozen (see CLAUDE.md)
 

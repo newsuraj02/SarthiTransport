@@ -365,6 +365,8 @@ reduced-motion rule in `index.css` / `index.html` is prefixed `:root:not(.force-
 `/motion-check.html` (`public/`) shows the phone's setting + whether the latest build is
 deployed, and lets someone who needs reduced motion opt out ("Follow my phone's setting").
 
+**Handwritten note (owner 2026-11-03, 3-11-2026 -- built, not yet confirmed on a device).** (1) Admin Rate Calculator: a read-only "Round trip rate" row (one-way + return, same as F6). (2) Booking screen: the fixed bottom "Round trip" box is a BIT BIGGER (14 px bold text, 24 px checkbox, `py-3`; was a 30 px strip) -- this deliberately replaces the 2026-11-01 "small and quiet" size; Pickup/Drop boxes got a MIC (Web Speech) and the suggestions are the customer's own city first, 8-10 of them (`searchPlaces` in `functions/addressLang.js`, needs `firebase deploy --only functions`; wrong-spelling tolerance is Google's); the booked-vehicle distance tile uses the real road distance. (3) The pulsing circle around the nearest vehicle on the booking map is gone (the "N min" pill stays). (4) Admin: bulk WhatsApp for KYC-incomplete / off-duty / uninstalled drivers; Change Log hides old fixed entries behind "Old changes (N)"; Alerts moved INSIDE the Notify tab. NOT done on purpose (frozen GPS/map code, needs the owner's go-ahead): extra live-vehicle layers on `AdminLiveMap`, and road-snapped movement of the vehicle toward the customer on `LiveTrackingMap` -- both already show the live position today.
+
 **Fares.** `calculateFare` (App.jsx): in-city = master formula × `priceCorrectionFactor`
 (anchored 5% below Porter at 13 km); outstation = `priceOutstation`, a piecewise
 curve from real Porter quotes (500/750/1200/2000/3500/5000 kg, ×0.95), tiers

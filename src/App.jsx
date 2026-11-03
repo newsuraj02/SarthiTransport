@@ -17,7 +17,7 @@ import {
   Settings2, Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, LocateFixed,
-  AlertTriangle, Volume2, Square,
+  AlertTriangle, Volume2, Square, Mic,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkDeleteDocs,
@@ -4215,12 +4215,8 @@ function NearbyDriverMarker({ driver, index = 0, highlightLabel = "" }) {
   return (
     <>
       <MarkerF position={pos || rawPos} icon={driverTruckIcon(heading)} opacity={opacity} />
-      {/* The nearest vehicle of the chosen type: a pulsing ring + "N min" pill (owner brief 2026-10-29). */}
-      {highlightLabel && (
-        <OverlayViewF position={pos || rawPos} mapPaneName="overlayLayer" getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h / 2 })}>
-          <span className="map-halo" />
-        </OverlayViewF>
-      )}
+      {/* The nearest vehicle of the chosen type: the "N min" pill only (owner brief 2026-10-29). The pulsing circle around the vehicle was
+          REMOVED on the owner's request (handwritten note 2026-11-03: "remove the round circle around the vehicles"). */}
       {highlightLabel && (
         <OverlayViewF position={pos || rawPos} mapPaneName="floatPane" getPixelPositionOffset={(w, h) => ({ x: -w / 2, y: -h - 20 })}>
           <span className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-extrabold shadow-md" style={{ background: C.navy, color: "#fff", border: `1.5px solid ${C.marigold}` }}>{highlightLabel}</span>
@@ -6480,9 +6476,32 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false }, ref) {
+export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false, biasLat = 18.6298, biasLng = 73.8131 }, ref) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  // MIC (owner 2026-11-03, handwritten note: "mic in pickup/drop" -- many customers and drivers are poorly educated, so they can SPEAK the
+  // place). Uses the device's Web Speech API; a phone whose WebView lacks it simply shows no mic (the keyboard's own mic still works).
+  // Shown only while the box is empty and enabled, so it never sits on top of the clear (X) button.
+  const SpeechRec = typeof window !== "undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+  const [listening, setListening] = useState(false);
+  const recRef = useRef(null);
+  const startListening = () => {
+    if (!SpeechRec || disabled) return;
+    try {
+      if (recRef.current) { recRef.current.stop(); recRef.current = null; setListening(false); return; }
+      const rec = new SpeechRec();
+      rec.lang = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
+      rec.interimResults = false; rec.maxAlternatives = 1;
+      rec.onresult = (ev) => {
+        const text = String(ev.results?.[0]?.[0]?.transcript || "").trim();
+        if (text) { onChange({ target: { value: text } }); setDropdownOpen(true); }
+      };
+      rec.onerror = () => { recRef.current = null; setListening(false); };
+      rec.onend = () => { recRef.current = null; setListening(false); };
+      recRef.current = rec; setListening(true); rec.start();
+    } catch { recRef.current = null; setListening(false); }
+  };
+  useEffect(() => () => { try { recRef.current?.stop(); } catch { /* already stopped */ } }, []);
   const debounceRef = useRef(null);
   const blurTimeoutRef = useRef(null);
   // Auto-scroll-into-view the moment this field is focused, so it clears
@@ -6516,7 +6535,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
       // Owner 2026-10-31 (developer brief): suggestions are produced on the server IN THE APP'S LANGUAGE, English words
       // transliterated into the script. City-only boxes (Set Fare) and any server failure use the in-browser lookup below.
       if (!citiesOnly) {
-        const data = await geoSearchPlaces({ input: value, lang, sessionToken: newSessionToken(), lat: 18.6298, lng: 73.8131 });
+        const data = await geoSearchPlaces({ input: value, lang, sessionToken: newSessionToken(), lat: biasLat, lng: biasLng });
         if (cancelled) return;
         if (data && Array.isArray(data.results)) {
           setPredictions(data.results.map((r) => ({ place_id: r.placeId, description: r.full, structured_formatting: { main_text: r.main, secondary_text: r.secondary }, __server: true })));
@@ -6535,7 +6554,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
       // because the picked suggestion resolved to a distant namesake.
       new window.google.maps.places.AutocompleteService().getPlacePredictions(
         {
-          input: value, componentRestrictions: { country: "in" }, location: new window.google.maps.LatLng(18.6298, 73.8131), radius: 60000,
+          input: value, componentRestrictions: { country: "in" }, location: new window.google.maps.LatLng(biasLat, biasLng), radius: 60000,
           // Set Fare's route pricing is city-to-city by design (see
           // ROUTE_MATCH_RADIUS_KM) — restricting suggestions here to
           // cities/towns keeps a driver's entry at the same granularity a
@@ -6548,7 +6567,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
       );
     }, 300);
     return () => { cancelled = true; clearTimeout(debounceRef.current); };
-  }, [value, mapsReady, citiesOnly, lang]);
+  }, [value, mapsReady, citiesOnly, lang, biasLat, biasLng]);
 
   useEffect(() => () => clearTimeout(blurTimeoutRef.current), []);
 
@@ -6588,7 +6607,8 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   // compact (customer booking steps, owner 2026-10-29): smaller, lighter text and
   // tighter padding so a long address shows more words before it runs out of room.
   const inputCls = compact ? "w-full rounded-lg py-4 text-[11.5px] font-semibold outline-none" : "w-full rounded-lg py-5 text-xs font-bold outline-none";
-  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: compact ? 12 : 16, paddingRight: value ? (compact ? 44 : 52) : (compact ? 12 : 16) };
+  const showMic = !!SpeechRec && !value && !disabled && !citiesOnly;
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: compact ? 12 : 16, paddingRight: (value || showMic) ? (compact ? 44 : 52) : (compact ? 12 : 16) };
   // Golden-yellow frame AROUND the box (not the box's own border/
   // background) -- a padded, colored outer wrapper rather than an
   // outline, so the gap between the box and the highlight itself is
@@ -6622,6 +6642,12 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
               onFocus?.();
             }}
             onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
+          {showMic && (
+            <button type="button" data-mic aria-label="Speak" onMouseDown={(e) => e.preventDefault()} onClick={startListening}
+              className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
+              <Mic size={22} color={listening ? C.safety : C.navy} strokeWidth={2.5} className={listening ? "animate-pulse" : ""} />
+            </button>
+          )}
           {value && !disabled && (
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
               className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
@@ -7780,7 +7806,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   return (
-    <div className={returnBarVisible ? "pt-0 pb-16" : "pt-0 pb-8"}>
+    <div className={returnBarVisible ? "pt-0 pb-24" : "pt-0 pb-8"}>
       {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
       {/* Centers on the typed Pickup once it's resolved, not the customer's own live position -- a customer
           booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
@@ -7817,6 +7843,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               onSuggestionTap={(a) => onPickupTyped(pickup.trim() + (pickup.trim() ? ", " : "") + a)}
               onFocus={() => setActiveField("pickup")}
               highlighted={highlightField === "pickup"}
+              biasLat={customerLocation?.lat ?? undefined} biasLng={customerLocation?.lng ?? undefined}
               ref={pickupFieldRef}
             />
           </div>
@@ -7877,6 +7904,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           onSuggestionTap={(a) => onDropTyped(drop.trim() + (drop.trim() ? ", " : "") + a)}
           onFocus={() => setActiveField("drop")}
           highlighted={highlightField === "drop"}
+          biasLat={(pickupCoords?.lat ?? customerLocation?.lat) ?? undefined} biasLng={(pickupCoords?.lng ?? customerLocation?.lng) ?? undefined}
           ref={dropFieldRef}
         />
         </div>
@@ -8168,12 +8196,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           text box has focus (an earlier version did, and vanished when the Weight box got the cursor). */}
       {returnBarVisible && (
         <div data-return-bar className="fixed left-0 right-0 bottom-0 z-[25] px-4 pt-1" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)", pointerEvents: "none" }}>
-          <label className="mx-auto max-w-sm flex items-center justify-between gap-3 rounded-xl px-3 py-1.5 cursor-pointer select-none" style={{ background: C.paper, border: `1px solid ${C.line}`, pointerEvents: "auto" }}>
-            <span className="flex items-center gap-1.5 min-w-0">
-              <span className="text-xs" aria-hidden="true" style={{ color: C.inkSoft }}>↔</span>
-              <span className="text-xs font-semibold truncate" style={{ color: C.inkSoft }}>{lang === "en" ? "Round trip" : "राउंड ट्रिप"}</span>
+          <label className="mx-auto max-w-sm flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer select-none" style={{ background: C.paper, border: `1px solid ${C.line}`, pointerEvents: "auto" }}>
+            <span className="flex items-center gap-2 min-w-0">
+              <span className="text-base" aria-hidden="true" style={{ color: C.inkSoft }}>↔</span>
+              <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{lang === "en" ? "Round trip" : "राउंड ट्रिप"}</span>
             </span>
-            <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-4 h-4 shrink-0 rounded" style={{ accentColor: C.navy }} />
+            <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-6 h-6 shrink-0 rounded" style={{ accentColor: C.navy }} />
           </label>
         </div>
       )}
@@ -8291,7 +8319,13 @@ function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
     : b.loadingStartedAt
     ? (b.dropLat != null ? { lat: b.dropLat, lng: b.dropLng } : null)
     : (b.pickupLat != null ? { lat: b.pickupLat, lng: b.pickupLng } : null);
-  const liveKm = estimateDistanceKm(b.driverLocation, target);
+  // KM FIX (owner 2026-11-03, handwritten note "Km सुधार"): this tile used the straight-line x1.35 guess while the map right below
+  // it shows the real road distance (useDrivingRoute), so the two numbers never agreed. Now the real road distance is used when the
+  // route is available; the guess stays only as the fallback (no Maps / no route yet).
+  const { isLoaded: mapsOk, hasKey: mapsKey } = useGoogleMaps();
+  const livePos = b.driverLocation?.lat != null && b.driverLocation?.lng != null ? { lat: b.driverLocation.lat, lng: b.driverLocation.lng } : null;
+  const roadLive = useDrivingRoute(livePos, target, mapsOk, mapsKey);
+  const liveKm = roadLive.distanceKm != null ? roadLive.distanceKm : estimateDistanceKm(b.driverLocation, target);
   const liveLabel = liveKm != null
     ? formatDistanceExact(liveKm, lang)
     : T("Waiting for location…", "लोकेशन येत आहे…", "लोकेशन आ रही है…");
