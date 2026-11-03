@@ -255,7 +255,9 @@ service cloud.firestore {
     // the customer who raised one never reads it back, so read stays
     // admin-only, same scoping as withdrawals/rechargeRequests above.
     match /unmatchedVehicleRequests/{id} {
-      allow read: if isAdmin();
+      // The customer may read THEIR OWN request (owner 2026-11-03: the "Not seeing the right vehicle?" link turns into "can't find a
+      // driver" after 10 minutes unless Admin has contacted them -- the app watches this one doc for Admin's contactedAt / status).
+      allow read: if isAdmin() || isOwnPhone(resource.data.customerMobile);
       allow create: if isOwnPhone(request.resource.data.customerMobile);
       allow update, delete: if isAdmin();
     }

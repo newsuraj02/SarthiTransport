@@ -16,7 +16,7 @@ import { GoogleMap, MarkerF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow } from "./firebaseClient";
-import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
+import { createDoc, patchDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
   ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
@@ -2778,6 +2778,9 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
   const [savingFareIds, setSavingFareIds] = useState({});
   const [savedFareIds, setSavedFareIds] = useState({});
   const [fareSendError, setFareSendError] = useState({});
+  // Stamps the request as "Admin contacted this customer" (Call tapped / fare sent). The customer's booking screen watches it: without a stamp
+  // (or Mark handled) within 10 minutes of their tap it says "can't find a driver for you at the moment".
+  const markRequestContacted = (id) => { if (id) patchDoc("unmatchedVehicleRequests", id, { contactedAt: Date.now() }).catch((e) => console.error("[contactedAt]", e)); };
   const saveFareAndNotify = async (req) => {
     const fareNum = Number(estimateDrafts[req.id] ?? estimateFor(req));
     if (!fareNum || fareNum <= 0 || savingFareIds[req.id]) return;
@@ -2808,6 +2811,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
       if (result?.ok === false) {
         setFareSendError((p) => ({ ...p, [req.id]: lang === "en" ? "Saved the rate, but couldn't notify the customer — try again." : lang === "mr" ? "दर सेव्ह झाला, पण कस्टमरला कळवता आले नाही — पुन्हा प्रयत्न करा." : "दर सेव हो गया, पर कस्टमर को सूचित नहीं कर सके — फिर कोशिश करें।" }));
       } else {
+        markRequestContacted(req.id);
         setSavedFareIds((p) => ({ ...p, [req.id]: true }));
       }
     } catch (e) {
@@ -2875,7 +2879,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                         <Phone size={11} /> {lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया"}
                       </div>
                     ) : (
-                      <a href={`tel:+91${req.customerMobile}`} onClick={() => markAlertCalled(req.customerMobile)} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
+                      <a href={`tel:+91${req.customerMobile}`} onClick={() => { markAlertCalled(req.customerMobile); markRequestContacted(req.id); }} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
                         <Phone size={11} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
                       </a>
                     )}

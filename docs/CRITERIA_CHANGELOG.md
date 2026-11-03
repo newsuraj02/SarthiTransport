@@ -37,3 +37,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-03 -- scan fix: otp-missing no longer fires for trips older than the 24 h OTP expiry (false alarm found in the Admin bug tracker); contracts G7
 - changed (4): file:functions/healthAudit.js, code:docs/SYSTEM_CONTRACTS.md, code:functions/healthAudit.js#auditLiveData, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-03 -- 10-minute no-call timer on 'Not seeing the right vehicle?' (customer shows 'can't find a driver' unless Admin contacted them; Admin Call/Save fare stamp contactedAt; customer may read own unmatched request); contract B8
+- changed (9): file:firestore.rules, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminAlerts, code:src/App.jsx#CustomerBooking, code:src/App.jsx#App
+- added (2): code:src/App.jsx#UNMATCHED_NO_CALL_MS, code:src/App.jsx#unmatchedRequestStage
