@@ -34,3 +34,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-03 -- Admin live map: no circle round vehicles, booked vehicle road line to pickup; Change Log entries for 3 Nov note
 - changed (6): code:docs/SYSTEM_CONTRACTS.md, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#statusTruckIcon, code:src/AdminPanel.jsx#AdminLiveMap, code:src/App.jsx#BUG_TRACKER_SEED, code:src/App.jsx#useDrivingRoute
 - added (1): code:src/AdminPanel.jsx#AdminTripRoad
+
+## 2026-11-03 -- scan fix: otp-missing no longer fires for trips older than the 24 h OTP expiry (false alarm found in the Admin bug tracker); contracts G7
+- changed (4): file:functions/healthAudit.js, code:docs/SYSTEM_CONTRACTS.md, code:functions/healthAudit.js#auditLiveData, code:scripts/verifyInvariants.mjs#checks

@@ -107,6 +107,7 @@ Results: `systemHealth/heartbeat` (tile), `systemHealth/changeFeed`, `systemHeal
 | G4 | **Instant check**: the moment a trip is accepted, a driver who is ALSO on another running trip raises a critical Change Log entry + a feed line within seconds (read-only, can never block the accept). | `auditTripAccepted`, `otherRunningTripsOfDriver` | invariant "INSTANT + HOURLY WATCH" |
 | G5 | **Hourly pulse** (:30 each hour) runs the same scan as 09:00/23:00; the tile treats it as a scan and turns amber after 2.5 h of silence (dead-man). | `hourlyHealthPulse`, `ScanStatusTile` | invariant "INSTANT + HOURLY WATCH" |
 | G6 | **Old-build warning**: the Admin tile compares the commit baked into THIS bundle with the live `/build.json` and says "this device runs an older build — tap Refresh". | `ScanStatusTile`, `vite.config.js` (`__BUNDLE_COMMIT__`) | invariant "INSTANT + HOURLY WATCH" |
+| G7 | **OTP-missing finding** covers only trips accepted 2 min – 23 h ago: the OTP expiry job deletes every OTP after 24 h, so older stuck trips are reported once, as "not started for over 24 h". | `auditLiveData` check 4, `expireOldBookingOtps` | invariant "BUG (found 2026-11-03 from the Admin bug tracker)" |
 
 ---
 

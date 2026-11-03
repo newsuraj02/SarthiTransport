@@ -98,7 +98,10 @@ function auditLiveData({ drivers = [], bookings = [], settings = {}, adminRouteF
 
   // 4. The server-made OTP (issuePickupOtp) must exist for every accepted, not-yet-started trip.
   const otp = new Set(otpIds);
-  const noOtp = running.filter((b) => !b.loadingStartedAt && !otp.has(b.id) && (ms(b.acceptedAt) ?? ms(b.createdAt)) != null && now - (ms(b.acceptedAt) ?? ms(b.createdAt)) > 2 * 60e3 && !b.scheduledFor);
+  // expireOldBookingOtps deletes every OTP after 24 h (BOOKING_OTP_TTL_HOURS in functions/index.js), so a trip older than that has none ON PURPOSE;
+  // it is reported once, as "not started for over 24 h" (check 3). Only the window 2 min .. 23 h is a real "OTP was never made".
+  const OTP_EXPIRY_HOURS = 24;
+  const noOtp = running.filter((b) => { const t = ms(b.acceptedAt) ?? ms(b.createdAt); return !b.loadingStartedAt && !otp.has(b.id) && t != null && now - t > 2 * 60e3 && now - t < (OTP_EXPIRY_HOURS - 1) * H && !b.scheduledFor; });
   if (noOtp.length) push("otp-missing", "critical", "OTP", `${noOtp.length} accepted trip(s) have NO pickup OTP`, `The issuePickupOtp function did not run for: ${ids(noOtp.map((b) => b.id))}`);
 
   // 5. Integrity.
