@@ -1,0 +1,8 @@
+[
+  {
+    "id": "fare-dips-over-5t",
+    "since": "2026-11-03",
+    "title": "Outstation fares for vehicles above 5 t FALL between about 94 km and 108-130 km",
+    "detail": "Found by the new fare-correctness check (not caused by any recent change). The tiers above the heaviest Porter anchor (5 t) are scaled from the 5 t curve by the OLD formula's ratio, and that ratio shrinks as distance grows (the minimum-fare floor stops dominating), so a longer trip can cost LESS: 7 t up to Rs 438, 9-12 t Rs 636, 16 t Rs 779, 18-25 t Rs 1,204, 30 t Rs 1,768, uncapped Rs 2,364 cheaper at ~108-130 km than at 94 km. Needs an owner decision: flatten (raise the dip to the 94 km price) or re-tune the ratio. Not changed because fares are owner-confirmed."
+  }
+]

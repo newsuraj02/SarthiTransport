@@ -4,7 +4,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const crypto = require("crypto");
 const { ringWeightText } = require("./ringText");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
-const { auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning } = require("./healthAudit");
+const { auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning } = require("./healthAudit");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -1666,6 +1666,7 @@ async function runDailyHealthCheck(label) {
   const head = headRes.ok && headRes.data && headRes.data.sha ? headRes.data.sha : null;
   if (!head) notes.push(`Latest commit not read from GitHub (HTTP ${headRes.status}) -- "is the live app up to date?" was not checked.`);
   findings.push(...auditDeployment({ hosting, functions: functionsStamp, head }));
+  if (hosting) findings.push(...auditKnownIssues(hosting.knownIssues));
 
   // --- change detection against what the previous scan saw ---
   const baseRef = db.collection("systemHealth").doc("baseline");

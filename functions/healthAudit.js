@@ -167,10 +167,15 @@ function auditDeployment({ hosting, functions, head, now = Date.now() }) {
   return f;
 }
 
+// Open issues the owner has been told about (scripts/knownIssues.json, carried in the live build.json): listed on EVERY scan so they stay visible.
+function auditKnownIssues(list) {
+  return (Array.isArray(list) ? list : []).slice(0, 10).map((k) => ({ id: `known-${String(k.id || "x").slice(0, 40)}`, sev: "info", area: "Known issue", title: String(k.title || "").slice(0, 200), detail: `Open since ${k.since || "?"}. ${String(k.detail || "").slice(0, 300)}` }));
+}
+
 function summarize(findings, changes, totalChanges = changes.length) {
   const crit = findings.filter((x) => x.sev === "critical").length, high = findings.filter((x) => x.sev === "high").length, info = findings.filter((x) => x.sev === "info").length;
   const status = crit || high ? "fail" : "pass";
   return { status, crit, high, info, changes: totalChanges, text: status === "pass" ? `All checks passed${info ? ` (${info} note${info > 1 ? "s" : ""})` : ""}${totalChanges ? ` - ${totalChanges} change(s) detected` : ""}.` : `${crit} critical, ${high} high${info ? `, ${info} note(s)` : ""}${totalChanges ? `; ${totalChanges} change(s) detected` : ""}.` };
 }
 
-module.exports = { isDriverRecord, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, driverIsBusyForCurrentLoad, isBookingRunning, getBookingWindow, estimatedTripHours, notificationLockHours };
+module.exports = { isDriverRecord, auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, driverIsBusyForCurrentLoad, isBookingRunning, getBookingWindow, estimatedTripHours, notificationLockHours };

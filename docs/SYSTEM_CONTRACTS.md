@@ -29,8 +29,8 @@ Legend: **app** = `src/App.jsx`, **admin** = `src/AdminPanel.jsx`, **fns** = `fu
 | A2 | An **advance** booking holds its driver from *(scheduled time − tonnage buffer)* until *(scheduled time + trip length)*; once its time arrives or loading starts it is "running" (A1). | same | same |
 | A3 | Tonnage buffer before an advance booking: capacity >16 t → 4 h, >8 t → 3 h, ≥3 t → 2 h, else 1 h. | app `notificationLockHours` (mirrored in fns + scan) | availability + equivalence invariants |
 | A4 | Trip length when a booking states none (`hours` is 0 on EVERY booking): `max(2, ceil(km/30)+1)` h, doubled for a round trip. | app `estimatedTripHours` (mirrored in scan) | availability invariant |
-| A5 | **Customer vehicle list** (`nearbyDrivers` in `CustomerBooking`): driver online, KYC Approved, not blacklisted, capacity ≥ load and ≤ load + 5,000 kg, a GPS fix not older than 5 min, within 30 km of pickup (50 km for advance), and **no availability conflict (A1/A2)**. | app `CustomerBooking` | invariants (customer booking) + browser test |
-| A6 | **Driver load list / broadcast** (`isDriverBroadcastEligible`): KYC Approved, not blacklisted, hasn't declined, capacity window (load … load + 5,000 kg), GPS fix within 24 h and within 30 km of pickup, no availability conflict. Online status is deliberately NOT checked. | app `isDriverBroadcastEligible` | text invariants |
+| A5 | **Customer vehicle list**: driver online, KYC Approved, not blacklisted, capacity ≥ load and ≤ load + 5,000 kg, a GPS fix not older than 5 min, within 30 km of pickup (50 km for advance), and **no availability conflict (A1/A2)**. | app `isDriverListableForCustomer` (called by `CustomerBooking`) | invariant "CUSTOMER VEHICLE-LIST RULE (A5), behaviour" (every condition tested alone) + browser test |
+| A6 | **Driver load list / broadcast** (`isDriverBroadcastEligible`): KYC Approved, not blacklisted, hasn't declined, capacity window (load … load + 5,000 kg), GPS fix within 24 h and within 30 km of pickup, no availability conflict. Online status is deliberately NOT checked. | app `isDriverBroadcastEligible` | invariant "DRIVER BROADCAST RULE (A6), behaviour" |
 | A7 | The server's ring (`onDirectRequestBroadcast` and the escalation waves) applies the same conflict rule through `hasLoadConflict` / `getBookingWindow` — a **mirrored copy**, fixed 2026-11-03 (it had the old `hours:0 → no window` bug and rang busy drivers). | fns | invariant "SERVER ring availability" (equivalence on 400 random cases) · scan finding `ring-busy-driver` |
 | A9 | **ONE ACCEPT**: a driver whose app is OPEN on its Home screen gets the in-app card + sound only (no ring push, no full-screen ring, no LoadWatcher target); a driver whose app is killed / in background / on another screen gets the ring. The app stamps `appForegroundAt` every 15 s while Home is open and clears it when hidden; the server treats a stamp under 30 s old as "open". No / old stamp = ring (fail-safe). | app `DriverApp` (`APP_OPEN_BEAT_MS`), fns `isAppOpenNow` in `onDirectRequestBroadcast` + escalation | invariant "ONE ACCEPT" + real-function run against fake Firebase |
 | A8 | Fewer than 3 vehicle categories nearby → the list climbs to the next tiers (`padVehicleCategories`). | app | text invariants |
@@ -41,12 +41,14 @@ Legend: **app** = `src/App.jsx`, **admin** = `src/AdminPanel.jsx`, **fns** = `fu
 |---|---|---|---|
 | F1 | Resolution order: Admin's saved rate for this vehicle+route → scaled by Admin's other-vehicle ratio on the same route → master formula. | app `resolveFareForCapacity` | invariants (fares) |
 | F2 | Route matching is by **coordinates first** (radius 25 km, growing to 60 km on long routes), place-name text only as fallback — for exact AND scaled rates. | app `getAdminRouteOverride`, `findExactAdminRoute`, `getRouteScaleRatio` | invariant "derived (scaled) Admin rate matches by COORDINATES" |
-| F3 | In-city = master formula × price corrector (5 % under Porter at 13 km); outstation = `priceOutstation` curve; a bigger vehicle is never cheaper than a smaller one. | app `calculateFare`, `priceOutstation`, `enforceMonotonicFares` | invariants |
+| F3 | In-city = master formula × price corrector (5 % under Porter at 13 km); outstation = `priceOutstation` curve; a bigger vehicle is never cheaper than a smaller one; fares never fall as diesel rises. | app `calculateFare`, `priceOutstation`, `enforceMonotonicFares` | invariant "FARE ENGINE, correctness + golden grid": Porter anchors, monotonic by tier / diesel / return %, and all 528 prices equal `scripts/golden/fares.json` |
+| F3b | **KNOWN OPEN ISSUE** (found 2026-11-03 by that check): outstation fares for vehicles above 5 t FALL between ~94 km and ~108–130 km (7 t up to ₹438, 18 t ₹1,204, 30 t ₹1,768, uncapped ₹2,364 cheaper). Owner decision pending; listed on every scan from `scripts/knownIssues.json`; the check caps the dip at its recorded size so it cannot get worse. | app `rawOutstationValue` | invariant (dip cap) · `scripts/knownIssues.json` |
 | F4 | Diesel baseline ₹98/L; live price in `settings/main.dieselPricePerLitre` adds `km × Δprice ÷ tier mileage` to every formula/scaled fare. | app `DIESEL_*`, `calculateFare` | invariants |
 | F5 | **Saved Admin rates follow diesel automatically**: each stores `dieselAtSave`; the root adds `km × (live − dieselAtSave) ÷ mileage`. Unstamped rates stand at `settings/main.ratesDieselBase`. | app `applyDieselToSavedRates` | invariant "saved Admin rates FOLLOW diesel" |
 | F6 | **Round trip** fare = one-way + return, where return = Admin's saved return rate for the swapped route, else one-way less Admin's `returnPct` (15). No halting charge. | app `CustomerBooking`, `completeBooking` | invariants |
 | F7 | A Round trip is **never** discounted a second time by the driver-side "Return Load" rule, and finishing one does not start Return-Load mode. | app `driverRespondBooking`, `completeBooking` | invariant "Round trip is never discounted a second time" |
 | F8 | Outlier fares (one vehicle priced wildly off its siblings) are corrected for display only. | app `findFareOutliers`, `interpolateOutlierFare` | invariants |
+| F10 | Admin rate resolution: a saved rate for this vehicle + zone + direction, matched by coordinates (text fallback), wins; km beyond its distance add its per-km; other direction / vehicle / far places never match; else the other vehicles' ratio scales the formula; else the plain formula. | app `getAdminRouteOverride`, `getRouteScaleRatio`, `resolveFareForTier` | invariant "ADMIN RATE RESOLUTION, behaviour" |
 | F9 | Admin Rate Calculator suggestion includes live diesel; an existing saved rate shows as it stands today. | admin `AdminRateCalculator` | invariant "diesel reaches EVERY fare" |
 
 ## 3. Booking input
@@ -63,8 +65,8 @@ Legend: **app** = `src/App.jsx`, **admin** = `src/AdminPanel.jsx`, **fns** = `fu
 | # | Rule | Where | Pinned by |
 |---|---|---|---|
 | T1 | The pickup OTP is made by the **server** when the booking turns Ongoing (`issuePickupOtp`); nobody's phone writes it; 10 wrong guesses lock the check for 10 min. | fns `issuePickupOtp`, `verifyPickupOtp`, `functions/otp.js`; rules `bookingOtps` | invariant "pickup OTP is made by the SERVER" · scan finding `otp-missing` |
-| T2 | Halting: free for `includedDays` (1 in city; `ceil(km/500)+1` outstation), then a fixed ₹/day per vehicle. | app `haltOf`, `includedDays`, `HALT_PER_DAY_BY_MAXKG` | invariants |
-| T3 | Bill = fare − return discount + halting + approved extras. | app `buildBill` | invariants |
+| T2 | Halting: free for `includedDays` (1 in city; `ceil(km/500)+1` outstation), then a fixed ₹/day per vehicle (500 if the vehicle is unknown); a started 24 h block counts as a day. | app `haltOf`, `includedDays`, `daysUsed`, `HALT_PER_DAY_BY_MAXKG` | invariant "TRIP MONEY, behaviour" |
+| T3 | Bill = fare − return discount + halting + ONLY the accepted extras. | app `buildBill` | invariant "TRIP MONEY, behaviour" |
 | T4 | A driver's own session may only LOWER the bonus; wallet / held credit are locked; withdrawals ≤ bonus; money taps cannot double-fire. | rules `drivers`; app `claimMoneyTap` | invariants + `scripts/rulesTest/` |
 | T5 | A Return-Load accept may only be a discount (fare never higher; originalFare = old fare). | rules `bookings` | `scripts/rulesTest/claim.mjs` |
 
@@ -80,6 +82,14 @@ unusable saved rates · withdrawals / recharges / unmatched requests / KYC waiti
 **deployment drift** (live build vs functions vs the latest commit, or built from uncommitted code).
 Change detection (against the previous scan): live build commit · functions commit · every rule/function/file fingerprint added/changed/removed · settings values.
 Results: `systemHealth/heartbeat` (tile), `systemHealth/changeFeed`, `systemHealth/baseline`, Change Log entries `scan-*`. No names or phone numbers are ever written.
+
+## 7. The guard and the tracking itself
+
+| # | Rule | Where | Pinned by |
+|---|---|---|---|
+| G1 | A push cannot skip the guard: `.githooks/pre-push` runs `npm run verify:invariants` (installed by `npm run build` / `npm install`); GitHub runs the same on every push (`.github/workflows/verify.yml`); `firebase deploy` of hosting/functions first runs it (and hosting rebuilds, so `dist` is never stale). | `.githooks`, `.github/workflows`, `firebase.json` predeploy, `scripts/installHooks.mjs` | invariant "FULL CODE INVENTORY" (the guard files are fingerprinted) |
+| G2 | EVERY tracked file is fingerprinted and the big sources are split into every top-level declaration; a comment edit changes nothing, any code edit changes exactly its unit. | `scripts/criteria.mjs` (`collectInventory`) | invariant "FULL CODE INVENTORY" |
+| G3 | Open issues the owner has been told about live in `scripts/knownIssues.json`; every scan lists them. | `scripts/knownIssues.json`, `vite.config.js`, scan | scan finding `known-*` |
 
 ---
 

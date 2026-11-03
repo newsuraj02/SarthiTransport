@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { execSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { collectCriteria } from "./scripts/criteria.mjs";
 
@@ -26,6 +26,8 @@ function buildStamp() {
         dirty: git("git status --porcelain --untracked-files=no").length > 0,
         builtAt: new Date().toISOString(),
         criteria,
+        // open issues the owner has been told about (scripts/knownIssues.json) -- the scan lists them every run so they are not forgotten
+        knownIssues: (() => { try { return JSON.parse(readFileSync(join(process.cwd(), "scripts/knownIssues.json"), "utf8")); } catch { return []; } })(),
       };
       mkdirSync(join(process.cwd(), outDir), { recursive: true });
       writeFileSync(join(process.cwd(), outDir, "build.json"), JSON.stringify(stamp, null, 1));

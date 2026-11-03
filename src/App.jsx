@@ -979,6 +979,20 @@ function driverIsOnTrip(driver, bookings, now = Date.now()) {
 }
 // ---- driver availability (end) ----
 
+// THE CUSTOMER VEHICLE-LIST RULE (pulled out of CustomerBooking 2026-11-03 so it can be tested): may this driver be shown as a bookable vehicle?
+// Online, KYC Approved, not blacklisted; vehicle capacity >= the load and at most VEHICLE_HEADROOM_KG above it; a pickup is known and the driver has
+// a GPS fix no older than NEARBY_DRIVER_STALE_MS (5 min) within bidRadiusKm (30 km current / 50 km advance) of it; and NO availability conflict --
+// a driver on a running trip (or inside an advance booking's buffer) is never shown. For an advance booking the conflict is checked against THAT slot.
+function isDriverListableForCustomer(d, { loadKg, pickupCoords, bidRadiusKm, advance = false, scheduledForValue = null, bookings = [], vehicleTypes = [], lang = "hi", now = Date.now() }) {
+  if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
+  const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
+  if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+  if (!pickupCoords || !d.lastKnownLocation) return false;
+  if (!d.lastKnownLocation.updatedAt || now - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
+  if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > bidRadiusKm) return false;
+  return !findDriverLoadConflict(d, advance ? { scheduledFor: scheduledForValue } : {}, bookings, vehicleTypes, lang);
+}
+
 // The single source of truth for "can this driver take this load" — used at
 // three points: hiding a load from a driver's list before they ever see it,
 // blocking the Send Quote button if they try anyway, and blocking Accept if
@@ -7611,20 +7625,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const nearbyDrivers = (() => {
     if (!scheduleReady) return []; // advance: nothing to match until the date AND time are chosen
     let withFare = drivers
-      .filter((d) => {
-        if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
-        const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-        if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
-        if (!pickupCoords || !d.lastKnownLocation) return false;
-        if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-        if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > bidRadiusKm) return false;
-        // On an Ongoing trip right now, or inside an upcoming advance-
-        // booking's protected window -- on the move, not actually
-        // available, shouldn't be shown as a bookable card at all.
-        // Advance: checked against THIS booking's own slot, not right now -- a driver free now but already committed
-        // during the requested window is unavailable for it.
-        return !findDriverLoadConflict(d, advance ? { scheduledFor: scheduledForValue } : {}, bookings, VEHICLES, lang);
-      })
+      .filter((d) => isDriverListableForCustomer(d, { loadKg, pickupCoords, bidRadiusKm, advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
       .map((d) => {
         const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
         const tier = findFareTier(capacityKg, fareTiers);
