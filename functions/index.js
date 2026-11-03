@@ -1682,6 +1682,9 @@ async function runDailyHealthCheck(label) {
     }
     if (settingsNow && prev.settings) changes.push(...diffSettings(prev.settings, settingsNow));
   } else notes.push("First scan: baseline recorded -- from the next scan on, every change is listed.");
+  // A deploy can change hundreds of code units at once -- show the first 25 and say how many more (the full set is in the baseline fingerprints).
+  const totalChanges = changes.length;
+  if (totalChanges > 25) { changes.length = 25; changes.push(`...and ${totalChanges - 25} more change(s) -- compare scripts/criteria.lock.json with the previous one for the full list`); }
   const pick = (o) => { const r = {}; for (const k of ["dieselPricePerLitre", "returnPct", "commissionPct", "bonusPct", "minWallet", "latestVersionCode", "ratesDieselBase"]) if (o && o[k] != null) r[k] = o[k]; return r; };
   await baseRef.set({
     at: FieldValue.serverTimestamp(), hostingCommit: hosting ? hosting.commit : (prev && prev.hostingCommit) || null, functionsCommit: functionsStamp ? functionsStamp.commit : (prev && prev.functionsCommit) || null,
@@ -1696,7 +1699,7 @@ async function runDailyHealthCheck(label) {
 
   const sevRank = { critical: 0, high: 1, info: 2 };
   findings.sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
-  const sum = summarize(findings, changes);
+  const sum = summarize(findings, changes, totalChanges);
   const passed = sum.status === "pass";
 
   // Always written, pass or fail -- the Live Dashboard tile reads this doc directly (public read, so NO names / phone numbers in it).
@@ -1720,7 +1723,7 @@ async function runDailyHealthCheck(label) {
   }
   if (changes.length) {
     await db.collection("bugs").doc(`scan-changes-${day}-${label}`).set({
-      title: `Scan ${label.replace("last", "").replace("Run", "")}: ${changes.length} change(s) detected in the app`, description: changes.join("\n").slice(0, 1500),
+      title: `Scan ${label.replace("last", "").replace("Run", "")}: ${totalChanges} change(s) detected in the app`, description: changes.join("\n").slice(0, 1500),
       severity: "low", status: "open", type: "config", area: "Morning/evening scan - change detection", foundAt: day, lastSeenAt: Date.now(),
     }, { merge: true });
   }

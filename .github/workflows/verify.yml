@@ -1,0 +1,20 @@
+# The guard, run by GitHub on EVERY push and pull request (owner 2026-11-03): a change that skipped the local guard still cannot go
+# unnoticed -- the commit shows a red cross on GitHub. Same two commands the owner's rule requires before every push.
+name: verify
+on:
+  push:
+  pull_request:
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Guard (invariants + criteria lock)
+        run: node scripts/verifyInvariants.mjs
+      - name: Build
+        run: npm run build

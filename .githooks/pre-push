@@ -1,0 +1,16 @@
+#!/bin/sh
+# Blocks a push that has not passed the guard (owner 2026-11-03: "a change nobody ran the guard for"). Installed automatically by
+# `npm run build` (prebuild -> scripts/installHooks.mjs) or `npm install` (prepare); do not bypass with --no-verify.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+echo "[pre-push] running the guard (npm run verify:invariants) ..."
+out=$(node scripts/verifyInvariants.mjs 2>&1)
+code=$?
+if [ "$code" -eq 0 ]; then
+  echo "[pre-push] guard passed."
+  exit 0
+fi
+echo "$out" | grep -v "^PASS"
+echo ""
+echo "[pre-push] BLOCKED: the guard failed (see the FAIL lines above)."
+echo "           If a rule was changed ON PURPOSE:  npm run criteria:accept -- \"why\"   then commit and push again."
+exit 1

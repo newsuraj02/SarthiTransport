@@ -9,6 +9,7 @@
 //   2. written into dist/build.json at build time (vite.config.js), which the morning/evening scan (functions/healthAudit.js) compares
 //      with the previous scan to tell Admin exactly which criteria changed in the LIVE app.
 import { readFileSync, existsSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 
@@ -72,6 +73,74 @@ export function extractExports(src) {
   return out;
 }
 
+// ---- COMPLETE CODE INVENTORY (owner 2026-11-03: "don't limit yourself to a hand-picked list") ---------------------------------------
+// Every tracked file is fingerprinted, and the big source files (App.jsx, AdminPanel.jsx, functions/index.js, firebaseClient.js ...) are split into
+// every top-level declaration (each component, hook, helper, constant) and every `exports.*` Cloud Function. Comments and blank lines are ignored, so
+// only real code changes count. Keys: `code:<path>` (whole file) or `code:<path>#<name>`.
+const BINARY = /\.(png|jpe?g|gif|webp|ico|jar|keystore|jks|woff2?|ttf|otf|mp3|mp4)$/i;
+const SKIP_FILES = new Set(["scripts/criteria.lock.json", "docs/CRITERIA_CHANGELOG.md", "functions/build.json", "scripts/package-lock.json", "package-lock.json", "functions/package-lock.json", "android/gradle/wrapper/gradle-wrapper.jar"]);
+const SPLIT = /\.(jsx?|mjs|cjs)$/;
+const SPLIT_MIN_LINES = 120; // smaller JS files are hashed whole
+
+function listFiles(root) {
+  let out = "";
+  try { out = execSync("git ls-files --cached --others --exclude-standard", { cwd: root, stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).toString(); } catch { return null; }
+  return out.split("\n").map((x) => x.trim()).filter((x) => x && !SKIP_FILES.has(x) && !x.endsWith("package-lock.json") && existsSync(join(root, x)));
+}
+// Drops comment-only lines, block comments, JSX comment lines and blank lines; trims trailing whitespace. Code is untouched.
+export function stripComments(text, file = "") {
+  const css = /\.css$/.test(file), markup = /\.(html|xml|svg)$/.test(file);
+  let t = text.replace(/\r\n/g, "\n");
+  if (markup) t = t.replace(/<!--[\s\S]*?-->/g, "");
+  if (css) t = t.replace(/\/\*[\s\S]*?\*\//g, "");
+  const out = []; let inBlock = false;
+  for (const raw of t.split("\n")) {
+    const l = raw.replace(/\s+$/, ""); const tr = l.trim();
+    if (inBlock) { if (tr.includes("*/")) inBlock = false; continue; }
+    if (!tr) continue;
+    if (!css && !markup) {
+      if (tr.startsWith("//")) continue;
+      if (tr.startsWith("/*") && !tr.startsWith("/**/")) { if (!tr.includes("*/")) inBlock = true; continue; }
+      if (/^\{\/\*.*\*\/\}$/.test(tr)) continue;
+    }
+    out.push(l);
+  }
+  return out.join("\n");
+}
+const DECL = /^(export\s+)?(default\s+)?(async\s+)?(?:function\*?\s+(\w+)|(?:const|let|var)\s+(\w+)|class\s+(\w+))/;
+// Splits a JS source into top-level units (declaration starts at column 0). Imports and anything unnamed are grouped into `imports` / `other`.
+export function splitUnits(src) {
+  const lines = src.replace(/\r\n/g, "\n").split("\n"); const marks = [];
+  lines.forEach((l, i) => {
+    let name = null; const m = l.match(DECL); const ex = l.match(/^exports\.(\w+)\s*=/);
+    if (m) name = m[4] || m[5] || m[6]; else if (ex) name = `fn:${ex[1]}`; else if (/^export\s+default\b/.test(l)) name = "default";
+    else if (/^import\b/.test(l)) name = "imports"; else if (/^(module\.exports|export\s*\{|export\s+\*)/.test(l)) name = "exportsList";
+    else if (/^[A-Za-z_$]/.test(l) && !/^(else|catch|finally|case|default)\b/.test(l)) name = "other";
+    if (name) marks.push([i, name]);
+  });
+  const buckets = {}; const seen = {};
+  for (let k = 0; k < marks.length; k++) {
+    const [start, name] = marks[k]; const end = k + 1 < marks.length ? marks[k + 1][0] : lines.length;
+    const text = lines.slice(start, end).join("\n");
+    let key = name; if (name !== "imports" && name !== "other" && name !== "exportsList") { seen[name] = (seen[name] || 0) + 1; if (seen[name] > 1) key = `${name}#${seen[name]}`; }
+    buckets[key] = (buckets[key] || "") + text + "\n";
+  }
+  return buckets;
+}
+export function collectInventory(root) {
+  const files = listFiles(root); if (!files) return { inventory: {}, error: "not a git checkout" };
+  const inv = {};
+  for (const f of files) {
+    let buf; try { buf = readFileSync(join(root, f)); } catch { continue; }
+    if (BINARY.test(f)) { inv[`code:${f}`] = createHash("sha256").update(buf).digest("hex").slice(0, 16); continue; }
+    const text = buf.toString("utf8");
+    const lineCount = text.split("\n").length;
+    if (SPLIT.test(f) && lineCount >= SPLIT_MIN_LINES) { for (const [k, v] of Object.entries(splitUnits(text))) inv[`code:${f}#${k}`] = sha(stripComments(v, f)); }
+    else inv[`code:${f}`] = sha(stripComments(text, f));
+  }
+  return { inventory: inv };
+}
+
 export function collectCriteria(root) {
   const out = {}; const missing = [];
   for (const [file, names] of Object.entries(BLOCKS)) {
@@ -81,5 +150,7 @@ export function collectCriteria(root) {
     if (file === "functions/index.js") for (const [k, v] of Object.entries(extractExports(src))) out[k] = sha(v);
   }
   for (const f of FILES) { const p = join(root, f); if (!existsSync(p)) { missing.push(f); continue; } out[`file:${f}`] = sha(readFileSync(p, "utf8").replace(/\r\n/g, "\n")); }
+  const { inventory } = collectInventory(root);
+  Object.assign(out, inventory);
   return { criteria: out, missing };
 }

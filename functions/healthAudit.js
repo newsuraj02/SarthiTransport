@@ -121,17 +121,24 @@ function auditLiveData({ drivers = [], bookings = [], settings = {}, adminRouteF
 
 // ---- change detection --------------------------------------------------------------------------------------------------------------
 function labelOf(key) {
-  const [kind, name] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
-  return kind === "app" ? `App rule ${name}` : kind === "fns" ? `Server rule ${name}` : kind === "fn" ? `Cloud Function ${name}` : kind === "file" ? `File ${name}` : key;
+  const i = key.indexOf(":"); const kind = key.slice(0, i); const name = key.slice(i + 1);
+  if (kind === "app") return `App rule ${name}`;
+  if (kind === "fns") return `Server rule ${name}`;
+  if (kind === "fn") return `Cloud Function ${name}`;
+  if (kind === "file") return `File ${name}`;
+  if (kind === "code") { const [path, unit] = name.split("#"); return unit ? `Code ${path} > ${unit}` : `Code ${path}`; }
+  return key;
 }
-// What differs between two criteria maps ({ key: hash }).
+// What differs between two criteria maps ({ key: hash }). The full code inventory (`code:...`) also contains every named rule / function /
+// file, so a change would be listed twice: the plain-English named entry wins and the duplicate `code:` entry is dropped.
 function diffCriteria(prev, cur) {
   const p = prev || {}, c = cur || {};
-  return {
-    added: Object.keys(c).filter((k) => !(k in p)).map(labelOf),
-    removed: Object.keys(p).filter((k) => !(k in c)).map(labelOf),
-    changed: Object.keys(c).filter((k) => k in p && p[k] !== c[k]).map(labelOf),
-  };
+  const keys = (pred) => Object.keys(pred === "added" ? c : pred === "removed" ? p : c).filter((k) => (pred === "added" ? !(k in p) : pred === "removed" ? !(k in c) : k in p && p[k] !== c[k]));
+  const out = { added: keys("added"), removed: keys("removed"), changed: keys("changed") };
+  const named = new Set([...out.added, ...out.removed, ...out.changed].filter((k) => !k.startsWith("code:")).map((k) => k.slice(k.indexOf(":") + 1)));
+  const dup = (k) => { if (!k.startsWith("code:")) return false; const rest = k.slice(5); const [path, unit] = rest.split("#"); return unit ? named.has(unit) : named.has(path); };
+  for (const g of Object.keys(out)) out[g] = out[g].filter((k) => !dup(k)).map(labelOf);
+  return out;
 }
 // Settings values that moved since the last scan, in plain words.
 function diffSettings(prev, cur) {
@@ -160,10 +167,10 @@ function auditDeployment({ hosting, functions, head, now = Date.now() }) {
   return f;
 }
 
-function summarize(findings, changes) {
+function summarize(findings, changes, totalChanges = changes.length) {
   const crit = findings.filter((x) => x.sev === "critical").length, high = findings.filter((x) => x.sev === "high").length, info = findings.filter((x) => x.sev === "info").length;
   const status = crit || high ? "fail" : "pass";
-  return { status, crit, high, info, changes: changes.length, text: status === "pass" ? `All checks passed${info ? ` (${info} note${info > 1 ? "s" : ""})` : ""}${changes.length ? ` - ${changes.length} change(s) detected` : ""}.` : `${crit} critical, ${high} high${info ? `, ${info} note(s)` : ""}${changes.length ? `; ${changes.length} change(s) detected` : ""}.` };
+  return { status, crit, high, info, changes: totalChanges, text: status === "pass" ? `All checks passed${info ? ` (${info} note${info > 1 ? "s" : ""})` : ""}${totalChanges ? ` - ${totalChanges} change(s) detected` : ""}.` : `${crit} critical, ${high} high${info ? `, ${info} note(s)` : ""}${totalChanges ? `; ${totalChanges} change(s) detected` : ""}.` };
 }
 
 module.exports = { isDriverRecord, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, driverIsBusyForCurrentLoad, isBookingRunning, getBookingWindow, estimatedTripHours, notificationLockHours };
