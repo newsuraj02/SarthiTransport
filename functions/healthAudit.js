@@ -60,6 +60,13 @@ function driverIsBusyForCurrentLoad(driver, bookings, capacityKg, now) {
   return false;
 }
 
+// Called the moment a trip is accepted: is the same driver ALSO on another running trip? Returns the other booking ids (empty = fine).
+// (Instant version of scan check "driver-double-booked"; pure so it can be tested on its own.)
+function otherRunningTripsOfDriver(booking, allOngoing, now) {
+  if (!booking || !isBookingRunning(booking, now)) return []; // a future advance trip is allowed to sit beside a running one
+  return (allOngoing || []).filter((b) => b && b.id !== booking.id && b.status === "Ongoing" && isDriverRecord(b, { mobile: booking.driverMobile, name: booking.driverName }) && isBookingRunning(b, now)).map((b) => b.id);
+}
+
 // ---- live-data audit ---------------------------------------------------------------------------------------------------------------
 // Each finding: { id, sev: "critical"|"high"|"info", area, title, detail }. `id` is stable so the Change Log entry for a problem that
 // persists is re-opened, not duplicated.
@@ -178,4 +185,4 @@ function summarize(findings, changes, totalChanges = changes.length) {
   return { status, crit, high, info, changes: totalChanges, text: status === "pass" ? `All checks passed${info ? ` (${info} note${info > 1 ? "s" : ""})` : ""}${totalChanges ? ` - ${totalChanges} change(s) detected` : ""}.` : `${crit} critical, ${high} high${info ? `, ${info} note(s)` : ""}${totalChanges ? `; ${totalChanges} change(s) detected` : ""}.` };
 }
 
-module.exports = { isDriverRecord, auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, driverIsBusyForCurrentLoad, isBookingRunning, getBookingWindow, estimatedTripHours, notificationLockHours };
+module.exports = { otherRunningTripsOfDriver, isDriverRecord, auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, driverIsBusyForCurrentLoad, isBookingRunning, getBookingWindow, estimatedTripHours, notificationLockHours };

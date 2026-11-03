@@ -90,6 +90,9 @@ Results: `systemHealth/heartbeat` (tile), `systemHealth/changeFeed`, `systemHeal
 | G1 | A push cannot skip the guard: `.githooks/pre-push` runs `npm run verify:invariants` (installed by `npm run build` / `npm install`); GitHub runs the same on every push (`.github/workflows/verify.yml`); `firebase deploy` of hosting/functions first runs it (and hosting rebuilds, so `dist` is never stale). | `.githooks`, `.github/workflows`, `firebase.json` predeploy, `scripts/installHooks.mjs` | invariant "FULL CODE INVENTORY" (the guard files are fingerprinted) |
 | G2 | EVERY tracked file is fingerprinted and the big sources are split into every top-level declaration; a comment edit changes nothing, any code edit changes exactly its unit. | `scripts/criteria.mjs` (`collectInventory`) | invariant "FULL CODE INVENTORY" |
 | G3 | Open issues the owner has been told about live in `scripts/knownIssues.json`; every scan lists them. | `scripts/knownIssues.json`, `vite.config.js`, scan | scan finding `known-*` |
+| G4 | **Instant check**: the moment a trip is accepted, a driver who is ALSO on another running trip raises a critical Change Log entry + a feed line within seconds (read-only, can never block the accept). | `auditTripAccepted`, `otherRunningTripsOfDriver` | invariant "INSTANT + HOURLY WATCH" |
+| G5 | **Hourly pulse** (:30 each hour) runs the same scan as 09:00/23:00; the tile treats it as a scan and turns amber after 2.5 h of silence (dead-man). | `hourlyHealthPulse`, `ScanStatusTile` | invariant "INSTANT + HOURLY WATCH" |
+| G6 | **Old-build warning**: the Admin tile compares the commit baked into THIS bundle with the live `/build.json` and says "this device runs an older build — tap Refresh". | `ScanStatusTile`, `vite.config.js` (`__BUNDLE_COMMIT__`) | invariant "INSTANT + HOURLY WATCH" |
 
 ---
 

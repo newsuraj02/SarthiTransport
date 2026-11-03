@@ -331,7 +331,7 @@ export function AdminPinLock({ adminPin, setAdminPin, lang, onUnlocked, onUseFal
 // MORNING / EVENING SCAN TILE (owner 2026-11-03: "inform Admin even the slightest of change"). Always visible on the Live Dashboard:
 // the latest scan (morning 9:00, night 23:00, or "Run scan now"), what it found, EVERY change it detected since the previous scan
 // (rules, functions, builds, settings), and which build is live vs the latest commit. Reads systemHealth/heartbeat (prop) and
-// systemHealth/changeFeed; written by functions/index.js runDailyHealthCheck. Never contains names or phone numbers.
+// systemHealth/changeFeed; written by functions/index.js runDailyHealthCheck (9:00, 23:00, hourly :30 pulse, Run scan now) and auditTripAccepted (instant). Never contains names or phone numbers.
 function ScanStatusTile({ systemHealth, lang }) {
   const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   const [open, setOpen] = useState(false);
@@ -339,15 +339,27 @@ function ScanStatusTile({ systemHealth, lang }) {
   const [runMsg, setRunMsg] = useState("");
   const [feed, setFeed] = useState([]);
   useEffect(() => subscribeDoc("systemHealth", "changeFeed", (d) => setFeed(Array.isArray(d?.entries) ? d.entries : [])), []);
+  // Is THIS device running the newest deployed build? (2026-11-03, "the app seems to get back to its older self": an old cached bundle looks
+  // exactly like a lost fix.) The bundle carries its own commit (vite `define`); the live /build.json is fetched fresh.
+  const [liveCommit, setLiveCommit] = useState(null);
+  useEffect(() => {
+    let off = false;
+    fetch(`/build.json?_=${Date.now()}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (!off && j && j.commit) setLiveCommit(j.commit); }).catch(() => {});
+    return () => { off = true; };
+  }, []);
+  const myCommit = typeof __BUNDLE_COMMIT__ !== "undefined" ? __BUNDLE_COMMIT__ : null;
+  const olderBuild = !!(liveCommit && myCommit && myCommit !== "unknown" && liveCommit !== "unknown" && liveCommit !== myCommit);
   const atOf = (k) => (systemHealth?.[`${k}At`]?.toMillis ? systemHealth[`${k}At`].toMillis() : null);
-  const latest = ["lastMorningRun", "lastNightRun", "lastManualRun"].map((k) => ({ k, at: atOf(k) })).filter((r) => r.at).sort((a, b) => b.at - a.at)[0] || null;
+  const latest = ["lastMorningRun", "lastNightRun", "lastManualRun", "lastPulseRun"].map((k) => ({ k, at: atOf(k) })).filter((r) => r.at).sort((a, b) => b.at - a.at)[0] || null;
   const status = latest ? systemHealth[`${latest.k}Status`] : null;
   const summary = latest ? systemHealth[`${latest.k}Summary`] : "";
   const findings = latest && Array.isArray(systemHealth[`${latest.k}Findings`]) ? systemHealth[`${latest.k}Findings`] : [];
   const changes = latest && Array.isArray(systemHealth[`${latest.k}Changes`]) ? systemHealth[`${latest.k}Changes`] : [];
   const notes = latest && Array.isArray(systemHealth[`${latest.k}Notes`]) ? systemHealth[`${latest.k}Notes`] : [];
   const staleHours = latest ? (Date.now() - latest.at) / 3600000 : null;
-  const stale = staleHours == null || staleHours > 26;
+  // The hourly pulse is the dead-man signal: once it has ever run, 2.5 h of silence means the scan has stopped; before that, 26 h (morning/night only).
+  const pulseSeen = !!atOf("lastPulseRun");
+  const stale = staleHours == null || staleHours > (pulseSeen ? 2.5 : 26);
   const color = stale ? C.marigoldDeep : status === "pass" ? C.success : C.safety;
   const when = latest ? new Date(latest.at).toLocaleString(lang === "mr" ? "mr-IN" : lang === "hi" ? "hi-IN" : "en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   const label = !latest ? T("Morning/evening scan — hasn't run yet", "सुबह/शाम स्कैन — अभी तक नहीं चला", "सकाळ/संध्याकाळ स्कॅन — अजून चालले नाही")
@@ -372,6 +384,11 @@ function ScanStatusTile({ systemHealth, lang }) {
         </div>
         <span className="text-[10px] font-bold" style={{ color: C.inkSoft }}>{open ? T("Hide", "छुपाएँ", "लपवा") : T("Details", "विवरण", "तपशील")}</span>
       </button>
+      {olderBuild && (
+        <div data-scan-older-build className="mt-2 rounded-lg px-2 py-1.5 text-[11px] font-bold" style={{ background: "#FFF4D6", color: C.ink, border: `1px solid ${C.marigoldDeep}` }}>
+          {T(`This device is running an OLDER build (${myCommit}) than the live app (${liveCommit}). Tap Refresh (top right) to load the latest.`, `इस डिवाइस पर पुराना बिल्ड (${myCommit}) चल रहा है, लाइव ऐप (${liveCommit}) नया है। नवीनतम के लिए Refresh दबाएँ।`, `या डिव्हाइसवर जुना बिल्ड (${myCommit}) चालू आहे, लाइव्ह अॅप (${liveCommit}) नवीन आहे. नवीनतम साठी Refresh दाबा.`)}
+        </div>
+      )}
       {open && (
         <div className="mt-2 space-y-2">
           {findings.length > 0 && (

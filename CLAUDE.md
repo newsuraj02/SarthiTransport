@@ -16,6 +16,11 @@ The memory is IN THE REPO, and it is enforced by machines, not by good intention
    (rule/function/file fingerprints from the live `/build.json`, settings, builds). Shown on the Live Dashboard scan tile + Change Log. Needs
    `firebase deploy --only functions` AND hosting (the build stamp `dist/build.json` is written by `vite.config.js`; `functions/build.json` by
    `scripts/writeFunctionsStamp.mjs` before every functions deploy).
+   Also (owner 2026-11-03, "dont limit yourself"): an HOURLY pulse (`hourlyHealthPulse`, :30) runs the same scan, so a problem or change shows within the hour and
+   the tile turns amber after 2.5 h of silence; `auditTripAccepted` raises a critical Change Log entry + feed line within seconds when a driver is accepted onto a
+   second running trip; the Admin tile warns when THIS device runs an older build than the live `/build.json` (`__BUNDLE_COMMIT__`). Known open issues the owner was
+   told about live in `scripts/knownIssues.json` and are listed on every scan. NOT built (needs the owner): phone push / WhatsApp to Admin (a WhatsApp template must
+   be approved in MSG91; the Admin app has no FCM, a native push needs a build).
 4. **Bug rule:** when a bug is found, first add a check that FAILS on the old code, then fix it (done for the busy-driver bug: the check fails on
    the old code, passes on the new).
 5. **Mirrored code** (app ↔ `functions/`): the checks compare the copies on hundreds of random situations; never edit one copy alone.

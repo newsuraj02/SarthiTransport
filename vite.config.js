@@ -35,7 +35,12 @@ function buildStamp() {
   };
 }
 
+// The commit this bundle was built from, baked INTO the JavaScript so the running app can compare itself with the live /build.json
+// (Admin scan tile: "this device runs an older build -- tap Refresh").
+const bundleCommit = (() => { try { return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || "unknown"; } catch { return "unknown"; } })();
+
 export default defineConfig({
+  define: { __BUNDLE_COMMIT__: JSON.stringify(bundleCommit) },
   plugins: [react(), buildStamp()],
   server: {
     host: true,

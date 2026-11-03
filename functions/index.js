@@ -4,7 +4,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const crypto = require("crypto");
 const { ringWeightText } = require("./ringText");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
-const { auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning } = require("./healthAudit");
+const { auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning, otherRunningTripsOfDriver: auditOtherRunningTrips } = require("./healthAudit");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -1691,12 +1691,7 @@ async function runDailyHealthCheck(label) {
     at: FieldValue.serverTimestamp(), hostingCommit: hosting ? hosting.commit : (prev && prev.hostingCommit) || null, functionsCommit: functionsStamp ? functionsStamp.commit : (prev && prev.functionsCommit) || null,
     criteria: hosting ? hosting.criteria : (prev && prev.criteria) || {}, settings: settingsNow ? pick(settingsNow) : (prev && prev.settings) || {},
   });
-  if (changes.length) {
-    const feedRef = db.collection("systemHealth").doc("changeFeed");
-    const feedSnap = await feedRef.get();
-    const old = feedSnap.exists ? feedSnap.data().entries || [] : [];
-    await feedRef.set({ entries: [...changes.map((text) => ({ at: Date.now(), scan: label, text: text.slice(0, 300) })), ...old].slice(0, 80) });
-  }
+  await pushChangeFeed(changes, label);
 
   const sevRank = { critical: 0, high: 1, info: 2 };
   findings.sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
@@ -1731,11 +1726,48 @@ async function runDailyHealthCheck(label) {
   return { status: passed ? "pass" : "fail", summary: sum.text, findings: findings.length, changes: changes.length };
 }
 
+// One place that adds lines to the Admin's "Recent changes" feed (systemHealth/changeFeed), newest first, capped at 80.
+async function pushChangeFeed(texts, label) {
+  if (!texts.length) return;
+  const feedRef = db.collection("systemHealth").doc("changeFeed");
+  const feedSnap = await feedRef.get();
+  const old = feedSnap.exists ? feedSnap.data().entries || [] : [];
+  await feedRef.set({ entries: [...texts.map((text) => ({ at: Date.now(), scan: label, text: String(text).slice(0, 300) })), ...old].slice(0, 80) });
+}
+
+// INSTANT CHECK (owner 2026-11-03: "inform Admin even the slightest of change"): the moment a trip is accepted, make sure that driver is not
+// ALSO on another running trip. If they are, Admin gets a red Change Log entry + a line in the Recent-changes feed within seconds, not at the
+// next scan. Read-only on bookings/drivers; a failure here can never block an accept.
+exports.auditTripAccepted = onDocumentUpdated("bookings/{bookingId}", async (event) => {
+  try {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after) return;
+    if (!(after.status === "Ongoing" && before.status !== "Ongoing")) return; // only the moment a trip is accepted
+    const booking = { id: event.params.bookingId, ...after };
+    const ongoing = (await db.collection("bookings").where("status", "==", "Ongoing").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+    const others = auditOtherRunningTrips(booking, ongoing, Date.now());
+    if (!others.length) return;
+    const day = new Date().toISOString().slice(0, 10);
+    await db.collection("bugs").doc(`live-double-booked-${booking.id}`.slice(0, 120)).set({
+      title: "A driver was just given a second trip while already on one", severity: "critical", status: "open", type: "bug", area: "Instant check - availability",
+      description: `Booking ${booking.id} was accepted by a driver who is already on running trip(s): ${others.slice(0, 5).join(", ")}. The "driver is busy" rule did not stop it (an old app version, or a rule fault).`,
+      foundAt: day, lastSeenAt: Date.now(),
+    }, { merge: true });
+    await pushChangeFeed([`ALERT: booking ${booking.id} accepted by a driver already on ${others.length} other running trip(s)`], "instant");
+  } catch (e) { console.error("[auditTripAccepted]", e.message); }
+});
+
 const SCAN_OPTIONS = { schedule: null, timeZone: "Asia/Kolkata", region: "asia-south1", timeoutSeconds: 300, memory: "512MiB" };
 exports.dailyHealthCheckMorning = onSchedule({ ...SCAN_OPTIONS, schedule: "0 9 * * *" }, async () => {
   await runDailyHealthCheck("lastMorningRun");
 });
 
+// Hourly pulse (same scan, :30 past each hour): a problem or a change reaches the Admin screen within the hour instead of waiting for 9:00 / 23:00.
+// Also the "dead-man" signal: the tile turns amber if no scan of any kind has run for 2.5 hours.
+exports.hourlyHealthPulse = onSchedule({ ...SCAN_OPTIONS, schedule: "30 * * * *" }, async () => {
+  await runDailyHealthCheck("lastPulseRun");
+});
 exports.dailyHealthCheckNight = onSchedule({ ...SCAN_OPTIONS, schedule: "0 23 * * *" }, async () => {
   await runDailyHealthCheck("lastNightRun");
 });
