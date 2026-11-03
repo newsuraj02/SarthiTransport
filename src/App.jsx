@@ -934,21 +934,50 @@ function notificationLockHours(vehicleCapacityKg) {
   return 1;
 }
 
-// The real-world time window a driver is committed to once a load is
-// accepted: starts at the scheduled time (advance) or the moment of
-// acceptance (immediate, via acceptedAt — falls back to createdAt for
-// older bookings from before that field existed), and runs for the
-// allotted hours. Used to stop a driver being double-booked into two
-// overlapping commitments (see findDriverLoadConflict).
-function getBookingWindow(b) {
-  if (!b.hours) return null;
+// ---- driver availability (start) ----
+// DRIVER AVAILABILITY -- "is this driver free to take / be shown for a load right now?" (owner 2026-11-03: "a vehicle already on the trip
+// is showing in the vehicle list"). ROOT CAUSE of that bug: this used to return null for any booking with `hours` of 0, and EVERY
+// booking is created with hours: 0 (auto-bids carry no loading-hours), so no driver was ever treated as busy -- not in the
+// customer's vehicle list, not in the driver's own load list, not when accepting a second trip. Fixed here and pinned by behaviour
+// checks in verifyInvariants.mjs (scripts/ also keeps a copy of the same rule for the morning/evening scan in functions/).
+//
+// A rough length for a trip that did not state its own hours: ~30 km/h on average incl. loading, never under 2 h; doubled for a
+// round trip. Only used to decide how long AFTER its start an ADVANCE booking keeps the driver committed.
+function estimatedTripHours(b) {
+  const km = Number(b?.distance) || 0;
+  const oneWay = Math.max(2, Math.ceil(km / 30) + 1);
+  return b?.returnTrip ? oneWay * 2 : oneWay;
+}
+// A booking is RUNNING (holds its driver until it is Completed/Cancelled) when it is an immediate booking (the moment it is accepted),
+// or an advance booking whose loading has begun or whose scheduled time has arrived.
+function isBookingRunning(b, now = Date.now()) {
+  if (!b.scheduledFor) return true;
+  if (b.loadingStartedAt) return true;
+  const t = parseScheduledFor(b.scheduledFor).getTime();
+  return Number.isFinite(t) && t <= now;
+}
+// The real-world time window a driver is committed to once a load is accepted: starts at the scheduled time (advance) or when it was
+// posted/accepted (immediate -- falls back to "now" while the server timestamps are still pending), and runs for the allotted hours
+// (or the estimate above). A RUNNING booking never ends before one hour from now: the driver stays committed until it is finished,
+// however long it overruns. Used to stop a driver being double-booked (see findDriverLoadConflict).
+function getBookingWindow(b, now = Date.now()) {
   let start;
   if (b.scheduledFor) start = parseScheduledFor(b.scheduledFor);
   else if (b.acceptedAt?.toMillis) start = new Date(b.acceptedAt.toMillis());
   else if (b.createdAt?.toMillis) start = new Date(b.createdAt.toMillis());
-  else return null;
-  return { start, end: new Date(start.getTime() + b.hours * 60 * 60 * 1000) };
+  else start = new Date(now);
+  if (!Number.isFinite(start.getTime())) return null;
+  const hours = Number(b.hours) > 0 ? Number(b.hours) : estimatedTripHours(b);
+  let end = start.getTime() + hours * 60 * 60 * 1000;
+  if (isBookingRunning(b, now) && end < now + 60 * 60 * 1000) end = now + 60 * 60 * 1000;
+  return { start, end: new Date(end) };
 }
+// True when this driver is on a trip RIGHT NOW (an Ongoing booking that is running) -- used to keep them off the customer's map and
+// vehicle list. (Future advance bookings are handled by the window + buffer in findDriverLoadConflict instead.)
+function driverIsOnTrip(driver, bookings, now = Date.now()) {
+  return (bookings || []).some((b) => b.status === "Ongoing" && isDriverRecord(b, driver) && isBookingRunning(b, now));
+}
+// ---- driver availability (end) ----
 
 // The single source of truth for "can this driver take this load" — used at
 // three points: hiding a load from a driver's list before they ever see it,
@@ -7687,6 +7716,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const mapEntries = !(weightReady && locationsReady && !sameLocation) ? null
     : selectedEntry ? nearbyDrivers.filter((e) => e.tier.maxKg === selectedEntry.tier.maxKg) : nearbyDrivers;
   const mapFixedDrivers = mapEntries ? mapEntries.map((e) => e.driver) : null;
+  // A truck that is on a trip right now is not "available nearby" -- keep it off the map before a weight is typed too (the vehicle list already excludes it).
+  const mapAvailableDrivers = (drivers || []).filter((d) => !driverIsOnTrip(d, bookings));
   const nearestOfType = selectedEntry && mapEntries?.length ? mapEntries.reduce((best, e) => (e.km < best.km ? e : best), mapEntries[0]) : null;
   const mapHighlight = nearestOfType
     ? { id: nearestOfType.id, label: (() => { const m = etaMinutes(nearestOfType.km); return lang === "en" ? `${m} min` : lang === "mr" ? `${m} मिनिट` : `${m} मिनट`; })() }
@@ -7758,7 +7789,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       {/* Owner 2026-10-31: an evident line between the map and the form (3 px navy rule + a soft shadow below it).
           Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched. */}
       <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
-        <NearbyVehiclesMap drivers={drivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
+        <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
           activeOnly={weightTyped} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
       </div>
       {bookedMsg && (
