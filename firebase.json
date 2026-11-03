@@ -3,7 +3,7 @@
     "site": "sarthi-transport-74865",
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "!**/.well-known/**", "**/node_modules/**"],
-    "predeploy": ["node scripts/verifyInvariants.mjs", "npm run build"],
+    "predeploy": ["npm run verify:quiet", "npm run build"],
     "rewrites": [
       {
         "source": "**",
@@ -40,7 +40,7 @@
       "source": "functions",
       "codebase": "default",
       "runtime": "nodejs22",
-      "predeploy": ["node scripts/verifyInvariants.mjs", "node scripts/writeFunctionsStamp.mjs"]
+      "predeploy": ["npm run verify:quiet", "npm run stamp:functions"]
     }
   ]
 }

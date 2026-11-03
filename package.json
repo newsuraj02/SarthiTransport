@@ -11,6 +11,8 @@
     "import:mh-rates": "node scripts/importMaharashtraDefaults.mjs",
     "verify:mh-rates": "node scripts/importMaharashtraDefaults.mjs --verify",
     "verify:invariants": "node scripts/verifyInvariants.mjs",
+    "verify:quiet": "node scripts/verifyInvariants.mjs --quiet",
+    "stamp:functions": "node scripts/writeFunctionsStamp.mjs",
     "migrate:fare-tiers": "node scripts/migrateFareTierBoundaries.mjs",
     "verify:fare-tiers": "node scripts/migrateFareTierBoundaries.mjs --verify",
     "revert:diesel-driver-rates": "node scripts/revertDieselDriverRates.mjs",

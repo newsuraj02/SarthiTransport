@@ -83,9 +83,14 @@ const SPLIT = /\.(jsx?|mjs|cjs)$/;
 const SPLIT_MIN_LINES = 120; // smaller JS files are hashed whole
 
 function listFiles(root) {
-  let out = "";
-  try { out = execSync("git ls-files --cached --others --exclude-standard", { cwd: root, stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).toString(); } catch { return null; }
-  return out.split("\n").map((x) => x.trim()).filter((x) => x && !SKIP_FILES.has(x) && !x.endsWith("package-lock.json") && existsSync(join(root, x)));
+  const git = (args) => execSync(`git ls-files ${args}`, { cwd: root, stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).toString().split("\n").map((x) => x.trim()).filter(Boolean);
+  let tracked, fresh;
+  try { tracked = git("--cached"); fresh = git("--others --exclude-standard"); } catch { return null; }
+  // Tracked files always count. A brand-new, not-yet-committed file counts only if it sits in a source folder: stray files in the project root
+  // (a Windows `> 100m` redirect, firebase-debug.log, .firebase/ cache ...) must never fail someone's deploy (2026-11-03).
+  const SOURCE_DIRS = /^(src|functions|scripts|android|public|docs|\.githooks|\.github)\//;
+  const all = [...new Set([...tracked, ...fresh.filter((x) => SOURCE_DIRS.test(x) && !/\s/.test(x))])];
+  return all.filter((x) => !SKIP_FILES.has(x) && !x.endsWith("package-lock.json") && existsSync(join(root, x)));
 }
 // Drops comment-only lines, block comments, JSX comment lines and blank lines; trims trailing whitespace. Code is untouched.
 export function stripComments(text, file = "") {

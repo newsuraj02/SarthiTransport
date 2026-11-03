@@ -27,3 +27,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-03 -- Re-accept after merging remote: handwritten note 2026-11-03 changes (admin Round trip column, mic + same-city suggestions, road km, no vehicle circle, bigger Round trip bar, driver bulk messages, Change Log old entries, Alerts in Notify)
 - changed (15): file:functions/addressLang.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/addressLang.js#createAddressService, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminBugTracker, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#imports, code:src/App.jsx#NearbyDriverMarker, code:src/App.jsx#LocationField, code:src/App.jsx#CustomerBooking, code:src/App.jsx#BookedVehiclePanel
+
+## 2026-11-03 -- Windows deploy fix: stray root files (100m, firebase-debug.log, .firebase/) no longer enter the code inventory; firebase predeploy uses npm scripts (verify:quiet, stamp:functions); quiet verify mode
+- changed (6): file:firebase.json, code:firebase.json, code:package.json, code:scripts/criteria.mjs#listFiles, code:scripts/verifyInvariants.mjs#checks, code:scripts/verifyInvariants.mjs#other
