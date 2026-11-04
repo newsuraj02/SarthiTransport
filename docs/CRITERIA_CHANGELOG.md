@@ -53,3 +53,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-04 -- In-app Pickup/Drop mic: native speech plugin (@capacitor-community/speech-recognition) + src/speechInput.js engine chain + VoiceListeningSheet UI; cap sync gradle files; contract B6
 - changed (9): code:CLAUDE.md, code:android/app/capacitor.build.gradle, code:android/capacitor.settings.gradle, code:docs/SYSTEM_CONTRACTS.md, code:package.json, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#LocationField, code:src/index.css
 - added (2): code:src/App.jsx#VoiceListeningSheet, code:src/speechInput.js
+
+## 2026-11-04 -- Admin Live Map: trip routes + ride detail card (additive; AdminLiveMap GPS code untouched); contract M1; held for owner go-ahead before push
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminLiveMap
+- added (7): code:src/AdminPanel.jsx#TRIP_ROUTE_CACHE, code:src/AdminPanel.jsx#MAX_TRIP_ROUTES_ON_MAP, code:src/AdminPanel.jsx#tripsOnMap, code:src/AdminPanel.jsx#useTripRoute, code:src/AdminPanel.jsx#tripPhase, code:src/AdminPanel.jsx#AdminTripRouteLine, code:src/AdminPanel.jsx#AdminTripDetailCard

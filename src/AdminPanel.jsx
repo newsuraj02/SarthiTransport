@@ -75,9 +75,91 @@ function AdminTripRoad({ driver, booking, mapsOk, mapsKey }) {
   );
 }
 
+// TRIP ROUTES + DETAILS ON THE LIVE MAP (owner 2026-11-04: "show the route for the trip and tapping it will show the details of the ride").
+// Added as NEW pieces beside AdminLiveMap; the frozen GPS / marker code inside AdminLiveMap is not edited -- AdminLiveMap only mounts these.
+// Every running trip (Ongoing, not a future advance) is drawn pickup -> drop along the road (dashed grey-blue until loading starts, solid orange
+// once the trip is under way), with a green P and a red D; tapping the route, either marker or the truck opens the ride card below the map.
+const TRIP_ROUTE_CACHE = new Map(); // "lat,lng|lat,lng" -> path (one Directions call per route per session)
+const MAX_TRIP_ROUTES_ON_MAP = 25;
+function tripsOnMap(bookings) {
+  return (bookings || []).filter((b) => b.status === "Ongoing" && [b.pickupLat, b.pickupLng, b.dropLat, b.dropLng].every((v) => v != null && Number.isFinite(Number(v))) && (!b.scheduledFor || b.loadingStartedAt)).slice(0, MAX_TRIP_ROUTES_ON_MAP);
+}
+function useTripRoute(from, to, isLoaded) {
+  const key = from && to ? `${from.lat},${from.lng}|${to.lat},${to.lng}` : null;
+  const [path, setPath] = useState(() => (key && TRIP_ROUTE_CACHE.get(key)) || null);
+  useEffect(() => {
+    if (!key || !isLoaded || !window.google?.maps) return undefined;
+    if (TRIP_ROUTE_CACHE.has(key)) { setPath(TRIP_ROUTE_CACHE.get(key)); return undefined; }
+    let cancelled = false;
+    new window.google.maps.DirectionsService().route({ origin: from, destination: to, travelMode: window.google.maps.TravelMode.DRIVING }, (result, status) => {
+      if (cancelled) return;
+      if (status === "OK" && result?.routes?.[0]) { const pts = result.routes[0].overview_path.map((q) => ({ lat: q.lat(), lng: q.lng() })); TRIP_ROUTE_CACHE.set(key, pts); setPath(pts); }
+    });
+    return () => { cancelled = true; };
+  }, [key, isLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  return path;
+}
+function tripPhase(b) { return b.returnStartedAt ? "returning" : b.loadingStartedAt ? "running" : "toPickup"; }
+function AdminTripRouteLine({ booking, driver, selected, onSelect, mapsOk }) {
+  const from = { lat: Number(booking.pickupLat), lng: Number(booking.pickupLng) };
+  const to = { lat: Number(booking.dropLat), lng: Number(booking.dropLng) };
+  const road = useTripRoute(from, to, mapsOk);
+  const path = road || [from, to]; // straight line until (or if never) the road route arrives
+  const started = !!booking.loadingStartedAt;
+  const pin = (fill, text) => ({ icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: selected ? 11 : 9, fillColor: fill, fillOpacity: 1, strokeColor: "#FFFFFF", strokeWeight: 2 }, label: { text, color: "#FFFFFF", fontSize: "10px", fontWeight: "800" } });
+  const pos = driver?.lastKnownLocation && driver.lastKnownLocation.lat != null ? { lat: driver.lastKnownLocation.lat, lng: driver.lastKnownLocation.lng } : null;
+  return (
+    <>
+      <PolylineF path={path} onClick={() => onSelect(booking.id)} options={{ strokeColor: started ? "#E8590C" : "#7C8DB5", strokeOpacity: started ? 0.9 : 0.8, strokeWeight: selected ? 7 : 4, zIndex: selected ? 5 : 2, clickable: true }} />
+      <PolylineF path={path} onClick={() => onSelect(booking.id)} options={{ strokeColor: "#000000", strokeOpacity: 0.01, strokeWeight: 22, zIndex: 1, clickable: true }} />
+      <MarkerF position={from} onClick={() => onSelect(booking.id)} title={booking.pickup || ""} {...pin("#1B873F", "P")} zIndex={selected ? 9 : 4} />
+      <MarkerF position={to} onClick={() => onSelect(booking.id)} title={booking.drop || ""} {...pin("#C62828", "D")} zIndex={selected ? 9 : 4} />
+      {pos && <MarkerF position={pos} onClick={() => onSelect(booking.id)} zIndex={20} icon={{ path: window.google.maps.SymbolPath.CIRCLE, scale: 20, fillColor: "#000000", fillOpacity: 0.01, strokeOpacity: 0 }} />}
+    </>
+  );
+}
+function AdminTripDetailCard({ booking, driver, lang, onClose }) {
+  const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
+  const phase = tripPhase(booking);
+  const phaseLabel = phase === "returning" ? T("Returning to pickup", "पिकअप पर वापस आ रहे हैं", "पिकअपकडे परत येत आहे") : phase === "running" ? T("Trip in progress", "ट्रिप चल रही है", "ट्रिप सुरू आहे") : T("Heading to pickup", "पिकअप की ओर जा रहे हैं", "पिकअपकडे जात आहे");
+  const loc = driver?.lastKnownLocation && driver.lastKnownLocation.lat != null ? driver.lastKnownLocation : null;
+  const target = phase === "toPickup" ? { lat: Number(booking.pickupLat), lng: Number(booking.pickupLng) } : phase === "returning" ? { lat: Number(booking.pickupLat), lng: Number(booking.pickupLng) } : { lat: Number(booking.dropLat), lng: Number(booking.dropLng) };
+  const toGoKm = loc ? haversineKm(loc.lat, loc.lng, target.lat, target.lng) : null;
+  const weightKg = Number(booking.weight) || 0;
+  const row = (label, value) => (value ? <div className="text-[11px] mb-0.5" style={{ color: C.inkSoft }}><b style={{ color: C.ink }}>{label}:</b> {value}</div> : null);
+  const spec = driver?.vehicleSpec || {};
+  const accepted = booking.acceptedAt?.toDate ? booking.acceptedAt.toDate() : null;
+  return (
+    <div data-trip-card className="absolute left-2 right-2 bottom-2 rounded-xl p-3 shadow-md max-h-[55%] overflow-y-auto" style={{ background: C.paper, border: `1.5px solid ${C.line}`, zIndex: 30 }}>
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="min-w-0">
+          <div className="text-xs font-extrabold" style={{ color: C.ink }}>{T("Ride", "राइड", "राइड")} #{booking.id} {booking.returnTrip && <ReturnTripTag lang={lang} />}</div>
+          <div className="text-[11px] font-bold" style={{ color: phase === "toPickup" ? "#7C8DB5" : "#E8590C" }}>● {phaseLabel}{toGoKm != null ? ` · ${toGoKm < 10 ? toGoKm.toFixed(1) : Math.round(toGoKm)} ${T("km to go (straight line)", "किमी बाकी (सीधी दूरी)", "किमी बाकी (सरळ अंतर)")}` : ""}</div>
+        </div>
+        <button type="button" data-trip-card-close onClick={onClose} className="shrink-0 text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: "#E5EAF2", color: C.ink }}>{T("Close", "बंद करें", "बंद करा")}</button>
+      </div>
+      {row(T("Pickup", "पिकअप", "पिकअप"), booking.pickup)}
+      {row(T("Drop", "ड्रॉप", "ड्रॉप"), booking.drop)}
+      {row(T("Driver", "ड्राइवर", "ड्रायव्हर"), [booking.driverName, booking.driverMobile].filter(Boolean).join(" · "))}
+      {row(T("Vehicle", "गाड़ी", "गाडी"), [spec.vehicleName, spec.vehicleNumber, spec.capacityKg ? `${spec.capacityKg}kg` : ""].filter(Boolean).join(" · "))}
+      {row(T("Customer", "ग्राहक", "ग्राहक"), [booking.customerName, booking.customerMobile].filter(Boolean).join(" · "))}
+      {row(T("Weight", "वज़न", "वजन"), weightKg ? (weightKg >= 1000 ? `${weightKg / 1000} ton (${weightKg}kg)` : `${weightKg}kg`) : "")}
+      {row(T("Distance", "दूरी", "अंतर"), booking.distance ? `${booking.distance} km` : "")}
+      {row(T("Fare", "भाड़ा", "भाडे"), booking.fare ? `${fmt(booking.fare)}${booking.returnTrip && booking.oneWayFare != null && booking.returnFare != null ? ` (${fmt(booking.oneWayFare)} + ${T("return", "वापसी", "परतीचे")} ${fmt(booking.returnFare)})` : ""}` : "")}
+      {row(T("Accepted", "स्वीकार किया", "स्वीकारले"), accepted ? accepted.toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "")}
+      {row(T("Scheduled for", "निर्धारित", "ठरलेले"), booking.scheduledFor)}
+      <div className="flex gap-2 mt-2">
+        {booking.driverMobile && <a href={`tel:+91${booking.driverMobile}`} className="flex-1 text-center text-[11px] font-bold py-2 rounded-lg text-white" style={{ background: C.metallicGreen }}>📞 {T("Call driver", "ड्राइवर को कॉल", "ड्रायव्हरला कॉल")}</a>}
+        {booking.customerMobile && <a href={`tel:+91${booking.customerMobile}`} className="flex-1 text-center text-[11px] font-bold py-2 rounded-lg text-white" style={{ background: C.navy }}>📞 {T("Call customer", "ग्राहक को कॉल", "ग्राहकाला कॉल")}</a>}
+      </div>
+    </div>
+  );
+}
+
 function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
   const { isLoaded, hasKey } = useGoogleMaps();
   const [mapInstance, setMapInstance] = useState(null);
+  const [selectedTripId, setSelectedTripId] = useState(null); // trip routes + ride card (owner 2026-11-04)
   const installed = installedDrivers(drivers);
   const located = installed.filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null);
   const neverLocated = installed.filter((d) => d.lastKnownLocation?.lat == null || d.lastKnownLocation?.lng == null);
@@ -92,6 +174,9 @@ function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
     mapInstance.fitBounds(bounds, 48);
   }, [mapInstance, located.length, located.map((d) => `${d.lastKnownLocation.lat},${d.lastKnownLocation.lng}`).join("|")]);
 
+  const mapTrips = tripsOnMap(bookings);
+  const selectedTrip = mapTrips.find((b) => b.id === selectedTripId) || null;
+  const tripDriverOf = (b) => installed.find((d) => (b.driverMobile && d.mobile ? d.mobile === b.driverMobile : !!d.name && d.name === b.driverName)) || null;
   const staleMinutes = (d) => Math.round((Date.now() - (d.lastKnownLocation?.updatedAt || 0)) / 60000);
   const statusNow = Date.now();
   const statusOf = (d) => vehicleStatusOf(d, bookings, statusNow);
@@ -165,11 +250,20 @@ function AdminLiveMap({ drivers, bookings = [], lang = "hi" }) {
           const bk = statusOf(d) === "trip" ? (bookings || []).find((b) => b.status === "Ongoing" && !b.loadingStartedAt && (b.driverMobile && d.mobile ? b.driverMobile === d.mobile : (!!d.name && b.driverName === d.name))) : null;
           return bk ? <AdminTripRoad key={"road-" + (d.mobile || d.id)} driver={d} booking={bk} mapsOk={isLoaded} mapsKey={hasKey} /> : null;
         })}
+        {mapTrips.map((b) => (
+          <AdminTripRouteLine key={"trip-" + b.id} booking={b} driver={tripDriverOf(b)} selected={selectedTripId === b.id} onSelect={setSelectedTripId} mapsOk={isLoaded} />
+        ))}
       </GoogleMap>
       <div className="absolute top-2 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
         {mapSummaryLabel}
       </div>
+      {mapTrips.length > 0 && !selectedTrip && (
+        <div data-trip-hint className="absolute top-9 left-2 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap" style={{ background: "rgba(255,255,255,0.95)", border: "1px solid #ddd", color: "#222" }}>
+          🛣 {mapTrips.length} {lang === "en" ? "trip route(s) — tap a route for details" : lang === "mr" ? "ट्रिप मार्ग — तपशीलासाठी मार्गावर टॅप करा" : "ट्रिप रूट — विवरण के लिए रूट पर टैप करें"}
+        </div>
+      )}
       {statusLegend}
+      {selectedTrip && <AdminTripDetailCard booking={selectedTrip} driver={tripDriverOf(selectedTrip)} lang={lang} onClose={() => setSelectedTripId(null)} />}
     </div>
   );
 }
