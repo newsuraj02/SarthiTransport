@@ -7585,7 +7585,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares, dieselPricePerLitre);
         return { driver: d, capacityKg, tier, tierIndex, km, id, fare };
       })
-      .sort((a, b) => a.tier.maxKg - b.tier.maxKg || (a.km ?? Infinity) - (b.km ?? Infinity)); // category, then nearest; GPS-off vehicles after the located ones
+      .sort((a, b) => (a.km == null ? 1 : 0) - (b.km == null ? 1 : 0) || a.tier.maxKg - b.tier.maxKg || (a.km ?? Infinity) - (b.km ?? Infinity)); // ONLINE first (GPS on = a live location), then the GPS-off ones (owner 2026-11-04); inside each group: category, then nearest
 
     // A bad Admin override for just one tier on this route (a stray digit,
     // a mixed-up route -- see findFareOutliers) would otherwise show the

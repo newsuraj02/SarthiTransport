@@ -137,7 +137,7 @@
   "code:.github/workflows/build-twa.yml": "39913cdb03b5dd04",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "d9e2dc0fee55202b",
-  "code:CLAUDE.md": "87500dd421202e90",
+  "code:CLAUDE.md": "fd94040b103c452a",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -318,7 +318,7 @@
   "code:apna-transport-native/settings.gradle": "faa7e8618f636a89",
   "code:capacitor.admin.config.ts": "f0a37c46e2497cc8",
   "code:capacitor.config.ts": "90638e0b1d9c2962",
-  "code:docs/SYSTEM_CONTRACTS.md": "2119c20505f55cb0",
+  "code:docs/SYSTEM_CONTRACTS.md": "f5e81bcdb7e8c970",
   "code:firebase.json": "df92d1ad829e6f5e",
   "code:firestore.rules": "1a02799bd5a20783",
   "code:functions/addressLang.js#TRANSLITERATE_ENABLED": "f3ef08d623c0099c",
@@ -453,6 +453,7 @@
   "code:functions/otp.js": "5a5ef97d41ebd4a7",
   "code:functions/package.json": "d5aa2a9b1670160a",
   "code:functions/ringText.js": "8d8d15739bbbdd4b",
+  "code:functions/tripLock.js": "ccb5283be556515e",
   "code:index.html": "13aaad7bdd0049da",
   "code:package.json": "79c500d810b09df1",
   "code:postcss.config.js": "33e39ff2f29058a0",
@@ -570,7 +571,7 @@
   "code:scripts/verifyInvariants.mjs#loadSignupFinalizeFn": "042d3aa5ce083f6b",
   "code:scripts/verifyInvariants.mjs#photo": "59f138fe9edd92a3",
   "code:scripts/verifyInvariants.mjs#fullDriver": "a2b6794f0ffd092d",
-  "code:scripts/verifyInvariants.mjs#checks": "6403187c498d27b3",
+  "code:scripts/verifyInvariants.mjs#checks": "1417d25293869f95",
   "code:scripts/verifyInvariants.mjs#failed": "75a04c1b55cc94b4",
   "code:scripts/verifyInvariants.mjs#other": "d97a2b8f6d95712c",
   "code:scripts/wipeBookings.js": "1e5b18cba5b73211",
@@ -926,7 +927,7 @@
   "code:src/App.jsx#PickupPage": "10f8d0fb6bbc6c86",
   "code:src/App.jsx#UNMATCHED_NO_CALL_MS": "968eb0be37fecf79",
   "code:src/App.jsx#unmatchedRequestStage": "1da7d54431b1f74a",
-  "code:src/App.jsx#CustomerBooking": "756c33206e094b18",
+  "code:src/App.jsx#CustomerBooking": "befebf968207dc99",
   "code:src/App.jsx#CustomerAdvanceBooking": "45abf9a27e76f14c",
   "code:src/App.jsx#RouteLine": "f7858c5b1b1e46ca",
   "code:src/App.jsx#ReturnTripTag": "0ca27422b1c6bcc2",
@@ -1050,7 +1051,6 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "7f5bacfd4416bf5f",
-  "code:functions/tripLock.js": "ccb5283be556515e"
+  "code:vite.config.js": "7f5bacfd4416bf5f"
  }
 }
