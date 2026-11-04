@@ -10,8 +10,11 @@
  *   - KYC is Approved and the driver is not blocked.
  *   - The driver is not on a trip (a running trip holds the driver until End Trip / Cancelled -- hasLoadConflict, the same availability
  *     rule the customer list uses).
- *   - The driver's vehicle CATEGORY is the one the customer picked, or one of the next RING_CATEGORIES_ABOVE categories above it
- *     (customer picks a 500 kg vehicle -> that category and the 2 above it).
+ *   - The driver's vehicle CATEGORY is the one the customer picked, or one of the next RING_CATEGORIES_ABOVE categories above it.
+ *     The categories are the SAME ones the customer's vehicle list shows (owner 2026-11-04): 500 / 750 / 1200 / 1700 / 2500 / 5000 / 7500 /
+ *     9000 / 12000 / 16000 / 20000 / 32000 kg + "above 32000 kg". The customer taps a category (never one driver) and EVERY vehicle in it
+ *     (and the 2 above) is rung; the first driver to accept gets the trip. A booking carries `listCategory` (the index of the picked category);
+ *     an older booking without it falls back to the category of its tierMaxKg / weight.
  *   - The driver is WITHIN RING_RADIUS_KM of the pickup -- 30 km for a Current booking, 50 km for an Advance one (the booking has `scheduledFor`) --
  *     measured from the driver's LAST KNOWN location however old (owner 2026-11-04: the same radius as the customer's vehicle list). GPS being off
  *     or stale does not matter, but a driver who has NEVER reported a location cannot be placed and is not rung. A booking with no pickup
@@ -19,11 +22,11 @@
  *   - The driver has not declined this load, and is not looking at the app on screen (the in-app card + sound handle that case:
  *     "one Accept", 2026-11-03).
  *
- * The category list MIRRORS DEFAULT_FARE_TIERS in src/App.jsx (an invariant compares them); a driver's category is the smallest tier whose
- * maxKg is at least the vehicle's capacity, exactly like the app's findFareTier.
+ * The category list MIRRORS CUSTOMER_LIST_CATEGORY_KG in src/App.jsx (an invariant compares them); a driver's category is the first limit
+ * the vehicle's capacity does not exceed (above the last limit = index 12, "Above 32000 kg"), exactly like the app's customerListCategoryIndex.
  */
 
-const FARE_TIER_MAX_KG = [500, 750, 800, 900, 1000, 1200, 1250, 1500, 2000, 2500, 3500, 5000, 7000, 7500, 9000, 9500, 10000, 12000, 16000, 18000, 21000, 25000, 30000, 999999];
+const RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
 const RING_CATEGORIES_ABOVE = 2;
 // MIRRORS CURRENT_BID_RADIUS_KM / ADVANCE_BID_RADIUS_KM in src/App.jsx (an invariant compares them) -- the same radius the customer's list uses.
 const RING_RADIUS_KM = { current: 30, advance: 50 };
@@ -32,15 +35,17 @@ const RING_RADIUS_KM = { current: 30, advance: 50 };
 function categoryIndexOfCapacity(capacityKg) {
   const kg = Number(capacityKg) || 0;
   if (kg <= 0) return -1;
-  const i = FARE_TIER_MAX_KG.findIndex((m) => kg <= m);
-  return i === -1 ? FARE_TIER_MAX_KG.length - 1 : i;
+  const i = RING_CATEGORY_MAX_KG.findIndex((m) => kg <= m);
+  return i === -1 ? RING_CATEGORY_MAX_KG.length : i;
 }
 
-// The category the customer picked: the booking's tierMaxKg (set by the app from the tapped vehicle); falls back to the booking's
-// weight for a booking made some other way; -1 = unknown (then no category filter is applied -- a load is never left unrung).
+// The category the customer picked: the booking's `listCategory` (the app stores the tapped category's index); an older booking without it
+// falls back to the category of its tierMaxKg, then its weight; -1 = unknown (then no category filter is applied -- a load is never left unrung).
 function loadCategoryIndex(load) {
+  const c = Number(load && load.listCategory);
+  if (load && load.listCategory != null && Number.isInteger(c) && c >= 0 && c <= RING_CATEGORY_MAX_KG.length) return c;
   const t = Number(load && load.tierMaxKg) || 0;
-  if (t > 0) { const i = FARE_TIER_MAX_KG.indexOf(t); if (i !== -1) return i; return categoryIndexOfCapacity(t); }
+  if (t > 0) return categoryIndexOfCapacity(t);
   return categoryIndexOfCapacity(load && load.weight);
 }
 
@@ -69,4 +74,4 @@ function evaluateNewLoadDriver(driver, load, ctx) {
   return { ok: true };
 }
 
-module.exports = { FARE_TIER_MAX_KG, RING_CATEGORIES_ABOVE, RING_RADIUS_KM, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };
+module.exports = { RING_CATEGORY_MAX_KG, RING_CATEGORIES_ABOVE, RING_RADIUS_KM, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };

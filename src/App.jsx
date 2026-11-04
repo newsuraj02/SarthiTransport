@@ -1371,17 +1371,20 @@ export function vehicleForWeight(weightKg, tiers = DEFAULT_FARE_TIERS) {
 // of the pickup by the LAST KNOWN location however old (GPS off / stale does not matter; never-located cannot be placed -> not rung).
 // MIRRORS functions/tripLock.js (evaluateNewLoadDriver) -- an invariant compares the two on hundreds of random drivers.
 const RING_CATEGORIES_ABOVE = 2;
-// Index of the fare-table category a vehicle of this capacity belongs to (the smallest tier that can carry it); -1 = unknown capacity.
+// The ring categories ARE the customer's vehicle-list categories (CUSTOMER_LIST_CATEGORY_KG, owner 2026-11-04): the customer taps a category and
+// every vehicle in it (and the 2 above) is rung. Index of the category a vehicle of this capacity belongs to; -1 = unknown capacity.
 function ringCategoryIndexOfCapacity(capacityKg) {
   const kg = Number(capacityKg) || 0;
   if (kg <= 0) return -1;
-  const i = DEFAULT_FARE_TIERS.findIndex((t) => kg <= t.maxKg);
-  return i === -1 ? DEFAULT_FARE_TIERS.length - 1 : i;
+  return customerListCategoryIndex(kg);
 }
-// The category the customer picked (the booking's tierMaxKg); falls back to its weight; -1 = unknown (no category filter).
+// The category the customer picked: the booking's `listCategory` (stored by the booking screen); an older booking without it falls back to
+// the category of its tierMaxKg, then its weight; -1 = unknown (no category filter).
 function ringCategoryIndexOfLoad(b) {
+  const c = Number(b?.listCategory);
+  if (b?.listCategory != null && Number.isInteger(c) && c >= 0 && c <= CUSTOMER_LIST_CATEGORY_KG.length) return c;
   const t = Number(b?.tierMaxKg) || 0;
-  if (t > 0) { const i = DEFAULT_FARE_TIERS.findIndex((x) => x.maxKg === t); return i !== -1 ? i : ringCategoryIndexOfCapacity(t); }
+  if (t > 0) return ringCategoryIndexOfCapacity(t);
   return ringCategoryIndexOfCapacity(b?.weight);
 }
 // Pure/explicit-args like findDriverLoadConflict above, so requestByCategory (checking "does anyone qualify at all") and DriverHome
@@ -7563,7 +7566,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // same way as each entry's own id.
   const [selectedDriverKey, setSelectedDriverKey] = useState(null);
   // The map is never collapsed or hidden before Book, and it scrolls with the page (owner 2026-10-29).
-  // Tapping a driver's inline "Book this vehicle" button sends the
+  // Tapping a driver's inline "Book this category" button sends the
   // request immediately (no separate confirmation step) -- sendingKey
   // marks that one card's button as "Request sent. Please wait" (disabled)
   // until this whole component unmounts, which happens naturally the
@@ -7671,6 +7674,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Nothing is pre-selected (owner 2026-10-29): the whole list is shown until the customer taps a vehicle;
   // only then does the Book button appear, and it books that vehicle.
   const chosen = !!selectedEntry;
+  // CATEGORY BOOKING (owner 2026-11-04): tapping any card selects its WHOLE capacity category -- no single driver is picked. Book rings every
+  // vehicle in that category (and the 2 above, server rule A6) and the first driver to accept gets the trip. The category's fare is its TOP fare
+  // (the dearest vehicle in it on this route), so nobody in it is paid below their own tier; that vehicle's tier / capacity / return fare go on the booking.
+  const selectedCategoryIndex = selectedEntry ? customerListCategoryIndex(selectedEntry.capacityKg) : null;
+  const categoryEntries = selectedEntry ? nearbyDrivers.filter((e) => customerListCategoryIndex(e.capacityKg) === selectedCategoryIndex) : [];
+  const topCategoryEntry = categoryEntries.reduce((best, e) => (!best || e.fare > best.fare || (e.fare === best.fare && e.capacityKg > best.capacityKg) ? e : best), null);
   // "Change pickup / drop" (owner 2026-10-31): sits UNDER the "Tap a vehicle" line (or the date/time hint / the
   // "Tap a vehicle" line), centred and dull grey. Only while Pickup/Drop are tucked away and no vehicle is chosen.
   // Owner 2026-11-01: the fixed "Round trip" bar is only for the step where Pickup and Drop are being ENTERED -- i.e. exactly while the
@@ -7686,14 +7695,14 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       </button>
     </div>
   ) : null;
-  const visibleDrivers = selectedEntry ? [selectedEntry] : nearbyDrivers;
-  const bookEntry = selectedEntry; // nothing is pre-selected: Book only appears once the customer taps a vehicle
+  const visibleDrivers = selectedEntry ? categoryEntries : nearbyDrivers; // once tapped: the whole chosen category stays, the others go
+  const bookEntry = topCategoryEntry; // nothing is pre-selected: Book only appears once the customer taps a vehicle; it books the whole category
   const canBook = locationsReady && !sameLocation && !!bookEntry;
   // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted; once one is
   // chosen, only that type -- with the nearest of them ringed and its minutes shown.
   const listStage = locationsReady && !sameLocation; // Pickup + Drop (+ date/time in Advance) done: the vehicle list is showing
   const mapEntries = !listStage ? null
-    : selectedEntry ? nearbyDrivers.filter((e) => e.tier.maxKg === selectedEntry.tier.maxKg) : nearbyDrivers;
+    : selectedEntry ? categoryEntries : nearbyDrivers;
   const mapFixedDrivers = mapEntries ? mapEntries.filter((e) => e.gpsOn).map((e) => e.driver) : null; // GPS-off vehicles are listed but not pinned (their last place is old)
   // A truck that is on a trip right now is not "available nearby" -- keep it off the map before the list shows too (the vehicle list already excludes it).
   const mapAvailableDrivers = (drivers || []).filter((d) => !driverIsOnTrip(d, bookings));
@@ -7705,7 +7714,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Tapping a specific driver's card doesn't pin the request to just them
   // (see requestByCategory's driverName param) — it's still a broadcast to
   // every eligible driver, whoever accepts first gets it. Fires straight
-  // off the inline "Book this vehicle" tap now (no separate
+  // off the inline "Book this category" tap now (no separate
   // confirmation sheet) -- sendingKey disables that one card's button and
   // relabels it "Request sent. Please wait" rather than resetting the form
   // or showing a separate success overlay; the component unmounts on its
@@ -7737,7 +7746,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // (Firestore's local echo would otherwise swap this screen out instantly).
     setTimeout(() => {
     const err = requestByCategory({
-      pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
+      pickup, drop, tierMaxKg: entry.tier.maxKg, listCategory: selectedCategoryIndex, customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       pickupPlaceId, dropPlaceId, returnTrip,
@@ -7909,7 +7918,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           since pricing is per-category, but each is its own bookable card
           because each is a real, different vehicle. Once one is picked,
           the list collapses to just that card (see visibleDrivers) with
-          an inline "Book this vehicle" button right under it and a
+          an inline "Book this category" button right under it and a
           "See all vehicles" link back to the full list; tapping
           Book sends the request immediately (no confirmation sheet) and
           that same button becomes a disabled "Request sent. Please wait". */}
@@ -7943,18 +7952,16 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               ) : (
                 <>
                   {/* Owner 2026-11-04: the list is grouped in the 12 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading; once a vehicle is tapped only its card shows (no heading). */}
-                  {(selectedEntry ? [{ index: -1, entries: visibleDrivers }] : groupByCustomerListCategory(visibleDrivers)).map((grp) => (
-                  <div key={grp.index} data-list-category={grp.index >= 0 ? grp.index : undefined} className="space-y-2.5">
-                  {grp.index >= 0 && (
-                    <div data-list-category-heading className="flex items-center gap-2 pt-1">
-                      <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: C.navy }}>{customerListCategoryLabel(grp.index, lang)}</span>
-                      <span className="flex-1 h-px" style={{ background: C.line }} />
-                      <span className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{grp.entries.length}</span>
-                    </div>
-                  )}
+                  {groupByCustomerListCategory(visibleDrivers).map((grp) => (
+                  <div key={grp.index} data-list-category={grp.index} className="space-y-2.5">
+                  <div data-list-category-heading className="flex items-center gap-2 pt-1">
+                    <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: C.navy }}>{customerListCategoryLabel(grp.index, lang)}</span>
+                    <span className="flex-1 h-px" style={{ background: C.line }} />
+                    <span className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{grp.entries.length}</span>
+                  </div>
                   {grp.entries.map((entry, idx) => {
                     const key = entry.id;
-                    const isSelected = !!selectedEntry && selectedEntry.id === key;
+                    const isSelected = !!selectedEntry; // the whole chosen category is highlighted (owner 2026-11-04: no single driver is picked)
                     const fare = entry.fare;
                     return (
                       <div key={key} className="anim-rise" style={{ animationDelay: `${Math.min(idx, 6) * 70}ms` }}>
@@ -7994,6 +8001,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   {chosen && (
                     <>
                       {returnFareNote}
+                      <div data-category-note className="text-center text-xs font-bold rounded-xl px-3 py-2" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1px solid rgba(0,82,204,0.25)` }}>
+                        {lang === "en" ? "Every vehicle in this category is notified. Only one driver can accept, and the fastest one wins."
+                          : lang === "mr" ? "या श्रेणीतील प्रत्येक वाहनाला सूचना जाते. फक्त एकच ड्रायव्हर स्वीकारू शकतो, आणि सर्वात जलद ड्रायव्हरला ट्रिप मिळते."
+                          : "इस कैटेगरी की हर गाड़ी को सूचना जाती है। सिर्फ़ एक ड्राइवर स्वीकार कर सकता है, और सबसे तेज़ ड्राइवर को ट्रिप मिलती है।"}
+                      </div>
                       {advance && (
                         <div className="text-center text-xs font-bold" style={{ color: C.inkSoft }}>
                           📅 {advanceDate} · {formatTimeSlot(advanceTime, lang)}
@@ -8005,7 +8017,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                         style={{ background: sendingKey ? C.inkSoft : canBook ? C.success : "#E5EAF2", color: canBook || sendingKey ? "#FFFFFF" : "#9AA3B0", boxShadow: canBook && !sendingKey ? "0 8px 18px rgba(0,168,84,0.3)" : undefined }}>
                         {sendingKey
                           ? <span className="inline-flex items-center gap-2"><Loader2 size={20} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
-                          : <>🚚 {lang === "en" ? "Book this vehicle" : lang === "mr" ? "ही गाडी बुक करा" : "यह गाड़ी बुक करें"}{canBook ? ` · ${fmt(bookEntry.fare)}` : ""}</>}
+                          : <>🚚 {lang === "en" ? "Book this category" : lang === "mr" ? "ही श्रेणी बुक करा" : "यह कैटेगरी बुक करें"}{canBook ? ` · ${fmt(bookEntry.fare)}` : ""}</>}
                       </button>
                       <button type="button" onClick={() => setSelectedDriverKey(null)} disabled={!!sendingKey}
                         className="w-full text-center text-xs font-semibold py-2 rounded-xl" style={{ color: C.inkSoft, background: "transparent", border: `1px solid ${C.line}` }}>
@@ -13001,12 +13013,12 @@ export default function App() {
   // category itself (resolveFareForTier), not any specific driver. Returns
   // an error message string to show the customer (nobody eligible at all
   // right now), or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, weightIsCapacity, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnFare, returnPct: returnPctUsed, fare: fareOverride }) => {
+  const requestByCategory = ({ pickup, drop, tierMaxKg, listCategory, customerWeight, weightIsCapacity, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnFare, returnPct: returnPctUsed, fare: fareOverride }) => {
     const bookingId = genId();
     // weight included here to match the real created doc below -- isDriverBroadcastEligible
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
     // pre-check needs the same field or it would always see loadWeightKg as 0.
-    const draftBooking = { id: bookingId, tierMaxKg, weight: customerWeight ?? tierMaxKg, pickupLat, pickupLng, scheduledFor, declinedBy: [] };
+    const draftBooking = { id: bookingId, tierMaxKg, listCategory, weight: customerWeight ?? tierMaxKg, pickupLat, pickupLng, scheduledFor, declinedBy: [] };
     const anyEligible = drivers.some((d) => isDriverBroadcastEligible(d, draftBooking, vehicleTypes, bookings, fareTiers, lang));
     if (!anyEligible) {
       return lang === "en" ? "No vehicles available nearby right now — please try again shortly." : lang === "mr" ? "सध्या जवळपास कोणतेही वाहन उपलब्ध नाही — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "अभी आसपास कोई वाहन उपलब्ध नहीं है — कृपया थोड़ी देर बाद फिर कोशिश करें।";
@@ -13025,7 +13037,7 @@ export default function App() {
       // one) rather than the category ceiling itself. vehicle stays null
       // until someone actually accepts (driverRespondBooking) -- unlike
       // the old single-target model, nobody specific is chosen yet.
-      pickup, drop, vehicle: null, tierMaxKg, weight: customerWeight ?? tierMaxKg, ...(weightIsCapacity ? { weightIsCapacity: true } : {}), distance, status: "AwaitingDriver", bids: [], fare,
+      pickup, drop, vehicle: null, tierMaxKg, ...(listCategory != null ? { listCategory } : {}), weight: customerWeight ?? tierMaxKg, ...(weightIsCapacity ? { weightIsCapacity: true } : {}), distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
       declinedBy: [],
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, returnTrip: !!returnTrip, ...(returnTrip ? { oneWayFare: oneWayFare ?? null, returnFare: returnFare ?? null, returnPct: returnPctUsed ?? null } : {}), customerMobile: customerAuth.mobile || "",

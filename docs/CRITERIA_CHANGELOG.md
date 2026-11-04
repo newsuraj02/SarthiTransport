@@ -88,3 +88,9 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-04 -- Customer vehicle list shown in capacity categories 500..32000 kg (+Above 32000) with headings; display only (owner 2026-11-04)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/criteria.mjs#BLOCKS, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
 - added (8): app:CUSTOMER_LIST_CATEGORY_KG, app:customerListCategoryIndex, app:customerListCategoryLabel, app:groupByCustomerListCategory, code:src/App.jsx#CUSTOMER_LIST_CATEGORY_KG, code:src/App.jsx#customerListCategoryIndex, code:src/App.jsx#customerListCategoryLabel, code:src/App.jsx#groupByCustomerListCategory
+
+## 2026-11-04 -- Category booking: tap selects the whole category, rings category + 2 above using the list's 12 categories (listCategory), top fare, fastest accept wins note (owner 2026-11-04)
+- changed (9): app:ringCategoryIndexOfCapacity, app:ringCategoryIndexOfLoad, file:functions/tripLock.js, code:functions/tripLock.js, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#ringCategoryIndexOfCapacity, code:src/App.jsx#ringCategoryIndexOfLoad, code:src/App.jsx#CustomerBooking, code:src/App.jsx#App
+
+## 2026-11-04 -- Category booking docs (contracts A5/A6, CLAUDE.md): tap selects whole category; ring uses the list's 12 categories via listCategory (owner 2026-11-04)
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
