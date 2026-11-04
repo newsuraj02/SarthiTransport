@@ -1016,14 +1016,16 @@ function driverIsOnTrip(driver, bookings, now = Date.now()) {
 // ---- driver availability (end) ----
 
 // THE CUSTOMER VEHICLE-LIST RULE (pulled out of CustomerBooking 2026-11-03 so it can be tested): may this driver be shown as a bookable vehicle?
-// Since 2026-11-04: DUTY ON + KYC Approved + not blacklisted + has a vehicle + NOT on a trip (a running trip, or an advance booking's buffer for THAT slot).
-// No GPS / distance / weight condition.
-function isDriverListableForCustomer(d, { advance = false, scheduledForValue = null, bookings = [], vehicleTypes = [], lang = "hi" }) {
-  // Owner 2026-11-04: DUTY ON is the only availability switch -- GPS on or off, near or far, makes no difference to being listed
-  // (the same people are rung, see isDriverBroadcastEligible). Listed = duty on + KYC Approved + not blocked + has a vehicle + not on a trip.
+// DUTY ON + KYC Approved + not blacklisted + has a vehicle + NOT on a trip (a running trip, or an advance booking's buffer for THAT slot) + WITHIN
+// bidRadiusKm of the pickup (30 km Current / 50 km Advance, owner 2026-11-04). The distance is measured from the driver's LAST KNOWN location, however
+// old -- GPS being off now does not matter, but a driver who has never reported a location cannot be placed and is not listed. No weight condition.
+function isDriverListableForCustomer(d, { pickupCoords, bidRadiusKm, advance = false, scheduledForValue = null, bookings = [], vehicleTypes = [], lang = "hi" }) {
   if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
   const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
   if (dCapKg <= 0) return false;
+  const loc = d.lastKnownLocation;
+  if (!pickupCoords || !loc || loc.lat == null || loc.lng == null) return false;
+  if (haversineKm(pickupCoords.lat, pickupCoords.lng, loc.lat, loc.lng) > bidRadiusKm) return false;
   return !findDriverLoadConflict(d, advance ? { scheduledFor: scheduledForValue } : {}, bookings, vehicleTypes, lang);
 }
 
@@ -7571,21 +7573,23 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // category (lightest first) and then nearest-first within a category,
   // matching the order the fare tiers and the dispatch engine already use
   // elsewhere.
+  const bidRadiusKm = advance ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM; // 50 km Advance / 30 km Current
   const nearbyDrivers = (() => {
     if (!scheduleReady) return []; // advance: nothing to match until the date AND time are chosen
     const withFare = drivers
-      .filter((d) => isDriverListableForCustomer(d, { advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
+      .filter((d) => isDriverListableForCustomer(d, { pickupCoords, bidRadiusKm, advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
       .map((d) => {
         const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
         const tier = findFareTier(capacityKg, fareTiers);
         const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
-        // km from Pickup only when the driver's GPS is ON (a fix under 5 min old); duty-on drivers with GPS off are still listed, with km = null.
-        const km = pickupCoords && hasFreshLocation(d) ? haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) : null;
+        // km from Pickup is measured from the driver's last known location; gpsOn = that location is live (a fix under 5 min old).
+        const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+        const gpsOn = hasFreshLocation(d);
         const id = d.mobile || d.id;
         const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares, dieselPricePerLitre);
-        return { driver: d, capacityKg, tier, tierIndex, km, id, fare };
+        return { driver: d, capacityKg, tier, tierIndex, km, gpsOn, id, fare };
       })
-      .sort((a, b) => (a.km == null ? 1 : 0) - (b.km == null ? 1 : 0) || a.tier.maxKg - b.tier.maxKg || (a.km ?? Infinity) - (b.km ?? Infinity)); // ONLINE first (GPS on = a live location), then the GPS-off ones (owner 2026-11-04); inside each group: category, then nearest
+      .sort((a, b) => (a.gpsOn ? 0 : 1) - (b.gpsOn ? 0 : 1) || a.tier.maxKg - b.tier.maxKg || a.km - b.km); // ONLINE first (GPS on = a live location), then the GPS-off ones (owner 2026-11-04); inside each group: category, then nearest
 
     // A bad Admin override for just one tier on this route (a stray digit,
     // a mixed-up route -- see findFareOutliers) would otherwise show the
@@ -7658,10 +7662,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const listStage = locationsReady && !sameLocation; // Pickup + Drop (+ date/time in Advance) done: the vehicle list is showing
   const mapEntries = !listStage ? null
     : selectedEntry ? nearbyDrivers.filter((e) => e.tier.maxKg === selectedEntry.tier.maxKg) : nearbyDrivers;
-  const mapFixedDrivers = mapEntries ? mapEntries.filter((e) => e.km != null).map((e) => e.driver) : null; // GPS-off vehicles are listed but cannot be pinned
+  const mapFixedDrivers = mapEntries ? mapEntries.filter((e) => e.gpsOn).map((e) => e.driver) : null; // GPS-off vehicles are listed but not pinned (their last place is old)
   // A truck that is on a trip right now is not "available nearby" -- keep it off the map before the list shows too (the vehicle list already excludes it).
   const mapAvailableDrivers = (drivers || []).filter((d) => !driverIsOnTrip(d, bookings));
-  const nearestOfType = selectedEntry && mapEntries?.some((e) => e.km != null) ? mapEntries.filter((e) => e.km != null).reduce((best, e) => (e.km < best.km ? e : best)) : null;
+  const nearestOfType = selectedEntry && mapEntries?.some((e) => e.gpsOn) ? mapEntries.filter((e) => e.gpsOn).reduce((best, e) => (e.km < best.km ? e : best)) : null;
   const mapHighlight = nearestOfType
     ? { id: nearestOfType.id, label: (() => { const m = etaMinutes(nearestOfType.km); return lang === "en" ? `${m} min` : lang === "mr" ? `${m} मिनिट` : `${m} मिनट`; })() }
     : null;
@@ -7926,14 +7930,15 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                               {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
                             </div>
                             <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {entry.km == null ? (
-                                <span data-gps-off className="font-bold">{lang === "en" ? "Location off" : lang === "mr" ? "लोकेशन बंद" : "लोकेशन बंद"}</span>
-                              ) : lang === "en" ? (
+                              {lang === "en" ? (
                                 <><span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} km</span> from Pickup</>
                               ) : lang === "mr" ? (
                                 <>पिकअपपासून <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
                               ) : (
                                 <>पिकअप से <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
+                              )}
+                              {!entry.gpsOn && (
+                                <span data-gps-off className="font-bold" style={{ color: C.marigoldDeep }}> · {lang === "en" ? "Location off (last seen)" : lang === "mr" ? "लोकेशन बंद (शेवटचे ठिकाण)" : "लोकेशन बंद (आख़िरी जगह)"}</span>
                               )}
                             </div>
                           </div>
