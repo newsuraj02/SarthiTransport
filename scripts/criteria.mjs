@@ -37,7 +37,7 @@ export const BLOCKS = {
 };
 // Whole-file fingerprints: rules, hosting/functions config, service worker, loader, native manifests, server helpers.
 export const FILES = [
-  "firestore.rules", "storage.rules", "firebase.json", "index.html", "public/service-worker.js", "functions/otp.js", "functions/ringText.js", "functions/tripLock.js",
+  "firestore.rules", "storage.rules", "firebase.json", "index.html", "public/service-worker.js", "functions/otp.js", "functions/ringText.js", "functions/tripLock.js", "functions/vehicleSpecRepair.js",
   "functions/addressLang.js", "functions/healthAudit.js", "functions/package.json", "capacitor.config.ts", "capacitor.admin.config.ts",
   "android/app/src/main/AndroidManifest.xml", "android-admin/app/src/main/AndroidManifest.xml", "src/firebaseClient.js", "src/firestoreStore.js",
 ];

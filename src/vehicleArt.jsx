@@ -39,7 +39,12 @@ const CAB_BOTTOM = 49.5;
 const DEPTH = 12;                   // how far the front face / roof recede (to the up-left)
 const RISE = 6;
 
-export default function CategoryVehicleArt({ index = 0, className = "", title = "" }) {
+// bold = the small row icon: every outline / detail stroke is drawn about twice as thick and a darker outline is used, so the drawing stays heavy
+// and readable at ~100 px (the large picture on the picked row uses the normal weight).
+export default function CategoryVehicleArt({ index = 0, className = "", title = "", bold = false }) {
+  const k = bold ? 2.4 : 1;
+  const wr = WHEEL_R + (bold ? 1 : 0);          // chunkier tyres in bold mode
+  const outline = bold ? "rgba(15,27,45,0.95)" : OUTLINE;
   const uid = React.useId().replace(/[^a-zA-Z0-9]/g, "");
   const sp = VEHICLE_ART_SPECS[Math.min(Math.max(index, 0), VEHICLE_ART_SPECS.length - 1)];
   // The width must also cover the last wheel's dark arch, or a many-axle truck loses its rear wheel at the edge.
@@ -60,9 +65,9 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
 
   // vertical ribs / corrugation / stakes on the near side of the body
   const marks = [];
-  if (sp.body === "container") for (let x = bx + 4; x < bx + sp.len - 2; x += 3.6) marks.push(<line key={x} x1={x} y1={by + 4} x2={x} y2={FLOOR - 4} stroke="rgba(30,45,70,0.16)" strokeWidth="1" />);
-  if (sp.body === "box") for (let x = bx + 15; x < bx + sp.len - 6; x += 17) marks.push(<line key={x} x1={x} y1={by + 3} x2={x} y2={by + sp.bh - 10} stroke="rgba(30,45,70,0.13)" strokeWidth="1" />);
-  if (sp.body === "open") for (let x = bx + 9; x < bx + sp.len - 4; x += 13) marks.push(<g key={x}><rect x={x - 1.4} y={by + 3} width={2.8} height={sp.bh - 3} fill="#0E3282" opacity="0.8" /><line x1={x + 2.2} y1={by + 4} x2={x + 2.2} y2={FLOOR - 1} stroke="rgba(255,255,255,0.18)" strokeWidth="0.9" /></g>);
+  if (sp.body === "container") for (let x = bx + 4; x < bx + sp.len - 2; x += 3.6) marks.push(<line key={x} x1={x} y1={by + 4} x2={x} y2={FLOOR - 4} stroke="rgba(30,45,70,0.16)" strokeWidth={1 * k} />);
+  if (sp.body === "box") for (let x = bx + 15; x < bx + sp.len - 6; x += 17) marks.push(<line key={x} x1={x} y1={by + 3} x2={x} y2={by + sp.bh - 10} stroke="rgba(30,45,70,0.13)" strokeWidth={1 * k} />);
+  if (sp.body === "open") for (let x = bx + 9; x < bx + sp.len - 4; x += 13) marks.push(<g key={x}><rect x={x - 1.4} y={by + 3} width={2.8} height={sp.bh - 3} fill="#0E3282" opacity="0.8" /><line x1={x + 2.2} y1={by + 4} x2={x + 2.2} y2={FLOOR - 1} stroke="rgba(255,255,255,0.18)" strokeWidth={0.9 * k} /></g>);
 
   return (
     <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className={className} role={title ? "img" : undefined} aria-hidden={title ? undefined : "true"} aria-label={title || undefined} focusable="false">
@@ -82,16 +87,16 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
       <ellipse cx={x0 + width / 2 - 2} cy={GROUND + 1.2} rx={width / 2 + 8} ry={3} fill="rgba(15,27,45,0.20)" />
 
       {/* chassis + underbody */}
-      <rect x={x0 + 2} y={FLOOR} width={width - 2} height={5.5} rx={1.5} fill={INK} />
+      <rect x={x0 + 2} y={FLOOR} width={width - 2} height={bold ? 7 : 5.5} rx={1.5} fill={INK} />
       <rect x={x0 + sp.cw * 0.5} y={FLOOR + 5.5} width={Math.min(18, sp.len * 0.28)} height={4} rx={1.5} fill="#2A3445" />
 
       {/* BODY ---------------------------------------------------------------- */}
       {sp.body === "open" && (
         <g>
           {/* far wall's inner face + bed (seen from above) */}
-          <polygon points={`${bx},${by} ${bx + sp.len},${by} ${bx + sp.len - d},${by - rise} ${bx - d},${by - rise}`} fill="#0F2F7A" stroke={OUTLINE} strokeWidth="0.9" strokeLinejoin="round" />
+          <polygon points={`${bx},${by} ${bx + sp.len},${by} ${bx + sp.len - d},${by - rise} ${bx - d},${by - rise}`} fill="#0F2F7A" stroke={outline} strokeWidth={0.9 * k} strokeLinejoin="round" />
           <polygon points={`${bx},${by} ${bx - d},${by - rise} ${bx - d},${by - rise + 3} ${bx},${by + 3}`} fill="#0B2565" />
-          <rect x={bx} y={by} width={sp.len} height={sp.bh} rx={1.8} fill={g("blue")} stroke={OUTLINE} strokeWidth="1.1" />
+          <rect x={bx} y={by} width={sp.len} height={sp.bh} rx={1.8} fill={g("blue")} stroke={outline} strokeWidth={1.1 * k} />
           <rect x={bx} y={by} width={sp.len} height={3.4} rx={1.6} fill="#5A92F2" />
           <rect x={bx} y={by + 3.4} width={sp.len} height={1.2} fill="rgba(8,30,90,0.5)" />
           {marks}
@@ -100,8 +105,8 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
       )}
       {sp.body === "box" && (
         <g>
-          <polygon points={`${bx},${by} ${bx + sp.len},${by} ${bx + sp.len - d},${by - rise} ${bx - d},${by - rise}`} fill={g("roof")} stroke={OUTLINE} strokeWidth="0.9" strokeLinejoin="round" />
-          <rect x={bx} y={by} width={sp.len} height={sp.bh} rx={2} fill={g("box")} stroke={OUTLINE} strokeWidth="1.1" />
+          <polygon points={`${bx},${by} ${bx + sp.len},${by} ${bx + sp.len - d},${by - rise} ${bx - d},${by - rise}`} fill={g("roof")} stroke={outline} strokeWidth={0.9 * k} strokeLinejoin="round" />
+          <rect x={bx} y={by} width={sp.len} height={sp.bh} rx={2} fill={g("box")} stroke={outline} strokeWidth={1.1 * k} />
           {marks}
           <rect x={bx} y={by + sp.bh - 11} width={sp.len} height={4.2} fill="#143A82" />
           <rect x={bx} y={by + sp.bh - 6.4} width={sp.len} height={1.2} fill="rgba(255,255,255,0.35)" />
@@ -110,8 +115,8 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
       )}
       {sp.body === "container" && (
         <g>
-          <polygon points={`${bx},${by} ${bx + sp.len},${by} ${bx + sp.len - d},${by - rise} ${bx - d},${by - rise}`} fill={g("roof")} stroke={OUTLINE} strokeWidth="0.9" strokeLinejoin="round" />
-          <rect x={bx} y={by} width={sp.len} height={sp.bh} rx={1.6} fill={g("cont")} stroke={OUTLINE} strokeWidth="1.1" />
+          <polygon points={`${bx},${by} ${bx + sp.len},${by} ${bx + sp.len - d},${by - rise} ${bx - d},${by - rise}`} fill={g("roof")} stroke={outline} strokeWidth={0.9 * k} strokeLinejoin="round" />
+          <rect x={bx} y={by} width={sp.len} height={sp.bh} rx={1.6} fill={g("cont")} stroke={outline} strokeWidth={1.1 * k} />
           {marks}
           <rect x={bx} y={by} width={sp.len} height={3.6} fill="#8A99AE" />
           <rect x={bx} y={FLOOR - 4.4} width={sp.len} height={4.4} fill="#8A99AE" />
@@ -125,22 +130,22 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
 
       {/* CAB ----------------------------------------------------------------- */}
       {/* roof (receding) */}
-      <polygon points={`${x0},${cabTop} ${x0 + sp.cw - 2},${cabTop} ${x0 + sp.cw - 2 - d},${cabTop - rise} ${x0 - d},${cabTop - rise}`} fill={g("roof")} stroke={OUTLINE} strokeWidth="1" strokeLinejoin="round" />
+      <polygon points={`${x0},${cabTop} ${x0 + sp.cw - 2},${cabTop} ${x0 + sp.cw - 2 - d},${cabTop - rise} ${x0 - d},${cabTop - rise}`} fill={g("roof")} stroke={outline} strokeWidth={1 * k} strokeLinejoin="round" />
       {/* front face */}
-      <polygon points={`${fp(0, 0)} ${fp(1, 0)} ${fp(1, 1)} ${fp(0, 1)}`} fill={g("front")} stroke={OUTLINE} strokeWidth="1.1" strokeLinejoin="round" />
-      <polygon points={`${fp(0.1, 0.1)} ${fp(0.92, 0.1)} ${fp(0.92, 0.5)} ${fp(0.1, 0.5)}`} fill={g("glass")} stroke="rgba(10,20,40,0.6)" strokeWidth="0.8" strokeLinejoin="round" />
+      <polygon points={`${fp(0, 0)} ${fp(1, 0)} ${fp(1, 1)} ${fp(0, 1)}`} fill={g("front")} stroke={outline} strokeWidth={1.1 * k} strokeLinejoin="round" />
+      <polygon points={`${fp(0.1, 0.1)} ${fp(0.92, 0.1)} ${fp(0.92, 0.5)} ${fp(0.1, 0.5)}`} fill={g("glass")} stroke="rgba(10,20,40,0.6)" strokeWidth={0.8 * k} strokeLinejoin="round" />
       <polygon points={`${fp(0.1, 0.1)} ${fp(0.42, 0.1)} ${fp(0.3, 0.5)} ${fp(0.1, 0.5)}`} fill="rgba(255,255,255,0.18)" />
-      <polygon points={`${fp(0.1, 0.57)} ${fp(0.92, 0.57)} ${fp(0.92, 0.72)} ${fp(0.1, 0.72)}`} fill="#222B39" stroke="rgba(0,0,0,0.5)" strokeWidth="0.6" />
+      <polygon points={`${fp(0.1, 0.57)} ${fp(0.92, 0.57)} ${fp(0.92, 0.72)} ${fp(0.1, 0.72)}`} fill="#222B39" stroke="rgba(0,0,0,0.5)" strokeWidth={0.6 * k} />
       <polygon points={`${fp(0.2, 0.61)} ${fp(0.84, 0.61)} ${fp(0.84, 0.625)} ${fp(0.2, 0.625)}`} fill="rgba(255,255,255,0.35)" />
       <polygon points={`${fp(0.2, 0.665)} ${fp(0.84, 0.665)} ${fp(0.84, 0.68)} ${fp(0.2, 0.68)}`} fill="rgba(255,255,255,0.3)" />
-      <polygon points={`${fp(0.04, 0.58)} ${fp(0.22, 0.58)} ${fp(0.22, 0.7)} ${fp(0.04, 0.7)}`} fill="#FFF3C9" stroke="rgba(0,0,0,0.45)" strokeWidth="0.6" />
-      <polygon points={`${fp(-0.02, 0.86)} ${fp(1, 0.86)} ${fp(1, 1.02)} ${fp(-0.02, 1.02)}`} fill="#222B39" stroke="rgba(0,0,0,0.5)" strokeWidth="0.6" />
+      <polygon points={`${fp(0.04, 0.58)} ${fp(0.22, 0.58)} ${fp(0.22, 0.7)} ${fp(0.04, 0.7)}`} fill="#FFF3C9" stroke="rgba(0,0,0,0.45)" strokeWidth={0.6 * k} />
+      <polygon points={`${fp(-0.02, 0.86)} ${fp(1, 0.86)} ${fp(1, 1.02)} ${fp(-0.02, 1.02)}`} fill="#222B39" stroke="rgba(0,0,0,0.5)" strokeWidth={0.6 * k} />
       {/* near side of the cab */}
-      <path d={`M ${x0} ${CAB_BOTTOM} L ${x0} ${cabTop} L ${x0 + sp.cw - 3} ${cabTop} Q ${x0 + sp.cw} ${cabTop} ${x0 + sp.cw} ${cabTop + 5} L ${x0 + sp.cw} ${CAB_BOTTOM} Z`} fill={g("cab")} stroke={OUTLINE} strokeWidth="1.1" strokeLinejoin="round" />
+      <path d={`M ${x0} ${CAB_BOTTOM} L ${x0} ${cabTop} L ${x0 + sp.cw - 3} ${cabTop} Q ${x0 + sp.cw} ${cabTop} ${x0 + sp.cw} ${cabTop + 5} L ${x0 + sp.cw} ${CAB_BOTTOM} Z`} fill={g("cab")} stroke={outline} strokeWidth={1.1 * k} strokeLinejoin="round" />
       <rect x={x0 + 0.6} y={CAB_BOTTOM - sp.ch * 0.22} width={sp.cw - 1.2} height={sp.ch * 0.22 - 0.6} fill="#C4CFDF" />
-      <path d={`M ${x0 + 2.6} ${cabTop + sp.ch * 0.14} L ${x0 + sp.cw * 0.7} ${cabTop + sp.ch * 0.14} L ${x0 + sp.cw * 0.7} ${cabTop + sp.ch * 0.5} L ${x0 + 2.6} ${cabTop + sp.ch * 0.5} Z`} fill={g("glass")} stroke="rgba(10,20,40,0.6)" strokeWidth="0.8" strokeLinejoin="round" />
+      <path d={`M ${x0 + 2.6} ${cabTop + sp.ch * 0.14} L ${x0 + sp.cw * 0.7} ${cabTop + sp.ch * 0.14} L ${x0 + sp.cw * 0.7} ${cabTop + sp.ch * 0.5} L ${x0 + 2.6} ${cabTop + sp.ch * 0.5} Z`} fill={g("glass")} stroke="rgba(10,20,40,0.6)" strokeWidth={0.8 * k} strokeLinejoin="round" />
       <path d={`M ${x0 + 2.6} ${cabTop + sp.ch * 0.14} L ${x0 + sp.cw * 0.34} ${cabTop + sp.ch * 0.14} L ${x0 + sp.cw * 0.14} ${cabTop + sp.ch * 0.5} L ${x0 + 2.6} ${cabTop + sp.ch * 0.5} Z`} fill="rgba(255,255,255,0.18)" />
-      <line x1={x0 + sp.cw * 0.76} y1={cabTop + sp.ch * 0.1} x2={x0 + sp.cw * 0.76} y2={CAB_BOTTOM - 1} stroke="rgba(15,27,45,0.45)" strokeWidth="1" />
+      <line x1={x0 + sp.cw * 0.76} y1={cabTop + sp.ch * 0.1} x2={x0 + sp.cw * 0.76} y2={CAB_BOTTOM - 1} stroke="rgba(15,27,45,0.45)" strokeWidth={1 * k} />
       <rect x={x0 + sp.cw * 0.6} y={cabTop + sp.ch * 0.56} width={5} height={1.8} rx={0.9} fill="#3A4659" />
       <rect x={x0 - 3.2} y={cabTop + sp.ch * 0.3} width={3.4} height={6} rx={1.2} fill={INK} />
       <rect x={x0 - 0.6} y={cabTop + sp.ch * 0.33} width={2} height={1.4} fill={INK} />
@@ -151,10 +156,10 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
         const cx = x0 + wx;
         return (
           <g key={wx}>
-            <circle cx={cx} cy={WHEEL_Y} r={WHEEL_R + 2.6} fill={INK} />
-            <circle cx={cx} cy={WHEEL_Y} r={WHEEL_R} fill="#12171F" stroke="#2E3948" strokeWidth="1" />
-            <circle cx={cx} cy={WHEEL_Y} r={WHEEL_R - 1.8} fill="none" stroke="#2A3544" strokeWidth="1" />
-            <circle cx={cx} cy={WHEEL_Y} r={4.7} fill={g("rim")} stroke="#6F7C91" strokeWidth="0.8" />
+            <circle cx={cx} cy={WHEEL_Y} r={wr + 2.6} fill={INK} />
+            <circle cx={cx} cy={WHEEL_Y} r={wr} fill="#12171F" stroke="#2E3948" strokeWidth={1 * k} />
+            <circle cx={cx} cy={WHEEL_Y} r={wr - 1.8} fill="none" stroke="#2A3544" strokeWidth={1 * k} />
+            <circle cx={cx} cy={WHEEL_Y} r={4.7} fill={g("rim")} stroke="#6F7C91" strokeWidth={0.8 * k} />
             <circle cx={cx} cy={WHEEL_Y} r={1.9} fill="#56627A" />
             {[0, 72, 144, 216, 288].map((a) => (
               <circle key={a} cx={cx + 3.1 * Math.cos((a * Math.PI) / 180)} cy={WHEEL_Y + 3.1 * Math.sin((a * Math.PI) / 180)} r={0.65} fill="#3C485C" />

@@ -4,6 +4,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const crypto = require("crypto");
 const { ringWeightText } = require("./ringText");
 const { evaluateNewLoadDriver } = require("./tripLock");
+const { planSixteenWheelerRepair, RIGHT_CAPACITY_KG } = require("./vehicleSpecRepair");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
 const { auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning, otherRunningTripsOfDriver: auditOtherRunningTrips } = require("./healthAudit");
 const { defineSecret } = require("firebase-functions/params");
@@ -1454,6 +1455,29 @@ exports.createCsvDownloadLink = onCall({ region: "asia-south1" }, async (request
   await file.save(csv, { metadata: { contentType: "text/csv; charset=utf-8", contentDisposition: `attachment; filename="${safeName}"` } });
   const [url] = await file.getSignedUrl({ version: "v4", action: "read", expires: Date.now() + 10 * 60 * 1000 });
   return { ok: true, url };
+});
+
+// Admin only (owner 2026-11-04, "fix this too"): repairs drivers / vehicle types saved with 9,000 kg because the old Driver-KYC autofill matched "16 wheeler"
+// to "6 wheeler" (see functions/vehicleSpecRepair.js for exactly which records are touched). DRY RUN by default: { apply: false } only lists what WOULD
+// change; { apply: true } writes capacityKg = 30,000 on those drivers' vehicleSpec and on those vehicleTypes entries, and nothing else.
+exports.repairSixteenWheelerCapacity = onCall({ region: "asia-south1" }, async (request) => {
+  if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
+  const apply = request.data?.apply === true;
+  const [dSnap, tSnap] = await Promise.all([db.collection("drivers").get(), db.collection("vehicleTypes").get()]);
+  const plan = planSixteenWheelerRepair(dSnap.docs.map((x) => ({ id: x.id, ...x.data() })), tSnap.docs.map((x) => ({ id: x.id, ...x.data() })));
+  if (apply) {
+    const writes = [
+      ...plan.drivers.map((d) => ({ ref: db.collection("drivers").doc(String(d.mobile)), data: { "vehicleSpec.capacityKg": RIGHT_CAPACITY_KG } })),
+      ...plan.types.map((t) => ({ ref: db.collection("vehicleTypes").doc(String(t.key)), data: { capacityKg: RIGHT_CAPACITY_KG } })),
+    ];
+    for (let i = 0; i < writes.length; i += 400) {
+      const batch = db.batch();
+      writes.slice(i, i + 400).forEach((w) => batch.update(w.ref, w.data));
+      await batch.commit();
+    }
+    console.log(`[repairSixteenWheelerCapacity] fixed ${plan.drivers.length} driver(s) + ${plan.types.length} vehicle type(s) -> ${RIGHT_CAPACITY_KG} kg`);
+  }
+  return { ok: true, applied: apply, newCapacityKg: RIGHT_CAPACITY_KG, drivers: plan.drivers.slice(0, 100), driverCount: plan.drivers.length, types: plan.types, typeCount: plan.types.length };
 });
 
 // ---------------- Daily health check (live-backend half) ----------------

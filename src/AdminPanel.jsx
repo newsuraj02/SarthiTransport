@@ -15,7 +15,7 @@ import {
 import { GoogleMap, MarkerF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow } from "./firebaseClient";
+import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
 import { createDoc, patchDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
   ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
@@ -4095,6 +4095,17 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
   const [metaCopied, setMetaCopied] = useState(false);
   const [metaShowText, setMetaShowText] = useState(false);
   const [metaPreparing, setMetaPreparing] = useState(false);
+  // 16-wheeler capacity repair (owner 2026-11-04): "Check" is a dry run (lists what would change), "Fix" writes 30,000 kg; see functions/vehicleSpecRepair.js.
+  const [repairBusy, setRepairBusy] = useState(false);
+  const [repairResult, setRepairResult] = useState(null);
+  const runRepair = async (apply) => {
+    if (repairBusy) return;
+    if (apply && !window.confirm(lang === "en" ? "Set the capacity of the listed drivers / vehicle types to 30,000 kg?" : lang === "mr" ? "यादीतील ड्रायव्हर / वाहन प्रकारांची क्षमता 30,000 किग्रा करायची?" : "सूची के ड्राइवर / वाहन प्रकार की क्षमता 30,000 किग्रा करें?")) return;
+    setRepairBusy(true);
+    const res = await repairSixteenWheelerCapacity(apply);
+    setRepairBusy(false);
+    setRepairResult(res || { ok: false });
+  };
   const metaNumbersText = metaExport.csv.replace(/^phone\n/, "").trim();
   const downloadMetaUsers = async () => {
     if (metaPreparing) return;
@@ -4183,6 +4194,42 @@ function AdminSettings({ drivers, customers, latestVersionCode, setLatestVersion
               {lang === "en" ? "In Meta choose Customer list → \"Copy and paste your customer list\", then paste these numbers (long-press → Select all → Copy if the button above didn't copy):" : lang === "mr" ? "Meta मध्ये Customer list → \"Copy and paste your customer list\" निवडा आणि हे नंबर पेस्ट करा (वरचे बटण कॉपी न करल्यास: दाबून धरा → Select all → Copy):" : "Meta में Customer list → \"Copy and paste your customer list\" चुनें और ये नंबर पेस्ट करें (ऊपर का बटन कॉपी न करे तो: दबाकर रखें → Select all → Copy):"}
             </div>
             <textarea readOnly value={metaNumbersText} onFocus={(e) => e.target.select()} rows={6} className="w-full rounded-lg p-2 text-xs" style={{ border: `1.5px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
+          </div>
+        )}
+      </div>
+
+      <div data-repair-16 className="rounded-lg p-3 mb-4" style={{ background: C.bg, border: `1px solid ${C.line}` }}>
+        <div className="text-xs font-bold mb-1" style={{ color: C.ink }}>{lang === "en" ? "Fix 16-wheeler vehicle sizes" : lang === "mr" ? "16 चाकी वाहनांची क्षमता दुरुस्त करा" : "16 चक्का गाड़ियों की क्षमता ठीक करें"}</div>
+        <div className="text-[11px] font-bold mb-3" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "An old bug saved drivers who typed \"16 wheeler\" as a 6 wheeler (9,000 kg), so they were listed in the wrong category and rung for the wrong loads. \"Check\" only lists them; \"Fix\" sets them to 30,000 kg. Drivers whose capacity was typed by hand (not 9,000 kg) are never touched."
+            : lang === "mr" ? "जुन्या बगमुळे \"16 wheeler\" टाइप केलेले ड्रायव्हर 6 चाकी (9,000 किग्रा) म्हणून सेव्ह झाले, त्यामुळे ते चुकीच्या श्रेणीत दिसत होते. \"तपासा\" फक्त यादी दाखवते; \"दुरुस्त करा\" त्यांना 30,000 किग्रा करते. हाताने टाइप केलेली क्षमता (9,000 किग्रा नसल्यास) कधीही बदलली जात नाही."
+            : "पुराने बग के कारण \"16 wheeler\" लिखने वाले ड्राइवर 6 चक्का (9,000 किग्रा) के रूप में सेव हो गए, इसलिए वे गलत कैटेगरी में दिखते थे। \"जाँचें\" सिर्फ़ सूची दिखाता है; \"ठीक करें\" उन्हें 30,000 किग्रा करता है। हाथ से लिखी क्षमता (9,000 किग्रा के अलावा) कभी नहीं बदली जाती।"}
+        </div>
+        <button onClick={() => runRepair(false)} disabled={repairBusy} className="w-full rounded-lg py-3 font-bold text-sm" style={{ background: "#FFFFFF", color: C.ink, border: `1.5px solid ${C.line}` }}>
+          {repairBusy ? (lang === "en" ? "Working..." : lang === "mr" ? "काम सुरू आहे..." : "काम हो रहा है...") : (lang === "en" ? "Check (nothing is changed)" : lang === "mr" ? "तपासा (काहीही बदलत नाही)" : "जाँचें (कुछ नहीं बदलता)")}
+        </button>
+        {repairResult && !repairResult.ok && (
+          <div className="mt-2 text-[11px] font-bold" style={{ color: C.safety }}>{lang === "en" ? "Could not run (needs the latest functions deploy and an Admin login)." : lang === "mr" ? "चालवता आले नाही (नवीनतम functions deploy आणि Admin लॉगिन आवश्यक)." : "चल नहीं सका (नवीनतम functions deploy और Admin लॉगिन चाहिए)।"}</div>
+        )}
+        {repairResult && repairResult.ok && (
+          <div className="mt-2">
+            <div data-repair-16-result className="text-xs font-extrabold" style={{ color: repairResult.applied ? C.success : (repairResult.driverCount + repairResult.typeCount > 0 ? C.safety : C.success) }}>
+              {repairResult.applied
+                ? (lang === "en" ? `Fixed: ${repairResult.driverCount} driver(s), ${repairResult.typeCount} vehicle type(s) set to 30,000 kg.` : lang === "mr" ? `दुरुस्त: ${repairResult.driverCount} ड्रायव्हर, ${repairResult.typeCount} वाहन प्रकार 30,000 किग्रा केले.` : `ठीक किया: ${repairResult.driverCount} ड्राइवर, ${repairResult.typeCount} वाहन प्रकार 30,000 किग्रा किए।`)
+                : (repairResult.driverCount + repairResult.typeCount === 0
+                  ? (lang === "en" ? "Nothing to fix." : lang === "mr" ? "दुरुस्त करण्यासारखे काही नाही." : "ठीक करने लायक कुछ नहीं।")
+                  : (lang === "en" ? `${repairResult.driverCount} driver(s) and ${repairResult.typeCount} vehicle type(s) have the wrong 9,000 kg.` : lang === "mr" ? `${repairResult.driverCount} ड्रायव्हर आणि ${repairResult.typeCount} वाहन प्रकारांवर चुकीचे 9,000 किग्रा आहे.` : `${repairResult.driverCount} ड्राइवर और ${repairResult.typeCount} वाहन प्रकार में गलत 9,000 किग्रा है।`))}
+            </div>
+            {!repairResult.applied && (repairResult.drivers || []).length > 0 && (
+              <div className="mt-1 rounded-lg p-2 text-[11px] font-bold" style={{ background: "#FFFFFF", border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont, maxHeight: 140, overflowY: "auto" }}>
+                {repairResult.drivers.map((d) => (<div key={d.mobile}>{d.name || "—"} · {d.mobile} · {d.vehicleName}</div>))}
+              </div>
+            )}
+            {!repairResult.applied && repairResult.driverCount + repairResult.typeCount > 0 && (
+              <button onClick={() => runRepair(true)} disabled={repairBusy} className="w-full rounded-lg py-3 font-bold text-sm mt-2" style={{ background: C.marigold, color: "#000000" }}>
+                {lang === "en" ? "Fix them (set to 30,000 kg)" : lang === "mr" ? "दुरुस्त करा (30,000 किग्रा)" : "ठीक करें (30,000 किग्रा)"}
+              </button>
+            )}
           </div>
         )}
       </div>

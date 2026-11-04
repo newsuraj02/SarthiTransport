@@ -400,6 +400,21 @@ export async function createCsvDownloadLink(csv, fileName) {
   }
 }
 
+// Admin only (functions/index.js repairSixteenWheelerCapacity): lists (apply = false, the default) or fixes (apply = true) drivers / vehicle types saved
+// with 9,000 kg because the old KYC autofill read "16 wheeler" as "6 wheeler". Always resolves with { ok, ... }.
+export async function repairSixteenWheelerCapacity(apply = false) {
+  const functions = functionsByRole[activeRole];
+  if (!functions) return { ok: false, reason: "not_configured" };
+  try {
+    const call = httpsCallable(functions, "repairSixteenWheelerCapacity");
+    const result = await call({ apply: apply === true });
+    return result.data;
+  } catch (e) {
+    console.error("[repairSixteenWheelerCapacity] callable failed", e);
+    return { ok: false, reason: "error" };
+  }
+}
+
 // Admin's "Run scan now" (Live Dashboard scan tile): runs the same morning/evening scan on demand (functions/index.js runHealthCheckNow).
 export async function runHealthCheckNow() {
   const functions = functionsByRole[activeRole];
