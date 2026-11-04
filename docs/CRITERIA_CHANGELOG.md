@@ -100,3 +100,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- CLAUDE.md pointer: card tap / Book this vehicle / See all vehicles replaced by the per-category button
 - changed (1): code:CLAUDE.md
+
+## 2026-11-04 -- Map N min pill restored on the nearest GPS-on listed vehicle (owner 2026-11-04)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking

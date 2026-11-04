@@ -7682,12 +7682,16 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     </div>
   ) : null;
   const canBook = locationsReady && !sameLocation;
-  // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted (no vehicle is picked any more --
-  // owner 2026-11-04 -- so the old "chosen type + nearest ringed with its minutes" view is gone).
+  // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted. The nearest of them (GPS on) carries its
+  // "N min" pill (owner 2026-11-04: "bring back the N min on the map"); no vehicle is picked any more, so it is the nearest of ALL listed vehicles.
   const listStage = locationsReady && !sameLocation; // Pickup + Drop (+ date/time in Advance) done: the vehicle list is showing
   const mapEntries = !listStage ? null
     : nearbyDrivers;
   const mapFixedDrivers = mapEntries ? mapEntries.filter((e) => e.gpsOn).map((e) => e.driver) : null; // GPS-off vehicles are listed but not pinned (their last place is old)
+  const nearestListed = mapEntries?.some((e) => e.gpsOn) ? mapEntries.filter((e) => e.gpsOn).reduce((best, e) => (e.km < best.km ? e : best)) : null;
+  const mapHighlight = nearestListed
+    ? { id: nearestListed.id, label: (() => { const m = etaMinutes(nearestListed.km); return lang === "en" ? `${m} min` : lang === "mr" ? `${m} मिनिट` : `${m} मिनट`; })() }
+    : null;
   // A truck that is on a trip right now is not "available nearby" -- keep it off the map before the list shows too (the vehicle list already excludes it).
   const mapAvailableDrivers = (drivers || []).filter((d) => !driverIsOnTrip(d, bookings));
 
@@ -7758,7 +7762,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched. */}
       <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
         <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
-          activeOnly={listStage} fixedDrivers={mapFixedDrivers} highlightId={null} highlightLabel="" />
+          activeOnly={listStage} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
       </div>
       {bookedMsg && (
         <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
