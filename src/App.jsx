@@ -7973,23 +7973,26 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                     onClick={() => setSelectedCategory(grp.index)}
                     className={`anim-rise w-full rounded-2xl p-3 text-left shadow-sm ${isPicked ? "driver-selected-bounce" : ""}`}
                     style={{ animationDelay: `${Math.min(rowIdx, 6) * 70}ms`, border: `2px solid ${isPicked ? C.success : C.line}`, background: isPicked ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isPicked ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
+                    {/* Owner 2026-11-04 (screenshot: on a 360 px phone the weight was cut to "7500 ..." and the name wrapped on 3 lines): TWO lines per row so
+                        nothing is squeezed. Line 1 = small vehicle icon + the category name (up to 2 lines) with its weight limit as a chip that is NEVER cut off;
+                        line 2 = "N min away" at the left and the fare, big, at the right. */}
                     <div className="flex items-center gap-3">
                     {/* Owner 2026-11-04: the vehicle is drawn ONCE -- the small icon here, or (when this row is picked) the big picture below, never both. */}
                     {!isPicked && (
-                      <div data-category-icon className="w-28 h-16 shrink-0">
+                      <div data-category-icon className="w-[84px] h-12 shrink-0">
                         <CategoryVehicleArt index={grp.index} bold className="w-full h-full" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div data-category-title className="text-lg font-extrabold leading-tight" style={{ color: C.ink }}>{isPicked ? "✓ " : ""}{customerListCategoryName(grp.index, lang)}</div>
-                      <div data-category-weight className="text-sm truncate" style={{ color: C.inkSoft }}>{customerListCategoryLabel(grp.index, lang)}</div>
+                      <div data-category-title className="text-base font-extrabold leading-snug" style={{ color: C.ink }}>{isPicked ? "✓ " : ""}{customerListCategoryName(grp.index, lang)}</div>
+                      <div data-category-weight className="mt-1 inline-block rounded-md px-2 py-0.5 text-xs font-bold leading-snug" style={{ color: C.inkSoft, background: "#EEF2F8" }}>⚖ {customerListCategoryLabel(grp.index, lang)}</div>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <div data-category-fare className="text-sm font-black rounded-full px-2.5 py-1" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(top.fare)}</div>
-                      {mins != null && (
-                        <div data-category-eta className="mt-1 text-[11px] font-bold" style={{ color: C.inkSoft }}>⏱ {lang === "en" ? `${mins} min` : lang === "mr" ? `${mins} मिनिट` : `${mins} मिनट`}</div>
-                      )}
                     </div>
+                    <div className="mt-2 pt-1.5 flex items-center justify-between gap-3" style={{ borderTop: `1px dashed ${C.line}` }}>
+                      <div data-category-eta className="text-xs font-bold" style={{ color: C.inkSoft }}>
+                        {mins != null ? <>⏱ {lang === "en" ? `${mins} min away` : lang === "mr" ? `${mins} मिनिटांवर` : `${mins} मिनट दूर`}</> : null}
+                      </div>
+                      <div data-category-fare className="text-lg font-black rounded-full px-3.5 py-0.5" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(top.fare)}</div>
                     </div>
                     {isPicked && (
                       <div data-category-art className="mt-3 rounded-xl flex items-center gap-2 py-3 px-3 anim-rise" style={{ background: "linear-gradient(135deg, rgba(0,82,204,0.12), rgba(255,255,255,0.95))", border: "1px solid rgba(0,82,204,0.18)" }}>
