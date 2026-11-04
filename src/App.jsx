@@ -26,6 +26,7 @@ import {
 import { increment, serverTimestamp } from "firebase/firestore";
 import { GoogleMap, MarkerF, OverlayViewF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
+import CategoryVehicleArt from "./vehicleArt.jsx";
 import { RecaptchaVerifier, signInWithPhoneNumber, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, linkWithCredential, EmailAuthProvider } from "firebase/auth";
 import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { customerFirebaseAuth, driverFirebaseAuth, adminFirebaseAuth, setActiveRole, getActiveStorage, requestPushToken, listenForegroundPush, checkPushPermission, isNativeApp, initiateMaskedCall, pinAuthEmail, pinToPassword, resetPinAfterPhoneVerify, checkMobileRegistered, classifyKycPhoto, creditDriverReferral, sendTestRing, verifyPickupOtp, mintLocationServiceToken, geoSearchPlaces, geoGetPlace, geoGetAddress } from "./firebaseClient";
@@ -4085,11 +4086,17 @@ function customerListCategoryIndex(capacityKg) {
   const i = CUSTOMER_LIST_CATEGORY_KG.findIndex((m) => kg <= m);
   return i === -1 ? CUSTOMER_LIST_CATEGORY_KG.length : i;
 }
-// The category NAMES the customer sees as each row's title (owner 2026-11-04), one per category, index-aligned with CUSTOMER_LIST_CATEGORY_KG plus the
-// final "Above 32000 kg" group. Same in every language (they are vehicle names); the weight limit is the small line under the name.
-const CUSTOMER_LIST_CATEGORY_NAMES = ["3 wheeler", "Tata Ace", "Pickup", "Pickup 8ft", "Tata 407", "17ft Eicher", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "32ft container", "12/14/16 wheeler", "32t+ truck"];
-function customerListCategoryName(index) {
-  return CUSTOMER_LIST_CATEGORY_NAMES[Math.min(Math.max(index, 0), CUSTOMER_LIST_CATEGORY_NAMES.length - 1)];
+// The category NAMES the customer sees as each row's title (owner 2026-11-04), index-aligned with CUSTOMER_LIST_CATEGORY_KG plus the final
+// "Above 32000 kg" group, in the customer's language (hi / mr translated, same wording style as the rest of the app: चक्का / चाकी, फीट / फूट);
+// the weight limit is the small line under the name.
+const CUSTOMER_LIST_CATEGORY_NAMES = {
+  en: ["3 wheeler", "Tata Ace", "Pickup", "Pickup 8ft", "Tata 407", "17ft Eicher", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "32ft container", "12/14/16 wheeler", "32t+ truck"],
+  hi: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फीट", "टाटा 407", "17 फीट आयशर", "20 फीट कंटेनर", "6 चक्का", "22/24 फीट ट्रक", "10 चक्का", "32 फीट कंटेनर", "12/14/16 चक्का", "32 टन+ ट्रक"],
+  mr: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फूट", "टाटा 407", "17 फूट आयशर", "20 फूट कंटेनर", "6 चाकी", "22/24 फूट ट्रक", "10 चाकी", "32 फूट कंटेनर", "12/14/16 चाकी", "32 टन+ ट्रक"],
+};
+function customerListCategoryName(index, lang) {
+  const list = CUSTOMER_LIST_CATEGORY_NAMES[lang] || CUSTOMER_LIST_CATEGORY_NAMES.en;
+  return list[Math.min(Math.max(index, 0), list.length - 1)];
 }
 function customerListCategoryLabel(index, lang) {
   const last = CUSTOMER_LIST_CATEGORY_KG[CUSTOMER_LIST_CATEGORY_KG.length - 1];
@@ -7954,13 +7961,14 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   return (
                   <button key={grp.index} type="button" data-list-category={grp.index} data-category-picked={isPicked ? "1" : undefined} aria-pressed={isPicked} disabled={!!sendingKey}
                     onClick={() => setSelectedCategory(grp.index)}
-                    className={`anim-rise w-full flex items-center gap-3 rounded-2xl p-3 text-left shadow-sm ${isPicked ? "driver-selected-bounce" : ""}`}
+                    className={`anim-rise w-full rounded-2xl p-3 text-left shadow-sm ${isPicked ? "driver-selected-bounce" : ""}`}
                     style={{ animationDelay: `${Math.min(rowIdx, 6) * 70}ms`, border: `2px solid ${isPicked ? C.success : C.line}`, background: isPicked ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isPicked ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
-                    <div data-category-icon className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                      <VehicleCategoryIcon tierIndex={top.tierIndex} />
+                    <div className="flex items-center gap-3">
+                    <div data-category-icon className="w-24 h-14 shrink-0">
+                      <CategoryVehicleArt index={grp.index} className="w-full h-full" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div data-category-title className="text-lg font-extrabold leading-tight" style={{ color: C.ink }}>{isPicked ? "✓ " : ""}{customerListCategoryName(grp.index)}</div>
+                      <div data-category-title className="text-lg font-extrabold leading-tight" style={{ color: C.ink }}>{isPicked ? "✓ " : ""}{customerListCategoryName(grp.index, lang)}</div>
                       <div data-category-weight className="text-sm truncate" style={{ color: C.inkSoft }}>{customerListCategoryLabel(grp.index, lang)}</div>
                     </div>
                     <div className="shrink-0 text-right">
@@ -7969,6 +7977,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                         <div data-category-eta className="mt-1 text-[11px] font-bold" style={{ color: C.inkSoft }}>⏱ {lang === "en" ? `${mins} min` : lang === "mr" ? `${mins} मिनिट` : `${mins} मिनट`}</div>
                       )}
                     </div>
+                    </div>
+                    {isPicked && (
+                      <div data-category-art className="mt-3 rounded-xl flex items-center justify-center py-3 px-2 anim-rise" style={{ background: "linear-gradient(135deg, rgba(0,82,204,0.12), rgba(255,255,255,0.95))", border: "1px solid rgba(0,82,204,0.18)" }}>
+                        <CategoryVehicleArt index={grp.index} title={customerListCategoryName(grp.index, lang)} className="w-full max-w-[300px] h-32" />
+                      </div>
+                    )}
                   </button>
                   );
                   })}

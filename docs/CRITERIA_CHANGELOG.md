@@ -113,3 +113,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-04 -- Category names on the customer list rows: 3 wheeler, Tata Ace, Pickup, Pickup 8ft, Tata 407, 17ft Eicher, 20ft container, 6 wheeler, 22ft/24ft truck, 10 wheeler, 32ft container, 12/14/16 wheeler, 32t+ truck (owner 2026-11-04)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/criteria.mjs#BLOCKS, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
 - added (4): app:CUSTOMER_LIST_CATEGORY_NAMES, app:customerListCategoryName, code:src/App.jsx#CUSTOMER_LIST_CATEGORY_NAMES, code:src/App.jsx#customerListCategoryName
+
+## 2026-11-04 -- Vehicle illustrations (src/vehicleArt.jsx) on the category rows + large on the picked row; category names translated to hi / mr (owner 2026-11-04)
+- changed (9): app:CUSTOMER_LIST_CATEGORY_NAMES, app:customerListCategoryName, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CUSTOMER_LIST_CATEGORY_NAMES, code:src/App.jsx#customerListCategoryName, code:src/App.jsx#CustomerBooking
+- added (1): code:src/vehicleArt.jsx
