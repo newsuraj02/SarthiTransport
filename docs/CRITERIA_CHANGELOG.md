@@ -126,3 +126,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-04 -- Bold row icons; 16-wheeler capacity repair callable + Admin Settings card + vehicleSpecRepair.js (owner 2026-11-04 'fix this too')
 - changed (10): file:src/firebaseClient.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#other, code:scripts/criteria.mjs#FILES, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminSettings, code:src/App.jsx#CustomerBooking, code:src/vehicleArt.jsx#CategoryVehicleArt
 - added (5): fn:repairSixteenWheelerCapacity, file:functions/vehicleSpecRepair.js, code:functions/index.js#fn:repairSixteenWheelerCapacity, code:src/firebaseClient.js#repairSixteenWheelerCapacity, code:functions/vehicleSpecRepair.js
+
+## 2026-11-04 -- Row vehicle icon thickness matched to the picked icon (strokes 1.7x, no extra tyre / chassis bulk) (owner 2026-11-04)
+- changed (2): code:CLAUDE.md, code:src/vehicleArt.jsx#CategoryVehicleArt

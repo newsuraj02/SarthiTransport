@@ -150,7 +150,7 @@
   "code:.github/workflows/build-twa.yml": "39913cdb03b5dd04",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "d9e2dc0fee55202b",
-  "code:CLAUDE.md": "2134c887866b67a1",
+  "code:CLAUDE.md": "8c14c94f8cab74df",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -468,6 +468,7 @@
   "code:functions/package.json": "d5aa2a9b1670160a",
   "code:functions/ringText.js": "8d8d15739bbbdd4b",
   "code:functions/tripLock.js": "cef6b4cc3ea713d8",
+  "code:functions/vehicleSpecRepair.js": "adf812ad98da8207",
   "code:index.html": "13aaad7bdd0049da",
   "code:package.json": "79c500d810b09df1",
   "code:postcss.config.js": "33e39ff2f29058a0",
@@ -1084,14 +1085,13 @@
   "code:src/vehicleArt.jsx#CAB_BOTTOM": "20f0cd632ba654d6",
   "code:src/vehicleArt.jsx#DEPTH": "ed47fa11321f9dd4",
   "code:src/vehicleArt.jsx#RISE": "a5c52ab874bb039d",
-  "code:src/vehicleArt.jsx#CategoryVehicleArt": "c2703e995af874ee",
+  "code:src/vehicleArt.jsx#CategoryVehicleArt": "34bfcfecca87085b",
   "code:storage.rules": "361dda11b22c0996",
   "code:store-assets/feature-graphic.png": "42a8c96c8f549c3a",
   "code:tailwind.config.js": "915e9fffd59ec80c",
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "7f5bacfd4416bf5f",
-  "code:functions/vehicleSpecRepair.js": "adf812ad98da8207"
+  "code:vite.config.js": "7f5bacfd4416bf5f"
  }
 }

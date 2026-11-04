@@ -39,12 +39,13 @@ const CAB_BOTTOM = 49.5;
 const DEPTH = 12;                   // how far the front face / roof recede (to the up-left)
 const RISE = 6;
 
-// bold = the small row icon: every outline / detail stroke is drawn about twice as thick and a darker outline is used, so the drawing stays heavy
-// and readable at ~100 px (the large picture on the picked row uses the normal weight).
+// bold = the small row icon (owner 2026-11-04: "match the thickness to the inside vehicle icon"): the big picture on the picked row is drawn about
+// 1.7x larger than the row icon, so the row icon's strokes are drawn 1.7x thicker -- the SAME on-screen line thickness, same colours, same wheels and
+// chassis (an earlier 2.4x version with chunkier tyres was too heavy).
 export default function CategoryVehicleArt({ index = 0, className = "", title = "", bold = false }) {
-  const k = bold ? 2.4 : 1;
-  const wr = WHEEL_R + (bold ? 1 : 0);          // chunkier tyres in bold mode
-  const outline = bold ? "rgba(15,27,45,0.95)" : OUTLINE;
+  const k = bold ? 1.7 : 1;                      // the big picture is drawn ~1.7x larger than the row icon, so 1.7x strokes = the SAME on-screen line thickness
+  const wr = WHEEL_R;
+  const outline = OUTLINE;
   const uid = React.useId().replace(/[^a-zA-Z0-9]/g, "");
   const sp = VEHICLE_ART_SPECS[Math.min(Math.max(index, 0), VEHICLE_ART_SPECS.length - 1)];
   // The width must also cover the last wheel's dark arch, or a many-axle truck loses its rear wheel at the edge.
@@ -87,7 +88,7 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
       <ellipse cx={x0 + width / 2 - 2} cy={GROUND + 1.2} rx={width / 2 + 8} ry={3} fill="rgba(15,27,45,0.20)" />
 
       {/* chassis + underbody */}
-      <rect x={x0 + 2} y={FLOOR} width={width - 2} height={bold ? 7 : 5.5} rx={1.5} fill={INK} />
+      <rect x={x0 + 2} y={FLOOR} width={width - 2} height={5.5} rx={1.5} fill={INK} />
       <rect x={x0 + sp.cw * 0.5} y={FLOOR + 5.5} width={Math.min(18, sp.len * 0.28)} height={4} rx={1.5} fill="#2A3445" />
 
       {/* BODY ---------------------------------------------------------------- */}
