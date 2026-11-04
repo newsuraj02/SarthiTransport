@@ -135,3 +135,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- More realistic vehicle art: far-side tyres, twin rear tyres, tread, mudguard lip, mud flaps, fuel tank, reflective tape (owner 2026-11-04 'tyre seems odd, only 2 tyres')
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/vehicleArt.jsx#CategoryVehicleArt
+
+## 2026-11-04 -- Realistic Indian 3 wheeler drawing (ThreeWheelerArt) in the same style as the rest of the set (owner 2026-11-04)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/vehicleArt.jsx#VEHICLE_ART_SPECS, code:src/vehicleArt.jsx#CategoryVehicleArt
+- added (1): code:src/vehicleArt.jsx#ThreeWheelerArt

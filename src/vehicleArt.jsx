@@ -13,7 +13,7 @@ import React from "react";
 //   cw/ch = cab width/height, body = open | box | container, len = body length, bh = body height, gap = space between cab and body,
 //   wheels = x of each wheel from the vehicle's left edge (more wheels = more axles).
 export const VEHICLE_ART_SPECS = [
-  { cw: 24, ch: 31, body: "open", len: 32, bh: 14, gap: 2, wheels: [10, 46] },                       // 3 wheeler
+  { cw: 25, ch: 31, body: "open", len: 34, bh: 16, gap: 2, wheels: [8, 48, 48], special: "three-wheeler" }, // 3 wheeler (drawn by ThreeWheelerArt: ONE centre front wheel + two rear)
   { cw: 28, ch: 35, body: "open", len: 40, bh: 17, gap: 2, wheels: [11, 56] },                      // Tata Ace
   { cw: 30, ch: 37, body: "open", len: 50, bh: 19, gap: 2, wheels: [12, 68] },                      // Pickup
   { cw: 30, ch: 37, body: "open", len: 62, bh: 23, gap: 2, wheels: [12, 80] },                      // Pickup 8ft
@@ -41,10 +41,106 @@ const CAB_BOTTOM = 49.5;
 const DEPTH = 12;                   // how far the front face / roof recede (to the up-left)
 const RISE = 6;
 
+// THE 3 WHEELER (owner 2026-11-04: "use that realistic 3 wheelers in India"): a loading auto like an Ape / Alfa / Bajaj -- ONE wheel in the centre at the
+// front under a scooter-style cowl with a raked windscreen and a round headlight, an open-sided cab (seat + handlebar visible, half door, canopy roof) and
+// a short open cargo bed over two rear wheels (only the near one is fully visible; the far one peeks out under the bed, like on the other vehicles).
+// Same palette, view, gradients and tyre detail as the rest of the set.
+function ThreeWheelerArt({ className = "", title = "", bold = false }) {
+  const uid = React.useId().replace(/[^a-zA-Z0-9]/g, "");
+  const k = bold ? 1.7 : 1;
+  const g = (name) => `url(#${name}${uid})`;
+  const x0 = DEPTH + 6, dd = 9, rr = 4.5;            // the vehicle is narrower than a truck: shallower front face / roof
+  const wr = 6.8;                                    // small wheels
+  const CB = 47, TOP = 18, FL = 44;                  // cab bottom, roof line, bed floor
+  const rearX = x0 + 49, rearY = GROUND - wr;
+  const frontX = x0 + 8 - dd * 0.5, frontY = GROUND - wr - rr * 0.5;   // the front wheel sits on the centre line, i.e. half way back along the depth
+  const bx = x0 + 27, len = 34, bh = 16, by = FL - bh;
+  const p = (u, t) => `${(x0 - dd * u).toFixed(2)},${(TOP + t * (CB - TOP) - rr * u).toFixed(2)}`;   // a point on the nose: u 0 = near edge, 1 = far edge; t 0 = top .. 1 = bottom
+  const wheel = (cx, cy, key, mudflap) => (
+    <g key={key}>
+      <circle cx={cx} cy={cy} r={wr + 2.4} fill={INK} />
+      <circle cx={cx} cy={cy} r={wr} fill="#12171F" stroke="#2E3948" strokeWidth={1.1 * k} />
+      <circle cx={cx} cy={cy} r={wr - 0.7} fill="none" stroke="#303C4E" strokeWidth={1.4 * k} strokeDasharray="1.3 1.5" />
+      <circle cx={cx} cy={cy} r={wr - 2.2} fill="none" stroke="#222C3A" strokeWidth={1 * k} />
+      <circle cx={cx} cy={cy} r={3.9} fill={g("rim")} stroke="#6F7C91" strokeWidth={0.8 * k} />
+      <circle cx={cx} cy={cy} r={1.6} fill="#56627A" />
+      {[0, 72, 144, 216, 288].map((a) => (<circle key={a} cx={cx + 2.5 * Math.cos((a * Math.PI) / 180)} cy={cy + 2.5 * Math.sin((a * Math.PI) / 180)} r={0.55} fill="#3C485C" />))}
+      {mudflap && <rect x={cx + wr + 1} y={cy - 2.5} width={2.2} height={8.5} rx={0.8} fill="#0C1118" />}
+    </g>
+  );
+  const marks = [];
+  for (let x = bx + 8; x < bx + len - 4; x += 13) marks.push(<g key={x}><rect x={x - 1.4} y={by + 3} width={2.8} height={bh - 3} fill="#0E3282" opacity="0.8" /><line x1={x + 2.2} y1={by + 4} x2={x + 2.2} y2={FL - 1} stroke="rgba(255,255,255,0.18)" strokeWidth={0.9 * k} /></g>);
+  const vbTop = TOP - rr - 4;
+  const viewBox = `2 ${vbTop} ${x0 + 66 - 2} ${GROUND + 5 - vbTop}`;
+  return (
+    <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" className={className} role={title ? "img" : undefined} aria-hidden={title ? undefined : "true"} aria-label={title || undefined} focusable="false">
+      {title ? <title>{title}</title> : null}
+      <defs>
+        <linearGradient id={`cab${uid}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFFFFF" /><stop offset="1" stopColor="#DCE4EF" /></linearGradient>
+        <linearGradient id={`front${uid}`} x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#C9D3E1" /><stop offset="1" stopColor="#F4F7FB" /></linearGradient>
+        <linearGradient id={`roof${uid}`} x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#F8FAFD" /><stop offset="1" stopColor="#E4EAF3" /></linearGradient>
+        <linearGradient id={`glass${uid}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={GLASS_TOP} /><stop offset="1" stopColor={GLASS_BOT} /></linearGradient>
+        <linearGradient id={`blue${uid}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3470E6" /><stop offset="1" stopColor="#1647AB" /></linearGradient>
+        <linearGradient id={`inside${uid}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#1A2332" /><stop offset="1" stopColor="#33425C" /></linearGradient>
+        <radialGradient id={`rim${uid}`} cx="0.4" cy="0.35" r="0.8"><stop offset="0" stopColor="#E8EEF6" /><stop offset="1" stopColor="#8E9BB0" /></radialGradient>
+      </defs>
+      <ellipse cx={x0 + 30} cy={GROUND + 1.2} rx={42} ry={3} fill="rgba(15,27,45,0.20)" />
+
+      {/* far rear wheel peeking out under the bed + the centre front wheel (drawn before the cowl so the cowl covers its top) */}
+      <circle cx={rearX - dd * 0.8} cy={rearY - rr * 0.8} r={wr + 0.6} fill="#0C1118" />
+      <circle cx={rearX - dd * 0.8} cy={rearY - rr * 0.8} r={wr - 2.2} fill="#1D2634" />
+      <circle cx={rearX - dd * 0.8} cy={rearY - rr * 0.8} r={2} fill="#46536A" />
+      {wheel(frontX, frontY, "front", false)}
+
+      {/* chassis rail + rear axle */}
+      <rect x={x0 + 6} y={FL} width={58} height={5} rx={1.5} fill={INK} />
+      <rect x={x0 + 26} y={FL + 5} width={14} height={4} rx={1.5} fill="#2A3445" />
+
+      {/* CARGO BED: far wall's inner face, near wall with ribs, tail light, marker */}
+      <polygon points={`${bx},${by} ${bx + len},${by} ${bx + len - dd},${by - rr} ${bx - dd},${by - rr}`} fill="#0F2F7A" stroke={OUTLINE} strokeWidth={0.9 * k} strokeLinejoin="round" />
+      <rect x={bx} y={by} width={len} height={bh} rx={1.8} fill={g("blue")} stroke={OUTLINE} strokeWidth={1.1 * k} />
+      <rect x={bx} y={by} width={len} height={3.4} rx={1.6} fill="#5A92F2" />
+      <rect x={bx} y={by + 3.4} width={len} height={1.2} fill="rgba(8,30,90,0.5)" />
+      {marks}
+      <rect x={bx} y={FL - 2.2} width={len} height={2.2} fill="#0E3282" />
+      <rect x={bx + len - 3.4} y={FL - 7} width={2.4} height={4.4} rx={1} fill="#C62828" />
+      <rect x={bx + len - 9} y={FL - 11} width={2.4} height={1.6} rx={0.5} fill="#F59E0B" />
+
+      {/* CAB: canopy roof (receding), raked windscreen, nose with headlight, near side with open window + seat + handlebar, half door */}
+      <polygon points={`${x0 + 5},${TOP} ${x0 + 25},${TOP} ${x0 + 25 - dd},${TOP - rr} ${x0 + 5 - dd},${TOP - rr}`} fill={g("roof")} stroke={OUTLINE} strokeWidth={1 * k} strokeLinejoin="round" />
+      <polygon points={`${p(0, 0.52)} ${p(1, 0.52)} ${p(1, 1)} ${p(0, 1)}`} fill={g("front")} stroke={OUTLINE} strokeWidth={1.1 * k} strokeLinejoin="round" />
+      <polygon points={`${x0},${TOP + 0.52 * (CB - TOP)} ${x0 - dd},${TOP + 0.52 * (CB - TOP) - rr} ${x0 - dd + 5},${TOP - rr} ${x0 + 5},${TOP}`} fill={g("glass")} stroke="rgba(10,20,40,0.6)" strokeWidth={0.8 * k} strokeLinejoin="round" />
+      <polygon points={`${x0 + 1.5},${TOP + 0.5 * (CB - TOP)} ${x0 - dd * 0.4},${TOP + 0.5 * (CB - TOP) - rr * 0.4} ${x0 - dd * 0.4 + 4.6},${TOP + 2 - rr * 0.4} ${x0 + 5.6},${TOP + 2.4}`} fill="rgba(255,255,255,0.2)" />
+      <ellipse cx={x0 - dd * 0.5} cy={TOP + 0.7 * (CB - TOP) - rr * 0.5} rx={2.7} ry={3.1} fill="#FFF3C9" stroke="rgba(0,0,0,0.5)" strokeWidth={0.7 * k} />
+      <polygon points={`${p(0.04, 0.9)} ${p(0.96, 0.9)} ${p(0.96, 1.03)} ${p(0.04, 1.03)}`} fill="#222B39" stroke="rgba(0,0,0,0.5)" strokeWidth={0.6 * k} />
+      <rect x={x0 - dd * 0.05 - 2.6} y={TOP + 0.66 * (CB - TOP) - 1} width={2.2} height={2} rx={0.6} fill="#F59E0B" />
+      {/* near side of the cab */}
+      <path d={`M ${x0} ${CB} L ${x0} ${TOP + 0.52 * (CB - TOP)} L ${x0 + 5} ${TOP} L ${x0 + 23} ${TOP} Q ${x0 + 25} ${TOP} ${x0 + 25} ${TOP + 3} L ${x0 + 25} ${CB} Z`} fill={g("cab")} stroke={OUTLINE} strokeWidth={1.1 * k} strokeLinejoin="round" />
+      <path d={`M ${x0 + 7.5} 23 L ${x0 + 21.5} 23 L ${x0 + 21.5} 37 L ${x0 + 3.4} 37 Z`} fill={g("inside")} stroke="rgba(10,20,40,0.65)" strokeWidth={0.9 * k} strokeLinejoin="round" />
+      <rect x={x0 + 12} y={29.5} width={9.5} height={7.5} rx={1.6} fill="#7C8AA0" />
+      <rect x={x0 + 19.4} y={25.5} width={2.2} height={11.5} rx={1} fill="#66748C" />
+      <line x1={x0 + 6.5} y1={29.5} x2={x0 + 11} y2={27} stroke="#0C1118" strokeWidth={1.6 * k} strokeLinecap="round" />
+      <circle cx={x0 + 6.2} cy={29.8} r={1.5} fill="#0C1118" />
+      <rect x={x0 + 0.6} y={37} width={24.4} height={CB - 37} fill="#C4CFDF" />
+      <path d={`M ${x0 + 3} 40 L ${x0 + 22} 40`} stroke="rgba(15,27,45,0.4)" strokeWidth={0.9 * k} />
+      <rect x={x0 + 14} y={41} width={5.4} height={1.8} rx={0.9} fill="#3A4659" />
+      <rect x={x0 - 2.8} y={25} width={3.2} height={5.4} rx={1.2} fill={INK} />
+      <rect x={x0 - 0.4} y={27} width={2.4} height={1.4} fill={INK} />
+
+      {/* front mudguard over the centre wheel, rear arch + near rear wheel */}
+      <path d={`M ${frontX - wr - 2.2} ${frontY - 2.2} A ${wr + 2.2} ${wr + 2.2} 0 0 1 ${frontX + wr + 2.2} ${frontY - 2.2} Z`} fill={g("cab")} stroke={OUTLINE} strokeWidth={1.1 * k} strokeLinejoin="round" />
+      <path d={`M ${frontX - wr - 1} ${frontY - 2.2} A ${wr + 1} ${wr + 1} 0 0 1 ${frontX + wr + 1} ${frontY - 2.2}`} fill="none" stroke="rgba(15,27,45,0.45)" strokeWidth={1 * k} />
+      <path d={`M ${rearX - wr - 3} ${rearY} A ${wr + 3} ${wr + 3} 0 0 1 ${rearX + wr + 3} ${rearY}`} fill="none" stroke="#5B6A82" strokeWidth={1.1 * k} />
+      {wheel(rearX, rearY, "rear", true)}
+    </svg>
+  );
+}
+
 // bold = the small row icon (owner 2026-11-04: "match the thickness to the inside vehicle icon"): the big picture on the picked row is drawn about
 // 1.7x larger than the row icon, so the row icon's strokes are drawn 1.7x thicker -- the SAME on-screen line thickness, same colours, same wheels and
 // chassis (an earlier 2.4x version with chunkier tyres was too heavy).
 export default function CategoryVehicleArt({ index = 0, className = "", title = "", bold = false }) {
+  if (index === 0) return <ThreeWheelerArt className={className} title={title} bold={bold} />;
   const k = bold ? 1.7 : 1;                      // the big picture is drawn ~1.7x larger than the row icon, so 1.7x strokes = the SAME on-screen line thickness
   const wr = WHEEL_R;
   const outline = OUTLINE;
