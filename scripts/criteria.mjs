@@ -18,9 +18,9 @@ export const BLOCKS = {
   "src/App.jsx": [
     // availability / who may be shown or take a load
     "parseScheduledFor", "minAdvanceNoticeHours", "notificationLockHours", "estimatedTripHours", "isBookingRunning", "getBookingWindow", "driverIsOnTrip",
-    "findDriverLoadConflict", "isDriverRecord", "isDriverBroadcastEligible", "nearbyOnlineDrivers", "nearbyOfflineDrivers", "padVehicleCategories",
+    "findDriverLoadConflict", "isDriverRecord", "isDriverBroadcastEligible", "ringCategoryIndexOfCapacity", "ringCategoryIndexOfLoad", "RING_CATEGORIES_ABOVE", "hasFreshLocation", "nearbyOnlineDrivers", "nearbyOfflineDrivers",
     "maxFleetVehicleCapacityKg", "CURRENT_BID_RADIUS_KM", "ADVANCE_BID_RADIUS_KM", "VEHICLE_HEADROOM_KG", "NEARBY_DRIVER_RADIUS_KM", "NEARBY_DRIVER_STALE_MS",
-    "BROADCAST_LOCATION_STALE_MS", "BROADCAST_WEIGHT_HEADROOM_KG", "DIRECT_REQUEST_RADIUS_KM", "APP_OPEN_BEAT_MS",
+    "APP_OPEN_BEAT_MS",
     // fares
     "DEFAULT_FARE_TIERS", "DIESEL_BASELINE_PRICE_PER_LITRE", "DIESEL_MILEAGE_BY_TIER_MAX_KG", "calculateFare", "priceOutstation", "priceCorrectionFactor",
     "findFareTier", "vehicleForWeight", "getAdminRouteOverride", "findExactAdminRoute", "getRouteScaleRatio", "resolveFareForCapacity", "resolveFareForTier",
@@ -32,12 +32,12 @@ export const BLOCKS = {
     "getKycMissingFromValues", "getDriverKycMissing", "isDriverKycComplete", "settlePendingRingAction",
   ],
   "functions/index.js": ["notificationLockHours", "parseScheduledFor", "estimatedTripHours", "isBookingRunning", "getBookingWindow", "hasLoadConflict", "haversineKm", "pinAuthEmail",
-    "BROADCAST_WEIGHT_HEADROOM_KG", "BROADCAST_LOCATION_STALE_MS", "DIRECT_REQUEST_RADIUS_KM", "APP_OPEN_WINDOW_MS", "isAppOpenNow", "escalateOneBooking", "ESCALATION_RADII_KM",
-    "ESCALATION_FIRST_NUDGE_SEC", "ESCALATION_LOCATION_STALE_MS", "WATCHER_BACKUP_DELAY_MS", "RING_RETRY_DELAYS_MS", "sendDirectRequestAlert", "sendDirectRequestRingAlert"],
+    "APP_OPEN_WINDOW_MS", "isAppOpenNow", "escalateOneBooking", "ESCALATION_ROUNDS",
+    "ESCALATION_FIRST_NUDGE_SEC", "WATCHER_BACKUP_DELAY_MS", "RING_RETRY_DELAYS_MS", "sendDirectRequestAlert", "sendDirectRequestRingAlert"],
 };
 // Whole-file fingerprints: rules, hosting/functions config, service worker, loader, native manifests, server helpers.
 export const FILES = [
-  "firestore.rules", "storage.rules", "firebase.json", "index.html", "public/service-worker.js", "functions/otp.js", "functions/ringText.js",
+  "firestore.rules", "storage.rules", "firebase.json", "index.html", "public/service-worker.js", "functions/otp.js", "functions/ringText.js", "functions/tripLock.js",
   "functions/addressLang.js", "functions/healthAudit.js", "functions/package.json", "capacitor.config.ts", "capacitor.admin.config.ts",
   "android/app/src/main/AndroidManifest.xml", "android-admin/app/src/main/AndroidManifest.xml", "src/firebaseClient.js", "src/firestoreStore.js",
 ];

@@ -1016,16 +1016,14 @@ function driverIsOnTrip(driver, bookings, now = Date.now()) {
 // ---- driver availability (end) ----
 
 // THE CUSTOMER VEHICLE-LIST RULE (pulled out of CustomerBooking 2026-11-03 so it can be tested): may this driver be shown as a bookable vehicle?
-// Online, KYC Approved, not blacklisted; vehicle capacity >= the load and at most VEHICLE_HEADROOM_KG above it; a pickup is known and the driver has
-// a GPS fix no older than NEARBY_DRIVER_STALE_MS (5 min) within bidRadiusKm (30 km current / 50 km advance) of it; and NO availability conflict --
-// a driver on a running trip (or inside an advance booking's buffer) is never shown. For an advance booking the conflict is checked against THAT slot.
-function isDriverListableForCustomer(d, { loadKg = 0, pickupCoords, bidRadiusKm, advance = false, scheduledForValue = null, bookings = [], vehicleTypes = [], lang = "hi", now = Date.now() }) {
+// Since 2026-11-04: DUTY ON + KYC Approved + not blacklisted + has a vehicle + NOT on a trip (a running trip, or an advance booking's buffer for THAT slot).
+// No GPS / distance / weight condition.
+function isDriverListableForCustomer(d, { advance = false, scheduledForValue = null, bookings = [], vehicleTypes = [], lang = "hi" }) {
+  // Owner 2026-11-04: DUTY ON is the only availability switch -- GPS on or off, near or far, makes no difference to being listed
+  // (the same people are rung, see isDriverBroadcastEligible). Listed = duty on + KYC Approved + not blocked + has a vehicle + not on a trip.
   if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
   const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-  if (loadKg > 0 && (dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG)) return false; // no weight given (the customer screen has no weight box any more) = every capacity
-  if (!pickupCoords || !d.lastKnownLocation) return false;
-  if (!d.lastKnownLocation.updatedAt || now - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-  if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > bidRadiusKm) return false;
+  if (dCapKg <= 0) return false;
   return !findDriverLoadConflict(d, advance ? { scheduledFor: scheduledForValue } : {}, bookings, vehicleTypes, lang);
 }
 
@@ -1365,60 +1363,33 @@ export function vehicleForWeight(weightKg, tiers = DEFAULT_FARE_TIERS) {
   }, null);
 }
 
-// Broadcast dispatch radius for a fresh category-based request (see
-// requestByCategory) — every eligible driver within this distance of
-// pickup, in the customer's own category or up to BROADCAST_WEIGHT_HEADROOM_KG
-// above it, sees the request at once (no single nearest-first target, no
-// per-driver timeout) and whoever accepts first gets it.
-const DIRECT_REQUEST_RADIUS_KM = 30;
-
-// Wider staleness cutoff than NEARBY_DRIVER_STALE_MS (5 min, used for the
-// live map/picker display) -- broadcast-dispatch reach deliberately goes
-// further so a driver who went off duty recently still gets found by their
-// last real position, without reviving stale-online-driver-treated-as-
-//-available (BUG_TRACKER_SEED, critical, fixed 2026-09-17: 188/203
-// "Online" drivers had no recent GPS at all, so an unbounded/no-staleness
-// check pushed loads to drivers based on days-old coordinates). 24h is the
-// deliberate middle ground between that bug and genuinely excluding every
-// off-duty driver.
-const BROADCAST_LOCATION_STALE_MS = 24 * 60 * 60 * 1000;
-
-// How far ABOVE the customer's own entered weight a vehicle's capacity may
-// go and still qualify for the broadcast (see isDriverBroadcastEligible) --
-// a straight kg window on the booking's own b.weight (the customer's real
-// entered weight, always set by requestByCategory), not a count of tier
-// brackets climbed.
-const BROADCAST_WEIGHT_HEADROOM_KG = 5000;
-
-// Whether driver d currently qualifies to see/accept broadcast booking b:
-// KYC-approved, not blacklisted (online status deliberately NOT checked —
-// see below); own vehicle capacity can actually carry b's weight and isn't
-// more than BROADCAST_WEIGHT_HEADROOM_KG over it; hasn't already declined
-// it; has reported a location within DIRECT_REQUEST_RADIUS_KM of pickup
-// inside the last BROADCAST_LOCATION_STALE_MS; and has no scheduling
-// conflict. Pure/explicit-args like findDriverLoadConflict above, so both
-// requestByCategory (checking "does anyone qualify at all") and DriverHome
-// (building each driver's own list of open requests) share the exact same
-// notion of "eligible" and can never drift apart.
-//
-// Online status is deliberately NOT checked here, on request -- every
-// eligible driver within range should see/be pushed a new load regardless
-// of whether they're currently on duty, not just whoever happens to be
-// online with the picker list already showing them. GPS freshness still
-// is, just with a much wider window (BROADCAST_LOCATION_STALE_MS, 24h) than
-// the live map's 5-minute one -- dropping it entirely would revive
-// stale-online-driver-treated-as-available (BUG_TRACKER_SEED, critical,
-// fixed 2026-09-17), where a driver's days-old coordinate got treated as
-// proof they're reachable right now.
+// WHO IS RUNG / SEES a new category-based request (owner 2026-11-04, replacing the old GPS + radius + weight-window rule): a driver whose
+// DUTY IS ON, KYC approved, not blocked, not on a trip, whose vehicle category is the one the customer picked or one of the next
+// RING_CATEGORIES_ABOVE categories above it. GPS, last-seen, distance and the phone being locked / the app closed are NOT looked at.
+// MIRRORS functions/tripLock.js (evaluateNewLoadDriver) -- an invariant compares the two on hundreds of random drivers.
+const RING_CATEGORIES_ABOVE = 2;
+// Index of the fare-table category a vehicle of this capacity belongs to (the smallest tier that can carry it); -1 = unknown capacity.
+function ringCategoryIndexOfCapacity(capacityKg) {
+  const kg = Number(capacityKg) || 0;
+  if (kg <= 0) return -1;
+  const i = DEFAULT_FARE_TIERS.findIndex((t) => kg <= t.maxKg);
+  return i === -1 ? DEFAULT_FARE_TIERS.length - 1 : i;
+}
+// The category the customer picked (the booking's tierMaxKg); falls back to its weight; -1 = unknown (no category filter).
+function ringCategoryIndexOfLoad(b) {
+  const t = Number(b?.tierMaxKg) || 0;
+  if (t > 0) { const i = DEFAULT_FARE_TIERS.findIndex((x) => x.maxKg === t); return i !== -1 ? i : ringCategoryIndexOfCapacity(t); }
+  return ringCategoryIndexOfCapacity(b?.weight);
+}
+// Pure/explicit-args like findDriverLoadConflict above, so requestByCategory (checking "does anyone qualify at all") and DriverHome
+// (building each driver's own list of open requests) share the exact same notion of "eligible" and can never drift apart.
 function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang) {
-  if (d.kyc !== "Approved" || d.blacklisted) return false;
+  if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
   if ((b.declinedBy || []).includes(d.name)) return false;
-  const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-  const loadWeightKg = Number(b.weight) || 0;
-  if (dCapKg < loadWeightKg || dCapKg > loadWeightKg + BROADCAST_WEIGHT_HEADROOM_KG) return false;
-  if (b.pickupLat == null || !d.lastKnownLocation) return false;
-  if (!d.lastKnownLocation.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > BROADCAST_LOCATION_STALE_MS) return false;
-  if (haversineKm(d.lastKnownLocation.lat, d.lastKnownLocation.lng, b.pickupLat, b.pickupLng) > DIRECT_REQUEST_RADIUS_KM) return false;
+  const dCat = ringCategoryIndexOfCapacity(d.vehicleSpec?.capacityKg);
+  if (dCat === -1) return false;
+  const lCat = ringCategoryIndexOfLoad(b);
+  if (lCat !== -1 && (dCat < lCat || dCat > lCat + RING_CATEGORIES_ABOVE)) return false;
   if (findDriverLoadConflict(d, b, bookings, vehicleTypes, lang)) return false;
   return true;
 }
@@ -4088,6 +4059,12 @@ function LiveTrackingMap({ pickup, drop, pickupLat, pickupLng, dropLat, dropLng,
 // hasn't reported in NEARBY_DRIVER_STALE_MS is treated as gone (closed the
 // app, lost signal) rather than shown stuck in a stale spot.
 const NEARBY_DRIVER_STALE_MS = 5 * 60 * 1000;
+// GPS is ON for a driver = a location fix newer than NEARBY_DRIVER_STALE_MS (5 min). Used only to decide whether a km / map pin can be shown --
+// never whether a duty-on driver is listed or rung (owner 2026-11-04).
+function hasFreshLocation(d, now = Date.now()) {
+  const l = d && d.lastKnownLocation;
+  return !!l && l.lat != null && l.lng != null && !!l.updatedAt && now - l.updatedAt <= NEARBY_DRIVER_STALE_MS;
+}
 const NEARBY_DRIVER_RADIUS_KM = 25;
 const NEARBY_DRIVER_MAX = 20;
 
@@ -6885,59 +6862,6 @@ function maxFleetVehicleCapacityKg(drivers, VEHICLES) {
   }, 0);
 }
 
-// Pads a vehicle-category list up to a minimum count by climbing to the
-// next tier(s) ABOVE whatever's already included, when nearby real
-// inventory is thin -- so a customer in a sparse area still sees at least
-// a few real choices instead of just one or two. Never adds a tier BELOW
-// what's already shown (a smaller vehicle than the load can't carry it
-// anyway). Mirrors nearbyDrivers' own driver-eligibility checks (online/
-// KYC/blacklist/location-freshness/radius) exactly, just scoped one tier
-// at a time instead of the normal flat capacity-headroom window -- shared
-// by CustomerBooking and CustomerAdvanceBooking, which both build
-// `withFare` the same way before calling this.
-function padVehicleCategories(withFare, { drivers, fareTiers, VEHICLES, pickupCoords, radiusKm, pickup, drop, distance, dropCoords, adminRouteFares, minCategories = 3, loadKg = 0, bookings = [], lang = "hi", scheduledFor = null, dieselPricePerLitre = null }) {
-  const coveredTiers = new Set(withFare.map((e) => e.tier.maxKg));
-  if (coveredTiers.size >= minCategories || !pickupCoords) return withFare;
-  const sortedTiers = [...fareTiers].sort((a, b) => a.maxKg - b.maxKg);
-  // Never pad with a tier that can't actually carry loadKg -- previously
-  // this started climbing from the SMALLEST tier whenever nothing matched
-  // the entered weight at all (coveredTiers empty -> highestCovered
-  // -Infinity), which meant an unreasonably heavy weight with no real
-  // match still got padded with irrelevant small vehicles (750kg, 1000kg,
-  // ...) instead of correctly showing no vehicles at all. The floor is
-  // now whichever is higher: what's already covered, or loadKg itself.
-  const highestCovered = Math.max(coveredTiers.size ? Math.max(...coveredTiers) : -Infinity, loadKg - 1);
-  const extra = [];
-  for (const tier of sortedTiers) {
-    if (coveredTiers.size >= minCategories) break;
-    if (tier.maxKg <= highestCovered) continue;
-    const matches = drivers.filter((d) => {
-      if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
-      const dCapKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-      if (findFareTier(dCapKg, fareTiers).maxKg !== tier.maxKg) return false;
-      if (!d.lastKnownLocation?.updatedAt || Date.now() - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
-      if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > radiusKm) return false;
-      // A driver mid-trip or inside an upcoming advance-booking window is
-      // on the move and shouldn't be offered as a padding option either --
-      // same reasoning as the main nearbyDrivers filter. scheduledFor (set
-      // only by CustomerAdvanceBooking) checks against THAT future window
-      // instead of right now.
-      return !findDriverLoadConflict(d, { scheduledFor }, bookings, VEHICLES, lang);
-    });
-    if (!matches.length) continue;
-    coveredTiers.add(tier.maxKg);
-    const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
-    const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares, dieselPricePerLitre);
-    for (const d of matches) {
-      const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-      const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
-      const id = d.mobile || d.id;
-      extra.push({ driver: d, capacityKg, tier, tierIndex, km, id, fare });
-    }
-  }
-  return extra.length ? [...withFare, ...extra].sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km) : withFare;
-}
-
 // Weight input shape per unit -- kg is a plain 3-5 digit integer (100kg to
 // 99999kg; nobody books a <100kg truck load). Tons allow up to 2 integer
 // digits plus 3 decimal digits (0 to 99.999t), typed manually including
@@ -7647,30 +7571,21 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // category (lightest first) and then nearest-first within a category,
   // matching the order the fare tiers and the dispatch engine already use
   // elsewhere.
-  const bidRadiusKm = advance ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
   const nearbyDrivers = (() => {
     if (!scheduleReady) return []; // advance: nothing to match until the date AND time are chosen
-    let withFare = drivers
-      .filter((d) => isDriverListableForCustomer(d, { pickupCoords, bidRadiusKm, advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
+    const withFare = drivers
+      .filter((d) => isDriverListableForCustomer(d, { advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
       .map((d) => {
         const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
         const tier = findFareTier(capacityKg, fareTiers);
         const tierIndex = DEFAULT_FARE_TIERS.findIndex((t) => t.maxKg === tier.maxKg);
-        const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
+        // km from Pickup only when the driver's GPS is ON (a fix under 5 min old); duty-on drivers with GPS off are still listed, with km = null.
+        const km = pickupCoords && hasFreshLocation(d) ? haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) : null;
         const id = d.mobile || d.id;
         const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares, dieselPricePerLitre);
         return { driver: d, capacityKg, tier, tierIndex, km, id, fare };
       })
-      .sort((a, b) => a.tier.maxKg - b.tier.maxKg || a.km - b.km);
-
-    // Fewer than 3 distinct categories available nearby? Climb to the next
-    // tier(s) above what's already here so the customer still sees a few
-    // real choices (see padVehicleCategories above).
-    withFare = padVehicleCategories(withFare, {
-      drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: bidRadiusKm,
-      pickup, drop, distance, dropCoords, adminRouteFares, bookings, lang, dieselPricePerLitre,
-      ...(advance ? { scheduledFor: scheduledForValue } : {}),
-    });
+      .sort((a, b) => a.tier.maxKg - b.tier.maxKg || (a.km ?? Infinity) - (b.km ?? Infinity)); // category, then nearest; GPS-off vehicles after the located ones
 
     // A bad Admin override for just one tier on this route (a stray digit,
     // a mixed-up route -- see findFareOutliers) would otherwise show the
@@ -7743,10 +7658,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const listStage = locationsReady && !sameLocation; // Pickup + Drop (+ date/time in Advance) done: the vehicle list is showing
   const mapEntries = !listStage ? null
     : selectedEntry ? nearbyDrivers.filter((e) => e.tier.maxKg === selectedEntry.tier.maxKg) : nearbyDrivers;
-  const mapFixedDrivers = mapEntries ? mapEntries.map((e) => e.driver) : null;
+  const mapFixedDrivers = mapEntries ? mapEntries.filter((e) => e.km != null).map((e) => e.driver) : null; // GPS-off vehicles are listed but cannot be pinned
   // A truck that is on a trip right now is not "available nearby" -- keep it off the map before the list shows too (the vehicle list already excludes it).
   const mapAvailableDrivers = (drivers || []).filter((d) => !driverIsOnTrip(d, bookings));
-  const nearestOfType = selectedEntry && mapEntries?.length ? mapEntries.reduce((best, e) => (e.km < best.km ? e : best), mapEntries[0]) : null;
+  const nearestOfType = selectedEntry && mapEntries?.some((e) => e.km != null) ? mapEntries.filter((e) => e.km != null).reduce((best, e) => (e.km < best.km ? e : best)) : null;
   const mapHighlight = nearestOfType
     ? { id: nearestOfType.id, label: (() => { const m = etaMinutes(nearestOfType.km); return lang === "en" ? `${m} min` : lang === "mr" ? `${m} मिनिट` : `${m} मिनट`; })() }
     : null;
@@ -8011,7 +7926,9 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                               {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
                             </div>
                             <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {lang === "en" ? (
+                              {entry.km == null ? (
+                                <span data-gps-off className="font-bold">{lang === "en" ? "Location off" : lang === "mr" ? "लोकेशन बंद" : "लोकेशन बंद"}</span>
+                              ) : lang === "en" ? (
                                 <><span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} km</span> from Pickup</>
                               ) : lang === "mr" ? (
                                 <>पिकअपपासून <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>

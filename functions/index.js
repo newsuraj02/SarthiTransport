@@ -3,6 +3,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const crypto = require("crypto");
 const { ringWeightText } = require("./ringText");
+const { evaluateNewLoadDriver } = require("./tripLock");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
 const { auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning, otherRunningTripsOfDriver: auditOtherRunningTrips } = require("./healthAudit");
 const { defineSecret } = require("firebase-functions/params");
@@ -339,30 +340,9 @@ async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile, 
 // addDeclinedBy adding one more name to declinedBy) must NOT re-blast
 // everyone who already got it.
 //
-// Capacity matching mirrors isDriverBroadcastEligible's own kg-window
-// logic (src/App.jsx) -- a driver qualifies if their capacity can carry
-// the load and isn't more than BROADCAST_WEIGHT_HEADROOM_KG over its
-// weight. These constants are duplicated here -- same manual-sync-required
-// pattern as notificationLockHours/haversineKm above, since Cloud
-// Functions can't import client code -- and safe to hardcode since these
-// are fixed code constants on the client too, never Admin-editable (see
-// App.jsx's own "Always the code constant now, never settings.fareTiers"
-// comment).
-const DIRECT_REQUEST_RADIUS_KM = 30;
-// Same constant as src/App.jsx's BROADCAST_WEIGHT_HEADROOM_KG -- kept in
-// sync manually. Replaced the old tier-bracket-climb approach (which used
-// a stale, never-synced 8-tier FARE_TIER_MAX_KGS list from before the
-// 24-tier rate table rebuild) with a plain kg window directly on the
-// load's own weight, since "2 brackets above" turned out to mean a much
-// smaller jump than expected once the rate table went from ~8 tiers to 24.
-const BROADCAST_WEIGHT_HEADROOM_KG = 5000;
-// Same constant as src/App.jsx's BROADCAST_LOCATION_STALE_MS -- kept in
-// sync manually (see that file's comment for the full reasoning). This
-// broadcast path is meant to reach a driver regardless of their online
-// toggle, so it needs a window generous enough to still find them by a
-// recent-ish last fix, while 24h (not unbounded) still guards against the
-// already-fixed stale-online-driver-treated-as-available bug.
-const BROADCAST_LOCATION_STALE_MS = 24 * 60 * 60 * 1000;
+// WHO is rung is decided by functions/tripLock.js (evaluateNewLoadDriver) -- duty on, KYC approved, not blocked, not on a trip, the picked
+// vehicle category or the 2 above it; no GPS / radius / weight condition (owner 2026-11-04). The old DIRECT_REQUEST_RADIUS_KM,
+// BROADCAST_WEIGHT_HEADROOM_KG and BROADCAST_LOCATION_STALE_MS constants were removed with that rule.
 // ---- घंटी पहुँची? (delivery receipt + automatic re-ring), 2026-10-13 ----
 // Uber-style: the server doesn't just fire the push and hope. Every
 // alerted driver gets a one-time ackKey (stored in ringDeliveries, which
@@ -434,31 +414,12 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
     driversSnap.forEach((doc) => {
       const driver = doc.data();
       const tag = `${doc.id} (${driver.name || "?"})`;
-      // Online status deliberately NOT checked here, on request -- this
-      // broadcast is meant to reach every eligible driver within range
-      // regardless of whether they're currently on duty.
-      if (driver.kyc !== "Approved") { skipLog.push(`${tag}: kyc=${driver.kyc}`); return; }
-      if (driver.blacklisted) { skipLog.push(`${tag}: blacklisted`); return; }
-
-      const capacityKg = Number(driver.vehicleSpec?.capacityKg) || 0;
-      const loadWeightKg = Number(load.weight) || 0;
-      if (capacityKg < loadWeightKg || capacityKg > loadWeightKg + BROADCAST_WEIGHT_HEADROOM_KG) {
-        skipLog.push(`${tag}: capacity ${capacityKg}kg outside [${loadWeightKg}kg, ${loadWeightKg + BROADCAST_WEIGHT_HEADROOM_KG}kg] window for load weight ${loadWeightKg}kg`);
-        return;
-      }
-
-      if (load.pickupLat == null) { skipLog.push(`${tag}: load has no pickupLat/Lng`); return; }
-      if (!driver.lastKnownLocation) { skipLog.push(`${tag}: no lastKnownLocation`); return; }
-      if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > BROADCAST_LOCATION_STALE_MS) { skipLog.push(`${tag}: lastKnownLocation stale (age ${driver.lastKnownLocation.updatedAt ? Math.round((Date.now() - driver.lastKnownLocation.updatedAt) / 1000) + "s" : "no timestamp"})`); return; }
-      const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng);
-      if (distKm > DIRECT_REQUEST_RADIUS_KM) { skipLog.push(`${tag}: ${distKm.toFixed(1)}km away, outside ${DIRECT_REQUEST_RADIUS_KM}km radius`); return; }
-
-      const lockHours = notificationLockHours(capacityKg);
+      // WHO GETS THE BELL (owner 2026-11-04): duty ON is the only availability switch -- no GPS / last-seen / radius / weight condition;
+      // KYC approved, not blocked, not on a trip, the picked vehicle category or the 2 above it. One rule for this ring and the later
+      // rounds: functions/tripLock.js evaluateNewLoadDriver.
       const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
-      if (hasLoadConflict(load, mine, lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
-
-      // App OPEN on screen -> the in-app card + sound handle it; no ring / push / LoadWatcher target (one Accept, 2026-11-03).
-      if (isAppOpenNow(driver, Date.now())) { skipLog.push(`${tag}: app is OPEN on screen -> in-app card + sound only, no ring`); return; }
+      const verdict = evaluateNewLoadDriver(driver, load, { mine, hasLoadConflict, notificationLockHours, isAppOpen: (d) => isAppOpenNow(d, Date.now()) });
+      if (!verdict.ok) { skipLog.push(`${tag}: ${verdict.reason}`); return; }
 
       if (driver.fcmToken) {
         skipLog.push(`${tag}: SENDING push+ring`);
@@ -562,7 +523,7 @@ exports.onBookingTaken = onDocumentUpdated("bookings/{bookingId}", async (event)
 
 // ---------------- Nearby-driver escalation (new, 2026-10-19) ----------------
 // Owner spec (developer guide, Step 15): onDirectRequestBroadcast above
-// already pings every eligible driver within DIRECT_REQUEST_RADIUS_KM
+// already pings every eligible driver (duty on, picked category +2: functions/tripLock.js)
 // (30km) the instant a booking is created, with no duty-on filter (an
 // earlier deliberate choice -- see its own comment). This is a DELIBERATE
 // SECOND NUDGE, not a search for new territory: once a booking has sat
@@ -581,19 +542,15 @@ exports.onBookingTaken = onDocumentUpdated("bookings/{bookingId}", async (event)
 // function invocation open per booking for ~45s, which is fine for a
 // single just-created booking but not for a scheduled pass that may be
 // escalating several unmatched bookings in the same run.
-const ESCALATION_RADII_KM = [5, 10, 20];
+// How many later rounds a still-unmatched booking gets (owner 2026-11-04: the radius tiers are gone with the GPS condition -- each round
+// simply rings whoever has become eligible since the previous round and was not alerted yet).
+const ESCALATION_ROUNDS = 3;
 // How old (from createdAt) a still-unmatched booking must be before the
 // FIRST escalation nudge goes out -- matches the owner's "2 minutes"
 // spec. Subsequent tiers (10km, then 20km) fire on later scheduled passes
 // once eligible, not instantly one after another.
 const ESCALATION_FIRST_NUDGE_SEC = 120;
-// Escalation only trusts a GPS fix fresher than this -- deliberately
-// tighter than the main broadcast's 24h BROADCAST_LOCATION_STALE_MS,
-// since this nudge is specifically about who is actually near the pickup
-// point right now, not who was near it up to a day ago.
-const ESCALATION_LOCATION_STALE_MS = 30 * 60 * 1000;
-
-async function escalateOneBooking(bookingId, load, radiusKm, tierIndex) {
+async function escalateOneBooking(bookingId, load, tierIndex) {
   const [driversSnap, ongoingSnap] = await Promise.all([
     db.collection("drivers").get(),
     db.collection("bookings").where("status", "==", "Ongoing").get(),
@@ -616,27 +573,14 @@ async function escalateOneBooking(bookingId, load, radiusKm, tierIndex) {
     const driver = doc.data();
     const tag = `${doc.id} (${driver.name || "?"})`;
     if (alreadyAlerted.has(doc.id)) { skipLog.push(`${tag}: already alerted for this booking`); return; }
-    if (!driver.online) { skipLog.push(`${tag}: off duty`); return; }
-    if (driver.kyc !== "Approved") { skipLog.push(`${tag}: kyc=${driver.kyc}`); return; }
-    if (driver.blacklisted) { skipLog.push(`${tag}: blacklisted`); return; }
-
-    const capacityKg = Number(driver.vehicleSpec?.capacityKg) || 0;
-    const loadWeightKg = Number(load.weight) || 0;
-    if (capacityKg < loadWeightKg || capacityKg > loadWeightKg + BROADCAST_WEIGHT_HEADROOM_KG) { skipLog.push(`${tag}: capacity ${capacityKg}kg outside window for load ${loadWeightKg}kg`); return; }
-
-    if (load.pickupLat == null) { skipLog.push(`${tag}: load has no pickupLat/Lng`); return; }
-    if (!driver.lastKnownLocation) { skipLog.push(`${tag}: no lastKnownLocation`); return; }
-    if (!driver.lastKnownLocation.updatedAt || Date.now() - driver.lastKnownLocation.updatedAt > ESCALATION_LOCATION_STALE_MS) { skipLog.push(`${tag}: lastKnownLocation stale (>30min)`); return; }
-    const distKm = haversineKm(driver.lastKnownLocation.lat, driver.lastKnownLocation.lng, load.pickupLat, load.pickupLng);
-    if (distKm > radiusKm) { skipLog.push(`${tag}: ${distKm.toFixed(1)}km away, outside ${radiusKm}km tier`); return; }
-
-    const lockHours = notificationLockHours(capacityKg);
+    // Same rule as the first ring (functions/tripLock.js): duty on, approved, not blocked, not on a trip, the picked category or the 2 above.
+    // No GPS / radius any more (owner 2026-11-04), so a later round reaches anyone who has become eligible since the first ring
+    // (went on duty, finished a trip) and was not alerted yet.
     const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
-    if (hasLoadConflict(load, mine, lockHours)) { skipLog.push(`${tag}: conflicts with an existing commitment`); return; }
-
-    if (isAppOpenNow(driver, Date.now())) { skipLog.push(`${tag}: app is OPEN on screen -> in-app card + sound only, no ring`); return; }
+    const verdict = evaluateNewLoadDriver(driver, load, { mine, hasLoadConflict, notificationLockHours, isAppOpen: (d) => isAppOpenNow(d, Date.now()) });
+    if (!verdict.ok) { skipLog.push(`${tag}: ${verdict.reason}`); return; }
     if (!driver.fcmToken) { skipLog.push(`${tag}: no fcmToken`); return; }
-    skipLog.push(`${tag}: NUDGING at ${radiusKm}km tier`);
+    skipLog.push(`${tag}: NUDGING (round ${tierIndex + 1})`);
     newlyAlerted.push(doc.id);
     const ackKey = crypto.randomBytes(12).toString("hex");
     ringKeys[doc.id] = { key: ackKey, token: driver.fcmToken };
@@ -644,7 +588,7 @@ async function escalateOneBooking(bookingId, load, radiusKm, tierIndex) {
     sends.push(() => sendDirectRequestRingAlert(driver.fcmToken, load, bookingId, doc.id, ackKey));
   });
 
-  console.log(`[escalateUnmatchedBookings] booking ${bookingId}: tier ${tierIndex} (${radiusKm}km) -- ${newlyAlerted.length} duty-on driver(s) newly nudged\n${skipLog.join("\n")}`);
+  console.log(`[escalateUnmatchedBookings] booking ${bookingId}: round ${tierIndex + 1} -- ${newlyAlerted.length} duty-on driver(s) newly nudged\n${skipLog.join("\n")}`);
 
   // Record the attempted tier even with zero matches, so the next
   // scheduled pass moves on to the next radius instead of retrying this
@@ -680,11 +624,11 @@ exports.escalateUnmatchedBookings = onSchedule(
       const ageSec = (now - createdAtMs) / 1000;
       if (ageSec < ESCALATION_FIRST_NUDGE_SEC) return;
 
-      // escalatedTierIndex: how many of ESCALATION_RADII_KM have already
+      // escalatedTierIndex: how many of the ESCALATION_ROUNDS have already
       // been tried for this booking -- 0 = none yet, 1 = 5km done, etc.
       const tierIndex = load.escalatedTierIndex || 0;
-      if (tierIndex >= ESCALATION_RADII_KM.length) return; // every tier already tried
-      jobs.push(escalateOneBooking(bookingId, load, ESCALATION_RADII_KM[tierIndex], tierIndex));
+      if (tierIndex >= ESCALATION_ROUNDS) return; // every round already done
+      jobs.push(escalateOneBooking(bookingId, load, tierIndex));
     });
     await Promise.all(jobs);
   }
