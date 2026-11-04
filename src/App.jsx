@@ -244,7 +244,11 @@ const VEHICLE_MODEL_SPECS = [
 function lookupVehicleModelSpec(name) {
   const q = (name || "").trim().toLowerCase();
   if (!q) return null;
-  return VEHICLE_MODEL_SPECS.find((v) => v.keys.some((k) => q.includes(k))) || null;
+  // The LONGEST matching key wins, not the first model in the list: "16 wheeler" contains "6 wheeler", and used to autofill the 6-wheeler
+  // size (17.5 ft, 9 t) instead of the 16-wheeler's (40 ft, 30 t); "tata ace gold" still beats "tata ace".
+  let best = null, bestLen = 0;
+  for (const v of VEHICLE_MODEL_SPECS) for (const k of v.keys) if (q.includes(k) && k.length > bestLen) { best = v; bestLen = k.length; }
+  return best;
 }
 // Vehicle types added via "+ Add new type" only have one name (like custom
 // materials), so English falls back to the same string when no labelEn exists.
@@ -4097,6 +4101,41 @@ const CUSTOMER_LIST_CATEGORY_NAMES = {
 function customerListCategoryName(index, lang) {
   const list = CUSTOMER_LIST_CATEGORY_NAMES[lang] || CUSTOMER_LIST_CATEGORY_NAMES.en;
   return list[Math.min(Math.max(index, 0), list.length - 1)];
+}
+// BODY SIZE shown beside the big illustration of the PICKED category (owner 2026-11-04; length x width x height in FEET, never on the small row icon).
+// Taken from the app's own VEHICLE_MODEL_SPECS (the table Driver KYC autofills from) so the two never disagree; a category that spans several models
+// shows the range ("22-24"). Index-aligned with CUSTOMER_LIST_CATEGORY_NAMES. The 3 wheeler is not in that table, so it uses a standard loading-auto figure.
+const CUSTOMER_LIST_CATEGORY_DIM_MODELS = [
+  null,                                          // 3 wheeler -> CUSTOMER_LIST_3_WHEELER_DIMS
+  ["tata ace"],                                  // Tata Ace
+  ["tata ace gold"],                             // Pickup
+  ["dost"],                                      // Pickup 8ft
+  ["tata 407"],                                  // Tata 407
+  ["eicher 17"],                                 // 17ft Eicher
+  ["20 ft container"],                           // 20ft container
+  ["6 wheeler"],                                 // 6 wheeler
+  ["22 ft", "24 ft"],                            // 22ft/24ft truck
+  ["10 wheeler"],                                // 10 wheeler
+  ["mxl"],                                       // 32ft container
+  ["12 wheeler", "14 wheeler", "16 wheeler"],    // 12/14/16 wheeler
+  ["trailer"],                                   // 32t+ truck
+];
+const CUSTOMER_LIST_3_WHEELER_DIMS = { length: 5.5, width: 4.5, height: 4.5 };
+const CUSTOMER_LIST_DIM_LABELS = {
+  en: { title: "Body size", length: "Length", width: "Width", height: "Height", unit: "ft" },
+  hi: { title: "बॉडी साइज़", length: "लंबाई", width: "चौड़ाई", height: "ऊँचाई", unit: "फीट" },
+  mr: { title: "बॉडी साइज", length: "लांबी", width: "रुंदी", height: "उंची", unit: "फूट" },
+};
+function formatDimFeet(values) {
+  const lo = Math.min(...values), hi = Math.max(...values);
+  return lo === hi ? String(lo) : `${lo}\u2013${hi}`;
+}
+// { length, width, height } as display strings in feet ("7", "4.5", "22\u201324"), or null if nothing is known for this category.
+function customerListCategoryDims(index) {
+  const models = CUSTOMER_LIST_CATEGORY_DIM_MODELS[Math.min(Math.max(index, 0), CUSTOMER_LIST_CATEGORY_DIM_MODELS.length - 1)];
+  const specs = models ? models.map((m) => lookupVehicleModelSpec(m)).filter(Boolean) : [CUSTOMER_LIST_3_WHEELER_DIMS];
+  if (!specs.length) return null;
+  return { length: formatDimFeet(specs.map((x) => x.length)), width: formatDimFeet(specs.map((x) => x.width)), height: formatDimFeet(specs.map((x) => x.height)) };
 }
 function customerListCategoryLabel(index, lang) {
   const last = CUSTOMER_LIST_CATEGORY_KG[CUSTOMER_LIST_CATEGORY_KG.length - 1];
@@ -7979,8 +8018,23 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                     </div>
                     </div>
                     {isPicked && (
-                      <div data-category-art className="mt-3 rounded-xl flex items-center justify-center py-3 px-2 anim-rise" style={{ background: "linear-gradient(135deg, rgba(0,82,204,0.12), rgba(255,255,255,0.95))", border: "1px solid rgba(0,82,204,0.18)" }}>
-                        <CategoryVehicleArt index={grp.index} title={customerListCategoryName(grp.index, lang)} className="w-full max-w-[300px] h-32" />
+                      <div data-category-art className="mt-3 rounded-xl flex items-center gap-2 py-3 px-3 anim-rise" style={{ background: "linear-gradient(135deg, rgba(0,82,204,0.12), rgba(255,255,255,0.95))", border: "1px solid rgba(0,82,204,0.18)" }}>
+                        <CategoryVehicleArt index={grp.index} title={customerListCategoryName(grp.index, lang)} className="flex-1 min-w-0 h-32" />
+                        {(() => {
+                          const dims = customerListCategoryDims(grp.index);
+                          const L = CUSTOMER_LIST_DIM_LABELS[lang] || CUSTOMER_LIST_DIM_LABELS.en;
+                          return dims ? (
+                            <div data-category-dims className="shrink-0 w-[104px] pl-3" style={{ borderLeft: `1.5px solid rgba(0,82,204,0.22)` }}>
+                              <div className="text-[10px] font-extrabold uppercase tracking-wide mb-1.5" style={{ color: C.inkSoft }}>{L.title}</div>
+                              {[["length", L.length], ["width", L.width], ["height", L.height]].map(([k, label]) => (
+                                <div key={k} className="mb-1.5 last:mb-0">
+                                  <div className="text-[10px] font-semibold leading-tight" style={{ color: C.inkSoft }}>{label}</div>
+                                  <div className="text-sm font-extrabold leading-tight" style={{ color: C.ink }}>{dims[k]} <span className="text-[11px] font-bold" style={{ color: C.inkSoft }}>{L.unit}</span></div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                     )}
                   </button>
