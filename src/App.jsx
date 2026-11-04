@@ -1365,9 +1365,10 @@ export function vehicleForWeight(weightKg, tiers = DEFAULT_FARE_TIERS) {
   }, null);
 }
 
-// WHO IS RUNG / SEES a new category-based request (owner 2026-11-04, replacing the old GPS + radius + weight-window rule): a driver whose
+// WHO IS RUNG / SEES a new category-based request (owner 2026-11-04, replacing the old GPS-fix + weight-window rule): a driver whose
 // DUTY IS ON, KYC approved, not blocked, not on a trip, whose vehicle category is the one the customer picked or one of the next
-// RING_CATEGORIES_ABOVE categories above it. GPS, last-seen, distance and the phone being locked / the app closed are NOT looked at.
+// RING_CATEGORIES_ABOVE categories above it, and who is WITHIN CURRENT_BID_RADIUS_KM (30) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
+// of the pickup by the LAST KNOWN location however old (GPS off / stale does not matter; never-located cannot be placed -> not rung).
 // MIRRORS functions/tripLock.js (evaluateNewLoadDriver) -- an invariant compares the two on hundreds of random drivers.
 const RING_CATEGORIES_ABOVE = 2;
 // Index of the fare-table category a vehicle of this capacity belongs to (the smallest tier that can carry it); -1 = unknown capacity.
@@ -1392,6 +1393,11 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
   if (dCat === -1) return false;
   const lCat = ringCategoryIndexOfLoad(b);
   if (lCat !== -1 && (dCat < lCat || dCat > lCat + RING_CATEGORIES_ABOVE)) return false;
+  if (b.pickupLat != null && b.pickupLng != null) {
+    const loc = d.lastKnownLocation;
+    if (!loc || loc.lat == null || loc.lng == null) return false;
+    if (haversineKm(loc.lat, loc.lng, b.pickupLat, b.pickupLng) > (b.scheduledFor ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM)) return false;
+  }
   if (findDriverLoadConflict(d, b, bookings, vehicleTypes, lang)) return false;
   return true;
 }

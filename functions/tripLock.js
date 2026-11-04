@@ -5,13 +5,17 @@
  * rounds), so the two can never disagree. Pure: no Firebase, no clock of its own, so scripts/verifyInvariants.mjs runs it directly.
  *
  * A driver is rung when ALL of these hold:
- *   - Duty is ON (`online`) -- the ONLY availability switch. GPS, last-seen, the phone being locked or the app being closed are NOT looked at:
- *     duty on + GPS off is rung; duty on + GPS on is rung; duty off is never rung (and nothing else is checked).
+ *   - Duty is ON (`online`) -- the availability switch. The phone being locked or the app being closed is NOT looked at:
+ *     duty on + GPS off is rung (placed by where it was last seen); duty on + GPS on is rung; duty off is never rung (and nothing else is checked).
  *   - KYC is Approved and the driver is not blocked.
  *   - The driver is not on a trip (a running trip holds the driver until End Trip / Cancelled -- hasLoadConflict, the same availability
  *     rule the customer list uses).
  *   - The driver's vehicle CATEGORY is the one the customer picked, or one of the next RING_CATEGORIES_ABOVE categories above it
  *     (customer picks a 500 kg vehicle -> that category and the 2 above it).
+ *   - The driver is WITHIN RING_RADIUS_KM of the pickup -- 30 km for a Current booking, 50 km for an Advance one (the booking has `scheduledFor`) --
+ *     measured from the driver's LAST KNOWN location however old (owner 2026-11-04: the same radius as the customer's vehicle list). GPS being off
+ *     or stale does not matter, but a driver who has NEVER reported a location cannot be placed and is not rung. A booking with no pickup
+ *     coordinates skips the radius (a load is never left unrung because of missing data).
  *   - The driver has not declined this load, and is not looking at the app on screen (the in-app card + sound handle that case:
  *     "one Accept", 2026-11-03).
  *
@@ -21,6 +25,8 @@
 
 const FARE_TIER_MAX_KG = [500, 750, 800, 900, 1000, 1200, 1250, 1500, 2000, 2500, 3500, 5000, 7000, 7500, 9000, 9500, 10000, 12000, 16000, 18000, 21000, 25000, 30000, 999999];
 const RING_CATEGORIES_ABOVE = 2;
+// MIRRORS CURRENT_BID_RADIUS_KM / ADVANCE_BID_RADIUS_KM in src/App.jsx (an invariant compares them) -- the same radius the customer's list uses.
+const RING_RADIUS_KM = { current: 30, advance: 50 };
 
 // Index of the category a vehicle of this capacity belongs to; -1 when the capacity is unknown.
 function categoryIndexOfCapacity(capacityKg) {
@@ -38,7 +44,7 @@ function loadCategoryIndex(load) {
   return categoryIndexOfCapacity(load && load.weight);
 }
 
-// ctx: { mine: this driver's Ongoing bookings, hasLoadConflict(load, mine, lockHours), notificationLockHours(capacityKg), isAppOpen(driver) }
+// ctx: { mine: this driver's Ongoing bookings, hasLoadConflict(load, mine, lockHours), notificationLockHours(capacityKg), isAppOpen(driver), haversineKm(lat1, lng1, lat2, lng2) }
 // Returns { ok: true } or { ok: false, reason }.
 function evaluateNewLoadDriver(driver, load, ctx) {
   if (!driver.online) return { ok: false, reason: "off duty" };
@@ -50,9 +56,17 @@ function evaluateNewLoadDriver(driver, load, ctx) {
   if (dCat === -1) return { ok: false, reason: "no vehicle capacity on file" };
   const lCat = loadCategoryIndex(load);
   if (lCat !== -1 && (dCat < lCat || dCat > lCat + RING_CATEGORIES_ABOVE)) return { ok: false, reason: `category ${dCat} outside the picked category ${lCat} .. +${RING_CATEGORIES_ABOVE}` };
+  // Radius from the pickup, by the driver's last known location (however old); skipped when the booking has no pickup coordinates.
+  if (load.pickupLat != null && load.pickupLng != null) {
+    const loc = driver.lastKnownLocation;
+    if (!loc || loc.lat == null || loc.lng == null) return { ok: false, reason: "no location on record -> cannot be placed within the radius" };
+    const radiusKm = load.scheduledFor ? RING_RADIUS_KM.advance : RING_RADIUS_KM.current;
+    const km = ctx.haversineKm(loc.lat, loc.lng, load.pickupLat, load.pickupLng);
+    if (km > radiusKm) return { ok: false, reason: `${km.toFixed(1)}km away (last known), outside the ${radiusKm}km radius` };
+  }
   if (ctx.hasLoadConflict(load, ctx.mine || [], ctx.notificationLockHours(capacityKg))) return { ok: false, reason: "on a trip / conflicts with an existing commitment" };
   if (ctx.isAppOpen(driver)) return { ok: false, reason: "app is OPEN on screen -> in-app card + sound only, no ring" };
   return { ok: true };
 }
 
-module.exports = { FARE_TIER_MAX_KG, RING_CATEGORIES_ABOVE, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };
+module.exports = { FARE_TIER_MAX_KG, RING_CATEGORIES_ABOVE, RING_RADIUS_KM, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };

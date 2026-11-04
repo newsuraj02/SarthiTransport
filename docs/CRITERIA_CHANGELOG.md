@@ -81,3 +81,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- Customer vehicle list: must be within 30 km (Current) / 50 km (Advance) of the pickup by last known location (GPS off/stale still listed; never-located not listed); card shows last seen; GPS-on first order kept; contract A5
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverListableForCustomer, code:src/App.jsx#CustomerBooking
+
+## 2026-11-04 -- Bell radius: the load bell now uses the same 30 km (Current) / 50 km (Advance) pickup radius as the customer vehicle list, by last known location; never-located drivers are not rung (owner 2026-11-04 'apply the same radius to the bell')
+- changed (11): app:isDriverBroadcastEligible, fns:escalateOneBooking, fn:onDirectRequestBroadcast, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/index.js#fn:onDirectRequestBroadcast, code:functions/index.js#escalateOneBooking, code:functions/tripLock.js, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
