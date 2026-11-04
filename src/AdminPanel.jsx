@@ -16,9 +16,9 @@ import { GoogleMap, MarkerF, PolylineF } from "@react-google-maps/api";
 import { useGoogleMaps } from "./googleMapsContext.jsx";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { adminFirebaseAuth, sendAdminNotification, resolveChangeLogEntry, sendBulkDriverWhatsApp, createCsvDownloadLink, runHealthCheckNow, repairSixteenWheelerCapacity } from "./firebaseClient";
-import { createDoc, patchDoc, removeDoc, subscribeDoc } from "./firestoreStore";
+import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
-  ADVANCE_BID_RADIUS_KM, C, CURRENT_BID_RADIUS_KM, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
+  C, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
@@ -26,7 +26,7 @@ import {
   isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
-  LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile, VEHICLE_HEADROOM_KG,
+  LocationField, PhotoPicker, RouteLine, ReturnTripTag, SafeImage, StatTile,
 } from "./App.jsx";
 
 // Owner rule (2026-10-13): every vehicle's current status shows directly
@@ -542,7 +542,7 @@ function ScanStatusTile({ systemHealth, lang }) {
   );
 }
 
-function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, bugs, systemHealth, unmatchedVehicleRequests }) {
+function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet, lang, onNavigate, onLogout, toggleBlacklist, updateDriverKyc, updateDriverVehicleSpec, vehicleTypes, bugs, systemHealth }) {
   const readyOnlineDrivers = drivers.filter((d) => d.online && d.kyc === "Approved" && !d.blacklisted);
   // Single partition, used for every installed/uninstalled/blacklisted
   // count on this dashboard (see partitionDriversByInstallStatus) -- these
@@ -1351,25 +1351,8 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
     Array.from({ length: financeLabelCount }, (_, i) => Math.round(i * (financeDays.length - 1) / Math.max(1, financeLabelCount - 1)))
   );
   const financeVisibleLabels = financeDays.map((d, i) => ({ ...d, show: financeLabelIdx.has(i) }));
-  // Owner request (2026-10-25): an unmatched load (AdminAlerts' own detail/
-  // action screen) used to only surface once admin manually opened the
-  // Alerts tab -- easy to miss for a while. Pops right here on the Live
-  // Dashboard, the first thing admin sees on opening the app, instead.
-  // Deliberately a summary banner, not the full interactive card (fare
-  // entry, offline-driver matches, Call buttons) -- that detail/action
-  // stays on AdminAlerts; tapping this just jumps there.
-  const pendingUnmatchedCount = (unmatchedVehicleRequests || []).filter((r) => r.status === "pending").length;
-
   return (
     <div>
-      {pendingUnmatchedCount > 0 && (
-        <button onClick={() => onNavigate("alerts")} className="w-full rounded-xl p-4 mb-3 shadow-sm text-left flex items-center gap-2.5" style={{ background: C.safety, border: `1.5px solid ${C.safety}` }}>
-          <AlertTriangle size={20} color="#FFFFFF" className="shrink-0" />
-          <div className="text-sm font-bold text-white">
-            {lang === "en" ? `${pendingUnmatchedCount} Direct request${pendingUnmatchedCount > 1 ? "s" : ""} from customer` : lang === "mr" ? `${pendingUnmatchedCount} कस्टमरकडून डायरेक्ट रिक्वेस्ट` : `${pendingUnmatchedCount} कस्टमर से डायरेक्ट रिक्वेस्ट`}
-          </div>
-        </button>
-      )}
       <ScanStatusTile systemHealth={systemHealth} lang={lang} />
       {openChangeLogCount > 0 && (
         <button onClick={() => onNavigate("changelog")} className="w-full rounded-xl p-4 mb-5 shadow-sm text-left" style={{ background: criticalChangeLogCount > 0 ? C.safety : C.marigold, border: `1.5px solid ${criticalChangeLogCount > 0 ? C.safety : C.marigoldDeep}` }}>
@@ -2766,169 +2749,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   );
 }
 
-function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang, drivers, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, fareTiers, adminRouteFares, dieselPricePerLitre }) {
-  // Smart Load-to-Vehicle Match -- a customer tapped "Doesn't match
-  // requirement? Call Apna Transport directly" below the vehicle list
-  // (CustomerBooking/CustomerAdvanceBooking) because no online vehicle
-  // actually suited them. For each still-pending request, suggest the
-  // nearest OFFLINE (inactive) drivers whose vehicle capacity fits -- same
-  // fit window (VEHICLE_HEADROOM_KG) and KYC/blacklist gates
-  // onDirectRequestBroadcast already uses for the online case, just
-  // computed live here instead of via a Cloud Function. Call only -- no
-  // WhatsApp button, drivers don't respond to it; admin calls personally.
-  const pendingUnmatched = (unmatchedVehicleRequests || []).filter((r) => r.status === "pending");
-  const UNMATCHED_OFFLINE_MAX = 5;
-  // Owner request (2026-10-23): this previously only filtered by capacity --
-  // with no pickup coordinates it returned ANY offline driver fleet-wide,
-  // and even WITH coordinates it only sorted nearest-first and capped at 5
-  // with no actual radius cutoff, so a driver hundreds of km away could
-  // still show up as a "nearby" suggestion whenever fewer than 5 closer
-  // matches existed. Now requires a real pickup location to return anything
-  // at all, and only counts a driver as a match within the same radius live
-  // dispatch itself already uses for this exact booking type
-  // (CURRENT_BID_RADIUS_KM/ADVANCE_BID_RADIUS_KM, see App.jsx) -- an
-  // offline driver admin calls personally should be realistically reachable
-  // for the job, not just the least-far of whoever happens to fit.
-  const offlineMatchesFor = (req) => {
-    const loadKg = Number(req.weightKg) || 0;
-    if (req.pickupLat == null || req.pickupLng == null) return [];
-    const radiusKm = req.bookingType === "advance" ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
-    const matches = (drivers || []).filter((d) => {
-      if (d.online || d.blacklisted || d.kyc !== "Approved") return false;
-      const capKg = Number(d.vehicleSpec?.capacityKg) || 0;
-      // No weight on the request (the customer screen has no weight box since 2026-11-04) = any capacity; sorted by distance below.
-      if (loadKg > 0 && (capKg < loadKg || capKg > loadKg + VEHICLE_HEADROOM_KG)) return false;
-      return true;
-    });
-    return matches
-      .filter((d) => d.lastKnownLocation?.lat != null && d.lastKnownLocation?.lng != null)
-      .map((d) => ({ driver: d, km: haversineKm(req.pickupLat, req.pickupLng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) }))
-      .filter((x) => x.km <= radiusKm)
-      .sort((a, b) => a.km - b.km)
-      .slice(0, UNMATCHED_OFFLINE_MAX);
-  };
-  // "Called" tracking for this screen's Call buttons (the unmatched
-  // customer themselves, and each offline driver match) -- owner request
-  // (2026-10-25): consistent with every other Call button in the app now
-  // (Uninstalled/Blocked, Customers tab, Drivers tab), this disables a
-  // called entry's Call control and keeps it disabled indefinitely, not
-  // just for the rest of the day. Unlike those other three lists, this
-  // screen has no single stable roster to complete a "round" over -- the
-  // offline-driver matches are a different, ad hoc top-5 subset per
-  // unmatched request, not one fixed population -- so there's no automatic
-  // reset-when-everyone's-called here. Double-tapping a disabled Call
-  // control re-enables just that one entry immediately (unmarkAlertCalled).
-  const [alertCalledMap, setAlertCalledMap] = usePersistedState("sarthi_alertCalled", {});
-  const markAlertCalled = (mobile) => setAlertCalledMap((prev) => ({ ...prev, [mobile]: true }));
-  const unmarkAlertCalled = (mobile) => setAlertCalledMap((prev) => {
-    const next = { ...prev };
-    delete next[mobile];
-    return next;
-  });
-  const calledAlertToday = (mobile) => !!alertCalledMap[mobile];
-  // Date/time shown under "Requirement" -- advance bookings carry their
-  // own scheduledFor ("YYYY-MM-DD HH:MM", see CustomerAdvanceBooking's
-  // scheduledForValue); an immediate booking has no such field, so its
-  // "when" is simply when the request itself was raised (createdAt).
-  const dateTimeFor = (req) => {
-    if (req.bookingType === "advance" && req.scheduledFor) {
-      const [d, t] = String(req.scheduledFor).split(" ");
-      return { date: d || "—", time: t || "—" };
-    }
-    const dt = req.createdAt?.toDate ? req.createdAt.toDate() : null;
-    if (!dt) return { date: "—", time: "—" };
-    const locale = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
-    return {
-      date: dt.toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }),
-      time: dt.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
-    };
-  };
-  // Distance shown and used for the fare estimate -- prefer the value
-  // captured at request time (distanceKm), but a request raised before
-  // dropLat/dropLng were captured (or whose road-distance fetch never
-  // resolved on the customer's end) can still fall back to a straight-line
-  // estimate here, same formula as estimateDistanceKm (App.jsx), as long
-  // as both ends' coordinates made it onto the doc.
-  const kmFor = (req) => {
-    if (req.distanceKm != null) return Number(req.distanceKm) || 0;
-    if (req.pickupLat == null || req.dropLat == null) return 0;
-    return Math.round(haversineKm(req.pickupLat, req.pickupLng, req.dropLat, req.dropLng) * 1.3 * 100) / 100;
-  };
-  // Admin-editable estimate -- same resolution order AdminRateCalculator's
-  // own stdRateFor (above) uses to judge a driver-submitted rate: an exact
-  // admin-saved rate for this route+tier wins outright (no distance
-  // needed); failing that, the formula fare scaled by nearby admin
-  // routes' ratio, or the plain formula if there's nothing nearby to scale
-  // from. Only truly blank (left for admin to fill in by hand) when there's
-  // no weight, no matching tier, and no distance to fall back on.
-  const [estimateDrafts, setEstimateDrafts] = useState({});
-  // Save button beside the Fare box -- admin calls the customer, agrees a
-  // (possibly edited) number, taps Save: sends that exact figure to the
-  // customer via the existing admin-notification channel, AND writes it
-  // into adminRouteFares for this route+tier+zone (same doc shape/id
-  // scheme as AdminRateCalculator's own "Save as Route Rate" button, see
-  // stdRateFor above and the save() in AdminRateCalculator), so the next
-  // request on a similar route surfaces this same figure automatically via
-  // findExactAdminRoute instead of only ever falling back to the formula.
-  const [savingFareIds, setSavingFareIds] = useState({});
-  const [savedFareIds, setSavedFareIds] = useState({});
-  const [fareSendError, setFareSendError] = useState({});
-  // Stamps the request as "Admin contacted this customer" (Call tapped / fare sent). The customer's booking screen watches it: without a stamp
-  // (or Mark handled) within 10 minutes of their tap it says "can't find a driver for you at the moment".
-  const markRequestContacted = (id) => { if (id) patchDoc("unmatchedVehicleRequests", id, { contactedAt: Date.now() }).catch((e) => console.error("[contactedAt]", e)); };
-  const saveFareAndNotify = async (req) => {
-    const fareNum = Number(estimateDrafts[req.id] ?? estimateFor(req));
-    if (!fareNum || fareNum <= 0 || savingFareIds[req.id]) return;
-    const loadKg = Number(req.weightKg) || 0;
-    const tier = findFareTier(loadKg, fareTiers);
-    if (!tier) return;
-    setSavingFareIds((p) => ({ ...p, [req.id]: true }));
-    setFareSendError((p) => ({ ...p, [req.id]: "" }));
-    try {
-      const km = kmFor(req);
-      const zone = zoneFor(req.pickupLat ?? null, req.pickupLng ?? null, req.dropLat ?? null, req.dropLng ?? null, km);
-      const docId = `${sanitizeForDocId(req.pickup)}__${sanitizeForDocId(req.drop)}__${tier.maxKg}__${zone}`;
-      await createDoc("adminRouteFares", docId, {
-        pickupName: req.pickup, dropName: req.drop,
-        pickupKey: normalizeRouteText(req.pickup), dropKey: normalizeRouteText(req.drop),
-        pickupLat: req.pickupLat ?? null, pickupLng: req.pickupLng ?? null,
-        dropLat: req.dropLat ?? null, dropLng: req.dropLng ?? null,
-        estimatedKm: km, tierMaxKg: tier.maxKg, veh: tier.label, zone,
-        fix: fareNum, per: 0, totalFare: fareNum, manual: true,
-        isReturn: false, returnPct: null, driverEntry: null, dieselAtSave: dieselPricePerLitre ?? null, updatedAt: Date.now(),
-      });
-      const message = lang === "en"
-        ? `Your estimated fare for ${req.pickup} to ${req.drop}: ₹${fareNum}. Our team will arrange a vehicle shortly.`
-        : lang === "mr"
-        ? `${req.pickup} ते ${req.drop} साठी अंदाजे भाडे: ₹${fareNum}. आमची टीम लवकरच गाडी व्यवस्था करेल.`
-        : `${req.pickup} से ${req.drop} के लिए अनुमानित भाड़ा: ₹${fareNum}. हमारी टीम जल्द ही गाड़ी व्यवस्था करेगी.`;
-      const result = await sendAdminNotification(req.customerMobile, message, "customer");
-      if (result?.ok === false) {
-        setFareSendError((p) => ({ ...p, [req.id]: lang === "en" ? "Saved the rate, but couldn't notify the customer — try again." : lang === "mr" ? "दर सेव्ह झाला, पण कस्टमरला कळवता आले नाही — पुन्हा प्रयत्न करा." : "दर सेव हो गया, पर कस्टमर को सूचित नहीं कर सके — फिर कोशिश करें।" }));
-      } else {
-        markRequestContacted(req.id);
-        setSavedFareIds((p) => ({ ...p, [req.id]: true }));
-      }
-    } catch (e) {
-      console.error(e);
-      setFareSendError((p) => ({ ...p, [req.id]: lang === "en" ? "Couldn't save — try again." : lang === "mr" ? "सेव्ह होऊ शकले नाही — पुन्हा प्रयत्न करा." : "सेव नहीं हो सका — फिर कोशिश करें।" }));
-    }
-    setSavingFareIds((p) => ({ ...p, [req.id]: false }));
-  };
-  const estimateFor = (req) => {
-    const loadKg = Number(req.weightKg) || 0;
-    if (loadKg <= 0) return "";
-    const tier = findFareTier(loadKg, fareTiers);
-    if (!tier) return "";
-    const km = kmFor(req);
-    const zone = zoneFor(req.pickupLat ?? null, req.pickupLng ?? null, req.dropLat ?? null, req.dropLng ?? null, km);
-    const exact = findExactAdminRoute(req.pickup, req.drop, tier.maxKg, zone, false, adminRouteFares, req.pickupLat, req.pickupLng, req.dropLat, req.dropLng);
-    if (exact) return Number(exact.totalFare) || "";
-    if (km <= 0) return "";
-    const ratio = getRouteScaleRatio(req.pickup, req.drop, zone, false, adminRouteFares, fareTiers, req.pickupLat, req.pickupLng, req.dropLat, req.dropLng, dieselPricePerLitre);
-    const formulaFare = calculateFare(tier.maxKg, km, fareTiers, zone, 0, dieselPricePerLitre);
-    return ratio != null ? Math.round(formulaFare * ratio) : formulaFare;
-  };
+function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, lang, drivers }) {
   const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
   // Draft reply text per complaint id, so opening one complaint's reply box
   // doesn't touch any other's. Prefilled with the existing adminReply (if
@@ -2949,115 +2770,6 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
   const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
   return (
     <div className="space-y-4">
-      {pendingUnmatched.length > 0 && (
-        <div className="space-y-3">
-          {pendingUnmatched.map((req) => {
-            const offlineMatches = offlineMatchesFor(req);
-            const dt = dateTimeFor(req);
-            const km = kmFor(req);
-            const estimate = estimateFor(req);
-            return (
-              <div key={req.id} className="rounded-xl p-4 shadow-sm" style={{ background: C.marigold, border: `1.5px solid ${C.marigoldDeep}` }}>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="text-sm font-bold flex items-center gap-1.5" style={{ color: "#000000" }}>
-                    <AlertTriangle size={16} color={C.marigoldDeep} /> {lang === "en" ? "Unmatched load" : lang === "mr" ? "न जुळलेला लोड" : "असमान लोड"}
-                  </div>
-                  <span className="text-[10px] font-black px-2.5 py-1 rounded-full shrink-0" style={{ background: C.safety, color: "#FFFFFF" }}>
-                    {lang === "en" ? "Action needed" : lang === "mr" ? "कृती आवश्यक" : "कार्रवाई आवश्यक"}
-                  </span>
-                </div>
-                <div className="rounded-lg p-3 mb-2" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs font-bold" style={{ color: C.ink }}>{req.customerName || req.customerMobile}</div>
-                    {calledAlertToday(req.customerMobile) ? (
-                      <div onDoubleClick={() => unmarkAlertCalled(req.customerMobile)} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: "#9AA3B0" }}>
-                        <Phone size={11} /> {lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया"}
-                      </div>
-                    ) : (
-                      <a href={`tel:+91${req.customerMobile}`} onClick={() => { markAlertCalled(req.customerMobile); markRequestContacted(req.id); }} className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
-                        <Phone size={11} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
-                      </a>
-                    )}
-                  </div>
-                  <div className="text-[11px] mt-1.5" style={{ color: C.inkSoft }}>
-                    <b style={{ color: C.ink }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}:</b> {req.pickup || "—"}
-                  </div>
-                  {req.returnTrip && <ReturnTripTag lang={lang} />}
-                  <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
-                    <b style={{ color: C.ink }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}:</b> {req.drop || "—"}
-                  </div>
-                  {/* weightKg is ALWAYS kilograms (see raiseUnmatchedVehicleRequest); weightUnit is only the label the customer picked -- never print one as the other's suffix ("9000ton" bug). */}
-                  <div className="text-[11px] mt-2" style={{ color: C.inkSoft }}>
-                    <b style={{ color: C.ink }}>{lang === "en" ? "Requirement" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}:</b> {dt.date}, {dt.time}, {req.weightKg ? (req.weightUnit === "ton" ? `${req.weightKg / 1000}ton` : `${req.weightKg}kg`) : "—"}, {km > 0 ? `${Math.round(km)}km` : "—"}
-                  </div>
-                  {Number(req.weightKg) > 0 ? (
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}:</span>
-                    <span className="text-[11px] font-bold" style={{ color: C.ink }}>₹</span>
-                    <input type="number" value={estimateDrafts[req.id] ?? estimate} onChange={(e) => { setEstimateDrafts((p) => ({ ...p, [req.id]: e.target.value })); setSavedFareIds((p) => ({ ...p, [req.id]: false })); }}
-                      className="w-20 rounded-lg px-2 py-1 text-xs font-bold" style={{ border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }} />
-                    <button onClick={() => saveFareAndNotify(req)} disabled={savingFareIds[req.id]}
-                      className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg text-white" style={{ background: savedFareIds[req.id] ? C.success : C.navy, opacity: savingFareIds[req.id] ? 0.6 : 1 }}>
-                      {savingFareIds[req.id]
-                        ? (lang === "en" ? "Sending…" : lang === "mr" ? "पाठवत आहे…" : "भेजा जा रहा है…")
-                        : savedFareIds[req.id]
-                        ? `✓ ${lang === "en" ? "Sent" : lang === "mr" ? "पाठवले" : "भेजा गया"}`
-                        : (lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें")}
-                    </button>
-                  </div>
-                  ) : (
-                    <div data-no-weight-note className="text-[11px] font-bold mt-2" style={{ color: C.marigoldDeep }}>
-                      {lang === "en" ? "No weight given (the customer screen has no weight box) — call the customer, ask the load and the fare." : lang === "mr" ? "वजन दिलेले नाही (ग्राहकाच्या स्क्रीनवर वजनाचा बॉक्स नाही) — ग्राहकाला कॉल करून माल आणि भाडे विचारा." : "वज़न नहीं दिया गया (कस्टमर स्क्रीन पर वज़न का बॉक्स नहीं है) — कस्टमर को कॉल करके माल और भाड़ा पूछें।"}
-                    </div>
-                  )}
-                  {fareSendError[req.id] && (
-                    <div className="text-[10.5px] font-bold mt-1" style={{ color: C.safety }}>{fareSendError[req.id]}</div>
-                  )}
-                </div>
-                <div className="text-[11px] font-bold mb-1.5" style={{ color: C.success }}>
-                  {lang === "en" ? "Inactive vehicle matches" : lang === "mr" ? "इनअ‍ॅक्टिव्ह वाहन मॅच" : "इनएक्टिव वाहन मैच"}
-                </div>
-                {offlineMatches.length === 0 ? (
-                  <p className="text-[11px]" style={{ color: C.inkSoft }}>
-                    {lang === "en" ? "No offline vehicle currently matches this requirement either." : lang === "mr" ? "सध्या कोणतेही इनअ‍ॅक्टिव्ह वाहनही या गरजेशी जुळत नाही." : "फिलहाल कोई इनएक्टिव वाहन भी इस ज़रूरत से मेल नहीं खाता।"}
-                  </p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {offlineMatches.map(({ driver: d, km }) => {
-                      const called = calledAlertToday(d.mobile);
-                      return (
-                        <div key={d.id} className="rounded-lg p-2.5 flex items-center justify-between gap-2" style={{ background: "rgba(0,168,84,0.1)", border: `1px solid ${C.success}`, opacity: called ? 0.6 : 1 }}>
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold" style={{ color: C.ink }}>{d.name} · {d.vehicleSpec?.vehicleNumber || "—"}</div>
-                            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>{d.vehicleSpec?.capacityKg ? `${d.vehicleSpec.capacityKg}kg` : "—"}</div>
-                            <div className="text-[10px]" style={{ color: C.inkSoft, fontFamily: monoFont }}>
-                              {lang === "en" ? `${Math.round(km)} km from Pickup` : lang === "mr" ? `पिकअपपासून ${Math.round(km)} किमी` : `पिकअप से ${Math.round(km)} किमी`}
-                            </div>
-                          </div>
-                          {called ? (
-                            <div onDoubleClick={() => unmarkAlertCalled(d.mobile)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white flex items-center gap-1" style={{ background: "#9AA3B0" }}>
-                              <Phone size={12} /> {lang === "en" ? "Called" : lang === "mr" ? "कॉल केले" : "कॉल किया"}
-                            </div>
-                          ) : (
-                            <a href={`tel:+91${d.mobile}`} onClick={() => markAlertCalled(d.mobile)} className="shrink-0 text-xs font-bold px-3 py-2 rounded-lg text-white flex items-center gap-1" style={{ background: C.metallicGreen }}>
-                              <Phone size={12} /> {lang === "en" ? "Call" : lang === "mr" ? "कॉल" : "कॉल"}
-                            </a>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="flex justify-end mt-2">
-                  <button onClick={() => handleUnmatchedVehicleRequest(req.id)} className="text-[11px] font-bold underline" style={{ color: C.inkSoft }}>
-                    {lang === "en" ? "Mark handled" : lang === "mr" ? "हाताळले म्हणून चिन्हांकित करा" : "हैंडल किया गया चिह्नित करें"}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
       {pendingRecharges.length > 0 && (
         <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}><Wallet size={16} color={C.marigoldDeep} /> {lang === "en" ? "Wallet Recharge Requests" : lang === "mr" ? "वॉलेट रिचार्ज रिक्वेस्ट" : "वॉलेट रीचार्ज रिक्वेस्ट"}</div>
@@ -4678,7 +4390,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, unmatchedVehicleRequests, handleUnmatchedVehicleRequest, dieselPricePerLitre, setDieselPricePerLitre }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -4701,7 +4413,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
           </button>
         ))}
       </div>
-      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} bugs={bugs} systemHealth={systemHealth} unmatchedVehicleRequests={unmatchedVehicleRequests} />}
+      {tab === "fleet" && <AdminFleet drivers={drivers} customers={customers} bookings={bookings} tripLog={tripLog} expenses={expenses} minWallet={minWallet} lang={lang} onNavigate={setTab} onLogout={onLogout} toggleBlacklist={toggleBlacklist} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} vehicleTypes={vehicleTypes} bugs={bugs} systemHealth={systemHealth} />}
       {tab === "bookings" && <AdminBookings bookings={bookings} tripLog={tripLog} lang={lang} />}
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
@@ -4721,7 +4433,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
         </div>
       )}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
-      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} unmatchedVehicleRequests={unmatchedVehicleRequests} handleUnmatchedVehicleRequest={handleUnmatchedVehicleRequest} fareTiers={fareTiers} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} />}
+      {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} />}
       {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
       {tab === "settings" && <AdminSettings drivers={drivers} customers={customers} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>

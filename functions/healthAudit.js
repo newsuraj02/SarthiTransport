@@ -70,7 +70,7 @@ function otherRunningTripsOfDriver(booking, allOngoing, now) {
 // ---- live-data audit ---------------------------------------------------------------------------------------------------------------
 // Each finding: { id, sev: "critical"|"high"|"info", area, title, detail }. `id` is stable so the Change Log entry for a problem that
 // persists is re-opened, not duplicated.
-function auditLiveData({ drivers = [], bookings = [], settings = {}, adminRouteFares = [], otpIds = [], withdrawals = [], rechargeRequests = [], unmatched = [], vehicleTypes = [], now = Date.now(), busyRule = driverIsBusyForCurrentLoad }) {
+function auditLiveData({ drivers = [], bookings = [], settings = {}, adminRouteFares = [], otpIds = [], withdrawals = [], rechargeRequests = [], vehicleTypes = [], now = Date.now(), busyRule = driverIsBusyForCurrentLoad }) {
   const f = [];
   const push = (id, sev, area, title, detail) => f.push({ id, sev, area, title, detail: String(detail || "").slice(0, 400) });
   const ids = (arr, n = 8) => arr.slice(0, n).join(", ") + (arr.length > n ? ` (+${arr.length - n} more)` : "");
@@ -124,7 +124,6 @@ function auditLiveData({ drivers = [], bookings = [], settings = {}, adminRouteF
   const old = (rows, h) => rows.filter((r) => ms(r.createdAt) != null && now - ms(r.createdAt) > h * H);
   const w = old(withdrawals.filter((x) => x.status === "Pending"), 24); if (w.length) push("withdrawals-waiting", "info", "Money", `${w.length} withdrawal request(s) waiting over 24 h`, "");
   const rc = old(rechargeRequests.filter((x) => x.status === "Pending"), 24); if (rc.length) push("recharges-waiting", "info", "Money", `${rc.length} wallet recharge request(s) waiting over 24 h`, "");
-  const um = old(unmatched.filter((x) => x.status === "Pending" || !x.status), 6); if (um.length) push("unmatched-waiting", "info", "Requests", `${um.length} customer request(s) with no matching vehicle waiting over 6 h`, "");
   const kyc = old(drivers.filter((d) => d.kyc === "Pending" && d.vehicleSpec), 48); if (kyc.length) push("kyc-waiting", "info", "KYC", `${kyc.length} driver KYC submission(s) waiting over 48 h`, "");
   return f;
 }

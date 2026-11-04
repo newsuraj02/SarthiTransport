@@ -149,3 +149,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- Est. km at the left and Change pickup / drop at the right of one row above the list; blue note box removed (owner 2026-11-04)
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-04 -- Owner 2026-11-04: bigger 'Distance: N km' label; REMOVED 'Not seeing the right vehicle? Click here' and everything tied to it (customer button + 10-min timer, unmatchedVehicleRequests rules/collection use, Admin dashboard box + Alerts Unmatched load cards, scan unmatched-waiting check, blink CSS)
+- changed (16): file:firestore.rules, file:functions/healthAudit.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:firestore.rules, code:functions/healthAudit.js#auditLiveData, code:functions/index.js#loadLiveData, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminAlerts, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#CustomerBooking, code:src/App.jsx#CustomerApp, code:src/App.jsx#App, code:src/index.css
+- removed (2): code:src/App.jsx#UNMATCHED_NO_CALL_MS, code:src/App.jsx#unmatchedRequestStage

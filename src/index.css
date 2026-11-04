@@ -164,7 +164,6 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   :root:not(.force-motion) .guided-step-active,
   :root:not(.force-motion) .guided-submit-ready,
   :root:not(.force-motion) .current-location-blink,
-  :root:not(.force-motion) .unmatched-vehicle-link-blink,
   :root:not(.force-motion) .driver-selected-bounce,
   :root:not(.force-motion) .live-pulse,
   :root:not(.force-motion) .sheet-up,
@@ -259,19 +258,6 @@ select {
 .current-location-blink {
   animation: currentLocationBlink 1.4s ease-in-out infinite;
   border: 1.5px solid #0052CC;
-}
-
-/* "Not seeing the right vehicle?" link (CustomerBooking/
-   CustomerAdvanceBooking) -- same spirit as current-location-blink above,
-   a yellow/white swap instead of blue/white, to draw the eye to this
-   escape hatch once the vehicle list is showing. */
-@keyframes unmatchedVehicleLinkBlink {
-  0%, 100% { background-color: #FFCC00; }
-  50%      { background-color: #FFFFFF; }
-}
-.unmatched-vehicle-link-blink {
-  animation: unmatchedVehicleLinkBlink 1.4s ease-in-out infinite;
-  border: 1.5px solid #FFCC00;
 }
 
 /* App-wide tap feedback — every button presses down very slightly on tap

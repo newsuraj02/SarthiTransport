@@ -1575,14 +1575,14 @@ const REPO_HEAD_API = "https://api.github.com/repos/newsuraj02/SarthiTransport/c
 function readFunctionsStamp() { try { return require("./build.json"); } catch (e) { return null; } }
 async function loadLiveData() {
   const col = async (name, q) => (await (q ? q(db.collection(name)) : db.collection(name)).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
-  const [drivers, bookings, withdrawals, rechargeRequests, unmatched, adminRouteFares, vehicleTypes] = await Promise.all([
+  const [drivers, bookings, withdrawals, rechargeRequests, adminRouteFares, vehicleTypes] = await Promise.all([
     col("drivers"), col("bookings", (c) => c.where("status", "in", ["Ongoing", "AwaitingDriver"])), col("withdrawals", (c) => c.where("status", "==", "Pending")),
-    col("rechargeRequests", (c) => c.where("status", "==", "Pending")), col("unmatchedVehicleRequests", (c) => c.limit(200)), col("adminRouteFares"), col("vehicleTypes"),
+    col("rechargeRequests", (c) => c.where("status", "==", "Pending")), col("adminRouteFares"), col("vehicleTypes"),
   ]);
   const settingsSnap = await db.collection("settings").doc("main").get();
   const ongoing = bookings.filter((b) => b.status === "Ongoing");
   const otpSnaps = ongoing.length ? await db.getAll(...ongoing.map((b) => db.collection("bookingOtps").doc(b.id))) : [];
-  return { drivers, bookings, withdrawals, rechargeRequests, unmatched, adminRouteFares, vehicleTypes, settings: settingsSnap.exists ? settingsSnap.data() : {}, otpIds: otpSnaps.filter((x) => x.exists).map((x) => x.id) };
+  return { drivers, bookings, withdrawals, rechargeRequests, adminRouteFares, vehicleTypes, settings: settingsSnap.exists ? settingsSnap.data() : {}, otpIds: otpSnaps.filter((x) => x.exists).map((x) => x.id) };
 }
 
 async function runDailyHealthCheck(label) {
