@@ -124,6 +124,12 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .chip-fade-out { overflow: hidden; animation: popIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) both, chipOut 5s ease 0s forwards; }
 @keyframes radarRing { 0% { opacity: 0.7; transform: scale(0.5); } 100% { opacity: 0; transform: scale(1.4); } }
 .radar-ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid rgba(0, 82, 204, 0.6); background: rgba(0, 82, 204, 0.14); animation: radarRing 2.4s ease-out infinite; pointer-events: none; }
+/* Pickup/Drop mic listening sheet (owner 2026-11-04): pulsing rings + an equalizer, decoration only (stops under reduced motion). */
+@keyframes micRing { 0% { opacity: 0.55; transform: scale(0.75); } 100% { opacity: 0; transform: scale(1.35); } }
+.mic-ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid rgba(0, 82, 204, 0.55); background: rgba(0, 82, 204, 0.12); animation: micRing 1.6s ease-out infinite; pointer-events: none; }
+.mic-ring-2 { animation-delay: 0.8s; }
+@keyframes micBar { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+.mic-bar { display: inline-block; width: 5px; height: 24px; border-radius: 3px; background: #0052CC; transform-origin: bottom; animation: micBar 0.9s ease-in-out infinite; }
 @keyframes mapHalo { 0% { opacity: 0.5; transform: scale(0.3); } 100% { opacity: 0; transform: scale(1.5); } }
 .map-halo { display: block; width: 140px; height: 140px; border-radius: 50%; background: rgba(0, 82, 204, 0.18); border: 1px solid rgba(0, 82, 204, 0.35); animation: mapHalo 2s ease-out infinite; pointer-events: none; }
 @keyframes shimmerSweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
@@ -178,6 +184,8 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   :root:not(.force-motion) .draw-tick,
   :root:not(.force-motion) .chip-fade-out,
   :root:not(.force-motion) .radar-ring,
+  :root:not(.force-motion) .mic-ring,
+  :root:not(.force-motion) .mic-bar,
   :root:not(.force-motion) .map-halo,
   :root:not(.force-motion) .skeleton::after,
   :root:not(.force-motion) .bob,

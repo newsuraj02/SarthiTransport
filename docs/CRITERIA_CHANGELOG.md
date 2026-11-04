@@ -49,3 +49,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-04 -- Pickup/Drop suggestions nearest-first with km (origin + 5 areas + band ranking, replaces the <3 local rule); contract B5 rewritten
 - changed (6): file:functions/addressLang.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/addressLang.js#createAddressService, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#LocationField
 - added (2): code:src/App.jsx#sortPredictionsNearestFirst, code:src/App.jsx#formatSuggestionKm
+
+## 2026-11-04 -- In-app Pickup/Drop mic: native speech plugin (@capacitor-community/speech-recognition) + src/speechInput.js engine chain + VoiceListeningSheet UI; cap sync gradle files; contract B6
+- changed (9): code:CLAUDE.md, code:android/app/capacitor.build.gradle, code:android/capacitor.settings.gradle, code:docs/SYSTEM_CONTRACTS.md, code:package.json, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#LocationField, code:src/index.css
+- added (2): code:src/App.jsx#VoiceListeningSheet, code:src/speechInput.js
