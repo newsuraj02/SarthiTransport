@@ -94,3 +94,9 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- Category booking docs (contracts A5/A6, CLAUDE.md): tap selects whole category; ring uses the list's 12 categories via listCategory (owner 2026-11-04)
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-04 -- One 'Book this category' button per category; vehicle rows info only; card selection / See all removed (owner 2026-11-04 'single button for each and every category')
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-04 -- CLAUDE.md pointer: card tap / Book this vehicle / See all vehicles replaced by the per-category button
+- changed (1): code:CLAUDE.md

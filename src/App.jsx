@@ -7474,7 +7474,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Typing in Pickup or Drop clears everything chosen AFTER it (drop, distance, the picked vehicle) -- owner brief 2026-10-29.
   // Distance is derived from the two coordinates, so clearing them clears it too.
   const clearAfterDrop = () => {
-    setSelectedDriverKey(null); setUnmatchedAt(null); setUnmatchedId(null); setUnmatchedContacted(false); setBookingError("");
+    setUnmatchedAt(null); setUnmatchedId(null); setUnmatchedContacted(false); setBookingError("");
   };
   const clearAfterPickup = () => {
     setDrop(""); setDropCoords(null); setDropPlaceId(null); dropFromPlaceRef.current = false;
@@ -7564,7 +7564,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // vehicle" button floated to the top before a confirmation sheet even
   // opens, instead of it firing the instant they tap the card. Keyed the
   // same way as each entry's own id.
-  const [selectedDriverKey, setSelectedDriverKey] = useState(null);
   // The map is never collapsed or hidden before Book, and it scrolls with the page (owner 2026-10-29).
   // Tapping a driver's inline "Book this category" button sends the
   // request immediately (no separate confirmation step) -- sendingKey
@@ -7663,23 +7662,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     </div>
   ) : null;
 
-  // Once a driver is picked, the list collapses down to just that one
-  // card (matching the design mock) instead of floating it to the top of
-  // a still-full list -- "See all vehicles" below it is the only
-  // way back to the full list. Falls back to the full list if the
-  // selected driver ever drops out of nearbyDrivers entirely (went
-  // offline, no longer matches the current weight) rather than showing a
-  // stale single card for someone no longer there.
-  const selectedEntry = selectedDriverKey ? nearbyDrivers.find((e) => e.id === selectedDriverKey) || null : null;
-  // Nothing is pre-selected (owner 2026-10-29): the whole list is shown until the customer taps a vehicle;
-  // only then does the Book button appear, and it books that vehicle.
-  const chosen = !!selectedEntry;
-  // CATEGORY BOOKING (owner 2026-11-04): tapping any card selects its WHOLE capacity category -- no single driver is picked. Book rings every
-  // vehicle in that category (and the 2 above, server rule A6) and the first driver to accept gets the trip. The category's fare is its TOP fare
-  // (the dearest vehicle in it on this route), so nobody in it is paid below their own tier; that vehicle's tier / capacity / return fare go on the booking.
-  const selectedCategoryIndex = selectedEntry ? customerListCategoryIndex(selectedEntry.capacityKg) : null;
-  const categoryEntries = selectedEntry ? nearbyDrivers.filter((e) => customerListCategoryIndex(e.capacityKg) === selectedCategoryIndex) : [];
-  const topCategoryEntry = categoryEntries.reduce((best, e) => (!best || e.fare > best.fare || (e.fare === best.fare && e.capacityKg > best.capacityKg) ? e : best), null);
+  // CATEGORY BOOKING (owner 2026-11-04): every capacity category in the list has ONE button ("Book this category"); nothing is picked card by card.
+  // It rings every vehicle in that category (and the 2 above, server rule A6) and the first driver to accept gets the trip. The category's fare is its
+  // TOP fare (the dearest vehicle in it on this route), so nobody in it is paid below their own tier; that vehicle's tier / capacity / return fare go on the booking.
+  const categoryTopEntry = (entries) => entries.reduce((best, e) => (!best || e.fare > best.fare || (e.fare === best.fare && e.capacityKg > best.capacityKg) ? e : best), null);
   // "Change pickup / drop" (owner 2026-10-31): sits UNDER the "Tap a vehicle" line (or the date/time hint / the
   // "Tap a vehicle" line), centred and dull grey. Only while Pickup/Drop are tucked away and no vehicle is chosen.
   // Owner 2026-11-01: the fixed "Round trip" bar is only for the step where Pickup and Drop are being ENTERED -- i.e. exactly while the
@@ -7687,29 +7673,23 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // "Change pickup / drop" brings the boxes -- and the bar -- back. The tick itself is kept either way.
   // Owner 2026-11-01 (later): and once it is TICKED the box is not shown any more (hence "&& !returnTrip"); the green "Return fare
   // included" note with its small "Remove" is how the tick shows -- and gets undone -- from then on.
-  const returnBarVisible = !tripHidden && !chosen && !returnTrip;
-  const changePlacesLink = tripHidden && !chosen ? (
+  const returnBarVisible = !tripHidden && !returnTrip;
+  const changePlacesLink = tripHidden ? (
     <div className="text-center">
       <button type="button" onClick={() => { setFromTrip(false); }} className="px-3 py-2 text-xs font-semibold underline underline-offset-2" style={{ color: "#94A3B8" }}>
         {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
       </button>
     </div>
   ) : null;
-  const visibleDrivers = selectedEntry ? categoryEntries : nearbyDrivers; // once tapped: the whole chosen category stays, the others go
-  const bookEntry = topCategoryEntry; // nothing is pre-selected: Book only appears once the customer taps a vehicle; it books the whole category
-  const canBook = locationsReady && !sameLocation && !!bookEntry;
-  // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted; once one is
-  // chosen, only that type -- with the nearest of them ringed and its minutes shown.
+  const canBook = locationsReady && !sameLocation;
+  // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted (no vehicle is picked any more --
+  // owner 2026-11-04 -- so the old "chosen type + nearest ringed with its minutes" view is gone).
   const listStage = locationsReady && !sameLocation; // Pickup + Drop (+ date/time in Advance) done: the vehicle list is showing
   const mapEntries = !listStage ? null
-    : selectedEntry ? categoryEntries : nearbyDrivers;
+    : nearbyDrivers;
   const mapFixedDrivers = mapEntries ? mapEntries.filter((e) => e.gpsOn).map((e) => e.driver) : null; // GPS-off vehicles are listed but not pinned (their last place is old)
   // A truck that is on a trip right now is not "available nearby" -- keep it off the map before the list shows too (the vehicle list already excludes it).
   const mapAvailableDrivers = (drivers || []).filter((d) => !driverIsOnTrip(d, bookings));
-  const nearestOfType = selectedEntry && mapEntries?.some((e) => e.gpsOn) ? mapEntries.filter((e) => e.gpsOn).reduce((best, e) => (e.km < best.km ? e : best)) : null;
-  const mapHighlight = nearestOfType
-    ? { id: nearestOfType.id, label: (() => { const m = etaMinutes(nearestOfType.km); return lang === "en" ? `${m} min` : lang === "mr" ? `${m} मिनिट` : `${m} मिनट`; })() }
-    : null;
 
   // Tapping a specific driver's card doesn't pin the request to just them
   // (see requestByCategory's driverName param) — it's still a broadcast to
@@ -7719,7 +7699,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // relabels it "Request sent. Please wait" rather than resetting the form
   // or showing a separate success overlay; the component unmounts on its
   // own once activeBooking swaps this screen for ActiveRide.
-  const bookDriver = (entry) => {
+  const bookDriver = (entry, categoryIndex) => {
     setBookingError("");
     if (isSameLocation(pickup, drop, pickupCoords, dropCoords)) {
       setBookingError(lang === "en" ? "Pickup and Drop look like the same place — please enter a more specific address (area, landmark or street) for one of them."
@@ -7741,12 +7721,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         return;
       }
     }
-    setSendingKey(entry.id);
+    setSendingKey(`cat-${categoryIndex}`);
     // A short, deliberate beat so the "Sending request…" spinner is actually seen
     // (Firestore's local echo would otherwise swap this screen out instantly).
     setTimeout(() => {
     const err = requestByCategory({
-      pickup, drop, tierMaxKg: entry.tier.maxKg, listCategory: selectedCategoryIndex, customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
+      pickup, drop, tierMaxKg: entry.tier.maxKg, listCategory: categoryIndex, customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       pickupPlaceId, dropPlaceId, returnTrip,
@@ -7773,12 +7753,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
           Falls back to customerLocation (device GPS) only before Pickup has been entered/geocoded.
           Owner brief 2026-10-29: once the vehicle list shows, the map shows ONLY active vehicles of the matching types
-          (inactive ones hidden); once a vehicle is chosen, only that type, with the nearest one ringed and its minutes shown. */}
+          (inactive ones hidden). */}
       {/* Owner 2026-10-31: an evident line between the map and the form (3 px navy rule + a soft shadow below it).
           Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched. */}
       <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
         <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
-          activeOnly={listStage} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
+          activeOnly={listStage} fixedDrivers={mapFixedDrivers} highlightId={null} highlightLabel="" />
       </div>
       {bookedMsg && (
         <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
@@ -7873,7 +7853,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
 
         {/* Advance only (owner 2026-10-30): ONE horizontal box holding Date and Time, placed after the Pickup/Drop flow and
             shown only once Pickup AND Drop are entered. */}
-        {advance && placesReady && !chosen && (
+        {advance && placesReady && (
           <>
           <div className="anim-rise" style={{
               padding: highlightField === "date" || highlightField === "time" ? 4 : 0,
@@ -7910,18 +7890,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
 
       {/* Once Pickup+Drop are filled (owner 2026-11-04: there is NO weight / est. distance box any more), this section shows the
           eligible-driver list straight away. Every real, currently eligible driver near Pickup is
-          listed individually with their own KYC vehicle photo, category
-          label, capacity, and fare (see nearbyDrivers/bookDriver), so the
-          customer picks by looking at the actual vehicle rather than an
-          anonymous category card. Several drivers can share a category
-          (e.g. three separate 17ft entries) -- they share the same fare,
-          since pricing is per-category, but each is its own bookable card
-          because each is a real, different vehicle. Once one is picked,
-          the list collapses to just that card (see visibleDrivers) with
-          an inline "Book this category" button right under it and a
-          "See all vehicles" link back to the full list; tapping
-          Book sends the request immediately (no confirmation sheet) and
-          that same button becomes a disabled "Request sent. Please wait". */}
+          listed with their own KYC vehicle photo, category label, capacity and fare (see nearbyDrivers), grouped under the
+          capacity categories (owner 2026-11-04). The vehicle rows are information only -- nobody picks a single driver. Each category
+          has ONE "Book this category" button (see bookDriver) that sends the request to every vehicle in that category (and the 2 above)
+          at the category's top fare, immediately (no confirmation sheet); that same button becomes "Sending request..." while it goes out. */}
       {locationsReady && (
         <div className="px-5 pt-3 pb-4 space-y-2.5">
           {sameLocation ? (
@@ -7935,9 +7907,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             </div>
           ) : (
             <>
-              {!chosen && (
-              <div className="text-center text-sm font-bold rounded-xl py-2.5" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1.5px solid rgba(0,82,204,0.3)` }}>
-                👇 {lang === "en" ? "Tap a vehicle to select it" : lang === "mr" ? "निवडण्यासाठी गाडीवर टॅप करा" : "चुनने के लिए गाड़ी पर टैप करें"}
+              {nearbyDrivers.length > 0 && (
+              <div data-category-note className="text-center text-xs font-bold rounded-xl px-3 py-2.5" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1.5px solid rgba(0,82,204,0.3)` }}>
+                👇 {lang === "en" ? "Tap a category's Book button. Every vehicle in that category is notified. Only one driver can accept, and the fastest one wins."
+                  : lang === "mr" ? "श्रेणीच्या बुक बटणावर टॅप करा. त्या श्रेणीतील प्रत्येक वाहनाला सूचना जाते. फक्त एकच ड्रायव्हर स्वीकारू शकतो, आणि सर्वात जलद ड्रायव्हरला ट्रिप मिळते."
+                  : "कैटेगरी के बुक बटन पर टैप करें। उस कैटेगरी की हर गाड़ी को सूचना जाती है। सिर्फ़ एक ड्राइवर स्वीकार कर सकता है, और सबसे तेज़ ड्राइवर को ट्रिप मिलती है।"}
               </div>
               )}
               {returnFareNote}
@@ -7951,8 +7925,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 </p>
               ) : (
                 <>
-                  {/* Owner 2026-11-04: the list is grouped in the 12 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading; once a vehicle is tapped only its card shows (no heading). */}
-                  {groupByCustomerListCategory(visibleDrivers).map((grp) => (
+                  {/* Owner 2026-11-04: the list is grouped in the 12 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading,
+                      its vehicles as plain info rows and ONE "Book this category" button -- no card is tapped, no single driver is picked. */}
+                  {groupByCustomerListCategory(nearbyDrivers).map((grp) => {
+                  const topEntry = categoryTopEntry(grp.entries);
+                  const catKey = `cat-${grp.index}`;
+                  return (
                   <div key={grp.index} data-list-category={grp.index} className="space-y-2.5">
                   <div data-list-category-heading className="flex items-center gap-2 pt-1">
                     <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: C.navy }}>{customerListCategoryLabel(grp.index, lang)}</span>
@@ -7961,13 +7939,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                   </div>
                   {grp.entries.map((entry, idx) => {
                     const key = entry.id;
-                    const isSelected = !!selectedEntry; // the whole chosen category is highlighted (owner 2026-11-04: no single driver is picked)
                     const fare = entry.fare;
                     return (
                       <div key={key} className="anim-rise" style={{ animationDelay: `${Math.min(idx, 6) * 70}ms` }}>
-                        <button onClick={() => setSelectedDriverKey(key)} disabled={!!sendingKey}
-                          className={`w-full flex items-center gap-3 rounded-xl p-3 text-left shadow-sm ${isSelected ? "driver-selected-bounce" : ""}`}
-                          style={{ border: `2px solid ${isSelected ? C.success : C.line}`, background: isSelected ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isSelected ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
+                        <div data-vehicle-info className="w-full flex items-center gap-3 rounded-xl p-3 text-left shadow-sm" style={{ border: `2px solid ${C.line}`, background: C.paper }}>
                           <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
                             <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
                               <VehicleCategoryIcon tierIndex={entry.tierIndex} />
@@ -7992,42 +7967,24 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                             </div>
                           </div>
                           <div className="text-sm font-black shrink-0 rounded-full px-2.5 py-1" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(fare)}</div>
-                        </button>
+                        </div>
                       </div>
                     );
                   })}
+                  {/* ONE button for this category (owner 2026-11-04: "single button for each and every category"): books the whole category at its top fare. */}
+                  <button type="button" data-book-category={grp.index} disabled={!canBook || !!sendingKey} onClick={() => topEntry && bookDriver(topEntry, grp.index)}
+                    className="w-full rounded-xl py-3.5 font-extrabold text-base flex items-center justify-center gap-2"
+                    style={{ background: sendingKey === catKey ? C.inkSoft : canBook && !sendingKey ? C.success : "#E5EAF2", color: canBook || sendingKey === catKey ? "#FFFFFF" : "#9AA3B0", boxShadow: canBook && !sendingKey ? "0 6px 14px rgba(0,168,84,0.28)" : undefined }}>
+                    {sendingKey === catKey
+                      ? <span className="inline-flex items-center gap-2"><Loader2 size={18} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
+                      : <>🚚 {lang === "en" ? "Book this category" : lang === "mr" ? "ही श्रेणी बुक करा" : "यह कैटेगरी बुक करें"}{topEntry ? ` · ${fmt(topEntry.fare)}` : ""}</>}
+                  </button>
                   </div>
-                  ))}
-                  {chosen && (
-                    <>
-                      {returnFareNote}
-                      <div data-category-note className="text-center text-xs font-bold rounded-xl px-3 py-2" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1px solid rgba(0,82,204,0.25)` }}>
-                        {lang === "en" ? "Every vehicle in this category is notified. Only one driver can accept, and the fastest one wins."
-                          : lang === "mr" ? "या श्रेणीतील प्रत्येक वाहनाला सूचना जाते. फक्त एकच ड्रायव्हर स्वीकारू शकतो, आणि सर्वात जलद ड्रायव्हरला ट्रिप मिळते."
-                          : "इस कैटेगरी की हर गाड़ी को सूचना जाती है। सिर्फ़ एक ड्राइवर स्वीकार कर सकता है, और सबसे तेज़ ड्राइवर को ट्रिप मिलती है।"}
-                      </div>
-                      {advance && (
-                        <div className="text-center text-xs font-bold" style={{ color: C.inkSoft }}>
-                          📅 {advanceDate} · {formatTimeSlot(advanceTime, lang)}
-                        </div>
-                      )}
-                      {/* Order once a vehicle is chosen (owner 2026-10-30): the card, THEN "Book this vehicle", THEN "See all vehicles". */}
-                      <button type="button" disabled={!canBook || !!sendingKey} onClick={() => bookEntry && bookDriver(bookEntry)}
-                        className="w-full rounded-xl py-5 font-extrabold text-xl flex items-center justify-center gap-2"
-                        style={{ background: sendingKey ? C.inkSoft : canBook ? C.success : "#E5EAF2", color: canBook || sendingKey ? "#FFFFFF" : "#9AA3B0", boxShadow: canBook && !sendingKey ? "0 8px 18px rgba(0,168,84,0.3)" : undefined }}>
-                        {sendingKey
-                          ? <span className="inline-flex items-center gap-2"><Loader2 size={20} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
-                          : <>🚚 {lang === "en" ? "Book this category" : lang === "mr" ? "ही श्रेणी बुक करा" : "यह कैटेगरी बुक करें"}{canBook ? ` · ${fmt(bookEntry.fare)}` : ""}</>}
-                      </button>
-                      <button type="button" onClick={() => setSelectedDriverKey(null)} disabled={!!sendingKey}
-                        className="w-full text-center text-xs font-semibold py-2 rounded-xl" style={{ color: C.inkSoft, background: "transparent", border: `1px solid ${C.line}` }}>
-                        {lang === "en" ? "See all vehicles" : lang === "mr" ? "सर्व गाड्या पहा" : "सभी गाड़ियाँ देखें"}
-                      </button>
-                    </>
-                  )}
+                  );
+                  })}
                 </>
               )}
-              {chosen ? null : unmatchedStage === "no-driver" ? (
+              {unmatchedStage === "no-driver" ? (
                 <p data-unmatched-no-driver className="text-center text-xs font-bold py-2" style={{ color: C.marigoldDeep }}>
                   {lang === "en" ? "We can't find a driver for you at the moment." : lang === "mr" ? "सध्या आम्हाला तुमच्यासाठी ड्रायव्हर सापडत नाही." : "फ़िलहाल हम आपके लिए ड्राइवर नहीं ढूँढ पा रहे हैं।"}
                 </p>
@@ -8079,7 +8036,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
 // Current Booking screen): it is CustomerBooking itself with `advance`, which adds the date + time row up front, the
 // longer search radius (ADVANCE_BID_RADIUS_KM), driver availability checked against the chosen slot, the per-category
 // minimum-notice check, and sends `scheduledFor`. Everything else -- trips under Pickup, hidden trip, weight tucking
-// Pickup/Drop away, matching-vehicles map, no pre-selection, Book this vehicle / See all vehicles, clearing rules,
+// Pickup/Drop away, matching-vehicles map, no pre-selection, one Book button per category, clearing rules,
 // place ids, form emptied after Book -- is shared code. Keep it that way: change CustomerBooking, not a copy.
 function CustomerAdvanceBooking(props) {
   return <CustomerBooking {...props} advance />;
