@@ -132,3 +132,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- Picked row shows the vehicle once: small icon hidden while the big picture is shown (owner 2026-11-04)
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-04 -- More realistic vehicle art: far-side tyres, twin rear tyres, tread, mudguard lip, mud flaps, fuel tank, reflective tape (owner 2026-11-04 'tyre seems odd, only 2 tyres')
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/vehicleArt.jsx#CategoryVehicleArt

@@ -3,7 +3,9 @@
 // ONE parametric drawing, so all thirteen share one style: a heavy, realistic commercial-vehicle look seen from the front-left and slightly
 // above (the near side, the front face and the roof / open bed are visible), soft gradients, a white cab with a tinted windscreen and side
 // window, door seam and handle, mirror, grille, headlight and bumper, a deep-blue open bed or a white box / corrugated container, a dark
-// chassis and chunky tyres with rims. Bigger categories are longer with more axles (each drawing is cropped to its own bounds so every icon
+// chassis and chunky tyres with rims. Realism details: the far-side tyres peek out below the body (so a truck never reads as having two tyres), the
+// rear axles of the bigger trucks carry twin tyres, tyres have tread / sidewall / lug nuts, arches have a mudguard lip, mud flaps, fuel tank, rear guard,
+// reflective tape and marker lights. Bigger categories are longer with more axles (each drawing is cropped to its own bounds so every icon
 // fills its box). Original artwork, language-free, crisp at any size, bundled with the app (no image files, works offline).
 import React from "react";
 
@@ -87,9 +89,21 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
       {/* ground shadow */}
       <ellipse cx={x0 + width / 2 - 2} cy={GROUND + 1.2} rx={width / 2 + 8} ry={3} fill="rgba(15,27,45,0.20)" />
 
+      {/* FAR-SIDE tyres (the other side of the vehicle, seen below the body to the up-left): without them a truck reads as having only two tyres */}
+      {sp.wheels.map((wx) => (
+        <g key={"far" + wx}>
+          <circle cx={x0 + wx - d * 0.8} cy={WHEEL_Y - rise * 0.8} r={wr + 0.6} fill="#0C1118" />
+          <circle cx={x0 + wx - d * 0.8} cy={WHEEL_Y - rise * 0.8} r={wr - 2.4} fill="#1D2634" />
+          <circle cx={x0 + wx - d * 0.8} cy={WHEEL_Y - rise * 0.8} r={2.2} fill="#46536A" />
+        </g>
+      ))}
+
       {/* chassis + underbody */}
       <rect x={x0 + 2} y={FLOOR} width={width - 2} height={5.5} rx={1.5} fill={INK} />
       <rect x={x0 + sp.cw * 0.5} y={FLOOR + 5.5} width={Math.min(18, sp.len * 0.28)} height={4} rx={1.5} fill="#2A3445" />
+      {/* fuel tank between the cab and the rear axle (from the Tata 407 up) + rear underride guard */}
+      {sp.cw >= 32 && <rect x={x0 + sp.cw + 8} y={FLOOR + 5.2} width={15} height={7} rx={3.2} fill="#8896AB" stroke="rgba(15,27,45,0.5)" strokeWidth={0.9 * k} />}
+      <rect x={x0 + width - 5} y={FLOOR + 4.5} width={3.4} height={5} rx={0.8} fill={INK} />
 
       {/* BODY ---------------------------------------------------------------- */}
       {sp.body === "open" && (
@@ -126,6 +140,14 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
           <rect x={bx + sp.len - 3} y={by + 3.6} width={3} height={sp.bh - 8} fill="#9DAABD" />
         </g>
       )}
+      {/* reflective tape along the bottom of the box / container + an amber side-marker light */}
+      {sp.body !== "open" && (
+        <g>
+          <line x1={bx + 3} y1={FLOOR - 7.4} x2={bx + sp.len - 5} y2={FLOOR - 7.4} stroke="#C62828" strokeWidth={1.5 * k} />
+          <line x1={bx + 3} y1={FLOOR - 7.4} x2={bx + sp.len - 5} y2={FLOOR - 7.4} stroke="#F4F6FA" strokeWidth={1.5 * k} strokeDasharray="4 3.5" />
+        </g>
+      )}
+      <rect x={bx + sp.len - 9} y={FLOOR - 11} width={2.4} height={1.6} rx={0.5} fill="#F59E0B" />
       {/* tail light */}
       <rect x={bx + sp.len - 3.4} y={FLOOR - 7} width={2.4} height={4.4} rx={1} fill="#C62828" />
 
@@ -152,19 +174,32 @@ export default function CategoryVehicleArt({ index = 0, className = "", title = 
       <rect x={x0 - 0.6} y={cabTop + sp.ch * 0.33} width={2} height={1.4} fill={INK} />
       <rect x={x0 + 1} y={CAB_BOTTOM - 0.5} width={sp.cw * 0.5} height={2.4} rx={0.8} fill="#2A3445" />
 
-      {/* WHEELS (near side) --------------------------------------------------- */}
+      {/* WHEELS (near side): dark arch with a lighter mudguard lip, TWIN tyres on the rear axles of the bigger trucks (the inner twin shows behind the outer),
+          a tread ring, a sidewall, a bright rim with lug nuts, and a mud flap behind the last wheel. */}
       {sp.wheels.map((wx) => {
         const cx = x0 + wx;
+        const isFront = wx <= sp.cw + 4;
+        const twin = !isFront && sp.cw >= 32;           // from the Tata 407 up, the rear axles carry twin tyres
+        const lastAxle = wx === Math.max(...sp.wheels);
         return (
           <g key={wx}>
             <circle cx={cx} cy={WHEEL_Y} r={wr + 2.6} fill={INK} />
-            <circle cx={cx} cy={WHEEL_Y} r={wr} fill="#12171F" stroke="#2E3948" strokeWidth={1 * k} />
-            <circle cx={cx} cy={WHEEL_Y} r={wr - 1.8} fill="none" stroke="#2A3544" strokeWidth={1 * k} />
-            <circle cx={cx} cy={WHEEL_Y} r={4.7} fill={g("rim")} stroke="#6F7C91" strokeWidth={0.8 * k} />
+            <path d={`M ${cx - wr - 3.2} ${WHEEL_Y} A ${wr + 3.2} ${wr + 3.2} 0 0 1 ${cx + wr + 3.2} ${WHEEL_Y}`} fill="none" stroke="#5B6A82" strokeWidth={1.1 * k} />
+            {twin && (
+              <g>
+                <circle cx={cx - 3.6} cy={WHEEL_Y - 1.4} r={wr} fill="#0C1118" stroke="#27313F" strokeWidth={1 * k} />
+                <circle cx={cx - 3.6} cy={WHEEL_Y - 1.4} r={wr - 1.4} fill="none" stroke="#1C2533" strokeWidth={1 * k} strokeDasharray="1.3 1.5" />
+              </g>
+            )}
+            <circle cx={cx} cy={WHEEL_Y} r={wr} fill="#12171F" stroke="#2E3948" strokeWidth={1.1 * k} />
+            <circle cx={cx} cy={WHEEL_Y} r={wr - 0.8} fill="none" stroke="#303C4E" strokeWidth={1.5 * k} strokeDasharray="1.3 1.5" />
+            <circle cx={cx} cy={WHEEL_Y} r={wr - 2.4} fill="none" stroke="#222C3A" strokeWidth={1 * k} />
+            <circle cx={cx} cy={WHEEL_Y} r={4.6} fill={g("rim")} stroke="#6F7C91" strokeWidth={0.8 * k} />
             <circle cx={cx} cy={WHEEL_Y} r={1.9} fill="#56627A" />
             {[0, 72, 144, 216, 288].map((a) => (
-              <circle key={a} cx={cx + 3.1 * Math.cos((a * Math.PI) / 180)} cy={WHEEL_Y + 3.1 * Math.sin((a * Math.PI) / 180)} r={0.65} fill="#3C485C" />
+              <circle key={a} cx={cx + 3 * Math.cos((a * Math.PI) / 180)} cy={WHEEL_Y + 3 * Math.sin((a * Math.PI) / 180)} r={0.65} fill="#3C485C" />
             ))}
+            {lastAxle && <rect x={cx + wr + 1} y={WHEEL_Y - 3} width={2.4} height={10} rx={0.8} fill="#0C1118" />}
           </g>
         );
       })}
