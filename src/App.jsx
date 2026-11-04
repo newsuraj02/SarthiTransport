@@ -7722,9 +7722,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // "Change pickup / drop" brings the boxes -- and the bar -- back. The tick itself is kept either way.
   // Owner 2026-11-01 (later): and once it is TICKED the box is not shown any more (hence "&& !returnTrip"); the green "Return fare
   // included" note with its small "Remove" is how the tick shows -- and gets undone -- from then on.
-  // Owner 2026-11-04 (replaces the above): the bar is for the MAIN screen only -- Current Booking, nothing entered yet. It is gone for good once the
-  // cursor has been placed in Pickup (`pickupTouched`), once Pickup has any text, in Advance Booking, and once ticked; the form emptying after a booking brings it back.
-  const returnBarVisible = !advance && !returnTrip && !pickupTouched && !pickup.trim();
+  // Owner 2026-11-04 (replaces the above): the bar is for the MAIN screen only -- Current AND Advance Booking (same screen, owner: "I want it on the Advance booking screen
+  // similarly"), nothing entered yet. It is gone for good once the cursor has been placed in Pickup (`pickupTouched`), once Pickup has any text, and once ticked;
+  // the form emptying after a booking brings it back.
+  const returnBarVisible = !returnTrip && !pickupTouched && !pickup.trim();
   // ONE row (owner 2026-11-04): the est. distance at the LEFT end and "Change pickup / drop" at the RIGHT end, both visible (est. km once Pickup + Drop
   // give a distance; the link only while the Pickup / Drop boxes are tucked away). It is the row the Round-trip / list sections show under the places.
   const estKm = distance > 0 && placesReady ? Math.round(distance) : null;

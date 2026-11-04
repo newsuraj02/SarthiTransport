@@ -162,3 +162,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- Owner 2026-11-04: Book Round trip bar only on the main screen (gone once cursor is in Pickup, in Advance, once ticked); Book now bar only with the vehicle list and not while a box has the cursor
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-04 -- Owner 2026-11-04: Book Round trip bar also on the Advance Booking main screen (same rule as Current)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
