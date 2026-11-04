@@ -7369,6 +7369,9 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // being typed was geocoded after a 900 ms pause and counted as "chosen", so the Drop box and the whole vehicle list appeared before Pickup / Drop were entered.
   // Typed text now counts only once the cursor has left the box (or a suggestion / current location / map tap / trip chose the place).
   const [typingField, setTypingField] = useState(null);
+  // Owner 2026-11-04: the "Book Round trip" bar belongs to the MAIN screen only. Once the cursor has been placed in Pickup it is gone, and stays gone
+  // ("it must disappear once you place the cursor on the pickup and afterwards") until the form is emptied after a booking.
+  const [pickupTouched, setPickupTouched] = useState(false);
   // Real DOM refs for the three fields -- lets the auto-advance below
   // actually move the keyboard cursor into the next field, not just the
   // visual highlight, the moment a place is chosen (not while typing by
@@ -7576,6 +7579,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     setFromTrip(false);
     setAdvanceDate(""); setAdvanceTime("");
     setReturnTrip(false);
+    setPickupTouched(false);
     setActiveField(null);
   };
 
@@ -7718,7 +7722,9 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // "Change pickup / drop" brings the boxes -- and the bar -- back. The tick itself is kept either way.
   // Owner 2026-11-01 (later): and once it is TICKED the box is not shown any more (hence "&& !returnTrip"); the green "Return fare
   // included" note with its small "Remove" is how the tick shows -- and gets undone -- from then on.
-  const returnBarVisible = !returnTrip;
+  // Owner 2026-11-04 (replaces the above): the bar is for the MAIN screen only -- Current Booking, nothing entered yet. It is gone for good once the
+  // cursor has been placed in Pickup (`pickupTouched`), once Pickup has any text, in Advance Booking, and once ticked; the form emptying after a booking brings it back.
+  const returnBarVisible = !advance && !returnTrip && !pickupTouched && !pickup.trim();
   // ONE row (owner 2026-11-04): the est. distance at the LEFT end and "Change pickup / drop" at the RIGHT end, both visible (est. km once Pickup + Drop
   // give a distance; the link only while the Pickup / Drop boxes are tucked away). It is the row the Round-trip / list sections show under the places.
   const estKm = distance > 0 && placesReady ? Math.round(distance) : null;
@@ -7740,7 +7746,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // picked category that disappeared from the list (its last vehicle went off duty) counts as not picked.
   const selectedGroup = selectedCategory == null ? null : groupByCustomerListCategory(nearbyDrivers).find((g) => g.index === selectedCategory) || null;
   const selectedTopEntry = selectedGroup ? categoryTopEntry(selectedGroup.entries) : null;
-  const bookBarVisible = locationsReady && !sameLocation && nearbyDrivers.length > 0;
+  const bookBarVisible = locationsReady && !sameLocation && nearbyDrivers.length > 0 && !typingField; // Owner 2026-11-04: ONLY with the vehicle list showing (never while a Pickup / Drop box has the cursor)
   // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted. The nearest of them (GPS on) carries its
   // "N min" pill (owner 2026-11-04: "bring back the N min on the map"); no vehicle is picked any more, so it is the nearest of ALL listed vehicles.
   const listStage = locationsReady && !sameLocation; // Pickup + Drop (+ date/time in Advance) done: the vehicle list is showing
@@ -7845,7 +7851,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
               placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
               suggestions={suggestAreas(pickup)}
               onSuggestionTap={(a) => onPickupTyped(pickup.trim() + (pickup.trim() ? ", " : "") + a)}
-              onFocus={() => { setActiveField("pickup"); setTypingField("pickup"); }}
+              onFocus={() => { setActiveField("pickup"); setTypingField("pickup"); setPickupTouched(true); }}
               onBlur={() => setTypingField((f) => (f === "pickup" ? null : f))}
               highlighted={highlightField === "pickup"}
               biasLat={customerLocation?.lat ?? undefined} biasLng={customerLocation?.lng ?? undefined}

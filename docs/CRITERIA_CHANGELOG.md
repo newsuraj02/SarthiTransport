@@ -159,3 +159,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- Owner 2026-11-04: bar renamed 'Book Round trip' and kept visible at all times (z-45, suggestion lists capped above it); MAJOR BUG fix: vehicle list / Drop box no longer appear while Pickup/Drop text is still being typed (typingField)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#LocationField, code:src/App.jsx#CustomerBooking
+
+## 2026-11-04 -- Owner 2026-11-04: Book Round trip bar only on the main screen (gone once cursor is in Pickup, in Advance, once ticked); Book now bar only with the vehicle list and not while a box has the cursor
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
