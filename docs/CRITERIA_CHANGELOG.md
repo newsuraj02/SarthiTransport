@@ -106,3 +106,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- One fixed 'Book now' bar: select a category then press it; per-category buttons removed (owner 2026-11-04)
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-04 -- Customer list = one row per category (icon, weight, vehicle name, top fare, N min); per-vehicle cards removed (owner 2026-11-04)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking

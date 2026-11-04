@@ -7938,55 +7938,32 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               ) : (
                 <>
                   {/* Owner 2026-11-04: the list is grouped in the 12 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading,
-                      its vehicles as plain info rows; tapping the category selects it (highlighted) for the fixed "Book now" bar -- no single driver is picked. */}
-                  {groupByCustomerListCategory(nearbyDrivers).map((grp) => {
+                      ONE ROW per category (owner 2026-11-04, "like the weight / vehicle list"): vehicle icon, the category's weight in big bold type, its vehicle name, the top fare and
+                      "N min" of its nearest GPS-on vehicle. Tapping a row selects the category (highlighted) for the fixed "Book now" bar -- no single driver is picked. */}
+                  {groupByCustomerListCategory(nearbyDrivers).map((grp, rowIdx) => {
                   const isPicked = selectedCategory === grp.index;
+                  const top = categoryTopEntry(grp.entries); // the dearest vehicle in the category: its icon, name and fare stand for the category
+                  const nearestGps = grp.entries.filter((e) => e.gpsOn).reduce((best, e) => (!best || e.km < best.km ? e : best), null);
+                  const mins = nearestGps ? etaMinutes(nearestGps.km) : null; // "N min" = the nearest vehicle of the category that has GPS on
                   return (
-                  <div key={grp.index} data-list-category={grp.index} data-category-picked={isPicked ? "1" : undefined} role="button" tabIndex={0} aria-pressed={isPicked}
-                    onClick={() => { if (!sendingKey) setSelectedCategory(grp.index); }}
-                    onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !sendingKey) { e.preventDefault(); setSelectedCategory(grp.index); } }}
-                    className={`space-y-2.5 rounded-2xl p-2 cursor-pointer ${isPicked ? "driver-selected-bounce" : ""}`}
-                    style={{ border: `2px solid ${isPicked ? C.success : "transparent"}`, background: isPicked ? "rgba(0,168,84,0.06)" : "transparent", boxShadow: isPicked ? "0 0 0 4px rgba(0,168,84,0.14)" : undefined }}>
-                  <div data-list-category-heading className="flex items-center gap-2 pt-1">
-                    <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: C.navy }}>{isPicked ? "✓ " : ""}{customerListCategoryLabel(grp.index, lang)}</span>
-                    <span className="flex-1 h-px" style={{ background: C.line }} />
-                    <span className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{grp.entries.length}</span>
-                  </div>
-                  {grp.entries.map((entry, idx) => {
-                    const key = entry.id;
-                    const fare = entry.fare;
-                    return (
-                      <div key={key} className="anim-rise" style={{ animationDelay: `${Math.min(idx, 6) * 70}ms` }}>
-                        <div data-vehicle-info className="w-full flex items-center gap-3 rounded-xl p-3 text-left shadow-sm" style={{ border: `2px solid ${C.line}`, background: C.paper }}>
-                          <SafeImage src={entry.driver.vehicleSpec?.photoSide?.url} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" style={{ background: C.bg, border: `1px solid ${C.line}` }} fallback={
-                            <div className="w-16 h-16 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
-                              <VehicleCategoryIcon tierIndex={entry.tierIndex} />
-                            </div>
-                          } />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold" style={{ color: C.ink }}>{entry.tier.label}</div>
-                            <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {entry.capacityKg ? `${entry.capacityKg}kg` : (entry.tier.maxKg >= FARE_TIER_MAX_KG_UNCAPPED ? (lang === "en" ? "35+ tonnes" : "35+ टन") : `${entry.tier.maxKg}kg`)}
-                            </div>
-                            <div className="text-[11px]" style={{ color: C.inkSoft }}>
-                              {lang === "en" ? (
-                                <><span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} km</span> from Pickup</>
-                              ) : lang === "mr" ? (
-                                <>पिकअपपासून <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
-                              ) : (
-                                <>पिकअप से <span className="font-bold" style={{ color: C.ink }}>{Math.round(entry.km)} किमी</span></>
-                              )}
-                              {!entry.gpsOn && (
-                                <span data-gps-off className="font-bold" style={{ color: C.marigoldDeep }}> · {lang === "en" ? "Location off (last seen)" : lang === "mr" ? "लोकेशन बंद (शेवटचे ठिकाण)" : "लोकेशन बंद (आख़िरी जगह)"}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-sm font-black shrink-0 rounded-full px-2.5 py-1" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(fare)}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  </div>
+                  <button key={grp.index} type="button" data-list-category={grp.index} data-category-picked={isPicked ? "1" : undefined} aria-pressed={isPicked} disabled={!!sendingKey}
+                    onClick={() => setSelectedCategory(grp.index)}
+                    className={`anim-rise w-full flex items-center gap-3 rounded-2xl p-3 text-left shadow-sm ${isPicked ? "driver-selected-bounce" : ""}`}
+                    style={{ animationDelay: `${Math.min(rowIdx, 6) * 70}ms`, border: `2px solid ${isPicked ? C.success : C.line}`, background: isPicked ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isPicked ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
+                    <div data-category-icon className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.marigold }}>
+                      <VehicleCategoryIcon tierIndex={top.tierIndex} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div data-category-title className="text-lg font-extrabold leading-tight" style={{ color: C.ink }}>{isPicked ? "✓ " : ""}{customerListCategoryLabel(grp.index, lang)}</div>
+                      <div className="text-sm truncate" style={{ color: C.inkSoft }}>{top.tier.label}</div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div data-category-fare className="text-sm font-black rounded-full px-2.5 py-1" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(top.fare)}</div>
+                      {mins != null && (
+                        <div data-category-eta className="mt-1 text-[11px] font-bold" style={{ color: C.inkSoft }}>⏱ {lang === "en" ? `${mins} min` : lang === "mr" ? `${mins} मिनिट` : `${mins} मिनट`}</div>
+                      )}
+                    </div>
+                  </button>
                   );
                   })}
                 </>
