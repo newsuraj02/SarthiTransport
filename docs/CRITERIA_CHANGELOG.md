@@ -60,3 +60,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- Windows fix: the mic invariant loads src/speechInput.js through a file:// URL (a plain C:\ path breaks ESM import on Windows) and says 'run npm install' if the speech plugin is missing
 - changed (2): code:scripts/verifyInvariants.mjs#imports, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-04 -- Microphone removed completely (button, sheet, speech engine, plugin, gradle); contract B6 now says NO microphone
+- changed (9): code:CLAUDE.md, code:android/app/capacitor.build.gradle, code:android/capacitor.settings.gradle, code:docs/SYSTEM_CONTRACTS.md, code:package.json, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#LocationField, code:src/index.css
+- removed (3): code:src/App.jsx#VoiceListeningSheet, code:src/App.jsx#speechRecognitionBroken, code:src/speechInput.js

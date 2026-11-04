@@ -22,7 +22,6 @@
     "prepare": "node scripts/installHooks.mjs"
   },
   "dependencies": {
-    "@capacitor-community/speech-recognition": "^7.0.1",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.1",
     "@capacitor/push-notifications": "^8.1.2",

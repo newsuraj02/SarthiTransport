@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef, useId, useMemo, useSyncExternalStore, Suspense, lazy } from "react";
-import { createPortal } from "react-dom";
-import { startSpeech, pickSpeechEngine } from "./speechInput";
 // Admin's 16 screens live in their own module and are lazy-loaded here so a
 // customer or driver never downloads any of it — see AdminPanel.jsx's own
 // header comment for how this was split out.
@@ -19,7 +17,7 @@ import {
   Settings2, Download, IndianRupee,
   ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, LocateFixed,
-  AlertTriangle, Volume2, Square, Mic,
+  AlertTriangle, Volume2, Square,
 } from "lucide-react";
 import {
   firestoreReady, subscribeCollection, subscribeDoc, getOrCreateDoc, getDocOnce, createDoc, replaceDoc, patchDoc, removeDoc, seedIfEmpty, bulkDeleteDocs,
@@ -6522,109 +6520,9 @@ function sortPredictionsNearestFirst(list) {
 }
 function formatSuggestionKm(km) { return km < 1 ? "<1 km" : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`; }
 
-// The listening sheet shown while the Pickup / Drop mic is on (owner 2026-11-04). Rendered into <body> (a portal) because the booking screen's
-// .anim-rise blocks have a transform, which would break `position: fixed`. Phases: preparing (mic starting / permission), listening (pulsing
-// rings + equalizer + live transcript), heard (green tick, then the text fills the box), error ("denied" -> how to switch the mic on,
-// "no-speech" -> try again).
-function VoiceListeningSheet({ voice, lang, title, onStop, onCancel, onRetry }) {
-  const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
-  const { phase, text, error } = voice;
-  const orbColor = phase === "error" ? C.safety : phase === "heard" ? C.success : C.navy;
-  const heading = phase === "preparing" ? T("Getting the mic ready…", "माइक तैयार हो रहा है…", "माइक तयार होत आहे…")
-    : phase === "listening" ? T("Listening… speak now", "सुन रहे हैं… अब बोलिए", "ऐकत आहे… आता बोला")
-    : phase === "heard" ? T("Got it!", "समझ गया!", "समजले!")
-    : error === "denied" ? T("Microphone is off for this app", "इस ऐप के लिए माइक बंद है", "या अॅपसाठी माइक बंद आहे")
-    : T("Didn't hear anything", "कुछ सुनाई नहीं दिया", "काही ऐकू आले नाही");
-  const sub = phase === "error" && error === "denied"
-    ? T("Turn on Microphone for Apna Transport in your phone's Settings, then try again.", "फ़ोन की सेटिंग में Apna Transport के लिए माइक चालू करें, फिर दोबारा कोशिश करें।", "फोनच्या सेटिंगमध्ये Apna Transport साठी माइक चालू करा, मग पुन्हा प्रयत्न करा.")
-    : phase === "error" ? T("Hold the phone closer and say the place name clearly.", "फ़ोन पास रखें और जगह का नाम साफ़ बोलें।", "फोन जवळ धरा आणि ठिकाणाचे नाव स्पष्ट बोला.")
-    : title || "";
-  const body = (
-    <div data-voice-sheet data-voice-phase={phase} className="fixed inset-0 z-[80] flex items-end justify-center" style={{ background: "rgba(15,27,45,0.55)" }} onClick={onCancel}>
-      <div role="dialog" aria-live="polite" className="anim-rise w-full max-w-md rounded-t-3xl px-6 pt-6 text-center" style={{ background: C.paper, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)", boxShadow: "0 -10px 30px rgba(15,27,45,0.25)" }} onClick={(e) => e.stopPropagation()}>
-        <div className="mx-auto mb-4 rounded-full" style={{ width: 40, height: 4, background: C.line }} />
-        <div className="relative mx-auto flex items-center justify-center" style={{ width: 112, height: 112 }}>
-          {phase === "listening" && <><span className="mic-ring" /><span className="mic-ring mic-ring-2" /></>}
-          <div className="relative flex items-center justify-center rounded-full" style={{ width: 84, height: 84, background: orbColor, boxShadow: "0 8px 20px rgba(0,82,204,0.35)" }}>
-            {phase === "preparing" ? <Loader2 size={34} color="#FFFFFF" className="animate-spin" />
-              : phase === "heard" ? <CheckCircle2 size={38} color="#FFFFFF" strokeWidth={2.5} />
-              : phase === "error" ? <XCircle size={38} color="#FFFFFF" strokeWidth={2.5} />
-              : <Mic size={36} color="#FFFFFF" strokeWidth={2.5} />}
-          </div>
-        </div>
-        {phase === "listening" && (
-          <div className="flex items-end justify-center gap-1.5 mt-3" style={{ height: 26 }} aria-hidden="true">
-            {[0, 1, 2, 3, 4].map((i) => <span key={i} className="mic-bar" style={{ animationDelay: `${i * 0.12}s` }} />)}
-          </div>
-        )}
-        <div className="text-lg font-extrabold mt-3" style={{ color: C.ink }}>{heading}</div>
-        {sub && <div className="text-xs font-semibold mt-1" style={{ color: C.inkSoft }}>{sub}</div>}
-        {(phase === "listening" || phase === "heard" || phase === "preparing") && (
-          <div data-voice-transcript className="mt-4 rounded-xl px-4 py-3 text-xl font-extrabold leading-snug" style={{ minHeight: 60, background: C.bg, border: `1.5px solid ${C.line}`, color: text ? C.ink : "#94A3B8", wordBreak: "break-word" }}>
-            {text || T("Say e.g. “Wakad, Pune”", "जैसे बोलिए “वाकड, पुणे”", "उदा. बोला “वाकड, पुणे”")}
-          </div>
-        )}
-        <div className="flex gap-3 mt-5">
-          {phase === "error" ? (
-            <>
-              <button type="button" onClick={onCancel} className="flex-1 rounded-xl py-3.5 text-sm font-bold" style={{ background: "transparent", border: `1.5px solid ${C.line}`, color: C.inkSoft }}>{T("Type instead", "टाइप करें", "टाइप करा")}</button>
-              <button type="button" data-voice-retry onClick={onRetry} className="flex-1 rounded-xl py-3.5 text-sm font-extrabold text-white" style={{ background: C.blue || "#0052CC" }}>{T("Try again", "फिर कोशिश करें", "पुन्हा प्रयत्न करा")}</button>
-            </>
-          ) : (
-            <>
-              <button type="button" data-voice-cancel onClick={onCancel} disabled={phase === "heard"} className="flex-1 rounded-xl py-3.5 text-sm font-bold" style={{ background: "transparent", border: `1.5px solid ${C.line}`, color: C.inkSoft, opacity: phase === "heard" ? 0.5 : 1 }}>{T("Cancel", "रद्द करें", "रद्द करा")}</button>
-              <button type="button" data-voice-stop onClick={onStop} disabled={phase !== "listening"} className="flex-1 rounded-xl py-3.5 text-sm font-extrabold text-white" style={{ background: phase === "listening" ? C.safety : "#E5EAF2", color: phase === "listening" ? "#FFFFFF" : "#9AA3B0" }}>{T("Done speaking", "बोल लिया", "बोलून झाले")}</button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-  return typeof document !== "undefined" ? createPortal(body, document.body) : null;
-}
-
-// Set the first time the phone's speech recognition fails for good (not-allowed / service-not-allowed / network / start threw): the installed
-// Android app's WebView often lacks it, so every later tap goes straight to the keyboard's own mic instead of failing silently again.
-let speechRecognitionBroken = false;
 export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false, biasLat = 18.6298, biasLng = 73.8131 }, ref) {
   const [predictions, setPredictions] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  // MIC (owner 2026-11-03 handwritten note; owner 2026-11-04: "work independently in the app" + a proper listening UI). Tapping the mic opens a
-  // listening sheet (VoiceListeningSheet): the microphone turns on, a live transcript shows while the person speaks, and the final text fills the
-  // box. Engine order (src/speechInput.js): the app's own native speech plugin (needs the native build) -> the browser's Web Speech API ->
-  // the keyboard's own mic with a visible hint. The icon always shows on an empty, enabled box so it never sits on the clear (X) button.
-  const inputElRef = useRef(null);
-  const setInputRefs = (el) => { inputElRef.current = el; if (typeof ref === "function") ref(el); else if (ref) ref.current = el; };
-  // micHint: "" | "keyboard" (use the keyboard's own mic) -- always visible text, a mic that fails silently was the reported bug (2026-11-03).
-  const [micHint, setMicHint] = useState("");
-  useEffect(() => { if (!micHint) return undefined; const t = setTimeout(() => setMicHint(""), 7000); return () => clearTimeout(t); }, [micHint]);
-  const useKeyboardMic = () => { setMicHint("keyboard"); try { inputElRef.current?.focus(); } catch { /* ignore */ } };
-  // voice = null (closed) | { phase: "preparing" | "listening" | "heard" | "error", text, error }
-  const [voice, setVoice] = useState(null);
-  const voiceSessionRef = useRef(null);
-  const voiceTimerRef = useRef(null);
-  const closeVoice = () => { clearTimeout(voiceTimerRef.current); try { voiceSessionRef.current?.cancel(); } catch { /* ignore */ } voiceSessionRef.current = null; setVoice(null); };
-  const startListening = () => {
-    if (disabled) return;
-    if (speechRecognitionBroken || pickSpeechEngine() === "none") { useKeyboardMic(); return; }
-    setMicHint(""); setVoice({ phase: "preparing", text: "" });
-    try { navigator.vibrate?.(15); } catch { /* not supported */ }
-    voiceSessionRef.current = startSpeech({
-      lang,
-      onStart: () => setVoice((v) => (v && v.phase === "preparing" ? { phase: "listening", text: "" } : v)),
-      onPartial: (t) => setVoice({ phase: "listening", text: t }),
-      onResult: (t) => {
-        setVoice({ phase: "heard", text: t });
-        voiceTimerRef.current = setTimeout(() => { voiceSessionRef.current = null; setVoice(null); onChange({ target: { value: t } }); setDropdownOpen(true); }, 700);
-      },
-      onError: (code) => {
-        voiceSessionRef.current = null;
-        if (code === "unavailable") { speechRecognitionBroken = true; setVoice(null); useKeyboardMic(); } // this phone cannot do speech: keyboard mic from now on
-        else setVoice({ phase: "error", text: "", error: code }); // "denied" | "no-speech"
-      },
-    });
-  };
-  useEffect(() => () => { clearTimeout(voiceTimerRef.current); try { voiceSessionRef.current?.cancel(); } catch { /* already stopped */ } }, []);
   const debounceRef = useRef(null);
   const blurTimeoutRef = useRef(null);
   // Auto-scroll-into-view the moment this field is focused, so it clears
@@ -6737,8 +6635,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   // compact (customer booking steps, owner 2026-10-29): smaller, lighter text and
   // tighter padding so a long address shows more words before it runs out of room.
   const inputCls = compact ? "w-full rounded-lg py-4 text-[11.5px] font-semibold outline-none" : "w-full rounded-lg py-5 text-xs font-bold outline-none";
-  const showMic = !value && !disabled && !citiesOnly; // always shown (a phone without speech recognition falls back to the keyboard's own mic with a hint)
-  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: compact ? 12 : 16, paddingRight: (value || showMic) ? (compact ? 44 : 52) : (compact ? 12 : 16) };
+  const inputStyle = { background: C.paper, border: `1.5px solid ${C.line}`, color: C.ink, paddingLeft: compact ? 12 : 16, paddingRight: value ? (compact ? 44 : 52) : (compact ? 12 : 16) };
   // Golden-yellow frame AROUND the box (not the box's own border/
   // background) -- a padded, colored outer wrapper rather than an
   // outline, so the gap between the box and the highlight itself is
@@ -6764,7 +6661,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
     <div>
       <div style={highlightWrapStyle}>
         <div className="relative w-full">
-          <input ref={setInputRefs} className={inputCls} style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }} placeholder={placeholder} value={value} disabled={disabled}
+          <input ref={ref} className={inputCls} style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }} placeholder={placeholder} value={value} disabled={disabled}
             onChange={(e) => { onChange(e); setDropdownOpen(true); }}
             onFocus={(e) => {
               setDropdownOpen(true);
@@ -6772,12 +6669,6 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
               onFocus?.();
             }}
             onBlur={() => { blurTimeoutRef.current = setTimeout(() => setDropdownOpen(false), 150); onBlur?.(); }} />
-          {showMic && (
-            <button type="button" data-mic aria-label="Speak" onMouseDown={(e) => e.preventDefault()} onClick={startListening}
-              className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
-              <Mic size={22} color={voice ? C.safety : C.navy} strokeWidth={2.5} className={voice ? "animate-pulse" : ""} />
-            </button>
-          )}
           {value && !disabled && (
             <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange({ target: { value: "" } })}
               className="absolute right-0 top-0 bottom-0 flex items-center justify-center" style={{ width: 44, background: "transparent" }}>
@@ -6818,12 +6709,6 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
           )}
         </div>
       </div>
-      {micHint && (
-        <div data-mic-hint className="text-[11px] font-bold mt-1 px-1" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "🎤 Tap the mic on your keyboard and speak the place." : lang === "mr" ? "🎤 तुमच्या कीबोर्डवरील माइक दाबा आणि ठिकाण बोला." : "🎤 अपने कीबोर्ड का माइक दबाएँ और जगह बोलें।"}
-        </div>
-      )}
-      {voice && <VoiceListeningSheet voice={voice} lang={lang} title={placeholder} onStop={() => voiceSessionRef.current?.stop()} onCancel={closeVoice} onRetry={() => { closeVoice(); setTimeout(startListening, 60); }} />}
       {suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1">
           {suggestions.map((a) => (
