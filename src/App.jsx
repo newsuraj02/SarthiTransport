@@ -7744,11 +7744,19 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Owner 2026-11-01 (later): and once it is TICKED the box is not shown any more (hence "&& !returnTrip"); the green "Return fare
   // included" note with its small "Remove" is how the tick shows -- and gets undone -- from then on.
   const returnBarVisible = !tripHidden && !returnTrip;
-  const changePlacesLink = tripHidden ? (
-    <div className="text-center">
-      <button type="button" onClick={() => { setFromTrip(false); }} className="px-3 py-2 text-xs font-semibold underline underline-offset-2" style={{ color: "#94A3B8" }}>
-        {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
-      </button>
+  // ONE row (owner 2026-11-04): the est. distance at the LEFT end and "Change pickup / drop" at the RIGHT end, both visible (est. km once Pickup + Drop
+  // give a distance; the link only while the Pickup / Drop boxes are tucked away). It is the row the Round-trip / list sections show under the places.
+  const estKm = distance > 0 && placesReady ? Math.round(distance) : null;
+  const changePlacesLink = estKm != null || tripHidden ? (
+    <div data-trip-row className="flex items-center justify-between gap-3">
+      <div data-est-km className="text-xs font-semibold min-w-0 truncate" style={{ color: C.inkSoft }}>
+        {estKm != null && (<>{lang === "en" ? "Est." : lang === "mr" ? "अंदाजे" : "अनुमानित"} <span className="font-extrabold" style={{ color: C.ink }}>{estKm} {lang === "en" ? "km" : "किमी"}</span></>)}
+      </div>
+      {tripHidden && (
+        <button type="button" data-change-places onClick={() => { setFromTrip(false); }} className="shrink-0 py-2 text-xs font-bold underline underline-offset-2" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
+        </button>
+      )}
     </div>
   ) : null;
   const canBook = locationsReady && !sameLocation;
@@ -7987,13 +7995,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             </div>
           ) : (
             <>
-              {nearbyDrivers.length > 0 && (
-              <div data-category-note className="text-center text-xs font-bold rounded-xl px-3 py-2.5" style={{ color: C.navy, background: "rgba(0,82,204,0.08)", border: `1.5px solid rgba(0,82,204,0.3)` }}>
-                👇 {lang === "en" ? "Tap a category, then press Book now. Every vehicle in that category is notified. Only one driver can accept, and the fastest one wins."
-                  : lang === "mr" ? "श्रेणीवर टॅप करा, मग आता बुक करा दाबा. त्या श्रेणीतील प्रत्येक वाहनाला सूचना जाते. फक्त एकच ड्रायव्हर स्वीकारू शकतो, आणि सर्वात जलद ड्रायव्हरला ट्रिप मिळते."
-                  : "कैटेगरी पर टैप करें, फिर अभी बुक करें दबाएँ। उस कैटेगरी की हर गाड़ी को सूचना जाती है। सिर्फ़ एक ड्राइवर स्वीकार कर सकता है, और सबसे तेज़ ड्राइवर को ट्रिप मिलती है।"}
-              </div>
-              )}
               {returnFareNote}
               {changePlacesLink}
               {bookingError && (
