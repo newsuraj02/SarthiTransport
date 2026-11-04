@@ -8003,9 +8003,12 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                     className={`anim-rise w-full rounded-2xl p-3 text-left shadow-sm ${isPicked ? "driver-selected-bounce" : ""}`}
                     style={{ animationDelay: `${Math.min(rowIdx, 6) * 70}ms`, border: `2px solid ${isPicked ? C.success : C.line}`, background: isPicked ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isPicked ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
                     <div className="flex items-center gap-3">
-                    <div data-category-icon className="w-28 h-16 shrink-0">
-                      <CategoryVehicleArt index={grp.index} bold className="w-full h-full" />
-                    </div>
+                    {/* Owner 2026-11-04: the vehicle is drawn ONCE -- the small icon here, or (when this row is picked) the big picture below, never both. */}
+                    {!isPicked && (
+                      <div data-category-icon className="w-28 h-16 shrink-0">
+                        <CategoryVehicleArt index={grp.index} bold className="w-full h-full" />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div data-category-title className="text-lg font-extrabold leading-tight" style={{ color: C.ink }}>{isPicked ? "✓ " : ""}{customerListCategoryName(grp.index, lang)}</div>
                       <div data-category-weight className="text-sm truncate" style={{ color: C.inkSoft }}>{customerListCategoryLabel(grp.index, lang)}</div>

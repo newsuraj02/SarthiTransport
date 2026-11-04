@@ -129,3 +129,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-04 -- Row vehicle icon thickness matched to the picked icon (strokes 1.7x, no extra tyre / chassis bulk) (owner 2026-11-04)
 - changed (2): code:CLAUDE.md, code:src/vehicleArt.jsx#CategoryVehicleArt
+
+## 2026-11-04 -- Picked row shows the vehicle once: small icon hidden while the big picture is shown (owner 2026-11-04)
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
