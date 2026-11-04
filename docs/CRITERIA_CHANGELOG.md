@@ -45,3 +45,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-03 -- Pickup/Drop mic always shown; visible keyboard-mic / retry hints instead of silent failure; B6 rewritten
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#LocationField
 - added (1): code:src/App.jsx#speechRecognitionBroken
+
+## 2026-11-04 -- Pickup/Drop suggestions nearest-first with km (origin + 5 areas + band ranking, replaces the <3 local rule); contract B5 rewritten
+- changed (6): file:functions/addressLang.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/addressLang.js#createAddressService, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#LocationField
+- added (2): code:src/App.jsx#sortPredictionsNearestFirst, code:src/App.jsx#formatSuggestionKm

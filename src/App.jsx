@@ -6512,6 +6512,14 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
+// Suggestion ordering (owner 2026-11-04): nearest first, ascending kilometres. The server already sends them ranked; the in-browser fallback
+// uses this. Entries with no distance keep their order after the ones that have one.
+function sortPredictionsNearestFirst(list) {
+  const withKm = list.filter((p) => typeof p.distanceKm === "number").sort((a, b) => a.distanceKm - b.distanceKm);
+  return [...withKm, ...list.filter((p) => typeof p.distanceKm !== "number")];
+}
+function formatSuggestionKm(km) { return km < 1 ? "<1 km" : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`; }
+
 // Set the first time the phone's speech recognition fails for good (not-allowed / service-not-allowed / network / start threw): the installed
 // Android app's WebView often lacks it, so every later tap goes straight to the keyboard's own mic instead of failing silently again.
 let speechRecognitionBroken = false;
@@ -6597,7 +6605,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
         const data = await geoSearchPlaces({ input: value, lang, sessionToken: newSessionToken(), lat: biasLat, lng: biasLng });
         if (cancelled) return;
         if (data && Array.isArray(data.results)) {
-          setPredictions(data.results.map((r) => ({ place_id: r.placeId, description: r.full, structured_formatting: { main_text: r.main, secondary_text: r.secondary }, __server: true })));
+          setPredictions(data.results.map((r) => ({ place_id: r.placeId, description: r.full, structured_formatting: { main_text: r.main, secondary_text: r.secondary }, distanceKm: typeof r.distanceKm === "number" ? r.distanceKm : null, __server: true })));
           return;
         }
       }
@@ -6614,6 +6622,8 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
       new window.google.maps.places.AutocompleteService().getPlacePredictions(
         {
           input: value, componentRestrictions: { country: "in" }, location: new window.google.maps.LatLng(biasLat, biasLng), radius: 60000,
+          // origin = the customer: every prediction then carries distance_meters, so the list can be shown nearest-first (owner 2026-11-04)
+          origin: new window.google.maps.LatLng(biasLat, biasLng),
           // Set Fare's route pricing is city-to-city by design (see
           // ROUTE_MATCH_RADIUS_KM) — restricting suggestions here to
           // cities/towns keeps a driver's entry at the same granularity a
@@ -6622,7 +6632,12 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
           // stretching to cover.
           ...(citiesOnly ? { types: ["(cities)"] } : {}),
         },
-        (preds, status) => { if (!cancelled) setPredictions(status === "OK" && preds ? preds : []); }
+        (preds, status) => {
+          if (cancelled) return;
+          if (status !== "OK" || !preds) { setPredictions([]); return; }
+          const withKm = preds.map((q) => ({ ...q, distanceKm: typeof q.distance_meters === "number" ? Math.round(q.distance_meters / 100) / 10 : null }));
+          setPredictions(citiesOnly ? withKm : sortPredictionsNearestFirst(withKm));
+        }
       );
     }, 300);
     return () => { cancelled = true; clearTimeout(debounceRef.current); };
@@ -6722,10 +6737,13 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
                   <button key={p.place_id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectPrediction(p)}
                     className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: `1px solid ${C.line}` }}>
                     <MapPin size={14} color={C.marigoldDeep} className="mt-0.5 shrink-0" />
-                    <span className="text-xs leading-snug">
+                    <span className="text-xs leading-snug flex-1 min-w-0">
                       <span className="font-bold" style={{ color: C.ink }}>{main}</span>
                       {secondary && <span style={{ color: C.inkSoft }}> {secondary}</span>}
                     </span>
+                    {typeof p.distanceKm === "number" && !citiesOnly && (
+                      <span data-suggestion-km className="shrink-0 text-[11px] font-bold mt-0.5" style={{ color: C.inkSoft }}>{formatSuggestionKm(p.distanceKm)}</span>
+                    )}
                   </button>
                 );
               })}

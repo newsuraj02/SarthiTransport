@@ -106,6 +106,8 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
   async function autocompleteOnce(input, lang, sessionToken, lat, lng, area) {
     const body = { input, languageCode: lang, includedRegionCodes: ["in"] };
     if (sessionToken) body.sessionToken = sessionToken;
+    // `origin` makes Google return distanceMeters (straight-line, from the customer) on every prediction -- used to rank nearest-first.
+    if (typeof lat === "number" && typeof lng === "number") body.origin = { latitude: lat, longitude: lng };
     if (area && typeof lat === "number" && typeof lng === "number") {
       if (area.restrictDeg) {
         const d = area.restrictDeg;
@@ -124,29 +126,52 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
     return (j.suggestions || []).filter((s) => s.placePrediction).map((s) => s.placePrediction);
   }
 
-  // Owner 2026-11-03 (handwritten note): picking "Kudalwadi" while in Pune must list the 8-10 Kudalwadi places of
-  // THAT city, not the one in another state. Google returns at most 5 per call, so: a tight box around the customer
-  // (~13 km), then a city-wide box (~39 km), merged without duplicates, nearest-first. Only when fewer than 3 local
-  // places exist (e.g. the customer types "Mumbai" for a long trip) does the old wide, soft-biased search fill in.
+  // Owner 2026-11-04: the suggestions under Pickup / Drop must come NEAREST FIRST, in ascending kilometres from the customer -- typing
+  // "Kudalwadi" shows the one next to them, then the one ~120 km away, then the one ~350 km away, each with its km. Google returns at most
+  // 5 per call, so the search asks several areas around the customer (tight ~13 km, city ~39 km, region ~130 km, state ~350 km, anywhere),
+  // merges them without duplicates, keeps the closest few of each distance band (so far places are not crowded out by many near ones),
+  // and sorts the result ascending by distance. Without a known position there is no distance: Google's own relevance order.
+  const DISTANCE_BANDS_KM = [15, 40, 150, 400, Infinity];
+  const PER_BAND = 3;
+  const MAX_RESULTS = 10;
+  function rankNearestFirst(preds) {
+    const withDist = preds.map((p) => ({ p, m: typeof p.distanceMeters === "number" ? p.distanceMeters : null }));
+    const known = withDist.filter((x) => x.m != null).sort((a, b) => a.m - b.m);
+    const unknown = withDist.filter((x) => x.m == null);
+    const picked = []; let lower = 0;
+    for (const upperKm of DISTANCE_BANDS_KM) {
+      const inBand = known.filter((x) => x.m >= lower && x.m < upperKm * 1000);
+      picked.push(...inBand.slice(0, PER_BAND));
+      lower = upperKm * 1000;
+    }
+    const out = picked.sort((a, b) => a.m - b.m).slice(0, MAX_RESULTS);
+    return [...out, ...unknown].slice(0, MAX_RESULTS).map((x) => ({ ...x.p, distanceMeters: x.m }));
+  }
   async function searchPlaces(input, lang, sessionToken, lat, lng) {
     const hasPoint = typeof lat === "number" && typeof lng === "number";
     let preds = [];
     const seen = new Set();
     const add = (list) => { for (const p of list) { if (p?.placeId && !seen.has(p.placeId)) { seen.add(p.placeId); preds.push(p); } } };
     if (hasPoint) {
-      const [near, city] = await Promise.all([
+      const lists = await Promise.all([
         autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 0.12 }).catch(() => []),
         autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 0.35 }).catch(() => []),
+        autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 1.2 }).catch(() => []),
+        autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 3.2 }).catch(() => []),
+        autocompleteOnce(input, lang, sessionToken, lat, lng, null).catch(() => []),
       ]);
-      add(near); add(city);
+      lists.forEach(add);
+      preds = rankNearestFirst(preds);
+    } else {
+      add(await autocompleteOnce(input, lang, sessionToken, lat, lng, { biasKm: 50 }));
+      preds = preds.slice(0, MAX_RESULTS);
     }
-    if (!hasPoint || preds.length < 3) add(await autocompleteOnce(input, lang, sessionToken, lat, lng, { biasKm: 50 }));
-    const list = preds.slice(0, 10).map((p) => ({ placePrediction: p }));
-    return Promise.all(list.map(async ({ placePrediction: p }) => ({
+    return Promise.all(preds.map(async (p) => ({
       placeId: p.placeId,
       main: await toScript(stripPlusCode(p.structuredFormat?.mainText?.text || p.text?.text || ""), lang),
       secondary: await toScript(stripPlusCode(p.structuredFormat?.secondaryText?.text || ""), lang),
       full: await toScript(stripPlusCode(p.text?.text || ""), lang),
+      distanceKm: typeof p.distanceMeters === "number" ? Math.round(p.distanceMeters / 100) / 10 : null,
     })));
   }
 
