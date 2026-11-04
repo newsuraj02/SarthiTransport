@@ -13,8 +13,8 @@
  *   - The driver's vehicle CATEGORY is the one the customer picked, or one of the next RING_CATEGORIES_ABOVE categories above it.
  *     The categories are the SAME ones the customer's vehicle list shows (owner 2026-11-04): 500 / 750 / 1200 / 1700 / 2500 / 5000 / 7500 /
  *     9000 / 12000 / 16000 / 20000 / 32000 kg + "above 32000 kg". The customer taps a category (never one driver) and EVERY vehicle in it
- *     (and the 2 above) is rung; the first driver to accept gets the trip. A booking carries `listCategory` (the index of the picked category);
- *     an older booking without it falls back to the category of its tierMaxKg / weight.
+ *     (and the 2 above) is rung; the first driver to accept gets the trip. A booking carries `listCategoryKg` (the picked category's weight limit; an older booking only `listCategory`, an index into the previous table);
+ *     an older booking without either falls back to the category of its tierMaxKg / weight.
  *   - The driver is WITHIN RING_RADIUS_KM of the pickup -- 30 km for a Current booking, 50 km for an Advance one (the booking has `scheduledFor`) --
  *     measured from the driver's LAST KNOWN location however old (owner 2026-11-04: the same radius as the customer's vehicle list). GPS being off
  *     or stale does not matter, but a driver who has NEVER reported a location cannot be placed and is not rung. A booking with no pickup
@@ -26,7 +26,10 @@
  * the vehicle's capacity does not exceed (above the last limit = index 12, "Above 32000 kg"), exactly like the app's customerListCategoryIndex.
  */
 
-const RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
+const RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 3500, 5000, 7500, 9000, 12000, 16000, 20000, 25000, 32000];
+// The category table BEFORE 3500 kg and 25000 kg were added (2026-11-04). A booking made by the old app carries only `listCategory` = an index into THIS
+// table, so it is translated through it (to a weight limit) rather than read against the new table, which would shift it by one or two categories.
+const LEGACY_RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
 const RING_CATEGORIES_ABOVE = 2;
 // MIRRORS CURRENT_BID_RADIUS_KM / ADVANCE_BID_RADIUS_KM in src/App.jsx (an invariant compares them) -- the same radius the customer's list uses.
 const RING_RADIUS_KM = { current: 30, advance: 50 };
@@ -39,11 +42,17 @@ function categoryIndexOfCapacity(capacityKg) {
   return i === -1 ? RING_CATEGORY_MAX_KG.length : i;
 }
 
-// The category the customer picked: the booking's `listCategory` (the app stores the tapped category's index); an older booking without it
-// falls back to the category of its tierMaxKg, then its weight; -1 = unknown (then no category filter is applied -- a load is never left unrung).
+// The category the customer picked. A booking made by the current app carries `listCategoryKg` = the picked category's weight limit (999999 = "above
+// 32000 kg"), which stays right whenever categories are added; a booking from an older app carries only `listCategory` = an index into the OLD table,
+// which is translated through LEGACY_RING_CATEGORY_MAX_KG; anything older falls back to its tierMaxKg, then its weight. -1 = unknown (then no category
+// filter is applied -- a load is never left unrung).
 function loadCategoryIndex(load) {
+  const kg = Number(load && load.listCategoryKg);
+  if (load && load.listCategoryKg != null && kg > 0) return categoryIndexOfCapacity(kg);
   const c = Number(load && load.listCategory);
-  if (load && load.listCategory != null && Number.isInteger(c) && c >= 0 && c <= RING_CATEGORY_MAX_KG.length) return c;
+  if (load && load.listCategory != null && Number.isInteger(c) && c >= 0 && c <= LEGACY_RING_CATEGORY_MAX_KG.length) {
+    return categoryIndexOfCapacity(c < LEGACY_RING_CATEGORY_MAX_KG.length ? LEGACY_RING_CATEGORY_MAX_KG[c] : 999999);
+  }
   const t = Number(load && load.tierMaxKg) || 0;
   if (t > 0) return categoryIndexOfCapacity(t);
   return categoryIndexOfCapacity(load && load.weight);
@@ -74,4 +83,4 @@ function evaluateNewLoadDriver(driver, load, ctx) {
   return { ok: true };
 }
 
-module.exports = { RING_CATEGORY_MAX_KG, RING_CATEGORIES_ABOVE, RING_RADIUS_KM, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };
+module.exports = { RING_CATEGORY_MAX_KG, LEGACY_RING_CATEGORY_MAX_KG, RING_CATEGORIES_ABOVE, RING_RADIUS_KM, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };

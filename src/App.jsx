@@ -1383,11 +1383,17 @@ function ringCategoryIndexOfCapacity(capacityKg) {
   if (kg <= 0) return -1;
   return customerListCategoryIndex(kg);
 }
-// The category the customer picked: the booking's `listCategory` (stored by the booking screen); an older booking without it falls back to
-// the category of its tierMaxKg, then its weight; -1 = unknown (no category filter).
+// The category the customer picked. A booking made by the current app carries `listCategoryKg` = the category's weight limit (999999 = above 32000 kg),
+// which stays right whenever categories are added; a booking from an older app carries only `listCategory` = an index into the OLD table
+// (LEGACY_CUSTOMER_LIST_CATEGORY_KG); anything older falls back to its tierMaxKg, then its weight; -1 = unknown (no category filter).
+// MIRRORS loadCategoryIndex in functions/tripLock.js.
 function ringCategoryIndexOfLoad(b) {
+  const kg = Number(b?.listCategoryKg);
+  if (b?.listCategoryKg != null && kg > 0) return ringCategoryIndexOfCapacity(kg);
   const c = Number(b?.listCategory);
-  if (b?.listCategory != null && Number.isInteger(c) && c >= 0 && c <= CUSTOMER_LIST_CATEGORY_KG.length) return c;
+  if (b?.listCategory != null && Number.isInteger(c) && c >= 0 && c <= LEGACY_CUSTOMER_LIST_CATEGORY_KG.length) {
+    return ringCategoryIndexOfCapacity(c < LEGACY_CUSTOMER_LIST_CATEGORY_KG.length ? LEGACY_CUSTOMER_LIST_CATEGORY_KG[c] : 999999);
+  }
   const t = Number(b?.tierMaxKg) || 0;
   if (t > 0) return ringCategoryIndexOfCapacity(t);
   return ringCategoryIndexOfCapacity(b?.weight);
@@ -4083,8 +4089,16 @@ function hasFreshLocation(d, now = Date.now()) {
 }
 // CUSTOMER VEHICLE-LIST CATEGORIES (owner 2026-11-04): the list is shown in these twelve capacity groups (+ a final "Above 32000 kg"), light -> heavy. A vehicle belongs to the
 // FIRST group whose limit its capacity does not exceed (a 600 kg vehicle is in "750 kg"); anything above the last limit goes in a final
-// "Above 32000 kg" group so no listed vehicle is ever hidden. Display grouping only -- who is listed (A5) and who is rung (A6) are unchanged.
-const CUSTOMER_LIST_CATEGORY_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
+// "Above 32000 kg" group so no listed vehicle is ever hidden (owner 2026-11-04: 3500 and 25000 kg were added; 16000 was already there -> 14 limits + "above").
+// Display grouping only -- who is listed (A5) and who is rung (A6) are unchanged.
+const CUSTOMER_LIST_CATEGORY_KG = [500, 750, 1200, 1700, 2500, 3500, 5000, 7500, 9000, 12000, 16000, 20000, 25000, 32000];
+// The table BEFORE 3500 kg and 25000 kg were added (2026-11-04). A booking made by the old app stores only `listCategory` = an index into THIS table, so it is
+// translated through it (to a weight limit) instead of being read against the new table, which would shift it by a category or two.
+const LEGACY_CUSTOMER_LIST_CATEGORY_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
+// The weight limit that identifies category `index` on a booking (`listCategoryKg`): stays right whenever categories are added. 999999 = "above 32000 kg".
+function customerListCategoryLimitKg(index) {
+  return index >= 0 && index < CUSTOMER_LIST_CATEGORY_KG.length ? CUSTOMER_LIST_CATEGORY_KG[index] : 999999;
+}
 function customerListCategoryIndex(capacityKg) {
   const kg = Number(capacityKg) || 0;
   const i = CUSTOMER_LIST_CATEGORY_KG.findIndex((m) => kg <= m);
@@ -4094,9 +4108,9 @@ function customerListCategoryIndex(capacityKg) {
 // "Above 32000 kg" group, in the customer's language (hi / mr translated, same wording style as the rest of the app: चक्का / चाकी, फीट / फूट);
 // the weight limit is the small line under the name.
 const CUSTOMER_LIST_CATEGORY_NAMES = {
-  en: ["3 wheeler", "Tata Ace", "Pickup", "Pickup 8ft", "Tata 407", "17ft Eicher", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "32ft container", "12/14/16 wheeler", "32t+ truck"],
-  hi: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फीट", "टाटा 407", "17 फीट आयशर", "20 फीट कंटेनर", "6 चक्का", "22/24 फीट ट्रक", "10 चक्का", "32 फीट कंटेनर", "12/14/16 चक्का", "32 टन+ ट्रक"],
-  mr: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फूट", "टाटा 407", "17 फूट आयशर", "20 फूट कंटेनर", "6 चाकी", "22/24 फूट ट्रक", "10 चाकी", "32 फूट कंटेनर", "12/14/16 चाकी", "32 टन+ ट्रक"],
+  en: ["3 wheeler", "Tata Ace", "Pickup", "Pickup 8ft", "Tata 407", "14ft Eicher", "17ft Eicher", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "32ft container", "12/14 wheeler", "16 wheeler", "32t+ truck"],
+  hi: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फीट", "टाटा 407", "14 फीट आयशर", "17 फीट आयशर", "20 फीट कंटेनर", "6 चक्का", "22/24 फीट ट्रक", "10 चक्का", "32 फीट कंटेनर", "12/14 चक्का", "16 चक्का", "32 टन+ ट्रक"],
+  mr: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फूट", "टाटा 407", "14 फूट आयशर", "17 फूट आयशर", "20 फूट कंटेनर", "6 चाकी", "22/24 फूट ट्रक", "10 चाकी", "32 फूट कंटेनर", "12/14 चाकी", "16 चाकी", "32 टन+ ट्रक"],
 };
 function customerListCategoryName(index, lang) {
   const list = CUSTOMER_LIST_CATEGORY_NAMES[lang] || CUSTOMER_LIST_CATEGORY_NAMES.en;
@@ -4111,13 +4125,15 @@ const CUSTOMER_LIST_CATEGORY_DIM_MODELS = [
   ["tata ace gold"],                             // Pickup
   ["dost"],                                      // Pickup 8ft
   ["tata 407"],                                  // Tata 407
+  ["eicher 14"],                                 // 14ft Eicher
   ["eicher 17"],                                 // 17ft Eicher
   ["20 ft container"],                           // 20ft container
   ["6 wheeler"],                                 // 6 wheeler
   ["22 ft", "24 ft"],                            // 22ft/24ft truck
   ["10 wheeler"],                                // 10 wheeler
   ["mxl"],                                       // 32ft container
-  ["12 wheeler", "14 wheeler", "16 wheeler"],    // 12/14/16 wheeler
+  ["12 wheeler", "14 wheeler"],                  // 12/14 wheeler
+  ["16 wheeler"],                                // 16 wheeler
   ["trailer"],                                   // 32t+ truck
 ];
 const CUSTOMER_LIST_3_WHEELER_DIMS = { length: 5.5, width: 4.5, height: 4.5 };
@@ -7624,7 +7640,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // moment CustomerApp's own activeBooking picks up the just-created
   // AwaitingDriver booking from Firestore and swaps in ActiveRide instead.
   const [sendingKey, setSendingKey] = useState(null);
-  // The capacity category the customer tapped (index into CUSTOMER_LIST_CATEGORY_KG, 12 = above 32000 kg); null = none yet. The ONE fixed "Book now" bar books it.
+  // The capacity category the customer tapped (index into CUSTOMER_LIST_CATEGORY_KG, 14 = above 32000 kg); null = none yet. The ONE fixed "Book now" bar books it.
   const [selectedCategory, setSelectedCategory] = useState(null);
   // "Selected" = coordinates are known (a suggestion / current location / map tap / recent trip, or typed text
   // that has geocoded). Without Google Maps (no way to geocode) typed text of 3+ characters counts.
@@ -7790,7 +7806,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // (Firestore's local echo would otherwise swap this screen out instantly).
     setTimeout(() => {
     const err = requestByCategory({
-      pickup, drop, tierMaxKg: entry.tier.maxKg, listCategory: categoryIndex, customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
+      pickup, drop, tierMaxKg: entry.tier.maxKg, listCategory: categoryIndex, listCategoryKg: customerListCategoryLimitKg(categoryIndex), customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       pickupPlaceId, dropPlaceId, returnTrip,
@@ -7989,7 +8005,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 </p>
               ) : (
                 <>
-                  {/* Owner 2026-11-04: the list is grouped in the 12 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading,
+                  {/* Owner 2026-11-04: the list is grouped in the 14 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading,
                       ONE ROW per category (owner 2026-11-04, "like the weight / vehicle list"): vehicle icon, the category NAME in big bold type, its weight limit under it, the top fare and
                       "N min" of its nearest GPS-on vehicle. Tapping a row selects the category (highlighted) for the fixed "Book now" bar -- no single driver is picked. */}
                   {groupByCustomerListCategory(nearbyDrivers).map((grp, rowIdx) => {
@@ -13046,12 +13062,12 @@ export default function App() {
   // category itself (resolveFareForTier), not any specific driver. Returns
   // an error message string to show the customer (nobody eligible at all
   // right now), or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, listCategory, customerWeight, weightIsCapacity, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnFare, returnPct: returnPctUsed, fare: fareOverride }) => {
+  const requestByCategory = ({ pickup, drop, tierMaxKg, listCategory, listCategoryKg, customerWeight, weightIsCapacity, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnFare, returnPct: returnPctUsed, fare: fareOverride }) => {
     const bookingId = genId();
     // weight included here to match the real created doc below -- isDriverBroadcastEligible
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
     // pre-check needs the same field or it would always see loadWeightKg as 0.
-    const draftBooking = { id: bookingId, tierMaxKg, listCategory, weight: customerWeight ?? tierMaxKg, pickupLat, pickupLng, scheduledFor, declinedBy: [] };
+    const draftBooking = { id: bookingId, tierMaxKg, listCategory, listCategoryKg, weight: customerWeight ?? tierMaxKg, pickupLat, pickupLng, scheduledFor, declinedBy: [] };
     const anyEligible = drivers.some((d) => isDriverBroadcastEligible(d, draftBooking, vehicleTypes, bookings, fareTiers, lang));
     if (!anyEligible) {
       return lang === "en" ? "No vehicles available nearby right now — please try again shortly." : lang === "mr" ? "सध्या जवळपास कोणतेही वाहन उपलब्ध नाही — कृपया थोड्या वेळाने पुन्हा प्रयत्न करा." : "अभी आसपास कोई वाहन उपलब्ध नहीं है — कृपया थोड़ी देर बाद फिर कोशिश करें।";
@@ -13070,7 +13086,7 @@ export default function App() {
       // one) rather than the category ceiling itself. vehicle stays null
       // until someone actually accepts (driverRespondBooking) -- unlike
       // the old single-target model, nobody specific is chosen yet.
-      pickup, drop, vehicle: null, tierMaxKg, ...(listCategory != null ? { listCategory } : {}), weight: customerWeight ?? tierMaxKg, ...(weightIsCapacity ? { weightIsCapacity: true } : {}), distance, status: "AwaitingDriver", bids: [], fare,
+      pickup, drop, vehicle: null, tierMaxKg, ...(listCategory != null ? { listCategory } : {}), ...(listCategoryKg != null ? { listCategoryKg } : {}), weight: customerWeight ?? tierMaxKg, ...(weightIsCapacity ? { weightIsCapacity: true } : {}), distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
       declinedBy: [],
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, returnTrip: !!returnTrip, ...(returnTrip ? { oneWayFare: oneWayFare ?? null, returnFare: returnFare ?? null, returnPct: returnPctUsed ?? null } : {}), customerMobile: customerAuth.mobile || "",
