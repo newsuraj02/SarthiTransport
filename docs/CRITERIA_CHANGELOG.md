@@ -64,3 +64,9 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-04 -- Microphone removed completely (button, sheet, speech engine, plugin, gradle); contract B6 now says NO microphone
 - changed (9): code:CLAUDE.md, code:android/app/capacitor.build.gradle, code:android/capacitor.settings.gradle, code:docs/SYSTEM_CONTRACTS.md, code:package.json, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#LocationField, code:src/index.css
 - removed (3): code:src/App.jsx#VoiceListeningSheet, code:src/App.jsx#speechRecognitionBroken, code:src/speechInput.js
+
+## 2026-11-04 -- Customer booking: est. km + Enter Weight boxes removed; Pickup+Drop lead straight to the vehicle list (no capacity window); booking stores tapped vehicle capacity as weight + weightIsCapacity; Admin unmatched card copes with no weight; contracts A5/B1, CLAUDE.md
+- changed (7): code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminAlerts, code:src/App.jsx#isDriverListableForCustomer, code:src/App.jsx#CustomerBooking, code:src/App.jsx#BookedVehiclePanel, code:src/App.jsx#App
+
+## 2026-11-04 -- CLAUDE.md: restored the nearest-first suggestions paragraph (silently lost by my earlier mic-removal edit), added the no-weight-box paragraph, Live Map marked pushed
+- changed (1): code:CLAUDE.md

@@ -1019,10 +1019,10 @@ function driverIsOnTrip(driver, bookings, now = Date.now()) {
 // Online, KYC Approved, not blacklisted; vehicle capacity >= the load and at most VEHICLE_HEADROOM_KG above it; a pickup is known and the driver has
 // a GPS fix no older than NEARBY_DRIVER_STALE_MS (5 min) within bidRadiusKm (30 km current / 50 km advance) of it; and NO availability conflict --
 // a driver on a running trip (or inside an advance booking's buffer) is never shown. For an advance booking the conflict is checked against THAT slot.
-function isDriverListableForCustomer(d, { loadKg, pickupCoords, bidRadiusKm, advance = false, scheduledForValue = null, bookings = [], vehicleTypes = [], lang = "hi", now = Date.now() }) {
+function isDriverListableForCustomer(d, { loadKg = 0, pickupCoords, bidRadiusKm, advance = false, scheduledForValue = null, bookings = [], vehicleTypes = [], lang = "hi", now = Date.now() }) {
   if (!d.online || d.kyc !== "Approved" || d.blacklisted) return false;
   const dCapKg = Number(d.vehicleSpec?.capacityKg) || vehicleTypes.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
-  if (loadKg <= 0 || dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+  if (loadKg > 0 && (dCapKg < loadKg || dCapKg > loadKg + VEHICLE_HEADROOM_KG)) return false; // no weight given (the customer screen has no weight box any more) = every capacity
   if (!pickupCoords || !d.lastKnownLocation) return false;
   if (!d.lastKnownLocation.updatedAt || now - d.lastKnownLocation.updatedAt > NEARBY_DRIVER_STALE_MS) return false;
   if (haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng) > bidRadiusKm) return false;
@@ -7312,72 +7312,40 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // True while the box text is the NAME of a chosen place (so a language change may re-read it); typing clears it.
   const pickupFromPlaceRef = useRef(!!restored?.pickup);
   // True while Pickup + Drop came from a tapped suggestion (past trip): they are filled in the background and hidden --
-  // only the est. km box and Enter Weight are shown (owner 2026-10-30).
+  // the vehicle list shows straight away (owner 2026-10-30; the est. km + Enter Weight boxes were removed 2026-11-04).
   const [fromTrip, setFromTrip] = useState(false);
   const dropFromPlaceRef = useRef(!!restored?.drop);
   const [distance, setDistance] = useState(null);
-  const [weight, setWeight] = useState(restored?.weight || "");
-  // kg (default) or ton -- loadKg below converts for every downstream use
-  // (vehicle matching, fare resolution), so the rest of this component
-  // never needs to know which unit was actually typed.
-  const [weightUnit, setWeightUnit] = useState(restored?.weightUnit === "ton" ? "ton" : "kg");
-  // Set the moment getWeightInputChange (see its own comment) detects the
-  // customer typing past the current unit's cap -- holds the OTHER unit to
-  // offer switching to, cleared the instant they either switch or edit the
-  // field back under the cap.
-  const [weightUnitHint, setWeightUnitHint] = useState(null);
-  // True right after a keystroke was refused for pushing the weight past
-  // MAX_BOOKING_WEIGHT_KG/TON (see getWeightInputChange) -- drives the "max
-  // weight" note under the field; cleared on any accepted keystroke or unit switch.
-  const [weightCapHit, setWeightCapHit] = useState(false);
-  useEffect(() => { setWeightCapHit(false); }, [weightUnit]);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
   const mapsReady = mapsHasKey && mapsLoaded;
 
-  // Which field (Pickup, Drop, or Weight) was last focused — tapping a
+  // Which field (Pickup or Drop; Weight was removed 2026-11-04) was last focused — tapping a
   // point on the live map fills Pickup/Drop with the tapped location, same
-  // as if it had been typed (Weight obviously isn't a map-fillable field,
+  // as if it had been typed (the date/time box isn't a map-fillable field,
   // but it shares this same state since all three use it to drive the
   // golden "current step" highlight below -- see highlightField).
   // Deliberately sticky (only ever set on focus, never cleared on blur):
   // tapping the map blurs whatever input was focused before the map's own
   // click event fires, so a "currently focused" version would already be
   // null by the time onMapClick runs. Falls back to the natural fill
-  // order (pickup -> drop -> weight) if nothing was ever explicitly
+  // order (pickup -> drop) if nothing was ever explicitly
   // focused yet.
-  const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | 'weight' | null
+  const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | 'date' | 'time' | null
   // Real DOM refs for the three fields -- lets the auto-advance below
   // actually move the keyboard cursor into the next field, not just the
   // visual highlight, the moment a place is chosen (not while typing by
   // hand). LocationField forwards its ref straight to its <input>.
   const pickupFieldRef = useRef(null);
   const dropFieldRef = useRef(null);
-  const weightInputRef = useRef(null);
-  // Owner 2026-10-29 flow: Pickup first; Drop appears once Pickup is chosen; Weight appears once
+  // Owner 2026-10-29 flow: Pickup first; Drop appears once Pickup is chosen; The vehicle list appears once
   // both are chosen. After a CHOSEN place (not while typing) the cursor moves to the box that
   // just appeared -- requested here, done after the render that mounts that box.
-  const [focusReq, setFocusReq] = useState(null); // { to: "drop" | "weight", n }
+  const [focusReq, setFocusReq] = useState(null); // { to: "drop" | "date", n }
   const requestFocus = (to) => setFocusReq({ to, n: Date.now() });
-  // The Weight row sits low on the page, so the phone's keyboard (and the sticky Book Now bar) used
-  // to cover it. Re-centre it in the visible area while the keyboard slides up and whenever the
-  // visible height changes (visualViewport), for about a second.
-  const weightRowRef = useRef(null);
-  const keepWeightVisible = () => {
-    const timers = [0, 200, 450, 800].map((ms) => setTimeout(() => weightRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), ms));
-    const vv = typeof window !== "undefined" ? window.visualViewport : null;
-    const onResize = () => weightRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    vv?.addEventListener("resize", onResize);
-    const stop = setTimeout(() => vv?.removeEventListener("resize", onResize), 1400);
-    return () => { timers.forEach(clearTimeout); clearTimeout(stop); vv?.removeEventListener("resize", onResize); };
-  };
   useEffect(() => {
     if (!focusReq) return;
-    let cleanupKeep = null;
     const t = setTimeout(() => {
-      if (focusReq.to === "weight") {
-        weightInputRef.current?.focus({ preventScroll: true });
-        cleanupKeep = keepWeightVisible();
-      } else if (focusReq.to === "pickup") {
+      if (focusReq.to === "pickup") {
         pickupFieldRef.current?.focus();
       } else if (focusReq.to === "date") {
         if (typeof document !== "undefined") document.activeElement?.blur?.(); // keyboard down; the golden ring shows the next step
@@ -7385,10 +7353,10 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         dropFieldRef.current?.focus();
       }
     }, 90);
-    return () => { clearTimeout(t); cleanupKeep?.(); };
+    return () => { clearTimeout(t); };
   }, [focusReq]);
   const onMapClick = async (lat, lng) => {
-    if (weight.trim() || fromTrip) return; // Pickup/Drop are tucked away once a weight is typed / a trip suggestion was tapped
+    if (fromTrip || (pickupCoords && dropCoords)) return; // Pickup/Drop are tucked away after a trip suggestion / both places are already chosen (the vehicle list is showing)
     const field = activeField || (!pickup.trim() ? "pickup" : !drop.trim() ? "drop" : null);
     if (!field || field === "date" || field === "time") return;
     const found = await reverseGeocodeFull(lat, lng, lang);
@@ -7474,15 +7442,15 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // tap all count, same as explicitly tapping into the next field by
   // hand. Typing by hand doesn't trigger this -- only a genuine selection
   // does, since the customer might still be mid-edit after typing.
-  // Next step once Pickup AND Drop are in: advance -> the Date/Time box (until it is filled), otherwise Weight.
+  // Next step once Pickup AND Drop are in: advance -> the Date/Time box (until it is filled), otherwise the vehicle list (keyboard down).
   const goAfterPlaces = () => {
     if (advance && !(advanceDate && advanceTime)) { setActiveField("date"); requestFocus("date"); }
-    else { setActiveField("weight"); requestFocus("weight"); }
+    else { setActiveField(null); requestFocus("date"); } // no weight step any more: Pickup + Drop lead straight to the vehicle list (keyboard down)
   };
   const onPickupPlaceSelected = (p) => {
     setPickup(p.name); setPickupCoords({ lat: p.lat, lng: p.lng }); setPickupPlaceId(p.placeId || null); pickupFromPlaceRef.current = true;
     // Owner 2026-10-31: once BOTH places were explicitly chosen (suggestion / current location / map tap -- not just typed
-    // text) the boxes tuck away exactly like after a recent-trip tap (`fromTrip` / `tripHidden`), leaving km + weight.
+    // text) the boxes tuck away exactly like after a recent-trip tap (`fromTrip` / `tripHidden`), leaving the vehicle list.
     const dropAlreadyChosen = dropFromPlaceRef.current && !!dropCoords;
     setFromTrip(dropAlreadyChosen); setBookedMsg(false);
     if (dropAlreadyChosen) goAfterPlaces(); else { setActiveField("drop"); requestFocus("drop"); }
@@ -7509,7 +7477,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapsReady, lang, tripsKey]);
-  // A whole past trip picked from the suggestions: fills Pickup AND Drop, cursor goes to Weight.
+  // A whole past trip picked from the suggestions: fills Pickup AND Drop, the vehicle list shows.
   const onTripSelected = (t) => {
     setPickup(tripName(t, "pickup")); setPickupCoords({ lat: t.pickupLat, lng: t.pickupLng }); setPickupPlaceId(t.pickupPlaceId || null); pickupFromPlaceRef.current = true;
     setDrop(tripName(t, "drop")); setDropCoords({ lat: t.dropLat, lng: t.dropLng }); setDropPlaceId(t.dropPlaceId || null); dropFromPlaceRef.current = true;
@@ -7531,21 +7499,20 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, mapsReady]);
   // The carry-over is for the language-change reload only: drop the stamp now that it has been read, and keep a
-  // draft of the chosen places + weight for the NEXT reload (nothing is restored unless that stamp is fresh).
+  // draft of the chosen places for the NEXT reload (nothing is restored unless that stamp is fresh).
   useEffect(() => { try { window.sessionStorage.removeItem(LANG_RELOAD_KEY); } catch { /* storage unavailable */ } }, []);
   useEffect(() => {
     if (!pickupCoords && !dropCoords) { writeBookingDraft(null); return; }
     writeBookingDraft({
       pickup: pickupCoords ? { name: pickup, lat: pickupCoords.lat, lng: pickupCoords.lng, placeId: pickupPlaceId } : null,
       drop: dropCoords ? { name: drop, lat: dropCoords.lat, lng: dropCoords.lng, placeId: dropPlaceId } : null,
-      weight, weightUnit, advance: !!advance, advanceDate, advanceTime, returnTrip,
+      advance: !!advance, advanceDate, advanceTime, returnTrip,
     });
-  }, [pickup, drop, pickupCoords, dropCoords, pickupPlaceId, dropPlaceId, weight, weightUnit, advance, advanceDate, advanceTime, returnTrip]);
+  }, [pickup, drop, pickupCoords, dropCoords, pickupPlaceId, dropPlaceId, advance, advanceDate, advanceTime, returnTrip]);
 
-  // Typing in Pickup or Drop clears everything chosen AFTER it (drop, distance, weight) -- owner brief 2026-10-29.
+  // Typing in Pickup or Drop clears everything chosen AFTER it (drop, distance, the picked vehicle) -- owner brief 2026-10-29.
   // Distance is derived from the two coordinates, so clearing them clears it too.
   const clearAfterDrop = () => {
-    setWeight(""); setWeightUnitHint(null); setWeightCapHit(false);
     setSelectedDriverKey(null); setUnmatchedAt(null); setUnmatchedId(null); setUnmatchedContacted(false); setBookingError("");
   };
   const clearAfterPickup = () => {
@@ -7624,7 +7591,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // Directions call hadn't resolved yet.
     const distanceKm = distance ?? estimateDistanceKm(pickupCoords, dropCoords);
     const requestId = raiseUnmatchedVehicleRequest?.({
-      pickup, drop, weightKg: loadKg || null, weightUnit, bookingType: advance ? "advance" : "immediate", ...(advance ? { scheduledFor: scheduledForValue } : {}), distanceKm, returnTrip,
+      pickup, drop, weightKg: null, weightUnit: "kg", bookingType: advance ? "advance" : "immediate", ...(advance ? { scheduledFor: scheduledForValue } : {}), distanceKm, returnTrip,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
     });
@@ -7637,17 +7604,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // opens, instead of it firing the instant they tap the card. Keyed the
   // same way as each entry's own id.
   const [selectedDriverKey, setSelectedDriverKey] = useState(null);
-  // Reset the moment the entered weight OR its unit changes -- without
-  // this, a vehicle selected under one weight/unit stayed "selected"
-  // (collapsing the list down to just that one card, see visibleDrivers
-  // below) even after the customer changed the weight enough that a
-  // different set of vehicles should now be showing, e.g. switching the
-  // kg/ton toggle after already picking a card. Only truly clears when the
-  // previously selected id no longer appears in the freshly filtered list
-  // at all; this makes it unconditional, so a genuinely new weight/unit
-  // always shows the full fresh list again instead of silently keeping a
-  // stale single-vehicle view whenever the old id still happens to match.
-  useEffect(() => { setSelectedDriverKey(null); }, [weight, weightUnit]);
   // The map is never collapsed or hidden before Book, and it scrolls with the page (owner 2026-10-29).
   // Tapping a driver's inline "Book this vehicle" button sends the
   // request immediately (no separate confirmation step) -- sendingKey
@@ -7663,26 +7619,22 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   const showDrop = pickupSelected;                    // Drop box is invisible until Pickup is selected
   const placesReady = pickupSelected && dropSelected && !!pickup.trim() && !!drop.trim(); // Pickup AND Drop chosen
   const locationsReady = placesReady && scheduleReady;   // advance: ...and the date + time too
-  const showWeight = placesReady;                     // km + Enter Weight come with the Date/Time box (advance) -- the vehicle list still waits for the schedule
-  const tripHidden = fromTrip && placesReady;      // trip suggestion tapped: Pickup/Drop stay filled but hidden                  // Weight is invisible until Pickup AND Drop are selected
+  const tripHidden = fromTrip && placesReady;      // trip suggestion tapped / both places chosen: Pickup/Drop stay filled but hidden
   const sameLocation = locationsReady && isSameLocation(pickup, drop, pickupCoords, dropCoords);
-  const weightReady = isWeightValid(weight, weightUnit) && !weightUnitHint;
-  // Weight typed = Pickup and Drop tuck away (owner brief 2026-10-29); the vehicles below + the map take over.
-  const weightTyped = showWeight && !!weight.trim();
-  // Which ONE of Pickup/Drop/Enter Weight gets the golden "current step"
-  // ring (see LocationField's highlighted prop and the weight input's own
+  // Which ONE of Pickup/Drop/Date/Time gets the golden "current step"
+  // ring (see LocationField's highlighted prop and the date/time box's own
   // outline below) -- defaults through the natural fill order and stays
   // on a field even after it loses actual DOM focus, not just for the
   // instant it's focused. activeField (sticky, set onFocus -- see its own
   // comment above) takes over the moment the customer explicitly taps a
   // field out of order.
-  const naturalField = !pickupSelected ? "pickup" : !dropSelected ? "drop" : advance && !advanceDate ? "date" : advance && !advanceTime ? "time" : !weightReady ? "weight" : null;
-  const highlightField = activeField && ((activeField === "date" && advance && placesReady) || (activeField === "time" && advance && placesReady) || activeField === "pickup" || (activeField === "drop" && showDrop) || (activeField === "weight" && showWeight)) ? activeField : naturalField;
+  const naturalField = !pickupSelected ? "pickup" : !dropSelected ? "drop" : advance && !advanceDate ? "date" : advance && !advanceTime ? "time" : null;
+  const highlightField = activeField && ((activeField === "date" && advance && placesReady) || (activeField === "time" && advance && placesReady) || activeField === "pickup" || (activeField === "drop" && showDrop)) ? activeField : naturalField;
 
   // Every real, currently online/approved/non-blacklisted driver within
   // the request radius of Pickup AND whose own vehicle can actually carry
-  // the declared weight (capacity between the load and load+headroom,
-  // same window the old weight-based flow used), each carrying their own
+  // any capacity (owner 2026-11-04: no weight is asked any more, so there is no
+  // capacity window), each carrying their own
   // KYC vehicle photo and category — the customer picks a specific
   // vehicle by its actual photo now, not an anonymous category card. Same
   // eligibility rules as before otherwise (fails closed on a missing/
@@ -7695,14 +7647,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // category (lightest first) and then nearest-first within a category,
   // matching the order the fare tiers and the dispatch engine already use
   // elsewhere.
-  const loadKg = (Number(weight) || 0) * (weightUnit === "ton" ? 1000 : 1);
-  const maxFleetCapacityKg = maxFleetVehicleCapacityKg(drivers, VEHICLES);
-  const exceedsFleetMax = weightReady && maxFleetCapacityKg > 0 && loadKg > maxFleetCapacityKg;
   const bidRadiusKm = advance ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM;
   const nearbyDrivers = (() => {
     if (!scheduleReady) return []; // advance: nothing to match until the date AND time are chosen
     let withFare = drivers
-      .filter((d) => isDriverListableForCustomer(d, { loadKg, pickupCoords, bidRadiusKm, advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
+      .filter((d) => isDriverListableForCustomer(d, { pickupCoords, bidRadiusKm, advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
       .map((d) => {
         const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
         const tier = findFareTier(capacityKg, fareTiers);
@@ -7719,7 +7668,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // real choices (see padVehicleCategories above).
     withFare = padVehicleCategories(withFare, {
       drivers, fareTiers, VEHICLES, pickupCoords, radiusKm: bidRadiusKm,
-      pickup, drop, distance, dropCoords, adminRouteFares, loadKg, bookings, lang, dieselPricePerLitre,
+      pickup, drop, distance, dropCoords, adminRouteFares, bookings, lang, dieselPricePerLitre,
       ...(advance ? { scheduledFor: scheduledForValue } : {}),
     });
 
@@ -7771,30 +7720,31 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
   // Nothing is pre-selected (owner 2026-10-29): the whole list is shown until the customer taps a vehicle;
   // only then does the Book button appear, and it books that vehicle.
   const chosen = !!selectedEntry;
-  // "Change pickup / drop" (owner 2026-10-31): sits UNDER the "Enter weight first..." note (or the date/time hint / the
+  // "Change pickup / drop" (owner 2026-10-31): sits UNDER the "Tap a vehicle" line (or the date/time hint / the
   // "Tap a vehicle" line), centred and dull grey. Only while Pickup/Drop are tucked away and no vehicle is chosen.
   // Owner 2026-11-01: the fixed "Round trip" bar is only for the step where Pickup and Drop are being ENTERED -- i.e. exactly while the
   // Pickup/Drop boxes are on screen. Once both are in (they tuck away) or a weight is typed or a vehicle is chosen, it is gone;
   // "Change pickup / drop" brings the boxes -- and the bar -- back. The tick itself is kept either way.
   // Owner 2026-11-01 (later): and once it is TICKED the box is not shown any more (hence "&& !returnTrip"); the green "Return fare
   // included" note with its small "Remove" is how the tick shows -- and gets undone -- from then on.
-  const returnBarVisible = !weightTyped && !tripHidden && !chosen && !returnTrip;
+  const returnBarVisible = !tripHidden && !chosen && !returnTrip;
   const changePlacesLink = tripHidden && !chosen ? (
     <div className="text-center">
-      <button type="button" onClick={() => { setFromTrip(false); setWeight(""); }} className="px-3 py-2 text-xs font-semibold underline underline-offset-2" style={{ color: "#94A3B8" }}>
+      <button type="button" onClick={() => { setFromTrip(false); }} className="px-3 py-2 text-xs font-semibold underline underline-offset-2" style={{ color: "#94A3B8" }}>
         {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
       </button>
     </div>
   ) : null;
   const visibleDrivers = selectedEntry ? [selectedEntry] : nearbyDrivers;
   const bookEntry = selectedEntry; // nothing is pre-selected: Book only appears once the customer taps a vehicle
-  const canBook = locationsReady && !sameLocation && weightReady && !exceedsFleetMax && !!bookEntry;
-  // Map (owner brief 2026-10-29): with a valid weight, only the vehicles in the list below are plotted; once one is
+  const canBook = locationsReady && !sameLocation && !!bookEntry;
+  // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted; once one is
   // chosen, only that type -- with the nearest of them ringed and its minutes shown.
-  const mapEntries = !(weightReady && locationsReady && !sameLocation) ? null
+  const listStage = locationsReady && !sameLocation; // Pickup + Drop (+ date/time in Advance) done: the vehicle list is showing
+  const mapEntries = !listStage ? null
     : selectedEntry ? nearbyDrivers.filter((e) => e.tier.maxKg === selectedEntry.tier.maxKg) : nearbyDrivers;
   const mapFixedDrivers = mapEntries ? mapEntries.map((e) => e.driver) : null;
-  // A truck that is on a trip right now is not "available nearby" -- keep it off the map before a weight is typed too (the vehicle list already excludes it).
+  // A truck that is on a trip right now is not "available nearby" -- keep it off the map before the list shows too (the vehicle list already excludes it).
   const mapAvailableDrivers = (drivers || []).filter((d) => !driverIsOnTrip(d, bookings));
   const nearestOfType = selectedEntry && mapEntries?.length ? mapEntries.reduce((best, e) => (e.km < best.km ? e : best), mapEntries[0]) : null;
   const mapHighlight = nearestOfType
@@ -7836,7 +7786,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
     // (Firestore's local echo would otherwise swap this screen out instantly).
     setTimeout(() => {
     const err = requestByCategory({
-      pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: loadKg, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
+      pickup, drop, tierMaxKg: entry.tier.maxKg, customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       pickupPlaceId, dropPlaceId, returnTrip,
@@ -7862,13 +7812,13 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
       {/* Centers on the typed Pickup once it's resolved, not the customer's own live position -- a customer
           booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
           Falls back to customerLocation (device GPS) only before Pickup has been entered/geocoded.
-          Owner brief 2026-10-29: once a weight is typed the map shows ONLY active vehicles of the matching types
+          Owner brief 2026-10-29: once the vehicle list shows, the map shows ONLY active vehicles of the matching types
           (inactive ones hidden); once a vehicle is chosen, only that type, with the nearest one ringed and its minutes shown. */}
       {/* Owner 2026-10-31: an evident line between the map and the form (3 px navy rule + a soft shadow below it).
           Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched. */}
       <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
         <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
-          activeOnly={weightTyped} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
+          activeOnly={listStage} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
       </div>
       {bookedMsg && (
         <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
@@ -7876,11 +7826,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         </div>
       )}
       <div className="px-5 pt-4 space-y-4">
-        {/* Layering (owner 2026-10-29: the km box and Enter Weight were painting OVER the Drop suggestions): every
+        {/* Layering (owner 2026-10-29: the km and weight boxes -- since removed -- were painting OVER the Drop suggestions): every
             .anim-rise block below is its own stacking layer, and a later layer paints over an earlier one no matter
             how high a z-index sits INSIDE it. So the two boxes that own a suggestion dropdown get their own
             explicit layers: Pickup (z-40) above Drop (z-30) above everything under them. */}
-        <SmoothCollapse show={!weightTyped && !tripHidden}>
+        <SmoothCollapse show={!tripHidden}>
         <div className="relative z-40 flex items-start gap-2">
           <div className="flex-1 min-w-0">
             <LocationField
@@ -7942,7 +7892,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           </div>
         )}
 
-        <SmoothCollapse show={showDrop && !weightTyped && !tripHidden}>
+        <SmoothCollapse show={showDrop && !tripHidden}>
         <div className="anim-rise relative z-30">
         <LocationField
           lang={lang}
@@ -7960,21 +7910,6 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
         />
         </div>
         </SmoothCollapse>
-
-        {weightTyped && !chosen && !tripHidden && (
-          <button type="button" onClick={() => setWeight("")} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-            <span className="flex flex-col items-center py-1 shrink-0" aria-hidden="true">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
-              <span className="flex-1 w-px my-0.5" style={{ background: C.line }} />
-              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: C.navy }} />
-            </span>
-            <span className="flex-1 min-w-0 flex flex-col gap-1.5">
-              <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{pickup}</span>
-              <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{drop}</span>
-            </span>
-            <span className="self-center text-xs font-extrabold shrink-0 underline" style={{ color: C.navy }}>{lang === "en" ? "Change" : lang === "mr" ? "बदला" : "बदलें"}</span>
-          </button>
-        )}
 
         {/* Advance only (owner 2026-10-30): ONE horizontal box holding Date and Time, placed after the Pickup/Drop flow and
             shown only once Pickup AND Drop are entered. */}
@@ -8003,83 +7938,18 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
             onSelect={(t, d) => {
               setAdvanceDate(d); setAdvanceTime(t);
               setBookedMsg(false);
-              // Auto-shift to Weight the instant date + time are confirmed (cancelling out of the sheet never steals focus).
-              setActiveField("weight");
-              requestFocus("weight");
+              // Date + time confirmed -> the vehicle list shows straight away (no weight step); keyboard stays down.
+              setActiveField(null);
+              requestFocus("date");
             }}
             onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
           </>
         )}
 
-        {showWeight && !chosen && (
-        <div ref={weightRowRef} className="flex gap-3 anim-rise" style={{ scrollMarginBottom: 130, scrollMarginTop: 70 }}>
-          {/* Narrower now (fixed width, not a 50/50 grid column) -- the
-              weight box needs the extra room for the two-segment kg/ton
-              toggle below, and this box's own content (a short distance
-              or "Calculating...") reads fine truncated at this width. */}
-          <div className={`${inputCls} flex items-center gap-1.5 shrink-0`} style={{ ...inputStyle, width: 104 }}>
-            <Navigation size={14} color={C.inkSoft} className="shrink-0" />
-            <span className="truncate text-[11px]">
-              {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
-            </span>
-          </div>
-          {/* Same golden-frame wrapper technique as LocationField's
-              highlightWrapStyle -- padded, colored outer div around the
-              untouched relative/absolute-positioned inner block, so the
-              kg/ton toggle stays flush with the input's own edges. */}
-          <div className="flex-1" style={{
-              padding: highlightField === "weight" ? 4 : 0,
-              background: highlightField === "weight" ? C.marigold : "transparent",
-              borderRadius: highlightField === "weight" ? 12 : 0,
-              transition: "padding 0.15s ease, background 0.15s ease",
-            }}>
-            <div className="relative">
-              <input ref={weightInputRef} className={inputCls} style={{ ...inputStyle, paddingRight: 108 }} inputMode="decimal"
-                placeholder={lang === "en" ? "Enter Weight" : lang === "mr" ? "वजन टाका" : "वजन डालें"} value={weight}
-                onChange={(e) => {
-                  // See getWeightInputChange's own comment -- enforces kg's
-                  // 3-5 digit / tons' 2+2-digit shape as you type, and flags
-                  // mismatchUnit (surfaced below) the moment what's typed
-                  // looks like it belongs in the OTHER unit instead.
-                  const { clean, mismatchUnit, capped } = getWeightInputChange(e.target.value, weightUnit, weight);
-                  setWeight(clean);
-                  setWeightUnitHint(mismatchUnit);
-                  setWeightCapHit(capped);
-                }}
-                onFocus={() => { setActiveField("weight"); keepWeightVisible(); }} />
-              {/* Both units shown at once now (a real segmented toggle, not a
-                  single button that only displays whichever is currently
-                  active) -- same right-edge slot pattern as LocationField's
-                  clear button. */}
-              <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1 rounded-md p-1" style={{ background: "rgba(0,0,0,0.06)" }}>
-                <button type="button" onClick={() => { setWeightUnit("kg"); setWeightUnitHint(null); }}
-                  className="h-full px-3 rounded text-xs font-black"
-                  style={{ background: weightUnit === "kg" ? C.navy : "transparent", color: weightUnit === "kg" ? "#fff" : C.inkSoft }}>
-                  kg
-                </button>
-                <button type="button" onClick={() => { setWeightUnit("ton"); setWeightUnitHint(null); }}
-                  className="h-full px-3 rounded text-xs font-black"
-                  style={{ background: weightUnit === "ton" ? C.navy : "transparent", color: weightUnit === "ton" ? "#fff" : C.inkSoft }}>
-                  {weightUnitLabel("ton")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        )}
-
-        {weightCapHit && (
-          <div className="text-xs font-bold -mt-1" style={{ color: C.safety }}>
-            {lang === "en" ? `Maximum weight is ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg.` : lang === "mr" ? `कमाल वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg आहे.` : `अधिकतम वजन ${MAX_BOOKING_WEIGHT_TON} ton / ${MAX_BOOKING_WEIGHT_KG} kg है।`}
-          </div>
-        )}
-
       </div>
 
-      {/* Once Pickup+Drop are filled, this section takes over from the
-          disabled Book button above: a nudge to enter weight until it has
-          at least 3 digits (matching the design mock), then the eligible-
-          driver list. Every real, currently eligible driver near Pickup is
+      {/* Once Pickup+Drop are filled (owner 2026-11-04: there is NO weight / est. distance box any more), this section shows the
+          eligible-driver list straight away. Every real, currently eligible driver near Pickup is
           listed individually with their own KYC vehicle photo, category
           label, capacity, and fare (see nearbyDrivers/bookDriver), so the
           customer picks by looking at the actual vehicle rather than an
@@ -8097,49 +7967,11 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
           {sameLocation ? (
             // Pickup and Drop read as the same place (see isSameLocation) --
             // no point showing bookable vehicles for a trip that can't be
-            // booked; same "hide the list on an error" rule as
-            // weightUnitHint/exceedsFleetMax/!weightReady below, just
-            // checked first since a location problem blocks booking
-            // regardless of what the weight says.
+            // booked: the list is hidden on this location problem.
             <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
               {lang === "en" ? "Pickup and Drop look like the same place — enter a more specific address (area, landmark or street) for one of them."
                 : lang === "mr" ? "पिकअप आणि ड्रॉप एकच ठिकाण दिसत आहे — एकासाठी अधिक नेमका पत्ता (भाग, खूण किंवा रस्ता) टाका."
                 : "पिकअप और ड्रॉप एक जैसी जगह लग रहे हैं — एक के लिए ज़्यादा सटीक पता (इलाका, पहचान या सड़क) डालें।"}
-            </div>
-          ) : weightUnitHint ? (
-            // Typed value overflowed the current unit's shape (see
-            // getWeightInputChange) -- almost certainly meant for the
-            // OTHER unit, so this offers a one-tap fix instead of a
-            // generic error, and (same as !weightReady) still hides the
-            // vehicle list below, since the entered weight can't be
-            // trusted yet.
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
-              {lang === "en"
-                ? `Do you mean ${weightUnitLabel(weightUnitHint)}? `
-                : lang === "mr"
-                ? `तुमचा अर्थ ${weightUnitLabel(weightUnitHint)} आहे का? `
-                : `क्या आपका मतलब ${weightUnitLabel(weightUnitHint)} से है? `}
-              <button type="button" onClick={() => { setWeightUnit(weightUnitHint); setWeightUnitHint(null); }} className="underline">
-                {lang === "en" ? `Switch to ${weightUnitLabel(weightUnitHint)}` : lang === "mr" ? `${weightUnitLabel(weightUnitHint)}वर स्विच करा` : `${weightUnitLabel(weightUnitHint)} पर स्विच करें`}
-              </button>
-            </div>
-          ) : exceedsFleetMax ? (
-            // Entered weight is heavier than anything the live fleet can
-            // carry (see maxFleetVehicleCapacityKg) -- same "don't show
-            // vehicles on an error" rule as weightUnitHint above, since no
-            // real vehicle could ever match this. maxFleetCapacityKg grows
-            // automatically the moment a bigger vehicle completes KYC, so
-            // this message is never stuck describing a stale ceiling.
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.safety, background: "rgba(139,0,0,0.08)", border: `1.5px solid rgba(139,0,0,0.3)` }}>
-              {lang === "en"
-                ? `We don't currently have a vehicle for this weight. Max available: ${maxFleetCapacityKg}kg.`
-                : lang === "mr"
-                ? `सध्या तुमच्या वजनासाठी आमच्याकडे वाहन उपलब्ध नाही. कमाल उपलब्ध: ${maxFleetCapacityKg}kg.`
-                : `फिलहाल आपके वजन के लिए कोई गाड़ी उपलब्ध नहीं है। अधिकतम उपलब्ध: ${maxFleetCapacityKg}kg.`}
-            </div>
-          ) : !weightReady ? (
-            <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
-              👆 {lang === "en" ? "Enter weight first, then vehicles will show" : lang === "mr" ? "आधी वजन टाका, मग गाड्या दिसतील" : "पहले वजन डालें, तभी गाड़ियाँ दिखेंगी"}
             </div>
           ) : (
             <>
@@ -8232,8 +8064,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               )}
             </>
           )}
-          {!(weightReady && !sameLocation && !weightUnitHint && !exceedsFleetMax) && returnFareNote}
-          {!(weightReady && !sameLocation && !weightUnitHint && !exceedsFleetMax) && changePlacesLink}
+          {sameLocation && returnFareNote}
+          {sameLocation && changePlacesLink}
         </div>
       )}
       {advance && placesReady && !scheduleReady && (
@@ -8394,7 +8226,7 @@ function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
     { icon: <Navigation size={14} color={C.navy} />, label: liveCaption, value: liveLabel, strong: true },
     { icon: <IndianRupee size={14} color={C.navy} />, label: T("Fare", "भाडे", "भाड़ा"), value: b.fare ? fmt(b.fare) : "—", strong: true },
     { icon: <Truck size={14} color={C.navy} />, label: T("Capacity", "क्षमता", "क्षमता"), value: formatKgLabel(capacityKg, lang) || "—" },
-    { icon: <Weight size={14} color={C.navy} />, label: T("Your load", "तुमचे वजन", "आपका वज़न"), value: formatKgLabel(b.weight, lang) || "—" },
+    { icon: <Weight size={14} color={C.navy} />, label: b.weightIsCapacity ? T("Vehicle capacity", "गाड़ी की क्षमता", "गाडीची क्षमता") : T("Your load", "तुमचे वजन", "आपका वज़न"), value: formatKgLabel(b.weight, lang) || "—" },
   ];
 
   return (
@@ -13203,7 +13035,7 @@ export default function App() {
   // category itself (resolveFareForTier), not any specific driver. Returns
   // an error message string to show the customer (nobody eligible at all
   // right now), or null on success.
-  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnFare, returnPct: returnPctUsed, fare: fareOverride }) => {
+  const requestByCategory = ({ pickup, drop, tierMaxKg, customerWeight, weightIsCapacity, distance, scheduledFor, pickupLat, pickupLng, dropLat, dropLng, pickupPlaceId, dropPlaceId, returnTrip, oneWayFare, returnFare, returnPct: returnPctUsed, fare: fareOverride }) => {
     const bookingId = genId();
     // weight included here to match the real created doc below -- isDriverBroadcastEligible
     // now matches against b.weight directly (see BROADCAST_WEIGHT_HEADROOM_KG), so this
@@ -13227,7 +13059,7 @@ export default function App() {
       // one) rather than the category ceiling itself. vehicle stays null
       // until someone actually accepts (driverRespondBooking) -- unlike
       // the old single-target model, nobody specific is chosen yet.
-      pickup, drop, vehicle: null, tierMaxKg, weight: customerWeight ?? tierMaxKg, distance, status: "AwaitingDriver", bids: [], fare,
+      pickup, drop, vehicle: null, tierMaxKg, weight: customerWeight ?? tierMaxKg, ...(weightIsCapacity ? { weightIsCapacity: true } : {}), distance, status: "AwaitingDriver", bids: [], fare,
       pendingDriverName: null, pendingDriverMobile: null, pendingBidId: null, hours: 0, extraHourRate: 0, acceptedAt: serverTimestamp(),
       declinedBy: [],
       driverName: null, progress: 0, scheduledFor: scheduledFor || null, returnTrip: !!returnTrip, ...(returnTrip ? { oneWayFare: oneWayFare ?? null, returnFare: returnFare ?? null, returnPct: returnPctUsed ?? null } : {}), customerMobile: customerAuth.mobile || "",

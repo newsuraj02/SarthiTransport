@@ -2796,7 +2796,8 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
     const matches = (drivers || []).filter((d) => {
       if (d.online || d.blacklisted || d.kyc !== "Approved") return false;
       const capKg = Number(d.vehicleSpec?.capacityKg) || 0;
-      if (loadKg <= 0 || capKg < loadKg || capKg > loadKg + VEHICLE_HEADROOM_KG) return false;
+      // No weight on the request (the customer screen has no weight box since 2026-11-04) = any capacity; sorted by distance below.
+      if (loadKg > 0 && (capKg < loadKg || capKg > loadKg + VEHICLE_HEADROOM_KG)) return false;
       return true;
     });
     return matches
@@ -2989,6 +2990,7 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                   <div className="text-[11px] mt-2" style={{ color: C.inkSoft }}>
                     <b style={{ color: C.ink }}>{lang === "en" ? "Requirement" : lang === "mr" ? "आवश्यकता" : "ज़रूरत"}:</b> {dt.date}, {dt.time}, {req.weightKg ? (req.weightUnit === "ton" ? `${req.weightKg / 1000}ton` : `${req.weightKg}kg`) : "—"}, {km > 0 ? `${Math.round(km)}km` : "—"}
                   </div>
+                  {Number(req.weightKg) > 0 ? (
                   <div className="flex items-center gap-1.5 mt-2">
                     <span className="text-[11px] font-bold" style={{ color: C.ink }}>{lang === "en" ? "Fare" : lang === "mr" ? "भाडे" : "भाड़ा"}:</span>
                     <span className="text-[11px] font-bold" style={{ color: C.ink }}>₹</span>
@@ -3003,6 +3005,11 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
                         : (lang === "en" ? "Save" : lang === "mr" ? "सेव्ह करा" : "सेव करें")}
                     </button>
                   </div>
+                  ) : (
+                    <div data-no-weight-note className="text-[11px] font-bold mt-2" style={{ color: C.marigoldDeep }}>
+                      {lang === "en" ? "No weight given (the customer screen has no weight box) — call the customer, ask the load and the fare." : lang === "mr" ? "वजन दिलेले नाही (ग्राहकाच्या स्क्रीनवर वजनाचा बॉक्स नाही) — ग्राहकाला कॉल करून माल आणि भाडे विचारा." : "वज़न नहीं दिया गया (कस्टमर स्क्रीन पर वज़न का बॉक्स नहीं है) — कस्टमर को कॉल करके माल और भाड़ा पूछें।"}
+                    </div>
+                  )}
                   {fareSendError[req.id] && (
                     <div className="text-[10.5px] font-bold mt-1" style={{ color: C.safety }}>{fareSendError[req.id]}</div>
                   )}
