@@ -6607,6 +6607,9 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
   const blurTimeoutRef = useRef(null);
+  // Owner 2026-11-04: the fixed "Book Round trip" bar must stay visible while the suggestions are open, so the list is capped to end ABOVE it.
+  const fieldWrapRef = useRef(null);
+  const [ddMaxH, setDdMaxH] = useState(256);
   // Auto-scroll-into-view the moment this field is focused, so it clears
   // the on-screen keyboard -- relying on the WebView's own default
   // behavior isn't consistent enough inside the installed app to trust on
@@ -6732,6 +6735,18 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
     transition: "padding 0.15s ease, background 0.15s ease",
   };
   const showDropdown = dropdownOpen && predictions.length > 0;
+  useEffect(() => {
+    if (!dropdownOpen || !fieldWrapRef.current) return undefined;
+    const fit = () => {
+      const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+      const r = fieldWrapRef.current.getBoundingClientRect();
+      setDdMaxH(Math.max(120, Math.min(256, Math.round(vh - r.bottom - 88))));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    return () => { window.removeEventListener("resize", fit); window.visualViewport?.removeEventListener("resize", fit); };
+  }, [dropdownOpen, predictions.length, value]);
   // Shown instead of the live-predictions dropdown, only while the field is
   // focused and still empty — the moment there's real input, predictions
   // (once they arrive) take over instead. Mirrors the common ride-hailing-
@@ -6742,7 +6757,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
   return (
     <div>
       <div style={highlightWrapStyle}>
-        <div className="relative w-full">
+        <div className="relative w-full" ref={fieldWrapRef}>
           <input ref={ref} className={inputCls} style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }} placeholder={placeholder} value={value} disabled={disabled}
             onChange={(e) => { onChange(e); setDropdownOpen(true); }}
             onFocus={(e) => {
@@ -6758,7 +6773,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
             </button>
           )}
           {showDropdown && (
-            <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+            <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden overflow-y-auto" style={{ maxHeight: ddMaxH, border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
               {predictions.map((p) => {
                 const main = stripPlusCode(p.structured_formatting?.main_text || p.description);
                 const secondary = stripPlusCode(p.structured_formatting?.secondary_text || "");
@@ -6779,7 +6794,7 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
             </div>
           )}
           {showRecents && (
-            <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden max-h-64 overflow-y-auto" style={{ border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
+            <div className="absolute left-0 right-0 mt-1 z-20 rounded-lg overflow-hidden overflow-y-auto" style={{ maxHeight: ddMaxH, border: `1px solid ${C.line}`, background: C.paper, boxShadow: "0 6px 18px rgba(0,0,0,0.18)" }}>
               {recentItems.map((r, i) => (
                 <button key={i} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectRecent(r)}
                   className="w-full text-left px-4 py-3.5 flex items-start gap-2" style={{ borderTop: i === 0 ? "none" : `1px solid ${C.line}` }}>
@@ -7350,6 +7365,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // order (pickup -> drop) if nothing was ever explicitly
   // focused yet.
   const [activeField, setActiveField] = useState(null); // 'pickup' | 'drop' | 'date' | 'time' | null
+  // Which Pickup/Drop box has the cursor RIGHT NOW (set on focus, cleared on blur; unlike activeField, which is sticky). Owner 2026-11-04 (major bug): text still
+  // being typed was geocoded after a 900 ms pause and counted as "chosen", so the Drop box and the whole vehicle list appeared before Pickup / Drop were entered.
+  // Typed text now counts only once the cursor has left the box (or a suggestion / current location / map tap / trip chose the place).
+  const [typingField, setTypingField] = useState(null);
   // Real DOM refs for the three fields -- lets the auto-advance below
   // actually move the keyboard cursor into the next field, not just the
   // visual highlight, the moment a place is chosen (not while typing by
@@ -7598,8 +7617,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   const [selectedCategory, setSelectedCategory] = useState(null);
   // "Selected" = coordinates are known (a suggestion / current location / map tap / recent trip, or typed text
   // that has geocoded). Without Google Maps (no way to geocode) typed text of 3+ characters counts.
-  const pickupSelected = !!pickupCoords || (!mapsReady && pickup.trim().length >= 3);
-  const dropSelected = !!dropCoords || (!mapsReady && drop.trim().length >= 3);
+  const pickupTyping = typingField === "pickup" && !pickupFromPlaceRef.current; // still typing by hand: not chosen yet
+  const dropTyping = typingField === "drop" && !dropFromPlaceRef.current;
+  const pickupSelected = (!!pickupCoords || (!mapsReady && pickup.trim().length >= 3)) && !pickupTyping;
+  const dropSelected = (!!dropCoords || (!mapsReady && drop.trim().length >= 3)) && !dropTyping;
   const showDrop = pickupSelected;                    // Drop box is invisible until Pickup is selected
   const placesReady = pickupSelected && dropSelected && !!pickup.trim() && !!drop.trim(); // Pickup AND Drop chosen
   const locationsReady = placesReady && scheduleReady;   // advance: ...and the date + time too
@@ -7697,7 +7718,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // "Change pickup / drop" brings the boxes -- and the bar -- back. The tick itself is kept either way.
   // Owner 2026-11-01 (later): and once it is TICKED the box is not shown any more (hence "&& !returnTrip"); the green "Return fare
   // included" note with its small "Remove" is how the tick shows -- and gets undone -- from then on.
-  const returnBarVisible = !tripHidden && !returnTrip;
+  const returnBarVisible = !returnTrip;
   // ONE row (owner 2026-11-04): the est. distance at the LEFT end and "Change pickup / drop" at the RIGHT end, both visible (est. km once Pickup + Drop
   // give a distance; the link only while the Pickup / Drop boxes are tucked away). It is the row the Round-trip / list sections show under the places.
   const estKm = distance > 0 && placesReady ? Math.round(distance) : null;
@@ -7824,7 +7845,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
               placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
               suggestions={suggestAreas(pickup)}
               onSuggestionTap={(a) => onPickupTyped(pickup.trim() + (pickup.trim() ? ", " : "") + a)}
-              onFocus={() => setActiveField("pickup")}
+              onFocus={() => { setActiveField("pickup"); setTypingField("pickup"); }}
+              onBlur={() => setTypingField((f) => (f === "pickup" ? null : f))}
               highlighted={highlightField === "pickup"}
               biasLat={customerLocation?.lat ?? undefined} biasLng={customerLocation?.lng ?? undefined}
               ref={pickupFieldRef}
@@ -7885,7 +7907,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
           suggestions={suggestAreas(drop)}
           onSuggestionTap={(a) => onDropTyped(drop.trim() + (drop.trim() ? ", " : "") + a)}
-          onFocus={() => setActiveField("drop")}
+          onFocus={() => { setActiveField("drop"); setTypingField("drop"); }}
+          onBlur={() => setTypingField((f) => (f === "drop" ? null : f))}
           highlighted={highlightField === "drop"}
           biasLat={(pickupCoords?.lat ?? customerLocation?.lat) ?? undefined} biasLng={(pickupCoords?.lng ?? customerLocation?.lng) ?? undefined}
           ref={dropFieldRef}
@@ -8054,11 +8077,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           and the sheets (z-50). Visible ONLY while the Pickup/Drop boxes are on screen (returnBarVisible); it must not depend on which
           text box has focus (an earlier version did, and vanished when the Weight box got the cursor). */}
       {returnBarVisible && (
-        <div data-return-bar className="fixed left-0 right-0 bottom-0 z-[25] px-4 pt-1" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)", pointerEvents: "none" }}>
+        <div data-return-bar className="fixed left-0 right-0 bottom-0 z-[45] px-4 pt-1" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)", pointerEvents: "none" }}>
           <label className="mx-auto max-w-sm flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer select-none" style={{ background: C.paper, border: `1px solid ${C.line}`, pointerEvents: "auto" }}>
             <span className="flex items-center gap-2 min-w-0">
               <span className="text-base" aria-hidden="true" style={{ color: C.inkSoft }}>↔</span>
-              <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{lang === "en" ? "Round trip" : "राउंड ट्रिप"}</span>
+              <span className="text-sm font-bold truncate" style={{ color: C.ink }}>{lang === "en" ? "Book Round trip" : lang === "mr" ? "राउंड ट्रिप बुक करा" : "राउंड ट्रिप बुक करें"}</span>
             </span>
             <input type="checkbox" checked={returnTrip} onChange={(e) => setReturnTrip(e.target.checked)} className="w-6 h-6 shrink-0 rounded" style={{ accentColor: C.navy }} />
           </label>
