@@ -4085,6 +4085,12 @@ function customerListCategoryIndex(capacityKg) {
   const i = CUSTOMER_LIST_CATEGORY_KG.findIndex((m) => kg <= m);
   return i === -1 ? CUSTOMER_LIST_CATEGORY_KG.length : i;
 }
+// The category NAMES the customer sees as each row's title (owner 2026-11-04), one per category, index-aligned with CUSTOMER_LIST_CATEGORY_KG plus the
+// final "Above 32000 kg" group. Same in every language (they are vehicle names); the weight limit is the small line under the name.
+const CUSTOMER_LIST_CATEGORY_NAMES = ["3 wheeler", "Tata Ace", "Pickup", "Pickup 8ft", "Tata 407", "17ft Eicher", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "32ft container", "12/14/16 wheeler", "32t+ truck"];
+function customerListCategoryName(index) {
+  return CUSTOMER_LIST_CATEGORY_NAMES[Math.min(Math.max(index, 0), CUSTOMER_LIST_CATEGORY_NAMES.length - 1)];
+}
 function customerListCategoryLabel(index, lang) {
   const last = CUSTOMER_LIST_CATEGORY_KG[CUSTOMER_LIST_CATEGORY_KG.length - 1];
   if (index >= CUSTOMER_LIST_CATEGORY_KG.length) return lang === "en" ? `Above ${last} kg` : lang === "mr" ? `${last} किग्रा पेक्षा जास्त` : `${last} किग्रा से ऊपर`;
@@ -7938,7 +7944,7 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
               ) : (
                 <>
                   {/* Owner 2026-11-04: the list is grouped in the 12 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading,
-                      ONE ROW per category (owner 2026-11-04, "like the weight / vehicle list"): vehicle icon, the category's weight in big bold type, its vehicle name, the top fare and
+                      ONE ROW per category (owner 2026-11-04, "like the weight / vehicle list"): vehicle icon, the category NAME in big bold type, its weight limit under it, the top fare and
                       "N min" of its nearest GPS-on vehicle. Tapping a row selects the category (highlighted) for the fixed "Book now" bar -- no single driver is picked. */}
                   {groupByCustomerListCategory(nearbyDrivers).map((grp, rowIdx) => {
                   const isPicked = selectedCategory === grp.index;
@@ -7954,8 +7960,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                       <VehicleCategoryIcon tierIndex={top.tierIndex} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div data-category-title className="text-lg font-extrabold leading-tight" style={{ color: C.ink }}>{isPicked ? "✓ " : ""}{customerListCategoryLabel(grp.index, lang)}</div>
-                      <div className="text-sm truncate" style={{ color: C.inkSoft }}>{top.tier.label}</div>
+                      <div data-category-title className="text-lg font-extrabold leading-tight" style={{ color: C.ink }}>{isPicked ? "✓ " : ""}{customerListCategoryName(grp.index)}</div>
+                      <div data-category-weight className="text-sm truncate" style={{ color: C.inkSoft }}>{customerListCategoryLabel(grp.index, lang)}</div>
                     </div>
                     <div className="shrink-0 text-right">
                       <div data-category-fare className="text-sm font-black rounded-full px-2.5 py-1" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(top.fare)}</div>

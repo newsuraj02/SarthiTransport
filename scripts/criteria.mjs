@@ -18,7 +18,7 @@ export const BLOCKS = {
   "src/App.jsx": [
     // availability / who may be shown or take a load
     "parseScheduledFor", "minAdvanceNoticeHours", "notificationLockHours", "estimatedTripHours", "isBookingRunning", "getBookingWindow", "driverIsOnTrip",
-    "findDriverLoadConflict", "isDriverRecord", "isDriverBroadcastEligible", "ringCategoryIndexOfCapacity", "ringCategoryIndexOfLoad", "RING_CATEGORIES_ABOVE", "hasFreshLocation", "CUSTOMER_LIST_CATEGORY_KG", "customerListCategoryIndex", "customerListCategoryLabel", "groupByCustomerListCategory", "nearbyOnlineDrivers", "nearbyOfflineDrivers",
+    "findDriverLoadConflict", "isDriverRecord", "isDriverBroadcastEligible", "ringCategoryIndexOfCapacity", "ringCategoryIndexOfLoad", "RING_CATEGORIES_ABOVE", "hasFreshLocation", "CUSTOMER_LIST_CATEGORY_KG", "CUSTOMER_LIST_CATEGORY_NAMES", "customerListCategoryName", "customerListCategoryIndex", "customerListCategoryLabel", "groupByCustomerListCategory", "nearbyOnlineDrivers", "nearbyOfflineDrivers",
     "maxFleetVehicleCapacityKg", "CURRENT_BID_RADIUS_KM", "ADVANCE_BID_RADIUS_KM", "VEHICLE_HEADROOM_KG", "NEARBY_DRIVER_RADIUS_KM", "NEARBY_DRIVER_STALE_MS",
     "APP_OPEN_BEAT_MS",
     // fares
