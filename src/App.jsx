@@ -4073,6 +4073,32 @@ function hasFreshLocation(d, now = Date.now()) {
   const l = d && d.lastKnownLocation;
   return !!l && l.lat != null && l.lng != null && !!l.updatedAt && now - l.updatedAt <= NEARBY_DRIVER_STALE_MS;
 }
+// CUSTOMER VEHICLE-LIST CATEGORIES (owner 2026-11-04): the list is shown in these twelve capacity groups (+ a final "Above 32000 kg"), light -> heavy. A vehicle belongs to the
+// FIRST group whose limit its capacity does not exceed (a 600 kg vehicle is in "750 kg"); anything above the last limit goes in a final
+// "Above 32000 kg" group so no listed vehicle is ever hidden. Display grouping only -- who is listed (A5) and who is rung (A6) are unchanged.
+const CUSTOMER_LIST_CATEGORY_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
+function customerListCategoryIndex(capacityKg) {
+  const kg = Number(capacityKg) || 0;
+  const i = CUSTOMER_LIST_CATEGORY_KG.findIndex((m) => kg <= m);
+  return i === -1 ? CUSTOMER_LIST_CATEGORY_KG.length : i;
+}
+function customerListCategoryLabel(index, lang) {
+  const last = CUSTOMER_LIST_CATEGORY_KG[CUSTOMER_LIST_CATEGORY_KG.length - 1];
+  if (index >= CUSTOMER_LIST_CATEGORY_KG.length) return lang === "en" ? `Above ${last} kg` : lang === "mr" ? `${last} किग्रा पेक्षा जास्त` : `${last} किग्रा से ऊपर`;
+  return lang === "en" ? `${CUSTOMER_LIST_CATEGORY_KG[index]} kg` : `${CUSTOMER_LIST_CATEGORY_KG[index]} किग्रा`;
+}
+// Splits an already-ordered list of entries ({ capacityKg }) into category groups, light -> heavy, KEEPING the incoming order inside each group
+// (so GPS-on first, then nearest, still holds within a category). Empty categories are not returned.
+function groupByCustomerListCategory(entries) {
+  const groups = [];
+  for (const e of entries) {
+    const index = customerListCategoryIndex(e.capacityKg);
+    let g = groups.find((x) => x.index === index);
+    if (!g) { g = { index, entries: [] }; groups.push(g); }
+    g.entries.push(e);
+  }
+  return groups.sort((a, b) => a.index - b.index);
+}
 const NEARBY_DRIVER_RADIUS_KM = 25;
 const NEARBY_DRIVER_MAX = 20;
 
@@ -7916,7 +7942,17 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                 </p>
               ) : (
                 <>
-                  {visibleDrivers.map((entry, idx) => {
+                  {/* Owner 2026-11-04: the list is grouped in the 12 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading; once a vehicle is tapped only its card shows (no heading). */}
+                  {(selectedEntry ? [{ index: -1, entries: visibleDrivers }] : groupByCustomerListCategory(visibleDrivers)).map((grp) => (
+                  <div key={grp.index} data-list-category={grp.index >= 0 ? grp.index : undefined} className="space-y-2.5">
+                  {grp.index >= 0 && (
+                    <div data-list-category-heading className="flex items-center gap-2 pt-1">
+                      <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: C.navy }}>{customerListCategoryLabel(grp.index, lang)}</span>
+                      <span className="flex-1 h-px" style={{ background: C.line }} />
+                      <span className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{grp.entries.length}</span>
+                    </div>
+                  )}
+                  {grp.entries.map((entry, idx) => {
                     const key = entry.id;
                     const isSelected = !!selectedEntry && selectedEntry.id === key;
                     const fare = entry.fare;
@@ -7953,6 +7989,8 @@ function CustomerBooking({ requestByCategory, raiseUnmatchedVehicleRequest, vehi
                       </div>
                     );
                   })}
+                  </div>
+                  ))}
                   {chosen && (
                     <>
                       {returnFareNote}
