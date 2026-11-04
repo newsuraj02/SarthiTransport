@@ -57,3 +57,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-04 -- Admin Live Map: trip routes + ride detail card (additive; AdminLiveMap GPS code untouched); contract M1; held for owner go-ahead before push
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminLiveMap
 - added (7): code:src/AdminPanel.jsx#TRIP_ROUTE_CACHE, code:src/AdminPanel.jsx#MAX_TRIP_ROUTES_ON_MAP, code:src/AdminPanel.jsx#tripsOnMap, code:src/AdminPanel.jsx#useTripRoute, code:src/AdminPanel.jsx#tripPhase, code:src/AdminPanel.jsx#AdminTripRouteLine, code:src/AdminPanel.jsx#AdminTripDetailCard
+
+## 2026-11-04 -- Windows fix: the mic invariant loads src/speechInput.js through a file:// URL (a plain C:\ path breaks ESM import on Windows) and says 'run npm install' if the speech plugin is missing
+- changed (2): code:scripts/verifyInvariants.mjs#imports, code:scripts/verifyInvariants.mjs#checks
