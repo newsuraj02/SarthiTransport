@@ -139,3 +139,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-04 -- Realistic Indian 3 wheeler drawing (ThreeWheelerArt) in the same style as the rest of the set (owner 2026-11-04)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/vehicleArt.jsx#VEHICLE_ART_SPECS, code:src/vehicleArt.jsx#CategoryVehicleArt
 - added (1): code:src/vehicleArt.jsx#ThreeWheelerArt
+
+## 2026-11-04 -- 3 wheeler redrawn with real proportions and details: tall narrow cab, rounded nose + headlamp, mudguard, engine bay, exhaust, leaf spring, low cargo deck (owner 2026-11-04 'more realistic')
+- changed (3): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:src/vehicleArt.jsx#ThreeWheelerArt
