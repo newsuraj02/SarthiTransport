@@ -4,4 +4,8 @@
     <string name="title_activity_main">Apna Transport</string>
     <string name="package_name">com.apnatransport.app</string>
     <string name="custom_url_scheme">com.apnatransport.app</string>
+    <!-- Meta (Facebook) app-install ads: PASTE THE REAL VALUES HERE (Meta developer dashboard
+         > your app > Settings > Basic: "App ID"; Settings > Advanced > Security: "Client token"). -->
+    <string name="facebook_app_id">YOUR_FACEBOOK_APP_ID</string>
+    <string name="facebook_client_token">YOUR_FACEBOOK_CLIENT_TOKEN</string>
 </resources>

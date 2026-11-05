@@ -11,6 +11,15 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- Meta (Facebook) app-install ads (owner 2026-11-05). The Meta SDK starts itself
+             (facebook-core's content provider) and, with auto-logging on, reports the app
+             activation Meta uses to count an App Install. The real values are pasted in
+             res/values/strings.xml (facebook_app_id, facebook_client_token). -->
+        <meta-data android:name="com.facebook.sdk.ApplicationId" android:value="@string/facebook_app_id" />
+        <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token" />
+        <meta-data android:name="com.facebook.sdk.AutoInitEnabled" android:value="true" />
+        <meta-data android:name="com.facebook.sdk.AutoLogAppEventsEnabled" android:value="true" />
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"

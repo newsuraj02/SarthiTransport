@@ -604,6 +604,8 @@ kerning/ligatures on. Bold / italic / underline are NEVER removed -- no rule may
 `!important`. Layout measured before/after on six screens: 0 moved (1 element 1 px in Hindi). Not viewable in the sandbox (Google Fonts
 are not loaded there), so the real-font look is for the owner to confirm on a phone. Pinned in `verifyInvariants.mjs`.
 
+**Meta (Facebook) app-install ads (owner 2026-11-05 -- prepared, NOT built, NOT confirmed).** The Android app has the Meta SDK (`facebook-core` in `android/app/build.gradle`) and the `com.facebook.sdk.*` meta-data in `AndroidManifest.xml`, reading `facebook_app_id` / `facebook_client_token` from `res/values/strings.xml` -- PLACEHOLDERS (`YOUR_FACEBOOK_APP_ID` / `YOUR_FACEBOOK_CLIENT_TOKEN`) until the owner pastes the real ones. Auto-init + auto-logging only (the SDK's app activation is what Meta counts as an install); NO Java was added and no frozen GPS / ring file was touched. Ships with the NEXT native build. `meta-pages/terms.html` + `meta-pages/delete-data.html` are static pages (placeholder `YOUR_EMAIL`); the Privacy URL for Meta is the existing live `public/privacy.html`. Contract N1. Remember to declare Advertising ID use in Play Console (App content) and in the Data Safety form when this ships.
+
 **Working agreement.** Push automatically after build + invariants pass, EXCEPT
 GPS/notification-related changes — ask first (owner rule, 2026-10-23). After a
 push, give the deploy commands: `git checkout claude/app-from-document-njzc58 &&

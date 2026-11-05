@@ -112,6 +112,11 @@ dependencies {
     // not a website's web-analytics instance, which is why this goes
     // through the native SDK rather than firebase/analytics in JS.
     implementation "com.google.firebase:firebase-analytics"
+
+    // Meta (Facebook) SDK -- app-install ads (owner 2026-11-05). facebook-core is enough: it
+    // auto-initialises and logs the app activation Meta counts as an App Install. Needs the
+    // App ID / client token in res/values/strings.xml.
+    implementation "com.facebook.android:facebook-core:18.0.3"
     // Owner-reported real-device bug (2026-10-18): Accept from the full-
     // screen ring fails to reach MainActivity every single time when the
     // app was fully killed, landing on the home screen instead, even with

@@ -247,3 +247,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Owner 2026-11-05: removed the +2 vehicle-category rule from the ring/list eligibility; RING_CATEGORIES_ABOVE 2 -> 0 (functions/tripLock.js + src/App.jsx mirror): only the category the customer picked is rung
 - changed (10): app:RING_CATEGORIES_ABOVE, fns:escalateOneBooking, fn:onDirectRequestBroadcast, file:functions/tripLock.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/tripLock.js, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#RING_CATEGORIES_ABOVE, code:src/App.jsx#CustomerBooking
+
+## 2026-11-05 -- Owner 2026-11-05: Meta (Facebook) SDK for app-install ads -- facebook-core dependency, com.facebook.sdk meta-data in the manifest, placeholder App ID / client token in strings.xml (no frozen GPS/ring code touched)
+- changed (6): file:android/app/src/main/AndroidManifest.xml, code:CLAUDE.md, code:android/app/build.gradle, code:android/app/src/main/AndroidManifest.xml, code:android/app/src/main/res/values/strings.xml, code:docs/SYSTEM_CONTRACTS.md
