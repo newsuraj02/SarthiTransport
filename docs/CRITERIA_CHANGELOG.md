@@ -179,3 +179,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Owner 2026-11-04: map pinned (sticky 30vh) once Pickup+Drop are chosen; Advance day buttons pinned under it so they stay visible over the vehicle list
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-05 -- Owner 2026-11-04 (correcting my misreading, which pinned the map): map HIDDEN over the vehicle list (Current) and date step + list (Advance); Advance day buttons disappear once picked, with a date summary + Change
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking

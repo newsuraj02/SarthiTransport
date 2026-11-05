@@ -7753,6 +7753,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   const bookBarVisible = locationsReady && !sameLocation && nearbyDrivers.length > 0 && !typingField; // Owner 2026-11-04: ONLY with the vehicle list showing (never while a Pickup / Drop box has the cursor)
   // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted. The nearest of them (GPS on) carries its
   // "N min" pill (owner 2026-11-04: "bring back the N min on the map"); no vehicle is picked any more, so it is the nearest of ALL listed vehicles.
+  const mapHidden = advance ? placesReady : (locationsReady && !sameLocation); // owner 2026-11-04: no map over the vehicle list (Current) / the date step + list (Advance)
   const listStage = locationsReady && !sameLocation; // Pickup + Drop (+ date/time in Advance) done: the vehicle list is showing
   const mapEntries = !listStage ? null
     : nearbyDrivers;
@@ -7829,12 +7830,16 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           (inactive ones hidden). */}
       {/* Owner 2026-10-31: an evident line between the map and the form (3 px navy rule + a soft shadow below it).
           Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched.
-          Owner 2026-11-04 ("map disappears on the vehicle list / date selection"): once Pickup + Drop are chosen (placesReady) the map is PINNED to the top (sticky) so it
-          stays on screen while the list scrolls; before that it scrolls with the page as before (the keyboard needs the room). */}
-      <div data-map-divider className={placesReady ? "sticky top-0 z-30" : undefined} style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
-        <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height={placesReady ? "30vh" : "35vh"} lang={lang} onMapClick={onMapClick}
+          Owner 2026-11-04 ("the map at the top disappears on the vehicle selection list and reappears from the OTP screen onwards; in Advance it also disappears on the
+          date selection"): the map is HIDDEN, to give the whole screen to the list -- in Current from the moment the vehicle list shows (`listStage`), in Advance from the
+          moment Pickup + Drop are chosen (the date step and the list; `placesReady`). It is back while Pickup / Drop are being typed (so a map tap can still pick a
+          place) and on the OTP / ride screen, which has its own map. */}
+      {!mapHidden && (
+      <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
+        <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
           activeOnly={listStage} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
       </div>
+      )}
       {bookedMsg && (
         <div className="mx-5 mt-3 rounded-xl px-4 py-3 text-sm font-extrabold text-center anim-rise" style={{ background: "rgba(0,168,84,0.12)", border: `1.5px solid ${C.success}`, color: C.success }}>
           ✓ {lang === "en" ? "Your message has gone to drivers" : lang === "mr" ? "तुमचा संदेश ड्रायव्हर्सना पाठवला आहे" : "आपका संदेश ड्राइवरों को भेज दिया गया है"}
@@ -7930,11 +7935,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
 
       </div>
 
-      {/* Advance only: the three day buttons (owner 2026-11-04 -- date only, see ADVANCE_DAY_OFFSETS). They sit RIGHT UNDER the map and are pinned with it
-          (owner 2026-11-04: "Date selection disappears once the date is selected" -- they used to scroll away with the page), so the chosen day stays in view
-          while the vehicle list scrolls. A direct child of the page root (not of the Pickup/Drop form block) so `sticky` can stay pinned across the list. */}
-      {advance && placesReady && (
-        <div data-advance-days-pin className="sticky z-30 px-5 py-2" style={{ top: "calc(30vh + 3px)", background: C.bg }}>
+      {/* Advance only: the three day buttons (owner 2026-11-04 -- date only, see ADVANCE_DAY_OFFSETS). Owner 2026-11-04: "Date selection disappears once the date is
+          selected" -- they are shown ONLY until a day is picked (`!scheduleReady`); then the vehicle list takes the screen, with a one-line summary + "Change" (below). */}
+      {advance && placesReady && !scheduleReady && (
+        <div data-advance-days-pin className="px-5 pt-4">
           <div className="anim-rise" style={{
               padding: highlightField === "date" || highlightField === "time" ? 4 : 0,
               background: highlightField === "date" || highlightField === "time" ? C.marigold : "transparent",
@@ -7985,6 +7989,16 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           ) : (
             <>
               {returnFareNote}
+              {advance && scheduleReady && (
+                <div data-advance-date-summary className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: "rgba(0,82,204,0.08)", border: "1px solid rgba(0,82,204,0.2)" }}>
+                  <span className="text-sm font-extrabold min-w-0 truncate" style={{ color: "#0052CC" }}>
+                    📅 {(() => { const off = ADVANCE_DAY_OFFSETS.find((o) => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + o); return localDateKey(d) === advanceDate; }); const dt = new Date(`${advanceDate}T12:00:00`); return `${off ? `${advanceDayLabel(off, lang)} · ` : ""}${dt.toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { weekday: "short", day: "numeric", month: "short" })}`; })()}
+                  </span>
+                  <button type="button" data-advance-date-change onClick={() => { setAdvanceDate(""); setAdvanceTime(""); setSelectedCategory(null); setBookedMsg(false); }} className="shrink-0 py-1 text-xs font-bold underline underline-offset-2" style={{ color: "#0052CC" }}>
+                    {lang === "en" ? "Change date" : lang === "mr" ? "तारीख बदला" : "तारीख बदलें"}
+                  </button>
+                </div>
+              )}
               {changePlacesLink}
               {bookingError && (
                 <div className="rounded-lg p-2.5 text-xs font-bold text-center" style={{ background: C.safety, color: "#FFFFFF" }}>{bookingError}</div>
