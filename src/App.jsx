@@ -7759,7 +7759,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   }, [selectedCategory]);
   const selectedGroup = selectedCategory == null ? null : groupByCustomerListCategory(nearbyDrivers).find((g) => g.index === selectedCategory) || null;
   const selectedTopEntry = selectedGroup ? categoryTopEntry(selectedGroup.entries) : null;
-  const bookBarVisible = locationsReady && !sameLocation && nearbyDrivers.length > 0 && !typingField; // Owner 2026-11-04: ONLY with the vehicle list showing (never while a Pickup / Drop box has the cursor)
   // Map (owner brief 2026-10-29): once the vehicle list shows, only the vehicles in it are plotted. The nearest of them (GPS on) carries its
   // "N min" pill (owner 2026-11-04: "bring back the N min on the map"); no vehicle is picked any more, so it is the nearest of ALL listed vehicles.
   const mapHidden = advance ? placesReady : (locationsReady && !sameLocation); // owner 2026-11-04: no map over the vehicle list (Current) / the date step + list (Advance)
@@ -7830,7 +7829,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   const inputStyle = { background: C.paper, border: `1px solid ${C.line}`, color: C.ink };
 
   return (
-    <div className={bookBarVisible ? (returnBarVisible ? "pt-0 pb-44" : "pt-0 pb-28") : returnBarVisible ? "pt-0 pb-24" : "pt-0 pb-8"}>
+    <div className={returnBarVisible ? "pt-0 pb-24" : "pt-0 pb-8"}>
       {locationPermission && <LocationBanner permission={locationPermission.permission} onEnable={locationPermission.enable} lang={lang} context="customer" />}
       {/* Centers on the typed Pickup once it's resolved, not the customer's own live position -- a customer
           booking a load for a different part of town needs to see vehicles near the load's actual pickup point.
@@ -8091,6 +8090,17 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                       </div>
                     )}
                   </button>
+                  {isPicked && !typingField && (
+                    /* Owner 2026-11-04 ("I dont want the Book now button fixed ... keep it simple"): "Book now" is NOT a fixed bar any more -- it sits right BELOW the selected
+                       category card, and the other categories follow after it. It exists only while a category is selected. */
+                    <button type="button" data-book-now disabled={!canBook || !selectedTopEntry || !!sendingKey} onClick={() => selectedTopEntry && bookDriver(selectedTopEntry, selectedCategory)}
+                      className="w-full rounded-2xl py-4 font-extrabold text-base flex items-center justify-center gap-2"
+                      style={{ background: sendingKey ? C.inkSoft : "linear-gradient(135deg, #00A854, #00C26A)", color: "#FFFFFF", boxShadow: sendingKey ? "0 2px 6px rgba(15,27,45,0.12)" : "0 6px 14px rgba(0,168,84,0.28)" }}>
+                      {sendingKey
+                        ? <span className="inline-flex items-center gap-2"><Loader2 size={18} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
+                        : <>🚚 {lang === "en" ? "Book now" : lang === "mr" ? "आता बुक करा" : "अभी बुक करें"}{selectedTopEntry ? ` · ${fmt(selectedTopEntry.fare)}` : ""}</>}
+                    </button>
+                  )}
                   </React.Fragment>
                   );
                   })}
@@ -8109,21 +8119,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           </div>
           {returnFareNote}
           {changePlacesLink}
-        </div>
-      )}
-      {/* ONE fixed "Book now" bar (owner 2026-11-04). Fixed to the screen bottom (z-[25], like the Round trip bar, below the suggestion lists / menus / sheets);
-          when the Round trip bar is also showing it sits just above it. Books the tapped category at its top fare; greyed out until one is tapped. */}
-      {bookBarVisible && (
-        <div data-book-bar className="fixed left-0 right-0 z-[25] px-4 pt-1" style={{ bottom: returnBarVisible ? "calc(env(safe-area-inset-bottom, 0px) + 66px)" : 0, paddingBottom: returnBarVisible ? "6px" : "calc(env(safe-area-inset-bottom, 0px) + 8px)", pointerEvents: "none" }}>
-          <button type="button" data-book-now disabled={!canBook || !selectedTopEntry || !!sendingKey} onClick={() => selectedTopEntry && bookDriver(selectedTopEntry, selectedCategory)}
-            className="mx-auto max-w-sm w-full rounded-2xl py-4 font-extrabold text-base flex items-center justify-center gap-2"
-            style={{ pointerEvents: "auto", background: sendingKey ? C.inkSoft : selectedTopEntry ? "linear-gradient(135deg, #00A854, #00C26A)" : "#E5EAF2", color: sendingKey || selectedTopEntry ? "#FFFFFF" : "#9AA3B0", boxShadow: selectedTopEntry && !sendingKey ? "0 6px 14px rgba(0,168,84,0.28)" : "0 2px 6px rgba(15,27,45,0.12)" }}>
-            {sendingKey
-              ? <span className="inline-flex items-center gap-2"><Loader2 size={18} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
-              : selectedTopEntry
-                ? <>🚚 {lang === "en" ? "Book now" : lang === "mr" ? "आता बुक करा" : "अभी बुक करें"} · {fmt(selectedTopEntry.fare)}</>
-                : <>{lang === "en" ? "Book now — tap a category first" : lang === "mr" ? "आता बुक करा — आधी श्रेणी निवडा" : "अभी बुक करें — पहले कैटेगरी चुनें"}</>}
-          </button>
         </div>
       )}
       {/* Owner 2026-11-01: a FIXED horizontal box at the bottom with the "Round trip" checkbox (Current and Advance, one
