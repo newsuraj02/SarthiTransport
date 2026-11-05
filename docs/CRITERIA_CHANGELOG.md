@@ -230,3 +230,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Ride History card: separator between fare and distance
 - changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerHistory
+
+## 2026-11-05 -- ONE WEIGHT CATEGORY SYSTEM: category + kg labels everywhere (bookingCategoryText / vehicleCategoryText / formatKgLabel), booking weight = category limit
+- changed (14): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminTripDetailCard, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminCustomers, code:src/App.jsx#CustomerBooking, code:src/App.jsx#formatKgLabel, code:src/App.jsx#BookedVehiclePanel, code:src/App.jsx#ActiveRide, code:src/App.jsx#DriverHome
+- added (3): code:src/App.jsx#vehicleCategoryText, code:src/App.jsx#bookingCategoryIndex, code:src/App.jsx#bookingCategoryText

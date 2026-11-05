@@ -21,7 +21,7 @@ import {
   C, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError,
-  syncRouteDistance, formatTripKm, fareKmText, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
+  syncRouteDistance, formatTripKm, fareKmText, formatKgLabel, bookingCategoryText, vehicleCategoryText, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
@@ -125,7 +125,6 @@ function AdminTripDetailCard({ booking, driver, lang, onClose }) {
   const loc = driver?.lastKnownLocation && driver.lastKnownLocation.lat != null ? driver.lastKnownLocation : null;
   const target = phase === "toPickup" ? { lat: Number(booking.pickupLat), lng: Number(booking.pickupLng) } : phase === "returning" ? { lat: Number(booking.pickupLat), lng: Number(booking.pickupLng) } : { lat: Number(booking.dropLat), lng: Number(booking.dropLng) };
   const toGoKm = loc ? haversineKm(loc.lat, loc.lng, target.lat, target.lng) : null;
-  const weightKg = Number(booking.weight) || 0;
   const row = (label, value) => (value ? <div className="text-[11px] mb-0.5" style={{ color: C.inkSoft }}><b style={{ color: C.ink }}>{label}:</b> {value}</div> : null);
   const spec = driver?.vehicleSpec || {};
   const accepted = booking.acceptedAt?.toDate ? booking.acceptedAt.toDate() : null;
@@ -141,9 +140,9 @@ function AdminTripDetailCard({ booking, driver, lang, onClose }) {
       {row(T("Pickup", "पिकअप", "पिकअप"), booking.pickup)}
       {row(T("Drop", "ड्रॉप", "ड्रॉप"), booking.drop)}
       {row(T("Driver", "ड्राइवर", "ड्रायव्हर"), [booking.driverName, booking.driverMobile].filter(Boolean).join(" · "))}
-      {row(T("Vehicle", "गाड़ी", "गाडी"), [spec.vehicleName, spec.vehicleNumber, spec.capacityKg ? `${spec.capacityKg}kg` : ""].filter(Boolean).join(" · "))}
+      {row(T("Vehicle", "गाड़ी", "गाडी"), [spec.vehicleName, spec.vehicleNumber, spec.capacityKg ? vehicleCategoryText(spec.capacityKg, lang) : ""].filter(Boolean).join(" · "))}
       {row(T("Customer", "ग्राहक", "ग्राहक"), [booking.customerName, booking.customerMobile].filter(Boolean).join(" · "))}
-      {row(T("Weight", "वज़न", "वजन"), weightKg ? (weightKg >= 1000 ? `${weightKg / 1000} ton (${weightKg}kg)` : `${weightKg}kg`) : "")}
+      {row(T("Category", "श्रेणी", "श्रेणी"), bookingCategoryText(booking, lang))}
       {row(T("Distance", "दूरी", "अंतर"), booking.distance ? formatTripKm(booking.distance, lang) : "")}
       {row(T("Fare", "भाड़ा", "भाडे"), booking.fare ? `${fmt(booking.fare)}${booking.returnTrip && booking.oneWayFare != null && booking.returnFare != null ? ` (${fmt(booking.oneWayFare)} + ${T("return", "वापसी", "परतीचे")} ${fmt(booking.returnFare)})` : ""}` : "")}
       {row(T("Accepted", "स्वीकार किया", "स्वीकारले"), accepted ? accepted.toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "")}
@@ -1126,7 +1125,7 @@ function AdminFleet({ drivers, customers, bookings, tripLog, expenses, minWallet
                             )}
                             <div className="text-[11px] mb-2" style={{ color: C.ink }}>
                               <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{dr.vehicleSpec.vehicleNumber || "—"}</span><br />
-                              <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {dr.vehicleSpec.capacityKg ? `${dr.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} · {dr.vehicleSpec.length || "—"}×{dr.vehicleSpec.width || "—"}×{dr.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
+                              <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {dr.vehicleSpec.capacityKg ? vehicleCategoryText(dr.vehicleSpec.capacityKg, lang) : "—"} · {dr.vehicleSpec.length || "—"}×{dr.vehicleSpec.width || "—"}×{dr.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
                             </div>
                             <button onClick={() => startApprovalEdit(dr)} className="text-[11px] font-bold underline mb-1" style={{ color: C.navy }}>
                               {lang === "en" ? "Edit details" : lang === "mr" ? "माहिती बदला" : "विवरण बदलें"}
@@ -2609,7 +2608,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                 style={{ ...inputStyle, borderColor: tier ? C.navy : C.marigoldDeep, background: tier ? C.bg : "rgba(239,108,26,0.08)" }}>
                 {tier ? (
                   <span className="min-w-0">
-                    <span className="block font-black truncate">{tier.weightLabel}</span>
+                    <span className="block font-black truncate">{formatKgLabel(tier.maxKg, lang)}{customerCategoriesForTier(tier.maxKg, fareTiers).length ? ` · ${customerCategoriesForTier(tier.maxKg, fareTiers).map((i) => customerListCategoryName(i, lang)).join(" / ")}` : ""}</span>
                     <span className="block text-[11px] font-semibold truncate" style={{ color: C.inkSoft }}>{tier.label}</span>
                   </span>
                 ) : (
@@ -2863,7 +2862,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               {lightTiers.map((t) => (
                 <button key={t.maxKg} onClick={() => { setSelectedMaxKg(t.maxKg); setKgPickerOpen(false); }}
                   className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedMaxKg === t.maxKg ? 2 : 1.5}px solid ${selectedMaxKg === t.maxKg ? C.navy : C.line}`, background: selectedMaxKg === t.maxKg ? "rgba(0,82,204,0.08)" : C.bg }}>
-                  <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{t.weightLabel}</span>
+                  <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{formatKgLabel(t.maxKg, lang)}{customerCategoriesForTier(t.maxKg, fareTiers).length ? ` · ${customerCategoriesForTier(t.maxKg, fareTiers).map((i) => customerListCategoryName(i, lang)).join(" / ")}` : ""}</span>
                   <span className="text-xs font-semibold" style={{ color: C.inkSoft }}>{t.label}</span>
                 </button>
               ))}
@@ -2873,7 +2872,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               {heavyTiers.map((t) => (
                 <button key={t.maxKg} onClick={() => { setSelectedMaxKg(t.maxKg); setKgPickerOpen(false); }}
                   className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedMaxKg === t.maxKg ? 2 : 1.5}px solid ${selectedMaxKg === t.maxKg ? C.navy : C.line}`, background: selectedMaxKg === t.maxKg ? "rgba(0,82,204,0.08)" : C.bg }}>
-                  <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{t.weightLabel}</span>
+                  <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{formatKgLabel(t.maxKg, lang)}{customerCategoriesForTier(t.maxKg, fareTiers).length ? ` · ${customerCategoriesForTier(t.maxKg, fareTiers).map((i) => customerListCategoryName(i, lang)).join(" / ")}` : ""}</span>
                   <span className="text-xs font-semibold" style={{ color: C.inkSoft }}>{t.label}</span>
                 </button>
               ))}
@@ -3362,7 +3361,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             {d.vehicleSpec && (
               <div className="text-[11px] mb-2" style={{ color: C.ink }}>
                 <b>{lang === "en" ? "Vehicle number" : lang === "mr" ? "गाडी नंबर" : "गाड़ी नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.vehicleSpec.vehicleNumber || "—"}</span><br />
-                <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? `${d.vehicleSpec.capacityKg} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}` : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
+                <b>{lang === "en" ? "Capacity/size" : lang === "mr" ? "क्षमता/साइझ" : "क्षमता/साइज़"}:</b> {d.vehicleSpec.capacityKg ? vehicleCategoryText(d.vehicleSpec.capacityKg, lang) : "—"} · {d.vehicleSpec.length || "—"}×{d.vehicleSpec.width || "—"}×{d.vehicleSpec.height || "—"} {lang === "en" ? "ft" : lang === "mr" ? "फूट" : "फीट"}
               </div>
             )}
             {!d.vehicleSpec && !d.docs && <p className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "No extra data available for this driver (demo driver)." : lang === "mr" ? "या ड्रायव्हरचा कोणताही अतिरिक्त डेटा उपलब्ध नाही (डेमो ड्रायव्हर)." : "इस ड्राइवर का कोई अतिरिक्त डेटा उपलब्ध नहीं है (डेमो ड्राइवर)।"}</p>}
@@ -3654,7 +3653,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                           <span className="text-[11px] font-bold truncate" style={{ color: C.ink }}>{latestRide.pickup} → {latestRide.drop}</span>
                         </div>
                         <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
-                          {latestRide.weight} {lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}
+                          {bookingCategoryText(latestRide, lang)}
                         </div>
                         <div className="text-[10px] flex items-center justify-between mt-1">
                           <span style={{ color: C.inkSoft }}>{latestRide.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${latestRide.driverName}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(latestRide)}</span>
@@ -3687,7 +3686,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: sm.color, background: sm.bg }}>{sm.label}</span>
                             </div>
                             <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft }}>
-                              {b.weight} {lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}
+                              {bookingCategoryText(b, lang)}
                             </div>
                             <div className="text-[10px] flex items-center justify-between mt-1">
                               <span style={{ color: C.inkSoft }}>{b.driverName ? `${lang === "en" ? "Driver" : lang === "mr" ? "ड्रायव्हर" : "ड्राइवर"}: ${b.driverName}` : (lang === "en" ? "No driver assigned" : lang === "mr" ? "ड्रायव्हर निश्चित नाही" : "ड्राइवर तय नहीं")} · {bookingDate(b)}</span>

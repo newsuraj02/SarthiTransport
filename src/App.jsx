@@ -4259,6 +4259,30 @@ function customerListCategoryLabel(index, lang) {
   if (index >= CUSTOMER_LIST_CATEGORY_KG.length) return lang === "en" ? `Above ${last} kg` : lang === "mr" ? `${last} किग्रा पेक्षा जास्त` : `${last} किग्रा से ऊपर`;
   return lang === "en" ? `${CUSTOMER_LIST_CATEGORY_KG[index]} kg` : `${CUSTOMER_LIST_CATEGORY_KG[index]} किग्रा`;
 }
+// ONE VEHICLE-WEIGHT CATEGORY SYSTEM EVERYWHERE (owner 2026-11-05: "match the vehicle weight categories everywhere consistently"). The customer list's categories
+// (CUSTOMER_LIST_CATEGORY_KG + the names above) are THE categories; every screen that names a vehicle's / booking's weight class -- the customer's ride screen, the
+// driver's load card and trip, Admin's trip card, driver details, rate calculator and saved routes -- shows it as "<category name> · <N kg>" through these helpers,
+// always in kg (never "1.2 ton" / "1200kg" / a hand-typed tier label).
+export function vehicleCategoryText(capacityKg, lang) {
+  const kg = Number(capacityKg) || 0;
+  if (kg <= 0) return "";
+  const i = customerListCategoryIndex(kg);
+  return `${customerListCategoryName(i, lang)} \u00b7 ${customerListCategoryLabel(i, lang)}`;
+}
+// The category index a BOOKING was made for: its `listCategoryKg` (the picked category's limit), else an old booking's `listCategory` (an index into the previous
+// table), else the vehicle tier it asked for; null when none is known.
+export function bookingCategoryIndex(b) {
+  const lim = Number(b && b.listCategoryKg);
+  if (lim > 0) return lim >= 999999 ? CUSTOMER_LIST_CATEGORY_KG.length : customerListCategoryIndex(lim);
+  if (b && b.listCategory != null) { const old = LEGACY_CUSTOMER_LIST_CATEGORY_KG[b.listCategory]; return old ? customerListCategoryIndex(old) : CUSTOMER_LIST_CATEGORY_KG.length; }
+  const tier = Number(b && b.tierMaxKg);
+  return tier > 0 ? customerListCategoryIndex(tier) : null;
+}
+export function bookingCategoryText(b, lang) {
+  const i = bookingCategoryIndex(b);
+  if (i == null) return formatKgLabel(b && b.weight, lang) || "";
+  return `${customerListCategoryName(i, lang)} \u00b7 ${customerListCategoryLabel(i, lang)}`;
+}
 // Splits an already-ordered list of entries ({ capacityKg }) into category groups, light -> heavy, KEEPING the incoming order inside each group
 // (so GPS-on first, then nearest, still holds within a category). Empty categories are not returned.
 function groupByCustomerListCategory(entries) {
@@ -7875,7 +7899,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     // (Firestore's local echo would otherwise swap this screen out instantly).
     setTimeout(() => {
     const err = requestByCategory({
-      pickup, drop, tierMaxKg: entry.fareTierMaxKg, listCategory: categoryIndex, listCategoryKg: customerListCategoryLimitKg(categoryIndex), customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
+      pickup, drop, tierMaxKg: entry.fareTierMaxKg, listCategory: categoryIndex, listCategoryKg: customerListCategoryLimitKg(categoryIndex), customerWeight: customerListCategoryLimitKg(categoryIndex), weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       pickupPlaceId, dropPlaceId, returnTrip,
@@ -8282,17 +8306,12 @@ function findBookingDriver(drivers, b) {
   return b.driverName ? drivers.find((d) => d.name === b.driverName) || null : null;
 }
 
-// "1250 किग्रा" below a tonne, "1.5 टन" from a tonne up -- the same unit a
-// truck owner would say out loud.
-function formatKgLabel(kg, lang) {
+// A weight as "1250 kg" / "1250 किग्रा" -- ALWAYS kilograms, exactly like the category chip on the vehicle list (owner 2026-11-05: no "1.2 ton" here and "1200kg" there).
+export function formatKgLabel(kg, lang) {
   const n = Number(kg);
   if (!n || n <= 0) return null;
-  if (n >= FARE_TIER_MAX_KG_UNCAPPED) return lang === "en" ? "35+ tonnes" : "35+ टन";
-  if (n >= 1000) {
-    const t = Math.round((n / 1000) * 10) / 10;
-    return `${t} ${lang === "en" ? "ton" : "टन"}`;
-  }
-  return `${Math.round(n)} ${lang === "en" ? "kg" : lang === "mr" ? "किलो" : "किग्रा"}`;
+  if (n >= FARE_TIER_MAX_KG_UNCAPPED) return customerListCategoryLabel(CUSTOMER_LIST_CATEGORY_KG.length, lang);
+  return `${Math.round(n)} ${lang === "en" ? "kg" : "किग्रा"}`;
 }
 
 // Customer's "vehicle booked" panel (owner request 2026-10-13): one card
@@ -8336,8 +8355,9 @@ function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
   const tiles = [
     { icon: <Navigation size={14} color={C.navy} />, label: liveCaption, value: liveLabel, strong: true },
     { icon: <IndianRupee size={14} color={C.navy} />, label: T("Fare", "भाडे", "भाड़ा"), value: b.fare ? fmt(b.fare) : "—", strong: true },
-    { icon: <Truck size={14} color={C.navy} />, label: T("Capacity", "क्षमता", "क्षमता"), value: formatKgLabel(capacityKg, lang) || "—" },
-    { icon: <Weight size={14} color={C.navy} />, label: b.weightIsCapacity ? T("Vehicle capacity", "गाड़ी की क्षमता", "गाडीची क्षमता") : T("Your load", "तुमचे वजन", "आपका वज़न"), value: formatKgLabel(b.weight, lang) || "—" },
+    { icon: <Truck size={14} color={C.navy} />, label: T("Category", "श्रेणी", "श्रेणी"), value: bookingCategoryText(b, lang) || "—" },
+    { icon: <Weight size={14} color={C.navy} />, label: T("Vehicle capacity", "गाड़ी की क्षमता", "गाडीची क्षमता"), value: formatKgLabel(capacityKg, lang) || "—" },
+    ...(b.weightIsCapacity ? [] : [{ icon: <Weight size={14} color={C.navy} />, label: T("Your load", "तुमचे वजन", "आपका वज़न"), value: formatKgLabel(b.weight, lang) || "—" }]),
   ];
 
   return (
@@ -8474,9 +8494,9 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
               {lang === "en" ? `Ringing on ${ringCount} driver phone${b.ringDeliveredCount > 1 ? "s" : ""}` : lang === "mr" ? `${ringCount} ड्रायव्हरच्या फोनवर घंटी वाजत आहे` : `${ringCount} ड्राइवरों के फ़ोन पर घंटी बज रही है`}
             </div>
           )}
-          {!noDriverYet && (formatKgLabel(b.weight, lang) || b.distance != null) && (
+          {!noDriverYet && (bookingCategoryText(b, lang) || b.distance != null) && (
             <div className="text-xs font-bold mt-1" style={{ color: C.inkSoft }}>
-              {[formatKgLabel(b.weight, lang), b.distance != null ? formatTripKm(b.distance, lang) : null].filter(Boolean).join(" · ")}
+              {[bookingCategoryText(b, lang), b.distance != null ? formatTripKm(b.distance, lang) : null].filter(Boolean).join(" · ")}
             </div>
           )}
         </div>
@@ -10287,7 +10307,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-2">
                   <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatTripKm(b.distance, lang)}</span>
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{b.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{bookingCategoryText(b, lang)}</span>
                 </div>
                 {b.fare != null && (
                   <div className="text-center rounded-lg py-2.5 mb-3" style={{ background: C.metallicGold }}>
@@ -10380,7 +10400,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
               </div>
               <div className="text-right shrink-0">
                 {myTrip.fare ? <div className="text-base font-black" style={{ color: C.ink }}>{fmt(myTrip.fare)}</div> : null}
-                {formatKgLabel(myTrip.weight, lang) && <div className="text-xs font-bold" style={{ color: C.inkSoft }}>{formatKgLabel(myTrip.weight, lang)}</div>}
+                {bookingCategoryText(myTrip, lang) && <div className="text-xs font-bold" style={{ color: C.inkSoft }}>{bookingCategoryText(myTrip, lang)}</div>}
               </div>
             </div>
             {myTrip.customerMobile && (
