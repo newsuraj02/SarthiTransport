@@ -176,6 +176,18 @@ The machine enforcement already exists and covers this: `npm run verify:invarian
 (and the invariant "CUSTOMER BOOKING UI IS FROZEN" fails if this section is removed). Do not "accept" a change here on your own initiative; if a change in
 ANOTHER area (fares, ring, admin) happens to touch these blocks, work around them or leave them exactly as they are.
 
+## Fare, distance and vehicle categories — FROZEN, do not touch (owner 2026-11-05)
+
+The owner, after the consistency work of 2026-11-05: **"Now, I want to freeze these too and leave it untouched unless I ask you to make changes."**
+Same rule as GPS, the ring and the customer booking UI: no unsolicited changes. A request from the owner that names a change here is the permission to make
+THAT change only; a NEW bug report is permission to investigate and fix it. Known-good version: commit `0589294` (2026-11-05).
+
+What is frozen (the detailed rules are the paragraphs "ONE FARE EVERYWHERE" and "ONE FARE + ONE DISTANCE, EVERYWHERE" in the "Verified-working behavior" section):
+- FARE: one number everywhere -- `buildRouteFareTable` / `categoryRouteFare` / `calculateFare` (incl. market change and live diesel), stored on the booking and shown unchanged by the customer list, booking, driver, trip, invoice, history and Admin; the Admin Rate Calculator reads the same table; nothing may re-price for one audience.
+- DISTANCE: `syncRouteDistance` + `formatTripKm` / `tripKmRounded` / `fareKmText` -- the Main screen's "Distance: N km" everywhere.
+- VEHICLE CATEGORIES: the 15 categories -- `CUSTOMER_LIST_CATEGORY_KG` + `CUSTOMER_LIST_CATEGORY_NAMES` (en/hi/mr, incl. "20 ton container" at 20000 kg), the server's `RING_CATEGORY_MAX_KG`, `bookingCategoryText` / `vehicleCategoryText` / `formatKgLabel` (always "<name> · <N kg>"), and the Admin calculator's picker (exactly these 15, one row each).
+Do not add, rename, re-order or re-weigh a category, change a fare/distance formula or rounding, or add another fare/distance calculation unless the owner asks. The machine enforcement covers it: `npm run verify:invariants` fails if these blocks change without `npm run criteria:accept` (and the invariant "FARE, DISTANCE AND VEHICLE CATEGORIES ARE FROZEN" fails if this section is removed). Do not "accept" a change here on your own initiative.
+
 ## Don't trigger a new native build/versionCode unless it's mandatory
 
 The user has explicitly said too many versionCodes were built in a short
