@@ -223,3 +223,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-05 -- ONE FARE + ONE DISTANCE everywhere: syncRouteDistance + formatTripKm used by customer/Admin/driver; Return Load no longer changes the fare
 - changed (14): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminTripDetailCard, code:src/AdminPanel.jsx#AdminSavedRoutes, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/App.jsx#CustomerBooking, code:src/App.jsx#BookedVehiclePanel, code:src/App.jsx#ActiveRide, code:src/App.jsx#CustomerHistory, code:src/App.jsx#DriverHome, code:src/App.jsx#SetFareForm, code:src/App.jsx#App
 - added (3): code:src/App.jsx#syncRouteDistance, code:src/App.jsx#tripKmRounded, code:src/App.jsx#formatTripKm
+
+## 2026-11-05 -- Fare + distance shown in every booking list row (Advance lists, Admin lists, history) via fareKmText
+- changed (9): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminBookings, code:src/App.jsx#CustomerHistory, code:src/App.jsx#CustomerApp, code:src/App.jsx#DriverHistory, code:src/App.jsx#DriverApp
+- added (1): code:src/App.jsx#fareKmText
+
+## 2026-11-05 -- Ride History card: separator between fare and distance
+- changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerHistory

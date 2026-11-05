@@ -2472,6 +2472,12 @@ export function syncRouteDistance(pickupCoords, dropCoords, mapsReady, setDistan
     .catch((e) => console.error(`[${tag}]`, e));
 }
 export function tripKmRounded(km) { return Math.round(Number(km) || 0); }
+// "₹687 · 12 km" -- a booking's fare and trip distance as EVERY list row shows them (owner 2026-11-05: Round trip / Advance / history rows carry the same rate and
+// distance the customer was given). Reads only the booking's stored `fare` and `distance`.
+export function fareKmText(b, lang) {
+  if (!b) return "";
+  return [b.fare != null && b.fare !== "" ? fmt(b.fare) : null, b.distance != null ? formatTripKm(b.distance, lang) : null].filter(Boolean).join(" · ");
+}
 export function formatTripKm(km, lang) {
   if (km == null || !Number.isFinite(Number(km))) return null;
   return `${tripKmRounded(km)} ${lang === "en" ? "km" : "किमी"}`;
@@ -8650,6 +8656,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
               <div>
                 <div className="text-[9px] font-semibold" style={{ color: C.inkSoft }}>{lang === "en" ? "Transaction Amount" : lang === "mr" ? "व्यवहार रक्कम" : "लेन-देन राशि"}</div>
                 <span className="text-lg font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{b.fare ? fmt(b.fare) : "—"}</span>
+                {b.distance != null && <span className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>{" · "}{formatTripKm(b.distance, lang)}</span>}
               </div>
               {b.status === "Completed" && (
                 <div className="flex items-center gap-3">
@@ -9302,6 +9309,7 @@ function CustomerApp({ bookings, requestByCategory, drivers, vehicleTypes, cance
                         <RideTypeBanner booking={ab} lang={lang} />
                         <RouteLine pickup={ab.pickup} drop={ab.drop} lang={lang} />
                         <div className="text-xs mt-2" style={{ color: C.inkSoft }}>{lang === "en" ? `Driver assigned — ${ab.driverName}` : lang === "mr" ? `ड्रायव्हर निश्चित झाला — ${ab.driverName}` : `ड्राइवर तय हो गया — ${ab.driverName}`}</div>
+                        {fareKmText(ab, lang) && <div data-fare-km className="text-sm font-extrabold mt-1" style={{ color: C.navy, fontFamily: monoFont }}>{fareKmText(ab, lang)}</div>}
                       </button>
                     ))}
                   </div>
@@ -10965,7 +10973,7 @@ function DriverHistory({ tripLog, driver, lang }) {
                 actually happened to the wallet. */}
             <div className="flex items-center justify-between mt-1">
               <div className="text-[10px]" style={{ color: C.inkSoft }}>
-                {lang === "en" ? `Fare ${fmt(t.fare)}` : lang === "mr" ? `भाडे ${fmt(t.fare)}` : `भाड़ा ${fmt(t.fare)}`}
+                {lang === "en" ? `Fare ${fmt(t.fare)}` : lang === "mr" ? `भाडे ${fmt(t.fare)}` : `भाड़ा ${fmt(t.fare)}`}{t.distance != null ? ` · ${formatTripKm(t.distance, lang)}` : ""}
               </div>
               {t.status === "Cancelled" ? null : t.rating ? <div className="text-[11px] font-semibold" style={{ color: C.marigoldDeep }}>{stars(t.rating)}</div> : <div className="text-[10px]" style={{ color: C.inkSoft }}>{t.status === "Ongoing" ? (lang === "en" ? "In progress" : lang === "mr" ? "चालू" : "चालू") : (lang === "en" ? "Rating pending" : lang === "mr" ? "रेटिंग बाकी" : "रेटिंग बाकी")}</div>}
             </div>
@@ -12194,6 +12202,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
                       <RideTypeBanner booking={ab} lang={lang} />
                       <div className="pb-2.5" style={{ color: C.ink, borderBottom: `2px solid ${C.navy}` }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{ab.pickup}</span></div>
                       <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}: </span><span className="text-base font-normal">{ab.drop}</span></div>
+                      {fareKmText(ab, lang) && <div data-fare-km className="text-sm font-extrabold mt-1.5" style={{ color: C.navy, fontFamily: monoFont }}>{fareKmText(ab, lang)}</div>}
                     </button>
                   ))}
                 </div>

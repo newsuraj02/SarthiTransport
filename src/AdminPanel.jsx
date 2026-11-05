@@ -21,7 +21,7 @@ import {
   C, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError,
-  syncRouteDistance, formatTripKm, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
+  syncRouteDistance, formatTripKm, fareKmText, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
@@ -1573,7 +1573,7 @@ function AdminBookings({ bookings, tripLog, lang }) {
       renderItem: (t) => (
         <div key={t.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={t.pickup} drop={t.drop} lang={lang} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fmt(t.fare)} · {statusMeta[t.status]?.label || t.status}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{t.driverName || "—"} · {fareKmText(t, lang)} · {statusMeta[t.status]?.label || t.status}</div>
         </div>
       ),
     },
@@ -1585,7 +1585,7 @@ function AdminBookings({ bookings, tripLog, lang }) {
       renderItem: (b) => (
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : lang === "mr" ? "कोणताही ड्रायव्हर निश्चित झाला नाही" : "कोई ड्राइवर तय नहीं हुआ")}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.driverName || (lang === "en" ? "No driver assigned" : lang === "mr" ? "कोणताही ड्रायव्हर निश्चित झाला नाही" : "कोई ड्राइवर तय नहीं हुआ")}{fareKmText(b, lang) ? ` · ${fareKmText(b, lang)}` : ""}</div>
         </div>
       ),
     },
@@ -1597,7 +1597,7 @@ function AdminBookings({ bookings, tripLog, lang }) {
       renderItem: (b) => (
         <div key={b.id} className="rounded-lg p-2.5" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
           <RouteLine pickup={b.pickup} drop={b.drop} lang={lang} returnTrip={!!b.returnTrip} />
-          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}</div>
+          <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.scheduledFor} · {b.driverName || (lang === "en" ? "Awaiting bids" : lang === "mr" ? "बोलीची वाट पाहत आहे" : "बोली का इंतज़ार")}{fareKmText(b, lang) ? ` · ${fareKmText(b, lang)}` : ""}</div>
         </div>
       ),
     },
