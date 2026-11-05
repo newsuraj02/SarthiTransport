@@ -342,7 +342,7 @@ async function sendDirectRequestRingAlert(token, load, bookingId, driverMobile, 
 // everyone who already got it.
 //
 // WHO is rung is decided by functions/tripLock.js (evaluateNewLoadDriver) -- duty on, KYC approved, not blocked, not on a trip, the picked
-// vehicle category or the 2 above it, within 30 km (Current) / 50 km (Advance) of the pickup by the last known location; no GPS-on / weight condition (owner 2026-11-04). The old DIRECT_REQUEST_RADIUS_KM,
+// vehicle category only (owner 2026-11-05: no "+2 above"), within 30 km (Current) / 50 km (Advance) of the pickup by the last known location; no GPS-on / weight condition (owner 2026-11-04). The old DIRECT_REQUEST_RADIUS_KM,
 // BROADCAST_WEIGHT_HEADROOM_KG and BROADCAST_LOCATION_STALE_MS constants were removed with that rule.
 // ---- घंटी पहुँची? (delivery receipt + automatic re-ring), 2026-10-13 ----
 // Uber-style: the server doesn't just fire the push and hope. Every
@@ -415,7 +415,7 @@ exports.onDirectRequestBroadcast = onDocumentCreated(
     driversSnap.forEach((doc) => {
       const driver = doc.data();
       const tag = `${doc.id} (${driver.name || "?"})`;
-      // WHO GETS THE BELL (owner 2026-11-04): duty ON, KYC approved, not blocked, not on a trip, the picked vehicle category or the 2 above it, within
+      // WHO GETS THE BELL (owner 2026-11-04): duty ON, KYC approved, not blocked, not on a trip, the picked vehicle category only (owner 2026-11-05: no "+2 above"), within
       // 30 km / 50 km of the pickup by the last known location (GPS being off does not matter; never-located is not rung); no weight condition. One rule for this ring and the later
       // rounds: functions/tripLock.js evaluateNewLoadDriver.
       const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
@@ -524,7 +524,7 @@ exports.onBookingTaken = onDocumentUpdated("bookings/{bookingId}", async (event)
 
 // ---------------- Nearby-driver escalation (new, 2026-10-19) ----------------
 // Owner spec (developer guide, Step 15): onDirectRequestBroadcast above
-// already pings every eligible driver (duty on, picked category +2: functions/tripLock.js)
+// already pings every eligible driver (duty on, picked category only: functions/tripLock.js)
 // (30km) the instant a booking is created, with no duty-on filter (an
 // earlier deliberate choice -- see its own comment). This is a DELIBERATE
 // SECOND NUDGE, not a search for new territory: once a booking has sat
@@ -574,7 +574,7 @@ async function escalateOneBooking(bookingId, load, tierIndex) {
     const driver = doc.data();
     const tag = `${doc.id} (${driver.name || "?"})`;
     if (alreadyAlerted.has(doc.id)) { skipLog.push(`${tag}: already alerted for this booking`); return; }
-    // Same rule as the first ring (functions/tripLock.js): duty on, approved, not blocked, not on a trip, the picked category or the 2 above.
+    // Same rule as the first ring (functions/tripLock.js): duty on, approved, not blocked, not on a trip, the picked category only.
     // Same radius as the first ring (owner 2026-11-04), so a later round reaches anyone who has become eligible since the first ring
     // (went on duty, came inside the radius, finished a trip) and was not alerted yet.
     const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];

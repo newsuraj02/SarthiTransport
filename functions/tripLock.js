@@ -10,10 +10,10 @@
  *   - KYC is Approved and the driver is not blocked.
  *   - The driver is not on a trip (a running trip holds the driver until End Trip / Cancelled -- hasLoadConflict, the same availability
  *     rule the customer list uses).
- *   - The driver's vehicle CATEGORY is the one the customer picked, or one of the next RING_CATEGORIES_ABOVE categories above it.
+ *   - The driver's vehicle CATEGORY is the one the customer picked, (RING_CATEGORIES_ABOVE = 0: owner 2026-11-05 removed the "+2 above"; it is only that category).
  *     The categories are the SAME ones the customer's vehicle list shows (owner 2026-11-04): 500 / 750 / 1200 / 1700 / 2500 / 5000 / 7500 /
  *     9000 / 12000 / 16000 / 20000 / 32000 kg + "above 32000 kg". The customer taps a category (never one driver) and EVERY vehicle in it
- *     (and the 2 above) is rung; the first driver to accept gets the trip. A booking carries `listCategoryKg` (the picked category's weight limit; an older booking only `listCategory`, an index into the previous table);
+ *     (ONLY that category, owner 2026-11-05) is rung; the first driver to accept gets the trip. A booking carries `listCategoryKg` (the picked category's weight limit; an older booking only `listCategory`, an index into the previous table);
  *     an older booking without either falls back to the category of its tierMaxKg / weight.
  *   - The driver is WITHIN RING_RADIUS_KM of the pickup -- 30 km for a Current booking, 50 km for an Advance one (the booking has `scheduledFor`) --
  *     measured from the driver's LAST KNOWN location however old (owner 2026-11-04: the same radius as the customer's vehicle list). GPS being off
@@ -30,7 +30,7 @@ const RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 3500, 5000, 7500, 9000
 // The category table BEFORE 3500 kg and 25000 kg were added (2026-11-04). A booking made by the old app carries only `listCategory` = an index into THIS
 // table, so it is translated through it (to a weight limit) rather than read against the new table, which would shift it by one or two categories.
 const LEGACY_RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
-const RING_CATEGORIES_ABOVE = 2;
+const RING_CATEGORIES_ABOVE = 0; // owner 2026-11-05: ring ONLY the category the customer picked (was 2 above)
 // MIRRORS CURRENT_BID_RADIUS_KM / ADVANCE_BID_RADIUS_KM in src/App.jsx (an invariant compares them) -- the same radius the customer's list uses.
 const RING_RADIUS_KM = { current: 30, advance: 50 };
 

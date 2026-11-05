@@ -1380,12 +1380,12 @@ export function vehicleForWeight(weightKg, tiers = DEFAULT_FARE_TIERS) {
 
 // WHO IS RUNG / SEES a new category-based request (owner 2026-11-04, replacing the old GPS-fix + weight-window rule): a driver whose
 // DUTY IS ON, KYC approved, not blocked, not on a trip, whose vehicle category is the one the customer picked or one of the next
-// RING_CATEGORIES_ABOVE categories above it, and who is WITHIN CURRENT_BID_RADIUS_KM (30) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
+// RING_CATEGORIES_ABOVE (= 0, owner 2026-11-05: ONLY that category) categories above it, and who is WITHIN CURRENT_BID_RADIUS_KM (30) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
 // of the pickup by the LAST KNOWN location however old (GPS off / stale does not matter; never-located cannot be placed -> not rung).
 // MIRRORS functions/tripLock.js (evaluateNewLoadDriver) -- an invariant compares the two on hundreds of random drivers.
-const RING_CATEGORIES_ABOVE = 2;
+const RING_CATEGORIES_ABOVE = 0; // owner 2026-11-05: ring ONLY the category the customer picked (was 2 above)
 // The ring categories ARE the customer's vehicle-list categories (CUSTOMER_LIST_CATEGORY_KG, owner 2026-11-04): the customer taps a category and
-// every vehicle in it (and the 2 above) is rung. Index of the category a vehicle of this capacity belongs to; -1 = unknown capacity.
+// every vehicle in it (ONLY that category, owner 2026-11-05) is rung. Index of the category a vehicle of this capacity belongs to; -1 = unknown capacity.
 function ringCategoryIndexOfCapacity(capacityKg) {
   const kg = Number(capacityKg) || 0;
   if (kg <= 0) return -1;
@@ -7814,7 +7814,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   ) : null;
 
   // CATEGORY BOOKING (owner 2026-11-04): the customer taps a capacity category, then presses the ONE fixed "Book now" bar; nothing is picked card by card.
-  // It rings every vehicle in that category (and the 2 above, server rule A6) and the first driver to accept gets the trip. The category's fare is its
+  // It rings every vehicle in that category (only that category, server rule A6) and the first driver to accept gets the trip. The category's fare is its
   // TOP fare (the dearest vehicle in it on this route), so nobody in it is paid below their own tier; that vehicle's tier / capacity / return fare go on the booking.
   const categoryTopEntry = (entries) => entries.reduce((best, e) => (!best || e.fare > best.fare || (e.fare === best.fare && e.capacityKg > best.capacityKg) ? e : best), null);
   // "Change pickup / drop" (owner 2026-10-31): sits UNDER the "Tap a vehicle" line (or the date/time hint / the
@@ -8083,7 +8083,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           eligible-driver list straight away. Every real, currently eligible driver near Pickup is
           listed with their own KYC vehicle photo, category label, capacity and fare (see nearbyDrivers), grouped under the
           capacity categories (owner 2026-11-04). The vehicle rows are information only -- nobody picks a single driver. The customer taps a category
-          and then presses the ONE fixed "Book now" bar (see bookDriver) that sends the request to every vehicle in that category (and the 2 above)
+          and then presses the ONE fixed "Book now" bar (see bookDriver) that sends the request to every vehicle in that category (ONLY that category, owner 2026-11-05)
           at the category's top fare, immediately (no confirmation sheet); that same bar becomes "Sending request..." while it goes out. */}
       {locationsReady && (
         <div className="px-5 pt-3 pb-4 space-y-2.5">
