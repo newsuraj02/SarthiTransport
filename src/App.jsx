@@ -2204,6 +2204,14 @@ export function customerCategoriesForTier(tierMaxKg, tiers) {
   for (let i = 0; i <= CUSTOMER_LIST_CATEGORY_KG.length; i++) { const { lo, hi } = categoryTierBounds(i, list); if (tierMaxKg >= lo && tierMaxKg <= hi) out.push(i); }
   return out;
 }
+// The vehicle tier whose fare the customer list shows for category `index` (its TOP tier) -- the tier Admin's rate calculator sets / reads for that category.
+export function categoryTopTier(categoryIndex, tiers) {
+  const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
+  const { hi } = categoryTierBounds(categoryIndex, list);
+  return list.find((t) => t.maxKg === hi) || list[list.length - 1];
+}
+// Number of customer-list categories (the capacity limits + the final "above 32000 kg" one).
+export function customerListCategoryCount() { return CUSTOMER_LIST_CATEGORY_KG.length + 1; }
 // Firestore document IDs can't contain "/" and have a length cap — routes
 // are short place names in practice (Set Fare is meant for city-level
 // entries like "Pune"/"Kolhapur"), but sanitize defensively anyway.
@@ -4254,7 +4262,7 @@ function customerListCategoryDims(index) {
   if (!specs.length) return null;
   return { length: formatDimFeet(specs.map((x) => x.length)), width: formatDimFeet(specs.map((x) => x.width)), height: formatDimFeet(specs.map((x) => x.height)) };
 }
-function customerListCategoryLabel(index, lang) {
+export function customerListCategoryLabel(index, lang) {
   const last = CUSTOMER_LIST_CATEGORY_KG[CUSTOMER_LIST_CATEGORY_KG.length - 1];
   if (index >= CUSTOMER_LIST_CATEGORY_KG.length) return lang === "en" ? `Above ${last} kg` : lang === "mr" ? `${last} किग्रा पेक्षा जास्त` : `${last} किग्रा से ऊपर`;
   return lang === "en" ? `${CUSTOMER_LIST_CATEGORY_KG[index]} kg` : `${CUSTOMER_LIST_CATEGORY_KG[index]} किग्रा`;

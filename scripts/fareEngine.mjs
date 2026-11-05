@@ -19,7 +19,7 @@ export function loadFareEngine(root) {
   const shared = limitsLine + "\n" + app.slice(sharedA, sharedB).replace(/^export\s+/gm, "");
   return new Function(hav + "\n" + region + "\n" + shared + `; return { calculateFare, priceOutstation, DEFAULT_FARE_TIERS, zoneFor, findFareTier, enforceMonotonicFares, haltOf, includedDays,
     daysUsed, buildBill, getAdminRouteOverride, findExactAdminRoute, getRouteScaleRatio, resolveFareForTier, applyDieselToSavedRates, findFareOutliers,
-    applyMarketAdjustPct, clampMarketAdjustPct, marketAdjustFactor, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, CUSTOMER_LIST_CATEGORY_KG,
+    applyMarketAdjustPct, clampMarketAdjustPct, marketAdjustFactor, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, categoryTopTier, CUSTOMER_LIST_CATEGORY_KG,
     PORTER_OUTSTATION_RAW, PRICE_CORRECTOR_ANCHORS, priceCorrectionFactor, haltPerDayFor, KM_PER_DAY, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG };`)();
 }
 

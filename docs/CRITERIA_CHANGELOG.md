@@ -234,3 +234,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-05 -- ONE WEIGHT CATEGORY SYSTEM: category + kg labels everywhere (bookingCategoryText / vehicleCategoryText / formatKgLabel), booking weight = category limit
 - changed (14): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminTripDetailCard, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminCustomers, code:src/App.jsx#CustomerBooking, code:src/App.jsx#formatKgLabel, code:src/App.jsx#BookedVehiclePanel, code:src/App.jsx#ActiveRide, code:src/App.jsx#DriverHome
 - added (3): code:src/App.jsx#vehicleCategoryText, code:src/App.jsx#bookingCategoryIndex, code:src/App.jsx#bookingCategoryText
+
+## 2026-11-05 -- Admin calculator vehicle picker = the customer's 15 weight categories (categoryTopTier); category helpers exported
+- changed (8): app:customerListCategoryLabel, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/fareEngine.mjs, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/App.jsx#customerListCategoryLabel
+- added (2): code:src/App.jsx#categoryTopTier, code:src/App.jsx#customerListCategoryCount

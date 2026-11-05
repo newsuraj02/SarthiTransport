@@ -22,7 +22,7 @@ import {
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError,
   syncRouteDistance, formatTripKm, fareKmText, formatKgLabel, bookingCategoryText, vehicleCategoryText, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
-  getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
+  getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, customerListCategoryLabel, customerListCategoryCount, categoryTopTier, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
@@ -2494,8 +2494,14 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   // vehicle with less actual payload but a bigger box (e.g. the 32ft SXL
   // container) costs more than some heavier-payload options, so showing
   // it by weight alone would look out of order next to its own price.
-  const lightTiers = fareTiers.filter((t) => !t.heavy);
-  const heavyTiers = [...fareTiers.filter((t) => t.heavy)].sort((a, b) => a.innerFix - b.innerFix);
+  // The vehicle picker lists the CUSTOMER LIST'S weight categories, exactly (owner 2026-11-05: "match these vehicle weight categories with the customer vehicle weight
+  // categories"): one row per category (limit + name), light -> heavy. A row stands for the category's TOP vehicle tier -- the tier whose fare the customer is quoted --
+  // so what Admin sets here is what the customer sees. (A rate saved earlier on a lower tier still opens on that tier, labelled with its category.)
+  const categoryRows = Array.from({ length: customerListCategoryCount() }, (_, i) => ({ i, top: categoryTopTier(i, fareTiers) }));
+  const lightTiers = categoryRows.filter((r) => !r.top.heavy);
+  const heavyTiers = categoryRows.filter((r) => r.top.heavy);
+  const selectedCategoryRow = selectedMaxKg == null ? null : (categoryRows.find((r) => r.top.maxKg === selectedMaxKg) || categoryRows.find((r) => customerCategoriesForTier(selectedMaxKg, fareTiers).includes(r.i)) || null);
+  const categoryRowTitle = (r) => `${customerListCategoryLabel(r.i, lang)} \u00b7 ${customerListCategoryName(r.i, lang)}`;
 
   const RETURN_PCTS = [5, 10, 15, 20, 25, 30, 35];
   const inputCls = "w-full rounded-lg p-2.5 text-sm font-bold outline-none";
@@ -2608,8 +2614,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                 style={{ ...inputStyle, borderColor: tier ? C.navy : C.marigoldDeep, background: tier ? C.bg : "rgba(239,108,26,0.08)" }}>
                 {tier ? (
                   <span className="min-w-0">
-                    <span className="block font-black truncate">{formatKgLabel(tier.maxKg, lang)}{customerCategoriesForTier(tier.maxKg, fareTiers).length ? ` · ${customerCategoriesForTier(tier.maxKg, fareTiers).map((i) => customerListCategoryName(i, lang)).join(" / ")}` : ""}</span>
-                    <span className="block text-[11px] font-semibold truncate" style={{ color: C.inkSoft }}>{tier.label}</span>
+                    <span className="block font-black truncate">{selectedCategoryRow ? categoryRowTitle(selectedCategoryRow) : formatKgLabel(tier.maxKg, lang)}</span>
+                    {selectedCategoryRow && selectedCategoryRow.top.maxKg !== tier.maxKg && <span className="block text-[11px] font-semibold truncate" style={{ color: C.inkSoft }}>{lang === "en" ? "saved on the" : lang === "mr" ? "यावर सेव्ह:" : "इस पर सेव:"} {formatKgLabel(tier.maxKg, lang)}</span>}
                   </span>
                 ) : (
                   <span style={{ color: C.marigoldDeep }}>{lang === "en" ? "Choose vehicle" : lang === "mr" ? "गाडी निवडा" : "गाड़ी चुनें"}</span>
@@ -2859,21 +2865,19 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               <div className="rounded-lg px-3 py-2 text-xs font-black" style={{ background: C.navySoft || "rgba(0,82,204,0.1)", color: C.navy, border: `1.5px solid ${C.navy}` }}>
                 {lang === "en" ? "Light/Medium: Fixed (1-3km) + per km" : lang === "mr" ? "लोकल/मीडियम: बेस (1-3 km) + किमी" : "लोकल/मीडियम: बेस (1–3 km) + किमी"}
               </div>
-              {lightTiers.map((t) => (
-                <button key={t.maxKg} onClick={() => { setSelectedMaxKg(t.maxKg); setKgPickerOpen(false); }}
-                  className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedMaxKg === t.maxKg ? 2 : 1.5}px solid ${selectedMaxKg === t.maxKg ? C.navy : C.line}`, background: selectedMaxKg === t.maxKg ? "rgba(0,82,204,0.08)" : C.bg }}>
-                  <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{formatKgLabel(t.maxKg, lang)}{customerCategoriesForTier(t.maxKg, fareTiers).length ? ` · ${customerCategoriesForTier(t.maxKg, fareTiers).map((i) => customerListCategoryName(i, lang)).join(" / ")}` : ""}</span>
-                  <span className="text-xs font-semibold" style={{ color: C.inkSoft }}>{t.label}</span>
+              {lightTiers.map((r) => (
+                <button key={r.i} data-category-pick={r.i} onClick={() => { setSelectedMaxKg(r.top.maxKg); setKgPickerOpen(false); }}
+                  className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedCategoryRow?.i === r.i ? 2 : 1.5}px solid ${selectedCategoryRow?.i === r.i ? C.navy : C.line}`, background: selectedCategoryRow?.i === r.i ? "rgba(0,82,204,0.08)" : C.bg }}>
+                  <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{categoryRowTitle(r)}</span>
                 </button>
               ))}
               <div className="rounded-lg px-3 py-2 text-xs font-black mt-2" style={{ background: "rgba(239,108,26,0.1)", color: C.marigoldDeep, border: `1.5px solid ${C.marigoldDeep}` }}>
                 {lang === "en" ? "Heavy/Outstation: same formula, bigger rates + toll" : lang === "mr" ? "हेवी/आउटस्टेशन: तोच फॉर्म्युला, मोठे दर + टोल" : "हेवी/आउटस्टेशन: वही फॉर्मूला, बड़े दर + टोल"}
               </div>
-              {heavyTiers.map((t) => (
-                <button key={t.maxKg} onClick={() => { setSelectedMaxKg(t.maxKg); setKgPickerOpen(false); }}
-                  className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedMaxKg === t.maxKg ? 2 : 1.5}px solid ${selectedMaxKg === t.maxKg ? C.navy : C.line}`, background: selectedMaxKg === t.maxKg ? "rgba(0,82,204,0.08)" : C.bg }}>
-                  <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{formatKgLabel(t.maxKg, lang)}{customerCategoriesForTier(t.maxKg, fareTiers).length ? ` · ${customerCategoriesForTier(t.maxKg, fareTiers).map((i) => customerListCategoryName(i, lang)).join(" / ")}` : ""}</span>
-                  <span className="text-xs font-semibold" style={{ color: C.inkSoft }}>{t.label}</span>
+              {heavyTiers.map((r) => (
+                <button key={r.i} data-category-pick={r.i} onClick={() => { setSelectedMaxKg(r.top.maxKg); setKgPickerOpen(false); }}
+                  className="w-full text-left rounded-lg p-2.5 grid gap-0.5" style={{ border: `${selectedCategoryRow?.i === r.i ? 2 : 1.5}px solid ${selectedCategoryRow?.i === r.i ? C.navy : C.line}`, background: selectedCategoryRow?.i === r.i ? "rgba(0,82,204,0.08)" : C.bg }}>
+                  <span className="text-sm font-black" style={{ color: C.ink, fontFamily: monoFont }}>{categoryRowTitle(r)}</span>
                 </button>
               ))}
             </div>
