@@ -15,7 +15,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation,
   Settings2, Download, IndianRupee,
-  ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Loader2, RefreshCw,
+  ClipboardList, Siren, Menu, ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, LocateFixed,
   AlertTriangle, Volume2, Square,
 } from "lucide-react";
@@ -7732,22 +7732,52 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // ONE row (owner 2026-11-04): the est. distance at the LEFT end and "Change pickup / drop" at the RIGHT end, both visible (est. km once Pickup + Drop
   // give a distance; the link only while the Pickup / Drop boxes are tucked away). It is the row the Round-trip / list sections show under the places.
   const estKm = distance > 0 && placesReady ? Math.round(distance) : null;
+  // Owner 2026-11-04 ("improve the UI/UX of the entire flow"): with the map hidden over the list, this is the TRIP CARD -- the route (Pickup / Drop, partitioned, with the same
+  // rail as the recent-trip cards) when the boxes are tucked away, then the distance row. The row inside keeps its exact pinned markup.
   const changePlacesLink = estKm != null || tripHidden ? (
-    <div data-trip-row className="flex items-center justify-between gap-3">
-      <div data-est-km className="text-base font-extrabold min-w-0 truncate" style={{ color: C.ink }}>
-        {estKm != null && `${lang === "en" ? "Distance:" : lang === "mr" ? "अंतर:" : "दूरी:"} ${estKm} ${lang === "en" ? "km" : "किमी"}`}
-      </div>
+    <div data-trip-card className="rounded-2xl px-3.5 py-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
       {tripHidden && (
-        <button type="button" data-change-places onClick={() => { setFromTrip(false); }} className="shrink-0 py-2 text-xs font-bold underline underline-offset-2" style={{ color: C.inkSoft }}>
-          {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
-        </button>
+        <div data-trip-route className="flex items-center gap-3 pb-2.5 mb-2.5" style={{ borderBottom: `1px solid ${C.line}` }}>
+          <span className="flex flex-col items-center self-stretch py-1 shrink-0" aria-hidden="true">
+            <span className="w-3 h-3 rounded-full" style={{ background: C.success, boxShadow: "0 0 0 3px rgba(0,168,84,0.18)" }} />
+            <span className="flex-1 my-1" style={{ borderLeft: `2px dashed ${C.line}` }} />
+            <span className="w-3 h-3 rounded-[3px]" style={{ background: "#0052CC", boxShadow: "0 0 0 3px rgba(0,82,204,0.16)" }} />
+          </span>
+          <span className="flex-1 min-w-0 flex flex-col">
+            <span className="min-w-0 pb-1.5">
+              <span className="block text-[10px] font-extrabold uppercase tracking-wider" style={{ color: C.success }}>{lang === "en" ? "Pickup" : "पिकअप"}</span>
+              <span className="block text-[13px] font-semibold leading-snug truncate" style={{ color: C.ink }}>{pickup}</span>
+            </span>
+            <span className="min-w-0 pt-1.5" style={{ borderTop: `1px solid ${C.line}` }}>
+              <span className="block text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "#0052CC" }}>{lang === "en" ? "Drop" : "ड्रॉप"}</span>
+              <span className="block text-[13px] font-semibold leading-snug truncate" style={{ color: C.ink }}>{drop}</span>
+            </span>
+          </span>
+        </div>
       )}
+      <div data-trip-row className="flex items-center justify-between gap-3">
+        <div data-est-km className="text-base font-extrabold min-w-0 truncate" style={{ color: C.ink }}>
+          {estKm != null && `${lang === "en" ? "Distance:" : lang === "mr" ? "अंतर:" : "दूरी:"} ${estKm} ${lang === "en" ? "km" : "किमी"}`}
+        </div>
+        {tripHidden && (
+          <button type="button" data-change-places onClick={() => { setFromTrip(false); }} className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold" style={{ color: C.inkSoft, border: `1px solid ${C.line}`, background: C.bg }}>
+            {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
+          </button>
+        )}
+      </div>
     </div>
   ) : null;
   const canBook = locationsReady && !sameLocation;
   // ONE fixed "Book now" bar at the bottom of the screen (owner 2026-11-04: "just keep one fixed book now button at the bottom of the list").
   // The customer taps a category (it is highlighted); the bar books it at the category's TOP fare. Greyed out until a category is picked, and a
   // picked category that disappeared from the list (its last vehicle went off duty) counts as not picked.
+  const orderedListGroups = (() => { const all = groupByCustomerListCategory(nearbyDrivers); const first = selectedCategory == null ? null : all.find((g) => g.index === selectedCategory); return first ? [first, ...all.filter((g) => g !== first)] : all; })();
+  // After a pick the card jumps to the top of the list: bring it into view (the page may be scrolled further down).
+  useEffect(() => {
+    if (selectedCategory == null) return undefined;
+    const t = setTimeout(() => { document.querySelector("[data-category-picked]")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 140);
+    return () => clearTimeout(t);
+  }, [selectedCategory]);
   const selectedGroup = selectedCategory == null ? null : groupByCustomerListCategory(nearbyDrivers).find((g) => g.index === selectedCategory) || null;
   const selectedTopEntry = selectedGroup ? categoryTopEntry(selectedGroup.entries) : null;
   const bookBarVisible = locationsReady && !sameLocation && nearbyDrivers.length > 0 && !typingField; // Owner 2026-11-04: ONLY with the vehicle list showing (never while a Pickup / Drop box has the cursor)
@@ -7896,18 +7926,27 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
         {/* The last 3 whole trips (pickup + drop), right under the Pickup box and ONLY while Pickup is still empty
             (owner 2026-10-29: no heading text, and not kept on screen once a pickup is typed or chosen). */}
         {!pickup.trim() && recentTrips && recentTrips.length > 0 && (
-          <div className="space-y-1.5">
+          <div className="space-y-2.5">
             {recentTrips.map((t) => (
-              <button key={t.key || `${t.pickup}|${t.drop}`} type="button" onClick={() => onTripSelected(t)} className="w-full rounded-xl px-3 py-2.5 text-left flex items-stretch gap-2.5 anim-rise" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                <span className="flex flex-col items-center py-1 shrink-0" aria-hidden="true">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success }} />
-                  <span className="flex-1 w-px my-0.5" style={{ background: C.line }} />
-                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: C.navy }} />
+              <button key={t.key || `${t.pickup}|${t.drop}`} type="button" data-recent-trip onClick={() => onTripSelected(t)} className="w-full rounded-2xl px-3.5 py-3 text-left flex items-center gap-3 anim-rise shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+                {/* Owner 2026-11-04: Pickup and Drop need a PARTITION and a basic design -- a route rail (green dot -> dashed line -> blue square), a small label over each
+                    address, a hairline between the two, and a chevron so it reads as a tappable "book this trip again" card. */}
+                <span className="flex flex-col items-center self-stretch py-1.5 shrink-0" aria-hidden="true">
+                  <span className="w-3 h-3 rounded-full" style={{ background: C.success, boxShadow: "0 0 0 3px rgba(0,168,84,0.18)" }} />
+                  <span className="flex-1 my-1" style={{ borderLeft: `2px dashed ${C.line}` }} />
+                  <span className="w-3 h-3 rounded-[3px]" style={{ background: "#0052CC", boxShadow: "0 0 0 3px rgba(0,82,204,0.16)" }} />
                 </span>
-                <span className="flex-1 min-w-0 flex flex-col gap-1.5">
-                  <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "pickup")}</span>
-                  <span className="text-[12.5px] font-semibold leading-snug break-words" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "drop")}</span>
+                <span className="flex-1 min-w-0 flex flex-col">
+                  <span data-recent-pickup className="min-w-0 pb-2">
+                    <span className="block text-[10px] font-extrabold uppercase tracking-wider" style={{ color: C.success }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}</span>
+                    <span className="block text-[13px] font-semibold leading-snug" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "pickup")}</span>
+                  </span>
+                  <span data-recent-drop className="min-w-0 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                    <span className="block text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "#0052CC" }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}</span>
+                    <span className="block text-[13px] font-semibold leading-snug" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "drop")}</span>
+                  </span>
                 </span>
+                <ChevronRight size={18} color={C.inkSoft} className="shrink-0" aria-hidden="true" />
               </button>
             ))}
           </div>
@@ -8012,16 +8051,26 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                   {/* Owner 2026-11-04: the list is grouped in the 14 capacity categories (+ "Above 32000 kg") (CUSTOMER_LIST_CATEGORY_KG), each with a heading,
                       ONE ROW per category (owner 2026-11-04, "like the weight / vehicle list"): vehicle icon, the category NAME in big bold type, its weight limit under it, the top fare and
                       "N min" of its nearest GPS-on vehicle. Tapping a row selects the category (highlighted) for the fixed "Book now" bar -- no single driver is picked. */}
-                  {groupByCustomerListCategory(nearbyDrivers).map((grp, rowIdx) => {
+                  {/* Owner 2026-11-04: the category the customer picked MOVES TO THE TOP of the list and is shown as a bigger "selected" card; the others follow
+                      under a small "Other vehicles" label (the order inside each part stays light -> heavy). */}
+                  {orderedListGroups.map((grp, rowIdx) => {
                   const isPicked = selectedCategory === grp.index;
                   const top = categoryTopEntry(grp.entries); // the dearest vehicle in the category: its icon, name and fare stand for the category
                   const nearestGps = grp.entries.filter((e) => e.gpsOn).reduce((best, e) => (!best || e.km < best.km ? e : best), null);
                   const mins = nearestGps ? etaMinutes(nearestGps.km) : null; // "N min" = the nearest vehicle of the category that has GPS on
                   return (
-                  <button key={grp.index} type="button" data-list-category={grp.index} data-category-picked={isPicked ? "1" : undefined} aria-pressed={isPicked} disabled={!!sendingKey}
+                  <React.Fragment key={grp.index}>
+                  {rowIdx === 1 && selectedCategory != null && (
+                    <div data-other-vehicles className="flex items-center gap-3 pt-2 pb-0.5" aria-hidden="true">
+                      <span className="h-px flex-1" style={{ background: C.line }} />
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider" style={{ color: C.inkSoft }}>{lang === "en" ? "Other vehicles" : lang === "mr" ? "इतर गाड्या" : "अन्य गाड़ियाँ"}</span>
+                      <span className="h-px flex-1" style={{ background: C.line }} />
+                    </div>
+                  )}
+                  <button type="button" data-list-category={grp.index} data-category-picked={isPicked ? "1" : undefined} aria-pressed={isPicked} disabled={!!sendingKey}
                     onClick={() => setSelectedCategory(grp.index)}
-                    className={`anim-rise w-full rounded-2xl p-3 text-left shadow-sm ${isPicked ? "driver-selected-bounce" : ""}`}
-                    style={{ animationDelay: `${Math.min(rowIdx, 6) * 70}ms`, border: `2px solid ${isPicked ? C.success : C.line}`, background: isPicked ? "rgba(0,168,84,0.08)" : C.paper, boxShadow: isPicked ? "0 0 0 4px rgba(0,168,84,0.16)" : undefined }}>
+                    className={`anim-rise w-full text-left shadow-sm ${isPicked ? "p-4 rounded-3xl driver-selected-bounce" : "p-3 rounded-2xl"}`}
+                    style={{ animationDelay: `${Math.min(rowIdx, 6) * 70}ms`, scrollMarginTop: 12, border: `2px solid ${isPicked ? C.success : C.line}`, background: isPicked ? "linear-gradient(160deg, rgba(0,168,84,0.14), rgba(255,255,255,0.98) 58%)" : C.paper, boxShadow: isPicked ? "0 12px 26px -8px rgba(0,168,84,0.40), 0 0 0 4px rgba(0,168,84,0.12)" : undefined }}>
                     {/* Owner 2026-11-04 (screenshot: on a 360 px phone the weight was cut to "7500 ..." and the name wrapped on 3 lines): TWO lines per row so
                         nothing is squeezed. Line 1 = small vehicle icon + the category name (up to 2 lines) with its weight limit as a chip that is NEVER cut off;
                         line 2 = "N min away" at the left and the fare, big, at the right. */}
@@ -8033,7 +8082,12 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div data-category-title className="text-base font-extrabold leading-snug" style={{ color: C.ink }}>{isPicked ? "✓ " : ""}{customerListCategoryName(grp.index, lang)}</div>
+                      {isPicked && (
+                        <div data-category-selected-badge className="mb-1.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold" style={{ background: C.success, color: "#FFFFFF" }}>
+                          ✓ {lang === "en" ? "Selected" : lang === "mr" ? "निवडले" : "चुना गया"}
+                        </div>
+                      )}
+                      <div data-category-title className={`${isPicked ? "text-xl font-black" : "text-base font-extrabold"} leading-snug`} style={{ color: C.ink }}>{customerListCategoryName(grp.index, lang)}</div>
                       <div data-category-weight className="mt-1 inline-block rounded-md px-2 py-0.5 text-xs font-bold leading-snug" style={{ color: C.inkSoft, background: "#EEF2F8" }}>⚖ {customerListCategoryLabel(grp.index, lang)}</div>
                     </div>
                     </div>
@@ -8041,10 +8095,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                       <div data-category-eta className="text-xs font-bold" style={{ color: C.inkSoft }}>
                         {mins != null ? <>⏱ {lang === "en" ? `${mins} min away` : lang === "mr" ? `${mins} मिनिटांवर` : `${mins} मिनट दूर`}</> : null}
                       </div>
-                      <div data-category-fare className="text-lg font-black rounded-full px-3.5 py-0.5" style={{ color: C.navy, background: "rgba(0,82,204,0.09)" }}>{fmt(top.fare)}</div>
+                      <div data-category-fare className={`${isPicked ? "text-2xl px-4 py-1" : "text-lg px-3.5 py-0.5"} font-black rounded-full`} style={{ color: isPicked ? "#FFFFFF" : C.navy, background: isPicked ? C.navy : "rgba(0,82,204,0.09)" }}>{fmt(top.fare)}</div>
                     </div>
                     {isPicked && (
-                      <div data-category-art className="mt-3 rounded-xl flex items-center gap-2 py-3 px-3 anim-rise" style={{ background: "linear-gradient(135deg, rgba(0,82,204,0.12), rgba(255,255,255,0.95))", border: "1px solid rgba(0,82,204,0.18)" }}>
+                      <div data-category-art className="mt-3 rounded-2xl flex items-center gap-2 py-4 px-3 anim-rise" style={{ background: "linear-gradient(135deg, rgba(0,82,204,0.12), rgba(255,255,255,0.95))", border: "1px solid rgba(0,82,204,0.18)" }}>
                         <CategoryVehicleArt index={grp.index} title={customerListCategoryName(grp.index, lang)} className="flex-1 min-w-0 h-32" />
                         {(() => {
                           const dims = customerListCategoryDims(grp.index);
@@ -8064,6 +8118,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
                       </div>
                     )}
                   </button>
+                  </React.Fragment>
                   );
                   })}
                 </>
@@ -8088,8 +8143,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
       {bookBarVisible && (
         <div data-book-bar className="fixed left-0 right-0 z-[25] px-4 pt-1" style={{ bottom: returnBarVisible ? "calc(env(safe-area-inset-bottom, 0px) + 66px)" : 0, paddingBottom: returnBarVisible ? "6px" : "calc(env(safe-area-inset-bottom, 0px) + 8px)", pointerEvents: "none" }}>
           <button type="button" data-book-now disabled={!canBook || !selectedTopEntry || !!sendingKey} onClick={() => selectedTopEntry && bookDriver(selectedTopEntry, selectedCategory)}
-            className="mx-auto max-w-sm w-full rounded-xl py-3.5 font-extrabold text-base flex items-center justify-center gap-2"
-            style={{ pointerEvents: "auto", background: sendingKey ? C.inkSoft : selectedTopEntry ? C.success : "#E5EAF2", color: sendingKey || selectedTopEntry ? "#FFFFFF" : "#9AA3B0", boxShadow: selectedTopEntry && !sendingKey ? "0 6px 14px rgba(0,168,84,0.28)" : "0 2px 6px rgba(15,27,45,0.12)" }}>
+            className="mx-auto max-w-sm w-full rounded-2xl py-4 font-extrabold text-base flex items-center justify-center gap-2"
+            style={{ pointerEvents: "auto", background: sendingKey ? C.inkSoft : selectedTopEntry ? "linear-gradient(135deg, #00A854, #00C26A)" : "#E5EAF2", color: sendingKey || selectedTopEntry ? "#FFFFFF" : "#9AA3B0", boxShadow: selectedTopEntry && !sendingKey ? "0 6px 14px rgba(0,168,84,0.28)" : "0 2px 6px rgba(15,27,45,0.12)" }}>
             {sendingKey
               ? <span className="inline-flex items-center gap-2"><Loader2 size={18} className="animate-spin" />{lang === "en" ? "Sending request…" : lang === "mr" ? "रिक्वेस्ट पाठवत आहे…" : "रिक्वेस्ट भेज रहे हैं…"}</span>
               : selectedTopEntry
