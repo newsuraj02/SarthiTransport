@@ -4217,9 +4217,9 @@ function customerListCategoryIndex(capacityKg) {
 // "Above 32000 kg" group, in the customer's language (hi / mr translated, same wording style as the rest of the app: चक्का / चाकी, फीट / फूट);
 // the weight limit is the small line under the name.
 const CUSTOMER_LIST_CATEGORY_NAMES = {
-  en: ["3 wheeler", "Tata Ace", "Pickup", "Pickup 8ft", "Tata 407", "14ft Eicher", "17ft Eicher", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "32ft container", "12/14 wheeler", "16 wheeler", "32t+ truck"],
-  hi: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फीट", "टाटा 407", "14 फीट आयशर", "17 फीट आयशर", "20 फीट कंटेनर", "6 चक्का", "22/24 फीट ट्रक", "10 चक्का", "32 फीट कंटेनर", "12/14 चक्का", "16 चक्का", "32 टन+ ट्रक"],
-  mr: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फूट", "टाटा 407", "14 फूट आयशर", "17 फूट आयशर", "20 फूट कंटेनर", "6 चाकी", "22/24 फूट ट्रक", "10 चाकी", "32 फूट कंटेनर", "12/14 चाकी", "16 चाकी", "32 टन+ ट्रक"],
+  en: ["3 wheeler", "Tata Ace", "Pickup", "Pickup 8ft", "Tata 407", "14ft Eicher", "17ft Eicher", "20ft container", "6 wheeler", "22ft/24ft truck", "10 wheeler", "20 ton container", "12/14 wheeler", "16 wheeler", "32t+ truck"],
+  hi: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फीट", "टाटा 407", "14 फीट आयशर", "17 फीट आयशर", "20 फीट कंटेनर", "6 चक्का", "22/24 फीट ट्रक", "10 चक्का", "20 टन कंटेनर", "12/14 चक्का", "16 चक्का", "32 टन+ ट्रक"],
+  mr: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फूट", "टाटा 407", "14 फूट आयशर", "17 फूट आयशर", "20 फूट कंटेनर", "6 चाकी", "22/24 फूट ट्रक", "10 चाकी", "20 टन कंटेनर", "12/14 चाकी", "16 चाकी", "32 टन+ ट्रक"],
 };
 export function customerListCategoryName(index, lang) {
   const list = CUSTOMER_LIST_CATEGORY_NAMES[lang] || CUSTOMER_LIST_CATEGORY_NAMES.en;
@@ -4240,7 +4240,7 @@ const CUSTOMER_LIST_CATEGORY_DIM_MODELS = [
   ["6 wheeler"],                                 // 6 wheeler
   ["22 ft", "24 ft"],                            // 22ft/24ft truck
   ["10 wheeler"],                                // 10 wheeler
-  ["mxl"],                                       // 32ft container
+  ["mxl"],                                       // 20 ton container
   ["12 wheeler", "14 wheeler"],                  // 12/14 wheeler
   ["16 wheeler"],                                // 16 wheeler
   ["trailer"],                                   // 32t+ truck

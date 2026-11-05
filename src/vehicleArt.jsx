@@ -24,7 +24,7 @@ export const VEHICLE_ART_SPECS = [
   { cw: 34, ch: 43, body: "open", len: 100, bh: 30, gap: 2, wheels: [14, 102, 117] },               // 6 wheeler
   { cw: 36, ch: 45, body: "box", len: 108, bh: 42, gap: 2, wheels: [15, 114, 130] },                // 22ft/24ft truck
   { cw: 36, ch: 45, body: "open", len: 114, bh: 32, gap: 2, wheels: [13, 29, 122, 138] },           // 10 wheeler
-  { cw: 36, ch: 46, body: "container", len: 116, bh: 44, gap: 2, wheels: [14, 30, 128, 144] },      // 32ft container
+  { cw: 36, ch: 46, body: "container", len: 116, bh: 44, gap: 2, wheels: [14, 30, 128, 144] },      // 20 ton container (was 32ft container)
   { cw: 38, ch: 47, body: "box", len: 116, bh: 43, gap: 2, wheels: [15, 31, 124, 140] },            // 12/14 wheeler
   { cw: 38, ch: 48, body: "box", len: 118, bh: 44, gap: 2, wheels: [15, 31, 124, 140, 156] },       // 16 wheeler
   { cw: 38, ch: 48, body: "container", len: 122, bh: 44, gap: 8, wheels: [15, 42, 130, 146, 162] }, // 32t+ truck (tractor + trailer)

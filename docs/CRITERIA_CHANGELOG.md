@@ -238,3 +238,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-05 -- Admin calculator vehicle picker = the customer's 15 weight categories (categoryTopTier); category helpers exported
 - changed (8): app:customerListCategoryLabel, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/fareEngine.mjs, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/App.jsx#customerListCategoryLabel
 - added (2): code:src/App.jsx#categoryTopTier, code:src/App.jsx#customerListCategoryCount
+
+## 2026-11-05 -- Renamed customer vehicle category 32ft container -> 20 ton container (en; hi/mr: 20 टन कंटेनर); weight limit 20000 kg unchanged
+- changed (8): app:CUSTOMER_LIST_CATEGORY_NAMES, app:CUSTOMER_LIST_CATEGORY_DIM_MODELS, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CUSTOMER_LIST_CATEGORY_NAMES, code:src/App.jsx#CUSTOMER_LIST_CATEGORY_DIM_MODELS, code:src/vehicleArt.jsx#VEHICLE_ART_SPECS
