@@ -7905,19 +7905,20 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
         {/* The last 3 whole trips (pickup + drop), right under the Pickup box and ONLY while Pickup is still empty
             (owner 2026-10-29: no heading text, and not kept on screen once a pickup is typed or chosen). */}
         {!pickup.trim() && recentTrips && recentTrips.length > 0 && (
-          <div className="space-y-2.5">
+          <div className="space-y-1">
             {recentTrips.map((t) => (
-              <button key={t.key || `${t.pickup}|${t.drop}`} type="button" data-recent-trip onClick={() => onTripSelected(t)} className="w-full rounded-2xl px-3.5 py-3 text-left flex items-center gap-3 anim-rise shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
+              <button key={t.key || `${t.pickup}|${t.drop}`} type="button" data-recent-trip onClick={() => onTripSelected(t)} className="w-full rounded-xl px-3 py-1.5 text-left flex items-center gap-2.5 anim-rise shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 {/* Owner 2026-11-04: Pickup and Drop partitioned with a basic design -- a route rail (green dot -> dashed line -> blue square) and a hairline between the two
-                    addresses. Locations ONLY: no "Pickup" / "Drop" words, no side button / chevron, and a LIGHT font weight (the owner found it too bold). */}
-                <span className="flex flex-col items-center self-stretch py-1.5 shrink-0" aria-hidden="true">
-                  <span className="w-3 h-3 rounded-full" style={{ background: C.success, boxShadow: "0 0 0 3px rgba(0,168,84,0.18)" }} />
-                  <span className="flex-1 my-1" style={{ borderLeft: `2px dashed ${C.line}` }} />
-                  <span className="w-3 h-3 rounded-[3px]" style={{ background: "#0052CC", boxShadow: "0 0 0 3px rgba(0,82,204,0.16)" }} />
+                    addresses. Locations ONLY: no "Pickup" / "Drop" words, no side button / chevron, a LIGHT font weight, the FULL address (never cut with "...") and a compact
+                    card so three fit on the screen. */}
+                <span className="flex flex-col items-center self-stretch py-1 shrink-0" aria-hidden="true">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: C.success, boxShadow: "0 0 0 2px rgba(0,168,84,0.18)" }} />
+                  <span className="flex-1 my-0.5" style={{ borderLeft: `2px dashed ${C.line}` }} />
+                  <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: "#0052CC", boxShadow: "0 0 0 2px rgba(0,82,204,0.16)" }} />
                 </span>
                 <span className="flex-1 min-w-0 flex flex-col">
-                  <span data-recent-pickup className="block min-w-0 pb-2.5 text-[13px] font-normal leading-snug" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "pickup")}</span>
-                  <span data-recent-drop className="block min-w-0 pt-2.5 text-[13px] font-normal leading-snug" style={{ color: C.ink, borderTop: `1px solid ${C.line}`, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "drop")}</span>
+                  <span data-recent-pickup className="block min-w-0 pb-1 text-[12px] font-normal leading-[1.25] break-words" style={{ color: C.ink }}>{tripName(t, "pickup")}</span>
+                  <span data-recent-drop className="block min-w-0 pt-1 text-[12px] font-normal leading-[1.25] break-words" style={{ color: C.ink, borderTop: `1px solid ${C.line}` }}>{tripName(t, "drop")}</span>
                 </span>
               </button>
             ))}
