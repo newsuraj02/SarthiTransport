@@ -169,3 +169,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-05 -- Owner 2026-11-04: Advance Booking is date-only -- Kal / Parso / Day after Parso buttons (hi/mr) replace the date-and-time box; saved at fixed 08:00; availability window unchanged
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
 - added (3): code:src/App.jsx#ADVANCE_DAY_OFFSETS, code:src/App.jsx#ADVANCE_DEFAULT_TIME, code:src/App.jsx#advanceDayLabel
+
+## 2026-11-05 -- Owner 2026-11-04: Advance day buttons use English equivalents (Tomorrow / Day after tomorrow / In 3 days) in English
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#advanceDayLabel

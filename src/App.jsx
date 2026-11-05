@@ -287,7 +287,7 @@ function formatTimeSlot(hhmm, lang) {
 const ADVANCE_DAY_OFFSETS = [1, 2, 3];
 const ADVANCE_DEFAULT_TIME = "08:00";
 function advanceDayLabel(offset, lang) {
-  const L = { en: ["Kal", "Parso", "Day after Parso"], hi: ["कल", "परसों", "परसों के बाद"], mr: ["उद्या", "परवा", "परवा नंतर"] };
+  const L = { en: ["Tomorrow", "Day after tomorrow", "In 3 days"], hi: ["कल", "परसों", "परसों के बाद"], mr: ["उद्या", "परवा", "परवा नंतर"] };
   return (L[lang] || L.hi)[offset - 1];
 }
 function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
