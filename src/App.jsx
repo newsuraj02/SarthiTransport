@@ -7828,9 +7828,11 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           Owner brief 2026-10-29: once the vehicle list shows, the map shows ONLY active vehicles of the matching types
           (inactive ones hidden). */}
       {/* Owner 2026-10-31: an evident line between the map and the form (3 px navy rule + a soft shadow below it).
-          Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched. */}
-      <div data-map-divider style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
-        <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height="35vh" lang={lang} onMapClick={onMapClick}
+          Plain wrapper -- no position / z-index, so the map's own stacking context and the header layering are untouched.
+          Owner 2026-11-04 ("map disappears on the vehicle list / date selection"): once Pickup + Drop are chosen (placesReady) the map is PINNED to the top (sticky) so it
+          stays on screen while the list scrolls; before that it scrolls with the page as before (the keyboard needs the room). */}
+      <div data-map-divider className={placesReady ? "sticky top-0 z-30" : undefined} style={{ borderBottom: `3px solid ${C.navy}`, boxShadow: "0 8px 14px -8px rgba(15,27,45,0.45)" }}>
+        <NearbyVehiclesMap drivers={mapAvailableDrivers} customerLocation={pickupCoords || customerLocation} height={placesReady ? "30vh" : "35vh"} lang={lang} onMapClick={onMapClick}
           activeOnly={listStage} fixedDrivers={mapFixedDrivers} highlightId={mapHighlight?.id || null} highlightLabel={mapHighlight?.label || ""} />
       </div>
       {bookedMsg && (
@@ -7926,10 +7928,13 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
         </div>
         </SmoothCollapse>
 
-        {/* Advance only (owner 2026-10-30): ONE horizontal box holding Date and Time, placed after the Pickup/Drop flow and
-            shown only once Pickup AND Drop are entered. */}
-        {advance && placesReady && (
-          <>
+      </div>
+
+      {/* Advance only: the three day buttons (owner 2026-11-04 -- date only, see ADVANCE_DAY_OFFSETS). They sit RIGHT UNDER the map and are pinned with it
+          (owner 2026-11-04: "Date selection disappears once the date is selected" -- they used to scroll away with the page), so the chosen day stays in view
+          while the vehicle list scrolls. A direct child of the page root (not of the Pickup/Drop form block) so `sticky` can stay pinned across the list. */}
+      {advance && placesReady && (
+        <div data-advance-days-pin className="sticky z-30 px-5 py-2" style={{ top: "calc(30vh + 3px)", background: C.bg }}>
           <div className="anim-rise" style={{
               padding: highlightField === "date" || highlightField === "time" ? 4 : 0,
               background: highlightField === "date" || highlightField === "time" ? C.marigold : "transparent",
@@ -7957,10 +7962,8 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
               })}
             </div>
           </div>
-          </>
-        )}
-
-      </div>
+        </div>
+      )}
 
       {/* Once Pickup+Drop are filled (owner 2026-11-04: there is NO weight / est. distance box any more), this section shows the
           eligible-driver list straight away. Every real, currently eligible driver near Pickup is

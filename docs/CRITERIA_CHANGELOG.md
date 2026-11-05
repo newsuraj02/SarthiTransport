@@ -176,3 +176,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-05 -- Owner 2026-11-04: Pickup/Drop suggestions replicate Google Maps -- one soft-biased Autocomplete call, Google's own order, no hard boxes, no nearest-first re-sort
 - changed (6): file:functions/addressLang.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/addressLang.js#createAddressService, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#LocationField
 - removed (1): code:src/App.jsx#sortPredictionsNearestFirst
+
+## 2026-11-05 -- Owner 2026-11-04: map pinned (sticky 30vh) once Pickup+Drop are chosen; Advance day buttons pinned under it so they stay visible over the vehicle list
+- changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
