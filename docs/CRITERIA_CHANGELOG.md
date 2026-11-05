@@ -211,3 +211,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Market rate change: saved Admin route (and its toll/floor) never scaled in the calculator
 - changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminRateCalculator
+
+## 2026-11-05 -- Scan alerts settle for real: close-stuck-trips remedy, Resolve re-runs the scan, auto-close, one change entry per day, docs-only drift note, source markers pinned
+- changed (13): fn:resolveChangeLogEntry, file:functions/healthAudit.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/healthAudit.js#auditLiveData, code:functions/healthAudit.js#auditDeployment, code:functions/healthAudit.js#exportsList, code:functions/index.js#other, code:functions/index.js#RESOLVE_ACTIONS, code:functions/index.js#fn:resolveChangeLogEntry, code:functions/index.js#checkSourceMarkers, code:functions/index.js#runDailyHealthCheck, code:scripts/verifyInvariants.mjs#checks
+- added (4): code:functions/healthAudit.js#findStuckTrips, code:functions/healthAudit.js#HOSTING_CRITERIA, code:functions/healthAudit.js#hostingCodeMatches, code:functions/index.js#closeStuckTrips

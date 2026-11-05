@@ -6,7 +6,7 @@ const { ringWeightText } = require("./ringText");
 const { evaluateNewLoadDriver } = require("./tripLock");
 const { planSixteenWheelerRepair, RIGHT_CAPACITY_KG } = require("./vehicleSpecRepair");
 const { shouldIssuePickupOtp, newPickupOtp, judgeOtpGuess } = require("./otp");
-const { auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning, otherRunningTripsOfDriver: auditOtherRunningTrips } = require("./healthAudit");
+const { findStuckTrips, auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, isDriverRecord: auditIsDriverRecord, isBookingRunning: auditIsBookingRunning, otherRunningTripsOfDriver: auditOtherRunningTrips } = require("./healthAudit");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -1179,8 +1179,27 @@ async function cleanupOrphanedAdminRates() {
 // resolveAction field (see BUG_TRACKER_SEED in src/App.jsx). Run BEFORE
 // asking Claude anything below, so Claude is verifying/reporting on an
 // actual just-applied fix rather than being asked to invent one.
+// "Resolve" on the scan's "accepted trip(s) not started for over 24 h" / "driver on more than one trip" entries (owner 2026-11-05: these came back EVERY day,
+// because "Resolve" only asked an AI for an opinion while the stuck trips themselves stayed in Firestore and the next scan re-opened the entry).
+// Closes exactly the trips the scan reports (`findStuckTrips`, functions/healthAudit.js): accepted, never started, not an Advance booking, older than 24 h --
+// their pickup OTP is already deleted (expireOldBookingOtps), so they can never start and only keep a driver "busy" for ever. Marks them Cancelled the same
+// way the app's cancelBooking does (status + cancelledAt; no wallet change -- commission is 0) plus who/why. A trip that started, an Advance booking and any
+// recent trip are never touched, so two genuinely recent trips of one driver stay flagged. Returns how many were closed.
+async function closeStuckTrips() {
+  const snap = await db.collection("bookings").where("status", "==", "Ongoing").get();
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const stuck = findStuckTrips(rows, Date.now());
+  for (let i = 0; i < stuck.length; i += 400) {
+    const batch = db.batch();
+    stuck.slice(i, i + 400).forEach((b) => batch.update(db.collection("bookings").doc(b.id), { status: "Cancelled", cancelledAt: FieldValue.serverTimestamp(), cancelledBy: "system-cleanup", cancelReason: "Accepted but never started for over 24 h (pickup OTP expired); closed by Admin Resolve." }));
+    await batch.commit();
+  }
+  if (stuck.length) console.log(`[closeStuckTrips] closed ${stuck.length} stuck trip(s): ${stuck.map((b) => b.id).join(", ")}`);
+  return stuck.length;
+}
 const RESOLVE_ACTIONS = {
   "cleanup-orphaned-admin-rates": cleanupOrphanedAdminRates,
+  "close-stuck-trips": closeStuckTrips,
 };
 
 // Anthropic API key (set via `firebase functions:secrets:set ANTHROPIC_API_KEY`,
@@ -1213,7 +1232,7 @@ const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 // Never leaves an entry silently stuck on "resolving" — any failure
 // (missing key, network error, bad response) reverts it to "open" with a
 // note explaining why, so a false "resolved" is never shown.
-exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHROPIC_API_KEY] }, async (request) => {
+exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 300, memory: "512MiB" }, async (request) => {
   if (request.auth?.token?.admin !== true) throw new HttpsError("permission-denied", "Admin access required.");
   const { bugId } = request.data || {};
   if (!bugId) throw new HttpsError("invalid-argument", "bugId is required.");
@@ -1224,6 +1243,28 @@ exports.resolveChangeLogEntry = onCall({ region: "asia-south1", secrets: [ANTHRO
   const bug = snap.data();
 
   await ref.update({ status: "resolving", resolvingAt: FieldValue.serverTimestamp() });
+
+  // Entries written by the morning/evening scan (id "scan-...") are settled by the scan's own truth, never by an AI's opinion (owner 2026-11-05: "Resolve" used to
+  // mark them fixed on the strength of "code-level fix shipped" while the problem was still in the live data, so they re-opened every day). Run the registered data
+  // remedy (if any), then run the full scan again: it re-opens this entry when the problem is still detected and closes it ("verified") when it is gone.
+  if (String(bugId).startsWith("scan-") && !String(bugId).startsWith("scan-changes-")) {
+    try {
+      let did = "";
+      const act = RESOLVE_ACTIONS[bug.resolveAction];
+      if (act) { const n = await act(); did = n > 0 ? `Closed ${n} record(s). ` : "Nothing needed closing. "; }
+      await runDailyHealthCheck("lastManualRun");
+      const after = (await ref.get()).data() || {};
+      const fixed = after.status === "fixed";
+      const note = `${did}${after.resolutionNote || (fixed ? "Verified by the scan: no longer detected." : "Checked just now: still detected.")}`.trim();
+      if (!fixed) await ref.update({ status: "open", resolutionNote: note, resolvingAt: FieldValue.delete() });
+      else await ref.update({ resolutionNote: note });
+      return { ok: true, resolved: fixed, note };
+    } catch (e) {
+      console.error("[resolveChangeLogEntry] scan entry failed:", e.message);
+      await ref.update({ status: "open", resolutionNote: "Could not re-check just now (" + String(e.message).slice(0, 120) + ") -- try again.", resolvingAt: FieldValue.delete() });
+      return { ok: false, reason: "error" };
+    }
+  }
 
   let actionSummary = "No automated data remedy is registered for this issue — it was a code-level fix.";
   const action = RESOLVE_ACTIONS[bug.resolveAction];
@@ -1550,7 +1591,7 @@ async function checkSourceMarkers() {
   const mustContain = [
     ["CURRENT_BID_RADIUS_KM = 30", "30km current-load proximity radius"],
     ["ADVANCE_BID_RADIUS_KM = 50", "50km advance-load proximity radius"],
-    ["!pickupCoords || !d.lastKnownLocation", "proximity filter failing closed on missing coordinates"],
+    ["if (!pickupCoords || !loc || loc.lat == null || loc.lng == null) return false;", "proximity filter failing closed on missing coordinates"],
     ["function driverIsOnTrip(", "busy-driver rule (a vehicle on a trip must not be listed)"],
     ["const isReturn = !b.returnTrip && isReturnLoadFor(driver, b);", "Round trip not discounted twice"],
   ];
@@ -1633,7 +1674,13 @@ async function runDailyHealthCheck(label) {
   const headRes = await fetchJsonTimeout(REPO_HEAD_API, { "User-Agent": "apna-transport-health-check", Accept: "application/vnd.github+json" });
   const head = headRes.ok && headRes.data && headRes.data.sha ? headRes.data.sha : null;
   if (!head) notes.push(`Latest commit not read from GitHub (HTTP ${headRes.status}) -- "is the live app up to date?" was not checked.`);
-  findings.push(...auditDeployment({ hosting, functions: functionsStamp, head }));
+  // When the live site is behind the branch head, look at WHAT changed: a head whose website code is identical (only docs / tests / server files differ)
+  // is a note, not a "not deployed" alarm. The head's criteria come from its own scripts/criteria.lock.json (the pre-push guard keeps it current).
+  let headCriteria = null;
+  if (head && hosting && hosting.commitFull && !(hosting.commitFull.startsWith(head) || head.startsWith(hosting.commitFull))) {
+    try { const r = await fetch(`https://raw.githubusercontent.com/newsuraj02/SarthiTransport/${head}/scripts/criteria.lock.json`); if (r.ok) headCriteria = (JSON.parse(await r.text()) || {}).criteria || null; } catch (e) { notes.push(`Head criteria not read: ${e.message}`); }
+  }
+  findings.push(...auditDeployment({ hosting, functions: functionsStamp, head, headCriteria }));
   if (hosting) findings.push(...auditKnownIssues(hosting.knownIssues));
 
   // --- change detection against what the previous scan saw ---
@@ -1678,18 +1725,40 @@ async function runDailyHealthCheck(label) {
     functionsCommit: functionsStamp ? functionsStamp.commit : null, repoHead: head ? head.slice(0, 7) : null,
   }, { merge: true });
 
-  // Change Log: one entry per critical/high problem (stable id -> re-opened if it returns, never duplicated) + one per scan that saw changes.
+  // Change Log: one entry per critical/high problem (stable id -> re-opened if it returns, never duplicated).
   const day = new Date().toISOString().slice(0, 10);
+  const scanWord = label.replace("last", "").replace("Run", "");
   for (const x of findings.filter((y) => y.sev !== "info")) {
     await db.collection("bugs").doc(`scan-${x.id}`.slice(0, 120)).set({
       title: x.title, description: `${x.detail}`.trim() || x.title, severity: x.sev, status: "open", type: "bug", area: `Morning/evening scan - ${x.area}`, foundAt: day, lastSeenAt: Date.now(),
+      ...(x.remedy ? { resolveAction: x.remedy } : {}), resolutionNote: `Checked by the ${scanWord} scan: still detected.`, resolvingAt: FieldValue.delete(),
     }, { merge: true });
   }
+  // AUTO-CLOSE (owner 2026-11-05: the same entries came back every day and had to be marked fixed by hand): an open scan entry whose problem this scan no longer
+  // finds is closed here, "verified by the scan" -- but only when the check that produces it really ran (live data read, GitHub head read, source read).
+  try {
+    const currentIds = new Set(findings.filter((y) => y.sev !== "info").map((x) => `scan-${x.id}`.slice(0, 120)));
+    const checked = (area) => /Deployment$/.test(area) ? !!(hosting && head) : /Source$/.test(area) ? src.notes.length === 0 : /Infrastructure$/.test(area) ? true : !!live;
+    const openSnap = await db.collection("bugs").where("area", ">=", "Morning/evening scan").where("area", "<", "Morning/evening scan\uf8ff").get();
+    for (const d of openSnap.docs) {
+      const b = d.data() || {};
+      if (!d.id.startsWith("scan-") || b.status === "fixed") continue;
+      const isChange = d.id.startsWith("scan-changes-");
+      if (!isChange && (currentIds.has(d.id) || !checked(String(b.area || "")))) continue;
+      await db.collection("bugs").doc(d.id).set({ status: "fixed", fixedAt: FieldValue.serverTimestamp(), resolvingAt: FieldValue.delete(), resolutionNote: isChange ? "Informational -- listed on the Live Dashboard under Recent changes." : `Verified by the ${scanWord} scan: no longer detected.` }, { merge: true });
+    }
+  } catch (e) { console.error("[health] auto-close failed:", e.message); }
+  // Detected changes are INFORMATION, not a problem: ONE entry per day (all scans merged), logged already-settled so it never sits in the open list;
+  // the same lines are in the Live Dashboard's Recent changes feed.
   if (changes.length) {
-    await db.collection("bugs").doc(`scan-changes-${day}-${label}`).set({
-      title: `Scan ${label.replace("last", "").replace("Run", "")}: ${totalChanges} change(s) detected in the app`, description: changes.join("\n").slice(0, 1500),
-      severity: "low", status: "open", type: "config", area: "Morning/evening scan - change detection", foundAt: day, lastSeenAt: Date.now(),
-    }, { merge: true });
+    try {
+      const cref = db.collection("bugs").doc(`scan-changes-${day}`);
+      const csnap = await cref.get();
+      const od = csnap.exists ? csnap.data() || {} : {};
+      const lines = [`[${scanWord}] ${totalChanges} change(s):`, ...changes, ...(od.description ? [String(od.description)] : [])].join("\n").slice(0, 1500);
+      const count = (Number(od.changeCount) || 0) + totalChanges;
+      await cref.set({ title: `${count} change(s) detected in the app today`, description: lines, severity: "low", status: "fixed", fixedAt: FieldValue.serverTimestamp(), resolutionNote: "Informational -- listed on the Live Dashboard under Recent changes.", type: "config", area: "Morning/evening scan - change detection", foundAt: day, lastSeenAt: Date.now(), changeCount: count }, { merge: true });
+    } catch (e) { console.error("[health] change entry failed:", e.message); }
   }
   return { status: passed ? "pass" : "fail", summary: sum.text, findings: findings.length, changes: changes.length };
 }

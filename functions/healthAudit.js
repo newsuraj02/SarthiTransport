@@ -67,12 +67,19 @@ function otherRunningTripsOfDriver(booking, allOngoing, now) {
   return (allOngoing || []).filter((b) => b && b.id !== booking.id && b.status === "Ongoing" && isDriverRecord(b, { mobile: booking.driverMobile, name: booking.driverName }) && isBookingRunning(b, now)).map((b) => b.id);
 }
 
+// A trip that was accepted (status Ongoing) but never started (no loadingStartedAt), is not an Advance booking, and is older than 24 h. Its pickup OTP is
+// deleted after 24 h (expireOldBookingOtps), so it can NEVER start -- it only keeps its driver "busy" for ever. ONE definition: the scan reports exactly
+// these, and the "Resolve" remedy (closeStuckTrips in functions/index.js) closes exactly these and nothing else.
+function findStuckTrips(bookings, now) {
+  return (bookings || []).filter((b) => { if (!(b.status === "Ongoing" && isBookingRunning(b, now))) return false; const t = ms(b.acceptedAt) ?? ms(b.createdAt); return t != null && !b.loadingStartedAt && !b.scheduledFor && now - t > 24 * H; });
+}
+
 // ---- live-data audit ---------------------------------------------------------------------------------------------------------------
 // Each finding: { id, sev: "critical"|"high"|"info", area, title, detail }. `id` is stable so the Change Log entry for a problem that
 // persists is re-opened, not duplicated.
 function auditLiveData({ drivers = [], bookings = [], settings = {}, adminRouteFares = [], otpIds = [], withdrawals = [], rechargeRequests = [], vehicleTypes = [], now = Date.now(), busyRule = driverIsBusyForCurrentLoad }) {
   const f = [];
-  const push = (id, sev, area, title, detail) => f.push({ id, sev, area, title, detail: String(detail || "").slice(0, 400) });
+  const push = (id, sev, area, title, detail, remedy) => f.push({ id, sev, area, title, detail: String(detail || "").slice(0, 400), ...(remedy ? { remedy } : {}) });
   const ids = (arr, n = 8) => arr.slice(0, n).join(", ") + (arr.length > n ? ` (+${arr.length - n} more)` : "");
   const capOf = (d) => Number(d.vehicleSpec && d.vehicleSpec.capacityKg) || (vehicleTypes.find((v) => v.key === (d.vehicleSpec && d.vehicleSpec.type)) || {}).capacityKg || 0;
   const running = bookings.filter((b) => b.status === "Ongoing" && isBookingRunning(b, now));
@@ -86,11 +93,11 @@ function auditLiveData({ drivers = [], bookings = [], settings = {}, adminRouteF
   const per = {};
   running.forEach((b) => { const k = b.driverMobile || b.driverName; if (k) (per[k] = per[k] || []).push(b.id); });
   const dbl = Object.entries(per).filter(([, v]) => v.length > 1);
-  if (dbl.length) push("driver-double-booked", "critical", "Availability", `${dbl.length} driver(s) are on more than one trip at once`, `Bookings: ${ids(dbl.flatMap(([, v]) => v))}`);
+  if (dbl.length) push("driver-double-booked", "critical", "Availability", `${dbl.length} driver(s) are on more than one trip at once`, `Bookings: ${ids(dbl.flatMap(([, v]) => v))}. If one of them is an old stuck trip, "Resolve" closes it; two genuinely recent trips are never touched.`, "close-stuck-trips");
 
   // 3. Trips that never moved on.
-  const stuckTrips = running.filter((b) => { const t = ms(b.acceptedAt) ?? ms(b.createdAt); return t != null && !b.loadingStartedAt && !b.scheduledFor && now - t > 24 * H; });
-  if (stuckTrips.length) push("trip-stuck-not-started", "high", "Trips", `${stuckTrips.length} accepted trip(s) not started for over 24 h`, `They keep their driver busy until closed. Bookings: ${ids(stuckTrips.map((b) => b.id))}`);
+  const stuckTrips = findStuckTrips(bookings, now);
+  if (stuckTrips.length) push("trip-stuck-not-started", "high", "Trips", `${stuckTrips.length} accepted trip(s) not started for over 24 h`, `They keep their driver busy until closed (their pickup OTP expired after 24 h, so they can never start). "Resolve" closes them. Bookings: ${ids(stuckTrips.map((b) => b.id))}`, "close-stuck-trips");
   const longTrips = running.filter((b) => { const t = ms(b.loadingStartedAt); return t != null && now - t > 72 * H; });
   if (longTrips.length) push("trip-running-over-72h", "high", "Trips", `${longTrips.length} trip(s) running for over 72 h`, `Bookings: ${ids(longTrips.map((b) => b.id))}`);
   const searching = bookings.filter((b) => b.status === "AwaitingDriver" && !b.scheduledFor && ms(b.createdAt) != null && now - ms(b.createdAt) > 30 * 60e3);
@@ -160,13 +167,23 @@ function diffSettings(prev, cur) {
 
 // ---- deployment drift ("the app got back to its older self") -----------------------------------------------------------------------
 // hosting = live /build.json (or null), functions = functions/build.json stamp (or null), head = latest commit sha on the branch (or null).
-function auditDeployment({ hosting, functions, head, now = Date.now() }) {
+// Which criteria decide what the LIVE WEBSITE does (the app code, the page, the public files, the build config). Tests, docs, scripts, Cloud Functions and
+// the Android projects do not change the website, so a newer commit that touched only those must not read as "the live app is behind".
+const HOSTING_CRITERIA = (k) => k.startsWith("app:") || /^code:(src\/|public\/|index\.html|tailwind\.config\.js|postcss\.config\.js|vite\.config\.js|package\.json)/.test(k);
+function hostingCodeMatches(liveCriteria, headCriteria) {
+  if (!liveCriteria || !headCriteria || typeof liveCriteria !== "object" || typeof headCriteria !== "object") return false;
+  const a = Object.keys(liveCriteria).filter(HOSTING_CRITERIA), b = Object.keys(headCriteria).filter(HOSTING_CRITERIA);
+  if (!a.length || a.length !== b.length) return false;
+  return a.every((k) => k in headCriteria && headCriteria[k] === liveCriteria[k]);
+}
+function auditDeployment({ hosting, functions, head, headCriteria = null, now = Date.now() }) {
   const f = []; const push = (id, sev, title, detail) => f.push({ id, sev, area: "Deployment", title, detail });
   const same = (a, b) => a && b && (a.startsWith(b) || b.startsWith(a));
   if (!hosting) push("deploy-hosting-unstamped", "high", "The live app has no build stamp", "Live /build.json is missing: the live app was built before stamps existed, or from a different checkout. Rebuild and redeploy hosting.");
   else {
     if (hosting.dirty) push("deploy-hosting-dirty", "high", `The live app was built from UNCOMMITTED code (${hosting.commit})`, "Edits on the build machine that are not in the repository are live. Commit them or rebuild from a clean checkout.");
-    if (head && hosting.commitFull && !same(hosting.commitFull, head)) push("deploy-hosting-behind", "high", `The live app (${hosting.commit}) is not the latest commit (${head.slice(0, 7)})`, "Newer fixes are in the repository but not deployed. Run: git pull, npm run build, firebase deploy --only hosting.");
+    if (head && hosting.commitFull && !same(hosting.commitFull, head) && hostingCodeMatches(hosting.criteria, headCriteria)) push("deploy-hosting-docs-only", "info", `Newer commits exist (${head.slice(0, 7)}) but the live app's code is identical`, "Only docs / tests / server files changed since the deployed build, so nothing is missing from the website.");
+    else if (head && hosting.commitFull && !same(hosting.commitFull, head)) push("deploy-hosting-behind", "high", `The live app (${hosting.commit}) is not the latest commit (${head.slice(0, 7)})`, "Newer fixes are in the repository but not deployed. Run: git pull, npm run build, firebase deploy --only hosting.");
   }
   if (!functions) push("deploy-functions-unstamped", "info", "Cloud Functions have no build stamp", "Deploy functions once with the new firebase.json predeploy step to start tracking them.");
   else {
@@ -187,4 +204,4 @@ function summarize(findings, changes, totalChanges = changes.length) {
   return { status, crit, high, info, changes: totalChanges, text: status === "pass" ? `All checks passed${info ? ` (${info} note${info > 1 ? "s" : ""})` : ""}${totalChanges ? ` - ${totalChanges} change(s) detected` : ""}.` : `${crit} critical, ${high} high${info ? `, ${info} note(s)` : ""}${totalChanges ? `; ${totalChanges} change(s) detected` : ""}.` };
 }
 
-module.exports = { otherRunningTripsOfDriver, isDriverRecord, auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, driverIsBusyForCurrentLoad, isBookingRunning, getBookingWindow, estimatedTripHours, notificationLockHours };
+module.exports = { findStuckTrips, hostingCodeMatches, otherRunningTripsOfDriver, isDriverRecord, auditKnownIssues, auditLiveData, auditDeployment, diffCriteria, diffSettings, summarize, driverIsBusyForCurrentLoad, isBookingRunning, getBookingWindow, estimatedTripHours, notificationLockHours };

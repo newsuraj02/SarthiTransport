@@ -101,6 +101,14 @@ unusable saved rates · withdrawals / recharges / KYC waiting too long · login 
 Change detection (against the previous scan): live build commit · functions commit · every rule/function/file fingerprint added/changed/removed · settings values.
 Results: `systemHealth/heartbeat` (tile), `systemHealth/changeFeed`, `systemHealth/baseline`, Change Log entries `scan-*`. No names or phone numbers are ever written.
 
+**How scan entries settle (owner 2026-11-05: the same entries came back every day)** -- pinned by "SCAN ALERTS SETTLE FOR REAL" + "SCAN SOURCE MARKERS MATCH THE SOURCE":
+- **Stuck trip** = accepted, never started, not an Advance booking, older than 24 h (`findStuckTrips`; its pickup OTP is deleted after 24 h so it can never start). The scan reports exactly these; **Resolve** on "accepted trip(s) not started for over 24 h" / "driver on more than one trip" runs the data remedy `close-stuck-trips` (`closeStuckTrips`): marks exactly those Cancelled (`cancelledBy: system-cleanup`, no wallet change). A started trip, an Advance booking and a recent trip are never touched; two recent trips of one driver stay flagged.
+- **Resolve on any `scan-*` entry** runs the remedy (if any), then re-runs the whole scan and takes ITS answer (no AI opinion): still detected -> stays open ("Checked ... still detected"), gone -> fixed ("Verified by the scan").
+- **Auto-close**: every scan closes an open `scan-*` entry whose problem it no longer finds -- only when that check really ran (live data read / GitHub head read / source read), so a failed read never closes anything.
+- **Detected changes** are information: ONE already-settled entry per day (`scan-changes-<day>`, all scans merged); the same lines are in Recent changes.
+- **Deploy drift**: a newer commit whose WEBSITE criteria (`app:` rules, `src/`, `public/`, `index.html`, build config) are identical to the live build is a note (`deploy-hosting-docs-only`); any difference is still "live app is not the latest commit" (fix: deploy hosting).
+- **Source markers** (`checkSourceMarkers`) must be lines that exist in `src/App.jsx` today; rewriting a marked rule means updating its marker in the same commit.
+
 ## 7. The guard and the tracking itself
 
 | # | Rule | Where | Pinned by |

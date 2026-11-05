@@ -21,6 +21,13 @@ The memory is IN THE REPO, and it is enforced by machines, not by good intention
    second running trip; the Admin tile warns when THIS device runs an older build than the live `/build.json` (`__BUNDLE_COMMIT__`). Known open issues the owner was
    told about live in `scripts/knownIssues.json` and are listed on every scan. NOT built (needs the owner): phone push / WhatsApp to Admin (a WhatsApp template must
    be approved in MSG91; the Admin app has no FCM, a native push needs a build).
+   **Scan entries settle for real (owner 2026-11-05, "some of it keeps repeating every single day"):** the same Change Log entries returned daily because (a) "Resolve" only asked an AI for an opinion and marked
+   them fixed while the live problem (2 trips accepted > 24 h ago, never started, their OTP expired) stayed in Firestore, so the next scan re-opened them; (b) `checkSourceMarkers` looked for a line the
+   2026-11-04 radius change had rewritten (a false "rule missing" every scan); (c) every scan/pulse filed a new open "N change(s) detected" entry; (d) a docs-only commit read as "live app is not the latest
+   commit". Now: `close-stuck-trips` is a REAL remedy behind Resolve (closes exactly the trips the scan reports, `findStuckTrips`; started / Advance / recent trips untouched); Resolve on a `scan-*` entry re-runs the
+   scan and takes its answer; each scan auto-closes entries whose problem is gone (only when the check really ran); changes = one settled entry per day; docs/tests/server-only commits are a note
+   (`deploy-hosting-docs-only`), real website differences still raise "not the latest commit" (fix = deploy hosting); the source markers are pinned to the real source by an invariant. Needs
+   `firebase deploy --only functions` (hosting only for nothing here). Contract section 6; pinned by "SCAN ALERTS SETTLE FOR REAL" + "SCAN SOURCE MARKERS MATCH THE SOURCE".
 4. **Bug rule:** when a bug is found, first add a check that FAILS on the old code, then fix it (done for the busy-driver bug: the check fails on
    the old code, passes on the new).
 5. **Mirrored code** (app ↔ `functions/`): the checks compare the copies on hundreds of random situations; never edit one copy alone.
