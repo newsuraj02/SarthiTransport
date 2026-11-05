@@ -257,8 +257,8 @@ read while the stamp is under 60 s old; nothing else is ever remembered); (6) af
 "Your message has gone to drivers" shows (also the first line of the ride screen). Pinned in `verifyInvariants.mjs`.
 The earlier step-flow / Pickup-page / top-right-pill redesign was rolled back (`PickupPage`,
 `PickupPill`, `StepSummary`, `RecentPlacesList` remain in the file, unused). Also: the booking map
-is a compact 35% of the screen (owner 2026-10-29: 50% pushed the content off screen) and by default frames a 1.5 km radius around the current location
-(`NEARBY_MAP_DEFAULT_RADIUS_KM`); it (and the live ride-tracking map) has NO +/- zoom buttons and
+is a compact 35% of the screen (owner 2026-10-29: 50% pushed the content off screen) and by default frames a 500 m radius (owner 2026-11-04 "on the main screen, set the Map radius at 500m"; it was 1.5 km until then) around the current location
+(`NEARBY_MAP_DEFAULT_RADIUS_KM` = 0.5); it (and the live ride-tracking map) has NO +/- zoom buttons and
 keeps the customer's own zoom/pan until the page is refreshed (`nearbyMapUserView`); markers are the
 top-down blue-and-yellow truck (`truckMarkerIcon`) and a blue pickup dot. Weight caps, fares and
 the vehicle/driver list are unchanged. An evident 3 px navy line + soft shadow separates the map from the form (owner 2026-10-31, `data-map-divider`; a plain wrapper, no position/z-index). Inputs may always

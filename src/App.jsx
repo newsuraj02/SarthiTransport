@@ -4222,8 +4222,8 @@ function nearbyOfflineDrivers(drivers, customerLocation) {
 // Pimpri-Chinchwad / Pune — same fallback default as MapPicker, used only
 // until the customer's own GPS fix comes in (or if it never does).
 export const NEARBY_MAP_DEFAULT_CENTER = { lat: 18.6298, lng: 73.8131 };
-// Radius the booking map frames by default.
-const NEARBY_MAP_DEFAULT_RADIUS_KM = 1.5;
+// Radius the booking map frames by default (owner 2026-11-04: 500 m on the main screen; it was 1.5 km). The customer's own zoom / pan still wins.
+const NEARBY_MAP_DEFAULT_RADIUS_KM = 0.5;
 
 // Pickup / "you are here" marker: a calm blue dot with a soft halo, the way Google,
 // Uber and Ola mark a point (owner 2026-10-29: the old teardrop looked childish).

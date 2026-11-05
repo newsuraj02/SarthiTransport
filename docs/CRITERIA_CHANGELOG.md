@@ -191,3 +191,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Owner 2026-11-04: recent-trip cards show the FULL address (no line clamp) in a compact size so three fit in the frame
 - changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-05 -- Owner 2026-11-04: booking-screen map frames a 500 m radius by default (was 1.5 km)
+- changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#NEARBY_MAP_DEFAULT_RADIUS_KM
