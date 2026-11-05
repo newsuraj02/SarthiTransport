@@ -6602,12 +6602,8 @@ function BillDocumentsViewModal({ trip, onClose, lang }) {
 // stripPlusCode). This version fetches predictions itself and
 // renders them as an ordinary list, so each row's text can be transliterated
 // to match the app's language toggle before it's ever shown.
-// Suggestion ordering (owner 2026-11-04): nearest first, ascending kilometres. The server already sends them ranked; the in-browser fallback
-// uses this. Entries with no distance keep their order after the ones that have one.
-function sortPredictionsNearestFirst(list) {
-  const withKm = list.filter((p) => typeof p.distanceKm === "number").sort((a, b) => a.distanceKm - b.distanceKm);
-  return [...withKm, ...list.filter((p) => typeof p.distanceKm !== "number")];
-}
+// Suggestion ordering (owner 2026-11-04, replaces nearest-first): EXACTLY Google Maps' own order -- the server and the in-browser fallback both show Google's
+// relevance ranking (soft location bias around the reference point) untouched; each row only shows its distance.
 function formatSuggestionKm(km) { return km < 1 ? "<1 km" : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`; }
 
 export const LocationField = React.forwardRef(function LocationField({ value, onChange, onPlaceSelected, mapsReady, placeholder, suggestions = [], onSuggestionTap, onFocus, onBlur, recentItems, lang = "hi", citiesOnly = false, highlighted = false, disabled = false, compact = false, biasLat = 18.6298, biasLng = 73.8131 }, ref) {
@@ -6668,8 +6664,8 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
       // because the picked suggestion resolved to a distant namesake.
       new window.google.maps.places.AutocompleteService().getPlacePredictions(
         {
-          input: value, componentRestrictions: { country: "in" }, location: new window.google.maps.LatLng(biasLat, biasLng), radius: 60000,
-          // origin = the customer: every prediction then carries distance_meters, so the list can be shown nearest-first (owner 2026-11-04)
+          input: value, componentRestrictions: { country: "in" }, location: new window.google.maps.LatLng(biasLat, biasLng), radius: 50000,
+          // origin = the reference point: every prediction then carries distance_meters, shown as "N km" (the ORDER stays Google's own)
           origin: new window.google.maps.LatLng(biasLat, biasLng),
           // Set Fare's route pricing is city-to-city by design (see
           // ROUTE_MATCH_RADIUS_KM) — restricting suggestions here to
@@ -6683,10 +6679,10 @@ export const LocationField = React.forwardRef(function LocationField({ value, on
           if (cancelled) return;
           if (status !== "OK" || !preds) { setPredictions([]); return; }
           const withKm = preds.map((q) => ({ ...q, distanceKm: typeof q.distance_meters === "number" ? Math.round(q.distance_meters / 100) / 10 : null }));
-          setPredictions(citiesOnly ? withKm : sortPredictionsNearestFirst(withKm));
+          setPredictions(withKm);
         }
       );
-    }, 300);
+    }, 200); // Google Maps shows suggestions almost instantly
     return () => { cancelled = true; clearTimeout(debounceRef.current); };
   }, [value, mapsReady, citiesOnly, lang, biasLat, biasLng]);
 

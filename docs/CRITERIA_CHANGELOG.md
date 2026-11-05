@@ -172,3 +172,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Owner 2026-11-04: Advance day buttons use English equivalents (Tomorrow / Day after tomorrow / In 3 days) in English
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#advanceDayLabel
+
+## 2026-11-05 -- Owner 2026-11-04: Pickup/Drop suggestions replicate Google Maps -- one soft-biased Autocomplete call, Google's own order, no hard boxes, no nearest-first re-sort
+- changed (6): file:functions/addressLang.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/addressLang.js#createAddressService, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#LocationField
+- removed (1): code:src/App.jsx#sortPredictionsNearestFirst

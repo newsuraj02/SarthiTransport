@@ -102,19 +102,16 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
     return place;
   }
 
-  // One autocomplete call; `area` is optional: { restrictDeg } = ONLY inside this box around (lat,lng), { biasKm } = soft preference.
+  // One autocomplete call, the way Google Maps itself does it. `biasKm` (max 50 -- Google's limit for a circle) = a SOFT preference for places near (lat,lng):
+  // nearer matches rank higher but a better match farther away still shows. We never use locationRestriction (a hard box): it hides the right place whenever it is
+  // outside the box and, merged with other boxes, produced the vague lists the owner reported (2026-11-04).
   async function autocompleteOnce(input, lang, sessionToken, lat, lng, area) {
     const body = { input, languageCode: lang, includedRegionCodes: ["in"] };
     if (sessionToken) body.sessionToken = sessionToken;
-    // `origin` makes Google return distanceMeters (straight-line, from the customer) on every prediction -- used to rank nearest-first.
+    // `origin` only makes Google return distanceMeters (straight-line, from the customer) so the app can show "N km"; it does not change which places come back.
     if (typeof lat === "number" && typeof lng === "number") body.origin = { latitude: lat, longitude: lng };
-    if (area && typeof lat === "number" && typeof lng === "number") {
-      if (area.restrictDeg) {
-        const d = area.restrictDeg;
-        body.locationRestriction = { rectangle: { low: { latitude: lat - d, longitude: lng - d }, high: { latitude: lat + d, longitude: lng + d } } };
-      } else {
-        body.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: (area.biasKm || 50) * 1000 } };
-      }
+    if (area && area.biasKm && typeof lat === "number" && typeof lng === "number") {
+      body.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: Math.min(area.biasKm, 50) * 1000 } };
     }
     const r = await fetchFn("https://places.googleapis.com/v1/places:autocomplete", {
       method: "POST",
@@ -126,47 +123,18 @@ function createAddressService({ fetchFn, mapsKey, cache }) {
     return (j.suggestions || []).filter((s) => s.placePrediction).map((s) => s.placePrediction);
   }
 
-  // Owner 2026-11-04: the suggestions under Pickup / Drop must come NEAREST FIRST, in ascending kilometres from the customer -- typing
-  // "Kudalwadi" shows the one next to them, then the one ~120 km away, then the one ~350 km away, each with its km. Google returns at most
-  // 5 per call, so the search asks several areas around the customer (tight ~13 km, city ~39 km, region ~130 km, state ~350 km, anywhere),
-  // merges them without duplicates, keeps the closest few of each distance band (so far places are not crowded out by many near ones),
-  // and sorts the result ascending by distance. Without a known position there is no distance: Google's own relevance order.
-  const DISTANCE_BANDS_KM = [15, 40, 150, 400, Infinity];
-  const PER_BAND = 3;
-  const MAX_RESULTS = 10;
-  function rankNearestFirst(preds) {
-    const withDist = preds.map((p) => ({ p, m: typeof p.distanceMeters === "number" ? p.distanceMeters : null }));
-    const known = withDist.filter((x) => x.m != null).sort((a, b) => a.m - b.m);
-    const unknown = withDist.filter((x) => x.m == null);
-    const picked = []; let lower = 0;
-    for (const upperKm of DISTANCE_BANDS_KM) {
-      const inBand = known.filter((x) => x.m >= lower && x.m < upperKm * 1000);
-      picked.push(...inBand.slice(0, PER_BAND));
-      lower = upperKm * 1000;
-    }
-    const out = picked.sort((a, b) => a.m - b.m).slice(0, MAX_RESULTS);
-    return [...out, ...unknown].slice(0, MAX_RESULTS).map((x) => ({ ...x.p, distanceMeters: x.m }));
-  }
+  // Owner 2026-11-04 (replaces the nearest-first multi-box search): the suggestions under Pickup / Drop must work EXACTLY like Google Maps -- two or three letters
+  // of the first word already show the place you mean. Google Maps asks Autocomplete ONCE per keystroke with a soft location bias and shows Google's own relevance
+  // order (prefix matches, popularity, nearness together). So do we: ONE call, bias circle around the reference point (the customer for Pickup, the pickup for Drop),
+  // Google's order untouched, the km label from `origin`. No distance re-sorting, no hard areas, no padding with weaker matches.
+  const BIAS_KM = 50;
+  const MAX_RESULTS = 8;
   async function searchPlaces(input, lang, sessionToken, lat, lng) {
     const hasPoint = typeof lat === "number" && typeof lng === "number";
-    let preds = [];
-    const seen = new Set();
-    const add = (list) => { for (const p of list) { if (p?.placeId && !seen.has(p.placeId)) { seen.add(p.placeId); preds.push(p); } } };
-    if (hasPoint) {
-      const lists = await Promise.all([
-        autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 0.12 }).catch(() => []),
-        autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 0.35 }).catch(() => []),
-        autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 1.2 }).catch(() => []),
-        autocompleteOnce(input, lang, sessionToken, lat, lng, { restrictDeg: 3.2 }).catch(() => []),
-        autocompleteOnce(input, lang, sessionToken, lat, lng, null).catch(() => []),
-      ]);
-      lists.forEach(add);
-      preds = rankNearestFirst(preds);
-    } else {
-      add(await autocompleteOnce(input, lang, sessionToken, lat, lng, { biasKm: 50 }));
-      preds = preds.slice(0, MAX_RESULTS);
-    }
-    return Promise.all(preds.map(async (p) => ({
+    const list = await autocompleteOnce(input, lang, sessionToken, lat, lng, hasPoint ? { biasKm: BIAS_KM } : null);
+    const seen = new Set(); const preds = [];
+    for (const p of list) { if (p?.placeId && !seen.has(p.placeId)) { seen.add(p.placeId); preds.push(p); } }
+    return Promise.all(preds.slice(0, MAX_RESULTS).map(async (p) => ({
       placeId: p.placeId,
       main: await toScript(stripPlusCode(p.structuredFormat?.mainText?.text || p.text?.text || ""), lang),
       secondary: await toScript(stripPlusCode(p.structuredFormat?.secondaryText?.text || ""), lang),
