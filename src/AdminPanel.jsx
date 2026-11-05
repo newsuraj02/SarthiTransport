@@ -22,7 +22,7 @@ import {
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
-  getRouteScaleRatio, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
+  getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
@@ -2314,11 +2314,35 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   const dieselAdj = tier && km > 0 && !exactUsesSaved && dieselPricePerLitre != null
     ? km * ((dieselPricePerLitre - DIESEL_BASELINE_PRICE_PER_LITRE) / (DIESEL_MILEAGE_BY_TIER_MAX_KG[tier.maxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED])) * (!exactMatch && scaleRatio != null ? scaleRatio : 1)
     : 0;
-  const suggestedTotal = exactUsesSaved && Number(exactMatch.totalFare) > 0
-    ? Math.round(Number(exactMatch.totalFare)) // already the effective (live-diesel) saved rate -- same number the customer is quoted
-    : computedTotal != null
+  // The hand-made rate: only when Admin has typed their own fixed / per-km figure for this route.
+  const formulaTotal = computedTotal != null
     ? Math.round(isReturn && returnPct > 0 ? (computedTotal + dieselAdj) * (1 - returnPct / 100) : computedTotal + dieselAdj)
     : null;
+  // ONE FARE EVERYWHERE (owner 2026-11-05: "NO 2-3 different prices for Admin, Driver and Customer"). The suggested route rate is NOT calculated here any more:
+  // it is read from the very same fare table the customer's vehicle list is built from (buildRouteFareTable in App.jsx: Admin's saved rate -> scaled by the
+  // other vehicles -> the master formula with the live diesel + market-rate change, then the same safety passes over ALL vehicles). The old calculator
+  // formula here (fix + per km / max(...) + toll) was a second, different formula: it disagreed with what customers were quoted on EVERY route without a
+  // saved rate (checked: 120 of 120 vehicle x distance cases, by up to Rs 1,500). Admin's own fix / per figures still work: type one and the route rate
+  // follows YOUR numbers (orange "manual").
+  const placeArgs = { pickup, drop, distance: km, pickupLat: pickupCoords?.lat, pickupLng: pickupCoords?.lng, dropLat: dropCoords?.lat, dropLng: dropCoords?.lng, adminRouteFares, dieselPricePerLitre };
+  const fareTable = tier && km > 0 ? buildRouteFareTable({ tiers: fareTiers, ...placeArgs }) : null;
+  // The return direction (the swap): the customer pays Admin's saved RETURN rate for this swapped route, otherwise the one-way fare of the ORIGINAL direction
+  // (this form's pickup / drop swapped back) less Admin's returnPct -- exactly what the customer's Round trip list does.
+  const goingTable = tier && km > 0 && isReturn
+    ? buildRouteFareTable({ tiers: fareTiers, ...placeArgs, pickup: drop, drop: pickup, pickupLat: dropCoords?.lat, pickupLng: dropCoords?.lng, dropLat: pickupCoords?.lat, dropLng: pickupCoords?.lng })
+    : null;
+  const goingFare = goingTable && tier ? goingTable[tier.maxKg] : computedTotal;
+  const systemTotal = !tier || !fareTable ? null
+    : !isReturn ? fareTable[tier.maxKg]
+    : (() => {
+      const saved = getAdminRouteOverride(pickup, drop, tier.maxKg, adminRouteFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, fareTiers, km, null, true);
+      return saved != null ? Math.round(saved) : Math.round(goingTable[tier.maxKg] * (1 - (Number(returnPct) || 0) / 100));
+    })();
+  const suggestedTotal = fixTouched || perTouched ? formulaTotal : systemTotal;
+  // What a customer sees on the vehicle list for this vehicle right now (its category's fare) -- shown under the rate so Admin can see the two agree.
+  const customerSees = tier && fareTable && !isReturn
+    ? customerCategoriesForTier(tier.maxKg, fareTiers).map((i) => ({ name: customerListCategoryName(i, lang), fare: categoryRouteFare(i, fareTiers, fareTable).fare }))
+    : [];
   // Per ton (owner 2026-11-05): tons default to the vehicle's full capacity, the per-ton rate to the system suggestion; the route rate is then per ton x tons.
   const capacityTons = tier ? tier.maxKg / 1000 : 0;
   const tonsValue = rateBasis === "ton" ? (tonsTouched ? tons : (capacityTons > 0 && capacityTons < 1000 ? String(capacityTons) : "")) : "";
@@ -2567,11 +2591,11 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                   </div>
                 )}
               </div>
-              {computedTotal != null && suggestedTotal != null && (
+              {goingFare != null && suggestedTotal != null && (
                 <div className="px-3.5 py-2 flex items-center justify-between gap-1.5 text-[11px] font-bold" style={{ color: C.ink, background: C.paper, fontFamily: monoFont }}>
-                  <span>{lang === "en" ? "Going" : lang === "mr" ? "जाणे" : "जाना"} {fmt(computedTotal)}</span>
+                  <span>{lang === "en" ? "Going" : lang === "mr" ? "जाणे" : "जाना"} {fmt(goingFare)}</span>
                   <span style={{ color: C.success }}>{lang === "en" ? "Return" : lang === "mr" ? "रिटर्न" : "रिटर्न"} {fmt(suggestedTotal)}</span>
-                  <span style={{ color: C.inkSoft }}>{lang === "en" ? "Diff" : lang === "mr" ? "फरक" : "फ़र्क़"} −{fmt(computedTotal - suggestedTotal)}</span>
+                  <span style={{ color: C.inkSoft }}>{lang === "en" ? "Diff" : lang === "mr" ? "फरक" : "फ़र्क़"} −{fmt(goingFare - suggestedTotal)}</span>
                 </div>
               )}
             </div>
@@ -2715,6 +2739,18 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               <span style={{ color: C.inkSoft }}>{lang === "en" ? "System formula — no Admin rate set for this route yet" : lang === "mr" ? "सिस्टम फॉर्म्युला — या रूटसाठी अजून अ‍ॅडमिन दर नाही" : "सिस्टम फॉर्मूला — इस रूट के लिए अभी तक एडमिन दर नहीं है"}</span>
             )}
           </div>
+
+          {/* Same price for everyone (owner 2026-11-05): what the customer's vehicle list shows for this vehicle's category on this route, from the same fare table. */}
+          {customerSees.length > 0 && (
+            <div data-customer-sees className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.inkSoft }}>
+              {customerSees.map((c, i) => (
+                <div key={i} className="flex items-center justify-between gap-2">
+                  <span>{lang === "en" ? "Customer & driver see" : lang === "mr" ? "ग्राहक आणि ड्रायव्हर पाहतात" : "ग्राहक और ड्राइवर को दिखता है"}: {c.name}</span>
+                  <span style={{ fontFamily: monoFont, color: Number(totalFare) === c.fare ? C.success : C.marigoldDeep }}>{fmt(c.fare)}{Number(totalFare) > 0 && Number(totalFare) !== c.fare ? " ≠" : " ✓"}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Toll surcharge (guide section 5C) -- fixed per vehicle class,
               outside city only, never Admin-editable here, always added on

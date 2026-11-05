@@ -12,9 +12,14 @@ export function loadFareEngine(root) {
   if (a < 0 || bStart < 0) throw new Error("fare engine markers not found");
   const region = app.slice(a, bEnd).replace(/^export\s+/gm, "");
   const hav = extractBlock(app, "haversineKm").replace(/^export\s+/, "");
-  return new Function(hav + "\n" + region + `; return { calculateFare, priceOutstation, DEFAULT_FARE_TIERS, zoneFor, findFareTier, enforceMonotonicFares, haltOf, includedDays,
+  // ONE FARE EVERYWHERE (2026-11-05): the shared table + category helpers, and the category limits they read.
+  const sharedA = app.indexOf("// ONE FARE EVERYWHERE (owner 2026-11-05"), sharedB = app.indexOf("// Firestore document IDs can't contain");
+  const limitsLine = (app.match(/^const CUSTOMER_LIST_CATEGORY_KG = \[[^\]]*\];$/m) || [""])[0];
+  if (sharedA < 0 || sharedB < sharedA || !limitsLine) throw new Error("shared fare table markers not found");
+  const shared = limitsLine + "\n" + app.slice(sharedA, sharedB).replace(/^export\s+/gm, "");
+  return new Function(hav + "\n" + region + "\n" + shared + `; return { calculateFare, priceOutstation, DEFAULT_FARE_TIERS, zoneFor, findFareTier, enforceMonotonicFares, haltOf, includedDays,
     daysUsed, buildBill, getAdminRouteOverride, findExactAdminRoute, getRouteScaleRatio, resolveFareForTier, applyDieselToSavedRates, findFareOutliers,
-    applyMarketAdjustPct, clampMarketAdjustPct, marketAdjustFactor,
+    applyMarketAdjustPct, clampMarketAdjustPct, marketAdjustFactor, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, CUSTOMER_LIST_CATEGORY_KG,
     PORTER_OUTSTATION_RAW, PRICE_CORRECTOR_ANCHORS, priceCorrectionFactor, haltPerDayFor, KM_PER_DAY, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG };`)();
 }
 

@@ -2154,6 +2154,56 @@ function resolveFareForCapacity(capacityKg, pickup, drop, distanceKm, tiers, pic
 function resolveFareForTier(tierMaxKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, dieselPricePerLitre = null) {
   return resolveFareForCapacity(tierMaxKg, pickup, drop, distanceKm, tiers, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, null, false, dieselPricePerLitre);
 }
+// ONE FARE EVERYWHERE (owner 2026-11-05: "Admin rate calculator, customer vehicle list and driver must show the SAME price"). Everything that shows a route
+// fare -- the customer's vehicle list, the booking (and so the driver's load card) and the Admin Rate Calculator -- reads THIS table, so they cannot disagree:
+//   1. every vehicle tier's fare on the route = resolveFareForTier (Admin's saved rate -> scaled by Admin's other tiers -> the master formula, with the live
+//      diesel and the market-rate change already inside);
+//   2. a wildly-off saved rate is corrected, and a bigger vehicle is never cheaper than a smaller one -- over ALL tiers, never over "whoever is online", so the
+//      numbers do not change with the drivers on duty.
+// Returns { [tierMaxKg]: fare }.
+export function buildRouteFareTable({ tiers, pickup, drop, distance, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, dieselPricePerLitre = null }) {
+  const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
+  const raw = list.map((t) => ({ id: String(t.maxKg), tier: t, tierMaxKg: t.maxKg, fare: resolveFareForTier(t.maxKg, pickup, drop, distance, list, pickupLat, pickupLng, dropLat, dropLng, adminRouteFares, dieselPricePerLitre) }));
+  const outlierIds = findFareOutliers(raw.map((e) => ({ id: e.id, tierMaxKg: e.tierMaxKg, totalFare: e.fare, estimatedKm: distance })), list, dieselPricePerLitre);
+  const clean = raw.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tierMaxKg, fare: e.fare })).sort((a, b) => a.tierMaxKg - b.tierMaxKg);
+  const corrected = outlierIds.size === 0 ? raw : raw.map((e) => (outlierIds.has(e.id) ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tierMaxKg }, clean, distance, list, dieselPricePerLitre) } : e));
+  const out = {};
+  enforceMonotonicFares(corrected).forEach((e) => { out[e.tierMaxKg] = e.fare; });
+  return out;
+}
+// The fare the customer's list shows for capacity category `categoryIndex` (CUSTOMER_LIST_CATEGORY_KG, the last index = "above 32000 kg"): the fare of the TOP
+// vehicle tier that category can hold -- a fixed rule, not "the dearest vehicle that happens to be online" -- so the category always costs the same on a route.
+// Returns { fare, tierMaxKg } (tierMaxKg = that top tier, the one the booking is stamped with).
+export function categoryRouteFare(categoryIndex, tiers, table) {
+  const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
+  const { lo, hi } = categoryTierBounds(categoryIndex, list);
+  let best = null;
+  for (const t of list) {
+    if (t.maxKg < lo || t.maxKg > hi) continue;
+    const fare = table[t.maxKg];
+    if (fare != null && (!best || fare > best.fare || (fare === best.fare && t.maxKg > best.tierMaxKg))) best = { fare, tierMaxKg: t.maxKg };
+  }
+  return best || { fare: table[hi] ?? 0, tierMaxKg: hi };
+}
+// The vehicle tiers (by maxKg) a capacity category can hold: from the tier of its lightest possible capacity up to the tier of its limit.
+function categoryTierBounds(categoryIndex, list) {
+  const limits = CUSTOMER_LIST_CATEGORY_KG;
+  const prev = categoryIndex > 0 ? limits[Math.min(categoryIndex, limits.length) - 1] : 0;
+  const topFinite = Math.max(...list.filter((t) => t.maxKg < FARE_TIER_MAX_KG_UNCAPPED).map((t) => t.maxKg));
+  // The uncapped (multi-axle trailer) tier belongs to the final "above 32000 kg" category only -- it must not price the 16-wheeler (25-32 t) category.
+  if (categoryIndex >= limits.length) return { lo: FARE_TIER_MAX_KG_UNCAPPED, hi: FARE_TIER_MAX_KG_UNCAPPED };
+  const hi = Math.min(findFareTier(limits[categoryIndex], list).maxKg, topFinite);
+  const lo = Math.min(findFareTier(prev + 1, list).maxKg, hi);
+  return { lo, hi };
+}
+// Which customer-list categories include a vehicle tier (usually one; a tier that straddles a limit, e.g. 21000 kg, is in two) -- Admin's calculator uses it to say
+// "the customer list shows THIS vehicle under <category> at <fare>".
+export function customerCategoriesForTier(tierMaxKg, tiers) {
+  const list = Array.isArray(tiers) && tiers.length > 0 ? tiers : DEFAULT_FARE_TIERS;
+  const out = [];
+  for (let i = 0; i <= CUSTOMER_LIST_CATEGORY_KG.length; i++) { const { lo, hi } = categoryTierBounds(i, list); if (tierMaxKg >= lo && tierMaxKg <= hi) out.push(i); }
+  return out;
+}
 // Firestore document IDs can't contain "/" and have a length cap — routes
 // are short place names in practice (Set Fare is meant for city-level
 // entries like "Pune"/"Kolhapur"), but sanitize defensively anyway.
@@ -4137,7 +4187,7 @@ const CUSTOMER_LIST_CATEGORY_NAMES = {
   hi: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फीट", "टाटा 407", "14 फीट आयशर", "17 फीट आयशर", "20 फीट कंटेनर", "6 चक्का", "22/24 फीट ट्रक", "10 चक्का", "32 फीट कंटेनर", "12/14 चक्का", "16 चक्का", "32 टन+ ट्रक"],
   mr: ["3 व्हीलर", "टाटा एस", "पिकअप", "पिकअप 8 फूट", "टाटा 407", "14 फूट आयशर", "17 फूट आयशर", "20 फूट कंटेनर", "6 चाकी", "22/24 फूट ट्रक", "10 चाकी", "32 फूट कंटेनर", "12/14 चाकी", "16 चाकी", "32 टन+ ट्रक"],
 };
-function customerListCategoryName(index, lang) {
+export function customerListCategoryName(index, lang) {
   const list = CUSTOMER_LIST_CATEGORY_NAMES[lang] || CUSTOMER_LIST_CATEGORY_NAMES.en;
   return list[Math.min(Math.max(index, 0), list.length - 1)];
 }
@@ -7679,7 +7729,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   const bidRadiusKm = advance ? ADVANCE_BID_RADIUS_KM : CURRENT_BID_RADIUS_KM; // 50 km Advance / 30 km Current
   const nearbyDrivers = (() => {
     if (!scheduleReady) return []; // advance: nothing to match until the date AND time are chosen
-    const withFare = drivers
+    // ONE FARE EVERYWHERE (owner 2026-11-05): the fare table is built once over ALL vehicle tiers (buildRouteFareTable -- the same function the Admin Rate
+    // Calculator reads), and a category's fare is the fare of its TOP tier (categoryRouteFare) -- it no longer depends on which drivers are online.
+    const fareTable = buildRouteFareTable({ tiers: fareTiers, pickup, drop, distance, pickupLat: pickupCoords?.lat, pickupLng: pickupCoords?.lng, dropLat: dropCoords?.lat, dropLng: dropCoords?.lng, adminRouteFares, dieselPricePerLitre });
+    const priced = drivers
       .filter((d) => isDriverListableForCustomer(d, { pickupCoords, bidRadiusKm, advance, scheduledForValue, bookings, vehicleTypes: VEHICLES, lang }))
       .map((d) => {
         const capacityKg = Number(d.vehicleSpec?.capacityKg) || VEHICLES.find((v) => v.key === d.vehicleSpec?.type)?.capacityKg || 0;
@@ -7689,37 +7742,16 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
         const km = haversineKm(pickupCoords.lat, pickupCoords.lng, d.lastKnownLocation.lat, d.lastKnownLocation.lng);
         const gpsOn = hasFreshLocation(d);
         const id = d.mobile || d.id;
-        const fare = resolveFareForTier(tier.maxKg, pickup, drop, distance, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, adminRouteFares, dieselPricePerLitre);
-        return { driver: d, capacityKg, tier, tierIndex, km, gpsOn, id, fare };
+        const cat = categoryRouteFare(customerListCategoryIndex(capacityKg), fareTiers, fareTable);
+        return { driver: d, capacityKg, tier, tierIndex, km, gpsOn, id, fare: cat.fare, fareTierMaxKg: cat.tierMaxKg };
       })
       .sort((a, b) => (a.gpsOn ? 0 : 1) - (b.gpsOn ? 0 : 1) || a.tier.maxKg - b.tier.maxKg || a.km - b.km); // ONLINE first (GPS on = a live location), then the GPS-off ones (owner 2026-11-04); inside each group: category, then nearest
-
-    // A bad Admin override for just one tier on this route (a stray digit,
-    // a mixed-up route -- see findFareOutliers) would otherwise show the
-    // customer a fare wildly out of line with every other vehicle size in
-    // THIS exact list. Corrects only what's displayed here -- the
-    // underlying adminRouteFares document is untouched; Admin's Saved
-    // Routes screen flags the same entry so it actually gets fixed at the
-    // source, not just papered over for whoever books next.
-    const outlierIds = findFareOutliers(
-      withFare.map((e) => ({ id: e.id, tierMaxKg: e.tier.maxKg, totalFare: e.fare, estimatedKm: distance })),
-      fareTiers, dieselPricePerLitre
-    );
-    const afterOutliers = outlierIds.size === 0 ? withFare : (() => {
-      const clean = withFare.filter((e) => !outlierIds.has(e.id)).map((e) => ({ tierMaxKg: e.tier.maxKg, fare: e.fare }));
-      return withFare.map((e) => outlierIds.has(e.id)
-        ? { ...e, fare: interpolateOutlierFare({ tierMaxKg: e.tier.maxKg }, clean, distance, fareTiers, dieselPricePerLitre) }
-        : e);
-    })();
-    // Last pass, after outlier correction -- see enforceMonotonicFares:
-    // never show a bigger-capacity vehicle cheaper than a smaller one.
-    const priced = enforceMonotonicFares(afterOutliers);
     if (!returnTrip) return priced;
     // Return trip (owner 2026-11-01): total = the normal one-way fare + the RETURN fare. The return fare is what Admin's rate
     // calculator calls the return direction: Admin's saved return rate for the swapped route if there is one, otherwise the
     // same fare less the Admin-set return % (returnPct, settings/main -- 15 now). No waiting charge.
     return priced.map((e) => {
-      const saved = getAdminRouteOverride(drop, pickup, e.tier.maxKg, adminRouteFares, dropCoords?.lat, dropCoords?.lng, pickupCoords?.lat, pickupCoords?.lng, fareTiers, distance, null, true);
+      const saved = getAdminRouteOverride(drop, pickup, e.fareTierMaxKg, adminRouteFares, dropCoords?.lat, dropCoords?.lng, pickupCoords?.lat, pickupCoords?.lng, fareTiers, distance, null, true);
       const returnFare = saved != null ? Math.round(saved) : Math.round(e.fare * (1 - (Number(returnPct) || 0) / 100));
       return { ...e, oneWayFare: e.fare, returnFare, fare: e.fare + returnFare };
     });
@@ -7809,7 +7841,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     if (advance) {
       // Advance-notice lead time, scaled by the vehicle's own category (checked once a specific vehicle is confirmed).
       const scheduled = parseScheduledFor(scheduledForValue);
-      const minHours = minAdvanceNoticeHours(entry.tier.maxKg);
+      const minHours = minAdvanceNoticeHours(entry.fareTierMaxKg);
       const hoursUntil = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
       if (hoursUntil < minHours) {
         setBookingError(lang === "en"
@@ -7825,7 +7857,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
     // (Firestore's local echo would otherwise swap this screen out instantly).
     setTimeout(() => {
     const err = requestByCategory({
-      pickup, drop, tierMaxKg: entry.tier.maxKg, listCategory: categoryIndex, listCategoryKg: customerListCategoryLimitKg(categoryIndex), customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
+      pickup, drop, tierMaxKg: entry.fareTierMaxKg, listCategory: categoryIndex, listCategoryKg: customerListCategoryLimitKg(categoryIndex), customerWeight: entry.capacityKg || entry.tier.maxKg, weightIsCapacity: true, driverName: entry.driver.name, distance, scheduledFor: advance ? scheduledForValue : null,
       pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
       dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
       pickupPlaceId, dropPlaceId, returnTrip,
