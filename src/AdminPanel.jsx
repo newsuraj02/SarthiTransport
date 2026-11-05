@@ -20,8 +20,8 @@ import { createDoc, removeDoc, subscribeDoc } from "./firestoreStore";
 import {
   C, DEFAULT_EXPENSE_CATEGORIES, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG, EN_LABELS, FARE_TIER_MAX_KG_UNCAPPED, MR_LABELS,
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
-  describeAdminRateSaveError, estimateDistanceKm,
-  fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
+  describeAdminRateSaveError,
+  syncRouteDistance, formatTripKm, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
@@ -144,7 +144,7 @@ function AdminTripDetailCard({ booking, driver, lang, onClose }) {
       {row(T("Vehicle", "गाड़ी", "गाडी"), [spec.vehicleName, spec.vehicleNumber, spec.capacityKg ? `${spec.capacityKg}kg` : ""].filter(Boolean).join(" · "))}
       {row(T("Customer", "ग्राहक", "ग्राहक"), [booking.customerName, booking.customerMobile].filter(Boolean).join(" · "))}
       {row(T("Weight", "वज़न", "वजन"), weightKg ? (weightKg >= 1000 ? `${weightKg / 1000} ton (${weightKg}kg)` : `${weightKg}kg`) : "")}
-      {row(T("Distance", "दूरी", "अंतर"), booking.distance ? `${booking.distance} km` : "")}
+      {row(T("Distance", "दूरी", "अंतर"), booking.distance ? formatTripKm(booking.distance, lang) : "")}
       {row(T("Fare", "भाड़ा", "भाडे"), booking.fare ? `${fmt(booking.fare)}${booking.returnTrip && booking.oneWayFare != null && booking.returnFare != null ? ` (${fmt(booking.oneWayFare)} + ${T("return", "वापसी", "परतीचे")} ${fmt(booking.returnFare)})` : ""}` : "")}
       {row(T("Accepted", "स्वीकार किया", "स्वीकारले"), accepted ? accepted.toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "")}
       {row(T("Scheduled for", "निर्धारित", "ठरलेले"), booking.scheduledFor)}
@@ -2115,7 +2115,7 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditA
                   <div className="text-xs font-bold truncate mt-1" style={{ color: C.ink }}>{r.pickupName}</div>
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
                   <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
-                    {r.veh ? `${r.veh} · ` : ""}{r.estimatedKm != null ? `${formatDistanceExact(r.estimatedKm, lang)} · ` : ""}<b style={{ color: C.ink }}>{fmt(r.totalFare)}</b>
+                    {r.veh ? `${r.veh} · ` : ""}{r.estimatedKm != null ? `${formatTripKm(r.estimatedKm, lang)} · ` : ""}<b style={{ color: C.ink }}>{fmt(r.totalFare)}</b>
                     {r.rateBasis === "ton" && r.tons && r.perTon ? ` · ${r.tons} ${lang === "en" ? "t" : "टन"} × ${fmt(r.perTon)}/${lang === "en" ? "t" : "टन"}` : ""}
                     {r.isReturn ? ` · ${lang === "en" ? "Return" : lang === "mr" ? "रिटर्न" : "रिटर्न"} −${r.returnPct || 15}%` : ""}
                     {r.manual ? ` · ${lang === "en" ? "Manual" : lang === "mr" ? "मॅन्युअल" : "मैनुअल"}` : ""}
@@ -2239,13 +2239,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   }, [drop, dropCoords, mapsReady]);
   const distanceRequestRef = useRef(0);
   useEffect(() => {
-    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
-    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
-    if (!hasBothCoords || !mapsReady) return;
-    const requestId = ++distanceRequestRef.current;
-    fetchRoadDistanceKm(pickupCoords, dropCoords)
-      .then((km) => { if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100); })
-      .catch((e) => console.error("[admin rate calc distance]", e));
+    syncRouteDistance(pickupCoords, dropCoords, mapsReady, setDistance, distanceRequestRef, "admin rate calc distance");
   }, [pickupCoords, dropCoords, mapsReady]);
 
   const tier = selectedMaxKg != null ? fareTiers.find((t) => t.maxKg === selectedMaxKg) : null;
@@ -2605,7 +2599,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
             <div>
               <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Estimated distance" : lang === "mr" ? "अंदाजे अंतर" : "अनुमानित दूरी"}</div>
               <div className="rounded-lg p-2.5 text-sm font-black" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }}>
-                {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
+                {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatTripKm(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
               </div>
             </div>
             <div>
@@ -2806,7 +2800,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{r.pickupName} → {r.dropName}</div>
                         <div className="text-[10px] truncate" style={{ color: C.inkSoft, fontFamily: monoFont }}>
-                          {r.driverMobile} · {r.estimatedKm != null ? formatDistanceExact(r.estimatedKm, lang) : "—"}
+                          {r.driverMobile} · {r.estimatedKm != null ? formatTripKm(r.estimatedKm, lang) : "—"}
                         </div>
                       </div>
                       <div className="text-right shrink-0">

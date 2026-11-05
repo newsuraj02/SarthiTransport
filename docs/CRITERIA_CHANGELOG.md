@@ -219,3 +219,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-05 -- ONE FARE EVERYWHERE: calculator + customer list + booking read buildRouteFareTable; category fare = top tier; calculator no longer has its own formula
 - changed (9): app:customerListCategoryName, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/fareEngine.mjs, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/App.jsx#customerListCategoryName, code:src/App.jsx#CustomerBooking
 - added (4): code:src/App.jsx#buildRouteFareTable, code:src/App.jsx#categoryRouteFare, code:src/App.jsx#categoryTierBounds, code:src/App.jsx#customerCategoriesForTier
+
+## 2026-11-05 -- ONE FARE + ONE DISTANCE everywhere: syncRouteDistance + formatTripKm used by customer/Admin/driver; Return Load no longer changes the fare
+- changed (14): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminTripDetailCard, code:src/AdminPanel.jsx#AdminSavedRoutes, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/App.jsx#CustomerBooking, code:src/App.jsx#BookedVehiclePanel, code:src/App.jsx#ActiveRide, code:src/App.jsx#CustomerHistory, code:src/App.jsx#DriverHome, code:src/App.jsx#SetFareForm, code:src/App.jsx#App
+- added (3): code:src/App.jsx#syncRouteDistance, code:src/App.jsx#tripKmRounded, code:src/App.jsx#formatTripKm

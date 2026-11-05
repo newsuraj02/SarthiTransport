@@ -2457,6 +2457,26 @@ export function fetchRoadDistanceKm(pickupCoords, dropCoords) {
   });
 }
 
+// ONE DISTANCE EVERYWHERE (owner 2026-11-05: "Distance (km) is inconsistent, keep it same throughout the app (Admin, Customer and Driver); the whole app follows the
+// same distance calculation that it shows on the Main screen of Pickup and Drop"). The trip distance is ALWAYS: Google's road distance between the two places'
+// coordinates, rounded to 2 decimals (the straight-line estimate x ROAD_DISTANCE_FACTOR only until it arrives, or when Google cannot answer). This ONE routine
+// is run by the customer's booking screen, Admin's Rate Calculator and the driver's Set Fare; the booking stores that number (`distance`) and every other screen
+// reads it back. It is SHOWN everywhere as `formatTripKm` = the whole-km figure the Main screen shows ("Distance: 12 km").
+export function syncRouteDistance(pickupCoords, dropCoords, mapsReady, setDistance, requestRef, tag = "distance") {
+  setDistance(estimateDistanceKm(pickupCoords, dropCoords));
+  const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
+  if (!hasBothCoords || !mapsReady) return;
+  const requestId = ++requestRef.current;
+  fetchRoadDistanceKm(pickupCoords, dropCoords)
+    .then((km) => { if (requestRef.current === requestId) setDistance(Math.round(km * 100) / 100); })
+    .catch((e) => console.error(`[${tag}]`, e));
+}
+export function tripKmRounded(km) { return Math.round(Number(km) || 0); }
+export function formatTripKm(km, lang) {
+  if (km == null || !Number.isFinite(Number(km))) return null;
+  return `${tripKmRounded(km)} ${lang === "en" ? "km" : "किमी"}`;
+}
+
 // Manual refresh — the way to pick up a newly-deployed version without
 // force-closing and reopening the app (see firebase.json's no-cache
 // headers on index.html — that fix makes a plain reload actually get the
@@ -7536,15 +7556,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // banner shown) until real coordinates for both ends are known.
   const distanceRequestRef = useRef(0);
   useEffect(() => {
-    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
-    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
-    if (!hasBothCoords || !mapsReady) return;
-    const requestId = ++distanceRequestRef.current;
-    fetchRoadDistanceKm(pickupCoords, dropCoords)
-      .then((km) => {
-        if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100);
-      })
-      .catch((e) => console.error("[distance matrix]", e));
+    syncRouteDistance(pickupCoords, dropCoords, mapsReady, setDistance, distanceRequestRef, "distance matrix");
   }, [pickupCoords, dropCoords, mapsReady]);
 
   // Advances the golden highlight (highlightField, below) to the next
@@ -7780,7 +7792,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   const returnBarVisible = !returnTrip && !pickupTouched && !pickup.trim();
   // ONE row (owner 2026-11-04): the est. distance at the LEFT end and "Change pickup / drop" at the RIGHT end, both visible (est. km once Pickup + Drop
   // give a distance; the link only while the Pickup / Drop boxes are tucked away). It is the row the Round-trip / list sections show under the places.
-  const estKm = distance > 0 && placesReady ? Math.round(distance) : null;
+  const estKm = distance > 0 && placesReady ? tripKmRounded(distance) : null;
   // Owner 2026-11-04: from the next screen onwards (the vehicle list) NO route card -- only this small row: the distance at the left and a small "Change pickup / drop"
   // link at the right (the Pickup / Drop partition design lives on the main screen's recent-trip cards only).
   const changePlacesLink = estKm != null || tripHidden ? (
@@ -8350,7 +8362,7 @@ function BookedVehiclePanel({ b, v, VEHICLES, driverVehicle, drivers, lang }) {
       {b.distance != null && (
         <div className="px-3 py-2 text-[11px] font-bold flex items-center gap-1" style={{ color: C.inkSoft, borderTop: `1px solid ${C.line}` }}>
           <MapPin size={12} color={C.inkSoft} />
-          {T("Total trip (pickup → drop)", "एकूण प्रवास (पिकअप → ड्रॉप)", "कुल सफ़र (पिकअप → ड्रॉप)")}: <span style={{ color: C.ink }}>{formatDistanceExact(b.distance, lang)}</span>
+          {T("Total trip (pickup → drop)", "एकूण प्रवास (पिकअप → ड्रॉप)", "कुल सफ़र (पिकअप → ड्रॉप)")}: <span style={{ color: C.ink }}>{formatTripKm(b.distance, lang)}</span>
         </div>
       )}
     </div>
@@ -8458,7 +8470,7 @@ function ActiveRide({ booking: b, vehicleTypes, cancelBooking, driverVehicle, dr
           )}
           {!noDriverYet && (formatKgLabel(b.weight, lang) || b.distance != null) && (
             <div className="text-xs font-bold mt-1" style={{ color: C.inkSoft }}>
-              {[formatKgLabel(b.weight, lang), b.distance != null ? formatDistanceExact(b.distance, lang) : null].filter(Boolean).join(" · ")}
+              {[formatKgLabel(b.weight, lang), b.distance != null ? formatTripKm(b.distance, lang) : null].filter(Boolean).join(" · ")}
             </div>
           )}
         </div>
@@ -8608,7 +8620,7 @@ function CustomerHistory({ bookings, vehicleTypes, rateBooking, lang }) {
     const text = [
       "Apna Transport - Trip Invoice",
       `Booking: ${b.id}`, `Pickup: ${b.pickup}`, `Drop: ${b.drop}`,
-      `Vehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}`, `Distance: ${b.distance} km`, "",
+      `Vehicle: ${vehicleLabel(VEHICLES.find(v => v.key === b.vehicle), "en")}`, `Distance: ${formatTripKm(b.distance, "en") ?? "-"}`, "",
       line("Context", "Time", "Charges (Rs)"), rule, ...rows, "",
       `Status: ${b.status}`,
     ].join("\n");
@@ -10266,7 +10278,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
                   <div className="pt-2.5" style={{ color: C.ink }}><span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Drop" : "ड्रॉप"}: </span><span className="text-base font-normal">{b.drop}</span></div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{b.distance} {lang === "en" ? "km" : "किमी"}</span>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatTripKm(b.distance, lang)}</span>
                   <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{b.weight}{lang === "en" ? "kg" : "किग्रा"}</span>
                 </div>
                 {b.fare != null && (
@@ -10376,7 +10388,7 @@ function DriverHome({ driver, setDriver, bookings, driverRespondBooking, complet
                   <span className="text-lg font-black" style={{ color: C.navy }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}: </span><span className="text-base font-normal">{myTrip.pickup}</span>
                   {myTrip.distance != null && (
                     <div className="mt-1.5">
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatDistanceExact(myTrip.distance, lang)}</span>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: C.paper, color: C.navy, border: `1px solid ${C.line}` }}>{formatTripKm(myTrip.distance, lang)}</span>
                     </div>
                   )}
                 </div>
@@ -11650,13 +11662,7 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
   // real routed distance once it resolves — same pattern as CustomerBooking.
   const distanceRequestRef = useRef(0);
   useEffect(() => {
-    setDistance(estimateDistanceKm(pickupCoords, dropCoords));
-    const hasBothCoords = pickupCoords?.lat != null && pickupCoords?.lng != null && dropCoords?.lat != null && dropCoords?.lng != null;
-    if (!hasBothCoords || !mapsReady) return;
-    const requestId = ++distanceRequestRef.current;
-    fetchRoadDistanceKm(pickupCoords, dropCoords)
-      .then((km) => { if (distanceRequestRef.current === requestId) setDistance(Math.round(km * 100) / 100); })
-      .catch((e) => console.error("[set fare distance]", e));
+    syncRouteDistance(pickupCoords, dropCoords, mapsReady, setDistance, distanceRequestRef, "set fare distance");
   }, [pickupCoords, dropCoords, mapsReady]);
 
   const myRoutes = (routeFares || []).filter((r) => r.driverMobile === driver.mobile);
@@ -11789,7 +11795,7 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
           <div>
             <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Estimated km" : lang === "mr" ? "अंदाजे किमी" : "अनुमानित किमी"}</div>
             <div className="rounded-lg p-2.5 text-sm font-black" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink, fontFamily: monoFont }}>
-              {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatDistanceExact(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
+              {!pickup.trim() || !drop.trim() ? "—" : distance !== null ? formatTripKm(distance, lang) : (lang === "en" ? "Calculating..." : lang === "mr" ? "गणना होत आहे..." : "गणना हो रही है...")}
             </div>
           </div>
 
@@ -13230,8 +13236,10 @@ export default function App() {
     // scaled, or formula -- originally produced it).
     // A customer's Round trip (b.returnTrip) already includes its own return discount in `fare` -- never discount it a second
     // time just because this driver also happens to be flagged "heading home" (deep-clean 2026-11-02: 15% was taken twice).
-    const isReturn = !b.returnTrip && isReturnLoadFor(driver, b);
-    const claimedFare = isReturn ? Math.round((b.fare || 0) * (1 - returnPct / 100)) : b.fare;
+    // ONE FARE EVERYWHERE (owner 2026-11-05): the fare the customer was shown on the vehicle list is the fare, full stop -- accepting a "Return Load" no longer takes
+    // returnPct off it (that was a third, different price for the same trip). The driver still sees the "on your way home" badge; the fare is unchanged.
+    const isReturn = false;
+    const claimedFare = b.fare;
     let result;
     try {
       result = await claimBooking(bookingId, {
