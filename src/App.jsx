@@ -1628,6 +1628,22 @@ function priceOutstation(tierMaxKg, km, tiers) {
   }
   return best;
 }
+// MARKET RATE CHANGE (owner 2026-11-05, "Market rate change button as shown in the demo"): ONE admin-set percentage (settings/main.marketAdjustPct, -50 .. +100, steps of 5)
+// that moves the SYSTEM (formula) rate of EVERY vehicle at once -- fixed and per-km together -- when diesel / the market moves. 0 (the default, and what a settings doc without
+// the field means) changes nothing at all. It scales the formula result BEFORE the live-diesel term and the return discount, so diesel stays separate. Admin-SAVED route rates are
+// Admin's own numbers and do not move (saved rates stand; derived tiers cancel the factor because their ratio divides by the same formula). Kept as module state (set once at the
+// App root from the settings, like the other app-wide rules) so the ~30 calculateFare callers need no new argument.
+export const MARKET_ADJUST_MIN_PCT = -50;
+export const MARKET_ADJUST_MAX_PCT = 100;
+export const MARKET_ADJUST_STEP_PCT = 5;
+export function clampMarketAdjustPct(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(MARKET_ADJUST_MAX_PCT, Math.max(MARKET_ADJUST_MIN_PCT, Math.round(n)));
+}
+let currentMarketAdjustPct = 0;
+export function applyMarketAdjustPct(v) { currentMarketAdjustPct = clampMarketAdjustPct(v); }
+export function marketAdjustFactor() { return 1 + currentMarketAdjustPct / 100; }
 // `dieselPricePerLitre`: the live price (Admin's Rates & Diesel tab,
 // settings/main.dieselPricePerLitre) — null (the default, every existing
 // caller that doesn't know/care about live fuel price) means "no
@@ -1649,6 +1665,7 @@ export function calculateFare(capacityKg, distanceKm, tiers = DEFAULT_FARE_TIERS
     total = tier.innerFix + Math.max(0, km - 3) * tier.innerPer;
     total *= priceCorrectionFactor(tier.maxKg);
   }
+  total *= marketAdjustFactor(); // Market rate change (Admin): the formula rate of every vehicle, before diesel and the return discount
   if (dieselPricePerLitre != null) {
     const mileage = DIESEL_MILEAGE_BY_TIER_MAX_KG[tier.maxKg] ?? DIESEL_MILEAGE_BY_TIER_MAX_KG[FARE_TIER_MAX_KG_UNCAPPED];
     total += km * ((dieselPricePerLitre - DIESEL_BASELINE_PRICE_PER_LITRE) / mileage);
@@ -12597,6 +12614,9 @@ export default function App() {
   // needs this in Firestore, not just the demo's browser storage). `?? 15`
   // covers a settings/main doc created before this field existed.
   const returnPct = settings.returnPct ?? 15;
+  // Market rate change (owner 2026-11-05): applied at the root, during render, BEFORE any child computes a fare, so every screen quotes the same adjusted formula rate.
+  const marketAdjustPct = clampMarketAdjustPct(settings.marketAdjustPct ?? 0);
+  applyMarketAdjustPct(marketAdjustPct);
   // Always the code constant now, never settings.fareTiers — Admin has no
   // UI to edit this (removed from Admin Settings, since Admin's own
   // route+bracket overrides and driver-submitted averages are the real
@@ -12623,6 +12643,7 @@ export default function App() {
   const setBonusPct = (v) => patchDoc("settings", "main", { bonusPct: typeof v === "function" ? v(bonusPct) : v }).catch((e) => console.error(e));
   const setMinWallet = (v) => patchDoc("settings", "main", { minWallet: typeof v === "function" ? v(minWallet) : v }).catch((e) => console.error(e));
   const setReturnPct = (v) => patchDoc("settings", "main", { returnPct: typeof v === "function" ? v(returnPct) : v }).catch((e) => console.error(e));
+  const setMarketAdjustPct = (v) => patchDoc("settings", "main", { marketAdjustPct: clampMarketAdjustPct(typeof v === "function" ? v(marketAdjustPct) : v) }).catch((e) => console.error(e));
   // Bumped by hand in Admin Settings each time a new Production release
   // actually goes out on the Play Console — there's no client-reachable API
   // that tells the app "what's live in Production" on its own, so this
@@ -13664,7 +13685,7 @@ export default function App() {
             <Suspense fallback={<AdminLoadingFallback />}>
               <AdminPanel drivers={drivers} customers={allCustomers} updateDriverKyc={updateDriverKyc} updateDriverVehicleSpec={updateDriverVehicleSpec} bookings={bookings} tripLog={tripLog} deleteAllRideHistory={deleteAllRideHistory} alerts={alerts} replyToAlert={replyToAlert} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} deleteCustomer={deleteCustomer}
                 commissionPct={commissionPct} setCommissionPct={setCommissionPct} minWallet={minWallet} setMinWallet={setMinWallet}
-                returnPct={returnPct} setReturnPct={setReturnPct}
+                returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct}
                 dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre}
                 bonusPct={bonusPct} setBonusPct={setBonusPct} latestVersionCode={settings.latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={settings.updateUrl} setUpdateUrl={setUpdateUrl}
                 latestAdminVersionCode={settings.latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={settings.adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl}

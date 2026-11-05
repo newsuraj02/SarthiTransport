@@ -14,6 +14,7 @@ export function loadFareEngine(root) {
   const hav = extractBlock(app, "haversineKm").replace(/^export\s+/, "");
   return new Function(hav + "\n" + region + `; return { calculateFare, priceOutstation, DEFAULT_FARE_TIERS, zoneFor, findFareTier, enforceMonotonicFares, haltOf, includedDays,
     daysUsed, buildBill, getAdminRouteOverride, findExactAdminRoute, getRouteScaleRatio, resolveFareForTier, applyDieselToSavedRates, findFareOutliers,
+    applyMarketAdjustPct, clampMarketAdjustPct, marketAdjustFactor,
     PORTER_OUTSTATION_RAW, PRICE_CORRECTOR_ANCHORS, priceCorrectionFactor, haltPerDayFor, KM_PER_DAY, DIESEL_BASELINE_PRICE_PER_LITRE, DIESEL_MILEAGE_BY_TIER_MAX_KG };`)();
 }
 

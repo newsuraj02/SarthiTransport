@@ -22,7 +22,7 @@ import {
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError, estimateDistanceKm,
   fetchRoadDistanceKm, findExactAdminRoute, findFareTier, fmt, formatDistanceExact, genId, geocodeAddress,
-  getRouteScaleRatio, gpsStatus, greetingWord, haversineKm, installedDrivers, zoneFor,
+  getRouteScaleRatio, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
   sanitizeForDocId, usePersistedState, uploadPhoto, KycDocThumb,
@@ -1930,7 +1930,7 @@ const JUDGE_COLOR = { ok: C.success, warn: C.marigoldDeep, bad: C.safety };
 // Dashboard's "Driver Ride Entries" drill-down tile, see AdminFleet) plus
 // AdminRouteFares below it. Persistent tab now, not a drill-down, so no
 // Back button here.
-function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, lang, dieselPricePerLitre, setDieselPricePerLitre }) {
+function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, marketAdjustPct = 0, setMarketAdjustPct, lang, dieselPricePerLitre, setDieselPricePerLitre }) {
   // Global fuel-price control -- two separate effects, both from the same
   // Save tap, since there are two separate kinds of fare that need it:
   // 1. Live quotes (calculateFare in App.jsx, used by every route with no
@@ -2020,7 +2020,7 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
           {dieselError || dieselFlash}
         </div>
       )}
-      <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} />
+      <AdminRouteFares routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} />
     </div>
   );
 }
@@ -2028,7 +2028,7 @@ function AdminRatesDiesel({ routeFares, adminRouteFares, adminRouteFaresError, f
 // The guide's own home screen (section 1): two buttons, Admin Rate
 // Calculator and Saved Routes (with a live count) -- opens one or the
 // other as its own full-screen sheet, same as before.
-function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, lang, dieselPricePerLitre = null }) {
+function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fareTiers, drivers, returnPct, setReturnPct, marketAdjustPct = 0, setMarketAdjustPct, lang, dieselPricePerLitre = null }) {
   const [rateCalcOpen, setRateCalcOpen] = useState(false);
   // Entry to pre-load the calculator with -- set when Saved Routes' own
   // edit action reopens this instead of editing inline.
@@ -2061,7 +2061,7 @@ function AdminRouteFares({ routeFares, adminRouteFares, adminRouteFaresError, fa
         </div>
       )}
       {rateCalcOpen && (
-        <AdminRateCalculator adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} routeFares={routeFares} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre}
+        <AdminRateCalculator adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} routeFares={routeFares} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre}
           prefill={calcPrefill} onClose={() => setRateCalcOpen(false)} />
       )}
       {savedRoutesOpen && (
@@ -2180,7 +2180,7 @@ function clampTonsToCapacity(tonsText, capacityKg) {
   const t = Number(tonsText);
   return cap > 0 && Number.isFinite(t) && t > cap ? String(cap) : tonsText;
 }
-function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, routeFares, drivers, returnPct, setReturnPct, lang, prefill, onClose, dieselPricePerLitre = null }) {
+function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, routeFares, drivers, returnPct, setReturnPct, marketAdjustPct = 0, setMarketAdjustPct, lang, prefill, onClose, dieselPricePerLitre = null }) {
   // isReturn now means "the ⇅ swap button has flipped pickup/drop" -- the
   // form is calculating the RETURN-direction fare for this same pair of
   // places, not a manually-toggled discount switch (guide section 6A).
@@ -2194,6 +2194,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   // the app-wide returnPct itself only ever changes on an explicit "apply".
   const [pctDraft, setPctDraft] = useState(returnPct);
   const [pctEditing, setPctEditing] = useState(false);
+  // Market rate change (owner 2026-11-05): draft -/+ in 5 % steps, applied only by the Apply button (it moves every customer's system fare).
+  const [marketDraft, setMarketDraft] = useState(marketAdjustPct);
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null);
@@ -2276,10 +2278,12 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
 
   const baseFix = tier ? (zone === "out" ? tier.outerMin : tier.innerFix) : null;
   const basePer = tier ? (zone === "out" ? tier.outerPer : tier.innerPer) : null;
+  // Market rate change: the SYSTEM rate (formula, and the scaled layer whose ratio divides by the market-adjusted formula) moves with the factor; an exact saved Admin rate does not.
+  const mkt = exactMatch ? 1 : marketAdjustFactor(); // a saved Admin rate (and its toll / floor) is never scaled
   const suggestedFix = exactMatch ? (exactMatch.fix ?? null)
-    : (scaleRatio != null && baseFix != null ? Math.round(baseFix * scaleRatio / 10) * 10 : baseFix);
+    : (scaleRatio != null && baseFix != null ? Math.round(baseFix * mkt * scaleRatio / 10) * 10 : baseFix != null ? Math.round(baseFix * mkt) : baseFix);
   const suggestedPer = exactMatch ? exactMatch.per
-    : (scaleRatio != null && basePer != null ? Math.round(basePer * scaleRatio * 2) / 2 : basePer);
+    : (scaleRatio != null && basePer != null ? Math.round(basePer * mkt * scaleRatio * 2) / 2 : basePer != null ? Math.round(basePer * mkt * 2) / 2 : basePer);
   useEffect(() => {
     if (!fixTouched) setFix(suggestedFix != null ? String(suggestedFix) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2296,9 +2300,9 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   // toll surcharge applied outside city. The guard and toll stay tied to
   // the tier's own defaults (never Admin-overridable here), exactly like
   // calculateFare; only fix/per themselves can be overridden per route.
-  const c30Guard = tier ? tier.innerFix + 27 * tier.innerPer : 0;
+  const c30Guard = tier ? (tier.innerFix + 27 * tier.innerPer) * mkt : 0;
   const computedTotal = tier && km > 0
-    ? (zone === "out" ? Math.max(km * perNum, fixNum, c30Guard) + km * tier.tollPerKm : fixNum + Math.max(0, km - 3) * perNum)
+    ? (zone === "out" ? Math.max(km * perNum, fixNum, c30Guard) + km * tier.tollPerKm * mkt : fixNum + Math.max(0, km - 3) * perNum)
     : null;
   // isReturn means the ⇅ swap has flipped this into the return direction --
   // the return-load discount only ever applies on that side, never the
@@ -2596,6 +2600,39 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
                 <span style={{ color: C.inkSoft }}>▾</span>
               </button>
             </div>
+          </div>
+
+          {/* Market rate change (owner 2026-11-05, from the demo): one % that moves the SYSTEM rate of EVERY vehicle (fixed + per km) together. Draft -/+ in 5 % steps,
+              nothing changes until Apply (it re-prices every customer's formula quote); saved Admin route rates are not touched. */}
+          <div data-market-rate className="rounded-xl px-3 py-2.5" style={{ border: `1.5px solid ${C.line}`, background: C.paper }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-sm font-extrabold" style={{ color: C.ink }}>{lang === "en" ? "Market rate change" : lang === "mr" ? "बाजार दर बदल" : "बाज़ार रेट बदलाव"}</div>
+                <div className="text-[11px]" style={{ color: C.inkSoft }}>{lang === "en" ? "On the system rate of all vehicles" : lang === "mr" ? "सर्व गाड्यांच्या सिस्टम दरावर" : "सभी गाड़ियों के सिस्टम रेट पर"}</div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" data-market-minus aria-label="-5%" disabled={marketDraft <= MARKET_ADJUST_MIN_PCT} onClick={() => setMarketDraft((v) => clampMarketAdjustPct(v - MARKET_ADJUST_STEP_PCT))}
+                  className="w-9 h-9 rounded-lg text-lg font-black" style={{ border: `1.5px solid ${C.line}`, background: C.bg, color: C.ink, opacity: marketDraft <= MARKET_ADJUST_MIN_PCT ? 0.4 : 1 }}>−</button>
+                <div data-market-value className="min-w-[3.5rem] text-center text-base font-black" style={{ color: marketDraft > 0 ? C.safety : marketDraft < 0 ? C.success : C.ink, fontFamily: monoFont }}>{marketDraft > 0 ? "+" : ""}{marketDraft}%</div>
+                <button type="button" data-market-plus aria-label="+5%" disabled={marketDraft >= MARKET_ADJUST_MAX_PCT} onClick={() => setMarketDraft((v) => clampMarketAdjustPct(v + MARKET_ADJUST_STEP_PCT))}
+                  className="w-9 h-9 rounded-lg text-lg font-black" style={{ border: `1.5px solid ${C.line}`, background: C.bg, color: C.ink, opacity: marketDraft >= MARKET_ADJUST_MAX_PCT ? 0.4 : 1 }}>+</button>
+              </div>
+            </div>
+            {marketDraft !== marketAdjustPct && (
+              <div data-market-confirm className="grid gap-2 mt-2 pt-2" style={{ borderTop: `1.5px dashed ${C.line}` }}>
+                <div className="text-[11px] font-semibold" style={{ color: C.inkSoft }}>
+                  {lang === "en" ? `Now ${marketAdjustPct > 0 ? "+" : ""}${marketAdjustPct}% → ${marketDraft > 0 ? "+" : ""}${marketDraft}%. This changes the system fare every customer is quoted.` : lang === "mr" ? `आता ${marketAdjustPct > 0 ? "+" : ""}${marketAdjustPct}% → ${marketDraft > 0 ? "+" : ""}${marketDraft}%. यामुळे प्रत्येक ग्राहकाला दाखवले जाणारे सिस्टम भाडे बदलते.` : `अभी ${marketAdjustPct > 0 ? "+" : ""}${marketAdjustPct}% → ${marketDraft > 0 ? "+" : ""}${marketDraft}%. इससे हर ग्राहक को दिखने वाला सिस्टम भाड़ा बदलेगा।`}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" data-market-cancel onClick={() => setMarketDraft(marketAdjustPct)} className="rounded-lg py-1.5 text-xs font-bold" style={{ border: `1.5px solid ${C.line}`, color: C.inkSoft, background: C.paper }}>
+                    {lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें"}
+                  </button>
+                  <button type="button" data-market-apply onClick={() => { setMarketAdjustPct?.(marketDraft); }} className="rounded-lg py-1.5 text-xs font-bold" style={{ background: C.navy, color: "#fff" }}>
+                    {lang === "en" ? "Apply" : lang === "mr" ? "लागू करा" : "लागू करें"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Fare basis (owner 2026-11-05, from the demo screenshots): "per km" / "per ton". Per ton opens two numbers -- the load in tons (never above the
@@ -4459,7 +4496,7 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
@@ -4487,7 +4524,7 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       {tab === "drivers" && <AdminDriverList drivers={drivers} toggleBlacklist={toggleBlacklist} deleteDriver={deleteDriver} updateDriverVehicleSpec={updateDriverVehicleSpec} lang={lang} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver} minWallet={minWallet} />}
       {tab === "customers" && <AdminCustomers customers={customers} bookings={bookings} lang={lang} deleteCustomer={deleteCustomer} />}
       {tab === "finance" && <AdminFinance commissionPct={commissionPct} setCommissionPct={setCommissionPct} bonusPct={bonusPct} setBonusPct={setBonusPct} minWallet={minWallet} setMinWallet={setMinWallet} tripLog={tripLog} bookings={bookings} deleteAllRideHistory={deleteAllRideHistory} expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} lang={lang} />}
-      {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}
+      {tab === "rates" && <AdminRatesDiesel routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} fareTiers={fareTiers} drivers={drivers} returnPct={returnPct} setReturnPct={setReturnPct} marketAdjustPct={marketAdjustPct} setMarketAdjustPct={setMarketAdjustPct} lang={lang} dieselPricePerLitre={dieselPricePerLitre} setDieselPricePerLitre={setDieselPricePerLitre} />}
       {tab === "changelog" && <AdminBugTracker bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} lang={lang} />}
       {/* Alerts now live INSIDE the Notify tab (owner 2026-11-03, handwritten note: "shift Alerts into the Notifications column"):
           one tab, two sides. The Live Dashboard's red "Direct request" box still opens the Alerts side (onNavigate("alerts")). */}

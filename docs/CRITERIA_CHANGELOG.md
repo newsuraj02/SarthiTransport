@@ -204,3 +204,10 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-05 -- Owner 2026-11-05: Admin Rate Calculator gets a By km / By ton toggle (tons + rate per ton, route rate = per ton x tons); saved as rateBasis/tons/perTon; customer/driver fares unchanged
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminSavedRoutes, code:src/AdminPanel.jsx#AdminRateCalculator
 - added (3): code:src/AdminPanel.jsx#suggestPerTonRate, code:src/AdminPanel.jsx#tonRouteTotal, code:src/AdminPanel.jsx#clampTonsToCapacity
+
+## 2026-11-05 -- Admin Rate Calculator: Market rate change (settings/main.marketAdjustPct) scales formula fares in calculateFare; calculator card + props; invariant + engine export
+- changed (12): app:calculateFare, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/fareEngine.mjs, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminRatesDiesel, code:src/AdminPanel.jsx#AdminRouteFares, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#calculateFare, code:src/App.jsx#App
+- added (7): code:src/App.jsx#MARKET_ADJUST_MIN_PCT, code:src/App.jsx#MARKET_ADJUST_MAX_PCT, code:src/App.jsx#MARKET_ADJUST_STEP_PCT, code:src/App.jsx#clampMarketAdjustPct, code:src/App.jsx#currentMarketAdjustPct, code:src/App.jsx#applyMarketAdjustPct, code:src/App.jsx#marketAdjustFactor
+
+## 2026-11-05 -- Market rate change: saved Admin route (and its toll/floor) never scaled in the calculator
+- changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminRateCalculator
