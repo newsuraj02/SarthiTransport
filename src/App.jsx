@@ -282,6 +282,14 @@ function formatTimeSlot(hhmm, lang) {
 }
 // One sheet for BOTH the date and the time, as a two-step flow (owner 2026-10-30): 1. Select Date  ->  2. Time slots  ->
 // Confirm. The chosen date is held here until Confirm, which hands back (time, date) together.
+// Owner 2026-11-04: Advance Booking is DATE ONLY -- Kal / Parso / the day after Parso. The booking is saved as "YYYY-MM-DD 08:00" (fixed morning start), the
+// same "YYYY-MM-DD HH:MM" format every other place (ring text, availability window, notice check, audit) already reads.
+const ADVANCE_DAY_OFFSETS = [1, 2, 3];
+const ADVANCE_DEFAULT_TIME = "08:00";
+function advanceDayLabel(offset, lang) {
+  const L = { en: ["Kal", "Parso", "Day after Parso"], hi: ["कल", "परसों", "परसों के बाद"], mr: ["उद्या", "परवा", "परवा नंतर"] };
+  return (L[lang] || L.hi)[offset - 1];
+}
 function TimeSlotModal({ open, value, onSelect, onClose, lang, selectedDate }) {
   const T = (en, hi, mr) => (lang === "en" ? en : lang === "mr" ? mr : hi);
   const [step, setStep] = useState(1); // 1 = Select Date, 2 = Time slots
@@ -7329,7 +7337,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // Advance mode (owner 2026-10-30): the very same screen plus a date and a time -- the schedule below.
   const [advanceDate, setAdvanceDate] = useState(restored?.advanceDate || "");
   const [advanceTime, setAdvanceTime] = useState(restored?.advanceTime || "");
-  const [showTimeModal, setShowTimeModal] = useState(false);
   // Owner 2026-11-01: "Return trip" checkbox right under the Pickup box (Current and Advance). Saved on the booking as `returnTrip`;
   // it does NOT change the fare (not asked) and is cleared after Book like the rest of the form.
   const [returnTrip, setReturnTrip] = useState(!!restored?.returnTrip);
@@ -7784,10 +7791,10 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
       const hoursUntil = (scheduled.getTime() - Date.now()) / (60 * 60 * 1000);
       if (hoursUntil < minHours) {
         setBookingError(lang === "en"
-          ? `This vehicle needs at least ${minHours} hour${minHours > 1 ? "s" : ""} advance notice — please pick a later time.`
+          ? `This vehicle needs at least ${minHours} hour${minHours > 1 ? "s" : ""} advance notice — please pick a later date.`
           : lang === "mr"
-          ? `या वाहनासाठी किमान ${minHours} तास आधी बुकिंग आवश्यक आहे — कृपया नंतरची वेळ निवडा.`
-          : `इस वाहन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद का समय चुनें।`);
+          ? `या वाहनासाठी किमान ${minHours} तास आधी बुकिंग आवश्यक आहे — कृपया नंतरची तारीख निवडा.`
+          : `इस वाहन के लिए कम से कम ${minHours} घंटे पहले बुकिंग जरूरी है — कृपया बाद की तारीख चुनें।`);
         return;
       }
     }
@@ -7933,28 +7940,27 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
               borderRadius: highlightField === "date" || highlightField === "time" ? 12 : 0,
               transition: "padding 0.15s ease, background 0.15s ease",
             }}>
-            {/* ONE box: it reads "Choose date & time" and, once picked, "4 Nov 2026 . Morning 6:00 AM". Tapping it opens the
-                two-step sheet (1 Select Date -> 2 Time slots -> Confirm). */}
-            <button type="button" onClick={() => { setActiveField("date"); setShowTimeModal(true); }}
-              className={`${inputCls} flex items-center justify-between gap-2 text-left`} style={inputStyle}>
-              <span className="truncate" style={{ color: scheduleReady ? C.ink : "#94A3B8" }}>
-                {scheduleReady
-                  ? `${new Date(`${advanceDate}T00:00:00`).toLocaleDateString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", year: "numeric" })} · ${formatTimeSlot(advanceTime, lang)}`
-                  : (lang === "en" ? "Choose date & time" : lang === "mr" ? "तारीख आणि वेळ निवडा" : "तारीख और समय चुनें")}
-              </span>
-              <CalendarClock size={18} color={C.inkSoft} className="shrink-0" />
-            </button>
+            {/* Owner 2026-11-04: DATE ONLY, three quick choices instead of the old single date-and-time box / time-slot sheet: Kal (tomorrow), Parso (day after
+                tomorrow) and the day after Parso. The booking is saved at a fixed 08:00 start (ADVANCE_DEFAULT_TIME) -- driver availability still only blocks the
+                trip's own window (buffer + estimated length), never the whole day. */}
+            <div data-advance-days className="grid grid-cols-3 gap-2">
+              {ADVANCE_DAY_OFFSETS.map((offset) => {
+                const day = new Date(); day.setHours(12, 0, 0, 0); day.setDate(day.getDate() + offset);
+                const key = localDateKey(day);
+                const picked = advanceDate === key;
+                const locale = lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN";
+                return (
+                  <button key={offset} type="button" data-advance-day={offset} aria-pressed={picked}
+                    onClick={() => { setAdvanceDate(key); setAdvanceTime(ADVANCE_DEFAULT_TIME); setBookedMsg(false); setActiveField(null); requestFocus("date"); }}
+                    className="rounded-xl px-1.5 py-3 text-center min-w-0"
+                    style={{ border: `2px solid ${picked ? "#0052CC" : C.line}`, background: picked ? "rgba(0,82,204,0.10)" : C.paper, boxShadow: picked ? "0 0 0 3px rgba(0,82,204,0.14)" : undefined }}>
+                    <div className="text-sm font-extrabold leading-tight" style={{ color: picked ? "#0052CC" : C.ink }}>{picked ? "✓ " : ""}{advanceDayLabel(offset, lang)}</div>
+                    <div className="mt-1 text-[11px] font-semibold leading-tight" style={{ color: C.inkSoft }}>{day.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" })}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          {/* Outside the .anim-rise block on purpose: a transformed ancestor would turn this sheet's `fixed` into 'relative to the box'. */}
-          <TimeSlotModal open={showTimeModal} value={advanceTime}
-            onSelect={(t, d) => {
-              setAdvanceDate(d); setAdvanceTime(t);
-              setBookedMsg(false);
-              // Date + time confirmed -> the vehicle list shows straight away (no weight step); keyboard stays down.
-              setActiveField(null);
-              requestFocus("date");
-            }}
-            onClose={() => setShowTimeModal(false)} lang={lang} selectedDate={advanceDate} />
           </>
         )}
 
@@ -8058,7 +8064,7 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
       {advance && placesReady && !scheduleReady && (
         <div className="px-5 pt-3 pb-4">
           <div className="text-center text-sm font-bold rounded-xl py-3 px-4" style={{ color: C.marigoldDeep, background: "rgba(232,152,40,0.12)", border: `1.5px solid rgba(232,152,40,0.35)` }}>
-            👆 {lang === "en" ? "Choose the date & time first, then vehicles will show" : lang === "mr" ? "आधी तारीख आणि वेळ निवडा, मग गाड्या दिसतील" : "पहले तारीख और समय चुनें, तभी गाड़ियाँ दिखेंगी"}
+            👆 {lang === "en" ? "Choose the day first, then vehicles will show" : lang === "mr" ? "आधी दिवस निवडा, मग गाड्या दिसतील" : "पहले दिन चुनें, तभी गाड़ियाँ दिखेंगी"}
           </div>
           {returnFareNote}
           {changePlacesLink}
