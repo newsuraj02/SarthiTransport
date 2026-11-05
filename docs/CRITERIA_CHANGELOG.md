@@ -200,3 +200,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Owner 2026-11-04: customer booking UI/UX declared FROZEN (CLAUDE.md section + contracts note + invariant); no code change
 - changed (3): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-05 -- Owner 2026-11-05: Admin Rate Calculator gets a By km / By ton toggle (tons + rate per ton, route rate = per ton x tons); saved as rateBasis/tons/perTon; customer/driver fares unchanged
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminSavedRoutes, code:src/AdminPanel.jsx#AdminRateCalculator
+- added (3): code:src/AdminPanel.jsx#suggestPerTonRate, code:src/AdminPanel.jsx#tonRouteTotal, code:src/AdminPanel.jsx#clampTonsToCapacity

@@ -2116,6 +2116,7 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditA
                   <div className="text-xs font-bold truncate" style={{ color: C.ink }}>→ {r.dropName}</div>
                   <div className="text-[11px] mt-0.5" style={{ color: C.inkSoft }}>
                     {r.veh ? `${r.veh} · ` : ""}{r.estimatedKm != null ? `${formatDistanceExact(r.estimatedKm, lang)} · ` : ""}<b style={{ color: C.ink }}>{fmt(r.totalFare)}</b>
+                    {r.rateBasis === "ton" && r.tons && r.perTon ? ` · ${r.tons} ${lang === "en" ? "t" : "टन"} × ${fmt(r.perTon)}/${lang === "en" ? "t" : "टन"}` : ""}
                     {r.isReturn ? ` · ${lang === "en" ? "Return" : lang === "mr" ? "रिटर्न" : "रिटर्न"} −${r.returnPct || 15}%` : ""}
                     {r.manual ? ` · ${lang === "en" ? "Manual" : lang === "mr" ? "मॅन्युअल" : "मैनुअल"}` : ""}
                   </div>
@@ -2161,6 +2162,24 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditA
 // vehicle is SELECTED (full-screen picker, section 3), not typed as a
 // loose weight number -- unlike CustomerBooking's customer-facing weight
 // field, Admin is pricing one exact tier at a time.
+// Owner 2026-11-05: "per km" / "per ton" fare basis in the Admin Rate Calculator (display + save only -- the customer / driver apps still read the saved route
+// total, unchanged). For a per-ton route the route rate = rate per ton x tons of load; the SYSTEM SUGGESTION for the per-ton rate is the km-based route rate divided
+// by the vehicle's capacity in tons, rounded UP to a whole rupee (so a full load always earns at least the km-based rate). Example: 750 kg, route Rs 1,548 -> 2,065 / ton;
+// 2,065 x 0.75 t = Rs 1,549.
+function suggestPerTonRate(kmRouteRate, capacityKg) {
+  const tons = (Number(capacityKg) || 0) / 1000;
+  const rate = Number(kmRouteRate) || 0;
+  return tons > 0 && rate > 0 ? Math.ceil(rate / tons - 1e-9) : null;
+}
+function tonRouteTotal(perTonRate, tons) {
+  const r = Number(perTonRate) || 0, t = Number(tons) || 0;
+  return r > 0 && t > 0 ? Math.round(r * t) : null;
+}
+function clampTonsToCapacity(tonsText, capacityKg) {
+  const cap = (Number(capacityKg) || 0) / 1000;
+  const t = Number(tonsText);
+  return cap > 0 && Number.isFinite(t) && t > cap ? String(cap) : tonsText;
+}
 function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, routeFares, drivers, returnPct, setReturnPct, lang, prefill, onClose, dieselPricePerLitre = null }) {
   // isReturn now means "the ⇅ swap button has flipped pickup/drop" -- the
   // form is calculating the RETURN-direction fare for this same pair of
@@ -2188,6 +2207,12 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   const [perTouched, setPerTouched] = useState(false);
   const [totalFare, setTotalFare] = useState("");
   const [manual, setManual] = useState(false);
+  // Fare basis (owner 2026-11-05): "km" (the existing fixed + per-km rate) or "ton" (rate per ton x tons of load).
+  const [rateBasis, setRateBasis] = useState("km");
+  const [tons, setTons] = useState("");
+  const [tonsTouched, setTonsTouched] = useState(false);
+  const [perTon, setPerTon] = useState("");
+  const [perTonTouched, setPerTonTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -2231,7 +2256,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
   // same intent as the guide's own matchOff/manual resets on every pickup/
   // drop/zone keystroke, simplified into per-field "touched" flags.
   useEffect(() => {
-    setFixTouched(false); setPerTouched(false); setManual(false);
+    setFixTouched(false); setPerTouched(false); setManual(false); setTonsTouched(false); setPerTonTouched(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMaxKg, zone, pickup, drop, isReturn]);
 
@@ -2290,10 +2315,17 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     : computedTotal != null
     ? Math.round(isReturn && returnPct > 0 ? (computedTotal + dieselAdj) * (1 - returnPct / 100) : computedTotal + dieselAdj)
     : null;
+  // Per ton (owner 2026-11-05): tons default to the vehicle's full capacity, the per-ton rate to the system suggestion; the route rate is then per ton x tons.
+  const capacityTons = tier ? tier.maxKg / 1000 : 0;
+  const tonsValue = rateBasis === "ton" ? (tonsTouched ? tons : (capacityTons > 0 && capacityTons < 1000 ? String(capacityTons) : "")) : "";
+  const perTonSuggested = tier ? suggestPerTonRate(suggestedTotal, tier.maxKg) : null;
+  const perTonValue = rateBasis === "ton" ? (perTonTouched ? perTon : (perTonSuggested != null ? String(perTonSuggested) : "")) : "";
+  const tonTotal = rateBasis === "ton" ? tonRouteTotal(perTonValue, tonsValue) : null;
+  const effectiveTotal = rateBasis === "ton" ? tonTotal : suggestedTotal;
   useEffect(() => {
-    if (!manual) setTotalFare(suggestedTotal != null ? String(suggestedTotal) : "");
+    if (!manual) setTotalFare(effectiveTotal != null ? String(effectiveTotal) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestedTotal, manual]);
+  }, [effectiveTotal, manual]);
 
   // ROUND TRIP column (owner 2026-11-03, handwritten note): the same number a customer pays when "Round trip" is ticked
   // (rule F6): one-way + return, where return = Admin's saved return rate for the swapped route, otherwise one-way less
@@ -2314,6 +2346,7 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     setSelectedMaxKg(null); setIsReturn(false); setPctEditing(false);
     setFix(""); setFixTouched(false); setPer(""); setPerTouched(false);
     setTotalFare(""); setManual(false);
+    setRateBasis("km"); setTons(""); setTonsTouched(false); setPerTon(""); setPerTonTouched(false);
     setEditingId(null); setComparingEntry(null); setSaveError("");
   };
   const editEntry = (r) => {
@@ -2328,6 +2361,8 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     setFix(r.fix != null ? String(r.fix) : ""); setFixTouched(true);
     setPer(r.per != null ? String(r.per) : ""); setPerTouched(true);
     setTotalFare(r.totalFare != null ? String(r.totalFare) : ""); setManual(true);
+    setRateBasis(r.rateBasis === "ton" ? "ton" : "km");
+    if (r.rateBasis === "ton") { setTons(r.tons != null ? String(r.tons) : ""); setTonsTouched(true); setPerTon(r.perTon != null ? String(r.perTon) : ""); setPerTonTouched(true); }
     setEditingId(r.id);
     setComparingEntry(null);
     setSavedFlash(false);
@@ -2389,6 +2424,10 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
         per: Number(per) || 0,
         totalFare: Number(totalFare) || 0,
         manual,
+        // Fare basis (owner 2026-11-05): for a per-ton route the load (tons) and the rate per ton are kept so the form can reopen as "per ton". The customer / driver apps only read totalFare.
+        rateBasis,
+        tons: rateBasis === "ton" ? Number(tonsValue) || null : null,
+        perTon: rateBasis === "ton" ? Number(perTonValue) || null : null,
         isReturn,
         returnPct: isReturn ? returnPct : null,
         driverEntry: comparingEntry ? { mobile: comparingEntry.driverMobile, quote: comparingEntry.totalFare } : null,
@@ -2558,6 +2597,36 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
               </button>
             </div>
           </div>
+
+          {/* Fare basis (owner 2026-11-05, from the demo screenshots): "per km" / "per ton". Per ton opens two numbers -- the load in tons (never above the
+              vehicle's capacity) and the rate per ton (system suggestion pre-filled); the route rate below becomes rate per ton x tons. */}
+          <div data-rate-basis className="rounded-xl p-1 grid grid-cols-2 gap-1" style={{ border: `1.5px solid ${C.line}`, background: C.bg }}>
+            {[["km", lang === "en" ? "By km" : lang === "mr" ? "किमीनुसार" : "किमी के हिसाब से"], ["ton", lang === "en" ? "By ton" : lang === "mr" ? "टनानुसार" : "टन के हिसाब से"]].map(([key, label]) => (
+              <button key={key} type="button" data-rate-basis-btn={key} aria-pressed={rateBasis === key} onClick={() => { setRateBasis(key); setManual(false); setSavedFlash(false); setSaveError(""); }}
+                className="rounded-lg py-2.5 text-xs font-extrabold"
+                style={{ background: rateBasis === key ? C.navy : "transparent", color: rateBasis === key ? "#FFFFFF" : C.inkSoft }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {rateBasis === "ton" && (
+            <div data-rate-ton-fields className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Load weight (tons)" : lang === "mr" ? "मालाचे वजन (टन)" : "माल का वजन (टन)"}</div>
+                <input type="number" inputMode="decimal" step="0.01" min="0" value={tonsValue} disabled={!tier}
+                  onChange={(e) => { setTons(clampTonsToCapacity(e.target.value, tier?.maxKg)); setTonsTouched(true); setManual(false); setSavedFlash(false); setSaveError(""); }}
+                  className={inputCls} style={inputStyle} placeholder={lang === "en" ? "e.g. 0.75" : "उदा. 0.75"} />
+                {tier && <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? `Not above the vehicle's ${capacityTons} t` : lang === "mr" ? `गाडीच्या ${capacityTons} टनांपेक्षा जास्त नाही` : `गाड़ी की ${capacityTons} टन कैपेसिटी से ज़्यादा नहीं`}</div>}
+              </div>
+              <div>
+                <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Rate per ton (₹)" : lang === "mr" ? "प्रति टन दर (₹)" : "प्रति टन दर (₹)"}</div>
+                <input type="number" inputMode="numeric" min="0" value={perTonValue} disabled={!tier}
+                  onChange={(e) => { setPerTon(e.target.value); setPerTonTouched(true); setManual(false); setSavedFlash(false); setSaveError(""); }}
+                  className={inputCls} style={{ ...inputStyle, borderColor: perTonTouched ? C.marigoldDeep : C.line, color: perTonTouched ? C.marigoldDeep : C.ink }} placeholder={lang === "en" ? "Rate" : "दर"} />
+                {tier && perTonSuggested != null && <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? `System suggestion ₹${perTonSuggested}/t` : lang === "mr" ? `सिस्टम सुचवलेले ₹${perTonSuggested}/टन` : `सिस्टम सुझाव ₹${perTonSuggested}/टन`}</div>}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2 items-end">
             <div>
