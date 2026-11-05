@@ -185,3 +185,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Owner 2026-11-04: selected category moves to the top as a bigger Selected card; recent-trip + trip cards show Pickup/Drop partitioned with a route rail; larger gradient Book now bar
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerBooking
+
+## 2026-11-05 -- Owner 2026-11-04: recent-trip cards show locations only (no Pickup/Drop words, no chevron, lighter font); no route card from the vehicle list onwards, only the small Change pickup / drop row
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#CustomerBooking

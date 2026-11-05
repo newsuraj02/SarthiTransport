@@ -15,7 +15,7 @@ import {
   Truck, MapPin, Package, Wallet, UserCircle2, ShieldCheck, Camera, Clock3,
   Phone, MessageCircle, CheckCircle2, XCircle, Bell, Navigation,
   Settings2, Download, IndianRupee,
-  ClipboardList, Siren, Menu, ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2, RefreshCw,
+  ClipboardList, Siren, Menu, ChevronLeft, ChevronDown, Eye, Loader2, RefreshCw,
   FileText, X, Upload, ArrowRight, Languages, CalendarClock, Smartphone, Weight, LocateFixed,
   AlertTriangle, Volume2, Square,
 } from "lucide-react";
@@ -7732,39 +7732,18 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
   // ONE row (owner 2026-11-04): the est. distance at the LEFT end and "Change pickup / drop" at the RIGHT end, both visible (est. km once Pickup + Drop
   // give a distance; the link only while the Pickup / Drop boxes are tucked away). It is the row the Round-trip / list sections show under the places.
   const estKm = distance > 0 && placesReady ? Math.round(distance) : null;
-  // Owner 2026-11-04 ("improve the UI/UX of the entire flow"): with the map hidden over the list, this is the TRIP CARD -- the route (Pickup / Drop, partitioned, with the same
-  // rail as the recent-trip cards) when the boxes are tucked away, then the distance row. The row inside keeps its exact pinned markup.
+  // Owner 2026-11-04: from the next screen onwards (the vehicle list) NO route card -- only this small row: the distance at the left and a small "Change pickup / drop"
+  // link at the right (the Pickup / Drop partition design lives on the main screen's recent-trip cards only).
   const changePlacesLink = estKm != null || tripHidden ? (
-    <div data-trip-card className="rounded-2xl px-3.5 py-3 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      {tripHidden && (
-        <div data-trip-route className="flex items-center gap-3 pb-2.5 mb-2.5" style={{ borderBottom: `1px solid ${C.line}` }}>
-          <span className="flex flex-col items-center self-stretch py-1 shrink-0" aria-hidden="true">
-            <span className="w-3 h-3 rounded-full" style={{ background: C.success, boxShadow: "0 0 0 3px rgba(0,168,84,0.18)" }} />
-            <span className="flex-1 my-1" style={{ borderLeft: `2px dashed ${C.line}` }} />
-            <span className="w-3 h-3 rounded-[3px]" style={{ background: "#0052CC", boxShadow: "0 0 0 3px rgba(0,82,204,0.16)" }} />
-          </span>
-          <span className="flex-1 min-w-0 flex flex-col">
-            <span className="min-w-0 pb-1.5">
-              <span className="block text-[10px] font-extrabold uppercase tracking-wider" style={{ color: C.success }}>{lang === "en" ? "Pickup" : "पिकअप"}</span>
-              <span className="block text-[13px] font-semibold leading-snug truncate" style={{ color: C.ink }}>{pickup}</span>
-            </span>
-            <span className="min-w-0 pt-1.5" style={{ borderTop: `1px solid ${C.line}` }}>
-              <span className="block text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "#0052CC" }}>{lang === "en" ? "Drop" : "ड्रॉप"}</span>
-              <span className="block text-[13px] font-semibold leading-snug truncate" style={{ color: C.ink }}>{drop}</span>
-            </span>
-          </span>
-        </div>
-      )}
-      <div data-trip-row className="flex items-center justify-between gap-3">
-        <div data-est-km className="text-base font-extrabold min-w-0 truncate" style={{ color: C.ink }}>
-          {estKm != null && `${lang === "en" ? "Distance:" : lang === "mr" ? "अंतर:" : "दूरी:"} ${estKm} ${lang === "en" ? "km" : "किमी"}`}
-        </div>
-        {tripHidden && (
-          <button type="button" data-change-places onClick={() => { setFromTrip(false); }} className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold" style={{ color: C.inkSoft, border: `1px solid ${C.line}`, background: C.bg }}>
-            {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
-          </button>
-        )}
+    <div data-trip-row className="flex items-center justify-between gap-3">
+      <div data-est-km className="text-base font-extrabold min-w-0 truncate" style={{ color: C.ink }}>
+        {estKm != null && `${lang === "en" ? "Distance:" : lang === "mr" ? "अंतर:" : "दूरी:"} ${estKm} ${lang === "en" ? "km" : "किमी"}`}
       </div>
+      {tripHidden && (
+        <button type="button" data-change-places onClick={() => { setFromTrip(false); }} className="shrink-0 py-2 text-xs font-bold underline underline-offset-2" style={{ color: C.inkSoft }}>
+          {lang === "en" ? "Change pickup / drop" : lang === "mr" ? "पिकअप / ड्रॉप बदला" : "पिकअप / ड्रॉप बदलें"}
+        </button>
+      )}
     </div>
   ) : null;
   const canBook = locationsReady && !sameLocation;
@@ -7929,24 +7908,17 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           <div className="space-y-2.5">
             {recentTrips.map((t) => (
               <button key={t.key || `${t.pickup}|${t.drop}`} type="button" data-recent-trip onClick={() => onTripSelected(t)} className="w-full rounded-2xl px-3.5 py-3 text-left flex items-center gap-3 anim-rise shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                {/* Owner 2026-11-04: Pickup and Drop need a PARTITION and a basic design -- a route rail (green dot -> dashed line -> blue square), a small label over each
-                    address, a hairline between the two, and a chevron so it reads as a tappable "book this trip again" card. */}
+                {/* Owner 2026-11-04: Pickup and Drop partitioned with a basic design -- a route rail (green dot -> dashed line -> blue square) and a hairline between the two
+                    addresses. Locations ONLY: no "Pickup" / "Drop" words, no side button / chevron, and a LIGHT font weight (the owner found it too bold). */}
                 <span className="flex flex-col items-center self-stretch py-1.5 shrink-0" aria-hidden="true">
                   <span className="w-3 h-3 rounded-full" style={{ background: C.success, boxShadow: "0 0 0 3px rgba(0,168,84,0.18)" }} />
                   <span className="flex-1 my-1" style={{ borderLeft: `2px dashed ${C.line}` }} />
                   <span className="w-3 h-3 rounded-[3px]" style={{ background: "#0052CC", boxShadow: "0 0 0 3px rgba(0,82,204,0.16)" }} />
                 </span>
                 <span className="flex-1 min-w-0 flex flex-col">
-                  <span data-recent-pickup className="min-w-0 pb-2">
-                    <span className="block text-[10px] font-extrabold uppercase tracking-wider" style={{ color: C.success }}>{lang === "en" ? "Pickup" : lang === "mr" ? "पिकअप" : "पिकअप"}</span>
-                    <span className="block text-[13px] font-semibold leading-snug" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "pickup")}</span>
-                  </span>
-                  <span data-recent-drop className="min-w-0 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                    <span className="block text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "#0052CC" }}>{lang === "en" ? "Drop" : lang === "mr" ? "ड्रॉप" : "ड्रॉप"}</span>
-                    <span className="block text-[13px] font-semibold leading-snug" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "drop")}</span>
-                  </span>
+                  <span data-recent-pickup className="block min-w-0 pb-2.5 text-[13px] font-normal leading-snug" style={{ color: C.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "pickup")}</span>
+                  <span data-recent-drop className="block min-w-0 pt-2.5 text-[13px] font-normal leading-snug" style={{ color: C.ink, borderTop: `1px solid ${C.line}`, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{tripName(t, "drop")}</span>
                 </span>
-                <ChevronRight size={18} color={C.inkSoft} className="shrink-0" aria-hidden="true" />
               </button>
             ))}
           </div>
