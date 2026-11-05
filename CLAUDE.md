@@ -146,6 +146,29 @@ Known leftovers, to remove only when the owner asks: the temporary
 `PushDiagnosticPanel` in Profile screens, `rawPushRegisterProbe`, and
 `WebView.setWebContentsDebuggingEnabled(true)` in `MainActivity`.
 
+## Customer booking UI/UX — FROZEN, do not touch (owner 2026-11-04)
+
+The owner, after a long day of refinements: **"I want this UI/UX completely unbothered unless I ask you to change something in it. NO NEED TO CHANGE
+ANYTHING UNLESS I ASK YOU TO. KEEP THIS STORED IN YOUR MEMORY."** Same rule as GPS and the ring: no unsolicited changes -- no "improvements", polish,
+refactors, restyling, spacing/colour/font tweaks, copy changes or re-ordering -- in the customer's booking flow as it stands at commit `0e5cd06`
+(2026-11-04, the known-good version to go back to if anything breaks). A request from the owner that names a change in this area is the permission to make
+THAT change (and only that change); a NEW bug report here is permission to investigate and fix the bug.
+
+What is frozen (all in `src/App.jsx` unless noted; the detailed rules are the paragraphs of the "Verified-working behavior" section dated 2026-11-04):
+- `CustomerBooking` / `CustomerAdvanceBooking` (one component, Current + Advance): the main screen (Pickup box, "Use Current Location", the compact recent-trip
+  suggestion cards -- locations only, partitioned, light font, full address), the Pickup -> Drop flow and its guided highlight, `typingField` / `pickupTouched`
+  logic, the map (35vh, 500 m default radius, HIDDEN over the vehicle list in Current and over the date step + list in Advance), the "Book Round trip" box
+  (main screen only), the small "Distance: N km" row with the small "Change pickup / drop" link, the Advance day buttons (Tomorrow / Day after tomorrow /
+  In 3 days, hi/mr equivalents, 08:00 start, one-line date summary + Change date).
+- The vehicle list: one row per capacity category (icon, name, weight chip, "N min away", fare), the picked category moved to the top as the bigger "Selected"
+  card (badge, big fare, big picture, body size), the "Other vehicles" divider, and the INLINE "Book now" button directly under the selected card (no fixed bar).
+- `LocationField` (suggestions = Google-Maps style, `ddMaxH`), `CategoryVehicleArt` / `src/vehicleArt.jsx`, the category tables / names / dims.
+- The matching functions behaviour (`functions/addressLang.js` `searchPlaces`) and the rules pinned by the invariants listed with each paragraph.
+
+The machine enforcement already exists and covers this: `npm run verify:invariants` fails if any of these blocks change without `npm run criteria:accept`
+(and the invariant "CUSTOMER BOOKING UI IS FROZEN" fails if this section is removed). Do not "accept" a change here on your own initiative; if a change in
+ANOTHER area (fares, ring, admin) happens to touch these blocks, work around them or leave them exactly as they are.
+
 ## Don't trigger a new native build/versionCode unless it's mandatory
 
 The user has explicitly said too many versionCodes were built in a short

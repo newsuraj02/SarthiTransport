@@ -197,3 +197,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Owner 2026-11-04: Book now is no longer a fixed bar -- it is an inline button directly below the selected category card, other categories follow
 - changed (4): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+
+## 2026-11-05 -- Owner 2026-11-04: customer booking UI/UX declared FROZEN (CLAUDE.md section + contracts note + invariant); no code change
+- changed (3): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks
