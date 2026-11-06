@@ -250,3 +250,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-05 -- Owner 2026-11-05: Meta (Facebook) SDK for app-install ads -- facebook-core dependency, com.facebook.sdk meta-data in the manifest, placeholder App ID / client token in strings.xml (no frozen GPS/ring code touched)
 - changed (6): file:android/app/src/main/AndroidManifest.xml, code:CLAUDE.md, code:android/app/build.gradle, code:android/app/src/main/AndroidManifest.xml, code:android/app/src/main/res/values/strings.xml, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-06 -- Owner 2026-11-05: Meta follow-ups -- privacy.html Meta SDK disclosure (EN+HI), terms.html + delete-data.html copied into public/, 1024 icon in meta-pages (static web files only)
+- changed (3): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:public/privacy.html
+- added (4): code:meta-pages/delete-data.html, code:meta-pages/terms.html, code:public/delete-data.html, code:public/terms.html

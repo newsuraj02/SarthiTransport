@@ -150,7 +150,7 @@
   "code:.github/workflows/build-twa.yml": "39913cdb03b5dd04",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "d9e2dc0fee55202b",
-  "code:CLAUDE.md": "a591be51d04d07d5",
+  "code:CLAUDE.md": "91e169963d9091a4",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -331,7 +331,7 @@
   "code:apna-transport-native/settings.gradle": "faa7e8618f636a89",
   "code:capacitor.admin.config.ts": "f0a37c46e2497cc8",
   "code:capacitor.config.ts": "90638e0b1d9c2962",
-  "code:docs/SYSTEM_CONTRACTS.md": "1cc4d536b9f9f394",
+  "code:docs/SYSTEM_CONTRACTS.md": "ceeea2378a741c02",
   "code:firebase.json": "df92d1ad829e6f5e",
   "code:firestore.rules": "e16618f13a261d2f",
   "code:functions/addressLang.js#TRANSLITERATE_ENABLED": "f3ef08d623c0099c",
@@ -474,6 +474,8 @@
   "code:functions/tripLock.js": "19f5860e4fb586c9",
   "code:functions/vehicleSpecRepair.js": "adf812ad98da8207",
   "code:index.html": "13aaad7bdd0049da",
+  "code:meta-pages/delete-data.html": "93771526ac1d4a5b",
+  "code:meta-pages/terms.html": "7d0ed8ee9cf401f4",
   "code:package.json": "79c500d810b09df1",
   "code:postcss.config.js": "33e39ff2f29058a0",
   "code:public/.well-known/assetlinks.json": "2926adc1e7f315fd",
@@ -483,7 +485,7 @@
   "code:public/icons/icon-512.png": "6034568bbcb69866",
   "code:public/manifest.json": "222d7b3df018e7a0",
   "code:public/motion-check.html": "d605158d85e8784b",
-  "code:public/privacy.html": "f1614bf7a891ad13",
+  "code:public/privacy.html": "7eb76b1edb7874fe",
   "code:public/role-customer.svg": "acf11b3b3c70019b",
   "code:public/role-driver-icon.png": "5c42ed1d24d8f8b1",
   "code:public/service-worker.js": "86c40a29cceb1a6b",
@@ -1122,6 +1124,8 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "7f5bacfd4416bf5f"
+  "code:vite.config.js": "7f5bacfd4416bf5f",
+  "code:public/delete-data.html": "93771526ac1d4a5b",
+  "code:public/terms.html": "7d0ed8ee9cf401f4"
  }
 }
