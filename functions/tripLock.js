@@ -10,7 +10,7 @@
  *   - KYC is Approved and the driver is not blocked.
  *   - The driver is not on a trip (a running trip holds the driver until End Trip / Cancelled -- hasLoadConflict, the same availability
  *     rule the customer list uses).
- *   - The driver's vehicle CATEGORY is the one the customer picked, (RING_CATEGORIES_ABOVE = 0: owner 2026-11-05 removed the "+2 above"; it is only that category).
+ *   - The driver's vehicle CATEGORY is the one the customer picked, (owner 2026-11-05: the first ring is that category only; escalation rounds widen it to the picked limit + RING_EXTRA_RANGE_KG).
  *     The categories are the SAME ones the customer's vehicle list shows (owner 2026-11-04): 500 / 750 / 1200 / 1700 / 2500 / 5000 / 7500 /
  *     9000 / 12000 / 16000 / 20000 / 32000 kg + "above 32000 kg". The customer taps a category (never one driver) and EVERY vehicle in it
  *     (ONLY that category, owner 2026-11-05) is rung; the first driver to accept gets the trip. A booking carries `listCategoryKg` (the picked category's weight limit; an older booking only `listCategory`, an index into the previous table);
@@ -30,7 +30,10 @@ const RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 3500, 5000, 7500, 9000
 // The category table BEFORE 3500 kg and 25000 kg were added (2026-11-04). A booking made by the old app carries only `listCategory` = an index into THIS
 // table, so it is translated through it (to a weight limit) rather than read against the new table, which would shift it by one or two categories.
 const LEGACY_RING_CATEGORY_MAX_KG = [500, 750, 1200, 1700, 2500, 5000, 7500, 9000, 12000, 16000, 20000, 32000];
-const RING_CATEGORIES_ABOVE = 0; // owner 2026-11-05: ring ONLY the category the customer picked (was 2 above)
+// Owner 2026-11-05 (replaces the old "+2 categories above"): the FIRST ring goes ONLY to the category the customer picked; if the load is
+// still unaccepted, the escalation rounds widen the range to every category from the picked one up to the picked category's weight limit
+// + RING_EXTRA_RANGE_KG (500 kg picked -> 500 .. 5500 kg: 500, 750, 1200, 1700, 2500, 3500, 5000). Applies to every picked category.
+const RING_EXTRA_RANGE_KG = 5000;
 // MIRRORS CURRENT_BID_RADIUS_KM / ADVANCE_BID_RADIUS_KM in src/App.jsx (an invariant compares them) -- the same radius the customer's list uses.
 const RING_RADIUS_KM = { current: 30, advance: 50 };
 
@@ -58,7 +61,15 @@ function loadCategoryIndex(load) {
   return categoryIndexOfCapacity(load && load.weight);
 }
 
-// ctx: { mine: this driver's Ongoing bookings, hasLoadConflict(load, mine, lockHours), notificationLockHours(capacityKg), isAppOpen(driver), haversineKm(lat1, lng1, lat2, lng2) }
+// Weight limit of a category index (the last, "above 32000 kg", has no limit).
+function categoryLimitKg(idx) { return idx < RING_CATEGORY_MAX_KG.length ? RING_CATEGORY_MAX_KG[idx] : Infinity; }
+// First ring (extended = false): the picked category only. Escalation (extended = true): the picked category up to its limit + RING_EXTRA_RANGE_KG.
+function categoryInRingRange(dCat, lCat, extended) {
+  if (!extended) return dCat === lCat;
+  return dCat >= lCat && categoryLimitKg(dCat) <= categoryLimitKg(lCat) + RING_EXTRA_RANGE_KG;
+}
+
+// ctx: { extended: true from an escalation round, mine: this driver's Ongoing bookings, hasLoadConflict(load, mine, lockHours), notificationLockHours(capacityKg), isAppOpen(driver), haversineKm(lat1, lng1, lat2, lng2) }
 // Returns { ok: true } or { ok: false, reason }.
 function evaluateNewLoadDriver(driver, load, ctx) {
   if (!driver.online) return { ok: false, reason: "off duty" };
@@ -69,7 +80,7 @@ function evaluateNewLoadDriver(driver, load, ctx) {
   const dCat = categoryIndexOfCapacity(capacityKg);
   if (dCat === -1) return { ok: false, reason: "no vehicle capacity on file" };
   const lCat = loadCategoryIndex(load);
-  if (lCat !== -1 && (dCat < lCat || dCat > lCat + RING_CATEGORIES_ABOVE)) return { ok: false, reason: `category ${dCat} outside the picked category ${lCat} .. +${RING_CATEGORIES_ABOVE}` };
+  if (lCat !== -1 && !categoryInRingRange(dCat, lCat, !!ctx.extended)) return { ok: false, reason: `category ${dCat} outside the ${ctx.extended ? `picked category ${lCat} .. +${RING_EXTRA_RANGE_KG} kg` : `picked category ${lCat}`}` };
   // Radius from the pickup, by the driver's last known location (however old); skipped when the booking has no pickup coordinates.
   if (load.pickupLat != null && load.pickupLng != null) {
     const loc = driver.lastKnownLocation;
@@ -83,4 +94,4 @@ function evaluateNewLoadDriver(driver, load, ctx) {
   return { ok: true };
 }
 
-module.exports = { RING_CATEGORY_MAX_KG, LEGACY_RING_CATEGORY_MAX_KG, RING_CATEGORIES_ABOVE, RING_RADIUS_KM, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };
+module.exports = { RING_CATEGORY_MAX_KG, LEGACY_RING_CATEGORY_MAX_KG, RING_EXTRA_RANGE_KG, RING_RADIUS_KM, categoryInRingRange, categoryIndexOfCapacity, loadCategoryIndex, evaluateNewLoadDriver };

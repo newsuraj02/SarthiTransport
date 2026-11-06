@@ -254,3 +254,11 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-06 -- Owner 2026-11-05: Meta follow-ups -- privacy.html Meta SDK disclosure (EN+HI), terms.html + delete-data.html copied into public/, 1024 icon in meta-pages (static web files only)
 - changed (3): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:public/privacy.html
 - added (4): code:meta-pages/delete-data.html, code:meta-pages/terms.html, code:public/delete-data.html, code:public/terms.html
+
+## 2026-11-06 -- Owner 2026-11-05 (notification range): first ring = picked category only; escalation rounds ring the picked category up to its limit + 5000 kg (RING_EXTRA_RANGE_KG replaces RING_CATEGORIES_ABOVE; tripLock.js + app mirror; escalateOneBooking passes extended)
+- changed (8): app:isDriverBroadcastEligible, fns:escalateOneBooking, file:functions/tripLock.js, code:functions/index.js#escalateOneBooking, code:functions/tripLock.js, code:scripts/criteria.mjs#BLOCKS, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#isDriverBroadcastEligible
+- added (7): app:RING_EXTRA_RANGE_KG, app:ringCategoryLimitKg, app:ringCategoryInRange, code:meta-pages/app-icon-1024.png, code:src/App.jsx#RING_EXTRA_RANGE_KG, code:src/App.jsx#ringCategoryLimitKg, code:src/App.jsx#ringCategoryInRange
+- removed (2): app:RING_CATEGORIES_ABOVE, code:src/App.jsx#RING_CATEGORIES_ABOVE
+
+## 2026-11-06 -- docs only: ring range wording
+- changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md

@@ -574,11 +574,11 @@ async function escalateOneBooking(bookingId, load, tierIndex) {
     const driver = doc.data();
     const tag = `${doc.id} (${driver.name || "?"})`;
     if (alreadyAlerted.has(doc.id)) { skipLog.push(`${tag}: already alerted for this booking`); return; }
-    // Same rule as the first ring (functions/tripLock.js): duty on, approved, not blocked, not on a trip, the picked category only.
+    // Same rule as the first ring (functions/tripLock.js): duty on, approved, not blocked, not on a trip, the picked category up to its limit + 5000 kg (owner 2026-11-05: escalation widens the range).
     // Same radius as the first ring (owner 2026-11-04), so a later round reaches anyone who has become eligible since the first ring
     // (went on duty, came inside the radius, finished a trip) and was not alerted yet.
     const mine = [...(ongoingByDriver[doc.id] || []), ...(ongoingByDriver[`name:${driver.name}`] || [])];
-    const verdict = evaluateNewLoadDriver(driver, load, { mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: (d) => isAppOpenNow(d, Date.now()) });
+    const verdict = evaluateNewLoadDriver(driver, load, { extended: true, mine, hasLoadConflict, notificationLockHours, haversineKm, isAppOpen: (d) => isAppOpenNow(d, Date.now()) });
     if (!verdict.ok) { skipLog.push(`${tag}: ${verdict.reason}`); return; }
     if (!driver.fcmToken) { skipLog.push(`${tag}: no fcmToken`); return; }
     skipLog.push(`${tag}: NUDGING (round ${tierIndex + 1})`);

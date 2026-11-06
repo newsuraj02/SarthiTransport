@@ -1380,10 +1380,17 @@ export function vehicleForWeight(weightKg, tiers = DEFAULT_FARE_TIERS) {
 
 // WHO IS RUNG / SEES a new category-based request (owner 2026-11-04, replacing the old GPS-fix + weight-window rule): a driver whose
 // DUTY IS ON, KYC approved, not blocked, not on a trip, whose vehicle category is the one the customer picked or one of the next
-// RING_CATEGORIES_ABOVE (= 0, owner 2026-11-05: ONLY that category) categories above it, and who is WITHIN CURRENT_BID_RADIUS_KM (30) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
+// (escalated: up to the picked limit + RING_EXTRA_RANGE_KG), and who is WITHIN CURRENT_BID_RADIUS_KM (30) / ADVANCE_BID_RADIUS_KM (50, booking has scheduledFor)
 // of the pickup by the LAST KNOWN location however old (GPS off / stale does not matter; never-located cannot be placed -> not rung).
 // MIRRORS functions/tripLock.js (evaluateNewLoadDriver) -- an invariant compares the two on hundreds of random drivers.
-const RING_CATEGORIES_ABOVE = 0; // owner 2026-11-05: ring ONLY the category the customer picked (was 2 above)
+// Owner 2026-11-05: the FIRST ring is the picked category only; once escalation has started (the booking has `escalatedTierIndex` > 0) the range widens to
+// the picked category's limit + RING_EXTRA_RANGE_KG. MIRRORS categoryInRingRange in functions/tripLock.js.
+const RING_EXTRA_RANGE_KG = 5000;
+function ringCategoryLimitKg(idx) { return idx < CUSTOMER_LIST_CATEGORY_KG.length ? CUSTOMER_LIST_CATEGORY_KG[idx] : Infinity; }
+function ringCategoryInRange(dCat, lCat, extended) {
+  if (!extended) return dCat === lCat;
+  return dCat >= lCat && ringCategoryLimitKg(dCat) <= ringCategoryLimitKg(lCat) + RING_EXTRA_RANGE_KG;
+}
 // The ring categories ARE the customer's vehicle-list categories (CUSTOMER_LIST_CATEGORY_KG, owner 2026-11-04): the customer taps a category and
 // every vehicle in it (ONLY that category, owner 2026-11-05) is rung. Index of the category a vehicle of this capacity belongs to; -1 = unknown capacity.
 function ringCategoryIndexOfCapacity(capacityKg) {
@@ -1414,7 +1421,7 @@ function isDriverBroadcastEligible(d, b, vehicleTypes, bookings, fareTiers, lang
   const dCat = ringCategoryIndexOfCapacity(d.vehicleSpec?.capacityKg);
   if (dCat === -1) return false;
   const lCat = ringCategoryIndexOfLoad(b);
-  if (lCat !== -1 && (dCat < lCat || dCat > lCat + RING_CATEGORIES_ABOVE)) return false;
+  if (lCat !== -1 && !ringCategoryInRange(dCat, lCat, (Number(b.escalatedTierIndex) || 0) > 0)) return false;
   if (b.pickupLat != null && b.pickupLng != null) {
     const loc = d.lastKnownLocation;
     if (!loc || loc.lat == null || loc.lng == null) return false;
