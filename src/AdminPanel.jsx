@@ -22,6 +22,7 @@ import {
   NEARBY_MAP_DEFAULT_CENTER, useDrivingRoute, PLAY_STORE_URL, alertTypeLabel, calculateFare,
   describeAdminRateSaveError,
   syncRouteDistance, formatTripKm, fareKmText, formatKgLabel, bookingCategoryText, vehicleCategoryText, findExactAdminRoute, findFareTier, fmt, genId, geocodeAddress,
+  suggestPerTonRate, tonRouteTotal, clampTonsToCapacity, routeFixedRate,
   getRouteScaleRatio, getAdminRouteOverride, buildRouteFareTable, categoryRouteFare, customerCategoriesForTier, customerListCategoryName, customerListCategoryLabel, customerListCategoryCount, categoryTopTier, gpsStatus, marketAdjustFactor, clampMarketAdjustPct, MARKET_ADJUST_MIN_PCT, MARKET_ADJUST_MAX_PCT, MARKET_ADJUST_STEP_PCT, greetingWord, haversineKm, installedDrivers, zoneFor,
   isFutureAdvance, isLikelyUninstalled, localDateKey,
   monoFont, normalizeRouteText, pad2, partitionDriversByInstallStatus,
@@ -2161,24 +2162,8 @@ function AdminSavedRoutes({ adminRouteFares, adminRouteFaresError, lang, onEditA
 // vehicle is SELECTED (full-screen picker, section 3), not typed as a
 // loose weight number -- unlike CustomerBooking's customer-facing weight
 // field, Admin is pricing one exact tier at a time.
-// Owner 2026-11-05: "per km" / "per ton" fare basis in the Admin Rate Calculator (display + save only -- the customer / driver apps still read the saved route
-// total, unchanged). For a per-ton route the route rate = rate per ton x tons of load; the SYSTEM SUGGESTION for the per-ton rate is the km-based route rate divided
-// by the vehicle's capacity in tons, rounded UP to a whole rupee (so a full load always earns at least the km-based rate). Example: 750 kg, route Rs 1,548 -> 2,065 / ton;
-// 2,065 x 0.75 t = Rs 1,549.
-function suggestPerTonRate(kmRouteRate, capacityKg) {
-  const tons = (Number(capacityKg) || 0) / 1000;
-  const rate = Number(kmRouteRate) || 0;
-  return tons > 0 && rate > 0 ? Math.ceil(rate / tons - 1e-9) : null;
-}
-function tonRouteTotal(perTonRate, tons) {
-  const r = Number(perTonRate) || 0, t = Number(tons) || 0;
-  return r > 0 && t > 0 ? Math.round(r * t) : null;
-}
-function clampTonsToCapacity(tonsText, capacityKg) {
-  const cap = (Number(capacityKg) || 0) / 1000;
-  const t = Number(tonsText);
-  return cap > 0 && Number.isFinite(t) && t > cap ? String(cap) : tonsText;
-}
+// "per km" / "per ton" fare basis (owner 2026-11-05) + the 1-3 km fixed rate: suggestPerTonRate / tonRouteTotal / clampTonsToCapacity / routeFixedRate live in App.jsx and are shared
+// with the driver's Set Fare (owner 2026-11-07) so both screens always agree.
 function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers, routeFares, drivers, returnPct, setReturnPct, marketAdjustPct = 0, setMarketAdjustPct, lang, prefill, onClose, dieselPricePerLitre = null }) {
   // isReturn now means "the ⇅ swap button has flipped pickup/drop" -- the
   // form is calculating the RETURN-direction fare for this same pair of
@@ -2269,12 +2254,10 @@ function AdminRateCalculator({ adminRouteFares, adminRouteFaresError, fareTiers,
     : null;
   const suggestionSource = exactMatch ? "admin" : scaleRatio != null ? "scaled" : "formula";
 
-  const baseFix = tier ? (zone === "out" ? tier.outerMin : tier.innerFix) : null;
   const basePer = tier ? (zone === "out" ? tier.outerPer : tier.innerPer) : null;
   // Market rate change: the SYSTEM rate (formula, and the scaled layer whose ratio divides by the market-adjusted formula) moves with the factor; an exact saved Admin rate does not.
   const mkt = exactMatch ? 1 : marketAdjustFactor(); // a saved Admin rate (and its toll / floor) is never scaled
-  const suggestedFix = exactMatch ? (exactMatch.fix ?? null)
-    : (scaleRatio != null && baseFix != null ? Math.round(baseFix * mkt * scaleRatio / 10) * 10 : baseFix != null ? Math.round(baseFix * mkt) : baseFix);
+  const suggestedFix = routeFixedRate(tier, zone, exactMatch, scaleRatio);
   const suggestedPer = exactMatch ? exactMatch.per
     : (scaleRatio != null && basePer != null ? Math.round(basePer * mkt * scaleRatio * 2) / 2 : basePer != null ? Math.round(basePer * mkt * 2) / 2 : basePer);
   useEffect(() => {

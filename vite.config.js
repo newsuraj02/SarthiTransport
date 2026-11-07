@@ -4,6 +4,7 @@ import { execSync } from "node:child_process";
 import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { collectCriteria } from "./scripts/criteria.mjs";
+import { gitDirtyState } from "./scripts/dirtyState.mjs";
 
 // Writes dist/build.json on every build (2026-11-03, "the app seems to get back to its older self"): WHICH commit this build came from,
 // whether the folder had uncommitted edits, when it was built, and the fingerprint of every criterion (scripts/criteria.mjs). The
@@ -22,8 +23,8 @@ function buildStamp() {
         commit: git("git rev-parse --short HEAD") || "unknown",
         commitFull: git("git rev-parse HEAD") || "unknown",
         branch: git("git rev-parse --abbrev-ref HEAD") || "unknown",
-        // tracked files edited but not committed (the untracked scripts/package-lock.json is expected and ignored)
-        dirty: git("git status --porcelain --untracked-files=no").length > 0,
+        // tracked WEBSITE files edited but not committed (scripts/dirtyState.mjs: lock files, native Android files, docs and tests do not count; the files are named)
+        ...(({ dirty, dirtyFiles }) => ({ dirty, dirtyFiles }))(gitDirtyState(process.cwd(), "web")),
         builtAt: new Date().toISOString(),
         criteria,
         // open issues the owner has been told about (scripts/knownIssues.json) -- the scan lists them every run so they are not forgotten

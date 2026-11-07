@@ -11669,13 +11669,48 @@ function DriverProfileEdit({ driver, setDriver, lang, onChangeLang, onLogout, on
 // next to the refresh button in DriverApp's header, not shown inline on
 // the dashboard, since this is an occasional "log a route" action rather
 // than something checked on every visit.
-function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
+// ONE "By km / By ton" + 1-3 km fixed rate for the Admin Rate Calculator AND the driver's Set Fare (owner 2026-11-07: "sync both ... the toggle of 'According to the Km'
+// and 'According to ton' functioning exactly as in the Admin rate calculator ... keep the rate 1-3 km consistent in both"). These were private to AdminPanel.jsx; they live
+// here now so both screens call the very same functions.
+// Per ton: the route rate = rate per ton x tons of load; the SYSTEM SUGGESTION for the per-ton rate is the km-based route rate divided by the vehicle's capacity in tons,
+// rounded UP to a whole rupee (a full load always earns at least the km-based rate). Example: 750 kg, route Rs 1,548 -> 2,065 / ton; 2,065 x 0.75 t = Rs 1,549.
+export function suggestPerTonRate(kmRouteRate, capacityKg) {
+  const tons = (Number(capacityKg) || 0) / 1000;
+  const rate = Number(kmRouteRate) || 0;
+  return tons > 0 && rate > 0 ? Math.ceil(rate / tons - 1e-9) : null;
+}
+export function tonRouteTotal(perTonRate, tons) {
+  const r = Number(perTonRate) || 0, t = Number(tons) || 0;
+  return r > 0 && t > 0 ? Math.round(r * t) : null;
+}
+export function clampTonsToCapacity(tonsText, capacityKg) {
+  const cap = (Number(capacityKg) || 0) / 1000;
+  const t = Number(tonsText);
+  return cap > 0 && Number.isFinite(t) && t > cap ? String(cap) : tonsText;
+}
+// The 1-3 km Fixed Rate (outside the city: the Minimum charge) of a vehicle tier on a route: Admin's saved rate for this exact route + vehicle, else the tier's base
+// scaled by Admin's rates on the route's other vehicles, else the tier's own base -- with the market-rate change on a system (not a saved) rate.
+export function routeFixedRate(tier, zone, exactMatch, scaleRatio) {
+  if (!tier) return null;
+  const baseFix = zone === "out" ? tier.outerMin : tier.innerFix;
+  const mkt = exactMatch ? 1 : marketAdjustFactor();
+  return exactMatch ? (exactMatch.fix ?? null)
+    : (scaleRatio != null && baseFix != null ? Math.round(baseFix * mkt * scaleRatio / 10) * 10 : baseFix != null ? Math.round(baseFix * mkt) : baseFix);
+}
+
+function SetFareForm({ driver, routeFares, adminRouteFares, dieselPricePerLitre, fareTiers, lang, onClose }) {
   const [pickup, setPickup] = useState("");
   const [drop, setDrop] = useState("");
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropCoords, setDropCoords] = useState(null);
   const [distance, setDistance] = useState(null);
   const [totalFare, setTotalFare] = useState("");
+  // Fare basis (owner 2026-11-07, same as the Admin Rate Calculator): "km" = the driver types the route fare, "ton" = rate per ton x tons of load.
+  const [rateBasis, setRateBasis] = useState("km");
+  const [tons, setTons] = useState("");
+  const [tonsTouched, setTonsTouched] = useState(false);
+  const [perTon, setPerTon] = useState("");
+  const [perTonTouched, setPerTonTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const { isLoaded: mapsLoaded, hasKey: mapsHasKey } = useGoogleMaps();
@@ -11707,14 +11742,32 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
   const myCapacityKg = driver.vehicleSpec?.capacityKg || null;
   const myTier = myCapacityKg != null ? findFareTier(myCapacityKg, fareTiers) : null;
 
-  // 1-5 km Fixed Fare is no longer a separate input -- it's always exactly
-  // 25% of Total Fare, the one number a driver actually types in.
-  const tier1to5Fare = totalFare !== "" ? Math.round((Number(totalFare) || 0) * 0.25) : 0;
-  // What's left of the total, spread over the km beyond the first 5, gives
-  // a real ₹/km rate for this specific route -- not used to price anything
-  // yet, but stored (see save() below) so it's there to use later (e.g. to
-  // estimate a fare for a nearby distance on the same route).
-  const perKmRate = distance != null && distance > 5 && totalFare !== "" ? Math.round((Number(totalFare) - tier1to5Fare) / (distance - 5)) : null;
+  // Owner 2026-11-07 ("sync the Admin rate calculator and the drivers' Set Fare ... keep the rate 1-3 km consistent in both"): the SAME numbers the Admin Rate Calculator
+  // shows for this vehicle on this route -- the 1-3 km Fixed Rate (Minimum charge outside the city; routeFixedRate: Admin's saved route rate -> scaled -> the tier's own),
+  // the system route fare (the very table the customer list is built from), and the By km / By ton basis (suggestPerTonRate / tonRouteTotal / clampTonsToCapacity).
+  const km = distance || 0;
+  const zone = zoneFor(pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, distance);
+  const exactMatch = myTier && pickup.trim() && drop.trim()
+    ? findExactAdminRoute(pickup, drop, myTier.maxKg, zone, false, adminRouteFares, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng) : null;
+  const scaleRatio = myTier && pickup.trim() && drop.trim() && !exactMatch
+    ? getRouteScaleRatio(pickup, drop, zone, false, adminRouteFares, fareTiers, pickupCoords?.lat, pickupCoords?.lng, dropCoords?.lat, dropCoords?.lng, dieselPricePerLitre) : null;
+  const fixedRate = routeFixedRate(myTier, zone, exactMatch, scaleRatio);
+  const systemTable = myTier && km > 0
+    ? buildRouteFareTable({ tiers: fareTiers, pickup, drop, distance: km, pickupLat: pickupCoords?.lat, pickupLng: pickupCoords?.lng, dropLat: dropCoords?.lat, dropLng: dropCoords?.lng, adminRouteFares, dieselPricePerLitre })
+    : null;
+  const systemTotal = systemTable && myTier ? systemTable[myTier.maxKg] : null;
+  const capacityTons = myTier ? myTier.maxKg / 1000 : 0;
+  const tonsValue = rateBasis === "ton" ? (tonsTouched ? tons : (capacityTons > 0 && capacityTons < 1000 ? String(capacityTons) : "")) : "";
+  const perTonSuggested = myTier ? suggestPerTonRate(systemTotal, myTier.maxKg) : null;
+  const perTonValue = rateBasis === "ton" ? (perTonTouched ? perTon : (perTonSuggested != null ? String(perTonSuggested) : "")) : "";
+  const tonTotal = rateBasis === "ton" ? tonRouteTotal(perTonValue, tonsValue) : null;
+  const effectiveTotal = rateBasis === "ton" ? (tonTotal != null ? String(tonTotal) : "") : totalFare;
+  // 1-3 km Fixed Rate -> the rest of the route fare, spread over the km beyond the first 3 (same "fixed + (km - 3) x rate" shape as the Admin calculator); outside the city the rate per km.
+  const fixedFare1to3 = zone === "out" ? null : fixedRate;
+  const perKmRate = effectiveTotal !== "" && km > 0
+    ? (zone === "out" ? Math.round(Number(effectiveTotal) / km)
+      : (km > 3 && fixedRate != null ? Math.round((Number(effectiveTotal) - fixedRate) / (km - 3)) : null))
+    : null;
 
   // Once another driver has already quoted this same route, surface their
   // number (or the average across everyone who has) right here so this
@@ -11740,6 +11793,9 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
     setPickup(r.pickupName || ""); setDrop(r.dropName || "");
     setPickupCoords(null); setDropCoords(null);
     setTotalFare(r.totalFare != null ? String(r.totalFare) : "");
+    setRateBasis(r.rateBasis === "ton" ? "ton" : "km");
+    if (r.rateBasis === "ton") { setTons(r.tons != null ? String(r.tons) : ""); setTonsTouched(true); setPerTon(r.perTon != null ? String(r.perTon) : ""); setPerTonTouched(true); }
+    else { setTons(""); setTonsTouched(false); setPerTon(""); setPerTonTouched(false); }
     setSavedFlash(false);
   };
   // Requiring resolved coordinates (whenever Maps is actually available) is
@@ -11752,7 +11808,7 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
   // allowed with no coords at all if Maps genuinely isn't loaded, matching
   // the text-fallback this was always meant to cover.
   const locationResolved = !mapsReady || (pickupCoords != null && dropCoords != null);
-  const canSave = pickup.trim() && drop.trim() && totalFare !== "" && !saving && locationResolved;
+  const canSave = pickup.trim() && drop.trim() && effectiveTotal !== "" && !saving && locationResolved;
   const save = async () => {
     if (!canSave) return;
     setSaving(true);
@@ -11771,14 +11827,18 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
         pickupLat: pickupCoords?.lat ?? null, pickupLng: pickupCoords?.lng ?? null,
         dropLat: dropCoords?.lat ?? null, dropLng: dropCoords?.lng ?? null,
         estimatedKm: distance,
-        tier1to5Fare,
-        totalFare: Number(totalFare) || 0,
+        fixedFare1to3,
+        totalFare: Number(effectiveTotal) || 0,
+        // Fare basis (same fields as an Admin rate): for a per-ton entry the load (tons) and the rate per ton are kept so the form can reopen as "per ton".
+        rateBasis,
+        tons: rateBasis === "ton" ? Number(tonsValue) || null : null,
+        perTon: rateBasis === "ton" ? Number(perTonValue) || null : null,
         perKmRate,
         capacityKg: myCapacityKg,
         tierMaxKg: myTier?.maxKg ?? null,
       });
       setPickup(""); setDrop(""); setPickupCoords(null); setDropCoords(null); setDistance(null);
-      setTotalFare("");
+      setTotalFare(""); setRateBasis("km"); setTons(""); setTonsTouched(false); setPerTon(""); setPerTonTouched(false);
       setSavedFlash(true);
     } catch (e) { console.error(e); }
     setSaving(false);
@@ -11833,22 +11893,56 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
             </div>
           </div>
 
+          {/* Fare basis (owner 2026-11-07): the same "By km" / "By ton" toggle as the Admin Rate Calculator. By ton opens the load in tons (never above the vehicle's
+              capacity) and the rate per ton (system suggestion pre-filled); the fare for the route is then rate per ton x tons. */}
+          <div data-rate-basis className="rounded-xl p-1 grid grid-cols-2 gap-1" style={{ border: `1.5px solid ${C.line}`, background: C.bg }}>
+            {[["km", lang === "en" ? "By km" : lang === "mr" ? "किमीनुसार" : "किमी के हिसाब से"], ["ton", lang === "en" ? "By ton" : lang === "mr" ? "टनानुसार" : "टन के हिसाब से"]].map(([key, label]) => (
+              <button key={key} type="button" data-rate-basis-btn={key} aria-pressed={rateBasis === key} onClick={() => { setRateBasis(key); setSavedFlash(false); }}
+                className="rounded-lg py-2.5 text-xs font-extrabold"
+                style={{ background: rateBasis === key ? C.navy : "transparent", color: rateBasis === key ? "#FFFFFF" : C.inkSoft }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {rateBasis === "ton" && (
+            <div data-rate-ton-fields className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Load weight (tons)" : lang === "mr" ? "मालाचे वजन (टन)" : "माल का वजन (टन)"}</div>
+                <input type="number" inputMode="decimal" step="0.01" min="0" value={tonsValue} disabled={!myTier}
+                  onChange={(e) => { setTons(clampTonsToCapacity(e.target.value, myTier?.maxKg)); setTonsTouched(true); setSavedFlash(false); }}
+                  className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }} placeholder={lang === "en" ? "e.g. 0.75" : "उदा. 0.75"} />
+                {myTier && <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? `Not above your vehicle's ${capacityTons} t` : lang === "mr" ? `तुमच्या गाडीच्या ${capacityTons} टनांपेक्षा जास्त नाही` : `आपकी गाड़ी की ${capacityTons} टन क्षमता से ज़्यादा नहीं`}</div>}
+              </div>
+              <div>
+                <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Rate per ton (₹)" : "प्रति टन दर (₹)"}</div>
+                <input type="number" inputMode="numeric" min="0" value={perTonValue} disabled={!myTier}
+                  onChange={(e) => { setPerTon(e.target.value); setPerTonTouched(true); setSavedFlash(false); }}
+                  className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${perTonTouched ? C.marigoldDeep : C.line}`, color: perTonTouched ? C.marigoldDeep : C.ink }} placeholder={lang === "en" ? "Rate" : "दर"} />
+                {myTier && perTonSuggested != null && <div className="text-[10px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? `System suggestion ₹${perTonSuggested}/t` : lang === "mr" ? `सिस्टम सुचवलेले ₹${perTonSuggested}/टन` : `सिस्टम सुझाव ₹${perTonSuggested}/टन`}</div>}
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="text-[11px] font-bold mb-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Total Fare" : lang === "mr" ? "एकूण भाडे" : "कुल किराया"}</div>
-            <input type="number" inputMode="numeric" value={totalFare}
+            <input type="number" inputMode="numeric" value={effectiveTotal} readOnly={rateBasis === "ton"}
               onChange={(e) => { setTotalFare(e.target.value); setSavedFlash(false); }}
               className="w-full rounded-lg p-2.5 text-sm font-bold outline-none" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}
               placeholder={lang === "en" ? "Fill total fare" : lang === "mr" ? "एकूण भाडे भरा" : "कुल किराया भरें"} />
           </div>
 
-          {totalFare !== "" && (
-            <div className="rounded-lg p-2.5 text-[11px] font-semibold space-y-0.5" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.inkSoft }}>
+          {(effectiveTotal !== "" || fixedRate != null) && myTier && km > 0 && (
+            <div data-fixed-rate-1-3 className="rounded-lg p-2.5 text-[11px] font-semibold space-y-0.5" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.inkSoft }}>
               <div>
-                {lang === "en" ? "1–5 km Fixed Fare (25% of total, auto)" : lang === "mr" ? "1–5 किमी फिक्स्ड भाडे (एकूणच्या 25%, आपोआप)" : "1–5 किमी फिक्स्ड किराया (कुल का 25%, स्वतः)"}: <b style={{ color: C.ink }}>{fmt(tier1to5Fare)}</b>
+                {zone === "out"
+                  ? (lang === "en" ? "Minimum charge" : lang === "mr" ? "मिनिमम चार्ज" : "मिनिमम चार्ज")
+                  : (lang === "en" ? "1–3 km Fixed Rate" : lang === "mr" ? "1–3 किमी फिक्स्ड दर" : "1–3 किमी फिक्स्ड दर")}: <b style={{ color: C.ink }}>{fixedRate != null ? fmt(fixedRate) : "—"}</b>
               </div>
               {perKmRate != null && (
                 <div>
-                  {lang === "en" ? "Rate beyond 5 km" : lang === "mr" ? "5 किमी नंतरचा दर" : "5 किमी के बाद दर"}: <b style={{ color: C.ink }}>{fmt(perKmRate)}/km</b>
+                  {zone === "out"
+                    ? (lang === "en" ? "Rate per km" : lang === "mr" ? "प्रति किमी दर" : "प्रति किमी दर")
+                    : (lang === "en" ? "Rate beyond 3 km" : lang === "mr" ? "3 किमी नंतरचा दर" : "3 किमी के बाद दर")}: <b style={{ color: C.ink }}>{fmt(perKmRate)}/km</b>
                 </div>
               )}
             </div>
@@ -11904,7 +11998,7 @@ function SetFareForm({ driver, routeFares, fareTiers, lang, onClose }) {
 // send NO ring / full-screen push for that driver (functions/index.js isAppOpenNow, 30 s window); the in-app load card + sound (untouched)
 // do the job. The stamp is cleared the moment the app is hidden, closed or leaves Home. No stamp / an old stamp = the ring works as before.
 const APP_OPEN_BEAT_MS = 15000;
-function DriverApp({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, fareTiers, bookingExtras }) {
+function DriverApp({ driver, setDriver, bookings, driverRespondBooking, completeBooking, startLoading, cancelBooking, tripLog, vehicleTypes, addVehicleType, raiseAlert, alerts, minWallet, lang, onChangeLang, onLogout, withdrawals, requestWithdrawal, rechargeRequests, requestRecharge, onOpenTerms, adminNotifications, routeFares, adminRouteFares, dieselPricePerLitre, fareTiers, bookingExtras }) {
   const [tab, setTab] = useState("home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [setFareOpen, setSetFareOpen] = useState(false);
@@ -12046,7 +12140,7 @@ function DriverApp({ driver, setDriver, bookings, driverRespondBooking, complete
           <span className="text-xs font-bold" style={{ color: "#fff" }}>{lang === "en" ? "Set Fare" : lang === "mr" ? "भाडे सेट करा" : "किराया सेट करें"}</span>
         </button>
       )}
-      {setFareOpen && <SetFareForm driver={driver} routeFares={routeFares} fareTiers={fareTiers} lang={lang} onClose={() => setSetFareOpen(false)} />}
+      {setFareOpen && <SetFareForm driver={driver} routeFares={routeFares} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} fareTiers={fareTiers} lang={lang} onClose={() => setSetFareOpen(false)} />}
       {/* Owner 2026-10-31: the hamburger row is FIXED at the top (outside the scrolling area). */}
         {realHamburgerVisible && (
           <div className="relative z-20 shrink-0 flex items-center justify-between gap-2 px-5 pt-3 pb-1" style={{ background: C.bg }}>
@@ -13748,7 +13842,7 @@ export default function App() {
             tripLog={tripLog} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} raiseAlert={raiseAlert} alerts={alerts}
             minWallet={minWallet} lang={lang} onChangeLang={chooseLang} onLogout={logout}
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
-            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} fareTiers={fareTiers} bookingExtras={bookingExtras} />
+            onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} fareTiers={fareTiers} bookingExtras={bookingExtras} />
         )}
         {role === "admin" && adminAuth && isNativeApp && !adminUnlocked && (
           <Suspense fallback={<AdminLoadingFallback />}>

@@ -181,13 +181,13 @@ function auditDeployment({ hosting, functions, head, headCriteria = null, now = 
   const same = (a, b) => a && b && (a.startsWith(b) || b.startsWith(a));
   if (!hosting) push("deploy-hosting-unstamped", "high", "The live app has no build stamp", "Live /build.json is missing: the live app was built before stamps existed, or from a different checkout. Rebuild and redeploy hosting.");
   else {
-    if (hosting.dirty) push("deploy-hosting-dirty", "high", `The live app was built from UNCOMMITTED code (${hosting.commit})`, "Edits on the build machine that are not in the repository are live. Commit them or rebuild from a clean checkout.");
+    if (hosting.dirty) push("deploy-hosting-dirty", "high", `The live app was built from UNCOMMITTED code (${hosting.commit})`, `Edits on the build machine that are not in the repository are live${Array.isArray(hosting.dirtyFiles) && hosting.dirtyFiles.length ? `: ${hosting.dirtyFiles.join(", ")}` : ""}. Commit them (or undo them: git checkout -- <file>) and rebuild from a clean checkout.`);
     if (head && hosting.commitFull && !same(hosting.commitFull, head) && hostingCodeMatches(hosting.criteria, headCriteria)) push("deploy-hosting-docs-only", "info", `Newer commits exist (${head.slice(0, 7)}) but the live app's code is identical`, "Only docs / tests / server files changed since the deployed build, so nothing is missing from the website.");
     else if (head && hosting.commitFull && !same(hosting.commitFull, head)) push("deploy-hosting-behind", "high", `The live app (${hosting.commit}) is not the latest commit (${head.slice(0, 7)})`, "Newer fixes are in the repository but not deployed. Run: git pull, npm run build, firebase deploy --only hosting.");
   }
   if (!functions) push("deploy-functions-unstamped", "info", "Cloud Functions have no build stamp", "Deploy functions once with the new firebase.json predeploy step to start tracking them.");
   else {
-    if (functions.dirty) push("deploy-functions-dirty", "high", `Cloud Functions were deployed from UNCOMMITTED code (${functions.commit})`, "");
+    if (functions.dirty) push("deploy-functions-dirty", "high", `Cloud Functions were deployed from UNCOMMITTED code (${functions.commit})`, `Edits to the server files that are not in the repository are live${Array.isArray(functions.dirtyFiles) && functions.dirtyFiles.length ? `: ${functions.dirtyFiles.join(", ")}` : ""}. Commit them (or undo them: git checkout -- <file>) and redeploy functions from a clean checkout.`);
     if (head && functions.commitFull && !same(functions.commitFull, head)) push("deploy-functions-behind", "info", `Cloud Functions (${functions.commit}) are not at the latest commit (${head.slice(0, 7)})`, "Only matters if functions/ changed since then.");
   }
   return f;

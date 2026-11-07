@@ -269,3 +269,8 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-07 -- Owner 2026-11-07: removed the orange AREAS chips under Pickup/Drop (AREAS + suggestAreas deleted, no suggestions prop on the two LocationFields)
 - changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
 - removed (2): code:src/App.jsx#AREAS, code:src/App.jsx#suggestAreas
+
+## 2026-11-07 -- Owner 2026-11-07: Set Fare synced with the Admin Rate Calculator (shared By km/By ton + 1-3 km fixed rate helpers); deploy 'dirty' stamp counts only really-deployed files (scripts/dirtyState.mjs)
+- changed (12): file:functions/healthAudit.js, code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:functions/healthAudit.js#auditDeployment, code:scripts/verifyInvariants.mjs#checks, code:scripts/writeFunctionsStamp.mjs, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminRateCalculator, code:src/App.jsx#SetFareForm, code:src/App.jsx#DriverApp, code:src/App.jsx#App, code:vite.config.js
+- added (5): code:src/App.jsx#suggestPerTonRate, code:src/App.jsx#tonRouteTotal, code:src/App.jsx#clampTonsToCapacity, code:src/App.jsx#routeFixedRate, code:scripts/dirtyState.mjs
+- removed (3): code:src/AdminPanel.jsx#suggestPerTonRate, code:src/AdminPanel.jsx#tonRouteTotal, code:src/AdminPanel.jsx#clampTonsToCapacity
