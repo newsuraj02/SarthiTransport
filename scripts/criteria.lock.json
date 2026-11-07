@@ -1131,6 +1131,8 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "7f5bacfd4416bf5f"
+  "code:vite.config.js": "7f5bacfd4416bf5f",
+  "code:public/customer.html": "802981a715e6ebc9",
+  "code:public/driver.html": "cce0547d55aaa2e4"
  }
 }

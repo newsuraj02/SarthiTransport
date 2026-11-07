@@ -262,3 +262,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-06 -- docs only: ring range wording
 - changed (2): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md
+
+## 2026-11-07 -- Owner 2026-11-07: ad-only landing pages public/customer.html + public/driver.html (noindex, unlinked, copied unchanged otherwise)
+- added (2): code:public/customer.html, code:public/driver.html
