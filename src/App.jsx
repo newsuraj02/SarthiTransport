@@ -1114,11 +1114,6 @@ export function greetingWord(lang) {
   return hour < 12 ? "सुप्रभात" : hour < 17 ? "शुभ दोपहर" : "शुभ संध्या";
 }
 
-const AREAS = ["पिंपरी", "चिंचवड", "निगड़ी", "आकुर्डी", "भोसरी", "वाकड़", "तळवडे", "रावेत", "MG रोड", "MR-10", "काळेवाडी", "पिंपळे सौदागर", "थेरगाव", "चिखली", "मोशी", "भोसरी MIDC"];
-function suggestAreas(text) {
-  if (!text.trim()) return [];
-  return AREAS.filter((a) => a.toLowerCase().includes(text.trim().toLowerCase())).slice(0, 4);
-}
 // Great-circle ("as the crow flies") distance between two coordinates, in km.
 export function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
@@ -7974,8 +7969,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
               onPlaceSelected={onPickupPlaceSelected}
               mapsReady={mapsReady}
               placeholder={lang === "en" ? "Where to pick up the load from? (Pickup)" : lang === "mr" ? "सामान कुठून उचलायचे आहे? (पिकअप)" : "सामान कहाँ से उठाना है? (पिकअप)"}
-              suggestions={suggestAreas(pickup)}
-              onSuggestionTap={(a) => onPickupTyped(pickup.trim() + (pickup.trim() ? ", " : "") + a)}
               onFocus={() => { setActiveField("pickup"); setTypingField("pickup"); setPickupTouched(true); }}
               onBlur={() => setTypingField((f) => (f === "pickup" ? null : f))}
               highlighted={highlightField === "pickup"}
@@ -8039,8 +8032,6 @@ function CustomerBooking({ requestByCategory, vehicleTypes, recentPickups, recen
           onPlaceSelected={onDropPlaceSelected}
           mapsReady={mapsReady}
           placeholder={lang === "en" ? "Where to unload the goods? (Drop)" : lang === "mr" ? "सामान कुठे उतरवायचे आहे? (ड्रॉप)" : "सामान कहाँ उतारना है? (ड्रॉप)"}
-          suggestions={suggestAreas(drop)}
-          onSuggestionTap={(a) => onDropTyped(drop.trim() + (drop.trim() ? ", " : "") + a)}
           onFocus={() => { setActiveField("drop"); setTypingField("drop"); }}
           onBlur={() => setTypingField((f) => (f === "drop" ? null : f))}
           highlighted={highlightField === "drop"}

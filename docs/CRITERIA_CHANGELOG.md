@@ -265,3 +265,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-07 -- Owner 2026-11-07: ad-only landing pages public/customer.html + public/driver.html (noindex, unlinked, copied unchanged otherwise)
 - added (2): code:public/customer.html, code:public/driver.html
+
+## 2026-11-07 -- Owner 2026-11-07: removed the orange AREAS chips under Pickup/Drop (AREAS + suggestAreas deleted, no suggestions prop on the two LocationFields)
+- changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#CustomerBooking
+- removed (2): code:src/App.jsx#AREAS, code:src/App.jsx#suggestAreas

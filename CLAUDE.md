@@ -169,6 +169,7 @@ What is frozen (all in `src/App.jsx` unless noted; the detailed rules are the pa
   In 3 days, hi/mr equivalents, 08:00 start, one-line date summary + Change date).
 - The vehicle list: one row per capacity category (icon, name, weight chip, "N min away", fare), the picked category moved to the top as the bigger "Selected"
   card (badge, big fare, big picture, body size), the "Other vehicles" divider, and the INLINE "Book now" button directly under the selected card (no fixed bar).
+- (owner 2026-11-07: the orange area chips under Pickup / Drop -- the hard-coded `AREAS` list, `suggestAreas` -- were REMOVED; do not bring them back; invariant "NO AREA-CHIP SUGGESTIONS")
 - `LocationField` (suggestions = Google-Maps style, `ddMaxH`), `CategoryVehicleArt` / `src/vehicleArt.jsx`, the category tables / names / dims.
 - The matching functions behaviour (`functions/addressLang.js` `searchPlaces`) and the rules pinned by the invariants listed with each paragraph.
 
