@@ -2552,6 +2552,10 @@ function useRefreshButton() {
 
 // Persists a piece of state to localStorage under `key`, so the app
 // remembers role choice, bookings, wallet balances etc. across reloads.
+// ONE DEVICE PER DRIVER (owner 2026-11-08). This device's id (`mine`) vs the id stored on the driver's record (`stored`):
+// no stored id = nobody has logged in since this rule shipped, leave the session alone; a stored id that is not mine = another device logged in later, so sign out here.
+export function shouldLogOutDriverSession(mine, stored) { return !!stored && stored !== (mine || ""); }
+export function newDriverSessionId() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 6)}`; }
 export function usePersistedState(key, initialValue, persist = true) {
   const [value, setValue] = useState(() => {
     if (!persist) return initialValue;
@@ -5777,7 +5781,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     setError("");
     try {
       await signInWithEmailAndPassword(authInstance, pinAuthEmail(mobile, "driver"), pinToPassword(pin));
-      onOtpVerified(mobile);
+      onOtpVerified(mobile, true);
     } catch (e) {
       console.error(e);
       setError(lang === "en" ? "Incorrect mobile number or PIN." : lang === "mr" ? "चुकीचा मोबाइल नंबर किंवा PIN." : "गलत मोबाइल नंबर या PIN।");
@@ -5821,7 +5825,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
       return;
     }
     setFinalizeState("idle");
-    onOtpVerified(mobile);
+    onOtpVerified(mobile, true);
     setSending(false);
   };
   // Account exists and the driver doc has arrived: upload the photos + save the
@@ -5927,7 +5931,7 @@ function DriverOnboarding({ lang = "hi", authInstance, verified, onOtpVerified, 
     }
     // Already phone-verified for real just above -- straight into the app,
     // no separate re-login with the new PIN needed.
-    onOtpVerified(mobile);
+    onOtpVerified(mobile, true);
   };
 
   // Fallback completion form (see the "still just a placeholder name"
@@ -12750,6 +12754,10 @@ export default function App() {
     });
   };
   const [driverAuth, setDriverAuth] = usePersistedState("sarthi_driverAuth", { verified: false, mobile: "" });
+  // ONE DEVICE PER DRIVER (owner 2026-11-08): a fresh login stamps drivers/{mobile}.activeSessionId; any other device whose own id differs is signed out.
+  const [driverSession, setDriverSession] = usePersistedState("sarthi_driverSession", "");
+  const [sessionClaim, setSessionClaim] = useState(false);
+  const [kickedNotice, setKickedNotice] = useState(false);
   // Opening the app with ?admin=1 skips the role-choice screen entirely and
   // goes straight to the Admin login form — no option to pick Customer/Driver.
   useEffect(() => {
@@ -13187,6 +13195,18 @@ export default function App() {
     }).catch((e) => console.error("[driver init]", e));
     return unsub;
   }, [driverAuth.verified, driverAuth.mobile]);
+
+  // Claim the driver session once the profile exists (a brand-new account's doc is created just above), then watch for someone else taking it over.
+  useEffect(() => {
+    if (!sessionClaim || !firestoreReady || !driverAuth.verified || !driverAuth.mobile || !driver || !driverSession) return;
+    patchDoc("drivers", driverAuth.mobile, { activeSessionId: driverSession, activeSessionAt: serverTimestamp(), activeDevice: String(navigator.userAgent || "").slice(0, 120) })
+      .then(() => setSessionClaim(false)).catch((e) => console.error("[driver session claim]", e));
+  }, [sessionClaim, driverAuth.verified, driverAuth.mobile, !!driver, driverSession]);
+  useEffect(() => {
+    if (sessionClaim || !driverAuth.verified || !driver) return;
+    if (shouldLogOutDriverSession(driverSession, driver.activeSessionId)) { setKickedNotice(true); setDriverSession(""); logoutRole("driver"); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionClaim, driverAuth.verified, driver?.activeSessionId, driverSession]);
 
   // Install-activity signal for Admin's Uninstalled list (see
   // isLikelyUninstalled): stamp lastActiveAt whenever a signed-in driver opens
@@ -13930,7 +13950,7 @@ export default function App() {
         {role === "driver" && !driverResubmitting && (!driverAuth.verified || !driver || !driver.vehicleSpec) && (
           <DriverOnboarding lang={lang} authInstance={driverFirebaseAuth}
             verified={driverAuth.verified}
-            onOtpVerified={(mobile) => setDriverAuth({ verified: true, mobile })}
+            onOtpVerified={(mobile, fresh) => { if (fresh) { setDriverSession(newDriverSessionId()); setSessionClaim(true); } setDriverAuth({ verified: true, mobile }); }}
             onLogout={() => (driverAuth.verified ? logoutRole("driver") : goHome())}
             driver={driver} setDriver={setDriver} vehicleTypes={vehicleTypes} addVehicleType={addVehicleType}
             onFirstSignupComplete={() => {
@@ -13998,6 +14018,15 @@ export default function App() {
             withdrawals={withdrawals} requestWithdrawal={requestWithdrawal} rechargeRequests={rechargeRequests} requestRecharge={requestRecharge}
             onOpenTerms={() => setShowTerms(true)} adminNotifications={adminNotifications} routeFares={routeFares} adminRouteFares={adminRouteFares} dieselPricePerLitre={dieselPricePerLitre} fareTiers={fareTiers} bookingExtras={bookingExtras}
             fleetVehicles={fleetVehicles} fleetPrivateById={fleetPrivateById} />
+        )}
+        {kickedNotice && (
+          <div data-session-kicked className="fixed inset-0 z-[70] flex items-center justify-center p-6" style={{ background: "rgba(15,27,45,0.55)" }}>
+            <div className="w-full max-w-sm rounded-2xl p-5 text-center shadow-md" style={{ background: C.paper }}>
+              <div className="text-base font-extrabold mb-1.5" style={{ color: C.ink }}>{lang === "en" ? "Logged out" : lang === "mr" ? "लॉग आउट झाले" : "लॉग आउट हो गया"}</div>
+              <div className="text-sm mb-4" style={{ color: C.inkSoft }}>{lang === "en" ? "Your account was logged in on another device, so you were logged out here." : lang === "mr" ? "तुमचे खाते दुसऱ्या डिव्हाइसवर लॉगिन केले गेले, म्हणून येथून लॉग आउट केले." : "आपका अकाउंट दूसरे डिवाइस पर लॉगिन हुआ है, इसलिए यहाँ से लॉग आउट कर दिया गया।"}</div>
+              <button type="button" onClick={() => setKickedNotice(false)} className="w-full rounded-xl py-3 text-sm font-extrabold text-white" style={{ background: C.navy }}>OK</button>
+            </div>
+          </div>
         )}
         {role === "driver" && driver?.fleetOwner && fleetAssign && (() => {
           const fb = bookings.find((x) => x.id === fleetAssign.bookingId);

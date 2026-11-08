@@ -299,3 +299,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-08 -- Owner 2026-11-08: removed a stray extra brace after the Admin Drivers tab line (printed a literal } and an esbuild error)
 - changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminPanel
+
+## 2026-11-08 -- Owner 2026-11-08: one device per driver (activeSessionId claim + sign-out of the other device)
+- changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#App
+- added (2): code:src/App.jsx#shouldLogOutDriverSession, code:src/App.jsx#newDriverSessionId
