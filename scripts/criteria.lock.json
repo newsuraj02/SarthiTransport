@@ -154,7 +154,7 @@
   "code:.github/workflows/build-twa.yml": "39913cdb03b5dd04",
   "code:.github/workflows/verify.yml": "32112873df9a59fa",
   "code:.gitignore": "d086c1ed60e3ca9d",
-  "code:CLAUDE.md": "fbaea06df5f3a75f",
+  "code:CLAUDE.md": "cd422a2eee65c253",
   "code:DEPLOYMENT.md": "a767c307990b6406",
   "code:PLAY_STORE_LISTING.md": "90c972f484541e2e",
   "code:README.md": "b4c70b817af73015",
@@ -347,6 +347,7 @@
   "code:functions/addressLang.js#resolveLang": "4eaa337f1e5417ac",
   "code:functions/addressLang.js#createAddressService": "4cbd753a3c44b83e",
   "code:functions/addressLang.js#exportsList": "6f27535eec18d294",
+  "code:functions/bulkWhatsApp.js": "ee54357f422c2681",
   "code:functions/fleetDispatch.js": "1f240d9530546035",
   "code:functions/healthAudit.js#H": "62f7f3e55ee88d8f",
   "code:functions/healthAudit.js#parseScheduledFor": "1247596db6350c98",
@@ -619,7 +620,7 @@
   "code:scripts/verifyInvariants.mjs#loadSignupFinalizeFn": "042d3aa5ce083f6b",
   "code:scripts/verifyInvariants.mjs#photo": "59f138fe9edd92a3",
   "code:scripts/verifyInvariants.mjs#fullDriver": "a2b6794f0ffd092d",
-  "code:scripts/verifyInvariants.mjs#checks": "046ea197958aaa8d",
+  "code:scripts/verifyInvariants.mjs#checks": "299cfd86e55fe6d6",
   "code:scripts/verifyInvariants.mjs#failed": "75a04c1b55cc94b4",
   "code:scripts/verifyInvariants.mjs#other": "d97a2b8f6d95712c",
   "code:scripts/wipeBookings.js": "1e5b18cba5b73211",
@@ -664,7 +665,7 @@
   "code:src/AdminPanel.jsx#AdminSavedRoutes": "ee2415efd6c84008",
   "code:src/AdminPanel.jsx#AdminRateCalculator": "74022c8d271804a8",
   "code:src/AdminPanel.jsx#AdminAlerts": "fba962fbad3243ba",
-  "code:src/AdminPanel.jsx#AdminDriverList": "80bc6c6a49506753",
+  "code:src/AdminPanel.jsx#AdminDriverList": "e58ddcd4ece0e597",
   "code:src/AdminPanel.jsx#AdminCustomers": "d0bed5eba4a2d310",
   "code:src/AdminPanel.jsx#AdminNotify": "a24d09be3915da30",
   "code:src/AdminPanel.jsx#toMetaPhone": "f53983661940a035",
@@ -1176,7 +1177,6 @@
   "code:twa/generate-project.js": "116163e7dbafccb4",
   "code:twa/package.json": "639d5468308366a6",
   "code:twa/patch-project.js": "3a338323c5b69616",
-  "code:vite.config.js": "9cfe2ea5f53d0117",
-  "code:functions/bulkWhatsApp.js": "ee54357f422c2681"
+  "code:vite.config.js": "9cfe2ea5f53d0117"
  }
 }

@@ -3213,50 +3213,39 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     const called = calledDriverToday(d.mobile);
     return (
       <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper, opacity: called ? 0.6 : 1 }}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
-            <div className="min-w-0">
-              <div className="text-sm font-bold truncate" style={{ color: C.ink }}>{d.name}</div>
-              <div className="text-xs font-bold truncate" style={{ color: C.ink, fontFamily: monoFont }}>{driverPlateText(d, lang)} · {d.mobile}</div>
-            </div>
+        <div className="flex items-center gap-2.5">
+          <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
+          <SafeImage src={d.photo?.url || d.docs?.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold truncate" style={{ color: C.ink }}>{d.name || "—"}</div>
+            <div className="text-[10px] font-bold" style={{ color: C.ink, fontFamily: monoFont }}>{d.mobile}</div>
           </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <div className="flex items-center gap-1">
-              {called ? (
-                <div onDoubleClick={() => unmarkDriverCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: "#E5EAF2" }}>
-                  <Phone size={14} color="#9AA3B0" />
-                </div>
-              ) : (
-                <a href={`tel:+91${d.mobile}`} onClick={() => markDriverCalled(d.mobile)} className="p-2 rounded-full flex items-center justify-center" style={{ background: C.success }}>
-                  <Phone size={14} color="#FFFFFF" />
-                </a>
-              )}
-              {called && <CheckCircle2 size={14} color={C.success} />}
+          {called ? (
+            <div onDoubleClick={() => unmarkDriverCalled(d.mobile)} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: "#9AA3B0" }}>
+              <Phone size={16} color="#FFFFFF" />
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: gps.stale ? C.safety : C.success }} title={lang === "en" ? `GPS: ${gps.label}` : lang === "mr" ? `GPS: ${gps.label}` : `GPS: ${gps.label}`}>
-              <MapPin size={9} /> GPS
-            </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: d.kyc === "Approved" ? C.success : C.safety }} title={km.label}>KYC</span>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-2">
-          <button onClick={() => setExpandedId(expanded ? null : d.id)} className="text-sm font-bold" style={{ color: C.marigoldDeep }}>
-            {expanded ? (lang === "en" ? "▲ Hide KYC details" : lang === "mr" ? "▲ KYC डिटेल लपवा" : "▲ KYC डिटेल छुपाएं") : (lang === "en" ? "▼ View KYC details" : lang === "mr" ? "▼ KYC डिटेल पहा" : "▼ KYC डिटेल देखें")}
-          </button>
-          {/* Approve/Reject moved to the Live Dashboard's "New Registrations"
-              approval queue (see AdminFleet) -- this screen keeps Edit only,
-              for fixing bad vehicle data on a driver regardless of KYC
-              status, not for making the approval decision itself. */}
-          {d.vehicleSpec && (
-            <div className="flex gap-2 shrink-0">
-              <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
-                {editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}
-              </button>
-            </div>
+          ) : (
+            <a href={`tel:+91${d.mobile}`} onClick={() => markDriverCalled(d.mobile)} className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.success }}>
+              <Phone size={16} color="#FFFFFF" />
+            </a>
           )}
+          <button onClick={() => { if (expanded) { setExpandedId(null); if (editing) cancelEdit(); } else { if (editingId) cancelEdit(); setExpandedId(d.id); } }} aria-label={expanded ? (lang === "en" ? "Hide details" : lang === "mr" ? "तपशील लपवा" : "विवरण छुपाएं") : (lang === "en" ? "View details" : lang === "mr" ? "तपशील पहा" : "विवरण देखें")}
+            className="shrink-0 p-2.5 rounded-lg flex items-center justify-center" style={{ background: C.marigoldDeep }}>
+            <ChevronDown size={16} color="#FFFFFF" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+          </button>
         </div>
+        {expanded && (
+          <div data-driver-details className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
+            <div className="flex flex-wrap items-center gap-1.5 mb-3">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 text-white" style={{ background: gps.stale ? C.safety : C.success }}><MapPin size={9} /> GPS · {gps.label}</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: d.kyc === "Approved" ? C.success : C.safety }}>KYC · {km.label}</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: d.online ? C.success : C.inkSoft }}>{d.online ? (lang === "en" ? "On Duty" : lang === "mr" ? "ऑन ड्युटी" : "ऑन ड्यूटी") : (lang === "en" ? "Off Duty" : lang === "mr" ? "ऑफ ड्युटी" : "ऑफ ड्यूटी")}</span>
+              {d.fleetOwner && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.navy }}>{driverPlateText(d, lang)}</span>}
+              {d.blacklisted && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: C.safety }}>⛔ {lang === "en" ? "Blocked" : lang === "mr" ? "ब्लॉक्ड" : "ब्लॉक्ड"}</span>}
+            </div>
+            <div className="text-[11px] mb-1" style={{ color: C.ink }}>
+              <b>{lang === "en" ? "Contact number" : lang === "mr" ? "संपर्क नंबर" : "संपर्क नंबर"}:</b> <span style={{ fontFamily: monoFont }}>{d.mobile}</span>
+            </div>
         {editing ? (
           <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
             <div className="grid grid-cols-2 gap-2 mb-2">
@@ -3301,7 +3290,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
               </button>
             </div>
           </div>
-        ) : expanded && (
+        ) : (
           <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
             <div className="text-[11px] font-semibold mb-1.5" style={{ color: C.inkSoft }}>{lang === "en" ? "Submitted documents:" : lang === "mr" ? "जमा केलेली कागदपत्रे:" : "जमा किए गए दस्तावेज़:"}</div>
             <div className="grid grid-cols-2 gap-2 mb-2">
@@ -3329,7 +3318,14 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
           </div>
         )}
 
-        <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+          {d.vehicleSpec && (
+            <div className="flex gap-2 mt-2 justify-end">
+              <button onClick={() => (editing ? cancelEdit() : startEdit(d))} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: editing ? C.inkSoft : C.navy, color: "#FFFFFF" }}>
+                {editing ? (lang === "en" ? "Cancel" : lang === "mr" ? "रद्द करा" : "रद्द करें") : (lang === "en" ? "Edit" : lang === "mr" ? "एडिट" : "एडिट")}
+              </button>
+            </div>
+          )}
+        <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: `1px solid ${C.line}` }}>
           {d.blacklisted ? <span className="text-[11px] font-bold" style={{ color: C.safety }}>⛔ {lang === "en" ? "Blocked — won't get bookings" : lang === "mr" ? "ब्लॉक्ड — बुकिंग मिळणार नाही" : "ब्लॉक्ड — बुकिंग नहीं मिलेगी"}</span> : <span />}
           <div className="flex items-center gap-2">
             {confirmDeleteId === d.id ? (
@@ -3354,6 +3350,8 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
             )}
           </div>
         </div>
+          </div>
+        )}
       </div>
     );
   };

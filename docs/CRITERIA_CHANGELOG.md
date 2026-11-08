@@ -317,3 +317,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-08 -- Owner 2026-11-08: bulk WhatsApp reads MSG91's reply honestly and shows the real failure reason (judgeMsg91Response, reason/detail, UI line)
 - changed (9): fn:sendBulkDriverWhatsApp, file:src/firebaseClient.js, code:CLAUDE.md, code:functions/index.js#other, code:functions/index.js#fn:sendBulkDriverWhatsApp, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminFleet, code:src/AdminPanel.jsx#AdminDriverList, code:src/firebaseClient.js#sendBulkDriverWhatsApp
 - added (2): code:src/AdminPanel.jsx#whatsappFailDetail, code:functions/bulkWhatsApp.js
+
+## 2026-11-08 -- Owner 2026-11-08: Admin driver list rows now match the customer list rows (details, tags, edit, block, delete inside the arrow; one row open at a time)
+- changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminDriverList
