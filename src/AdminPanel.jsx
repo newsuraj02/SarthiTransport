@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Calculator, CalendarCheck, Camera, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock,
   ClipboardList, Download, Eye, EyeOff, Fuel, History, LayoutDashboard, MapPin, MapPinned,
-  MessageCircle, Phone, PhoneCall, Plus, Settings2, Siren, UserCircle2, Users,
+  MessageCircle, Phone, Plus, Settings2, Siren, UserCircle2, Users,
   Wallet, XCircle,
 } from "lucide-react";
 import { GoogleMap, MarkerF, PolylineF } from "@react-google-maps/api";
@@ -3046,48 +3046,6 @@ function AdminAlerts({ alerts, replyToAlert, withdrawals, approveWithdrawal, rec
   );
 }
 
-// Dispute-resolution audit trail for masked calls (see functions/index.js:
-// initiateMaskedCall) -- who called who, on which booking, when. Only the
-// initial connect request gets logged (no duration/answer status, since
-// MSG91's click-to-call response is all this reads -- a call-status
-// webhook would be needed for more than that, which isn't wired up).
-function AdminCallLogs({ callLogs, bookings, lang }) {
-  const roleLabel = lang === "en" ? { customer: "Customer", driver: "Driver" } : lang === "mr" ? { customer: "ग्राहक", driver: "ड्रायव्हर" } : { customer: "ग्राहक", driver: "ड्राइवर" };
-  const formatTime = (createdAt) => (createdAt?.toDate ? createdAt.toDate().toLocaleString(lang === "en" ? "en-IN" : lang === "mr" ? "mr-IN" : "hi-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
-  return (
-    <div className="rounded-xl p-4 shadow-sm" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-      <div className="text-sm font-bold mb-3 flex items-center gap-1.5" style={{ color: C.ink }}>
-        <PhoneCall size={16} color={C.marigoldDeep} /> {lang === "en" ? "Masked Call Logs" : lang === "mr" ? "मास्क्ड कॉल लॉग्स" : "मास्क्ड कॉल लॉग्स"}
-        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ color: "#FFFFFF", background: C.navy }}>{(callLogs || []).length}</span>
-      </div>
-      {(callLogs || []).length === 0 ? (
-        <p className="text-xs" style={{ color: C.inkSoft }}>{lang === "en" ? "No masked calls yet." : lang === "mr" ? "अजून कोणताही मास्क्ड कॉल झाला नाही." : "अभी तक कोई मास्क्ड कॉल नहीं हुई।"}</p>
-      ) : (
-        <div className="space-y-2">
-          {callLogs.map((log) => {
-            const b = (bookings || []).find((x) => x.id === log.bookingId);
-            return (
-              <div key={log.id} className="rounded-lg p-3" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold" style={{ color: C.ink }}>{roleLabel[log.initiatedBy] || log.initiatedBy} {lang === "en" ? "called" : lang === "mr" ? "ने कॉल केला" : "ने कॉल किया"}</span>
-                  <span className="text-[10px]" style={{ color: C.inkSoft }}>{formatTime(log.createdAt)}</span>
-                </div>
-                {b ? (
-                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{b.pickup} → {b.drop}{b.driverName ? ` · ${b.driverName}${fleetTag(b)}` : ""}</div>
-                ) : (
-                  <div className="text-[11px] mt-1" style={{ color: C.inkSoft }}>{lang === "en" ? "Booking" : lang === "mr" ? "बुकिंग" : "बुकिंग"}: {log.bookingId}</div>
-                )}
-                {/* msg91CallId is the current field (MSG91); kaleyraCallId/exotelCallSid are kept for any call log written before the Kaleyra->MSG91 / Exotel->Kaleyra switches. */}
-                {(log.msg91CallId || log.kaleyraCallId || log.exotelCallSid) && <div className="text-[10px] mt-0.5" style={{ color: C.inkSoft, fontFamily: monoFont }}>ID: {log.msg91CallId || log.kaleyraCallId || log.exotelCallSid}</div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Single home for everything about a driver -- used to be split across
 // this list (GPS/online/wallet, blacklist/delete, KYC shown read-only)
 // and a separate AdminKyc screen (Approve/Reject/Edit, WhatsApp nudges)
@@ -4524,12 +4482,12 @@ function AdminExpenses({ expenses, expenseCategories, addExpense, addExpenseCate
   );
 }
 
-export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, callLogs, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
+export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVehicleSpec, bookings, tripLog, deleteAllRideHistory, alerts, replyToAlert, toggleBlacklist, deleteDriver, deleteCustomer, commissionPct, setCommissionPct, minWallet, setMinWallet, returnPct, setReturnPct, marketAdjustPct, setMarketAdjustPct, bonusPct, setBonusPct, latestVersionCode, setLatestVersionCode, updateUrl, setUpdateUrl, latestAdminVersionCode, setLatestAdminVersionCode, adminUpdateUrl, setAdminUpdateUrl, fareTiers, lang, onLogout, withdrawals, approveWithdrawal, rechargeRequests, approveRecharge, vehicleTypes, addVehicleType, addManualDriver, expenses, expenseCategories, addExpense, addExpenseCategory, adminNotifications, deleteAdminNotification, bugs, setBugStatus, addBug, routeFares, adminRouteFares, adminRouteFaresError, systemHealth, dieselPricePerLitre, setDieselPricePerLitre, fleetVehicles, fleetPrivate, setFleetKyc }) {
   const [tab, setTab] = useState("fleet");
   // "kyc" is deliberately not in this list -- KYC review lives inside the
   // "drivers" tab now (see AdminDriverList), not its own top-level tab or
   // a separate "Pending KYC approvals" tile.
-  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["bookings", "बुकिंग्स", CalendarCheck], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["finance", "फायनान्स", BarChart3], ["rates", "रेट्स व डीज़ल", Fuel], ["changelog", "चेंज लॉग", History], ["notify", "सूचना भेजें", Bell], ["callLogs", "कॉल लॉग्स", PhoneCall], ["settings", "सिस्टम सेटिंग्स", Settings2]];
+  const tabs = [["fleet", "लाइव डैशबोर्ड", MapPinned], ["bookings", "बुकिंग्स", CalendarCheck], ["drivers", "ड्राइवर", ClipboardList], ["customers", "कस्टमर", UserCircle2], ["finance", "फायनान्स", BarChart3], ["rates", "रेट्स व डीज़ल", Fuel], ["changelog", "चेंज लॉग", History], ["notify", "सूचना भेजें", Bell], ["settings", "सिस्टम सेटिंग्स", Settings2]];
   return (
     <div className="p-5">
       <div className="flex items-center justify-between mb-4">
@@ -4569,7 +4527,6 @@ export function AdminPanel({ drivers, customers, updateDriverKyc, updateDriverVe
       )}
       {tab === "notify" && <AdminNotify drivers={drivers} customers={customers} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification} lang={lang} />}
       {tab === "alerts" && <AdminAlerts alerts={alerts} replyToAlert={replyToAlert} withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge} lang={lang} drivers={drivers} />}
-      {tab === "callLogs" && <AdminCallLogs callLogs={callLogs} bookings={bookings} lang={lang} />}
       {tab === "settings" && <AdminSettings drivers={drivers} customers={customers} latestVersionCode={latestVersionCode} setLatestVersionCode={setLatestVersionCode} updateUrl={updateUrl} setUpdateUrl={setUpdateUrl} latestAdminVersionCode={latestAdminVersionCode} setLatestAdminVersionCode={setLatestAdminVersionCode} adminUpdateUrl={adminUpdateUrl} setAdminUpdateUrl={setAdminUpdateUrl} lang={lang} />}
     </div>
   );

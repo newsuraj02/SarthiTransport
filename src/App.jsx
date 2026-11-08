@@ -437,13 +437,13 @@ export const EN_LABELS = {
   book: "Book Now", rides: "My Rides", home: "Home", wallet: "Wallet", history: "History",
   kyc: "KYC", sos: "SOS", fleet: "Live Dashboard", drivers: "Drivers", settings: "Settings",
   finance: "Finance", notify: "Notify", alerts: "Alerts", customers: "Customers", expenses: "Expenses",
-  callLogs: "Call Logs", bookings: "Bookings", rates: "Rates & Diesel", changelog: "Change Log",
+  bookings: "Bookings", rates: "Rates & Diesel", changelog: "Change Log",
 };
 export const MR_LABELS = {
   book: "आत्ता बुक करा", rides: "माझ्या राइड्स", home: "होम", wallet: "वॉलेट", history: "हिस्टरी",
   kyc: "KYC", sos: "SOS", fleet: "लाइव्ह डॅशबोर्ड", drivers: "ड्रायव्हर", settings: "सेटिंग्स",
   finance: "फायनान्स", notify: "सूचना पाठवा", alerts: "अलर्ट्स", customers: "कस्टमर", expenses: "खर्च",
-  callLogs: "कॉल लॉग्स", bookings: "बुकिंग्स", rates: "रेट्स व डिझेल", changelog: "चेंज लॉग",
+  bookings: "बुकिंग्स", rates: "रेट्स व डिझेल", changelog: "चेंज लॉग",
 };
 
 // Default business-expense categories for Admin's Expenses tab — admin can
@@ -13062,10 +13062,6 @@ export default function App() {
   useEffect(() => (firestoreReady ? subscribeCollection("alerts", setAlerts) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("withdrawals", setWithdrawals) : undefined), authDeps);
   useEffect(() => (firestoreReady ? subscribeCollection("rechargeRequests", setRechargeRequests) : undefined), authDeps);
-  // Masked-call audit trail (see functions/index.js: initiateMaskedCall) —
-  // admin-only read, same pattern as alerts above.
-  const [callLogs, setCallLogs] = useState([]);
-  useEffect(() => (firestoreReady && role === "admin" && adminAuth ? subscribeCollection("callLogs", setCallLogs) : undefined), authDeps);
   // Admin "Send Notification" history (see functions/index.js:
   // sendAdminNotification) — doubles as the announcements list drivers and
   // customers read in their own "Admin Announcements" inbox (hamburger
@@ -14057,7 +14053,7 @@ export default function App() {
                 fareTiers={fareTiers} lang={lang} onLogout={logout}
                 withdrawals={withdrawals} approveWithdrawal={approveWithdrawal} rechargeRequests={rechargeRequests} approveRecharge={approveRecharge}
                 vehicleTypes={vehicleTypes} addVehicleType={addVehicleType} addManualDriver={addManualDriver}
-                expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} callLogs={callLogs} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification}
+                expenses={expenses} expenseCategories={expenseCategories} addExpense={addExpense} addExpenseCategory={addExpenseCategory} adminNotifications={adminNotifications} deleteAdminNotification={deleteAdminNotification}
                 bugs={bugs} setBugStatus={setBugStatus} addBug={addBug} routeFares={routeFares} adminRouteFares={adminRouteFares} adminRouteFaresError={adminRouteFaresError} systemHealth={systemHealth}
                 fleetVehicles={fleetVehicles} fleetPrivate={fleetPrivate} setFleetKyc={(id, status) => patchDoc("fleetVehicles", id, { kyc: status }).catch((e) => console.error(e))} />
             </Suspense>

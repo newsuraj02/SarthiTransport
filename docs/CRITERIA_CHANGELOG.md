@@ -309,3 +309,7 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-08 -- CLAUDE.md note for the removed KYC Settings link
 - changed (1): code:CLAUDE.md
+
+## 2026-11-08 -- Owner 2026-11-08: removed the Admin Call Logs tab, screen and subscription
+- changed (7): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#imports, code:src/AdminPanel.jsx#AdminPanel, code:src/App.jsx#EN_LABELS, code:src/App.jsx#MR_LABELS, code:src/App.jsx#App
+- removed (1): code:src/AdminPanel.jsx#AdminCallLogs

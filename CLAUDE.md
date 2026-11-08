@@ -615,6 +615,8 @@ are not loaded there), so the real-font look is for the owner to confirm on a ph
 
 **One device per driver (owner 2026-11-08, "if the driver is already logged in on a device and tries to login in a different device then it must logout from the previous device directly" -- built, browser-checked on the fake store, NOT confirmed on two real phones).** A fresh driver login (PIN, sign-up, forgot-PIN; never the automatic restore) stamps `drivers/{mobile}.activeSessionId`; any other device with a different id is signed out (`logoutRole("driver")`) with a notice. No stored id = nobody logged in since this shipped = sessions are left alone. Hosting only; no rules change. The frozen GPS / ring files were NOT touched (the existing logout path, including the native sign-out, is reused as it is). Contract N3; pinned by "ONE DEVICE PER DRIVER".
 
+**Admin: Call Logs tab REMOVED (owner 2026-11-08, "remove the call logs from admin panel as it doesnt serve any purpose").** The tab, the `AdminCallLogs` screen, its `callLogs` prop and the app's `callLogs` subscription are gone (Admin no longer reads that collection). NOT removed on purpose (only the screen was asked for): the masked-call function `initiateMaskedCall` still writes its audit entries to `callLogs` and its `firestore.rules` block stays, so nothing breaks and the history is kept if the owner ever wants it back. Hosting only. Pinned by "NO CALL LOGS TAB IN ADMIN".
+
 **Working agreement.** Push automatically after build + invariants pass, EXCEPT
 GPS/notification-related changes — ask first (owner rule, 2026-10-23). After a
 push, give the deploy commands: `git checkout claude/app-from-document-njzc58 &&
