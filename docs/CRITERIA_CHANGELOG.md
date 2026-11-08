@@ -296,3 +296,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-08 -- Owner 2026-11-08: criteria inventory ignores stray *.log / .firebase files (functions/firebase-debug.log blocked a deploy)
 - changed (3): code:.gitignore, code:scripts/criteria.mjs#listFiles, code:scripts/verifyInvariants.mjs#checks
+
+## 2026-11-08 -- Owner 2026-11-08: removed a stray extra brace after the Admin Drivers tab line (printed a literal } and an esbuild error)
+- changed (2): code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminPanel

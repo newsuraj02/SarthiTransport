@@ -537,6 +537,8 @@ const checks = [
     return a.includes("b.fleetVehicleNumber || driverVehicle?.vehicleNumber") && !a.includes("${driverVehicle?.vehicleNumber || \"—\"}") && a.includes("data-fleet-chip")
       && adm.includes("function driverPlateText(") && adm.includes("booking.fleetBooking ? booking.fleetDriverMobile : booking.driverMobile") && adm.includes("Call owner")
       && !adm.includes('{d.vehicleSpec?.vehicleNumber || "—"}</div>')
+      // a stray extra "}" after a tab line printed a literal "}" under Admin's Drivers tab and made esbuild report an error (owner's deploy 2026-11-08)
+      && !/^\s*<AdminFleetVehicles[^\n]*\/><\/>\)\}\}/m.test(adm) && !/^\s*\{tab === [^\n]*\)\}\}\s*$/m.test(adm)
       // End Trip / cancel / referral must recognise the owner's OWN fleet booking by MOBILE (a fleet booking's driverName is the real driver's name)
       && !/b\.driverName === driver\?\.name/.test(a.slice(a.indexOf("const cancelBooking"), a.indexOf("const startLoading")))
       && a.includes("const bookingIsMine = (b) =>") && adm.includes("fleetTag(t)") && a.includes("data-fleet-invoice-vehicle");
