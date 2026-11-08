@@ -320,3 +320,6 @@ Every change to a rule, condition, function or config file the app depends on, n
 
 ## 2026-11-08 -- Owner 2026-11-08: Admin driver list rows now match the customer list rows (details, tags, edit, block, delete inside the arrow; one row open at a time)
 - changed (3): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminDriverList
+
+## 2026-11-08 -- Owner 2026-11-08: thicker (2px) border on every Admin customer and driver row
+- changed (4): code:CLAUDE.md, code:scripts/verifyInvariants.mjs#checks, code:src/AdminPanel.jsx#AdminDriverList, code:src/AdminPanel.jsx#AdminCustomers

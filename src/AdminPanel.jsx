@@ -3212,7 +3212,7 @@ function AdminDriverList({ drivers, toggleBlacklist, deleteDriver, updateDriverV
     const gps = gpsStatus(d, lang);
     const called = calledDriverToday(d.mobile);
     return (
-      <div key={d.id} className="rounded-lg p-3" style={{ border: `1px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper, opacity: called ? 0.6 : 1 }}>
+      <div key={d.id} className="rounded-lg p-3" data-admin-list-row style={{ border: `2px solid ${d.blacklisted ? C.safety : C.line}`, background: C.paper, opacity: called ? 0.6 : 1 }}>
         <div className="flex items-center gap-2.5">
           <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
           <SafeImage src={d.photo?.url || d.docs?.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
@@ -3576,7 +3576,7 @@ function AdminCustomers({ customers, bookings, lang, deleteCustomer }) {
           const currentStatusMeta = latestRide ? (statusMeta[latestRide.status] || statusMeta.Cancelled) : noActivityMeta;
           const called = calledCustomerToday(c.mobile);
           return (
-            <div key={c.mobile} className="rounded-lg p-3" style={{ border: `1px solid ${C.line}`, opacity: called ? 0.6 : 1 }}>
+            <div key={c.mobile} data-admin-list-row className="rounded-lg p-3" style={{ border: `2px solid ${C.line}`, opacity: called ? 0.6 : 1 }}>
               <div className="flex items-center gap-2.5">
                 <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: C.bg, color: C.inkSoft }}>{i + 1}</span>
                 <SafeImage src={c.photo?.url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: C.marigoldDeep }}><UserCircle2 size={20} color="#FFFFFF" /></div>} />
