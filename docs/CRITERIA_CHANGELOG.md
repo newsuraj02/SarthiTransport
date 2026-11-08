@@ -303,3 +303,9 @@ Every change to a rule, condition, function or config file the app depends on, n
 ## 2026-11-08 -- Owner 2026-11-08: one device per driver (activeSessionId claim + sign-out of the other device)
 - changed (5): code:CLAUDE.md, code:docs/SYSTEM_CONTRACTS.md, code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#DriverOnboarding, code:src/App.jsx#App
 - added (2): code:src/App.jsx#shouldLogOutDriverSession, code:src/App.jsx#newDriverSessionId
+
+## 2026-11-08 -- Owner 2026-11-08: removed the KYC Settings link from the driver home; WhatsApp Support stays centred at the bottom
+- changed (4): code:scripts/verifyInvariants.mjs#checks, code:src/App.jsx#imports, code:src/App.jsx#DriverHome, code:src/App.jsx#DriverApp
+
+## 2026-11-08 -- CLAUDE.md note for the removed KYC Settings link
+- changed (1): code:CLAUDE.md

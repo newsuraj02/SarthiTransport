@@ -378,7 +378,7 @@ driver's trip screen) frames a 500 m radius (`OTP_MAP_RADIUS_KM`) around the dri
 Pickup pin until a GPS fix arrives. Framed once per anchor, so the person's own zoom is kept; after the OTP
 (`mode="route"`) the old fit-the-whole-route behaviour is unchanged. Pinned in `verifyInvariants.mjs`.
 
-**Driver home shortcuts (owner 2026-10-31).** Under the "My Wallet" + duty bar on the driver's idle home screen sit two
+**Driver home shortcuts -- UPDATED 2026-11-08: the "KYC Settings" link was REMOVED at the owner's request ("remove the KYC settings from the main screen and keep the WhatsApp support in the bottom-center"); only "WhatsApp Support" remains, centred under My Wallet / the duty switch. KYC & Vehicle is reached from the menu -> Profile -> Documents -> Change and from the KYC reminder banner. Read the 2026-10-31 text below with that one change.** (owner 2026-10-31). Under the "My Wallet" + duty bar on the driver's idle home screen sit two
 quiet, plain-grey text links (no fill, no border -- "keep it simple and don't highlight it too much"): "KYC Settings"
 (opens the KYC & Vehicle settings screen via `onOpenKycSettings`; the menu's "Settings (KYC & Vehicle)" entry was REMOVED 2026-10-31 -- this link replaces it) and "WhatsApp Support" (the support
 number `ADMIN_WHATSAPP`, and it logs the same "व्हाट्सएप सपोर्ट" alert for that driver as the Helpline page). They stay on ONE
